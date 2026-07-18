@@ -3,6 +3,7 @@ import {
   purchaserValues,
 } from "@cubby/schemas/project";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { buildSelectOptions } from "~/lib/select-options";
 
 /** Human labels for the fixed purchase-category enum. */
 export const purchaseCategoryLabels: Record<
@@ -15,11 +16,10 @@ export const purchaseCategoryLabels: Record<
 };
 
 /** `{value,label}` options for the category filter/inline-edit select. */
-export const purchaseCategoryOptions: FilterableComboboxItem[] =
-  purchaseCategoryValues.map((value) => ({
-    value,
-    label: purchaseCategoryLabels[value],
-  }));
+export const purchaseCategoryOptions = buildSelectOptions(
+  purchaseCategoryValues,
+  purchaseCategoryLabels,
+);
 
 /** Human labels for the fixed purchaser enum. */
 export const purchaserLabels: Record<(typeof purchaserValues)[number], string> =
@@ -30,8 +30,9 @@ export const purchaserLabels: Record<(typeof purchaserValues)[number], string> =
   };
 
 /** `{value,label}` options for the purchaser filter/inline-edit select. */
-export const purchaserOptions: FilterableComboboxItem[] = purchaserValues.map(
-  (value) => ({ value, label: purchaserLabels[value] }),
+export const purchaserOptions = buildSelectOptions(
+  purchaserValues,
+  purchaserLabels,
 );
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */

@@ -1,7 +1,6 @@
 import type { ProductListItem } from "@cubby/schemas/product";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
-import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { Package, Pencil, Printer } from "lucide-react";
@@ -46,6 +45,8 @@ import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useNameEditable } from "../_components/hooks/useNameEditable";
+import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "../_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "../_components/inventory/inventory-entries-quick-edit-dialog";
@@ -109,19 +110,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   });
   const createInventoryMutation = useCreateInventoryMutation();
 
-  // Inline name editing on the hook-prepended name column. Stable reference
-  // required (feeds the columns memo); the mutation's mutateAsync is stable.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProductMutation changes every render but is functionally stable
-  const nameEditable = useMemo(
-    () => ({
-      onSave: async (newName: string, product: ProductListItem) => {
-        await updateProductMutation.mutateAsync({
-          id: product.id,
-          data: { name: newName },
-        });
-      },
-    }),
-    [],
+  // Inline name editing on the hook-prepended name column.
+  const nameEditable = useNameEditable<ProductListItem>(
+    updateProductMutation.mutateAsync,
   );
 
   // Quick-edit dialog for a row's inventory entries; track the id and derive
@@ -131,19 +122,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     null,
   );
 
-  // Build initial filter from URL params
-  const initialFilter = useMemo((): ColumnFiltersState => {
-    if (!initialCategory) return [];
-    return [{ id: "category", value: initialCategory }];
-  }, [initialCategory]);
-
-  // Memoize table state options to prevent recreating on every render
-  const tableStateOptions = useMemo(
-    () => ({
-      initialFilter,
-    }),
-    [initialFilter],
-  );
+  const tableStateOptions = useSeededFilter("category", initialCategory);
 
   // Use stable deletable config hook to prevent infinite render loop
   const deletableConfig = useDeletableConfig({

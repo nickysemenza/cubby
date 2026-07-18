@@ -4,7 +4,6 @@ import type {
   PurchaseOut,
   Purchaser,
 } from "@cubby/schemas/project";
-import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
@@ -23,7 +22,9 @@ import {
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
+import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
   futureFilterOptions,
@@ -55,17 +56,8 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
-  const nameEditable = useMemo(
-    () => ({
-      onSave: async (newName: string, purchase: PurchaseOut) => {
-        await updatePurchaseMutation.mutateAsync({
-          id: purchase.id,
-          data: { name: newName },
-        });
-      },
-    }),
-    [],
+  const nameEditable = useNameEditable<PurchaseOut>(
+    updatePurchaseMutation.mutateAsync,
   );
 
   const deletableConfig = useDeletableConfig({
@@ -232,15 +224,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     [projectFilterOptions],
   );
 
-  // Seed the "name" column filter from the route's `q` param (e.g. a
-  // command-palette deep link) — see the `initialFilter` pattern in
-  // productlist.tsx.
-  const initialFilter = useMemo((): ColumnFiltersState => {
-    if (!initialSearch) return [];
-    return [{ id: "name", value: initialSearch }];
-  }, [initialSearch]);
-
-  const tableStateOptions = useMemo(() => ({ initialFilter }), [initialFilter]);
+  const tableStateOptions = useSeededFilter("name", initialSearch);
 
   const {
     table,

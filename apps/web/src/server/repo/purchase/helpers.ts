@@ -1,4 +1,5 @@
 import type { PurchaseOut } from "@cubby/schemas/project";
+import { resolveLiveJoinName } from "~/server/repo/database-helpers";
 
 /** Shape of a `purchase` row loaded with its (nullable) parent `project` name. */
 type PurchaseRow = {
@@ -30,8 +31,7 @@ export const dbPurchaseToAPI = (row: PurchaseRow): PurchaseOut => ({
   notes: row.notes,
   future: row.future,
   projectId: row.projectId,
-  projectName:
-    row.project && row.project.deletedAt === null ? row.project.name : null,
+  projectName: resolveLiveJoinName(row.project),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

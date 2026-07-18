@@ -14,6 +14,7 @@ import {
   countWhere,
   executeListQueryWithCount,
   getDb,
+  relations,
 } from "~/server/repo/database-helpers";
 import { taskDependencyIds } from "./crud";
 import { dbTaskToAPI } from "./helpers";
@@ -43,7 +44,7 @@ export const taskList = async (
       orderBy: orderByArray,
       limit: take,
       offset: skip,
-      with: { project: { columns: { name: true, deletedAt: true } } },
+      ...relations.task.withProject,
     }),
     countWhere(db, task, whereClause),
   );

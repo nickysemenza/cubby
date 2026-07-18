@@ -16,10 +16,25 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { format } from "date-fns";
 import { partition } from "es-toolkit";
 import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
+import {
+  createFilterableSelectColumn,
+  createPlainDateColumn,
+  createProjectLinkColumn,
+} from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import {
+  purchaseCategoryLabels,
+  purchaseCategoryOptions,
+} from "~/app/purchases/purchase-options";
+import {
+  TASK_STATUS_LABELS,
+  taskStatusBadgeVariant,
+  taskStatusOptions,
+} from "~/app/tasks/task-options";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -30,6 +45,8 @@ import {
   EmptyIcon,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { NoneValue } from "~/components/ui/none-value";
+import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -46,43 +63,22 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   done: "Done",
 };
 
-export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  not_started: "Not started",
-  later: "Later",
-  in_progress: "In progress",
-  blocked: "Blocked",
-  done: "Done",
-};
+// Task labels live with the task options (see the note there on import
+// direction); re-exported here for this file's many existing consumers.
+export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 
 /** Status select options for the detail page's inline `EditableCell` status field. */
 export const PROJECT_STATUS_OPTIONS: FilterableComboboxItem[] =
-  projectStatusValues.map((s) => ({
-    value: s,
-    label: PROJECT_STATUS_LABELS[s],
-  }));
+  buildSelectOptions(projectStatusValues, PROJECT_STATUS_LABELS);
 
 /** Title-cases a single lowercase enum-ish token (project kind, purchase category). */
 export function capitalize(s: string): string {
   return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// -- Category colors (monochrome ink ladder + ultramarine accent) --
+// -- Category colors --
 
-export const CATEGORY_COLORS: Record<string, string> = {
-  materials: "var(--chart-1)",
-  tools: "var(--chart-5)",
-  services: "var(--chart-2)",
-};
-
-/**
- * Accepts a plain string, not the strict `PurchaseCategory` enum — callers
- * pass ad hoc bucket labels (e.g. treemap/donut group keys like
- * "uncategorized") through here too, not just raw purchase.category values.
- */
-export function getCategoryColor(category: string | null): string {
-  if (!category) return "var(--chart-neutral)";
-  return CATEGORY_COLORS[category] ?? "var(--chart-neutral)";
-}
+export { getCategoryColor } from "~/lib/status-colors";
 
 /**
  * `purchase.category` is now a strict enum (no more Notion emoji prefixes to
@@ -124,12 +120,20 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 // -- Date formatting --
 
+/**
+ * Parses a "YYYY-MM-DD" plain-date string (no time component) into a local
+ * `Date` at midnight via its components, rather than `new Date(iso+"T00:00:00")`.
+ * Mirrors the private `parsePlainDate` helper in columnHelpers.tsx (not
+ * exported from there, so duplicated here) — same day-precision guarantee its
+ * comment documents.
+ */
+function parsePlainDate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+}
+
 export function formatDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+  return format(parsePlainDate(iso), "MMM d");
 }
 
 export function formatDateRange(
@@ -141,52 +145,28 @@ export function formatDateRange(
   return `${formatDate(start)} — ${formatDate(end)}`;
 }
 
-// -- Project link pill (used by task/purchase tables) --
-
-function ProjectLink({
-  projectId,
-  projectName,
-}: {
-  projectId: string | null;
-  projectName: string | null;
-}) {
-  if (!projectName) return null;
-  if (!projectId) return <Badge variant="secondary">{projectName}</Badge>;
-  return (
-    <Link to="/projects/$id" params={{ id: projectId }}>
-      <Badge variant="secondary" className="cursor-pointer hover:bg-muted">
-        {projectName}
-      </Badge>
-    </Link>
-  );
-}
-
 // -- Task Table --
 
 const taskHelper = createColumnHelper<TaskOut>();
 
 const taskColumns = [
-  taskHelper.accessor("status", {
+  createFilterableSelectColumn(taskHelper, "status", {
     header: "Status",
-    cell: ({ getValue }) => <StatusIcon status={getValue()} />,
-    size: 60,
-    enableSorting: true,
+    className: "w-32",
+    placeholder: "Filter by status...",
+    selectOptions: taskStatusOptions,
+    renderCell: (status: TaskStatus) => (
+      <Badge variant={taskStatusBadgeVariant[status]}>
+        {TASK_STATUS_LABELS[status]}
+      </Badge>
+    ),
   }),
   taskHelper.accessor("name", {
     header: "Task",
     cell: ({ row }) => row.original.name,
     enableSorting: true,
   }),
-  taskHelper.accessor("projectName", {
-    header: "Project",
-    cell: ({ row }) => (
-      <ProjectLink
-        projectId={row.original.projectId}
-        projectName={row.original.projectName}
-      />
-    ),
-    enableSorting: true,
-  }),
+  createProjectLinkColumn(taskHelper, { className: "w-40" }),
   taskHelper.accessor("category", {
     header: "Category",
     cell: ({ getValue }) => {
@@ -196,19 +176,9 @@ const taskColumns = [
     },
     enableSorting: true,
   }),
-  taskHelper.accessor("dueDate", {
+  createPlainDateColumn(taskHelper, "dueDate", {
     header: "Due",
-    cell: ({ getValue }) => {
-      const due = getValue();
-      if (!due) return null;
-      return (
-        <Description as="span" size="xs">
-          {formatDate(due)}
-        </Description>
-      );
-    },
-    sortingFn: "alphanumeric",
-    enableSorting: true,
+    className: "w-28",
   }),
 ];
 
@@ -275,24 +245,14 @@ const purchaseColumns = [
     },
     enableSorting: true,
   }),
-  purchaseHelper.accessor("projectName", {
-    header: "Project",
-    cell: ({ row }) => (
-      <ProjectLink
-        projectId={row.original.projectId}
-        projectName={row.original.projectName}
-      />
-    ),
-    enableSorting: true,
-  }),
-  purchaseHelper.accessor("category", {
+  createProjectLinkColumn(purchaseHelper, { className: "w-40" }),
+  createFilterableSelectColumn(purchaseHelper, "category", {
     header: "Category",
-    cell: ({ getValue }) => {
-      const cat = getValue();
-      if (!cat) return null;
-      return <Badge variant="outline">{capitalize(cat)}</Badge>;
-    },
-    enableSorting: true,
+    className: "w-28",
+    placeholder: "Filter by category...",
+    selectOptions: purchaseCategoryOptions,
+    renderCell: (cat: PurchaseCategory | null) =>
+      cat ? purchaseCategoryLabels[cat] : <NoneValue />,
   }),
   purchaseHelper.accessor("subcategory", {
     header: "Subcategory",
@@ -312,19 +272,9 @@ const purchaseColumns = [
     },
     enableSorting: true,
   }),
-  purchaseHelper.accessor("date", {
+  createPlainDateColumn(purchaseHelper, "date", {
     header: "Date",
-    cell: ({ getValue }) => {
-      const date = getValue();
-      if (!date) return null;
-      return (
-        <Description as="span" size="xs">
-          {formatDate(date)}
-        </Description>
-      );
-    },
-    sortingFn: "alphanumeric",
-    enableSorting: true,
+    className: "w-28",
   }),
 ];
 
@@ -378,7 +328,7 @@ const projectColumns = [
   projectHelper.accessor("status", {
     header: "Status",
     cell: ({ row }) => (
-      <Row align="center" gap="sm">
+      <Row align="center" gap="xs">
         <StatusIcon status={row.original.status} />
         <span>{PROJECT_STATUS_LABELS[row.original.status]}</span>
       </Row>

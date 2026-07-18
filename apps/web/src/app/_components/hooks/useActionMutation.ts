@@ -21,12 +21,12 @@ export type MutationOptionsFn = (opts: never) => UseMutationOptions<
 >;
 
 /** The mutation's success-result type, recovered from the options it produces. */
-type DataOf<TFn extends MutationOptionsFn> =
+export type DataOf<TFn extends MutationOptionsFn> =
   ReturnType<TFn> extends UseMutationOptions<infer TData, infer _E, infer _V>
     ? TData
     : never;
 /** The mutation's input/variables type, recovered from the options it produces. */
-type VariablesOf<TFn extends MutationOptionsFn> =
+export type VariablesOf<TFn extends MutationOptionsFn> =
   ReturnType<TFn> extends UseMutationOptions<
     infer _D,
     infer _E,

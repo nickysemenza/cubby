@@ -28,11 +28,13 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   buildCascadeAuditEntries,
   computeChanges,
+  diffUnorderedIdSet,
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
   assertNoDependents,
+  buildPartialUpdateValues,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -131,19 +133,17 @@ export const updateProject = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
-    const updateValues = {
-      ...(data.name !== undefined ? { name: data.name } : {}),
-      ...(data.status !== undefined ? { status: data.status } : {}),
-      ...(data.kind !== undefined ? { kind: data.kind } : {}),
-      ...(data.locations !== undefined ? { locations: data.locations } : {}),
-      ...(data.costEstimate !== undefined
-        ? { costEstimate: data.costEstimate }
-        : {}),
-      ...(data.startDate !== undefined ? { startDate: data.startDate } : {}),
-      ...(data.endDate !== undefined ? { endDate: data.endDate } : {}),
-      ...(data.icon !== undefined ? { icon: data.icon } : {}),
-      ...(data.notes !== undefined ? { notes: data.notes } : {}),
-    };
+    const updateValues = buildPartialUpdateValues({
+      name: data.name,
+      status: data.status,
+      kind: data.kind,
+      locations: data.locations,
+      costEstimate: data.costEstimate,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      icon: data.icon,
+      notes: data.notes,
+    });
     const updated = await updateLiveAndReturn(tx, project, updateValues, id);
 
     // Full-replacement set: clear this project's blocked-by edges and insert
@@ -172,13 +172,12 @@ export const updateProject = async (
       ...(computeChanges(before, updated, [...AUDIT_FIELDS]) ?? {}),
     };
     if (data.blockedByIds !== undefined) {
-      const beforeSorted = [...(beforeBlockedBy ?? [])].sort();
-      const afterSorted = [...data.blockedByIds].sort();
-      if (JSON.stringify(beforeSorted) !== JSON.stringify(afterSorted)) {
-        changes.blockedByIds = {
-          from: beforeBlockedBy ?? [],
-          to: data.blockedByIds,
-        };
+      const blockedByChange = diffUnorderedIdSet(
+        beforeBlockedBy ?? [],
+        data.blockedByIds,
+      );
+      if (blockedByChange) {
+        changes.blockedByIds = blockedByChange;
       }
     }
     if (Object.keys(changes).length > 0) {

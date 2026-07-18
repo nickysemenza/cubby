@@ -3,7 +3,7 @@ import { ResponsiveLine } from "@nivo/line";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import {
-  CATEGORY_COLORS,
+  getCategoryColor,
   monthKey,
   monthLabel,
   nivoChartTheme,
@@ -77,7 +77,7 @@ export function CategoryTrend({ purchases }: { purchases: PurchaseOut[] }) {
         }}
         enableArea
         areaOpacity={0.4}
-        colors={(d) => CATEGORY_COLORS[d.id] ?? "var(--chart-neutral)"}
+        colors={(d) => getCategoryColor(String(d.id))}
         pointSize={5}
         pointColor="var(--card)"
         pointBorderWidth={2}

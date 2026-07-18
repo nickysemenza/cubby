@@ -1,7 +1,21 @@
 import type { TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
-import { TASK_STATUS_LABELS } from "~/app/projects/shared";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { buildSelectOptions } from "~/lib/select-options";
+
+/**
+ * Human-facing labels for the raw DB enum values — single source of truth for
+ * task status display text everywhere (lists, badges, charts, command menu).
+ * Lives here (not projects/shared.tsx) so shared.tsx can import the options/
+ * variant maps below without a circular import; shared.tsx re-exports it for
+ * its existing consumers.
+ */
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  not_started: "Not started",
+  later: "Later",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  done: "Done",
+};
 
 /** Badge tone per status — warm-paper ledger semantic tokens, not raw colors. */
 export const taskStatusBadgeVariant: Record<
@@ -16,6 +30,7 @@ export const taskStatusBadgeVariant: Record<
 };
 
 /** `{value,label}` options for the status filter/inline-edit select. */
-export const taskStatusOptions: FilterableComboboxItem[] = taskStatusValues.map(
-  (value) => ({ value, label: TASK_STATUS_LABELS[value] }),
+export const taskStatusOptions = buildSelectOptions(
+  taskStatusValues,
+  TASK_STATUS_LABELS,
 );

@@ -63,6 +63,25 @@ export function computeChanges<T extends Record<string, unknown>>(
 }
 
 /**
+ * Diff two id arrays where order doesn't matter — e.g. a `blockedByIds`
+ * full-replacement set — unlike {@link computeChanges}' order-sensitive
+ * (JSON.stringify) diff. Compares sorted copies so a mere reorder doesn't
+ * register as a change; the returned `from`/`to` preserve the original
+ * (unsorted) arrays. Returns `undefined` when the sets are equal.
+ */
+export function diffUnorderedIdSet<T extends string>(
+  before: readonly T[],
+  after: readonly T[],
+): { from: T[]; to: T[] } | undefined {
+  const beforeSorted = [...before].sort();
+  const afterSorted = [...after].sort();
+  if (JSON.stringify(beforeSorted) === JSON.stringify(afterSorted)) {
+    return undefined;
+  }
+  return { from: [...before], to: [...after] };
+}
+
+/**
  * Insert an audit log entry.
  */
 export async function logAuditEntry(

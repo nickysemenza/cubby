@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { projectId, purchaseId, taskId } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 
@@ -80,7 +81,7 @@ const projectFields = {
   notes: z.string().nullable().describe("Freeform markdown"),
 };
 
-export const projectCreateInput = z.object({
+const projectCreateShape = {
   ...projectFields,
   status: projectStatusSchema.default("planning"),
   kind: projectKindSchema.nullable().default(null),
@@ -90,23 +91,21 @@ export const projectCreateInput = z.object({
   endDate: plainDate.nullable().default(null),
   icon: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
-});
+};
+
+export const projectCreateInput = z.object(projectCreateShape);
 export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
 
-export const projectUpdateData = z.object({
-  name: projectFields.name.optional(),
-  status: projectFields.status.optional(),
-  kind: projectFields.kind.optional(),
-  locations: projectFields.locations.optional(),
-  costEstimate: projectFields.costEstimate.optional(),
-  startDate: projectFields.startDate.optional(),
-  endDate: projectFields.endDate.optional(),
-  icon: projectFields.icon.optional(),
-  notes: projectFields.notes.optional(),
-  blockedByIds: z
-    .array(projectId)
-    .optional()
-    .describe("Full replacement set of blocking-project ids"),
+// Every create field optional, with the create-time `.default(...)` stripped
+// (see deriveUpdateData — an omitted key must leave the row unchanged, not
+// reset to the default); `blockedByIds` is update-only.
+export const projectUpdateData = deriveUpdateData(projectCreateShape, {
+  extend: {
+    blockedByIds: z
+      .array(projectId)
+      .optional()
+      .describe("Full replacement set of blocking-project ids"),
+  },
 });
 export type ProjectUpdateData = z.infer<typeof projectUpdateData>;
 export const projectUpdateInput = z.object({
@@ -159,8 +158,7 @@ export const projectOut = z.object({
   ...projectFields,
   blockedByIds: z.array(projectId),
   blockingIds: z.array(projectId),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
   rollup: projectRollup,
 });
 export type ProjectOut = z.infer<typeof projectOut>;
@@ -178,27 +176,27 @@ const taskFields = {
   category: z.string().nullable().describe("Free-form category label"),
 };
 
-export const taskCreateInput = z.object({
+const taskCreateShape = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
   projectId: projectId.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
   category: z.string().nullable().default(null),
-});
+};
+
+export const taskCreateInput = z.object(taskCreateShape);
 export type TaskCreateInput = z.infer<typeof taskCreateInput>;
 
-export const taskUpdateData = z.object({
-  name: taskFields.name.optional(),
-  status: taskFields.status.optional(),
-  projectId: taskFields.projectId.optional(),
-  dueDate: taskFields.dueDate.optional(),
-  dueEndDate: taskFields.dueEndDate.optional(),
-  category: taskFields.category.optional(),
-  blockedByIds: z
-    .array(taskId)
-    .optional()
-    .describe("Full replacement set of blocking-task ids"),
+// Every create field optional, with the create-time `.default(...)` stripped
+// (see deriveUpdateData); `blockedByIds` is update-only.
+export const taskUpdateData = deriveUpdateData(taskCreateShape, {
+  extend: {
+    blockedByIds: z
+      .array(taskId)
+      .optional()
+      .describe("Full replacement set of blocking-task ids"),
+  },
 });
 export type TaskUpdateData = z.infer<typeof taskUpdateData>;
 export const taskUpdateInput = z.object({
@@ -231,8 +229,7 @@ export const taskOut = z.object({
   projectName: z.string().nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 export type TaskOut = z.infer<typeof taskOut>;
 
@@ -253,7 +250,7 @@ const purchaseFields = {
   projectId: projectId.nullable(),
 };
 
-export const purchaseCreateInput = z.object({
+const purchaseCreateShape = {
   ...purchaseFields,
   cost: z.number().nullable().default(null),
   date: plainDate.nullable().default(null),
@@ -264,21 +261,14 @@ export const purchaseCreateInput = z.object({
   notes: z.string().nullable().default(null),
   future: z.boolean().default(false),
   projectId: projectId.nullable().default(null),
-});
+};
+
+export const purchaseCreateInput = z.object(purchaseCreateShape);
 export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
 
-export const purchaseUpdateData = z.object({
-  name: purchaseFields.name.optional(),
-  cost: purchaseFields.cost.optional(),
-  date: purchaseFields.date.optional(),
-  category: purchaseFields.category.optional(),
-  subcategory: purchaseFields.subcategory.optional(),
-  purchaser: purchaseFields.purchaser.optional(),
-  url: purchaseFields.url.optional(),
-  notes: purchaseFields.notes.optional(),
-  future: purchaseFields.future.optional(),
-  projectId: purchaseFields.projectId.optional(),
-});
+// Every create field optional, with the create-time `.default(...)` stripped
+// (see deriveUpdateData).
+export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape);
 export type PurchaseUpdateData = z.infer<typeof purchaseUpdateData>;
 export const purchaseUpdateInput = z.object({
   id: purchaseId,
@@ -310,8 +300,7 @@ export const purchaseOut = z.object({
   id: purchaseId,
   ...purchaseFields,
   projectName: z.string().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 export type PurchaseOut = z.infer<typeof purchaseOut>;
 

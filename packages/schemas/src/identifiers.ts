@@ -8,61 +8,6 @@ import { z } from "zod";
 // Generic entity ID (use sparingly - prefer specific branded types)
 export const id = z.uuid().describe("entity identifier");
 
-// Branded ID types for type safety
-// Not exported - used only for type inference
-const _userId = z.string().brand("UserId");
-export const recipeId = z.uuid().brand("RecipeId");
-export const ingredientId = z.uuid().brand("IngredientId");
-export const productId = z.uuid().brand("ProductId");
-export const locationId = z.uuid().brand("LocationId");
-export const inventoryId = z.uuid().brand("InventoryId");
-export const cookbookId = z.uuid().brand("CookbookId");
-export const mealId = z.uuid().brand("MealId");
-export const mealRecipeId = z.uuid().brand("MealRecipeId");
-export const projectId = z.uuid().brand("ProjectId");
-export const taskId = z.uuid().brand("TaskId");
-export const purchaseId = z.uuid().brand("PurchaseId");
-
-// Shortcode schemas re-exported from shared package (single source of truth)
-export {
-  locationShortcode,
-  productShortcode,
-  recipeShortcode,
-} from "@cubby/shared";
-import {
-  locationShortcode,
-  productShortcode,
-  recipeShortcode,
-} from "@cubby/shared";
-export type { LocationShortcode, ProductShortcode, RecipeShortcode };
-
-// Type exports
-export type UserId = z.infer<typeof _userId>;
-export type RecipeId = z.infer<typeof recipeId>;
-export type IngredientId = z.infer<typeof ingredientId>;
-export type ProductId = z.infer<typeof productId>;
-export type LocationId = z.infer<typeof locationId>;
-export type InventoryId = z.infer<typeof inventoryId>;
-export type CookbookId = z.infer<typeof cookbookId>;
-export type MealId = z.infer<typeof mealId>;
-export type MealRecipeId = z.infer<typeof mealRecipeId>;
-export type ProjectId = z.infer<typeof projectId>;
-export type TaskId = z.infer<typeof taskId>;
-export type PurchaseId = z.infer<typeof purchaseId>;
-
-export const normalizedLocationShortcode = z
-  .string()
-  .transform((value) => value.trim().toUpperCase())
-  .pipe(locationShortcode);
-export const normalizedProductShortcode = z
-  .string()
-  .transform((value) => value.trim().toUpperCase())
-  .pipe(productShortcode);
-export const normalizedRecipeShortcode = z
-  .string()
-  .transform((value) => value.trim().toUpperCase())
-  .pipe(recipeShortcode);
-
 // Helper functions for unsafe casts (use only when you're certain the value is valid).
 // Useful in tests and when working with external/untyped strings you know are valid.
 //
@@ -79,38 +24,83 @@ type RejectBranded<T> = [Exclude<keyof T, keyof string>] extends [never]
 
 const unsafeId = <T>(id: string): T => id as unknown as T;
 
-export const unsafeUserId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<UserId>(id);
-export const unsafeRecipeId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<RecipeId>(id);
-export const unsafeIngredientId = <T extends string>(
-  id: T & RejectBranded<T>,
-) => unsafeId<IngredientId>(id);
-export const unsafeProductId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<ProductId>(id);
-export const unsafeLocationId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<LocationId>(id);
-export const unsafeInventoryId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<InventoryId>(id);
-export const unsafeCookbookId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<CookbookId>(id);
-export const unsafeMealId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<MealId>(id);
-export const unsafeMealRecipeId = <T extends string>(
-  id: T & RejectBranded<T>,
-) => unsafeId<MealRecipeId>(id);
-export const unsafeProjectId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<ProjectId>(id);
-export const unsafeTaskId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<TaskId>(id);
-export const unsafePurchaseId = <T extends string>(id: T & RejectBranded<T>) =>
-  unsafeId<PurchaseId>(id);
-export const unsafeLocationShortcode = <T extends string>(
-  code: T & RejectBranded<T>,
-) => unsafeId<LocationShortcode>(code);
-export const unsafeProductShortcode = <T extends string>(
-  code: T & RejectBranded<T>,
-) => unsafeId<ProductShortcode>(code);
-export const unsafeRecipeShortcode = <T extends string>(
-  code: T & RejectBranded<T>,
-) => unsafeId<RecipeShortcode>(code);
+/** Type-guarded unsafe-cast factory: same guard shape as every hand-written `unsafe*Id`. */
+function makeUnsafeId<Branded>() {
+  return <T extends string>(id: T & RejectBranded<T>) => unsafeId<Branded>(id);
+}
+
+/** Brand a uuid schema + return its type-guarded unsafe-cast in one call. */
+function brandedId<Name extends string>(name: Name) {
+  const schema = z.uuid().brand(name);
+  return [schema, makeUnsafeId<z.infer<typeof schema>>()] as const;
+}
+
+// Branded ID types for type safety.
+// `_userId` isn't uuid-shaped (session ids aren't uuids) and isn't exported as a
+// schema, so it stays hand-written rather than going through `brandedId`.
+const _userId = z.string().brand("UserId");
+export const unsafeUserId = makeUnsafeId<z.infer<typeof _userId>>();
+export type UserId = z.infer<typeof _userId>;
+
+export const [recipeId, unsafeRecipeId] = brandedId("RecipeId");
+export type RecipeId = z.infer<typeof recipeId>;
+
+export const [ingredientId, unsafeIngredientId] = brandedId("IngredientId");
+export type IngredientId = z.infer<typeof ingredientId>;
+
+export const [productId, unsafeProductId] = brandedId("ProductId");
+export type ProductId = z.infer<typeof productId>;
+
+export const [locationId, unsafeLocationId] = brandedId("LocationId");
+export type LocationId = z.infer<typeof locationId>;
+
+export const [inventoryId, unsafeInventoryId] = brandedId("InventoryId");
+export type InventoryId = z.infer<typeof inventoryId>;
+
+export const [cookbookId, unsafeCookbookId] = brandedId("CookbookId");
+export type CookbookId = z.infer<typeof cookbookId>;
+
+export const [mealId, unsafeMealId] = brandedId("MealId");
+export type MealId = z.infer<typeof mealId>;
+
+export const [mealRecipeId, unsafeMealRecipeId] = brandedId("MealRecipeId");
+export type MealRecipeId = z.infer<typeof mealRecipeId>;
+
+export const [projectId, unsafeProjectId] = brandedId("ProjectId");
+export type ProjectId = z.infer<typeof projectId>;
+
+export const [taskId, unsafeTaskId] = brandedId("TaskId");
+export type TaskId = z.infer<typeof taskId>;
+
+export const [purchaseId, unsafePurchaseId] = brandedId("PurchaseId");
+export type PurchaseId = z.infer<typeof purchaseId>;
+
+// Shortcode schemas re-exported from shared package (single source of truth)
+export {
+  locationShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "@cubby/shared";
+import {
+  locationShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "@cubby/shared";
+export type { LocationShortcode, ProductShortcode, RecipeShortcode };
+
+export const normalizedLocationShortcode = z
+  .string()
+  .transform((value) => value.trim().toUpperCase())
+  .pipe(locationShortcode);
+export const normalizedProductShortcode = z
+  .string()
+  .transform((value) => value.trim().toUpperCase())
+  .pipe(productShortcode);
+export const normalizedRecipeShortcode = z
+  .string()
+  .transform((value) => value.trim().toUpperCase())
+  .pipe(recipeShortcode);
+
+export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();
+export const unsafeProductShortcode = makeUnsafeId<ProductShortcode>();
+export const unsafeRecipeShortcode = makeUnsafeId<RecipeShortcode>();
