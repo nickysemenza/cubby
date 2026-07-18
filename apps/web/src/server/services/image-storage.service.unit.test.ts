@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   fetchAndStoreImage: vi.fn(),
   getImageByKey: vi.fn(),
   generatePresignedUploadUrl: vi.fn(),
+  uploadToS3: vi.fn(),
+  assertAttachableEntityExists: vi.fn(),
+  createAndAssociateUploadedImage: vi.fn(),
+  fetchExternalResponse: vi.fn(),
 }));
 
 vi.mock("~/server/repo/image", () => ({
@@ -14,25 +18,40 @@ vi.mock("~/server/repo/image", () => ({
   createUploadedImageRecord: mocks.createUploadedImageRecord,
   cullPendingImages: vi.fn(),
   getImageByKey: mocks.getImageByKey,
+  assertAttachableEntityExists: mocks.assertAttachableEntityExists,
+  createAndAssociateUploadedImage: mocks.createAndAssociateUploadedImage,
 }));
 
 vi.mock("~/server/utils/s3", () => ({
-  contentTypeToExtension: () => "jpg",
+  contentTypeToExtension: (ct: string) => (ct === "image/png" ? "png" : "jpg"),
   deleteS3Object: mocks.deleteS3Object,
   extractKeyFromUrl: vi.fn(),
   fetchAndStoreImage: mocks.fetchAndStoreImage,
-  generateImageKey: vi.fn(),
+  generateImageKey: (filename: string) => `cubby/images/${filename}`,
   generateDocumentKey: (filename: string, folder?: string) =>
     `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
   generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
   getS3ObjectUrl: (key: string) => `https://images.example/${key}`,
   isOurBucketUrl: () => false,
+  uploadToS3: mocks.uploadToS3,
 }));
 
+vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
+  ...(await importActual<typeof import("@cubby/shared/external-fetch")>()),
+  fetchExternalResponse: mocks.fetchExternalResponse,
+}));
+
+import type { McpAttachFileInput } from "@cubby/schemas/image";
+import { ExternalFetchError } from "@cubby/shared/external-fetch";
 import {
+  attachFileToEntity,
   importImageFromUrl,
   initiateDocumentUpload,
 } from "./image-storage.service";
+
+// 1×1 transparent PNG.
+const PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 describe("importImageFromUrl", () => {
   beforeEach(() => {
@@ -109,5 +128,141 @@ describe("initiateDocumentUpload", () => {
     expect(result.key).toMatch(
       /^cubby\/documents\/P-0123\/blender-manual-\d+\.pdf$/,
     );
+  });
+});
+
+describe("attachFileToEntity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.assertAttachableEntityExists.mockResolvedValue(undefined);
+    mocks.uploadToS3.mockResolvedValue(undefined);
+    mocks.deleteS3Object.mockResolvedValue(undefined);
+    mocks.createAndAssociateUploadedImage.mockResolvedValue({ id: "img-99" });
+  });
+
+  const base = {
+    entityType: "product",
+    entityId: "prod-1",
+  } satisfies Partial<McpAttachFileInput>;
+
+  it("stores a base64 image, associates it, and reports kind=image", async () => {
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      data: PNG_BASE64,
+      contentType: "image/png",
+    });
+
+    expect(result.kind).toBe("image");
+    expect(result.imageId).toBe("img-99");
+    expect(mocks.uploadToS3).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: expect.stringContaining("cubby/images/"),
+        contentType: "image/png",
+      }),
+    );
+    expect(mocks.createAndAssociateUploadedImage).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ contentType: "image/png", size: 70 }),
+      "product",
+      "prod-1",
+    );
+  });
+
+  it("parses a data: URI and infers the content type", async () => {
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      data: `data:image/png;base64,${PNG_BASE64}`,
+    });
+
+    expect(result.contentType).toBe("image/png");
+    expect(result.kind).toBe("image");
+  });
+
+  it("classifies a PDF as a document and uses the document key", async () => {
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      data: Buffer.from("%PDF-1.4 fake").toString("base64"),
+      contentType: "application/pdf",
+      filename: "permit.pdf",
+    });
+
+    expect(result.kind).toBe("document");
+    expect(mocks.uploadToS3).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "cubby/documents/permit.pdf" }),
+    );
+  });
+
+  it("stores a fetched URL image", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64"), {
+        headers: { "content-type": "image/png" },
+      }),
+    );
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      url: "https://example.com/photo.png",
+    });
+
+    expect(result.kind).toBe("image");
+    expect(mocks.uploadToS3).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a missing target before touching storage", async () => {
+    mocks.assertAttachableEntityExists.mockRejectedValue(
+      new Error("not found"),
+    );
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("not found");
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsupported content type", async () => {
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        data: Buffer.from("hello").toString("base64"),
+        contentType: "text/plain",
+      }),
+    ).rejects.toThrow(/Unsupported content type/);
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the R2 object when the insert+associate transaction fails", async () => {
+    // The repo runs insert + associate in one transaction; a throw from either
+    // (DB error, or the target deleted mid-flight) rolls back the row, and the
+    // service then deletes the now-orphaned R2 object.
+    mocks.createAndAssociateUploadedImage.mockRejectedValue(new Error("gone"));
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("gone");
+    expect(mocks.deleteS3Object).toHaveBeenCalledWith(
+      expect.stringContaining("cubby/images/"),
+    );
+  });
+
+  it("surfaces a blocked/oversized URL fetch as a 4xx, not a 500", async () => {
+    mocks.fetchExternalResponse.mockRejectedValue(
+      new ExternalFetchError("blocked host", "blocked-url"),
+    );
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        url: "https://internal.example/secret.png",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
   });
 });

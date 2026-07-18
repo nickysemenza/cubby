@@ -1,5 +1,6 @@
 import { projectId } from "@cubby/schemas/identifiers";
 import {
+  attachFileResponse,
   cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
   getImageByIdSchema,
@@ -11,7 +12,9 @@ import {
   initiateDocumentUploadSchema,
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
+  mcpAttachFileInput,
 } from "@cubby/schemas/image";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createEntityListProcedure } from "~/server/api/crud-factory";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
@@ -22,6 +25,7 @@ import {
   imageList,
 } from "~/server/repo/image";
 import {
+  attachFileToEntity,
   cullPendingImageStorage,
   importImageFromUrl,
   initiateDocumentUpload,
@@ -145,6 +149,28 @@ export const imageRouter = createTRPCRouter({
         throw createAppError(
           "IMAGE_IMPORT_FAILED",
           "Failed to import image from URL",
+          error,
+        );
+      }
+    }),
+
+  /**
+   * Attach a file (base64 bytes or an external URL) to an entity and store it
+   * in R2. Backs the MCP `attach_file` tool. Validation errors from the service
+   * are already typed TRPCErrors (4xx) — rethrow them; only wrap genuinely
+   * unexpected failures (R2/DB) into a 500.
+   */
+  attachFile: protectedProcedure
+    .input(mcpAttachFileInput)
+    .output(attachFileResponse)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await attachFileToEntity(ctx.db, input);
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw createAppError(
+          "IMAGE_UPLOAD_FAILED",
+          "Failed to attach file",
           error,
         );
       }

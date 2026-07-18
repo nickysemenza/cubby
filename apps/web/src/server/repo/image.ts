@@ -12,15 +12,29 @@
  */
 
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import {
+  unsafeLocationId,
+  unsafeProductId,
+  unsafeProjectId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
+import type {
+  AttachableImageEntity,
+  ImageWithEntity,
+} from "@cubby/schemas/image";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
-import type { Database } from "~/server/db";
+import { match } from "ts-pattern";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   image,
+  location,
   locationImage,
+  product,
   productImage,
+  project,
   projectImage,
+  recipe,
   recipeImage,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -33,6 +47,7 @@ import {
   insertAndReturn,
   isNotDeleted,
   notDeleted,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 
 export const createPendingImageRecord = async (
@@ -62,7 +77,7 @@ export const createPendingImageRecord = async (
 };
 
 export const createUploadedImageRecord = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   params: {
     key: string;
     url: string;
@@ -438,6 +453,117 @@ export const associateImagesWithProduct = async (
     productId,
     imageIds,
   );
+};
+
+/**
+ * Assert an attach target exists (and isn't soft-deleted) before we upload +
+ * associate, so a bad id fails cleanly instead of surfacing as a raw FK
+ * violation after the object is already in R2.
+ */
+export const assertAttachableEntityExists = async (
+  db: Database,
+  entityType: AttachableImageEntity,
+  entityId: string,
+): Promise<void> => {
+  // Count inside each arm so the table is a concrete type — a union of the four
+  // (branded-id) tables collapses Drizzle's query inference to `never`.
+  const count = await match(entityType)
+    .with("product", () =>
+      countWhere(
+        db,
+        product,
+        and(eq(product.id, unsafeProductId(entityId)), notDeleted(product)),
+      ),
+    )
+    .with("recipe", () =>
+      countWhere(
+        db,
+        recipe,
+        and(eq(recipe.id, unsafeRecipeId(entityId)), notDeleted(recipe)),
+      ),
+    )
+    .with("location", () =>
+      countWhere(
+        db,
+        location,
+        and(eq(location.id, unsafeLocationId(entityId)), notDeleted(location)),
+      ),
+    )
+    .with("project", () =>
+      countWhere(
+        db,
+        project,
+        and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
+      ),
+    )
+    .exhaustive();
+  if (count === 0) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `${entityType} ${entityId} not found`,
+    );
+  }
+};
+
+/**
+ * Attach an already-UPLOADED image to one of the four gallery entities by
+ * dispatching to its join table. Mirrors {@link associateImagesWithProduct} for
+ * the other three; `.exhaustive()` forces this to grow if `attachableImageEntity`
+ * does. Takes a client-or-tx so it can run inside the insert transaction (see
+ * {@link createAndAssociateUploadedImage}).
+ */
+const associateImageWithEntity = async (
+  dbc: DrizzleClient | DrizzleTransaction,
+  entityType: AttachableImageEntity,
+  entityId: string,
+  imageId: string,
+): Promise<void> => {
+  await match(entityType)
+    .with("product", () =>
+      associatePendingImages(dbc, productImage, "productId", entityId, [
+        imageId,
+      ]),
+    )
+    .with("recipe", () =>
+      associatePendingImages(dbc, recipeImage, "recipeId", entityId, [imageId]),
+    )
+    .with("location", () =>
+      associatePendingImages(dbc, locationImage, "locationId", entityId, [
+        imageId,
+      ]),
+    )
+    .with("project", () =>
+      associatePendingImages(dbc, projectImage, "projectId", entityId, [
+        imageId,
+      ]),
+    )
+    .exhaustive();
+};
+
+/**
+ * Insert an UPLOADED image row and associate it with its target entity in a
+ * single transaction, so a failure in either step rolls back the DB write. The
+ * caller owns removing the R2 object on failure (see attachFileToEntity) — a
+ * stranded UPLOADED row would otherwise never be reaped (cull only touches
+ * PENDING rows).
+ */
+export const createAndAssociateUploadedImage = async (
+  db: Database,
+  params: {
+    key: string;
+    url: string;
+    filename: string;
+    contentType: string;
+    size: number;
+  },
+  entityType: AttachableImageEntity,
+  entityId: string,
+): Promise<typeof image.$inferSelect> => {
+  return await withTransaction(db, async (tx) => {
+    const row = await createUploadedImageRecord(tx, params);
+    await associateImageWithEntity(tx, entityType, entityId, row.id);
+    return row;
+  });
 };
 
 /**
