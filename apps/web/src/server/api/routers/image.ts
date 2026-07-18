@@ -7,6 +7,7 @@ import {
   imageWithEntitySchema,
   importImageFromUrlResponseSchema,
   importImageFromUrlSchema,
+  initiateDocumentUploadSchema,
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
@@ -17,6 +18,7 @@ import { getImageById, imageList } from "~/server/repo/image";
 import {
   cullPendingImageStorage,
   importImageFromUrl,
+  initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
 
@@ -55,6 +57,32 @@ export const imageRouter = createTRPCRouter({
           ctx.db,
           input,
         );
+
+        return {
+          uploadUrl: uploadData.uploadUrl,
+          imageId: uploadData.imageId,
+          key: uploadData.key,
+          url: uploadData.url,
+        };
+      } catch (error) {
+        throw createAppError(
+          "IMAGE_UPLOAD_FAILED",
+          "Failed to initiate upload",
+          error,
+        );
+      }
+    }),
+
+  /**
+   * Initiate a document (PDF manual) upload. Same pending-image machinery as
+   * uploadImage — only the accepted content types and key layout differ.
+   */
+  uploadDocument: protectedProcedure
+    .input(initiateDocumentUploadSchema)
+    .output(initiateUploadWithoutEntityResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const uploadData = await initiateDocumentUpload(ctx.db, input);
 
         return {
           uploadUrl: uploadData.uploadUrl,

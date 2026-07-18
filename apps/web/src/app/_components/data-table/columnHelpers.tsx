@@ -6,6 +6,7 @@ import type {
   ProductId,
   RecipeId,
 } from "@cubby/schemas/identifiers";
+import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
@@ -210,6 +211,7 @@ interface ImageRow extends BaseRow {
     id: string;
     url: string;
     filename: string;
+    contentType?: string;
   }>;
 }
 
@@ -370,9 +372,15 @@ export function createImageColumn<T extends BaseRow>(
     mobile?: MobileColumnMeta;
   },
 ) {
+  // PDF manuals share the images relation — keep them out of thumbnails.
   const getImages =
     options.getImages ??
-    ((row: T) => (row as unknown as ImageRow).images ?? []);
+    ((row: T) =>
+      ((row as unknown as ImageRow).images ?? []).filter(
+        (img) =>
+          img.contentType === undefined ||
+          !isDocumentFile({ contentType: img.contentType }),
+      ));
   const { entity } = options;
 
   return columnHelper.accessor((row) => getImages(row), {

@@ -31,6 +31,27 @@ export const ALLOWED_IMAGE_TYPES = [
 export type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
 const imageContentType = z.enum(ALLOWED_IMAGE_TYPES);
 
+// Documents (PDF manuals) reuse the Image table + joins; a "document" is
+// inferred purely from contentType. Kept separate from ALLOWED_IMAGE_TYPES so
+// image-only surfaces (paste, camera, URL import, recipe/location forms) never
+// accept PDFs.
+export const PDF_CONTENT_TYPE = "application/pdf";
+const ALLOWED_DOCUMENT_TYPES = [PDF_CONTENT_TYPE] as const;
+
+// Predicate must be PDF-equality, NOT `startsWith("image/")` — legacy
+// same-bucket re-imports created rows with `application/octet-stream` that must
+// remain displayable as images.
+export const isDocumentFile = (file: { contentType: string }): boolean =>
+  file.contentType === PDF_CONTENT_TYPE;
+
+/** Split an entity's attached files into displayable images vs documents. */
+export const partitionEntityFiles = <T extends { contentType: string }>(
+  files: T[],
+): { images: T[]; documents: T[] } => ({
+  images: files.filter((f) => !isDocumentFile(f)),
+  documents: files.filter(isDocumentFile),
+});
+
 // Common image input schemas for create and update operations
 export const createInputImages = z.object({
   pendingImageIds: z.array(z.uuid()).optional(),
@@ -47,16 +68,36 @@ export type UpdateInputImages = z.infer<typeof updateInputImages>;
 // Max image upload size (~50MB) — server refuses presigned URLs for absurd sizes.
 export const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
 
-// Schema for initiating an image upload without entity ID (for pending uploads)
-export const initiateUploadWithoutEntitySchema = z.object({
+// Shared fields for upload initiation (image + document variants). Private
+// field map spread into both schemas — the sanctioned pattern (no .extend).
+const initiateUploadFields = {
   filename: z.string(),
-  contentType: imageContentType,
   size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
   entityType: entityImage,
+};
+
+// Schema for initiating an image upload without entity ID (for pending uploads)
+export const initiateUploadWithoutEntitySchema = z.object({
+  ...initiateUploadFields,
+  contentType: imageContentType,
 });
 
 export type InitiateUploadWithoutEntityInput = z.infer<
   typeof initiateUploadWithoutEntitySchema
+>;
+
+// Document (PDF) upload initiation. `folder` groups the object under a
+// human-meaningful R2 prefix (the owning entity's shortcode, e.g. "P-0123") so
+// document URLs read as .../documents/P-0123/blender-manual.pdf. Optional —
+// create-mode forms have no shortcode yet.
+export const initiateDocumentUploadSchema = z.object({
+  ...initiateUploadFields,
+  contentType: z.enum(ALLOWED_DOCUMENT_TYPES),
+  folder: z.string().max(64).optional(),
+});
+
+export type InitiateDocumentUploadInput = z.infer<
+  typeof initiateDocumentUploadSchema
 >;
 
 // Schema for getting image by ID

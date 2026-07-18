@@ -4,10 +4,16 @@
  */
 
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { inventoryEntry, product, productImage } from "~/server/db/schema";
+import {
+  image,
+  inventoryEntry,
+  product,
+  productImage,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -64,6 +70,8 @@ export const findProductsWithNoImages = async (
     conditions.push(isNull(product.ingredientId));
   }
 
+  // PDF manuals live in the same Image table/join — count only displayable
+  // (non-PDF) attachments so a manual-only product still reads as "no images".
   const results = await dbClient
     .select({
       id: product.id,
@@ -72,10 +80,20 @@ export const findProductsWithNoImages = async (
       upc: product.upc,
     })
     .from(product)
-    .leftJoin(productImage, eq(productImage.productId, product.id))
+    .leftJoin(
+      productImage,
+      and(eq(productImage.productId, product.id), notDeleted(productImage)),
+    )
+    .leftJoin(
+      image,
+      and(
+        eq(image.id, productImage.imageId),
+        sql`${image.contentType} <> ${PDF_CONTENT_TYPE}`,
+      ),
+    )
     .where(and(...conditions))
     .groupBy(product.id)
-    .having(sql`count(${productImage.imageId}) = 0`);
+    .having(sql`count(${image.id}) = 0`);
 
   return results;
 };

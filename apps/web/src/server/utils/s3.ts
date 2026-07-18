@@ -90,6 +90,26 @@ export const generateImageKey = (filename: string): string => {
 };
 
 /**
+ * Generate a key for a document (PDF manual). Unlike images, the original
+ * filename is preserved (no timestamp) so the public URL stays readable, and
+ * an optional folder (the owning entity's shortcode) namespaces the object:
+ * `{prefix}/documents/P-0123/blender-manual.pdf`. Collisions are handled by
+ * the caller (initiateDocumentUpload) via a DB key lookup.
+ */
+export const generateDocumentKey = (
+  filename: string,
+  folder?: string,
+): string => {
+  // Sanitization doubles as path-traversal defense: "/" and "." sequences in
+  // the folder can't escape the documents/ prefix.
+  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const sanitizedFolder = folder?.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const prefix = env.R2_KEY_PREFIX;
+  const folderSegment = sanitizedFolder ? `${sanitizedFolder}/` : "";
+  return `${prefix}/documents/${folderSegment}${sanitizedFilename}`;
+};
+
+/**
  * Generate an R2 object URL
  */
 export const getS3ObjectUrl = (key: string): string => {

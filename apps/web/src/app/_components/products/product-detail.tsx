@@ -1,3 +1,4 @@
+import { partitionEntityFiles } from "@cubby/schemas/image";
 import type {
   ProductCreateInput,
   ProductWithFoodOut,
@@ -5,8 +6,16 @@ import type {
 import { isNonFoodCategory } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { Apple, ChefHat, Info, MapPin, Package, Scale } from "lucide-react";
-import type { FC } from "react";
+import {
+  Apple,
+  ChefHat,
+  FileText,
+  Info,
+  MapPin,
+  Package,
+  Scale,
+} from "lucide-react";
+import { type FC, useCallback, useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { buttonVariants } from "~/components/ui/button";
@@ -26,6 +35,7 @@ import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
+import { type ManualViewTarget, ProductManuals } from "./product-manuals";
 import { ProductStockedAt } from "./product-stocked-at";
 
 interface ProductDetailProps {
@@ -47,6 +57,18 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const isNonFood = isNonFoodCategory(product.category);
 
+  // PDF manuals share the images relation — hero/gallery get only real
+  // images; documents render in their own Manuals section.
+  const { images, documents } = partitionEntityFiles(product.images);
+
+  // Wiki links in the notes ([[manual#page=N]]) jump the inline viewer here.
+  const [manualTarget, setManualTarget] = useState<ManualViewTarget | null>(
+    null,
+  );
+  const handleManualLink = useCallback((documentId: string, page: number) => {
+    setManualTarget({ documentId, page, nonce: Date.now() });
+  }, []);
+
   const sections: DetailSection[] = [
     editableDetailSection({
       title: "Basic Information",
@@ -55,7 +77,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       Form: ProductForm,
       entity: product,
       children: (
-        <ProductBasicInfo product={product} onEdit={editMode.startEditing} />
+        <ProductBasicInfo
+          product={product}
+          onEdit={editMode.startEditing}
+          documents={documents}
+          onManualLink={handleManualLink}
+        />
       ),
     }),
     // Custom section: Stocked At — where the product lives, the primary
@@ -76,6 +103,19 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductStockedAt product={product} />,
     },
+    // Custom section: Manuals — attached PDF instruction manuals (only if any)
+    ...(documents.length > 0
+      ? [
+          {
+            title: "Manuals",
+            icon: FileText,
+            zone: "main" as const,
+            content: (
+              <ProductManuals documents={documents} target={manualTarget} />
+            ),
+          },
+        ]
+      : []),
     // Custom section: Nutrition (only if available)
     ...(product.food?.nutritionInfo
       ? [
@@ -162,7 +202,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       entity="product"
       title={product.name}
       rawData={product}
-      heroImages={product.images}
+      heroImages={images}
       heroNo={product.shortcode ?? undefined}
       heroStamp={
         entries.length > 0
@@ -174,7 +214,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       <DetailSections
         sections={sections}
         rawData={product}
-        heroImages={product.images}
+        heroImages={images}
       />
     </Page>
   );

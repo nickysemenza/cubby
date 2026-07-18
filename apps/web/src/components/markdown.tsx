@@ -13,16 +13,20 @@ import { cn } from "~/lib/utils";
  * raw HTML in the source is not rendered.
  */
 
-type ElementProps<T extends keyof React.JSX.IntrinsicElements> =
+export type ElementProps<T extends keyof React.JSX.IntrinsicElements> =
   ComponentPropsWithoutRef<T> & { node?: unknown };
 
 // Strip the `node` prop react-markdown injects so it doesn't hit the DOM.
-function clean<T extends keyof React.JSX.IntrinsicElements>({
+export function clean<T extends keyof React.JSX.IntrinsicElements>({
   node: _node,
   ...rest
 }: ElementProps<T>) {
   return rest;
 }
+
+/** Anchor styling shared with custom `a` overrides (see componentOverrides). */
+export const markdownAnchorClass =
+  "text-primary underline underline-offset-2 hover:text-primary/80";
 
 const components = {
   p: (props: ElementProps<"p">) => (
@@ -51,7 +55,7 @@ const components = {
   ),
   a: (props: ElementProps<"a">) => (
     <a
-      className="text-primary underline underline-offset-2 hover:text-primary/80"
+      className={markdownAnchorClass}
       target="_blank"
       rel="noopener noreferrer"
       {...clean(props)}
@@ -109,13 +113,23 @@ const components = {
 export function MarkdownText({
   children,
   className,
+  componentOverrides,
 }: {
   children: string;
   className?: string;
+  /** Per-element overrides merged over the defaults (e.g. a custom `a`). */
+  componentOverrides?: Partial<typeof components>;
 }) {
   return (
     <div className={cn("text-sm", className)}>
-      <Markdown remarkPlugins={[remarkGfm]} components={components}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={
+          componentOverrides
+            ? { ...components, ...componentOverrides }
+            : components
+        }
+      >
         {children}
       </Markdown>
     </div>

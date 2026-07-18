@@ -9,6 +9,7 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { isDocumentFile } from "@cubby/schemas/image";
 import type {
   ProductCreateInput,
   ProductTopLevelOut,
@@ -152,7 +153,12 @@ export async function applyUpcDataWithSideEffects(
     });
   }
 
-  if (current.images.length === 0 && lookup?.imageUrl) {
+  // PDF manuals share the images relation — a manual-only product still has
+  // no displayable image and should get the UPC-lookup photo.
+  const hasDisplayableImage = current.images.some(
+    (img) => !isDocumentFile(img),
+  );
+  if (!hasDisplayableImage && lookup?.imageUrl) {
     try {
       await importImageFromUPC(
         services.db,

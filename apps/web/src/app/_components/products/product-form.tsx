@@ -1,6 +1,6 @@
 import { externalIdInput } from "@cubby/schemas/external-id";
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
   type ProductCreateInput,
   type ProductTopLevelOut,
@@ -13,7 +13,7 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { FC } from "react";
+import { type FC, useMemo } from "react";
 import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -38,7 +38,6 @@ import {
   FormWrapper,
   getSubmitButtonText,
 } from "../form-utils";
-import type { PendingImage } from "../PendingImageUpload";
 import { ProductFormFields } from "./product-form-fields";
 
 // Form schema for product form (simple Zod schema without z.custom)
@@ -163,7 +162,7 @@ interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
     name: string;
   } | null;
   unitMappings: UnitMappingInput[];
-  images?: PendingImage[] | ImageOut[];
+  images?: ImageOut[];
 }
 
 // Props for edit mode
@@ -190,6 +189,16 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
+
+  // PDF manuals share the images relation; split them so the image editor
+  // (cover/reorder) only sees displayable images.
+  const { images: existingImages, documents: existingDocuments } = useMemo(
+    () =>
+      partitionEntityFiles(
+        mode === "edit" && product?.images ? product.images : [],
+      ),
+    [mode, product?.images],
+  );
   const initialName = mode === "create" ? props.initialName : undefined;
   const initialExpectedQuantity =
     mode === "create" ? props.initialExpectedQuantity : undefined;
@@ -224,6 +233,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         name: values.name,
         manufacturer: values.manufacturer,
         model: values.model,
+        notes: values.notes,
         category: values.category,
         upc: values.upc,
         fdc_id: values.fdc_id,
@@ -331,9 +341,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
             <ProductFormFields
               form={form}
               imageHandlers={imageState}
-              existingImages={
-                mode === "edit" && product?.images ? product.images : []
-              }
+              existingImages={existingImages}
+              existingDocuments={existingDocuments}
+              documentFolder={product?.shortcode ?? undefined}
               pendingImages={imageState.pendingImages}
             />
           </Stack>

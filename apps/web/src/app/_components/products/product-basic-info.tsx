@@ -1,9 +1,10 @@
+import type { ImageOut } from "@cubby/schemas/image";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
-import { Row } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -20,15 +21,24 @@ import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
 import { CategoryLabel } from "./CategoryLabel";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
+import { ProductNotesMarkdown } from "./product-notes-markdown";
 
 interface ProductBasicInfoProps {
   product: ProductWithFoodOut;
   onEdit: () => void;
+  /** Attached PDF manuals, for resolving [[wiki links]] in the notes. */
+  documents?: ImageOut[];
+  /** Notes wiki-link click → jump the inline Manuals viewer to that page. */
+  onManualLink?: (documentId: string, page: number) => void;
 }
+
+const NO_DOCUMENTS: ImageOut[] = [];
 
 export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   product,
   onEdit,
+  documents = NO_DOCUMENTS,
+  onManualLink,
 }) => {
   const api = useTRPC();
 
@@ -66,7 +76,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       : []),
     { label: "Manufacturer", value: product.manufacturer },
     { label: "Model", value: product.model },
-    { label: "Notes", value: product.notes },
     {
       label: "Price",
       value: (
@@ -180,6 +189,20 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     <>
       <BasicInfo
         fields={fields}
+        // Notes render as a block below the fact rows — InfoRow's right-aligned
+        // value span is hostile to multi-line markdown.
+        footer={
+          product.notes ? (
+            <Stack gap="xs">
+              <p className="eyebrow my-0">Notes</p>
+              <ProductNotesMarkdown
+                notes={product.notes}
+                documents={documents}
+                onManualLink={onManualLink}
+              />
+            </Stack>
+          ) : undefined
+        }
         actions={
           // Add to Inventory lives on the Stocked At section header now —
           // this cluster is product-record actions only.
