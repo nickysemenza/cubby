@@ -119,6 +119,71 @@ export const importImageFromUrlSchema = z.object({
   entityType: entityImage,
 });
 
+// --- MCP attach_file ---------------------------------------------------------
+
+// The image-bearing entities exposed as attach targets. A subset of
+// `entityImage` (uppercase storage keys) — cookbook is excluded because it uses
+// a single write-once `coverImageId` (replace, not append), unlike these four
+// gallery join tables. Lowercase to match the `entitySchema` slug convention the
+// rest of the MCP surface uses; mapped to the join dispatch server-side.
+export const attachableImageEntity = z.enum([
+  "product",
+  "recipe",
+  "location",
+  "project",
+]);
+export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
+
+// Field map (not a z.object) so the MCP tool can consume `.shape` directly; the
+// cross-field "exactly one of url/data" rule — which JSON Schema can't express —
+// lives in `mcpAttachFileInput`'s refine (used by the tRPC procedure).
+export const attachFileFields = {
+  entityType: attachableImageEntity.describe(
+    "Target entity type to attach the file to",
+  ),
+  entityId: id.describe("ID of the target entity"),
+  url: z
+    .url()
+    .optional()
+    .describe(
+      "External http(s) URL to fetch the file from. Provide exactly one of `url` or `data`.",
+    ),
+  data: z
+    .string()
+    .optional()
+    .describe(
+      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url` or `data`.",
+    ),
+  contentType: z
+    .string()
+    .optional()
+    .describe(
+      "MIME type (image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, or application/pdf). Required for base64 `data` unless a data: URI carries it; inferred from the response for `url`.",
+    ),
+  filename: z
+    .string()
+    .optional()
+    .describe("Optional filename for the stored object."),
+};
+
+export const mcpAttachFileInput = z
+  .object(attachFileFields)
+  .refine((v) => Boolean(v.url) !== Boolean(v.data), {
+    message: "Provide exactly one of `url` or `data`",
+  });
+export type McpAttachFileInput = z.infer<typeof mcpAttachFileInput>;
+
+export const attachFileResponse = z.object({
+  imageId: id,
+  url: z.url(),
+  filename: z.string(),
+  contentType: z.string(),
+  kind: z.enum(["image", "document"]),
+  entityType: attachableImageEntity,
+  entityId: id,
+});
+export type AttachFileResponse = z.infer<typeof attachFileResponse>;
+
 // Schema for culling pending images
 export const cullPendingImagesSchema = z.object({
   olderThanHours: z.int().positive().default(24),

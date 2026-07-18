@@ -67,6 +67,9 @@ export const AppErrors = {
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_CULL_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_IMPORT_FAILED: "INTERNAL_SERVER_ERROR",
+  // Attach validation (bad target id, unsupported content type, empty/absent
+  // payload) — caller errors, so a 4xx that stays out of Sentry.
+  IMAGE_ATTACH_FAILED: "BAD_REQUEST",
 } as const;
 
 export type AppErrorReason = keyof typeof AppErrors;
