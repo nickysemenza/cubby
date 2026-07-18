@@ -14,13 +14,7 @@ import {
   useActionMutation,
   type VariablesOf,
 } from "~/app/_components/hooks/useActionMutation";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { FormWrapper } from "../form-utils";
 
 /**
@@ -107,31 +101,25 @@ export function QuickAddDialog<
   };
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
         if (!next) form.reset(resolveDefaults());
         onOpenChange(next);
       }}
+      title={title}
+      description={description}
     >
-      <DialogContent size="sm">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <FormWrapper<TFieldValues>
-          form={form}
-          onSubmit={onSubmit}
-          isPending={createMutation.isPending}
-          error={
-            createMutation.error ? createMutation.error.message : undefined
-          }
-          onCancel={() => onOpenChange(false)}
-          submitButtonText={submitButtonText}
-        >
-          {children(form)}
-        </FormWrapper>
-      </DialogContent>
-    </Dialog>
+      <FormWrapper<TFieldValues>
+        form={form}
+        onSubmit={onSubmit}
+        isPending={createMutation.isPending}
+        error={createMutation.error ? createMutation.error.message : undefined}
+        onCancel={() => onOpenChange(false)}
+        submitButtonText={submitButtonText}
+      >
+        {children(form)}
+      </FormWrapper>
+    </ResponsiveDialog>
   );
 }

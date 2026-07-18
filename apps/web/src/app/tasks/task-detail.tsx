@@ -1,10 +1,10 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { useQueries } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { Info, Link2 } from "lucide-react";
 import type { FC } from "react";
 import { useMemo } from "react";
 import { WithTaskSearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
@@ -34,13 +34,7 @@ interface TaskDetailProps {
 
 /** A blocked-by/blocking dependency link, name-only. */
 function TaskDependencyBadge({ id, name }: { id: string; name: string }) {
-  return (
-    <Link to="/tasks/$id" params={{ id }}>
-      <Badge variant="outline" className="cursor-pointer hover:bg-muted">
-        {name}
-      </Badge>
-    </Link>
-  );
+  return <EntityInlineLink entity="task" data={{ id, name }} compact />;
 }
 
 export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
@@ -183,13 +177,14 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     },
     {
       label: "Project",
-      value: task.projectId ? (
-        <Link to="/projects/$id" params={{ id: task.projectId }}>
-          <Badge variant="outline" className="cursor-pointer hover:bg-muted">
-            {task.projectName}
-          </Badge>
-        </Link>
-      ) : undefined,
+      value:
+        task.projectId && task.projectName ? (
+          <EntityInlineLink
+            entity="project"
+            data={{ id: task.projectId, name: task.projectName }}
+            compact
+          />
+        ) : undefined,
     },
   ];
 
@@ -247,13 +242,16 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     },
     {
       label: "Project",
-      value: task.projectId ? (
-        <Link to="/projects/$id" params={{ id: task.projectId }}>
-          {task.projectName}
-        </Link>
-      ) : (
-        <NoneValue />
-      ),
+      value:
+        task.projectId && task.projectName ? (
+          <EntityInlineLink
+            entity="project"
+            data={{ id: task.projectId, name: task.projectName }}
+            truncate
+          />
+        ) : (
+          <NoneValue />
+        ),
     },
   ];
 

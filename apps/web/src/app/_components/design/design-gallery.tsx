@@ -18,11 +18,17 @@ import {
   type IngredientPreview,
   type LocationPreview,
   type ProductPreview,
+  type ProjectPreview,
+  type PurchasePreview,
   type RecipePreview,
+  type TaskPreview,
   toIngredientCard,
   toLocationCard,
   toProductCard,
+  toProjectCard,
+  toPurchaseCard,
   toRecipeCard,
+  toTaskCard,
   toUsdaCard,
   type UsdaPreview,
 } from "~/app/_components/EntityPreviewContent";
@@ -1454,6 +1460,41 @@ const LOCATION_SAMPLE: LocationPreview = {
   itemCount: 12,
   subCount: 3,
 };
+const PROJECT_SAMPLE: ProjectPreview = {
+  id: "sample-project",
+  name: "Backyard Deck Rebuild",
+  icon: "🔨",
+  status: "in_progress",
+  kind: "renovation",
+  locations: ["Home"],
+  spent: 1240,
+  costEstimate: 2000,
+  taskCount: 8,
+  doneTaskCount: 5,
+  purchaseCount: 6,
+};
+const TASK_SAMPLE: TaskPreview = {
+  id: "sample-task",
+  name: "Sand and stain the railing",
+  status: "in_progress",
+  category: "carpentry",
+  dueDate: "2026-08-01",
+  dueEndDate: null,
+  projectId: "sample-project",
+  projectName: "Backyard Deck Rebuild",
+};
+const PURCHASE_SAMPLE: PurchasePreview = {
+  id: "sample-purchase",
+  name: "Cedar decking boards",
+  cost: 340,
+  date: "2026-07-10",
+  category: "materials",
+  subcategory: "lumber",
+  purchaser: "nicky",
+  future: false,
+  projectId: "sample-project",
+  projectName: "Backyard Deck Rebuild",
+};
 
 const PREVIEW_DEMOS = [
   { key: "recipe", node: <ManifestCard {...toRecipeCard(RECIPE_SAMPLE)} /> },
@@ -1466,5 +1507,11 @@ const PREVIEW_DEMOS = [
   {
     key: "location",
     node: <ManifestCard {...toLocationCard(LOCATION_SAMPLE)} />,
+  },
+  { key: "project", node: <ManifestCard {...toProjectCard(PROJECT_SAMPLE)} /> },
+  { key: "task", node: <ManifestCard {...toTaskCard(TASK_SAMPLE)} /> },
+  {
+    key: "purchase",
+    node: <ManifestCard {...toPurchaseCard(PURCHASE_SAMPLE)} />,
   },
 ] as const;

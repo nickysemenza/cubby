@@ -6,7 +6,6 @@ import type {
   TaskOut,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import {
   FileText,
   ImageIcon,
@@ -27,6 +26,7 @@ import {
 } from "~/app/_components/data-table/detail-page";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import EntityImageList from "~/app/_components/EntityImageList";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -93,13 +93,7 @@ interface ProjectDetailPageProps {
  * carry `ProjectPill`'s status icon/tooltip (those need a full `ProjectOut`).
  */
 function DependencyBadge({ id, name }: { id: string; name: string }) {
-  return (
-    <Link to="/projects/$id" params={{ id }}>
-      <Badge variant="outline" className="cursor-pointer hover:bg-muted">
-        {name}
-      </Badge>
-    </Link>
-  );
+  return <EntityInlineLink entity="project" data={{ id, name }} compact />;
 }
 
 /**

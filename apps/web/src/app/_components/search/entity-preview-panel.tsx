@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
+import { match } from "ts-pattern";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
+import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { TaskDetail } from "~/app/tasks/task-detail";
 import { Row } from "~/components/layout";
@@ -83,52 +85,47 @@ export function EntityPreviewPanel({
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {entityType === "product" ? (
-          data ? (
-            <ProductDetail product={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "recipe" ? (
-          data ? (
-            <RecipeDetail recipe={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "ingredient" ? (
-          data ? (
-            <IngredientDetail ingredient={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "location" ? (
-          data ? (
-            <LocationDetail location={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "inventory" ? (
-          data ? (
-            <InventoryDetail inventoryitem={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "usda-food" ? (
-          data ? (
-            <USDAFoodDetail id={fdcIdFromParam(id)} food={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "image" ? (
-          data ? (
-            <ImageDetail image={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "meal" ? <MealDetailPage mealId={id as never} /> : null}
-        {entityType === "task" ? (
-          data ? (
-            <TaskDetail task={data as never} />
-          ) : null
-        ) : null}
-        {entityType === "purchase" ? (
-          data ? (
-            <PurchaseDetail purchase={data as never} />
-          ) : null
-        ) : null}
+        {match(entityType)
+          .with("product", () =>
+            data ? <ProductDetail product={data as never} /> : null,
+          )
+          .with("recipe", () =>
+            data ? <RecipeDetail recipe={data as never} /> : null,
+          )
+          .with("ingredient", () =>
+            data ? <IngredientDetail ingredient={data as never} /> : null,
+          )
+          .with("location", () =>
+            data ? <LocationDetail location={data as never} /> : null,
+          )
+          .with("inventory", () =>
+            data ? <InventoryDetail inventoryitem={data as never} /> : null,
+          )
+          .with("usda-food", () =>
+            data ? (
+              <USDAFoodDetail id={fdcIdFromParam(id)} food={data as never} />
+            ) : null,
+          )
+          .with("image", () =>
+            data ? <ImageDetail image={data as never} /> : null,
+          )
+          // Meal fetches its own data internally (mealId), unlike the other
+          // arms which render off this panel's shared getByID `data`.
+          .with("meal", () => <MealDetailPage mealId={id as never} />)
+          .with("task", () =>
+            data ? <TaskDetail task={data as never} /> : null,
+          )
+          .with("purchase", () =>
+            data ? <PurchaseDetail purchase={data as never} /> : null,
+          )
+          .with("project", () =>
+            data ? <ProjectDetailPage project={data as never} /> : null,
+          )
+          // Cookbooks are canPreview:false (entity-contracts.ts) — this sheet
+          // never opens for them; kept only so .exhaustive() below still
+          // catches a future entity addition that forgets a preview arm here.
+          .with("cookbook", () => null)
+          .exhaustive()}
       </div>
     </div>
   );

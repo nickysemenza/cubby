@@ -7,23 +7,16 @@ import {
   Activity,
   ArrowLeft,
   BookOpen,
-  ClipboardList,
   Equal,
-  Hammer,
   MapPin,
   Package,
   Search,
   Settings,
-  ShoppingCart,
   Sparkles,
   Wrench,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import {
-  PROJECT_STATUS_LABELS,
-  TASK_STATUS_LABELS,
-} from "~/app/projects/shared";
 import { Row, Stack } from "~/components/layout";
 import {
   CommandDialog,
@@ -40,7 +33,7 @@ import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/integrations/trpc/react";
 import { setFlag, useFlag } from "~/lib/flags";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { AgentAnswer, AgentSourceContent } from "./agent/AgentAnswer";
 import { quickActions } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
@@ -74,21 +67,6 @@ interface GlobalCommandMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-/** One normalized tracker (project/task/purchase) search hit, pre-shaped for
- * the shared render loop below. */
-type TrackerCommandItem = {
-  key: string;
-  icon: React.ReactNode;
-  label: string;
-  subtitle: string;
-  onSelect: () => void;
-};
-
-type TrackerGroup = {
-  heading: string;
-  items: TrackerCommandItem[];
-};
-
 export function GlobalCommandMenu({
   open: externalOpen,
   onOpenChange: externalOnOpenChange,
@@ -107,7 +85,6 @@ export function GlobalCommandMenu({
     useGlobalSearch(search);
   const conversion = useConversionAnswer(search);
 
-  // Project-tracker data — already cached from the dashboard, filter client-side
   const trpc = useTRPC();
 
   // --- Agent ("Ask Cubby") ---
@@ -131,93 +108,6 @@ export function GlobalCommandMenu({
   React.useEffect(() => {
     if (agentError) toast.error(agentError);
   }, [agentError]);
-  const { data: trackerData } = useQuery({
-    ...trpc.project.dashboard.queryOptions(),
-    staleTime: 5 * 60 * 1000,
-    enabled: search.length >= 2,
-  });
-
-  const trackerResults = React.useMemo(() => {
-    if (!trackerData || !search || search.length < 2) return null;
-    const q = search.toLowerCase();
-
-    const projects = trackerData.projects
-      .filter((p) => p.name.toLowerCase().includes(q))
-      .slice(0, 5);
-    const tasks = trackerData.tasks
-      .filter((t) => t.name.toLowerCase().includes(q))
-      .slice(0, 5);
-    const purchases = trackerData.purchases
-      .filter((p) => p.name.toLowerCase().includes(q))
-      .slice(0, 5);
-
-    if (projects.length === 0 && tasks.length === 0 && purchases.length === 0)
-      return null;
-    return { projects, tasks, purchases };
-  }, [trackerData, search]);
-
-  // Normalize the 3 tracker-entity result arrays into one common shape so the
-  // render pass below is a single generic loop instead of 3 hand-rolled
-  // CommandGroup blocks (mirrors the groupedResults pattern above).
-  const trackerGroups = React.useMemo<TrackerGroup[]>(() => {
-    if (!trackerResults) return [];
-    const groups: TrackerGroup[] = [
-      {
-        heading: "Projects",
-        items: trackerResults.projects.map((p) => ({
-          key: `tracker-project-${p.id}`,
-          icon: p.icon ? (
-            <span className="text-base">{p.icon}</span>
-          ) : (
-            <Hammer className="h-4 w-4" />
-          ),
-          label: p.name,
-          subtitle: [PROJECT_STATUS_LABELS[p.status], p.kind]
-            .filter(Boolean)
-            .join(" · "),
-          onSelect: () => {
-            navigate({ to: "/projects/$id", params: { id: p.id } });
-            setOpen(false);
-          },
-        })),
-      },
-      {
-        heading: "Tasks",
-        items: trackerResults.tasks.map((t) => ({
-          key: `tracker-task-${t.id}`,
-          icon: <ClipboardList className="h-4 w-4" />,
-          label: t.name,
-          subtitle: [TASK_STATUS_LABELS[t.status], t.projectName]
-            .filter(Boolean)
-            .join(" · "),
-          onSelect: () => {
-            navigate({ to: "/tasks", search: { q: t.name } });
-            setOpen(false);
-          },
-        })),
-      },
-      {
-        heading: "Purchases",
-        items: trackerResults.purchases.map((p) => ({
-          key: `tracker-purchase-${p.id}`,
-          icon: <ShoppingCart className="h-4 w-4" />,
-          label: p.name,
-          subtitle: [
-            p.cost != null ? formatCurrency(p.cost, 0) : null,
-            p.projectName,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-          onSelect: () => {
-            navigate({ to: "/purchases", search: { q: p.name } });
-            setOpen(false);
-          },
-        })),
-      },
-    ];
-    return groups.filter((group) => group.items.length > 0);
-  }, [trackerResults, navigate, setOpen]);
-
   // Shortcode detection and lookup
   const parsedShortcode = parseShortcode(search);
   const locationQuery = useQuery({
@@ -414,7 +304,7 @@ export function GlobalCommandMenu({
             )}
 
             {/* Empty state */}
-            {isEmpty && !isLoading && !shortcodeResult && !trackerResults && (
+            {isEmpty && !isLoading && !shortcodeResult && (
               <CommandEmpty>Nothing matched — try another word.</CommandEmpty>
             )}
 
@@ -495,31 +385,6 @@ export function GlobalCommandMenu({
                 </CommandGroup>
               </div>
             )}
-
-            {/* Project-tracker results — filtered from cached dashboard data */}
-            {trackerGroups.length > 0 &&
-              !isLoading &&
-              trackerGroups.map((group) => (
-                <CommandGroup key={group.heading} heading={group.heading}>
-                  {group.items.map((item) => (
-                    <CommandItem
-                      key={item.key}
-                      onSelect={item.onSelect}
-                      className="flex items-center gap-2"
-                    >
-                      <IconTile size="md" className="rounded bg-muted/50">
-                        {item.icon}
-                      </IconTile>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">{item.label}</div>
-                        <div className="truncate text-muted-foreground text-xs">
-                          {item.subtitle}
-                        </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              ))}
 
             {/* Quick Actions - show when searching and matching */}
             {hasSearch && filteredActions.length > 0 && !isLoading && (

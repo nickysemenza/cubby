@@ -12,7 +12,10 @@ import {
   IngredientPreviewContent,
   LocationPreviewContent,
   ProductPreviewContent,
+  ProjectPreviewContent,
+  PurchasePreviewContent,
   RecipePreviewContent,
+  TaskPreviewContent,
   UsdaFoodPreviewContent,
 } from "./EntityPreviewContent";
 
@@ -37,7 +40,10 @@ type PreviewEntity =
   | "ingredient"
   | "product"
   | "usda-food"
-  | "location";
+  | "location"
+  | "project"
+  | "task"
+  | "purchase";
 
 type EntityPreviewLinkProps = {
   entity: PreviewEntity;
@@ -85,6 +91,9 @@ export function EntityPreviewLink({
             <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />
           ))
           .with("location", () => <LocationPreviewContent locationId={id} />)
+          .with("project", () => <ProjectPreviewContent projectId={id} />)
+          .with("task", () => <TaskPreviewContent taskId={id} />)
+          .with("purchase", () => <PurchasePreviewContent purchaseId={id} />)
           .exhaustive()}
       </PreviewCardContent>
     </PreviewCard>

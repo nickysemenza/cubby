@@ -1,13 +1,19 @@
 import type { LocationType } from "@cubby/schemas/location";
+import type {
+  ProjectKind,
+  ProjectStatus,
+  TaskStatus,
+} from "@cubby/schemas/project";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+import { capitalize, PROJECT_STATUS_LABELS } from "~/app/projects/shared";
 import { EntityIcon } from "~/entities/entities";
 import { usdaRouteId } from "~/entities/entity-query";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
-import { cn } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { EntityPreviewLink } from "./EntityPreviewLink";
 import { LocationIcon } from "./locations/location-icons";
 
@@ -38,6 +44,28 @@ type EntityInlineLinkProps = {
       data: {
         foodInfo: { description: string | null; data_type?: DataType };
         fdc_id: number;
+      };
+    }
+  | {
+      entity: "project";
+      data: MinimalEntityData & {
+        icon?: string | null;
+        status?: ProjectStatus;
+        kind?: ProjectKind | null;
+      };
+    }
+  | {
+      entity: "task";
+      data: MinimalEntityData & {
+        status?: TaskStatus;
+        projectName?: string | null;
+      };
+    }
+  | {
+      entity: "purchase";
+      data: MinimalEntityData & {
+        cost?: number | null;
+        projectName?: string | null;
       };
     }
 );
@@ -214,5 +242,69 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         </EntityPreviewLink>
       );
     })
+    .with({ entity: "project" }, ({ data }) => (
+      <EntityPreviewLink
+        entity="project"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+      >
+        <EntityLinkBody
+          icon={
+            data.icon ? (
+              <span className="text-xs leading-none">{data.icon}</span>
+            ) : (
+              <EntityIcon entity="project" size={12} colored />
+            )
+          }
+          name={data.name}
+          metadata={
+            data.kind
+              ? capitalize(data.kind)
+              : data.status
+                ? PROJECT_STATUS_LABELS[data.status]
+                : undefined
+          }
+          compact={compact}
+          truncate={truncate}
+        />
+      </EntityPreviewLink>
+    ))
+    .with({ entity: "task" }, ({ data }) => (
+      <EntityPreviewLink
+        entity="task"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+      >
+        <EntityLinkBody
+          icon={<EntityIcon entity="task" size={12} colored />}
+          name={data.name}
+          metadata={data.projectName ?? undefined}
+          compact={compact}
+          truncate={truncate}
+        />
+      </EntityPreviewLink>
+    ))
+    .with({ entity: "purchase" }, ({ data }) => (
+      <EntityPreviewLink
+        entity="purchase"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+      >
+        <EntityLinkBody
+          icon={<EntityIcon entity="purchase" size={12} colored />}
+          name={data.name}
+          metadata={
+            data.cost != null
+              ? formatCurrency(data.cost)
+              : (data.projectName ?? undefined)
+          }
+          compact={compact}
+          truncate={truncate}
+        />
+      </EntityPreviewLink>
+    ))
     .exhaustive();
 };
