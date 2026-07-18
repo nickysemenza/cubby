@@ -45,6 +45,7 @@ import {
   boolean,
   customType,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -782,7 +783,9 @@ export const project = pgTable(
       .default("planning"),
     kind: text("kind", { enum: projectKindValues }),
     locations: text("locations").array().notNull().default(sql`'{}'::text[]`),
-    costEstimate: real("costEstimate"),
+    // double precision (not `real`): this is a dollar ledger — float4 loses
+    // cents above ~$16k, which the import reconciliation actually caught.
+    costEstimate: doublePrecision("costEstimate"),
     startDate: date("startDate", { mode: "string" }),
     endDate: date("endDate", { mode: "string" }),
     icon: text("icon"),
@@ -891,7 +894,8 @@ export const purchase = pgTable(
   {
     id: pkUuid<PurchaseId>(),
     name: text("name").notNull(),
-    cost: real("cost"),
+    // See project.costEstimate — dollars need double precision, not float4.
+    cost: doublePrecision("cost"),
     date: date("date", { mode: "string" }),
     category: text("category", { enum: purchaseCategoryValues }),
     // Free-form label (organic Notion option set, intentionally not an enum).
