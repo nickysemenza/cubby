@@ -1,20 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
-import {
-  getEntityContract,
-  listOnlyEntities,
-  standardEntities,
-} from "./entity-contracts";
+import { getEntityContract, standardEntities } from "./entity-contracts";
 
 // Guards the drift the "no tRPC router yet" stubs shipped with: every entity
-// that claims a crud-factory-shaped contract (standard or list-only) must
-// actually carry real mutations and non-empty invalidation keys, not a
-// hand-rolled stub with `invalidationKeys: []`.
+// that claims a crud-factory-shaped standard contract must actually carry
+// real mutations and non-empty invalidation keys, not a hand-rolled stub with
+// `invalidationKeys: []`.
 describe("entity-contracts drift guard", () => {
-  const entitiesWithCrudContracts: Entity[] = [
-    ...standardEntities,
-    ...listOnlyEntities,
-  ];
+  const entitiesWithCrudContracts: Entity[] = [...standardEntities];
 
   it.each(
     entitiesWithCrudContracts,
@@ -30,11 +23,5 @@ describe("entity-contracts drift guard", () => {
 
   it.each(standardEntities)("%s can preview (has a detail page)", (entity) => {
     expect(getEntityContract(entity).canPreview).toBe(true);
-  });
-
-  it.each(
-    listOnlyEntities,
-  )("%s cannot preview (no detail page by design)", (entity) => {
-    expect(getEntityContract(entity).canPreview).toBe(false);
   });
 });

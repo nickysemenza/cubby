@@ -1,6 +1,12 @@
 import { unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  projectCreateInput,
+  purchaseCreateInput,
+  taskCreateInput,
+} from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { mock } from "~/lib/test/mock-schema";
 import {
   findOrphanedEntityEmbeddings,
   getEntityEmbeddingDeletedAt,
@@ -10,10 +16,13 @@ import {
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct, deleteProducts } from "~/server/repo/product";
+import { createProject, updateProject } from "~/server/repo/project";
+import { createPurchase } from "~/server/repo/purchase";
 import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { createTask } from "~/server/repo/task";
 import {
   getBackgroundBatchDetail,
   listBackgroundBatches,
@@ -76,6 +85,75 @@ describe("mutation side effects integration", () => {
         }),
         expect.objectContaining({
           payload: { entityType: "inventory", entityId: inventory.id },
+        }),
+      ]),
+    );
+  });
+
+  it("project rename enqueues project and related task/purchase embedding refreshes", async () => {
+    const project = await createProject(
+      ctx.db,
+      mock(projectCreateInput, {
+        overrides: { name: "Manifest Tracker Project" },
+      }),
+      ctx.actor,
+    );
+    const task = await createTask(
+      ctx.db,
+      mock(taskCreateInput, {
+        overrides: { name: "Manifest Tracker Task", projectId: project.id },
+      }),
+      ctx.actor,
+    );
+    const purchase = await createPurchase(
+      ctx.db,
+      mock(purchaseCreateInput, {
+        overrides: {
+          name: "Manifest Tracker Purchase",
+          projectId: project.id,
+        },
+      }),
+      ctx.actor,
+    );
+
+    // Tasks/purchases embed their project's name, so a rename must fan out
+    // (see refreshTrackerEmbeddingsForProject / findTrackerEmbeddingRefsForProjects).
+    await updateProject(
+      ctx.db,
+      project.id,
+      { name: "Manifest Tracker Project Renamed" },
+      ctx.actor,
+    );
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "project", entityId: project.id },
+      source: "test.project.rename",
+    });
+
+    const batches = await listBackgroundBatches(ctx.db, 20);
+    const embeddingBatches = batches.filter(
+      (batch) =>
+        batch.kind === "entity-embedding.refresh" &&
+        (batch.metadata as { source?: string } | null)?.source ===
+          "test.project.rename",
+    );
+    expect(embeddingBatches.length).toBeGreaterThan(0);
+    const details = await Promise.all(
+      embeddingBatches.map((batch) =>
+        getBackgroundBatchDetail(ctx.db, batch.id),
+      ),
+    );
+    const jobs = details.flatMap((detail) => detail?.jobs ?? []);
+    expect(jobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: { entityType: "project", entityId: project.id },
+        }),
+        expect.objectContaining({
+          payload: { entityType: "task", entityId: task.id },
+        }),
+        expect.objectContaining({
+          payload: { entityType: "purchase", entityId: purchase.id },
         }),
       ]),
     );

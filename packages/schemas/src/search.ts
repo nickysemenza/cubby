@@ -9,6 +9,9 @@ export const searchableEntities = [
   "ingredient",
   "location",
   "inventory",
+  "project",
+  "task",
+  "purchase",
 ] as const satisfies readonly Entity[];
 
 export const searchableEntitySchema = z.enum(searchableEntities);
@@ -93,12 +96,36 @@ const ingredientResult = z.object({
   recipeCount: z.number().nullable(),
 });
 
+const projectResult = z.object({
+  ...searchResultBaseFields,
+  entityType: z.literal("project"),
+  status: z.string().nullable(),
+  spent: z.number().nullable(),
+});
+
+const taskResult = z.object({
+  ...searchResultBaseFields,
+  entityType: z.literal("task"),
+  status: z.string().nullable(),
+  projectName: z.string().nullable(),
+});
+
+const purchaseResult = z.object({
+  ...searchResultBaseFields,
+  entityType: z.literal("purchase"),
+  cost: z.number().nullable(),
+  projectName: z.string().nullable(),
+});
+
 export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   productResult,
   locationResult,
   inventoryResult,
   recipeResult,
   ingredientResult,
+  projectResult,
+  taskResult,
+  purchaseResult,
 ]);
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
 
@@ -130,3 +157,6 @@ export type LocationSearchResult = z.infer<typeof locationResult>;
 export type InventorySearchResult = z.infer<typeof inventoryResult>;
 export type RecipeSearchResult = z.infer<typeof recipeResult>;
 export type IngredientSearchResult = z.infer<typeof ingredientResult>;
+export type ProjectSearchResult = z.infer<typeof projectResult>;
+export type TaskSearchResult = z.infer<typeof taskResult>;
+export type PurchaseSearchResult = z.infer<typeof purchaseResult>;

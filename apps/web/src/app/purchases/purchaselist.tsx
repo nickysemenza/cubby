@@ -22,6 +22,7 @@ import {
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
@@ -225,6 +226,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
   );
 
   const tableStateOptions = useSeededFilter("name", initialSearch);
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 
   const {
     table,
@@ -258,10 +260,6 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     filters,
     deletable: deletableConfig,
     nameEditable,
-    // /purchases has no dedicated detail page — entities.purchase.routes.detail
-    // points back at this list, so the linkified name and "View Details"
-    // would both be no-ops.
-    omitDetailLink: true,
     infinite: true,
     tableStateOptions,
   });
@@ -276,10 +274,13 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         timing={timing}
         entity="purchase"
         actions={actions}
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
       />
+      <PreviewSheet />
       {deleteDialog}
     </div>
   );

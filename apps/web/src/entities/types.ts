@@ -13,6 +13,8 @@ export type EntityDetailRoute =
   | "/inventory/$id"
   | "/meals/$id"
   | "/projects/$id"
+  | "/tasks/$id"
+  | "/purchases/$id"
   | "/usda/$id"
   | "/images/$id";
 

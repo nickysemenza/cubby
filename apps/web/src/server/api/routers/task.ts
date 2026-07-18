@@ -19,6 +19,7 @@ import {
   taskList,
   updateTask,
 } from "~/server/repo/task";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
@@ -38,10 +39,33 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     getByID: async (services, id: TaskId) => getTaskByID(services.db, id),
     list: async (services, filters, sort, pagination) =>
       taskList(services.db, filters, sort, pagination),
-    create: async (services, data) =>
-      createTask(services.db, data, services.actorContext),
-    update: async (services, id: TaskId, data) =>
-      updateTask(services.db, id, data, services.actorContext),
+    create: async (services, data) => {
+      const created = await createTask(
+        services.db,
+        data,
+        services.actorContext,
+      );
+      await runMutationSideEffects(services.db, {
+        action: "created",
+        entity: { entityType: "task", entityId: created.id },
+        source: "task.create",
+      });
+      return created;
+    },
+    update: async (services, id: TaskId, data) => {
+      const updated = await updateTask(
+        services.db,
+        id,
+        data,
+        services.actorContext,
+      );
+      await runMutationSideEffects(services.db, {
+        action: "updated",
+        entity: { entityType: "task", entityId: id },
+        source: "task.update",
+      });
+      return updated;
+    },
   },
   entityName: "task",
 });

@@ -3,7 +3,10 @@ import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
+  unsafeProjectId,
+  unsafePurchaseId,
   unsafeRecipeId,
+  unsafeTaskId,
 } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -15,9 +18,12 @@ import {
   inventoryEntry,
   location,
   product,
+  project,
+  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  task,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -32,7 +38,10 @@ import {
   buildInventoryEmbeddingText,
   buildLocationEmbeddingText,
   buildProductEmbeddingText,
+  buildProjectEmbeddingText,
+  buildPurchaseEmbeddingText,
   buildRecipeEmbeddingText,
+  buildTaskEmbeddingText,
   normalizeSearchText,
 } from "~/server/semantic/text";
 
@@ -248,6 +257,77 @@ async function getInventoryEmbeddingTexts(
   }));
 }
 
+async function getProjectEmbeddingTexts(
+  db: Database,
+  limit?: number,
+): Promise<SearchableEntityText[]> {
+  const rows = await getDb(db).query.project.findMany({
+    where: notDeleted(project),
+    columns: {
+      id: true,
+      name: true,
+      status: true,
+      kind: true,
+      locations: true,
+      notes: true,
+    },
+    ...(limit == null ? {} : { limit }),
+  });
+  return rows.map((row) => ({
+    entityType: "project",
+    entityId: row.id,
+    embeddingText: buildProjectEmbeddingText(row),
+  }));
+}
+
+async function getTaskEmbeddingTexts(
+  db: Database,
+  limit?: number,
+): Promise<SearchableEntityText[]> {
+  const query = getDb(db)
+    .select({
+      id: task.id,
+      name: task.name,
+      status: task.status,
+      category: task.category,
+      projectName: project.name,
+    })
+    .from(task)
+    .leftJoin(project, eq(task.projectId, project.id))
+    .where(notDeleted(task));
+  const rows = limit == null ? await query : await query.limit(limit);
+  return rows.map((row) => ({
+    entityType: "task",
+    entityId: row.id,
+    embeddingText: buildTaskEmbeddingText(row),
+  }));
+}
+
+async function getPurchaseEmbeddingTexts(
+  db: Database,
+  limit?: number,
+): Promise<SearchableEntityText[]> {
+  const query = getDb(db)
+    .select({
+      id: purchase.id,
+      name: purchase.name,
+      category: purchase.category,
+      subcategory: purchase.subcategory,
+      purchaser: purchase.purchaser,
+      notes: purchase.notes,
+      projectName: project.name,
+    })
+    .from(purchase)
+    .leftJoin(project, eq(purchase.projectId, project.id))
+    .where(notDeleted(purchase));
+  const rows = limit == null ? await query : await query.limit(limit);
+  return rows.map((row) => ({
+    entityType: "purchase",
+    entityId: row.id,
+    embeddingText: buildPurchaseEmbeddingText(row),
+  }));
+}
+
 export async function getEmbeddingTextsForEntityTypes(
   db: Database,
   entityTypes: SearchableEntity[],
@@ -270,6 +350,12 @@ export async function getEmbeddingTextsForEntityTypes(
           return getRecipeEmbeddingTexts(db, perTypeLimit);
         case "inventory":
           return getInventoryEmbeddingTexts(db, perTypeLimit);
+        case "project":
+          return getProjectEmbeddingTexts(db, perTypeLimit);
+        case "task":
+          return getTaskEmbeddingTexts(db, perTypeLimit);
+        case "purchase":
+          return getPurchaseEmbeddingTexts(db, perTypeLimit);
         default: {
           const exhaustive: never = entityType;
           throw new Error(`Unsupported searchable entity: ${exhaustive}`);
@@ -486,6 +572,73 @@ export async function getEmbeddingTextForEntity(
               locationPath: row.locationName,
               amount: row.amount,
             }),
+          }
+        : null;
+    }
+    case "project": {
+      const id = unsafeProjectId(entityId);
+      const row = await getDb(db).query.project.findFirst({
+        where: and(eq(project.id, id), notDeleted(project)),
+        columns: {
+          id: true,
+          name: true,
+          status: true,
+          kind: true,
+          locations: true,
+          notes: true,
+        },
+      });
+      return row
+        ? {
+            entityType,
+            entityId: row.id,
+            embeddingText: buildProjectEmbeddingText(row),
+          }
+        : null;
+    }
+    case "task": {
+      const id = unsafeTaskId(entityId);
+      const [row] = await getDb(db)
+        .select({
+          id: task.id,
+          name: task.name,
+          status: task.status,
+          category: task.category,
+          projectName: project.name,
+        })
+        .from(task)
+        .leftJoin(project, eq(task.projectId, project.id))
+        .where(and(eq(task.id, id), notDeleted(task)))
+        .limit(1);
+      return row
+        ? {
+            entityType,
+            entityId: row.id,
+            embeddingText: buildTaskEmbeddingText(row),
+          }
+        : null;
+    }
+    case "purchase": {
+      const id = unsafePurchaseId(entityId);
+      const [row] = await getDb(db)
+        .select({
+          id: purchase.id,
+          name: purchase.name,
+          category: purchase.category,
+          subcategory: purchase.subcategory,
+          purchaser: purchase.purchaser,
+          notes: purchase.notes,
+          projectName: project.name,
+        })
+        .from(purchase)
+        .leftJoin(project, eq(purchase.projectId, project.id))
+        .where(and(eq(purchase.id, id), notDeleted(purchase)))
+        .limit(1);
+      return row
+        ? {
+            entityType,
+            entityId: row.id,
+            embeddingText: buildPurchaseEmbeddingText(row),
           }
         : null;
     }

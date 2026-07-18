@@ -17,6 +17,9 @@ const entityToAuditType: Partial<Record<Entity, AuditEntityType>> = {
   inventory: "inventory",
   recipe: "recipe",
   ingredient: "ingredient",
+  project: "project",
+  task: "task",
+  purchase: "purchase",
 };
 
 /** Base interface for entities that can have images */

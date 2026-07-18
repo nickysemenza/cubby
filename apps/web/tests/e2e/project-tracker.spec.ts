@@ -73,6 +73,12 @@ test.describe("Project tracker", () => {
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
+
+    // The name column links to the task's detail page (/tasks/$id).
+    await page.getByRole("link", { name }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("purchases: quick-add creates a purchase and cost renders as currency", async ({

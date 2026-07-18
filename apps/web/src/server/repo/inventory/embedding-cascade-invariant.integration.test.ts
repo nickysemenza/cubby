@@ -1,7 +1,13 @@
+import {
+  projectCreateInput,
+  purchaseCreateInput,
+  taskCreateInput,
+} from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { mock } from "~/lib/test/mock-schema";
 import { entityEmbedding } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
@@ -14,10 +20,13 @@ import {
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
+import { createProject, deleteProjects } from "~/server/repo/project";
+import { createPurchase, deletePurchases } from "~/server/repo/purchase";
 import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { createTask, deleteTasks } from "~/server/repo/task";
 
 // F1 regression guard: the inventory manifest has onDelete: [], so a repo/bulk
 // removal transaction is the ONLY place an inventory entry's search-embedding
@@ -160,6 +169,89 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
     // The source inventory row is hard-deleted; its embedding is deliberately
     // soft-deleted (excluded from search + orphan detection), never left live.
     expect(await embeddingDeletedAt(sourceEntry.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+});
+
+// Same F1 regression guard as above, extended to the tracker entities
+// (project/task/purchase) — their delete paths cascade
+// softDeleteEntityEmbeddingsTx exactly like inventory's.
+describe("tracker removal cascades entity embeddings (no orphans)", () => {
+  const ctx = withTestDb();
+
+  const seedEmbedding = (entityType: SearchableEntity, entityId: string) =>
+    getDb(ctx.db)
+      .insert(entityEmbedding)
+      .values({
+        entityType,
+        entityId,
+        embeddingText: `${entityType} ${entityId}`,
+        embeddingHash: `hash-${entityId}`,
+        provider: "test",
+        model: "test",
+        dimensions: 3,
+        embedding: [0, 0, 0],
+      });
+
+  const embeddingDeletedAt = async (
+    entityType: SearchableEntity,
+    entityId: string,
+  ) =>
+    (
+      await getDb(ctx.db).query.entityEmbedding.findFirst({
+        where: and(
+          eq(entityEmbedding.entityType, entityType),
+          eq(entityEmbedding.entityId, entityId),
+        ),
+        columns: { deletedAt: true },
+      })
+    )?.deletedAt;
+
+  it("deleteProjects leaves no orphan", async () => {
+    const project = await createProject(
+      ctx.db,
+      mock(projectCreateInput, {
+        overrides: { name: "Embedding Cascade Project" },
+      }),
+      TEST_ACTOR,
+    );
+    await seedEmbedding("project", project.id);
+
+    await deleteProjects(ctx.db, [project.id], TEST_ACTOR);
+
+    expect(await embeddingDeletedAt("project", project.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  it("deleteTasks leaves no orphan", async () => {
+    const task = await createTask(
+      ctx.db,
+      mock(taskCreateInput, {
+        overrides: { name: "Embedding Cascade Task" },
+      }),
+      TEST_ACTOR,
+    );
+    await seedEmbedding("task", task.id);
+
+    await deleteTasks(ctx.db, [task.id], TEST_ACTOR);
+
+    expect(await embeddingDeletedAt("task", task.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  it("deletePurchases leaves no orphan", async () => {
+    const purchase = await createPurchase(
+      ctx.db,
+      mock(purchaseCreateInput, {
+        overrides: { name: "Embedding Cascade Purchase" },
+      }),
+      TEST_ACTOR,
+    );
+    await seedEmbedding("purchase", purchase.id);
+
+    await deletePurchases(ctx.db, [purchase.id], TEST_ACTOR);
+
+    expect(await embeddingDeletedAt("purchase", purchase.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

@@ -68,9 +68,10 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   };
   /**
    * Skip the standard name column's link to the entity's detail page, and the
-   * actions menu's "View Details" item. For entities with no dedicated detail
-   * page (task, purchase), `routes.detail` points back at the list page
-   * itself — both affordances would be no-ops there.
+   * actions menu's "View Details" item. For an entity with no dedicated detail
+   * page, `routes.detail` would point back at the list page itself — both
+   * affordances would be no-ops there. (No entity currently needs this; kept
+   * as the escape hatch for the next list-only entity.)
    */
   omitDetailLink?: boolean;
 }

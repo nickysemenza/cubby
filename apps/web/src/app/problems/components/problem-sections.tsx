@@ -195,6 +195,18 @@ function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
       to: "/inventory/$id" as const,
       params: { id: e.entityId },
     }))
+    .with({ entityType: "project" }, (e) => ({
+      to: "/projects/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "task" }, (e) => ({
+      to: "/tasks/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "purchase" }, (e) => ({
+      to: "/purchases/$id" as const,
+      params: { id: e.entityId },
+    }))
     .exhaustive();
 }
 

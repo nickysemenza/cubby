@@ -4,7 +4,10 @@ import {
   inventoryId,
   locationId,
   productId,
+  projectId,
+  purchaseId,
   recipeId,
+  taskId,
 } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -21,6 +24,7 @@ import {
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findRecipeEmbeddingRefsForIngredients,
+  findTrackerEmbeddingRefsForProjects,
 } from "~/server/repo/entity-embedding";
 
 const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
@@ -29,6 +33,9 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   z.object({ entityType: z.literal("ingredient"), entityId: ingredientId }),
   z.object({ entityType: z.literal("recipe"), entityId: recipeId }),
   z.object({ entityType: z.literal("inventory"), entityId: inventoryId }),
+  z.object({ entityType: z.literal("project"), entityId: projectId }),
+  z.object({ entityType: z.literal("task"), entityId: taskId }),
+  z.object({ entityType: z.literal("purchase"), entityId: purchaseId }),
   z.object({ entityType: z.literal("image"), entityId: z.uuid() }),
 ]);
 
@@ -145,6 +152,15 @@ const collectRecipeEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "project") return [];
+  return await findTrackerEmbeddingRefsForProjects(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
 async function refreshOwnEmbedding(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
@@ -180,6 +196,14 @@ async function refreshRecipeEmbeddingsForIngredient(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
+// Tasks/purchases embed their project's name, so a project update fans out.
+async function refreshTrackerEmbeddingsForProject(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectTrackerEmbeddingRefsForProject(ctx);
+  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
 // Maps each embedding-refresh handler to its ref-only collector, so the bulk
 // path (runMutationSideEffectsForEntities) can bypass the handler's own
 // per-event dispatch and instead accumulate refs for one wave-wide dispatch.
@@ -200,6 +224,7 @@ const embeddingRefCollectorByHandler = new Map<
     refreshRecipeEmbeddingsForIngredient,
     collectRecipeEmbeddingRefsForIngredient,
   ],
+  [refreshTrackerEmbeddingsForProject, collectTrackerEmbeddingRefsForProject],
 ]);
 
 async function enqueueLocationAiRefresh(
@@ -275,6 +300,22 @@ export const mutationSideEffectManifest = {
     onDelete: [],
   },
   inventory: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
+  project: {
+    onCreate: [refreshOwnEmbedding],
+    // Rename fan-out: task/purchase embeddings include the project name.
+    onUpdate: [refreshOwnEmbedding, refreshTrackerEmbeddingsForProject],
+    onDelete: [],
+  },
+  task: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
+  purchase: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],
