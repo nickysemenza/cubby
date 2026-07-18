@@ -40,8 +40,9 @@ function resolveManualDocument<T extends ManualDocument>(
   return partial.length === 1 ? partial[0] : undefined;
 }
 
-// Escape characters that would terminate the markdown link label early.
-const escapeLabel = (label: string) => label.replace(/([[\]])/g, "\\$1");
+// Escape characters that would terminate the markdown link label early —
+// backslash included, so a trailing "\" can't eat the closing bracket.
+const escapeLabel = (label: string) => label.replace(/([\\[\]])/g, "\\$1");
 
 /** Rewrite [[...]] wiki links to standard markdown links at the PDF URL. */
 export function resolveWikiLinks(

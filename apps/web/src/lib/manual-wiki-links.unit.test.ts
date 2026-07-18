@@ -41,6 +41,12 @@ describe("resolveWikiLinks", () => {
     );
   });
 
+  it("escapes backslashes in labels so they can't eat the closing bracket", () => {
+    expect(resolveWikiLinks("[[warranty#page=2|trailing\\]]", DOCS)).toBe(
+      "[trailing\\\\](https://r2.example/documents/P-EU8Y/warranty-card.pdf#page=2)",
+    );
+  });
+
   it("honors a custom label", () => {
     expect(resolveWikiLinks("[[warranty#page=2|the fine print]]", DOCS)).toBe(
       "[the fine print](https://r2.example/documents/P-EU8Y/warranty-card.pdf#page=2)",
