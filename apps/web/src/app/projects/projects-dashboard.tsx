@@ -34,6 +34,7 @@ import { formatCurrency } from "~/lib/utils";
 
 import {
   DashboardFilters,
+  dateRangeBounds,
   emptyFilters,
   type Filters,
 } from "./dashboard-filters";
@@ -73,8 +74,20 @@ const ProjectTimeline = lazy(() =>
     default: m.ProjectTimeline,
   })),
 );
-const PurchaseDonut = lazy(() =>
-  import("./charts/purchase-donut").then((m) => ({ default: m.PurchaseDonut })),
+const CategoryBreakdown = lazy(() =>
+  import("./charts/category-breakdown").then((m) => ({
+    default: m.CategoryBreakdown,
+  })),
+);
+const PlannedVsActual = lazy(() =>
+  import("./charts/planned-vs-actual").then((m) => ({
+    default: m.PlannedVsActual,
+  })),
+);
+const PurchaserSplit = lazy(() =>
+  import("./charts/purchaser-split").then((m) => ({
+    default: m.PurchaserSplit,
+  })),
 );
 const SpendingByProject = lazy(() =>
   import("./charts/spending-by-project").then((m) => ({
@@ -189,6 +202,20 @@ function DashboardContent({
     () => uniq(data.projects.flatMap((p) => p.locations)),
     [data.projects],
   );
+  const availableYears = useMemo(
+    () =>
+      uniq(
+        [
+          ...data.purchases.map((p) => p.date),
+          ...data.tasks.map((t) => t.dueDate),
+        ]
+          .filter((d) => d != null)
+          .map((d) => d.slice(0, 4)),
+      )
+        .sort()
+        .reverse(),
+    [data.purchases, data.tasks],
+  );
 
   const { projects, tasks, purchases } = useMemo(() => {
     let projects = data.projects;
@@ -209,12 +236,27 @@ function DashboardContent({
     // join here would cross-contaminate tasks/purchases across same-named
     // projects.
     const projectIds = new Set(projects.map((p) => p.id));
-    const tasks = data.tasks.filter(
+    let tasks = data.tasks.filter(
       (t) => !t.projectId || projectIds.has(t.projectId),
     );
-    const purchases = data.purchases.filter(
+    let purchases = data.purchases.filter(
       (p) => !p.projectId || projectIds.has(p.projectId),
     );
+
+    // Date scope applies to the time-stamped entities only — a project isn't
+    // "in" a month, so the project list never shrinks under a date filter.
+    // Undated rows (incl. most future purchases) are excluded by design.
+    const bounds = filters.dateRange
+      ? dateRangeBounds(filters.dateRange)
+      : null;
+    if (bounds) {
+      tasks = tasks.filter(
+        (t) => t.dueDate && t.dueDate >= bounds.from && t.dueDate <= bounds.to,
+      );
+      purchases = purchases.filter(
+        (p) => p.date && p.date >= bounds.from && p.date <= bounds.to,
+      );
+    }
 
     return { projects, tasks, purchases };
   }, [data, filters]);
@@ -229,6 +271,7 @@ function DashboardContent({
         availableStatuses={availableStatuses}
         availableKinds={availableKinds}
         availableLocations={availableLocations}
+        availableYears={availableYears}
       />
 
       <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
@@ -294,18 +337,29 @@ function DashboardContent({
                 <MonthlyTrend purchases={purchases} />
               </Section>
 
+              <CategoryBreakdown
+                purchases={purchases}
+                centerLabel="All projects"
+              />
+
               <Grid cols="pair">
-                <Section title="Category Split">
-                  <PurchaseDonut
-                    purchases={purchases}
-                    height={300}
-                    centerLabel="All projects"
-                  />
+                <Section
+                  title="Who's Buying"
+                  description="Spend by purchaser, planned purchases included"
+                >
+                  <PurchaserSplit purchases={purchases} />
                 </Section>
-                <Section title="Spending Heatmap">
-                  <SpendingHeatmap purchases={purchases} />
+                <Section
+                  title="Planned vs Actual"
+                  description="Committed spend vs future-flagged purchases"
+                >
+                  <PlannedVsActual purchases={purchases} />
                 </Section>
               </Grid>
+
+              <Section title="Spending Heatmap">
+                <SpendingHeatmap purchases={purchases} />
+              </Section>
 
               <Section
                 title="Task Heatmap"
@@ -360,6 +414,10 @@ function SummaryCards({
   const activeProjects = projects.filter((p) => p.status !== "done").length;
   const activeTasks = tasks.filter((t) => t.status !== "done").length;
   const totalSpend = sumBy(purchases, (p) => p.cost ?? 0);
+  const plannedSpend = sumBy(
+    purchases.filter((p) => p.future),
+    (p) => p.cost ?? 0,
+  );
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
@@ -413,7 +471,11 @@ function SummaryCards({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Description size="xs">{purchases.length} purchases</Description>
+          <Description size="xs">
+            {purchases.length} purchases
+            {plannedSpend > 0 &&
+              ` · ${formatCurrency(plannedSpend, 0)} planned`}
+          </Description>
         </CardContent>
       </Card>
     </div>

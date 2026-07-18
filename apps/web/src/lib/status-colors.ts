@@ -1,6 +1,7 @@
 import type {
   ProjectStatus,
   PurchaseCategory,
+  Purchaser,
   TaskStatus,
 } from "@cubby/schemas/project";
 import {
@@ -138,4 +139,17 @@ export function getCategoryColor(category: string | null): string {
   if (!category) return "var(--chart-neutral)";
   const map = CATEGORY_COLORS as Record<string, string>;
   return map[category] ?? "var(--chart-neutral)";
+}
+
+/** `purchase.purchaser` -> chart color. Shared purchases get the accent. */
+const PURCHASER_COLORS: Record<Purchaser, string> = {
+  nicky: "var(--chart-2)",
+  rebecca: "var(--chart-5)",
+  both: "var(--chart-1)",
+};
+
+export function getPurchaserColor(purchaser: string | null): string {
+  if (!purchaser) return "var(--chart-neutral)";
+  const map = PURCHASER_COLORS as Record<string, string>;
+  return map[purchaser] ?? "var(--chart-neutral)";
 }

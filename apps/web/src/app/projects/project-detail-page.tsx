@@ -40,11 +40,12 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
+import { CategoryBreakdown } from "./charts/category-breakdown";
 import { CategoryTreemap } from "./charts/category-treemap";
 import { CategoryTrend } from "./charts/category-trend";
-import { PurchaseDonut } from "./charts/purchase-donut";
+import { PlannedVsActual } from "./charts/planned-vs-actual";
+import { PurchaserSplit } from "./charts/purchaser-split";
 import { SpendingOverTime } from "./charts/spending-over-time";
-import { SubcategoryBars } from "./charts/subcategory-bars";
 import { TaskHeatmap } from "./charts/task-heatmap";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
@@ -560,14 +561,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 />
               </Section>
 
-              <Grid cols="pair">
-                <Section title="Spending by Category">
-                  <PurchaseDonut purchases={projectPurchases} />
-                </Section>
-                <Section title="Spending by Subcategory">
-                  <SubcategoryBars purchases={projectPurchases} />
-                </Section>
-              </Grid>
+              <CategoryBreakdown
+                purchases={projectPurchases}
+                donutHeight={350}
+              />
 
               <Grid cols="pair">
                 <Section title="Category Treemap">
@@ -575,6 +572,21 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 </Section>
                 <Section title="Category Trend">
                   <CategoryTrend purchases={projectPurchases} />
+                </Section>
+              </Grid>
+
+              <Grid cols="pair">
+                <Section
+                  title="Who's Buying"
+                  description="Spend by purchaser, planned purchases included"
+                >
+                  <PurchaserSplit purchases={projectPurchases} />
+                </Section>
+                <Section
+                  title="Planned vs Actual"
+                  description="Committed spend vs future-flagged purchases"
+                >
+                  <PlannedVsActual purchases={projectPurchases} />
                 </Section>
               </Grid>
             </>

@@ -86,7 +86,7 @@ export function capitalize(s: string): string {
 
 // -- Category colors --
 
-export { getCategoryColor } from "~/lib/status-colors";
+export { getCategoryColor, getPurchaserColor } from "~/lib/status-colors";
 
 /**
  * `purchase.category` is now a strict enum (no more Notion emoji prefixes to
