@@ -4,6 +4,11 @@ import { inventorySortableFields } from "@cubby/schemas/inventory";
 import { locationSortableFields } from "@cubby/schemas/location";
 import { mealSortableFields } from "@cubby/schemas/meal";
 import { productSortableFields } from "@cubby/schemas/product";
+import {
+  projectSortableFields,
+  purchaseSortableFields,
+  taskSortableFields,
+} from "@cubby/schemas/project";
 import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import {
@@ -13,14 +18,33 @@ import {
   CalendarDays,
   Carrot,
   ChefHat,
+  Hammer,
   Image,
+  ListChecks,
   type LucideProps,
   MapPin,
   Package,
+  ReceiptText,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
-import type { Entity, EntityDefinition } from "./types";
+import type {
+  Entity,
+  EntityDefinition,
+  EntityDetailRoute,
+  EntityListRoute,
+} from "./types";
+
+// /tasks and /purchases don't have routes yet (shipping later in this
+// migration) so they aren't in EntityDetailRoute/EntityListRoute — the
+// literal casts below are placeholders that keep those unions honest (only
+// real registered routes in them) without lying to every other `Link
+// to={entities[x].routes...}` call site in the app. Swap for real members
+// once the /tasks and /purchases routes land.
+const taskDetailRoute = "/tasks/$id" as EntityDetailRoute;
+const taskListRoute = "/tasks" as EntityListRoute;
+const purchaseDetailRoute = "/purchases/$id" as EntityDetailRoute;
+const purchaseListRoute = "/purchases" as EntityListRoute;
 
 const entityColor = (
   entity: Entity,
@@ -188,6 +212,71 @@ export const entities: Record<Entity, EntityDefinition> = {
       defaultSort: "date",
       standardColumns: [],
       sortableFields: mealSortableFields,
+    },
+  },
+  project: {
+    label: "Project",
+    pluralLabel: "Projects",
+    basePath: "projects",
+    lucideIcon: Hammer,
+    color: entityColor("project", {
+      bg: "bg-plum/15",
+      text: "text-plum",
+      border: "border-l-plum",
+    }),
+    // No "new" route — projects are created from a dialog on the list page
+    // (mirrors meal), not a dedicated /projects/new form.
+    routes: {
+      detail: "/projects/$id",
+      list: "/projects",
+    },
+    detail: { commonSections: ["images", "history"] },
+    list: {
+      defaultSort: "createdAt",
+      standardColumns: [],
+      sortableFields: projectSortableFields,
+    },
+  },
+  task: {
+    label: "Task",
+    pluralLabel: "Tasks",
+    basePath: "tasks",
+    lucideIcon: ListChecks,
+    color: entityColor("task", {
+      bg: "bg-slate/20",
+      text: "text-slate",
+      border: "border-l-slate",
+    }),
+    // /tasks doesn't have routes yet (shipping later in this migration) — see
+    // the taskDetailRoute/taskListRoute placeholder casts above.
+    routes: {
+      detail: taskDetailRoute,
+      list: taskListRoute,
+    },
+    detail: { commonSections: ["history"] },
+    list: {
+      defaultSort: "createdAt",
+      standardColumns: [],
+      sortableFields: taskSortableFields,
+    },
+  },
+  purchase: {
+    label: "Purchase",
+    pluralLabel: "Purchases",
+    basePath: "purchases",
+    lucideIcon: ReceiptText,
+    color: entityColor("purchase", { bg: "bg-primary/10" }),
+    // /purchases doesn't have routes yet (shipping later in this migration) —
+    // see the purchaseDetailRoute/purchaseListRoute placeholder casts above.
+    routes: {
+      detail: purchaseDetailRoute,
+      list: purchaseListRoute,
+    },
+    detail: { commonSections: ["history"] },
+    list: {
+      defaultSort: "createdAt",
+      standardColumns: [],
+      sortableFields: purchaseSortableFields,
     },
   },
   "usda-food": {

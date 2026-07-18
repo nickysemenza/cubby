@@ -13,7 +13,10 @@ import {
   location,
   meal,
   product,
+  project,
+  purchase,
   recipe,
+  task,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -37,6 +40,9 @@ const COUNT_SOURCES = {
   location: { table: location, where: notDeleted(location) },
   inventory: { table: inventoryEntry, where: notDeleted(inventoryEntry) },
   meal: { table: meal, where: notDeleted(meal) },
+  project: { table: project, where: notDeleted(project) },
+  task: { table: task, where: notDeleted(task) },
+  purchase: { table: purchase, where: notDeleted(purchase) },
   image: { table: image, where: notDeleted(image) },
 } satisfies Record<CountableEntity, { table: PgTable; where: SQL | undefined }>;
 

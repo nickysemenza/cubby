@@ -16,7 +16,10 @@ import type {
   MealId,
   MealRecipeId,
   ProductId,
+  ProjectId,
+  PurchaseId,
   RecipeId,
+  TaskId,
   UserId,
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
@@ -24,6 +27,13 @@ import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { LocationValuation } from "@cubby/schemas/location";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
+import {
+  projectKindValues,
+  projectStatusValues,
+  purchaseCategoryValues,
+  purchaserValues,
+  taskStatusValues,
+} from "@cubby/schemas/project";
 import {
   type RecipeTotals,
   type RecipeYield,
@@ -759,6 +769,184 @@ export const recipeImage = pgTable(
   ],
 );
 
+// Project tracker tables (migrated from the retired Notion databases).
+// `locations` is deliberately free-form text[] — house names live in data, not
+// in a committed enum (public repo).
+export const project = pgTable(
+  "Project",
+  {
+    id: pkUuid<ProjectId>(),
+    name: text("name").notNull(),
+    status: text("status", { enum: projectStatusValues })
+      .notNull()
+      .default("planning"),
+    kind: text("kind", { enum: projectKindValues }),
+    locations: text("locations").array().notNull().default(sql`'{}'::text[]`),
+    costEstimate: real("costEstimate"),
+    startDate: date("startDate", { mode: "string" }),
+    endDate: date("endDate", { mode: "string" }),
+    icon: text("icon"),
+    // Freeform markdown, converted from the Notion page body at import.
+    notes: text("notes"),
+    // Source Notion page id (dashed uuid) — the import script's idempotency key.
+    notionPageId: text("notionPageId"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("Project_notionPageId_key")
+      .on(table.notionPageId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Project_status_idx").on(table.status),
+    index("Project_kind_idx").on(table.kind),
+    index("Project_startDate_idx").on(table.startDate),
+    index("Project_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+    index("Project_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
+// Blocked-by edges; "blocking" is the reverse read of the same rows.
+export const projectDependency = pgTable(
+  "ProjectDependency",
+  {
+    id: pkUuid(),
+    projectId: uuid("projectId")
+      .notNull()
+      .$type<ProjectId>()
+      .references(() => project.id),
+    blockedByProjectId: uuid("blockedByProjectId")
+      .notNull()
+      .$type<ProjectId>()
+      .references(() => project.id),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("ProjectDependency_pair_key").on(
+      table.projectId,
+      table.blockedByProjectId,
+    ),
+    index("ProjectDependency_blockedBy_idx").on(table.blockedByProjectId),
+  ],
+);
+
+export const task = pgTable(
+  "Task",
+  {
+    id: pkUuid<TaskId>(),
+    name: text("name").notNull(),
+    status: text("status", { enum: taskStatusValues })
+      .notNull()
+      .default("not_started"),
+    // Nullable so future inbox tasks can exist without a project; every
+    // Notion-imported row has one.
+    projectId: uuid("projectId")
+      .$type<ProjectId>()
+      .references(() => project.id),
+    dueDate: date("dueDate", { mode: "string" }),
+    dueEndDate: date("dueEndDate", { mode: "string" }),
+    // Free-form label (organic Notion option set, intentionally not an enum).
+    category: text("category"),
+    notionPageId: text("notionPageId"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("Task_notionPageId_key")
+      .on(table.notionPageId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Task_projectId_idx").on(table.projectId),
+    index("Task_status_idx").on(table.status),
+    index("Task_dueDate_idx").on(table.dueDate),
+    index("Task_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+  ],
+);
+
+export const taskDependency = pgTable(
+  "TaskDependency",
+  {
+    id: pkUuid(),
+    taskId: uuid("taskId")
+      .notNull()
+      .$type<TaskId>()
+      .references(() => task.id),
+    blockedByTaskId: uuid("blockedByTaskId")
+      .notNull()
+      .$type<TaskId>()
+      .references(() => task.id),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("TaskDependency_pair_key").on(
+      table.taskId,
+      table.blockedByTaskId,
+    ),
+    index("TaskDependency_blockedBy_idx").on(table.blockedByTaskId),
+  ],
+);
+
+export const purchase = pgTable(
+  "Purchase",
+  {
+    id: pkUuid<PurchaseId>(),
+    name: text("name").notNull(),
+    cost: real("cost"),
+    date: date("date", { mode: "string" }),
+    category: text("category", { enum: purchaseCategoryValues }),
+    // Free-form label (organic Notion option set, intentionally not an enum).
+    subcategory: text("subcategory"),
+    purchaser: text("purchaser", { enum: purchaserValues }),
+    url: text("url"),
+    notes: text("notes"),
+    // Planned/not-yet-made purchase (kept out of spend rollups' "actuals" views).
+    future: boolean("future").notNull().default(false),
+    projectId: uuid("projectId")
+      .$type<ProjectId>()
+      .references(() => project.id),
+    notionPageId: text("notionPageId"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("Purchase_notionPageId_key")
+      .on(table.notionPageId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Purchase_projectId_idx").on(table.projectId),
+    index("Purchase_date_idx").on(table.date),
+    index("Purchase_category_idx").on(table.category),
+    index("Purchase_name_gin_idx").using(
+      "gin",
+      sql`${table.name} gin_trgm_ops`,
+    ),
+  ],
+);
+
+// ProjectImage table
+export const projectImage = pgTable(
+  "ProjectImage",
+  {
+    id: pkUuid(),
+    projectId: uuid("projectId")
+      .notNull()
+      .$type<ProjectId>()
+      .references(() => project.id),
+    imageId: uuid("imageId")
+      .notNull()
+      .references(() => image.id),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("ProjectImage_projectId_imageId_key")
+      .on(table.projectId, table.imageId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("ProjectImage_projectId_idx").on(table.projectId),
+    index("ProjectImage_imageId_idx").on(table.imageId),
+  ],
+);
+
 // Relations
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
   sections: many(recipeSection),
@@ -890,6 +1078,71 @@ export const imageRelations = relations(image, ({ many }) => ({
   productImages: many(productImage),
   locationImages: many(locationImage),
   recipeImages: many(recipeImage),
+  projectImages: many(projectImage),
+}));
+
+export const projectRelations = relations(project, ({ many }) => ({
+  tasks: many(task),
+  purchases: many(purchase),
+  images: many(projectImage),
+  blockedBy: many(projectDependency, { relationName: "ProjectBlocked" }),
+  blocking: many(projectDependency, { relationName: "ProjectBlocking" }),
+}));
+
+export const projectDependencyRelations = relations(
+  projectDependency,
+  ({ one }) => ({
+    project: one(project, {
+      fields: [projectDependency.projectId],
+      references: [project.id],
+      relationName: "ProjectBlocked",
+    }),
+    blockedByProject: one(project, {
+      fields: [projectDependency.blockedByProjectId],
+      references: [project.id],
+      relationName: "ProjectBlocking",
+    }),
+  }),
+);
+
+export const taskRelations = relations(task, ({ one, many }) => ({
+  project: one(project, {
+    fields: [task.projectId],
+    references: [project.id],
+  }),
+  blockedBy: many(taskDependency, { relationName: "TaskBlocked" }),
+  blocking: many(taskDependency, { relationName: "TaskBlocking" }),
+}));
+
+export const taskDependencyRelations = relations(taskDependency, ({ one }) => ({
+  task: one(task, {
+    fields: [taskDependency.taskId],
+    references: [task.id],
+    relationName: "TaskBlocked",
+  }),
+  blockedByTask: one(task, {
+    fields: [taskDependency.blockedByTaskId],
+    references: [task.id],
+    relationName: "TaskBlocking",
+  }),
+}));
+
+export const purchaseRelations = relations(purchase, ({ one }) => ({
+  project: one(project, {
+    fields: [purchase.projectId],
+    references: [project.id],
+  }),
+}));
+
+export const projectImageRelations = relations(projectImage, ({ one }) => ({
+  project: one(project, {
+    fields: [projectImage.projectId],
+    references: [project.id],
+  }),
+  image: one(image, {
+    fields: [projectImage.imageId],
+    references: [image.id],
+  }),
 }));
 
 export const productImageRelations = relations(productImage, ({ one }) => ({

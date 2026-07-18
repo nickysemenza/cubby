@@ -19,6 +19,7 @@ const IMAGE_KEY: Record<string, string> = {
   recipe: "RECIPE",
   cookbook: "COOKBOOK",
   location: "LOCATION",
+  project: "PROJECT",
 };
 
 describe("entity manifest", () => {

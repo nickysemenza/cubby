@@ -170,6 +170,53 @@ const entityContracts = {
       invalidationKeys: [queryKeys.cookbook.all],
     },
   },
+  // project/task/purchase have no tRPC router yet (routers + query-key
+  // invalidation land later in this migration, alongside the /tasks and
+  // /purchases routes) — no `router(api)` call to make yet, so these stay
+  // hand-rolled with a skipped detail query and canPreview: false rather than
+  // reaching for `standardContract` like the other crud-factory entities.
+  project: {
+    entity: "project",
+    route: entities.project.routes,
+    defaultSort: entities.project.list?.defaultSort ?? "createdAt",
+    sortableFields: entities.project.list?.sortableFields ?? [],
+    canPreview: false,
+    invalidationKeys: [],
+    query: {
+      detail: () => skippedDetailQuery,
+    },
+    mutation: {
+      invalidationKeys: [],
+    },
+  },
+  task: {
+    entity: "task",
+    route: entities.task.routes,
+    defaultSort: entities.task.list?.defaultSort ?? "createdAt",
+    sortableFields: entities.task.list?.sortableFields ?? [],
+    canPreview: false,
+    invalidationKeys: [],
+    query: {
+      detail: () => skippedDetailQuery,
+    },
+    mutation: {
+      invalidationKeys: [],
+    },
+  },
+  purchase: {
+    entity: "purchase",
+    route: entities.purchase.routes,
+    defaultSort: entities.purchase.list?.defaultSort ?? "createdAt",
+    sortableFields: entities.purchase.list?.sortableFields ?? [],
+    canPreview: false,
+    invalidationKeys: [],
+    query: {
+      detail: () => skippedDetailQuery,
+    },
+    mutation: {
+      invalidationKeys: [],
+    },
+  },
 } satisfies Record<Entity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

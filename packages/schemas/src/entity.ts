@@ -10,6 +10,7 @@ export const entityImage = z.enum([
   "LOCATION",
   "RECIPE",
   "COOKBOOK",
+  "PROJECT",
 ]);
 export type EntityImage = z.infer<typeof entityImage>;
 
@@ -22,6 +23,9 @@ export const entitySchema = z.enum([
   "location",
   "inventory",
   "meal",
+  "project",
+  "task",
+  "purchase",
   "usda-food",
   "image",
 ]);

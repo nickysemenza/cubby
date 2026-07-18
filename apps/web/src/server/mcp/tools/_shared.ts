@@ -18,6 +18,14 @@ import {
   productMcpOut,
 } from "@cubby/schemas/product";
 import {
+  type ProjectOut,
+  type PurchaseOut,
+  projectOut,
+  purchaseOut,
+  type TaskOut,
+  taskOut,
+} from "@cubby/schemas/project";
+import {
   type RecipeMcpOut,
   type RecipeTopLevel,
   recipeMcpOut,
@@ -453,6 +461,65 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
     })),
     recipeCount: (i.appearsInRecipes ?? []).length,
     usdaFdcId: i.food?.fdc_id ?? null,
+  };
+});
+
+export const slimProject = defineSlim(projectOut, (pRow: Row) => {
+  const p = pRow as ProjectOut;
+  return {
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    kind: p.kind,
+    locations: p.locations,
+    costEstimate: p.costEstimate,
+    startDate: p.startDate,
+    endDate: p.endDate,
+    icon: p.icon,
+    notes: p.notes,
+    blockedByIds: p.blockedByIds,
+    blockingIds: p.blockingIds,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    rollup: p.rollup,
+  };
+});
+
+export const slimTask = defineSlim(taskOut, (tRow: Row) => {
+  const t = tRow as TaskOut;
+  return {
+    id: t.id,
+    name: t.name,
+    status: t.status,
+    projectId: t.projectId,
+    projectName: t.projectName,
+    dueDate: t.dueDate,
+    dueEndDate: t.dueEndDate,
+    category: t.category,
+    blockedByIds: t.blockedByIds,
+    blockingIds: t.blockingIds,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  };
+});
+
+export const slimPurchase = defineSlim(purchaseOut, (pRow: Row) => {
+  const p = pRow as PurchaseOut;
+  return {
+    id: p.id,
+    name: p.name,
+    cost: p.cost,
+    date: p.date,
+    category: p.category,
+    subcategory: p.subcategory,
+    purchaser: p.purchaser,
+    url: p.url,
+    notes: p.notes,
+    future: p.future,
+    projectId: p.projectId,
+    projectName: p.projectName,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
   };
 });
 

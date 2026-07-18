@@ -144,6 +144,44 @@ export const entityManifest = {
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
+  project: {
+    name: "project",
+    dbTable: "Project",
+    idBrand: "ProjectId",
+    softDelete: true,
+    auditable: true,
+    hasImages: true,
+    countable: true,
+    // project→project: Blocked-by/Blocking dependency edges (ProjectDependency).
+    references: ["project", "image"],
+    mcp: ALL_MCP,
+    routerStyle: "custom",
+  },
+  task: {
+    name: "task",
+    dbTable: "Task",
+    idBrand: "TaskId",
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    countable: true,
+    // task→task: Blocked-by/Blocking dependency edges (TaskDependency).
+    references: ["project", "task"],
+    mcp: ALL_MCP,
+    routerStyle: "crud-factory",
+  },
+  purchase: {
+    name: "purchase",
+    dbTable: "Purchase",
+    idBrand: "PurchaseId",
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    countable: true,
+    references: ["project"],
+    mcp: ALL_MCP,
+    routerStyle: "crud-factory",
+  },
   "usda-food": {
     name: "usda-food",
     dbTable: null,
@@ -198,6 +236,9 @@ export const auditableEntities = [
   "location",
   "inventory",
   "meal",
+  "project",
+  "task",
+  "purchase",
 ] as const;
 
 /** Entities that can carry images (drives `entityImage`). */
@@ -206,6 +247,7 @@ export const imageEntities = [
   "recipe",
   "cookbook",
   "location",
+  "project",
 ] as const;
 
 /** Entities with a local soft-deletable table we can count. */
@@ -217,6 +259,9 @@ export const countableEntities = [
   "location",
   "inventory",
   "meal",
+  "project",
+  "task",
+  "purchase",
   "image",
 ] as const;
 

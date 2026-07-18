@@ -61,6 +61,24 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Plan recipes onto your calendar to see costs add up and build a shopping list.",
     actionLabel: "Plan a Meal",
   },
+  project: {
+    title: "No projects yet",
+    description:
+      "Track household projects from planning to done — budget, timeline, and every task and purchase along the way.",
+    actionLabel: "New Project",
+  },
+  task: {
+    title: "No tasks yet",
+    description:
+      "Break a project down into steps, or jot down a one-off to get to later.",
+    actionLabel: "New Task",
+  },
+  purchase: {
+    title: "No purchases yet",
+    description:
+      "Log what you've bought (or plan to) to keep a project's running cost honest.",
+    actionLabel: "New Purchase",
+  },
   image: {
     title: "No photos yet",
     description: "Add photos to attach them to recipes, products, and places.",
