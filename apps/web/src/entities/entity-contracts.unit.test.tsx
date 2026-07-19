@@ -9,17 +9,18 @@ import { getEntityContract, standardEntities } from "./entity-contracts";
 describe("entity-contracts drift guard", () => {
   const entitiesWithCrudContracts: Entity[] = [...standardEntities];
 
-  it.each(
-    entitiesWithCrudContracts,
-  )("%s has real create/update/delete mutations and non-empty invalidation keys", (entity) => {
-    const contract = getEntityContract(entity);
+  it.each(entitiesWithCrudContracts)(
+    "%s has real create/update/delete mutations and non-empty invalidation keys",
+    (entity) => {
+      const contract = getEntityContract(entity);
 
-    expect(contract.mutation.create).toBeDefined();
-    expect(contract.mutation.update).toBeDefined();
-    expect(contract.mutation.delete).toBeDefined();
-    expect(contract.invalidationKeys.length).toBeGreaterThan(0);
-    expect(contract.mutation.invalidationKeys.length).toBeGreaterThan(0);
-  });
+      expect(contract.mutation.create).toBeDefined();
+      expect(contract.mutation.update).toBeDefined();
+      expect(contract.mutation.delete).toBeDefined();
+      expect(contract.invalidationKeys.length).toBeGreaterThan(0);
+      expect(contract.mutation.invalidationKeys.length).toBeGreaterThan(0);
+    },
+  );
 
   it.each(standardEntities)("%s can preview (has a detail page)", (entity) => {
     expect(getEntityContract(entity).canPreview).toBe(true);

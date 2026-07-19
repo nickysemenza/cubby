@@ -26,6 +26,13 @@ peerDependencyRules:
   allowedVersions:
     "@cloudflare/workers-types": ">=4 <6"
     typescript: ">=5 <8"
+    # @cloudflare/tanstack-ai 0.2.1 bundles grok/gemini/openrouter/openai
+    # adapters peering @tanstack/ai ^0.40; cubby only imports the anthropic
+    # adapter, whose @tanstack/ai-anthropic peer requires ^0.41.
+    "@tanstack/ai": "^0.41.0"
+    # @better-auth/api-key (inside better-auth-ui) peers better-call 1.3.7
+    # while better-auth-ui resolves 2.x; cubby uses no API-key features.
+    better-call: "2"
 
 onlyBuiltDependencies:
   - better-sqlite3
