@@ -27,7 +27,10 @@ sometimes wears three different names across layers.
 | Meal | "Meal" | `Meal` / `meal` | `Meal` | A planned eating occasion on a calendar day; groups recipes. |
 | Meal recipe | (a recipe inside a meal) | `MealRecipe` / `mealRecipe` | `MealRecipe` | A recipe planned into a meal at a `scale` multiplier. |
 | Cookbook | "Cookbook" | `Cookbook` / `cookbook` | `Cookbook` | A first-class recipe *source* — the book an EPUB-extracted recipe set came from. |
-| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, or recipe. |
+| Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Purchases; blocked-by edges to other Projects. |
+| Task | "Task" | `Task` / `task` | `Task` | A unit of work, optionally inside a Project; blocked-by edges to other Tasks. |
+| Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. |
+| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, or project. |
 
 ---
 
@@ -93,6 +96,27 @@ House  →  Room  →  Shelf  →  Bin
 - InventoryEntries reference leaf-ish locations via `inventoryEntry.locationId`,
   but any location can hold inventory.
 - Each location has a printable QR **shortcode** (`L-XXXX`).
+
+---
+
+## Project tracker (Project / Task / Purchase)
+
+The household project tracker (migrated from Notion) is a self-contained module:
+
+- **Project** — groups Tasks and Purchases. `projectDependency` rows are
+  blocked-by edges between projects ("blocking" is the reverse read).
+  `project.locations` is deliberately a free-form `text[]` of house/site names —
+  **not** an FK to the `Location` entity (that tree is physical storage).
+  Images attach via the `ProjectImage` join table to the shared `Image` entity.
+  Spend/progress rollups (`spent`, task counts) are SQL aggregates, never
+  denormalized.
+- **Task** — `task.projectId` is nullable by design (future project-less
+  "inbox" tasks); `task.category` is deliberately free-form text, not an enum.
+  `taskDependency` mirrors the project blocked-by structure.
+- **Purchase** — the spend ledger. `future = true` marks planned (not yet
+  actual) spend. A Purchase is free-text `name` + `cost` today — it does
+  **not** link to a Product or InventoryEntry (a known roadmap item, see
+  README Roadmap).
 
 ---
 
