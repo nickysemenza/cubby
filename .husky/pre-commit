@@ -5,5 +5,5 @@ set -e
 # user's staged/unstaged split for partially staged files.
 pnpm exec biome check --staged --error-on-warnings --no-errors-on-unmatched
 
-# Run TypeScript checks across all packages (tsgo is ~10x faster than tsc)
+# Run TypeScript checks across all packages (native tsc, TypeScript 7)
 pnpm typecheck
