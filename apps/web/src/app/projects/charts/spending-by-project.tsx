@@ -5,7 +5,7 @@ import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
-import { nivoBarChrome, nivoChartTheme } from "../shared";
+import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -53,9 +53,7 @@ export function SpendingByProject({
         padding={0.3}
         colors={["var(--chart-1)"]}
         {...nivoBarChrome}
-        axisBottom={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
+        axisBottom={nivoCurrencyAxis}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,

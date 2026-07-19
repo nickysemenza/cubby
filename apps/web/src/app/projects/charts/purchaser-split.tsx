@@ -6,7 +6,12 @@ import { useMemo } from "react";
 import { purchaserLabels } from "~/app/purchases/purchase-options";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
-import { getPurchaserColor, nivoBarChrome, nivoChartTheme } from "../shared";
+import {
+  getPurchaserColor,
+  nivoBarChrome,
+  nivoChartTheme,
+  nivoCurrencyAxis,
+} from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -59,9 +64,7 @@ export function PurchaserSplit({ purchases }: { purchases: PurchaseOut[] }) {
         padding={0.25}
         colors={(bar) => bar.data.color}
         {...nivoBarChrome}
-        axisBottom={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
+        axisBottom={nivoCurrencyAxis}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,

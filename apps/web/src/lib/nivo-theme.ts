@@ -45,3 +45,18 @@ export const nivoBarChrome = {
   borderColor: "var(--border)",
   borderRadius: 0,
 } as const;
+
+const compactUsd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+});
+
+// Value axis for the currency bar charts. Nivo otherwise emits a tick per
+// gridline, and full "$120,000"-style labels collide once the range grows —
+// cap the count and use compact "$120K" labels. Spread extra props alongside:
+// axisBottom={nivoCurrencyAxis}.
+export const nivoCurrencyAxis = {
+  tickValues: 5,
+  format: (v: number) => compactUsd.format(v),
+} as const;

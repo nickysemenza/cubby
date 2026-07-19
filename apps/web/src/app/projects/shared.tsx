@@ -113,7 +113,11 @@ export function monthLabel(key: string): string {
 
 // -- Chart theme (consistent across all Nivo charts) --
 
-export { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
+export {
+  nivoBarChrome,
+  nivoChartTheme,
+  nivoCurrencyAxis,
+} from "~/lib/nivo-theme";
 
 // -- Status Icon --
 

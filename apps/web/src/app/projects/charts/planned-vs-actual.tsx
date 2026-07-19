@@ -3,7 +3,12 @@ import { ResponsiveBar } from "@nivo/bar";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import { capitalize, nivoBarChrome, nivoChartTheme } from "../shared";
+import {
+  capitalize,
+  nivoBarChrome,
+  nivoChartTheme,
+  nivoCurrencyAxis,
+} from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -70,9 +75,7 @@ export function PlannedVsActual({ purchases }: { purchases: PurchaseOut[] }) {
           SERIES_COLORS[bar.id as string] ?? "var(--chart-neutral)"
         }
         {...nivoBarChrome}
-        axisBottom={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
+        axisBottom={nivoCurrencyAxis}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,

@@ -3,7 +3,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import { nivoBarChrome, nivoChartTheme } from "../shared";
+import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -54,9 +54,7 @@ export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
             : "var(--chart-1)";
         }}
         {...nivoBarChrome}
-        axisBottom={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
+        axisBottom={nivoCurrencyAxis}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,
