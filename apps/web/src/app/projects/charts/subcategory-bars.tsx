@@ -8,6 +8,7 @@ import {
   getCategoryColor,
   nivoBarChrome,
   nivoChartTheme,
+  nivoCurrencyAxis,
   normalizeCategoryKey,
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
@@ -73,9 +74,7 @@ export function SubcategoryBars({ purchases }: { purchases: PurchaseOut[] }) {
         padding={0.25}
         colors={(bar) => getCategoryColor(bar.id as string)}
         {...nivoBarChrome}
-        axisBottom={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
+        axisBottom={nivoCurrencyAxis}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,
