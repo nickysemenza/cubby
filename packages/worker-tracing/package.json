@@ -9,8 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit",
-    "typecheck:stable": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "check": "biome check && pnpm typecheck",
@@ -20,7 +19,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
 }

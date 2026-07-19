@@ -246,9 +246,8 @@ Claude Code can run parallel sessions, each in its own git worktree under
 |---|---|
 | `pnpm run dev` | Start the web, UPC, and USDA local services |
 | `pnpm run build` | Build all three production Worker bundles |
-| `pnpm run check` | Biome (zero warnings), both TypeScript engines, Worker/OpenAPI drift, Knip, dedupe, audit policy, and conventions |
-| `pnpm run typecheck` | Recursive package typecheck with `tsgo` (TS 7.0 preview, fast) |
-| `pnpm run typecheck:stable` | Recursive package typecheck with stable TypeScript (fallback) |
+| `pnpm run check` | Biome (zero warnings), TypeScript, Worker/OpenAPI drift, Knip, dedupe, audit policy, and conventions |
+| `pnpm run typecheck` | Recursive package typecheck with `tsc` (TypeScript 7, native) |
 | `pnpm run lint` | Recursive package Biome lint |
 | `pnpm run format:check` | Recursive package Biome format/lint check |
 | `pnpm run format:write` | Recursive package Biome auto-fix |

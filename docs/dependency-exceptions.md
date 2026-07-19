@@ -13,12 +13,12 @@ as soon as the upstream range is corrected.
   brings the deprecated React Email 1.x component family transitively; Cubby does
   not import those packages directly.
 - `@triplit/logger@0.0.3` declares TypeScript `^5`, although it is runtime-only
-  logging code and Cubby passes both the stable TypeScript 6 and native-preview
-  checks. `peerDependencyRules.allowedVersions.typescript` accepts only versions
-  5 and 6 while this metadata catches up.
+  logging code and Cubby typechecks clean on TypeScript 7.
+  `peerDependencyRules.allowedVersions.typescript` accepts versions 5–7 while
+  this metadata catches up.
 - Wrangler 4.110 requires Workers Types 5 while Sentry 10.65 still declares
   Workers Types 4. Cubby uses Workers Types 5, regenerates all Worker bindings,
-  and gates both TypeScript engines. The peer exception accepts only majors 4–5.
+  and typechecks clean on TypeScript 7. The peer exception accepts only majors 4–5.
 
 ## Deprecated transitive packages
 

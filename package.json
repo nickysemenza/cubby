@@ -7,9 +7,8 @@
     "dev": "pnpm -r dev",
     "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
-    "check": "biome check --error-on-warnings && pnpm typecheck && pnpm typecheck:stable && pnpm types:check && pnpm openapi:check && pnpm knip && pnpm dedupe:check && pnpm audit:security && node scripts/check-conventions.mjs",
+    "check": "biome check --error-on-warnings && pnpm typecheck && pnpm types:check && pnpm openapi:check && pnpm knip && pnpm dedupe:check && pnpm audit:security && node scripts/check-conventions.mjs",
     "typecheck": "pnpm -r --parallel typecheck",
-    "typecheck:stable": "pnpm -r --parallel run typecheck:stable",
     "types:check": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --parallel types:check",
     "openapi:check": "pnpm --filter @cubby/usda-api generate:openapi:check",
     "knip": "knip --exclude duplicates --no-config-hints",
@@ -27,9 +26,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.3",
-    "@typescript/native-preview": "7.0.0-dev.20260630.1",
     "husky": "^9.1.7",
     "knip": "^6.26.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }

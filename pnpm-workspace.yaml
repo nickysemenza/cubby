@@ -25,7 +25,7 @@ packageExtensions:
 peerDependencyRules:
   allowedVersions:
     "@cloudflare/workers-types": ">=4 <6"
-    typescript: ">=5 <7"
+    typescript: ">=5 <8"
 
 onlyBuiltDependencies:
   - better-sqlite3
