@@ -8,15 +8,20 @@ as soon as the upstream range is corrected.
 
 ## Direct pins and peer ranges
 
-- `@daveyplate/better-auth-ui` is pinned to `3.3.15`. Its newer release line has
-  an unresolved Better Auth API-key / `better-call` peer conflict. The pin also
-  brings the deprecated React Email 1.x component family transitively; Cubby does
-  not import those packages directly.
+- `@daveyplate/better-auth-ui` is pinned to `3.4.0`. Its `@better-auth/api-key`
+  transitive still peers `better-call@1.3.7` while the UI resolves `better-call`
+  2.x; Cubby uses no API-key features, so the peer exception accepts major 2.
+  The pin also brings the deprecated React Email 1.x component family
+  transitively; Cubby does not import those packages directly.
+- `@cloudflare/tanstack-ai@0.2.1` bundles grok/gemini/openrouter/openai adapters
+  that peer `@tanstack/ai` `^0.40`. Cubby imports only the anthropic adapter,
+  and `@tanstack/ai-anthropic` requires `^0.41`, so the peer exception accepts
+  `^0.41.0` until Cloudflare republishes against 0.41.
 - `@triplit/logger@0.0.3` declares TypeScript `^5`, although it is runtime-only
   logging code and Cubby typechecks clean on TypeScript 7.
   `peerDependencyRules.allowedVersions.typescript` accepts versions 5–7 while
   this metadata catches up.
-- Wrangler 4.110 requires Workers Types 5 while Sentry 10.65 still declares
+- Wrangler 4.112 requires Workers Types 5 while Sentry 10.66 still declares
   Workers Types 4. Cubby uses Workers Types 5, regenerates all Worker bindings,
   and typechecks clean on TypeScript 7. The peer exception accepts only majors 4–5.
 

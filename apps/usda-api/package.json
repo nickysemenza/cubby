@@ -37,25 +37,25 @@
     "@cubby/usda-contract": "workspace:*",
     "@cubby/usda-schemas": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
-    "@hono/zod-validator": "^0.8.0",
-    "@scalar/hono-api-reference": "^0.11.9",
-    "@sentry/cloudflare": "^10.65.0",
+    "@hono/zod-validator": "^0.9.0",
+    "@scalar/hono-api-reference": "^0.11.11",
+    "@sentry/cloudflare": "^10.66.0",
     "better-sqlite3": "^12.11.1",
     "csv-parse": "^7.0.1",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.29",
+    "hono": "^4.12.31",
     "p-map": "^7.0.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260712.1",
+    "@cloudflare/workers-types": "^5.20260719.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10",
-    "wrangler": "^4.110.0"
+    "wrangler": "^4.112.0"
   }
 }
