@@ -2,6 +2,7 @@ import {
   type CostType,
   costTypeValues,
   type PurchaseOut,
+  type Trade,
 } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
 import { normalizeCostTypeKey } from "../shared";
@@ -12,7 +13,7 @@ export const PIVOT_COST_KEYS = [...costTypeValues, "other"] as const;
 export type PivotCostKey = CostType | "other";
 
 type TradePivotRow = {
-  trade: string; // trade slug or "other"
+  trade: Trade;
   cells: Record<PivotCostKey, number>; // dollar sums
   total: number;
 };
@@ -32,10 +33,10 @@ const emptyCells = (): Record<PivotCostKey, number> => ({
 });
 
 export function buildTradeCostPivot(purchases: PurchaseOut[]): TradeCostPivot {
-  const grouped = new Map<string, Record<PivotCostKey, number>>();
+  const grouped = new Map<Trade, Record<PivotCostKey, number>>();
 
   for (const p of purchases) {
-    const trade = p.trade ?? "other";
+    const trade = p.trade;
     const costType = normalizeCostTypeKey(p.costType);
     const cost = p.cost ?? 0;
 

@@ -9,7 +9,9 @@ import type {
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
+import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
 import { TRADE_LABELS, tradeOptions } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
@@ -318,9 +320,32 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     [columnFilters],
   );
 
+  const activeMatrixCell = useMemo<TradeCostCell | null>(() => {
+    const trade = chartFilters.trade;
+    return trade ? { trade, costType: chartFilters.costType ?? null } : null;
+  }, [chartFilters]);
+
+  const handleMatrixCellClick = useCallback(
+    (trade: Trade, costType: PivotCostKey | null) => {
+      // "other" is the pivot's null-costType bucket, never a filterable slug.
+      const next = costType === "other" ? null : costType;
+      const clear =
+        activeMatrixCell?.trade === trade && activeMatrixCell.costType === next;
+      table.getColumn("trade")?.setFilterValue(clear ? undefined : trade);
+      table
+        .getColumn("costType")
+        ?.setFilterValue(clear || next === null ? undefined : next);
+    },
+    [table, activeMatrixCell],
+  );
+
   return (
     <div>
-      <PurchaseChartStrip filters={chartFilters} />
+      <PurchaseChartStrip
+        filters={chartFilters}
+        onMatrixCellClick={handleMatrixCellClick}
+        activeMatrixCell={activeMatrixCell}
+      />
       <RTable
         table={table}
         isLoading={isLoading}
