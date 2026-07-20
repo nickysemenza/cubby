@@ -1,14 +1,16 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type {
-  PurchaseCategory,
+  CostType,
   PurchaseFilters,
   PurchaseOut,
   Purchaser,
+  Trade,
 } from "@cubby/schemas/project";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { TRADE_LABELS, tradeOptions } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -18,7 +20,6 @@ import {
   createFilterableSelectColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
-  createTextColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -30,9 +31,9 @@ import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { PurchaseChartStrip } from "./purchase-charts";
 import {
+  costTypeLabels,
+  costTypeOptions,
   futureFilterOptions,
-  purchaseCategoryLabels,
-  purchaseCategoryOptions,
   purchaserLabels,
   purchaserOptions,
 } from "./purchase-options";
@@ -49,7 +50,8 @@ function buildPurchaseFilters(
   const futureFilter = get("future");
   return {
     search: get("name"),
-    category: (get("category") as PurchaseCategory | undefined) || undefined,
+    costType: (get("costType") as CostType | undefined) || undefined,
+    trade: (get("trade") as Trade | undefined) || undefined,
     purchaser: (get("purchaser") as Purchaser | undefined) || undefined,
     projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
     future:
@@ -124,32 +126,40 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           },
         },
       }),
-      createFilterableSelectColumn(columnHelper, "category", {
-        header: "Category",
+      createFilterableSelectColumn(columnHelper, "costType", {
+        header: "Cost Type",
         className: "w-28",
-        placeholder: "Filter by category...",
-        selectOptions: purchaseCategoryOptions,
-        renderCell: (cat: PurchaseCategory | null) =>
-          cat ? purchaseCategoryLabels[cat] : <NoneValue />,
+        placeholder: "Filter by cost type...",
+        selectOptions: costTypeOptions,
+        renderCell: (costType: CostType | null) =>
+          costType ? costTypeLabels[costType] : <NoneValue />,
         mobile: { slot: "meta", priority: 20 },
         editable: {
-          onSave: async (newCategory, purchase) => {
+          onSave: async (newCostType, purchase) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newCostType) return;
             await updatePurchaseMutation.mutateAsync({
               id: purchase.id,
-              data: { category: newCategory },
+              data: { costType: newCostType },
             });
           },
         },
       }),
-      createTextColumn(columnHelper, "subcategory", {
-        header: "Subcategory",
-        className: "min-w-0 w-32 truncate",
+      createFilterableSelectColumn(columnHelper, "trade", {
+        header: "Trade",
+        className: "w-32",
+        placeholder: "Filter by trade...",
+        selectOptions: tradeOptions,
+        renderCell: (trade: Trade | null) =>
+          trade ? TRADE_LABELS[trade] : <NoneValue />,
         mobile: { slot: "meta", priority: 60 },
         editable: {
-          onSave: async (newValue, purchase) => {
+          onSave: async (newTrade, purchase) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newTrade) return;
             await updatePurchaseMutation.mutateAsync({
               id: purchase.id,
-              data: { subcategory: newValue },
+              data: { trade: newTrade },
             });
           },
         },
@@ -238,10 +248,16 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     () => [
       { id: "name", placeholder: "Search purchases..." },
       {
-        id: "category",
-        placeholder: "Filter by category...",
+        id: "costType",
+        placeholder: "Filter by cost type...",
         filterType: "select" as const,
-        options: purchaseCategoryOptions,
+        options: costTypeOptions,
+      },
+      {
+        id: "trade",
+        placeholder: "Filter by trade...",
+        filterType: "select" as const,
+        options: tradeOptions,
       },
       {
         id: "purchaser",

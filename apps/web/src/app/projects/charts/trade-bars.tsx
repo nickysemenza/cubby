@@ -1,21 +1,22 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { PurchaseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { sum } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import {
-  getCategoryColor,
+  getCostTypeColor,
   nivoBarChrome,
   nivoChartTheme,
   nivoCurrencyAxis,
-  normalizeCategoryKey,
+  normalizeCostTypeKey,
+  TRADE_LABELS,
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type BarDatum = {
-  subcategory: string;
+  trade: string;
   materials: number;
   tools: number;
   services: number;
@@ -23,35 +24,38 @@ type BarDatum = {
   total: number;
 };
 
-const CATEGORY_KEYS = ["materials", "tools", "services", "other"] as const;
+const COST_TYPE_KEYS = ["materials", "tools", "services", "other"] as const;
 
-export function SubcategoryBars({ purchases }: { purchases: PurchaseOut[] }) {
+const tradeLabel = (value: string): string =>
+  TRADE_LABELS[value as Trade] ?? value;
+
+export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
-    // Group by subcategory, then by category within each
+    // Group by trade, then by cost type within each
     const grouped = new Map<string, Record<string, number>>();
 
     for (const p of purchases) {
-      const sub = p.subcategory ?? "other";
-      const cat = normalizeCategoryKey(p.category);
+      const trade = p.trade ?? "other";
+      const costType = normalizeCostTypeKey(p.costType);
       const cost = p.cost ?? 0;
 
-      if (!grouped.has(sub)) {
-        grouped.set(sub, {
+      if (!grouped.has(trade)) {
+        grouped.set(trade, {
           materials: 0,
           tools: 0,
           services: 0,
           other: 0,
         });
       }
-      const entry = grouped.get(sub)!;
-      entry[cat] = (entry[cat] ?? 0) + cost;
+      const entry = grouped.get(trade)!;
+      entry[costType] = (entry[costType] ?? 0) + cost;
     }
 
     return Array.from(grouped.entries())
-      .map(([subcategory, cats]) => ({
-        subcategory,
-        ...cats,
-        total: sum(Object.values(cats)),
+      .map(([trade, costTypes]) => ({
+        trade,
+        ...costTypes,
+        total: sum(Object.values(costTypes)),
       }))
       .filter((d) => d.total > 0)
       .sort((a, b) => a.total - b.total) as BarDatum[];
@@ -67,17 +71,18 @@ export function SubcategoryBars({ purchases }: { purchases: PurchaseOut[] }) {
     <div style={{ height: chartHeight }}>
       <ResponsiveBar
         data={data}
-        keys={[...CATEGORY_KEYS]}
-        indexBy="subcategory"
+        keys={[...COST_TYPE_KEYS]}
+        indexBy="trade"
         layout="horizontal"
         margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
         padding={0.25}
-        colors={(bar) => getCategoryColor(bar.id as string)}
+        colors={(bar) => getCostTypeColor(bar.id as string)}
         {...nivoBarChrome}
         axisBottom={nivoCurrencyAxis}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,
+          format: tradeLabel,
         }}
         label={(d) =>
           d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
@@ -88,7 +93,7 @@ export function SubcategoryBars({ purchases }: { purchases: PurchaseOut[] }) {
         enableGridY={false}
         tooltip={({ id, value, indexValue, color }) => (
           <ChartTooltip>
-            <strong>{indexValue}</strong> — {id}:{" "}
+            <strong>{tradeLabel(String(indexValue))}</strong> — {id}:{" "}
             <span style={{ color }}>{formatCurrency(value, 0)}</span>
           </ChartTooltip>
         )}

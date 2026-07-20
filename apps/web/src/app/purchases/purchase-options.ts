@@ -1,24 +1,18 @@
-import {
-  purchaseCategoryValues,
-  purchaserValues,
-} from "@cubby/schemas/project";
+import { costTypeValues, purchaserValues } from "@cubby/schemas/project";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
 
-/** Human labels for the fixed purchase-category enum. */
-export const purchaseCategoryLabels: Record<
-  (typeof purchaseCategoryValues)[number],
-  string
-> = {
+/** Human labels for the fixed cost-type enum. */
+export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
   materials: "Materials",
   tools: "Tools",
   services: "Services",
 };
 
-/** `{value,label}` options for the category filter/inline-edit select. */
-export const purchaseCategoryOptions = buildSelectOptions(
-  purchaseCategoryValues,
-  purchaseCategoryLabels,
+/** `{value,label}` options for the cost-type filter/inline-edit select. */
+export const costTypeOptions = buildSelectOptions(
+  costTypeValues,
+  costTypeLabels,
 );
 
 /** Human labels for the fixed purchaser enum. */

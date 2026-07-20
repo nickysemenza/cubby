@@ -105,7 +105,7 @@ describe("globalSearch: tracker entities", () => {
         overrides: {
           name: "Manifest Sand The Deck",
           status: "in_progress",
-          category: "carpentry",
+          trade: "finishes",
           projectId: project.id,
         },
       }),
@@ -121,23 +121,23 @@ describe("globalSearch: tracker entities", () => {
       expect(hit.status).toBe("in_progress");
       expect(hit.projectName).toBe("Manifest Task Project");
       expect(hit.subtitle).toBe("Manifest Task Project");
-      expect(hit.typeHint).toBe("carpentry");
+      expect(hit.typeHint).toBe("finishes");
     }
   });
 
-  it("finds a task by category text", async () => {
+  it("finds a task by trade text", async () => {
     const task = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: {
-          name: "Category Search Task",
-          category: "manifest-category-plumbing",
+          name: "Trade Search Task",
+          trade: "plumbing",
         },
       }),
       ctx.actor,
     );
 
-    const results = await globalSearch(ctx.db, "manifest-category-plumbing");
+    const results = await globalSearch(ctx.db, "plumbing");
     expect(
       results.some((r) => r.entityType === "task" && r.id === task.id),
     ).toBe(true);
@@ -175,13 +175,13 @@ describe("globalSearch: tracker entities", () => {
     }
   });
 
-  it("finds a purchase by subcategory or notes text", async () => {
-    const bySubcategory = await createPurchase(
+  it("finds a purchase by trade or notes text", async () => {
+    const byTrade = await createPurchase(
       ctx.db,
       mock(purchaseCreateInput, {
         overrides: {
-          name: "Subcategory Search Purchase",
-          subcategory: "manifest-subcategory-lumber",
+          name: "Trade Search Purchase",
+          trade: "electrical",
         },
       }),
       ctx.actor,
@@ -197,13 +197,10 @@ describe("globalSearch: tracker entities", () => {
       ctx.actor,
     );
 
-    const subcategoryResults = await globalSearch(
-      ctx.db,
-      "manifest-subcategory-lumber",
-    );
+    const tradeResults = await globalSearch(ctx.db, "electrical");
     expect(
-      subcategoryResults.some(
-        (r) => r.entityType === "purchase" && r.id === bySubcategory.id,
+      tradeResults.some(
+        (r) => r.entityType === "purchase" && r.id === byTrade.id,
       ),
     ).toBe(true);
 

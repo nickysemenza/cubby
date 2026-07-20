@@ -1,6 +1,6 @@
 import type {
+  CostType,
   ProjectStatus,
-  PurchaseCategory,
   Purchaser,
   TaskStatus,
 } from "@cubby/schemas/project";
@@ -121,24 +121,24 @@ export function getStatusBadgeProps(
   };
 }
 
-// -- Category colors (monochrome ink ladder + ultramarine accent) --
+// -- Cost-type colors (monochrome ink ladder + ultramarine accent) --
 
-/** `purchase.category` -> chart/badge color, using the warm chart tokens. */
-const CATEGORY_COLORS: Record<PurchaseCategory, string> = {
+/** `purchase.costType` -> chart/badge color, using the warm chart tokens. */
+const COST_TYPE_COLORS: Record<CostType, string> = {
   materials: "var(--chart-1)",
   tools: "var(--chart-5)",
   services: "var(--chart-2)",
 };
 
 /**
- * Accepts a plain string, not the strict `PurchaseCategory` enum — callers
- * pass ad hoc bucket labels (e.g. treemap/donut group keys like
- * "uncategorized") through here too, not just raw purchase.category values.
+ * Accepts a plain string, not the strict `CostType` enum — callers pass ad
+ * hoc bucket labels (e.g. treemap/donut group keys like "uncategorized")
+ * through here too, not just raw purchase.costType values.
  */
-export function getCategoryColor(category: string | null): string {
-  if (!category) return "var(--chart-neutral)";
-  const map = CATEGORY_COLORS as Record<string, string>;
-  return map[category] ?? "var(--chart-neutral)";
+export function getCostTypeColor(costType: string | null): string {
+  if (!costType) return "var(--chart-neutral)";
+  const map = COST_TYPE_COLORS as Record<string, string>;
+  return map[costType] ?? "var(--chart-neutral)";
 }
 
 /** `purchase.purchaser` -> chart color. Shared purchases get the accent. */

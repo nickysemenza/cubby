@@ -28,10 +28,8 @@ export const purchaseList = async (
     purchase,
     [{ column: purchase.name, term: filters.search }],
     [
-      filters.category ? eq(purchase.category, filters.category) : undefined,
-      filters.subcategory
-        ? eq(purchase.subcategory, filters.subcategory)
-        : undefined,
+      filters.costType ? eq(purchase.costType, filters.costType) : undefined,
+      filters.trade ? eq(purchase.trade, filters.trade) : undefined,
       filters.purchaser ? eq(purchase.purchaser, filters.purchaser) : undefined,
       filters.projectId ? eq(purchase.projectId, filters.projectId) : undefined,
       filters.future !== undefined

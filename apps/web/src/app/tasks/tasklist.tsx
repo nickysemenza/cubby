@@ -1,17 +1,21 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
-import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
+import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { TASK_STATUS_LABELS } from "~/app/projects/shared";
+import {
+  TASK_STATUS_LABELS,
+  TRADE_LABELS,
+  tradeOptions,
+} from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
+import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createFilterableSelectColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
-  createTextColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -123,15 +127,21 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
           },
         },
       }),
-      createTextColumn(columnHelper, "category", {
-        header: "Category",
-        className: "min-w-0 w-32 truncate",
+      createFilterableSelectColumn(columnHelper, "trade", {
+        header: "Trade",
+        className: "w-32",
+        placeholder: "Filter by trade...",
+        selectOptions: tradeOptions,
+        renderCell: (trade: Trade | null) =>
+          trade ? TRADE_LABELS[trade] : <NoneValue />,
         mobile: { slot: "meta", priority: 50 },
         editable: {
-          onSave: async (newValue, task) => {
+          onSave: async (newTrade, task) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newTrade) return;
             await updateTaskMutation.mutateAsync({
               id: task.id,
-              data: { category: newValue },
+              data: { trade: newTrade },
             });
           },
         },
@@ -148,6 +158,12 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         placeholder: "Filter by status...",
         filterType: "select" as const,
         options: taskStatusOptions,
+      },
+      {
+        id: "trade",
+        placeholder: "Filter by trade...",
+        filterType: "select" as const,
+        options: tradeOptions,
       },
       {
         id: "project",
@@ -179,6 +195,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       return {
         search: ts.getColumnFilter("name"),
         status: ts.getColumnFilter("status") as TaskStatus | undefined,
+        trade: ts.getColumnFilter("trade") as Trade | undefined,
         projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
         // Checklist subtasks are managed from their parent's detail page, not
         // surfaced as independent rows here.

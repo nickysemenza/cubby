@@ -71,7 +71,7 @@ export function registerProjectTools(server: McpServer) {
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
-      list: "List project tasks with status, due dates, category, project name, parent task, and subtask counts. Filter by status/projectId/category/search/topLevelOnly/parentTaskId. Pass topLevelOnly=true to exclude checklist subtasks.",
+      list: "List project tasks with status, due dates, trade, project name, parent task, and subtask counts. Filter by status/projectId/trade/search/topLevelOnly/parentTaskId. Pass topLevelOnly=true to exclude checklist subtasks.",
       get: "Get a task by ID, including blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
       create:
         "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project. Set parentTaskId to create it as a checklist subtask of another task — one level only (a subtask can't itself have subtasks), and projectId is inherited from the parent when omitted. A subtask's own status is independent — the parent never auto-completes.",
@@ -104,10 +104,10 @@ export function registerProjectTools(server: McpServer) {
     slim: slimPurchase,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
-      list: "List purchases (project spend ledger) with cost, date, category/subcategory, purchaser, and project name. Filter by category/subcategory/purchaser/projectId/future/search.",
+      list: "List purchases (project spend ledger) with cost, date, costType/trade, purchaser, and project name. Filter by costType/trade/purchaser/projectId/future/search.",
       get: "Get a purchase by ID.",
       create:
-        "Log a purchase (category materials|tools|services; set future=true for planned spend), optionally attached to a project.",
+        "Log a purchase (costType materials|tools|services; set future=true for planned spend), optionally attached to a project.",
       update: "Update a purchase's fields.",
       delete: "Soft-delete purchases by IDs.",
     },

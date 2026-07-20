@@ -158,7 +158,7 @@ export function buildProjectEmbeddingText(project: ProjectSearchTextInput) {
 const taskSearchTextInputSchema = z.object({
   name: z.string(),
   status: nullableText,
-  category: nullableText,
+  trade: nullableText,
   projectName: nullableText,
 });
 type TaskSearchTextInput = z.infer<typeof taskSearchTextInputSchema>;
@@ -168,15 +168,15 @@ export function buildTaskEmbeddingText(task: TaskSearchTextInput) {
   return joinFields([
     field("task", parsed.name),
     field("status", parsed.status),
-    field("category", parsed.category),
+    field("trade", parsed.trade),
     field("project", parsed.projectName),
   ]);
 }
 
 const purchaseSearchTextInputSchema = z.object({
   name: z.string(),
-  category: nullableText,
-  subcategory: nullableText,
+  costType: nullableText,
+  trade: nullableText,
   purchaser: nullableText,
   notes: nullableText,
   projectName: nullableText,
@@ -187,8 +187,8 @@ export function buildPurchaseEmbeddingText(purchase: PurchaseSearchTextInput) {
   const parsed = purchaseSearchTextInputSchema.parse(purchase);
   return joinFields([
     field("purchase", parsed.name),
-    field("category", parsed.category),
-    field("subcategory", parsed.subcategory),
+    field("cost type", parsed.costType),
+    field("trade", parsed.trade),
     field("purchaser", parsed.purchaser),
     field("project", parsed.projectName),
     field("notes", parsed.notes),

@@ -9,82 +9,78 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
-import { Route as DesignRouteImport } from './routes/design'
 import { Route as DocsRouteImport } from './routes/docs'
-import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
-import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
-import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
-import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
-import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
-import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
-import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
-import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
-import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
-import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
-import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as ApiMcpRouteImport } from './routes/api/mcp'
-import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
+import { Route as DesignRouteImport } from './routes/design'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSectionRouteImport } from './routes/docs.$section'
-import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
-import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
-import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
-import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
-import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
-import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
-import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
-import { Route as AuthenticatedIngredientsEquivalencesRouteImport } from './routes/_authenticated/ingredients.equivalences'
-import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
-import { Route as AuthenticatedIngredientsWorkbenchRouteImport } from './routes/_authenticated/ingredients.workbench'
-import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
-import { Route as AuthenticatedInventoryIdRouteImport } from './routes/_authenticated/inventory.$id'
-import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
-import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
-import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
-import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
-import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
-import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
-import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
-import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
-import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authenticated/meals.index'
-import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
-import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
-import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
-import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
-import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
-import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
-import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
-import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
-import { Route as AuthenticatedPurchasesIndexRouteImport } from './routes/_authenticated/purchases.index'
-import { Route as AuthenticatedPurchasesIdRouteImport } from './routes/_authenticated/purchases.$id'
-import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
-import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
-import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
-import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
-import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
-import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
-import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
-import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks.index'
-import { Route as AuthenticatedTasksIdRouteImport } from './routes/_authenticated/tasks.$id'
+import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
+import { Route as ApiMcpRouteImport } from './routes/api/mcp'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
+import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
+import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
+import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
+import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
+import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
+import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
+import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
+import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
+import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
+import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
-import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
+import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks.index'
+import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
+import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
+import { Route as AuthenticatedPurchasesIndexRouteImport } from './routes/_authenticated/purchases.index'
+import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
+import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
+import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authenticated/meals.index'
+import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
+import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
+import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
+import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
+import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
-import { Route as AuthenticatedRecipesIdExportRouteImport } from './routes/_authenticated/recipes.$id_.export'
-import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
+import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
+import { Route as AuthenticatedTasksIdRouteImport } from './routes/_authenticated/tasks.$id'
+import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
+import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
+import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
+import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
+import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
+import { Route as AuthenticatedPurchasesIdRouteImport } from './routes/_authenticated/purchases.$id'
+import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
+import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
+import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
+import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
+import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
+import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
+import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
+import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
+import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
+import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
+import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
+import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
+import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
+import { Route as AuthenticatedInventoryIdRouteImport } from './routes/_authenticated/inventory.$id'
+import { Route as AuthenticatedIngredientsWorkbenchRouteImport } from './routes/_authenticated/ingredients.workbench'
+import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
+import { Route as AuthenticatedIngredientsEquivalencesRouteImport } from './routes/_authenticated/ingredients.equivalences'
+import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
+import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
+import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
+import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
+import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
+import { Route as AuthenticatedRecipesIdExportRouteImport } from './routes/_authenticated/recipes.$id_.export'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DesignRoute = DesignRouteImport.update({
@@ -92,81 +88,13 @@ const DesignRoute = DesignRouteImport.update({
   path: '/design',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DocsRoute = DocsRouteImport.update({
-  id: '/docs',
-  path: '/docs',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedShortcodeRoute = AuthenticatedShortcodeRouteImport.update({
-  id: '/$shortcode',
-  path: '/$shortcode',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
-  id: '/activity',
-  path: '/activity',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedAiSmokeTestRoute =
-  AuthenticatedAiSmokeTestRouteImport.update({
-    id: '/ai-smoke-test',
-    path: '/ai-smoke-test',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedAiUsageRoute = AuthenticatedAiUsageRouteImport.update({
-  id: '/ai-usage',
-  path: '/ai-usage',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
-  id: '/ask',
-  path: '/ask',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedBackgroundJobsRoute =
-  AuthenticatedBackgroundJobsRouteImport.update({
-    id: '/background-jobs',
-    path: '/background-jobs',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
-  id: '/entities',
-  path: '/entities',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
-  id: '/labels',
-  path: '/labels',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedMcpRoute = AuthenticatedMcpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedPantryViewRoute = AuthenticatedPantryViewRouteImport.update({
-  id: '/pantry-view',
-  path: '/pantry-view',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
-  id: '/problems',
-  path: '/problems',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const ApiMcpRoute = ApiMcpRouteImport.update({
-  id: '/api/mcp',
-  path: '/api/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
-  id: '/auth/$authView',
-  path: '/auth/$authView',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
@@ -179,213 +107,86 @@ const DocsSectionRoute = DocsSectionRouteImport.update({
   path: '/$section',
   getParentRoute: () => DocsRoute,
 } as any)
-const AuthenticatedAccountAccountViewRoute =
-  AuthenticatedAccountAccountViewRouteImport.update({
-    id: '/account/$accountView',
-    path: '/account/$accountView',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedCookbooksIndexRoute =
-  AuthenticatedCookbooksIndexRouteImport.update({
-    id: '/cookbooks/',
-    path: '/cookbooks/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedCookbooksCookbookIdRoute =
-  AuthenticatedCookbooksCookbookIdRouteImport.update({
-    id: '/cookbooks/$cookbookId',
-    path: '/cookbooks/$cookbookId',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedImagesIndexRoute =
-  AuthenticatedImagesIndexRouteImport.update({
-    id: '/images/',
-    path: '/images/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedImagesIdRoute = AuthenticatedImagesIdRouteImport.update({
-  id: '/images/$id',
-  path: '/images/$id',
+const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
+  id: '/auth/$authView',
+  path: '/auth/$authView',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedIngredientsIndexRoute =
-  AuthenticatedIngredientsIndexRouteImport.update({
-    id: '/ingredients/',
-    path: '/ingredients/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedIngredientsIdRoute =
-  AuthenticatedIngredientsIdRouteImport.update({
-    id: '/ingredients/$id',
-    path: '/ingredients/$id',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedIngredientsEquivalencesRoute =
-  AuthenticatedIngredientsEquivalencesRouteImport.update({
-    id: '/ingredients/equivalences',
-    path: '/ingredients/equivalences',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedIngredientsNewRoute =
-  AuthenticatedIngredientsNewRouteImport.update({
-    id: '/ingredients/new',
-    path: '/ingredients/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedIngredientsWorkbenchRoute =
-  AuthenticatedIngredientsWorkbenchRouteImport.update({
-    id: '/ingredients/workbench',
-    path: '/ingredients/workbench',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryIndexRoute =
-  AuthenticatedInventoryIndexRouteImport.update({
-    id: '/inventory/',
-    path: '/inventory/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryIdRoute =
-  AuthenticatedInventoryIdRouteImport.update({
-    id: '/inventory/$id',
-    path: '/inventory/$id',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryBulkEditRoute =
-  AuthenticatedInventoryBulkEditRouteImport.update({
-    id: '/inventory/bulk-edit',
-    path: '/inventory/bulk-edit',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryBulkMoveRoute =
-  AuthenticatedInventoryBulkMoveRouteImport.update({
-    id: '/inventory/bulk-move',
-    path: '/inventory/bulk-move',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryNewRoute =
-  AuthenticatedInventoryNewRouteImport.update({
-    id: '/inventory/new',
-    path: '/inventory/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventorySessionRoute =
-  AuthenticatedInventorySessionRouteImport.update({
-    id: '/inventory/session',
-    path: '/inventory/session',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedLocationsIndexRoute =
-  AuthenticatedLocationsIndexRouteImport.update({
-    id: '/locations/',
-    path: '/locations/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedLocationsIdRoute =
-  AuthenticatedLocationsIdRouteImport.update({
-    id: '/locations/$id',
-    path: '/locations/$id',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedLocationsArrangeRoute =
-  AuthenticatedLocationsArrangeRouteImport.update({
-    id: '/locations/arrange',
-    path: '/locations/arrange',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedLocationsNewRoute =
-  AuthenticatedLocationsNewRouteImport.update({
-    id: '/locations/new',
-    path: '/locations/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedMealsIndexRoute = AuthenticatedMealsIndexRouteImport.update({
-  id: '/meals/',
-  path: '/meals/',
+const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
+  id: '/problems',
+  path: '/problems',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedMealsIdRoute = AuthenticatedMealsIdRouteImport.update({
-  id: '/meals/$id',
-  path: '/meals/$id',
+const AuthenticatedPantryViewRoute = AuthenticatedPantryViewRouteImport.update({
+  id: '/pantry-view',
+  path: '/pantry-view',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedMealsShoppingListRoute =
-  AuthenticatedMealsShoppingListRouteImport.update({
-    id: '/meals/shopping-list',
-    path: '/meals/shopping-list',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedMealsSuggestionsRoute =
-  AuthenticatedMealsSuggestionsRouteImport.update({
-    id: '/meals/suggestions',
-    path: '/meals/suggestions',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProductsIndexRoute =
-  AuthenticatedProductsIndexRouteImport.update({
-    id: '/products/',
-    path: '/products/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProductsIdRoute = AuthenticatedProductsIdRouteImport.update({
-  id: '/products/$id',
-  path: '/products/$id',
+const AuthenticatedMcpRoute = AuthenticatedMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedProductsNewRoute =
-  AuthenticatedProductsNewRouteImport.update({
-    id: '/products/new',
-    path: '/products/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsIndexRoute =
-  AuthenticatedProjectsIndexRouteImport.update({
-    id: '/projects/',
-    path: '/projects/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
-  id: '/projects/$id',
-  path: '/projects/$id',
+const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
+  id: '/labels',
+  path: '/labels',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedPurchasesIndexRoute =
-  AuthenticatedPurchasesIndexRouteImport.update({
-    id: '/purchases/',
-    path: '/purchases/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedPurchasesIdRoute =
-  AuthenticatedPurchasesIdRouteImport.update({
-    id: '/purchases/$id',
-    path: '/purchases/$id',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRecipesIndexRoute =
-  AuthenticatedRecipesIndexRouteImport.update({
-    id: '/recipes/',
-    path: '/recipes/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRecipesIdRoute = AuthenticatedRecipesIdRouteImport.update({
-  id: '/recipes/$id',
-  path: '/recipes/$id',
+const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
+  id: '/entities',
+  path: '/entities',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedRecipesCompareRoute =
-  AuthenticatedRecipesCompareRouteImport.update({
-    id: '/recipes/compare',
-    path: '/recipes/compare',
+const AuthenticatedBackgroundJobsRoute =
+  AuthenticatedBackgroundJobsRouteImport.update({
+    id: '/background-jobs',
+    path: '/background-jobs',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedRecipesImportRoute =
-  AuthenticatedRecipesImportRouteImport.update({
-    id: '/recipes/import',
-    path: '/recipes/import',
+const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
+  id: '/ask',
+  path: '/ask',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAiUsageRoute = AuthenticatedAiUsageRouteImport.update({
+  id: '/ai-usage',
+  path: '/ai-usage',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAiSmokeTestRoute =
+  AuthenticatedAiSmokeTestRouteImport.update({
+    id: '/ai-smoke-test',
+    path: '/ai-smoke-test',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
-  id: '/recipes/new',
-  path: '/recipes/new',
+const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedShortcodeRoute = AuthenticatedShortcodeRouteImport.update({
+  id: '/$shortcode',
+  path: '/$shortcode',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedUsdaIndexRoute = AuthenticatedUsdaIndexRouteImport.update({
+  id: '/usda/',
+  path: '/usda/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
+  id: '/tasks/',
+  path: '/tasks/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedSearchIndexRoute =
@@ -394,35 +195,68 @@ const AuthenticatedSearchIndexRoute =
     path: '/search/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedSearchDebugRoute =
-  AuthenticatedSearchDebugRouteImport.update({
-    id: '/search/debug',
-    path: '/search/debug',
+const AuthenticatedRecipesIndexRoute =
+  AuthenticatedRecipesIndexRouteImport.update({
+    id: '/recipes/',
+    path: '/recipes/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
-  id: '/tasks/',
-  path: '/tasks/',
+const AuthenticatedPurchasesIndexRoute =
+  AuthenticatedPurchasesIndexRouteImport.update({
+    id: '/purchases/',
+    path: '/purchases/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsIndexRoute =
+  AuthenticatedProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProductsIndexRoute =
+  AuthenticatedProductsIndexRouteImport.update({
+    id: '/products/',
+    path: '/products/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedMealsIndexRoute = AuthenticatedMealsIndexRouteImport.update({
+  id: '/meals/',
+  path: '/meals/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedTasksIdRoute = AuthenticatedTasksIdRouteImport.update({
-  id: '/tasks/$id',
-  path: '/tasks/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedUsdaIndexRoute = AuthenticatedUsdaIndexRouteImport.update({
-  id: '/usda/',
-  path: '/usda/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedUsdaIdRoute = AuthenticatedUsdaIdRouteImport.update({
-  id: '/usda/$id',
-  path: '/usda/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
+const AuthenticatedLocationsIndexRoute =
+  AuthenticatedLocationsIndexRouteImport.update({
+    id: '/locations/',
+    path: '/locations/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryIndexRoute =
+  AuthenticatedInventoryIndexRouteImport.update({
+    id: '/inventory/',
+    path: '/inventory/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsIndexRoute =
+  AuthenticatedIngredientsIndexRouteImport.update({
+    id: '/ingredients/',
+    path: '/ingredients/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedImagesIndexRoute =
+  AuthenticatedImagesIndexRouteImport.update({
+    id: '/images/',
+    path: '/images/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCookbooksIndexRoute =
+  AuthenticatedCookbooksIndexRouteImport.update({
+    id: '/cookbooks/',
+    path: '/cookbooks/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
+  id: '/api/trpc/$',
+  path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
@@ -430,15 +264,181 @@ const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   path: '/api/debug/timing',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
-  id: '/api/trpc/$',
-  path: '/api/trpc/$',
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRecipesIdExportRoute =
-  AuthenticatedRecipesIdExportRouteImport.update({
-    id: '/recipes/$id_/export',
-    path: '/recipes/$id/export',
+const AuthenticatedUsdaIdRoute = AuthenticatedUsdaIdRouteImport.update({
+  id: '/usda/$id',
+  path: '/usda/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedTasksIdRoute = AuthenticatedTasksIdRouteImport.update({
+  id: '/tasks/$id',
+  path: '/tasks/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSearchDebugRoute =
+  AuthenticatedSearchDebugRouteImport.update({
+    id: '/search/debug',
+    path: '/search/debug',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
+  id: '/recipes/new',
+  path: '/recipes/new',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRecipesImportRoute =
+  AuthenticatedRecipesImportRouteImport.update({
+    id: '/recipes/import',
+    path: '/recipes/import',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRecipesCompareRoute =
+  AuthenticatedRecipesCompareRouteImport.update({
+    id: '/recipes/compare',
+    path: '/recipes/compare',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRecipesIdRoute = AuthenticatedRecipesIdRouteImport.update({
+  id: '/recipes/$id',
+  path: '/recipes/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedPurchasesIdRoute =
+  AuthenticatedPurchasesIdRouteImport.update({
+    id: '/purchases/$id',
+    path: '/purchases/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
+  id: '/projects/$id',
+  path: '/projects/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedProductsNewRoute =
+  AuthenticatedProductsNewRouteImport.update({
+    id: '/products/new',
+    path: '/products/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProductsIdRoute = AuthenticatedProductsIdRouteImport.update({
+  id: '/products/$id',
+  path: '/products/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMealsSuggestionsRoute =
+  AuthenticatedMealsSuggestionsRouteImport.update({
+    id: '/meals/suggestions',
+    path: '/meals/suggestions',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedMealsShoppingListRoute =
+  AuthenticatedMealsShoppingListRouteImport.update({
+    id: '/meals/shopping-list',
+    path: '/meals/shopping-list',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedMealsIdRoute = AuthenticatedMealsIdRouteImport.update({
+  id: '/meals/$id',
+  path: '/meals/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedLocationsNewRoute =
+  AuthenticatedLocationsNewRouteImport.update({
+    id: '/locations/new',
+    path: '/locations/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLocationsArrangeRoute =
+  AuthenticatedLocationsArrangeRouteImport.update({
+    id: '/locations/arrange',
+    path: '/locations/arrange',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLocationsIdRoute =
+  AuthenticatedLocationsIdRouteImport.update({
+    id: '/locations/$id',
+    path: '/locations/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventorySessionRoute =
+  AuthenticatedInventorySessionRouteImport.update({
+    id: '/inventory/session',
+    path: '/inventory/session',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryNewRoute =
+  AuthenticatedInventoryNewRouteImport.update({
+    id: '/inventory/new',
+    path: '/inventory/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryBulkMoveRoute =
+  AuthenticatedInventoryBulkMoveRouteImport.update({
+    id: '/inventory/bulk-move',
+    path: '/inventory/bulk-move',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryBulkEditRoute =
+  AuthenticatedInventoryBulkEditRouteImport.update({
+    id: '/inventory/bulk-edit',
+    path: '/inventory/bulk-edit',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryIdRoute =
+  AuthenticatedInventoryIdRouteImport.update({
+    id: '/inventory/$id',
+    path: '/inventory/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsWorkbenchRoute =
+  AuthenticatedIngredientsWorkbenchRouteImport.update({
+    id: '/ingredients/workbench',
+    path: '/ingredients/workbench',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsNewRoute =
+  AuthenticatedIngredientsNewRouteImport.update({
+    id: '/ingredients/new',
+    path: '/ingredients/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsEquivalencesRoute =
+  AuthenticatedIngredientsEquivalencesRouteImport.update({
+    id: '/ingredients/equivalences',
+    path: '/ingredients/equivalences',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsIdRoute =
+  AuthenticatedIngredientsIdRouteImport.update({
+    id: '/ingredients/$id',
+    path: '/ingredients/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedImagesIdRoute = AuthenticatedImagesIdRouteImport.update({
+  id: '/images/$id',
+  path: '/images/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCookbooksCookbookIdRoute =
+  AuthenticatedCookbooksCookbookIdRouteImport.update({
+    id: '/cookbooks/$cookbookId',
+    path: '/cookbooks/$cookbookId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAccountAccountViewRoute =
+  AuthenticatedAccountAccountViewRouteImport.update({
+    id: '/account/$accountView',
+    path: '/account/$accountView',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedUsdaUpcCodeRoute =
+  AuthenticatedUsdaUpcCodeRouteImport.update({
+    id: '/usda/upc/$code',
+    path: '/usda/upc/$code',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedUsdaNdbCodeRoute =
@@ -447,10 +447,10 @@ const AuthenticatedUsdaNdbCodeRoute =
     path: '/usda/ndb/$code',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedUsdaUpcCodeRoute =
-  AuthenticatedUsdaUpcCodeRouteImport.update({
-    id: '/usda/upc/$code',
-    path: '/usda/upc/$code',
+const AuthenticatedRecipesIdExportRoute =
+  AuthenticatedRecipesIdExportRouteImport.update({
+    id: '/recipes/$id_/export',
+    path: '/recipes/$id/export',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 
@@ -886,18 +886,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteImport
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/design': {
@@ -907,109 +900,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/docs': {
-      id: '/docs'
-      path: '/docs'
-      fullPath: '/docs'
-      preLoaderRoute: typeof DocsRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/$shortcode': {
-      id: '/_authenticated/$shortcode'
-      path: '/$shortcode'
-      fullPath: '/$shortcode'
-      preLoaderRoute: typeof AuthenticatedShortcodeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/activity': {
-      id: '/_authenticated/activity'
-      path: '/activity'
-      fullPath: '/activity'
-      preLoaderRoute: typeof AuthenticatedActivityRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ai-smoke-test': {
-      id: '/_authenticated/ai-smoke-test'
-      path: '/ai-smoke-test'
-      fullPath: '/ai-smoke-test'
-      preLoaderRoute: typeof AuthenticatedAiSmokeTestRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ai-usage': {
-      id: '/_authenticated/ai-usage'
-      path: '/ai-usage'
-      fullPath: '/ai-usage'
-      preLoaderRoute: typeof AuthenticatedAiUsageRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ask': {
-      id: '/_authenticated/ask'
-      path: '/ask'
-      fullPath: '/ask'
-      preLoaderRoute: typeof AuthenticatedAskRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/background-jobs': {
-      id: '/_authenticated/background-jobs'
-      path: '/background-jobs'
-      fullPath: '/background-jobs'
-      preLoaderRoute: typeof AuthenticatedBackgroundJobsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/entities': {
-      id: '/_authenticated/entities'
-      path: '/entities'
-      fullPath: '/entities'
-      preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/labels': {
-      id: '/_authenticated/labels'
-      path: '/labels'
-      fullPath: '/labels'
-      preLoaderRoute: typeof AuthenticatedLabelsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/mcp': {
-      id: '/_authenticated/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof AuthenticatedMcpRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/pantry-view': {
-      id: '/_authenticated/pantry-view'
-      path: '/pantry-view'
-      fullPath: '/pantry-view'
-      preLoaderRoute: typeof AuthenticatedPantryViewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/problems': {
-      id: '/_authenticated/problems'
-      path: '/problems'
-      fullPath: '/problems'
-      preLoaderRoute: typeof AuthenticatedProblemsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/api/mcp': {
-      id: '/api/mcp'
-      path: '/api/mcp'
-      fullPath: '/api/mcp'
-      preLoaderRoute: typeof ApiMcpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/$authView': {
-      id: '/auth/$authView'
-      path: '/auth/$authView'
-      fullPath: '/auth/$authView'
-      preLoaderRoute: typeof AuthAuthViewRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/': {
@@ -1026,284 +928,102 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSectionRouteImport
       parentRoute: typeof DocsRoute
     }
-    '/_authenticated/account/$accountView': {
-      id: '/_authenticated/account/$accountView'
-      path: '/account/$accountView'
-      fullPath: '/account/$accountView'
-      preLoaderRoute: typeof AuthenticatedAccountAccountViewRouteImport
+    '/auth/$authView': {
+      id: '/auth/$authView'
+      path: '/auth/$authView'
+      fullPath: '/auth/$authView'
+      preLoaderRoute: typeof AuthAuthViewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/cookbooks/': {
-      id: '/_authenticated/cookbooks/'
-      path: '/cookbooks'
-      fullPath: '/cookbooks/'
-      preLoaderRoute: typeof AuthenticatedCookbooksIndexRouteImport
+    '/_authenticated/problems': {
+      id: '/_authenticated/problems'
+      path: '/problems'
+      fullPath: '/problems'
+      preLoaderRoute: typeof AuthenticatedProblemsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/cookbooks/$cookbookId': {
-      id: '/_authenticated/cookbooks/$cookbookId'
-      path: '/cookbooks/$cookbookId'
-      fullPath: '/cookbooks/$cookbookId'
-      preLoaderRoute: typeof AuthenticatedCookbooksCookbookIdRouteImport
+    '/_authenticated/pantry-view': {
+      id: '/_authenticated/pantry-view'
+      path: '/pantry-view'
+      fullPath: '/pantry-view'
+      preLoaderRoute: typeof AuthenticatedPantryViewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/images/': {
-      id: '/_authenticated/images/'
-      path: '/images'
-      fullPath: '/images/'
-      preLoaderRoute: typeof AuthenticatedImagesIndexRouteImport
+    '/_authenticated/mcp': {
+      id: '/_authenticated/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof AuthenticatedMcpRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/images/$id': {
-      id: '/_authenticated/images/$id'
-      path: '/images/$id'
-      fullPath: '/images/$id'
-      preLoaderRoute: typeof AuthenticatedImagesIdRouteImport
+    '/_authenticated/labels': {
+      id: '/_authenticated/labels'
+      path: '/labels'
+      fullPath: '/labels'
+      preLoaderRoute: typeof AuthenticatedLabelsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/': {
-      id: '/_authenticated/ingredients/'
-      path: '/ingredients'
-      fullPath: '/ingredients/'
-      preLoaderRoute: typeof AuthenticatedIngredientsIndexRouteImport
+    '/_authenticated/entities': {
+      id: '/_authenticated/entities'
+      path: '/entities'
+      fullPath: '/entities'
+      preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/$id': {
-      id: '/_authenticated/ingredients/$id'
-      path: '/ingredients/$id'
-      fullPath: '/ingredients/$id'
-      preLoaderRoute: typeof AuthenticatedIngredientsIdRouteImport
+    '/_authenticated/background-jobs': {
+      id: '/_authenticated/background-jobs'
+      path: '/background-jobs'
+      fullPath: '/background-jobs'
+      preLoaderRoute: typeof AuthenticatedBackgroundJobsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/equivalences': {
-      id: '/_authenticated/ingredients/equivalences'
-      path: '/ingredients/equivalences'
-      fullPath: '/ingredients/equivalences'
-      preLoaderRoute: typeof AuthenticatedIngredientsEquivalencesRouteImport
+    '/_authenticated/ask': {
+      id: '/_authenticated/ask'
+      path: '/ask'
+      fullPath: '/ask'
+      preLoaderRoute: typeof AuthenticatedAskRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/new': {
-      id: '/_authenticated/ingredients/new'
-      path: '/ingredients/new'
-      fullPath: '/ingredients/new'
-      preLoaderRoute: typeof AuthenticatedIngredientsNewRouteImport
+    '/_authenticated/ai-usage': {
+      id: '/_authenticated/ai-usage'
+      path: '/ai-usage'
+      fullPath: '/ai-usage'
+      preLoaderRoute: typeof AuthenticatedAiUsageRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/workbench': {
-      id: '/_authenticated/ingredients/workbench'
-      path: '/ingredients/workbench'
-      fullPath: '/ingredients/workbench'
-      preLoaderRoute: typeof AuthenticatedIngredientsWorkbenchRouteImport
+    '/_authenticated/ai-smoke-test': {
+      id: '/_authenticated/ai-smoke-test'
+      path: '/ai-smoke-test'
+      fullPath: '/ai-smoke-test'
+      preLoaderRoute: typeof AuthenticatedAiSmokeTestRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/inventory/': {
-      id: '/_authenticated/inventory/'
-      path: '/inventory'
-      fullPath: '/inventory/'
-      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
+    '/_authenticated/activity': {
+      id: '/_authenticated/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AuthenticatedActivityRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/inventory/$id': {
-      id: '/_authenticated/inventory/$id'
-      path: '/inventory/$id'
-      fullPath: '/inventory/$id'
-      preLoaderRoute: typeof AuthenticatedInventoryIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/inventory/bulk-edit': {
-      id: '/_authenticated/inventory/bulk-edit'
-      path: '/inventory/bulk-edit'
-      fullPath: '/inventory/bulk-edit'
-      preLoaderRoute: typeof AuthenticatedInventoryBulkEditRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/inventory/bulk-move': {
-      id: '/_authenticated/inventory/bulk-move'
-      path: '/inventory/bulk-move'
-      fullPath: '/inventory/bulk-move'
-      preLoaderRoute: typeof AuthenticatedInventoryBulkMoveRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/inventory/new': {
-      id: '/_authenticated/inventory/new'
-      path: '/inventory/new'
-      fullPath: '/inventory/new'
-      preLoaderRoute: typeof AuthenticatedInventoryNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/inventory/session': {
-      id: '/_authenticated/inventory/session'
-      path: '/inventory/session'
-      fullPath: '/inventory/session'
-      preLoaderRoute: typeof AuthenticatedInventorySessionRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/locations/': {
-      id: '/_authenticated/locations/'
-      path: '/locations'
-      fullPath: '/locations/'
-      preLoaderRoute: typeof AuthenticatedLocationsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/locations/$id': {
-      id: '/_authenticated/locations/$id'
-      path: '/locations/$id'
-      fullPath: '/locations/$id'
-      preLoaderRoute: typeof AuthenticatedLocationsIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/locations/arrange': {
-      id: '/_authenticated/locations/arrange'
-      path: '/locations/arrange'
-      fullPath: '/locations/arrange'
-      preLoaderRoute: typeof AuthenticatedLocationsArrangeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/locations/new': {
-      id: '/_authenticated/locations/new'
-      path: '/locations/new'
-      fullPath: '/locations/new'
-      preLoaderRoute: typeof AuthenticatedLocationsNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/meals/': {
-      id: '/_authenticated/meals/'
-      path: '/meals'
-      fullPath: '/meals/'
-      preLoaderRoute: typeof AuthenticatedMealsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/meals/$id': {
-      id: '/_authenticated/meals/$id'
-      path: '/meals/$id'
-      fullPath: '/meals/$id'
-      preLoaderRoute: typeof AuthenticatedMealsIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/meals/shopping-list': {
-      id: '/_authenticated/meals/shopping-list'
-      path: '/meals/shopping-list'
-      fullPath: '/meals/shopping-list'
-      preLoaderRoute: typeof AuthenticatedMealsShoppingListRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/meals/suggestions': {
-      id: '/_authenticated/meals/suggestions'
-      path: '/meals/suggestions'
-      fullPath: '/meals/suggestions'
-      preLoaderRoute: typeof AuthenticatedMealsSuggestionsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/products/': {
-      id: '/_authenticated/products/'
-      path: '/products'
-      fullPath: '/products/'
-      preLoaderRoute: typeof AuthenticatedProductsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/products/$id': {
-      id: '/_authenticated/products/$id'
-      path: '/products/$id'
-      fullPath: '/products/$id'
-      preLoaderRoute: typeof AuthenticatedProductsIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/products/new': {
-      id: '/_authenticated/products/new'
-      path: '/products/new'
-      fullPath: '/products/new'
-      preLoaderRoute: typeof AuthenticatedProductsNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/': {
-      id: '/_authenticated/projects/'
-      path: '/projects'
-      fullPath: '/projects/'
-      preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/$id': {
-      id: '/_authenticated/projects/$id'
-      path: '/projects/$id'
-      fullPath: '/projects/$id'
-      preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/purchases/': {
-      id: '/_authenticated/purchases/'
-      path: '/purchases'
-      fullPath: '/purchases/'
-      preLoaderRoute: typeof AuthenticatedPurchasesIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/purchases/$id': {
-      id: '/_authenticated/purchases/$id'
-      path: '/purchases/$id'
-      fullPath: '/purchases/$id'
-      preLoaderRoute: typeof AuthenticatedPurchasesIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/': {
-      id: '/_authenticated/recipes/'
-      path: '/recipes'
-      fullPath: '/recipes/'
-      preLoaderRoute: typeof AuthenticatedRecipesIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/$id': {
-      id: '/_authenticated/recipes/$id'
-      path: '/recipes/$id'
-      fullPath: '/recipes/$id'
-      preLoaderRoute: typeof AuthenticatedRecipesIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/compare': {
-      id: '/_authenticated/recipes/compare'
-      path: '/recipes/compare'
-      fullPath: '/recipes/compare'
-      preLoaderRoute: typeof AuthenticatedRecipesCompareRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/import': {
-      id: '/_authenticated/recipes/import'
-      path: '/recipes/import'
-      fullPath: '/recipes/import'
-      preLoaderRoute: typeof AuthenticatedRecipesImportRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/new': {
-      id: '/_authenticated/recipes/new'
-      path: '/recipes/new'
-      fullPath: '/recipes/new'
-      preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/search/': {
-      id: '/_authenticated/search/'
-      path: '/search'
-      fullPath: '/search/'
-      preLoaderRoute: typeof AuthenticatedSearchIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/search/debug': {
-      id: '/_authenticated/search/debug'
-      path: '/search/debug'
-      fullPath: '/search/debug'
-      preLoaderRoute: typeof AuthenticatedSearchDebugRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/tasks/': {
-      id: '/_authenticated/tasks/'
-      path: '/tasks'
-      fullPath: '/tasks/'
-      preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/tasks/$id': {
-      id: '/_authenticated/tasks/$id'
-      path: '/tasks/$id'
-      fullPath: '/tasks/$id'
-      preLoaderRoute: typeof AuthenticatedTasksIdRouteImport
+    '/_authenticated/$shortcode': {
+      id: '/_authenticated/$shortcode'
+      path: '/$shortcode'
+      fullPath: '/$shortcode'
+      preLoaderRoute: typeof AuthenticatedShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/usda/': {
@@ -1313,18 +1033,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsdaIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/usda/$id': {
-      id: '/_authenticated/usda/$id'
-      path: '/usda/$id'
-      fullPath: '/usda/$id'
-      preLoaderRoute: typeof AuthenticatedUsdaIdRouteImport
+    '/_authenticated/tasks/': {
+      id: '/_authenticated/tasks/'
+      path: '/tasks'
+      fullPath: '/tasks/'
+      preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
+    '/_authenticated/search/': {
+      id: '/_authenticated/search/'
+      path: '/search'
+      fullPath: '/search/'
+      preLoaderRoute: typeof AuthenticatedSearchIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/': {
+      id: '/_authenticated/recipes/'
+      path: '/recipes'
+      fullPath: '/recipes/'
+      preLoaderRoute: typeof AuthenticatedRecipesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/purchases/': {
+      id: '/_authenticated/purchases/'
+      path: '/purchases'
+      fullPath: '/purchases/'
+      preLoaderRoute: typeof AuthenticatedPurchasesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/': {
+      id: '/_authenticated/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/products/': {
+      id: '/_authenticated/products/'
+      path: '/products'
+      fullPath: '/products/'
+      preLoaderRoute: typeof AuthenticatedProductsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/': {
+      id: '/_authenticated/meals/'
+      path: '/meals'
+      fullPath: '/meals/'
+      preLoaderRoute: typeof AuthenticatedMealsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/': {
+      id: '/_authenticated/locations/'
+      path: '/locations'
+      fullPath: '/locations/'
+      preLoaderRoute: typeof AuthenticatedLocationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/': {
+      id: '/_authenticated/inventory/'
+      path: '/inventory'
+      fullPath: '/inventory/'
+      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/': {
+      id: '/_authenticated/ingredients/'
+      path: '/ingredients'
+      fullPath: '/ingredients/'
+      preLoaderRoute: typeof AuthenticatedIngredientsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/images/': {
+      id: '/_authenticated/images/'
+      path: '/images'
+      fullPath: '/images/'
+      preLoaderRoute: typeof AuthenticatedImagesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/cookbooks/': {
+      id: '/_authenticated/cookbooks/'
+      path: '/cookbooks'
+      fullPath: '/cookbooks/'
+      preLoaderRoute: typeof AuthenticatedCookbooksIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/trpc/$': {
+      id: '/api/trpc/$'
+      path: '/api/trpc/$'
+      fullPath: '/api/trpc/$'
+      preLoaderRoute: typeof ApiTrpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/debug/timing': {
@@ -1334,18 +1131,221 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugTimingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/trpc/$': {
-      id: '/api/trpc/$'
-      path: '/api/trpc/$'
-      fullPath: '/api/trpc/$'
-      preLoaderRoute: typeof ApiTrpcSplatRouteImport
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/recipes/$id_/export': {
-      id: '/_authenticated/recipes/$id_/export'
-      path: '/recipes/$id/export'
-      fullPath: '/recipes/$id/export'
-      preLoaderRoute: typeof AuthenticatedRecipesIdExportRouteImport
+    '/_authenticated/usda/$id': {
+      id: '/_authenticated/usda/$id'
+      path: '/usda/$id'
+      fullPath: '/usda/$id'
+      preLoaderRoute: typeof AuthenticatedUsdaIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/tasks/$id': {
+      id: '/_authenticated/tasks/$id'
+      path: '/tasks/$id'
+      fullPath: '/tasks/$id'
+      preLoaderRoute: typeof AuthenticatedTasksIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/search/debug': {
+      id: '/_authenticated/search/debug'
+      path: '/search/debug'
+      fullPath: '/search/debug'
+      preLoaderRoute: typeof AuthenticatedSearchDebugRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/new': {
+      id: '/_authenticated/recipes/new'
+      path: '/recipes/new'
+      fullPath: '/recipes/new'
+      preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/import': {
+      id: '/_authenticated/recipes/import'
+      path: '/recipes/import'
+      fullPath: '/recipes/import'
+      preLoaderRoute: typeof AuthenticatedRecipesImportRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/compare': {
+      id: '/_authenticated/recipes/compare'
+      path: '/recipes/compare'
+      fullPath: '/recipes/compare'
+      preLoaderRoute: typeof AuthenticatedRecipesCompareRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/$id': {
+      id: '/_authenticated/recipes/$id'
+      path: '/recipes/$id'
+      fullPath: '/recipes/$id'
+      preLoaderRoute: typeof AuthenticatedRecipesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/purchases/$id': {
+      id: '/_authenticated/purchases/$id'
+      path: '/purchases/$id'
+      fullPath: '/purchases/$id'
+      preLoaderRoute: typeof AuthenticatedPurchasesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$id': {
+      id: '/_authenticated/projects/$id'
+      path: '/projects/$id'
+      fullPath: '/projects/$id'
+      preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/products/new': {
+      id: '/_authenticated/products/new'
+      path: '/products/new'
+      fullPath: '/products/new'
+      preLoaderRoute: typeof AuthenticatedProductsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/products/$id': {
+      id: '/_authenticated/products/$id'
+      path: '/products/$id'
+      fullPath: '/products/$id'
+      preLoaderRoute: typeof AuthenticatedProductsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/suggestions': {
+      id: '/_authenticated/meals/suggestions'
+      path: '/meals/suggestions'
+      fullPath: '/meals/suggestions'
+      preLoaderRoute: typeof AuthenticatedMealsSuggestionsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/shopping-list': {
+      id: '/_authenticated/meals/shopping-list'
+      path: '/meals/shopping-list'
+      fullPath: '/meals/shopping-list'
+      preLoaderRoute: typeof AuthenticatedMealsShoppingListRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/$id': {
+      id: '/_authenticated/meals/$id'
+      path: '/meals/$id'
+      fullPath: '/meals/$id'
+      preLoaderRoute: typeof AuthenticatedMealsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/new': {
+      id: '/_authenticated/locations/new'
+      path: '/locations/new'
+      fullPath: '/locations/new'
+      preLoaderRoute: typeof AuthenticatedLocationsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/arrange': {
+      id: '/_authenticated/locations/arrange'
+      path: '/locations/arrange'
+      fullPath: '/locations/arrange'
+      preLoaderRoute: typeof AuthenticatedLocationsArrangeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/$id': {
+      id: '/_authenticated/locations/$id'
+      path: '/locations/$id'
+      fullPath: '/locations/$id'
+      preLoaderRoute: typeof AuthenticatedLocationsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/session': {
+      id: '/_authenticated/inventory/session'
+      path: '/inventory/session'
+      fullPath: '/inventory/session'
+      preLoaderRoute: typeof AuthenticatedInventorySessionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/new': {
+      id: '/_authenticated/inventory/new'
+      path: '/inventory/new'
+      fullPath: '/inventory/new'
+      preLoaderRoute: typeof AuthenticatedInventoryNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/bulk-move': {
+      id: '/_authenticated/inventory/bulk-move'
+      path: '/inventory/bulk-move'
+      fullPath: '/inventory/bulk-move'
+      preLoaderRoute: typeof AuthenticatedInventoryBulkMoveRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/bulk-edit': {
+      id: '/_authenticated/inventory/bulk-edit'
+      path: '/inventory/bulk-edit'
+      fullPath: '/inventory/bulk-edit'
+      preLoaderRoute: typeof AuthenticatedInventoryBulkEditRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/$id': {
+      id: '/_authenticated/inventory/$id'
+      path: '/inventory/$id'
+      fullPath: '/inventory/$id'
+      preLoaderRoute: typeof AuthenticatedInventoryIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/workbench': {
+      id: '/_authenticated/ingredients/workbench'
+      path: '/ingredients/workbench'
+      fullPath: '/ingredients/workbench'
+      preLoaderRoute: typeof AuthenticatedIngredientsWorkbenchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/new': {
+      id: '/_authenticated/ingredients/new'
+      path: '/ingredients/new'
+      fullPath: '/ingredients/new'
+      preLoaderRoute: typeof AuthenticatedIngredientsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/equivalences': {
+      id: '/_authenticated/ingredients/equivalences'
+      path: '/ingredients/equivalences'
+      fullPath: '/ingredients/equivalences'
+      preLoaderRoute: typeof AuthenticatedIngredientsEquivalencesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/$id': {
+      id: '/_authenticated/ingredients/$id'
+      path: '/ingredients/$id'
+      fullPath: '/ingredients/$id'
+      preLoaderRoute: typeof AuthenticatedIngredientsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/images/$id': {
+      id: '/_authenticated/images/$id'
+      path: '/images/$id'
+      fullPath: '/images/$id'
+      preLoaderRoute: typeof AuthenticatedImagesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/cookbooks/$cookbookId': {
+      id: '/_authenticated/cookbooks/$cookbookId'
+      path: '/cookbooks/$cookbookId'
+      fullPath: '/cookbooks/$cookbookId'
+      preLoaderRoute: typeof AuthenticatedCookbooksCookbookIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/account/$accountView': {
+      id: '/_authenticated/account/$accountView'
+      path: '/account/$accountView'
+      fullPath: '/account/$accountView'
+      preLoaderRoute: typeof AuthenticatedAccountAccountViewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/usda/upc/$code': {
+      id: '/_authenticated/usda/upc/$code'
+      path: '/usda/upc/$code'
+      fullPath: '/usda/upc/$code'
+      preLoaderRoute: typeof AuthenticatedUsdaUpcCodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/usda/ndb/$code': {
@@ -1355,11 +1355,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsdaNdbCodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/usda/upc/$code': {
-      id: '/_authenticated/usda/upc/$code'
-      path: '/usda/upc/$code'
-      fullPath: '/usda/upc/$code'
-      preLoaderRoute: typeof AuthenticatedUsdaUpcCodeRouteImport
+    '/_authenticated/recipes/$id_/export': {
+      id: '/_authenticated/recipes/$id_/export'
+      path: '/recipes/$id/export'
+      fullPath: '/recipes/$id/export'
+      preLoaderRoute: typeof AuthenticatedRecipesIdExportRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
   }

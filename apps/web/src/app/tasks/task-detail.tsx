@@ -1,11 +1,15 @@
-import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
+import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Info, Link2, ListChecks } from "lucide-react";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
 import { WithTaskSearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { formatDateRange } from "~/app/projects/shared";
+import {
+  formatDateRange,
+  TRADE_LABELS,
+  tradeOptions,
+} from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -89,7 +93,8 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
   const addSubtask = () => {
     const name = newSubtaskName.trim();
     if (!name) return;
-    createMutation.mutate({ name, parentTaskId: task.id });
+    // Subtasks inherit the parent's trade (like projectId, one-time at create).
+    createMutation.mutate({ name, parentTaskId: task.id, trade: task.trade });
   };
 
   return (
@@ -236,18 +241,20 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       ),
     },
     {
-      label: "Category",
+      label: "Trade",
       value: (
         <EditableCell
-          value={task.category}
-          config={{ type: "text" }}
-          onSave={async (category) => {
+          value={task.trade}
+          config={{ type: "select", options: tradeOptions }}
+          onSave={async (trade) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!trade) return;
             await updateMutation.mutateAsync({
               id: task.id,
-              data: { category },
+              data: { trade: trade as Trade },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
+          renderValue={(v) => (v ? TRADE_LABELS[v as Trade] : <NoneValue />)}
         />
       ),
     },
@@ -375,8 +382,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         ]
       : []),
     {
-      label: "Category",
-      value: task.category ?? <NoneValue />,
+      label: "Trade",
+      value: task.trade ? TRADE_LABELS[task.trade] : <NoneValue />,
     },
     {
       label: "Due",

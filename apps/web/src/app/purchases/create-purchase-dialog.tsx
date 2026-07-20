@@ -1,9 +1,10 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
-import { plainDate, purchaseCategorySchema } from "@cubby/schemas/project";
+import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
+import { tradeOptions } from "~/app/projects/shared";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -12,7 +13,7 @@ import {
   SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
-import { purchaseCategoryOptions } from "./purchase-options";
+import { costTypeOptions } from "./purchase-options";
 
 // projectId stays a plain string here (not the branded `projectId` schema) —
 // it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
@@ -22,7 +23,16 @@ const quickAddPurchaseSchema = z.object({
   cost: z.number().nullable(),
   date: plainDate.nullable(),
   projectId: z.string().nullable(),
-  category: purchaseCategorySchema.nullable(),
+  // Required in the domain schema — held nullable here so the select can start
+  // empty, with the refine forcing a real choice before submit. The `boolean`
+  // return annotations stop TS 5.5+ from inferring a narrowing type predicate,
+  // which would change the parsed shape (QuickAddDialog requires input === output).
+  costType: costTypeSchema
+    .nullable()
+    .refine((v): boolean => v !== null, "Cost type is required"),
+  trade: tradeSchema
+    .nullable()
+    .refine((v): boolean => v !== null, "Trade is required"),
 });
 type QuickAddPurchaseValues = z.infer<typeof quickAddPurchaseSchema>;
 
@@ -31,7 +41,8 @@ const buildDefaultValues = (): QuickAddPurchaseValues => ({
   cost: null,
   date: format(new Date(), "yyyy-MM-dd"),
   projectId: null,
-  category: null,
+  costType: null,
+  trade: null,
 });
 
 interface CreatePurchaseDialogProps {
@@ -62,8 +73,10 @@ export function CreatePurchaseDialog({
         cost: values.cost,
         date: values.date,
         projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
-        category: values.category,
-        subcategory: null,
+        // Non-null by the schema refines above — zod has already rejected
+        // null before buildPayload runs.
+        costType: values.costType!,
+        trade: values.trade!,
         purchaser: null,
         url: null,
         notes: null,
@@ -90,10 +103,15 @@ export function CreatePurchaseDialog({
           <PlainDateField form={form} name="date" label="Date" />
           <SelectField
             form={form}
-            name="category"
-            label="Category"
-            options={purchaseCategoryOptions}
-            nullable
+            name="costType"
+            label="Cost Type"
+            options={costTypeOptions}
+          />
+          <SelectField
+            form={form}
+            name="trade"
+            label="Trade"
+            options={tradeOptions}
           />
           <SelectField
             form={form}

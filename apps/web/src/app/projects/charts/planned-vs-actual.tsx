@@ -13,7 +13,7 @@ import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type PlannedDatum = {
-  category: string;
+  costType: string;
   actual: number;
   planned: number;
 };
@@ -29,7 +29,7 @@ const SERIES_LABELS: Record<string, string> = {
 };
 
 /**
- * Committed spend vs future-flagged purchases, grouped by category — not by
+ * Committed spend vs future-flagged purchases, grouped by cost type — not by
  * month, because planned purchases usually have no date and a time axis
  * would silently drop them.
  */
@@ -37,15 +37,15 @@ export function PlannedVsActual({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
     const buckets = new Map<string, { actual: number; planned: number }>();
     for (const p of purchases) {
-      const category = p.category ?? "uncategorized";
-      const entry = buckets.get(category) ?? { actual: 0, planned: 0 };
+      const costType = p.costType ?? "uncategorized";
+      const entry = buckets.get(costType) ?? { actual: 0, planned: 0 };
       entry[p.future ? "planned" : "actual"] += p.cost ?? 0;
-      buckets.set(category, entry);
+      buckets.set(costType, entry);
     }
     return Array.from(buckets.entries())
       .map(
-        ([category, { actual, planned }]): PlannedDatum => ({
-          category: capitalize(category),
+        ([costType, { actual, planned }]): PlannedDatum => ({
+          costType: capitalize(costType),
           actual,
           planned,
         }),
@@ -65,7 +65,7 @@ export function PlannedVsActual({ purchases }: { purchases: PurchaseOut[] }) {
       <ResponsiveBar
         data={data}
         keys={["actual", "planned"]}
-        indexBy="category"
+        indexBy="costType"
         layout="horizontal"
         groupMode="grouped"
         margin={{ top: 10, right: 60, bottom: 60, left: 110 }}

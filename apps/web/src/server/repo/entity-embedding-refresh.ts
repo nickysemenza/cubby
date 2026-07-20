@@ -289,7 +289,7 @@ async function getTaskEmbeddingTexts(
       id: task.id,
       name: task.name,
       status: task.status,
-      category: task.category,
+      trade: task.trade,
       projectName: project.name,
     })
     .from(task)
@@ -311,8 +311,8 @@ async function getPurchaseEmbeddingTexts(
     .select({
       id: purchase.id,
       name: purchase.name,
-      category: purchase.category,
-      subcategory: purchase.subcategory,
+      costType: purchase.costType,
+      trade: purchase.trade,
       purchaser: purchase.purchaser,
       notes: purchase.notes,
       projectName: project.name,
@@ -603,7 +603,7 @@ export async function getEmbeddingTextForEntity(
           id: task.id,
           name: task.name,
           status: task.status,
-          category: task.category,
+          trade: task.trade,
           projectName: project.name,
         })
         .from(task)
@@ -624,8 +624,8 @@ export async function getEmbeddingTextForEntity(
         .select({
           id: purchase.id,
           name: purchase.name,
-          category: purchase.category,
-          subcategory: purchase.subcategory,
+          costType: purchase.costType,
+          trade: purchase.trade,
           purchaser: purchase.purchaser,
           notes: purchase.notes,
           projectName: project.name,

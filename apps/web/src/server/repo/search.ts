@@ -271,14 +271,14 @@ export async function globalSearch(
       )
       .limit(limitPerType) as Promise<ProjectSearchResult[]>,
 
-    // Task: search name, category; subtitle/projectName from its (live) project
+    // Task: search name, trade; subtitle/projectName from its (live) project
     client
       .select({
         id: task.id,
         name: task.name,
         subtitle: project.name,
         entityType: sql<"task">`'task'`.as("entityType"),
-        typeHint: task.category,
+        typeHint: task.trade,
         imageUrl: sql<string | null>`null`.as("imageUrl"),
         createdAt: task.createdAt,
         status: task.status,
@@ -294,20 +294,20 @@ export async function globalSearch(
           notDeleted(task),
           or(
             formatSearchTerm(task.name, query),
-            formatSearchTerm(task.category, query),
+            formatSearchTerm(task.trade, query),
           ),
         ),
       )
       .limit(limitPerType) as Promise<TaskSearchResult[]>,
 
-    // Purchase: search name, subcategory, notes; subtitle/projectName from its (live) project
+    // Purchase: search name, trade, notes; subtitle/projectName from its (live) project
     client
       .select({
         id: purchase.id,
         name: purchase.name,
         subtitle: project.name,
         entityType: sql<"purchase">`'purchase'`.as("entityType"),
-        typeHint: purchase.category,
+        typeHint: purchase.costType,
         imageUrl: sql<string | null>`null`.as("imageUrl"),
         createdAt: purchase.createdAt,
         cost: purchase.cost,
@@ -323,7 +323,7 @@ export async function globalSearch(
           notDeleted(purchase),
           or(
             formatSearchTerm(purchase.name, query),
-            formatSearchTerm(purchase.subcategory, query),
+            formatSearchTerm(purchase.trade, query),
             formatSearchTerm(purchase.notes, query),
           ),
         ),
@@ -561,7 +561,7 @@ export async function hydrateSearchResultsByRefs(
             name: task.name,
             subtitle: project.name,
             entityType: sql<"task">`'task'`.as("entityType"),
-            typeHint: task.category,
+            typeHint: task.trade,
             imageUrl: sql<string | null>`null`.as("imageUrl"),
             createdAt: task.createdAt,
             status: task.status,
@@ -583,7 +583,7 @@ export async function hydrateSearchResultsByRefs(
             name: purchase.name,
             subtitle: project.name,
             entityType: sql<"purchase">`'purchase'`.as("entityType"),
-            typeHint: purchase.category,
+            typeHint: purchase.costType,
             imageUrl: sql<string | null>`null`.as("imageUrl"),
             createdAt: purchase.createdAt,
             cost: purchase.cost,

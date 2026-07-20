@@ -1,11 +1,12 @@
 import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import type {
+  CostType,
   ProjectKind,
   ProjectStatus,
-  PurchaseCategory,
   Purchaser,
   TaskStatus,
+  Trade,
 } from "@cubby/schemas/project";
 import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
@@ -20,7 +21,9 @@ import {
   formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
+  TRADE_LABELS,
 } from "~/app/projects/shared";
+import { costTypeLabels } from "~/app/purchases/purchase-options";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { EntityIcon } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -576,7 +579,7 @@ export type TaskPreview = {
   id: string;
   name: string;
   status: TaskStatus;
-  category: string | null;
+  trade: Trade | null;
   dueDate: string | null;
   dueEndDate: string | null;
   projectId?: string | null;
@@ -584,7 +587,10 @@ export type TaskPreview = {
 };
 
 export function toTaskCard(vm: TaskPreview): ManifestCardProps {
-  const identity = [TASK_STATUS_LABELS[vm.status], vm.category]
+  const identity = [
+    TASK_STATUS_LABELS[vm.status],
+    vm.trade ? TRADE_LABELS[vm.trade] : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -629,7 +635,7 @@ export function TaskPreviewContent({ taskId }: { taskId: string }) {
         id: taskId,
         name: data.name,
         status: data.status,
-        category: data.category,
+        trade: data.trade,
         dueDate: data.dueDate,
         dueEndDate: data.dueEndDate,
         projectId: data.projectId,
@@ -646,8 +652,8 @@ export type PurchasePreview = {
   name: string;
   cost: number | null;
   date: string | null;
-  category: PurchaseCategory | null;
-  subcategory: string | null;
+  costType: CostType | null;
+  trade: Trade | null;
   purchaser: Purchaser | null;
   future: boolean;
   projectId?: string | null;
@@ -656,8 +662,13 @@ export type PurchasePreview = {
 
 export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
   const identity =
-    [vm.category, vm.subcategory, vm.purchaser].filter(Boolean).join(" · ") +
-    (vm.future ? " · planned" : "");
+    [
+      vm.costType ? costTypeLabels[vm.costType] : null,
+      vm.trade ? TRADE_LABELS[vm.trade] : null,
+      vm.purchaser,
+    ]
+      .filter(Boolean)
+      .join(" · ") + (vm.future ? " · planned" : "");
 
   return {
     entity: "purchase",
@@ -701,8 +712,8 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
         name: data.name,
         cost: data.cost,
         date: data.date,
-        category: data.category,
-        subcategory: data.subcategory,
+        costType: data.costType,
+        trade: data.trade,
         purchaser: data.purchaser,
         future: data.future,
         projectId: data.projectId,
