@@ -99,6 +99,11 @@ const SpendingHeatmap = lazy(() =>
     default: m.SpendingHeatmap,
   })),
 );
+const TradeProjectMatrix = lazy(() =>
+  import("./charts/trade-project-matrix").then((m) => ({
+    default: m.TradeProjectMatrix,
+  })),
+);
 const TaskHeatmap = lazy(() =>
   import("./charts/task-heatmap").then((m) => ({ default: m.TaskHeatmap })),
 );
@@ -341,6 +346,13 @@ function DashboardContent({
                 purchases={purchases}
                 centerLabel="All projects"
               />
+
+              <Section
+                title="Spend by Trade"
+                description="Committed spend, sub-projects folded into their root project"
+              >
+                <TradeProjectMatrix projects={projects} purchases={purchases} />
+              </Section>
 
               <Grid cols="pair">
                 <Section
