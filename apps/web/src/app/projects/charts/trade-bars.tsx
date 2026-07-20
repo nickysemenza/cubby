@@ -1,6 +1,5 @@
 import type { PurchaseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
-import { sum } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
@@ -9,11 +8,11 @@ import {
   nivoBarChrome,
   nivoChartTheme,
   nivoCurrencyAxis,
-  normalizeCostTypeKey,
   TRADE_LABELS,
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { buildTradeCostPivot, PIVOT_COST_KEYS } from "./trade-cost-pivot";
 
 type BarDatum = {
   trade: string;
@@ -24,41 +23,19 @@ type BarDatum = {
   total: number;
 };
 
-const COST_TYPE_KEYS = ["materials", "tools", "services", "other"] as const;
-
 const tradeLabel = (value: string): string =>
   TRADE_LABELS[value as Trade] ?? value;
 
 export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
-  const data = useMemo(() => {
-    // Group by trade, then by cost type within each
-    const grouped = new Map<string, Record<string, number>>();
-
-    for (const p of purchases) {
-      const trade = p.trade ?? "other";
-      const costType = normalizeCostTypeKey(p.costType);
-      const cost = p.cost ?? 0;
-
-      if (!grouped.has(trade)) {
-        grouped.set(trade, {
-          materials: 0,
-          tools: 0,
-          services: 0,
-          other: 0,
-        });
-      }
-      const entry = grouped.get(trade)!;
-      entry[costType] = (entry[costType] ?? 0) + cost;
-    }
-
-    return Array.from(grouped.entries())
-      .map(([trade, costTypes]) => ({
-        trade,
-        ...costTypes,
-        total: sum(Object.values(costTypes)),
-      }))
-      .filter((d) => d.total > 0)
-      .sort((a, b) => a.total - b.total) as BarDatum[];
+  const data = useMemo<BarDatum[]>(() => {
+    const { rows } = buildTradeCostPivot(purchases);
+    // Stacked bars can't render negative-net rows — drop them here (the
+    // matrix keeps them). The helper sorts total DESC, but nivo horizontal
+    // bars render bottom-up — reverse to keep the biggest-on-top visual.
+    return rows
+      .filter((row) => row.total > 0)
+      .map((row) => ({ trade: row.trade, ...row.cells, total: row.total }))
+      .reverse();
   }, [purchases]);
 
   if (data.length === 0) {
@@ -71,7 +48,7 @@ export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
     <div style={{ height: chartHeight }}>
       <ResponsiveBar
         data={data}
-        keys={[...COST_TYPE_KEYS]}
+        keys={[...PIVOT_COST_KEYS]}
         indexBy="trade"
         layout="horizontal"
         margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
