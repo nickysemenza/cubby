@@ -33,7 +33,7 @@ import {
 } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
-import { NutritionLabel } from "../nutrition/NutritionLabel";
+import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
@@ -142,8 +142,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         ]
       : []),
     // Custom section: Nutrition (only if available) — the raw USDA nutrient
-    // table plus an FDA-style label view (per 100g; per-serving aliases are a
-    // later phase), side by side so both readings of the same data coexist.
+    // table plus an FDA-style label view (per 100g, toggling to per-serving
+    // when a serving basis resolves — a custom "1 serving = X g" alias, a
+    // branded serving edge, or the food's USDA household portion), side by
+    // side so both readings of the same data coexist.
     ...(product.food?.nutritionInfo
       ? [
           {
@@ -151,9 +153,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             icon: Apple,
             content: (
               <Stack gap="md">
-                <NutritionLabel
+                <ProductNutritionLabel
                   nutrients={product.food.nutritionInfo.nutrientsPer100}
-                  servingLabel="per 100 g"
+                  mappings={mappings}
+                  portions={product.food.portionInfoRaw}
                 />
                 <MutedBox>
                   <NutritionInfoTable n={product.food.nutritionInfo} />
