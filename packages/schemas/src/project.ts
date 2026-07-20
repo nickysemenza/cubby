@@ -437,6 +437,9 @@ export const purchaseFilterFields = {
   trade: tradeSchema.optional(),
   purchaser: purchaserSchema.optional(),
   projectId: projectId.optional(),
+  // Only meaningful alongside `projectId`: expands the filter to the project
+  // plus every live descendant (sub-project subtree).
+  includeSubProjects: z.boolean().optional(),
   future: z.boolean().optional(),
   search: z.string().optional(),
 };

@@ -267,6 +267,15 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   );
   const projectPurchases = purchasesPage?.items ?? NO_PURCHASES;
 
+  // Charts aggregate the project PLUS its whole sub-project subtree (the
+  // Purchases list tab stays direct-only, on `projectPurchases`).
+  const { data: chartPurchases = NO_PURCHASES } = useQuery(
+    api.purchase.chartData.queryOptions({
+      projectId: project.id,
+      includeSubProjects: true,
+    }),
+  );
+
   const { data: imageMap } = useQuery({
     ...api.image.imagesByProjectIds.queryOptions({ projectIds: [project.id] }),
     staleTime: 5 * 60 * 1000,
@@ -729,28 +738,32 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           panels). Purchases-dependent charts and the task timeline are gated
           independently — a project with tasks but no purchases (or vice
           versa) must still see its own section. */}
-      {(projectPurchases.length > 0 || projectTasks.length > 0) && (
+      {(chartPurchases.length > 0 || projectTasks.length > 0) && (
         <Stack className="pt-4">
-          {projectPurchases.length > 0 && (
+          {chartPurchases.length > 0 && (
             <>
-              <Section title="Spending Over Time">
+              <Section
+                title="Spending Over Time"
+                description={
+                  childProjects.length > 0
+                    ? "Includes sub-project purchases"
+                    : undefined
+                }
+              >
                 <SpendingOverTime
-                  purchases={projectPurchases}
+                  purchases={chartPurchases}
                   costEstimate={project.costEstimate}
                 />
               </Section>
 
-              <CategoryBreakdown
-                purchases={projectPurchases}
-                donutHeight={350}
-              />
+              <CategoryBreakdown purchases={chartPurchases} donutHeight={350} />
 
               <Grid cols="pair">
                 <Section title="Category Treemap">
-                  <CategoryTreemap purchases={projectPurchases} />
+                  <CategoryTreemap purchases={chartPurchases} />
                 </Section>
                 <Section title="Category Trend">
-                  <CategoryTrend purchases={projectPurchases} />
+                  <CategoryTrend purchases={chartPurchases} />
                 </Section>
               </Grid>
 
@@ -759,13 +772,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                   title="Who's Buying"
                   description="Spend by purchaser, planned purchases included"
                 >
-                  <PurchaserSplit purchases={projectPurchases} />
+                  <PurchaserSplit purchases={chartPurchases} />
                 </Section>
                 <Section
                   title="Planned vs Actual"
                   description="Committed spend vs future-flagged purchases"
                 >
-                  <PlannedVsActual purchases={projectPurchases} />
+                  <PlannedVsActual purchases={chartPurchases} />
                 </Section>
               </Grid>
             </>

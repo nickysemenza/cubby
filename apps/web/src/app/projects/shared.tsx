@@ -95,7 +95,9 @@ export { getCostTypeColor, getPurchaserColor } from "~/lib/status-colors";
  * kept as a named helper since every chart file already calls it as the
  * "cost type or other" bucket key.
  */
-export function normalizeCostTypeKey(costType: CostType | null): string {
+export function normalizeCostTypeKey(
+  costType: CostType | null,
+): CostType | "other" {
   return costType ?? "other";
 }
 
