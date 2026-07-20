@@ -59,6 +59,7 @@ import {
   upsertNotionRecipeFromImport,
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
+import { importRecipeImageFromUrl } from "~/server/services/image-import";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -89,6 +90,13 @@ const insertImport = protectedProcedure
   .output(recipeImportIdOut)
   .mutation(async ({ ctx, input }) => {
     const result = await upsertImportRecipe(input, ctx.db, ctx.actorContext);
+    // Persist the scraped hero photo (the browser form imports it client-side
+    // instead — see PendingImageUpload's autoImportUrl). Inline: this call is
+    // already user-triggered and awaited a scrape, and the helper swallows its
+    // own failures so a dead photo URL can't sink the import.
+    if (input.image) {
+      await importRecipeImageFromUrl(ctx.db, result.id, input.image);
+    }
     // Persist recompute work through the background dispatcher. In dev this
     // still drains inline, but the operation is visible on Background Jobs.
     await ctx.services.recipeCosting.dispatchRecompute([result.id], {

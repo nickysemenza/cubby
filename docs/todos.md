@@ -13,19 +13,6 @@ contradicts one belongs in a **Rejected** block, not in the open list.
 
 ## Recipes & Import
 
-### Image not persisted on the server import path
-
-- [ ] **Scraped/Notion image not persisted on the server import path**: the scrape
-  *form* imports the image client-side via `image.importFromUrl`, but the server-side
-  import (`apps/web/src/server/repo/import-recipe-convert.ts`) drops
-  `ImportRecipe.image`. Fix: call the existing `importImageFromUrl(db, …)`
-  (`apps/web/src/server/services/image-storage.service.ts` — `services/image-import.ts`
-  is a working call-site template) during server-side import and attach the resulting
-  image id via the `recipeImage` join table. This is also the path for the deferred
-  Notion hero-image import — note Notion image URLs are signed/expiring, so they must
-  be fetched at import time. Do it **inline**: import is user-triggered and already
-  awaits a scrape, so it doesn't need the background queue.
-
 ### MCP recipe authoring (from real-use feedback)
 
 Follow-ons to the batch `resolve_ingredients` + `create_recipe_from_text` MCP tools
@@ -50,12 +37,9 @@ prep/nested/matrix views + the `/recipes/$id/export` print route).
 
 Follow-on to client-side recipe scaling (multiplier/weight/ingredient anchors,
 `recipe-scaling.ts` + `RecipeScaleControl.tsx`). No new schema/table — fix data
-organically via the existing per-product `UnitMapping` mechanism.
-
-- [ ] **Salt convention**: distinct salts ("Diamond Crystal kosher salt" — already
-  in data — "Morton", "table salt") each carry their own density mapping; bare
-  "salt" defaults to table salt. Mostly data; document the default in `recipe-utils`.
-  Low urgency — salt barely moves totals.
+organically via the existing per-product `UnitMapping` mechanism — fill in a
+density when an ingredient shows up in a recipe's missing-weight list. Salts are
+done; bare "salt" stays aliased to Diamond Crystal.
 
 Parked: pan-size scaling, a global density reference table/seed, interactive
 parse-clarification, and the baker's-% compare "X-ray".

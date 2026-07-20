@@ -1,14 +1,20 @@
 /**
- * Service for importing images from external sources (UPC lookup, etc.)
+ * Service for importing images from external sources (UPC lookup, recipe
+ * scrape, etc.)
  *
- * This service combines UPC lookup + image import + association in a single operation.
+ * Each function here combines "resolve a source URL" + image import + entity
+ * association in a single operation.
  */
 
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
 import { env } from "~/env";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
-import { associateImagesWithProduct } from "~/server/repo/image";
+import {
+  associateImagesWithProduct,
+  associateImagesWithRecipe,
+  recipeHasImages,
+} from "~/server/repo/image";
 import { importImageFromUrl } from "~/server/services/image-storage.service";
 
 /**
@@ -66,6 +72,52 @@ export const importImageFromUPC = async (
   } catch (error) {
     console.error(
       `[importImageFromUPC] Error importing image for UPC ${upc}:`,
+      error,
+    );
+    return null;
+  }
+};
+
+/**
+ * Import a scraped recipe's hero photo into R2 and attach it to the recipe.
+ *
+ * Runs inline on the server-side import path (`recipe.insertImport`, which the
+ * MCP `import_recipe` / `scrape_recipe` tools drive) — the browser scrape form
+ * imports its image client-side via `image.importFromUrl` instead.
+ *
+ * No-ops when the recipe already has an image so a re-import doesn't stack a
+ * fresh R2 object every time (the upsert keys on name, and `Image` carries no
+ * source URL to dedupe on). Never throws: a dead or 403 photo URL must not sink
+ * the recipe import.
+ */
+export const importRecipeImageFromUrl = async (
+  db: Database,
+  recipeId: RecipeId,
+  sourceUrl: string,
+): Promise<{ imageId: string } | null> => {
+  try {
+    if (await recipeHasImages(db, recipeId)) {
+      return null;
+    }
+
+    const imported = await importImageFromUrl(db, {
+      sourceUrl,
+      filenamePrefix: `recipe-${recipeId}`,
+    });
+
+    if (!imported) {
+      console.warn(
+        `[importRecipeImageFromUrl] Failed to import image for recipe ${recipeId}`,
+      );
+      return null;
+    }
+
+    await associateImagesWithRecipe(db, recipeId, [imported.imageId]);
+
+    return { imageId: imported.imageId };
+  } catch (error) {
+    console.error(
+      `[importRecipeImageFromUrl] Error importing image for recipe ${recipeId}:`,
       error,
     );
     return null;
