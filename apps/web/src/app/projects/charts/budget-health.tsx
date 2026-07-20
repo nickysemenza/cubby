@@ -20,22 +20,28 @@ type ProjectBudget = {
  */
 export function BudgetHealth({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
-    return projects
-      .filter((p) => p.costEstimate && p.costEstimate > 0)
-      .map((p) => {
-        const actual =
-          p.rollup.subtree.projectCount > 0
-            ? p.rollup.subtree.spent
-            : p.rollup.spent;
-        return {
-          name: p.name,
-          actual,
-          estimate: p.costEstimate!,
-          pct: (actual / p.costEstimate!) * 100,
-        };
-      })
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, 12) as ProjectBudget[];
+    return (
+      projects
+        // Top-level only: a parent's bar already includes descendant spend via
+        // subtree.spent, so letting sub-projects render their own bars would
+        // double-count them (same filter as ProjectCards).
+        .filter((p) => !p.parentProjectId)
+        .filter((p) => p.costEstimate && p.costEstimate > 0)
+        .map((p) => {
+          const actual =
+            p.rollup.subtree.projectCount > 0
+              ? p.rollup.subtree.spent
+              : p.rollup.spent;
+          return {
+            name: p.name,
+            actual,
+            estimate: p.costEstimate!,
+            pct: (actual / p.costEstimate!) * 100,
+          };
+        })
+        .sort((a, b) => b.pct - a.pct)
+        .slice(0, 12) as ProjectBudget[]
+    );
   }, [projects]);
 
   if (data.length === 0) {

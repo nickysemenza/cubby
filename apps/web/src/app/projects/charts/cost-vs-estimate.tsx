@@ -21,21 +21,27 @@ type Datum = {
  */
 export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
-    return projects
-      .map((p) => ({
-        project: p.name,
-        actual:
-          p.rollup.subtree.projectCount > 0
-            ? p.rollup.subtree.spent
-            : p.rollup.spent,
-        estimate: p.costEstimate ?? 0,
-      }))
-      .filter((d) => d.actual > 0 && d.estimate > 0)
-      .sort(
-        (a, b) =>
-          Math.max(b.actual, b.estimate) - Math.max(a.actual, a.estimate),
-      )
-      .slice(0, 12) as Datum[];
+    return (
+      projects
+        // Top-level only: a parent's bar already includes descendant spend via
+        // subtree.spent, so letting sub-projects render their own bars would
+        // double-count them (same filter as ProjectCards).
+        .filter((p) => !p.parentProjectId)
+        .map((p) => ({
+          project: p.name,
+          actual:
+            p.rollup.subtree.projectCount > 0
+              ? p.rollup.subtree.spent
+              : p.rollup.spent,
+          estimate: p.costEstimate ?? 0,
+        }))
+        .filter((d) => d.actual > 0 && d.estimate > 0)
+        .sort(
+          (a, b) =>
+            Math.max(b.actual, b.estimate) - Math.max(a.actual, a.estimate),
+        )
+        .slice(0, 12) as Datum[]
+    );
   }, [projects]);
 
   if (data.length === 0) {
