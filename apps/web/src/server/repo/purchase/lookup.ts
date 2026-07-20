@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
 import {
@@ -16,6 +16,11 @@ import {
   getDb,
   relations,
 } from "~/server/repo/database-helpers";
+import {
+  allProjectParentRows,
+  buildChildrenMap,
+  collectDescendantIds,
+} from "~/server/repo/project/subtree";
 import { dbPurchaseToAPI } from "./helpers";
 
 export const purchaseList = async (
@@ -24,6 +29,23 @@ export const purchaseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
+  // When scoped to a project subtree, resolve the project + every live
+  // descendant id and match on the whole set; otherwise a plain project match.
+  let projectCondition = filters.projectId
+    ? eq(purchase.projectId, filters.projectId)
+    : undefined;
+  if (filters.projectId && filters.includeSubProjects) {
+    const parentRows = await allProjectParentRows(db);
+    const descendantIds = collectDescendantIds(
+      buildChildrenMap(parentRows),
+      filters.projectId,
+    );
+    projectCondition = inArray(purchase.projectId, [
+      filters.projectId,
+      ...descendantIds,
+    ]);
+  }
+
   const whereClause = buildSearchConditions(
     purchase,
     [{ column: purchase.name, term: filters.search }],
@@ -31,7 +53,7 @@ export const purchaseList = async (
       filters.costType ? eq(purchase.costType, filters.costType) : undefined,
       filters.trade ? eq(purchase.trade, filters.trade) : undefined,
       filters.purchaser ? eq(purchase.purchaser, filters.purchaser) : undefined,
-      filters.projectId ? eq(purchase.projectId, filters.projectId) : undefined,
+      projectCondition,
       filters.future !== undefined
         ? eq(purchase.future, filters.future)
         : undefined,

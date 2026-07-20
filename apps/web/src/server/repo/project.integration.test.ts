@@ -16,7 +16,7 @@ import {
   projectList,
   updateProject,
 } from "./project";
-import { createPurchase } from "./purchase";
+import { createPurchase, purchaseList } from "./purchase";
 import { createTask, updateTask } from "./task";
 
 describe("project repository", () => {
@@ -685,5 +685,71 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       { pageIndex: 0, pageSize: 50 },
     );
     expect(childrenOfParent.data.map((p) => p.id)).toEqual([child.id]);
+  });
+
+  it("includeSubProjects expands the purchase filter to the whole subtree", async () => {
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "subtree filter parent" }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "subtree filter child",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+    const grandchild = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "subtree filter grandchild",
+        parentProjectId: child.id,
+      }),
+      ctx.actor,
+    );
+
+    for (const [project, name] of [
+      [parent, "parent purchase"],
+      [child, "child purchase"],
+      [grandchild, "grandchild purchase"],
+    ] as const) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          projectId: project.id,
+          cost: 10,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const pagination = { pageIndex: 0, pageSize: 50 };
+
+    // Direct-only (flag unset): just the parent's own purchase.
+    const directOnly = await purchaseList(
+      ctx.db,
+      { projectId: parent.id },
+      [],
+      pagination,
+    );
+    expect(directOnly.count).toBe(1);
+    expect(directOnly.data.map((p) => p.name)).toEqual(["parent purchase"]);
+
+    // Subtree: parent + child + grandchild.
+    const subtree = await purchaseList(
+      ctx.db,
+      { projectId: parent.id, includeSubProjects: true },
+      [],
+      pagination,
+    );
+    expect(subtree.count).toBe(3);
+    expect(new Set(subtree.data.map((p) => p.name))).toEqual(
+      new Set(["parent purchase", "child purchase", "grandchild purchase"]),
+    );
   });
 });
