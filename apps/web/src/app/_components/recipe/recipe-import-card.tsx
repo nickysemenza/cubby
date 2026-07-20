@@ -115,9 +115,9 @@ function RecipeImportCardImpl({
   const ingredientNames = useMemo(
     () =>
       uniq(
-        recipe.sections
-          .flatMap((s) => s.ingredients)
-          .map((line) => wasm.parse_ingredient(line).name)
+        wasm
+          .parse_ingredient_lines(recipe.sections.flatMap((s) => s.ingredients))
+          .map((parsed) => parsed.name)
           .filter((n) => n.length > 0),
       ),
     [recipe],

@@ -135,6 +135,18 @@ export const perServingRange = (
   upper: upper != null ? upper / divisor : undefined,
 });
 
+/** Divide every value in a nutrients record by a per-serving divisor — the
+ * same linear per-portion math as {@link perServingRange}, applied to a whole
+ * `NutrientsPer100` record instead of one figure. Used to feed a whole-recipe
+ * totals record into a per-serving `NutritionLabel`. */
+export const divideNutrients = (
+  nutrients: NutrientsPer100,
+  divisor: number,
+): NutrientsPer100 =>
+  Object.fromEntries(
+    Object.entries(nutrients).map(([code, value]) => [code, value / divisor]),
+  );
+
 /** Coverage of a computed total (cost/calories) by the ingredients that had the
  * underlying data. `complete` drives dimming / caption suppression (unknown
  * coverage counts as complete); `fraction` is the bare "9/13" label shown when

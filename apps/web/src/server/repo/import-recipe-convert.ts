@@ -127,40 +127,46 @@ const importRecipeToRecipeInput = async (
       servings: normalized.servings,
       notes: normalized.notes,
       sections: await Promise.all(
-        normalized.sections.map(async (section) => ({
-          name: section.name,
-          instructions: section.instructions,
-          ingredients: await Promise.all(
-            section.ingredients.map(async (line) => {
-              const parsed = wasm.parse_ingredient(line);
-              const refTitle = lineToTitle.get(line.trim());
-              const targetRecipeId = refTitle
-                ? titleToId.get(refTitle)
-                : undefined;
-              // A reference whose target recipe exists in the book → link it.
-              const ingredientId = targetRecipeId
-                ? await resolveLink(targetRecipeId)
-                : await resolvePlain(parsed.name);
-              return {
-                type: "ingredient" as const,
-                ingredientId,
-                recipeId: null,
-                // Map the parser's WAmount (snake `upper_value`) to the persisted
-                // Amount (camel `upperValue`). The `> value` guard drops a
-                // degenerate equal range at the source.
-                amounts: parsed.amounts.map((a) => ({
-                  value: a.value,
-                  unit: a.unit,
-                  ...(a.upper_value != null && a.upper_value > a.value
-                    ? { upperValue: a.upper_value }
-                    : {}),
-                })),
-                rawLine: line,
-                modifier: parsed.modifier ?? null,
-              };
-            }),
-          ),
-        })),
+        normalized.sections.map(async (section) => {
+          // One batch WASM call for the whole section instead of one per line
+          // — output order matches input (parse_ingredient_lines contract),
+          // so indexing by position below is safe.
+          const parsedLines = wasm.parse_ingredient_lines(section.ingredients);
+          return {
+            name: section.name,
+            instructions: section.instructions,
+            ingredients: await Promise.all(
+              section.ingredients.map(async (line, i) => {
+                const parsed = parsedLines[i]!;
+                const refTitle = lineToTitle.get(line.trim());
+                const targetRecipeId = refTitle
+                  ? titleToId.get(refTitle)
+                  : undefined;
+                // A reference whose target recipe exists in the book → link it.
+                const ingredientId = targetRecipeId
+                  ? await resolveLink(targetRecipeId)
+                  : await resolvePlain(parsed.name);
+                return {
+                  type: "ingredient" as const,
+                  ingredientId,
+                  recipeId: null,
+                  // Map the parser's WAmount (snake `upper_value`) to the persisted
+                  // Amount (camel `upperValue`). The `> value` guard drops a
+                  // degenerate equal range at the source.
+                  amounts: parsed.amounts.map((a) => ({
+                    value: a.value,
+                    unit: a.unit,
+                    ...(a.upper_value != null && a.upper_value > a.value
+                      ? { upperValue: a.upper_value }
+                      : {}),
+                  })),
+                  rawLine: line,
+                  modifier: parsed.modifier ?? null,
+                };
+              }),
+            ),
+          };
+        }),
       ),
     };
   };

@@ -53,6 +53,13 @@ const SLOW_WASM_THRESHOLD_MS = 16;
  */
 const CACHEABLE_METHODS = [
   "parse_ingredient",
+  // Batch sibling of parse_ingredient — one call per array of lines, output
+  // order matching input. The cache key is the *whole* lines array
+  // (`JSON.stringify`), which only hits on an identical batch, not per-line;
+  // that's fine because every call site is a paste/import/report surface that
+  // re-renders with the same lines (not a per-keystroke surface — those stay
+  // on single `parse_ingredient`, which still gets its own fine-grained entries).
+  "parse_ingredient_lines",
   "decompose_ingredient",
   "parse_rich_text",
   "conv_amount_to_kind",

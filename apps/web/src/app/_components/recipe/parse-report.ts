@@ -122,18 +122,24 @@ export const buildImportRecipeParseReport = (recipe: ImportRecipe): string => {
 
   const sections = recipe.sections
     .filter((section) => section.ingredients.length > 0)
-    .map((section) => ({
-      name: section.name ?? undefined,
-      blocks: section.ingredients.map((line) => {
-        const parsed = wasm.parse_ingredient(line);
-        return buildParseBlock({
-          rawLine: line,
-          name: parsed.name,
-          amounts: parsed.amounts,
-          modifier: parsed.modifier,
-        });
-      }),
-    }));
+    .map((section) => {
+      // One batch call per section instead of one per line — output order
+      // matches input (parse_ingredient_lines contract), so indexing by
+      // position below is safe.
+      const parsedLines = wasm.parse_ingredient_lines(section.ingredients);
+      return {
+        name: section.name ?? undefined,
+        blocks: section.ingredients.map((line, i) => {
+          const parsed = parsedLines[i]!;
+          return buildParseBlock({
+            rawLine: line,
+            name: parsed.name,
+            amounts: parsed.amounts,
+            modifier: parsed.modifier,
+          });
+        }),
+      };
+    });
 
   return assembleSectionedReport(header, sections);
 };

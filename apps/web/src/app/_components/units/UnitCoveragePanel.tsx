@@ -1,4 +1,5 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { ProductId } from "@cubby/schemas/identifiers";
+import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { ChevronRight, Network } from "lucide-react";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -12,6 +13,7 @@ import { Label } from "~/components/ui/label";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { ConversionCapabilities } from "./ConversionCapabilities";
+import { ServingAliasField } from "./serving-alias-field";
 import { UnitMappingsTable } from "./unitmappingstable";
 
 // d3-force is heavy and only matters when the graph is actually expanded, so
@@ -44,6 +46,7 @@ export function UnitCoveragePanel({
   hideConvertButton = false,
   defaultGraphOpen = false,
   showCoverage = true,
+  servingAlias,
 }: {
   mappings: UnitMapping[];
   /** Measurement-kind universe to grade against (USDA passes USDA_KINDS). */
@@ -58,6 +61,16 @@ export function UnitCoveragePanel({
    * (if any) and the graph render.
    */
   showCoverage?: boolean;
+  /**
+   * Opt into the "1 serving = X g" quick-add row. Only a single product owns a
+   * concrete `unitMappings` array to append to — an ingredient's mappings
+   * aggregate across all its linked products, so ingredient-detail omits this
+   * and only product-detail passes it.
+   */
+  servingAlias?: {
+    productId: ProductId;
+    storedMappings: UnitMappingInput[];
+  };
 }) {
   const [graphOpen, setGraphOpen] = useState(defaultGraphOpen);
   const [showNutrients, setShowNutrients] = useState(false);
@@ -133,6 +146,14 @@ export function UnitCoveragePanel({
           )}
         </CollapsibleContent>
       </Collapsible>
+
+      {servingAlias && (
+        <ServingAliasField
+          productId={servingAlias.productId}
+          storedMappings={servingAlias.storedMappings}
+          previewMappings={mappings}
+        />
+      )}
 
       <UnitMappingsTable mappings={mappings} kinds={kinds} />
     </Stack>

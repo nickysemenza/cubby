@@ -5,6 +5,7 @@ import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { sectionRuleClass } from "~/components/ui/section-rule";
+import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type {
   CalculateTotalsResult,
   RecipeCosting,
@@ -56,6 +57,13 @@ function VitalsPanel({
     kcal: (stats[m.key] ?? 0) * m.kcalPerG,
   })).filter((m) => m.grams > 0);
   const macroKcal = macros.reduce((sum, m) => sum + m.kcal, 0);
+
+  // Two small nutrient-density figures, re-expressed from the same cost/kcal/
+  // protein numbers already shown above — no new engine call, just division
+  // (see nutrition-intel.ts). Null-safe: a recipe missing protein or calorie
+  // data just omits these rather than showing a bogus ratio.
+  const proteinDensity = proteinPer100Kcal(stats.protein, stats.kcal);
+  const costPerProteinGram = costPerNutrient(stats.cost, stats.protein);
 
   return (
     <aside className="w-full lg:w-[230px] lg:self-start lg:justify-self-end">
@@ -121,6 +129,22 @@ function VitalsPanel({
                 ))}
               </div>
             </>
+          )}
+
+          {(proteinDensity != null || costPerProteinGram != null) && (
+            <Row
+              align="center"
+              justify="between"
+              gap="sm"
+              className="mt-2 border-border/60 border-t pt-2 text-2xs text-muted-foreground"
+            >
+              {proteinDensity != null && (
+                <span>{proteinDensity.toFixed(1)}g protein / 100 kcal</span>
+              )}
+              {costPerProteinGram != null && (
+                <span>{formatCurrency(costPerProteinGram)} / g protein</span>
+              )}
+            </Row>
           )}
         </div>
       ) : (

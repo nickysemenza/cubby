@@ -299,6 +299,25 @@ pub fn parse_ingredient(input: &str) -> WIngredient {
     parse_ingredient_str(input).into()
 }
 
+/// `WIngredient[]` (`transparent` → `type WParsedLines = WIngredient[]`).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct WParsedLines(pub Vec<WIngredient>);
+
+/// Batch [`parse_ingredient`]: one boundary crossing for N lines (collapses the
+/// TS per-line loops on paste/import/report surfaces). Output order matches
+/// input; each element is exactly what `parse_ingredient` returns for that line.
+#[wasm_bindgen]
+pub fn parse_ingredient_lines(lines: Vec<String>) -> WParsedLines {
+    WParsedLines(
+        lines
+            .iter()
+            .map(|line| parse_ingredient_str(line).into())
+            .collect(),
+    )
+}
+
 /// Decompose a line into ordered `{text, field?}` segments showing how the
 /// grammar carved it into amount / name / modifier spans. `source` is the
 /// *normalized* line the spans index into, not the verbatim raw input.
@@ -492,6 +511,38 @@ mod tests {
         assert_eq!(
             notes.unparsed_digit, unparsed_digit,
             "unparsed_digit for: {line}"
+        );
+    }
+
+    /// `parse_ingredient_lines` ≡ N sequential `parse_ingredient` calls — the
+    /// equivalence contract the TS loop-collapse relies on. Mixed batch: a
+    /// structured line, an amount-less name, an empty string, an optional
+    /// parenthesized line, and a usage-classified line. Compared over serde so
+    /// the whole wire shape (amounts, flags, notes) is pinned, plus the
+    /// `transparent` array serialization.
+    #[test]
+    fn parse_ingredient_lines_matches_sequential() {
+        let lines = [
+            "2 1/2 cups flour",
+            "Chocolate Chip Cookies",
+            "",
+            "(½ cup chopped walnuts)",
+            "oil, for frying",
+        ];
+        let batch = parse_ingredient_lines(lines.iter().map(|s| s.to_string()).collect());
+        assert_eq!(
+            batch.0.len(),
+            lines.len(),
+            "output order/length matches input"
+        );
+        let sequential: Vec<serde_json::Value> = lines
+            .iter()
+            .map(|l| serde_json::to_value(parse_ingredient(l)).expect("serializes"))
+            .collect();
+        assert_eq!(
+            serde_json::to_value(&batch).expect("serializes"),
+            serde_json::Value::Array(sequential),
+            "batch is transparent array of per-line parse_ingredient results"
         );
     }
 
