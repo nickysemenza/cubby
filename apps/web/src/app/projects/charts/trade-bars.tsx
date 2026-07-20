@@ -19,7 +19,6 @@ type BarDatum = {
   materials: number;
   tools: number;
   services: number;
-  other: number;
   total: number;
 };
 
