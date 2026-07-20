@@ -28,11 +28,12 @@ import type { LocationValuation } from "@cubby/schemas/location";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
 import {
+  costTypeValues,
   projectKindValues,
   projectStatusValues,
-  purchaseCategoryValues,
   purchaserValues,
   taskStatusValues,
+  tradeValues,
 } from "@cubby/schemas/project";
 import {
   type RecipeTotals,
@@ -864,8 +865,7 @@ export const task = pgTable(
       .references((): AnyPgColumn => task.id),
     dueDate: date("dueDate", { mode: "string" }),
     dueEndDate: date("dueEndDate", { mode: "string" }),
-    // Free-form label (organic Notion option set, intentionally not an enum).
-    category: text("category"),
+    trade: text("trade", { enum: tradeValues }).notNull(),
     notionPageId: text("notionPageId"),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -913,9 +913,8 @@ export const purchase = pgTable(
     // See project.costEstimate — dollars need double precision, not float4.
     cost: doublePrecision("cost"),
     date: date("date", { mode: "string" }),
-    category: text("category", { enum: purchaseCategoryValues }),
-    // Free-form label (organic Notion option set, intentionally not an enum).
-    subcategory: text("subcategory"),
+    costType: text("costType", { enum: costTypeValues }).notNull(),
+    trade: text("trade", { enum: tradeValues }).notNull(),
     purchaser: text("purchaser", { enum: purchaserValues }),
     url: text("url"),
     notes: text("notes"),
@@ -934,7 +933,7 @@ export const purchase = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Purchase_projectId_idx").on(table.projectId),
     index("Purchase_date_idx").on(table.date),
-    index("Purchase_category_idx").on(table.category),
+    index("Purchase_costType_idx").on(table.costType),
     index("Purchase_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,

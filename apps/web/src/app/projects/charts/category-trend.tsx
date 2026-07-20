@@ -3,42 +3,43 @@ import { ResponsiveLine } from "@nivo/line";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import {
-  getCategoryColor,
+  getCostTypeColor,
   monthKey,
   monthLabel,
   nivoChartTheme,
-  normalizeCategoryKey,
+  normalizeCostTypeKey,
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 
 export function CategoryTrend({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
-    // Group purchases by month and category
+    // Group purchases by month and cost type
     const dated = purchases.filter((p) => p.date && p.cost != null);
     if (dated.length === 0) return [];
 
     // Collect all months
     const months = new Set<string>();
-    const byCatMonth = new Map<string, Map<string, number>>();
+    const byCostTypeMonth = new Map<string, Map<string, number>>();
 
     for (const p of dated) {
-      const cat = normalizeCategoryKey(p.category);
+      const costType = normalizeCostTypeKey(p.costType);
       const month = monthKey(p.date!);
       months.add(month);
 
-      if (!byCatMonth.has(cat)) byCatMonth.set(cat, new Map());
-      const catMap = byCatMonth.get(cat)!;
-      catMap.set(month, (catMap.get(month) ?? 0) + (p.cost ?? 0));
+      if (!byCostTypeMonth.has(costType))
+        byCostTypeMonth.set(costType, new Map());
+      const costTypeMap = byCostTypeMonth.get(costType)!;
+      costTypeMap.set(month, (costTypeMap.get(month) ?? 0) + (p.cost ?? 0));
     }
 
     const sortedMonths = Array.from(months).sort();
 
-    // Build series per category, cumulative within each
-    return Array.from(byCatMonth.entries())
-      .map(([cat, monthMap]) => {
+    // Build series per cost type, cumulative within each
+    return Array.from(byCostTypeMonth.entries())
+      .map(([costType, monthMap]) => {
         let cumulative = 0;
         return {
-          id: cat,
+          id: costType,
           data: sortedMonths.map((month) => {
             cumulative += monthMap.get(month) ?? 0;
             return { x: monthLabel(month), y: cumulative };
@@ -77,7 +78,7 @@ export function CategoryTrend({ purchases }: { purchases: PurchaseOut[] }) {
         }}
         enableArea
         areaOpacity={0.4}
-        colors={(d) => getCategoryColor(String(d.id))}
+        colors={(d) => getCostTypeColor(String(d.id))}
         pointSize={5}
         pointColor="var(--card)"
         pointBorderWidth={2}

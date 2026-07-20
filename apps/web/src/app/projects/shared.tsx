@@ -1,12 +1,14 @@
 import {
+  type CostType,
   type ProjectKind,
   type ProjectOut,
   type ProjectStatus,
-  type PurchaseCategory,
   type PurchaseOut,
   projectStatusValues,
   type TaskOut,
   type TaskStatus,
+  TRADE_LABELS,
+  tradeValues,
 } from "@cubby/schemas/project";
 import {
   createColumnHelper,
@@ -33,8 +35,8 @@ import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
-  purchaseCategoryLabels,
-  purchaseCategoryOptions,
+  costTypeLabels,
+  costTypeOptions,
 } from "~/app/purchases/purchase-options";
 import {
   TASK_STATUS_LABELS,
@@ -79,25 +81,31 @@ export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 export const PROJECT_STATUS_OPTIONS: FilterableComboboxItem[] =
   buildSelectOptions(projectStatusValues, PROJECT_STATUS_LABELS);
 
-/** Title-cases a single lowercase enum-ish token (project kind, purchase category). */
+/** Title-cases a single lowercase enum-ish token (project kind, cost type). */
 export function capitalize(s: string): string {
   return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// -- Category colors --
+// -- Cost-type colors --
 
-export { getCategoryColor, getPurchaserColor } from "~/lib/status-colors";
+export { getCostTypeColor, getPurchaserColor } from "~/lib/status-colors";
 
 /**
- * `purchase.category` is now a strict enum (no more Notion emoji prefixes to
- * strip), so this is just a null-coalesce — kept as a named helper since every
- * chart file already calls it as the "category or other" bucket key.
+ * `purchase.costType` is a strict enum, so this is just a null-coalesce —
+ * kept as a named helper since every chart file already calls it as the
+ * "cost type or other" bucket key.
  */
-export function normalizeCategoryKey(
-  category: PurchaseCategory | null,
-): string {
-  return category ?? "other";
+export function normalizeCostTypeKey(costType: CostType | null): string {
+  return costType ?? "other";
 }
+
+/** `{value,label}` options for the trade filter/inline-edit select — shared by tasks and purchases. */
+export const tradeOptions: FilterableComboboxItem[] = buildSelectOptions(
+  tradeValues,
+  TRADE_LABELS,
+);
+
+export { TRADE_LABELS };
 
 // -- Date helpers --
 
@@ -179,12 +187,12 @@ const taskColumns = [
     enableSorting: true,
   }),
   createProjectLinkColumn(taskHelper, { className: "w-40" }),
-  taskHelper.accessor("category", {
-    header: "Category",
+  taskHelper.accessor("trade", {
+    header: "Trade",
     cell: ({ getValue }) => {
-      const cat = getValue();
-      if (!cat) return null;
-      return <Badge variant="outline">{cat}</Badge>;
+      const trade = getValue();
+      if (!trade) return null;
+      return <Badge variant="outline">{TRADE_LABELS[trade]}</Badge>;
     },
     enableSorting: true,
   }),
@@ -258,20 +266,20 @@ const purchaseColumns = [
     enableSorting: true,
   }),
   createProjectLinkColumn(purchaseHelper, { className: "w-40" }),
-  createFilterableSelectColumn(purchaseHelper, "category", {
-    header: "Category",
+  createFilterableSelectColumn(purchaseHelper, "costType", {
+    header: "Cost Type",
     className: "w-28",
-    placeholder: "Filter by category...",
-    selectOptions: purchaseCategoryOptions,
-    renderCell: (cat: PurchaseCategory | null) =>
-      cat ? purchaseCategoryLabels[cat] : <NoneValue />,
+    placeholder: "Filter by cost type...",
+    selectOptions: costTypeOptions,
+    renderCell: (costType: CostType | null) =>
+      costType ? costTypeLabels[costType] : <NoneValue />,
   }),
-  purchaseHelper.accessor("subcategory", {
-    header: "Subcategory",
+  purchaseHelper.accessor("trade", {
+    header: "Trade",
     cell: ({ getValue }) => {
-      const sub = getValue();
-      if (!sub) return null;
-      return <Badge variant="outline">{sub}</Badge>;
+      const trade = getValue();
+      if (!trade) return null;
+      return <Badge variant="outline">{TRADE_LABELS[trade]}</Badge>;
     },
     enableSorting: true,
   }),

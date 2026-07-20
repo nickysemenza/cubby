@@ -7,8 +7,8 @@ type PurchaseRow = {
   name: string;
   cost: number | null;
   date: string | null;
-  category: PurchaseOut["category"];
-  subcategory: string | null;
+  costType: PurchaseOut["costType"];
+  trade: PurchaseOut["trade"];
   purchaser: PurchaseOut["purchaser"];
   url: string | null;
   notes: string | null;
@@ -24,8 +24,8 @@ export const dbPurchaseToAPI = (row: PurchaseRow): PurchaseOut => ({
   name: row.name,
   cost: row.cost,
   date: row.date,
-  category: row.category,
-  subcategory: row.subcategory,
+  costType: row.costType,
+  trade: row.trade,
   purchaser: row.purchaser,
   url: row.url,
   notes: row.notes,

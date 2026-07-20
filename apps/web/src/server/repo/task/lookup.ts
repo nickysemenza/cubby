@@ -31,7 +31,7 @@ export const taskList = async (
     [
       filters.status ? eq(task.status, filters.status) : undefined,
       filters.projectId ? eq(task.projectId, filters.projectId) : undefined,
-      filters.category ? eq(task.category, filters.category) : undefined,
+      filters.trade ? eq(task.trade, filters.trade) : undefined,
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId
         ? eq(task.parentTaskId, filters.parentTaskId)

@@ -1,8 +1,13 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
-import { plainDate, taskStatusSchema } from "@cubby/schemas/project";
+import {
+  plainDate,
+  taskStatusSchema,
+  tradeSchema,
+} from "@cubby/schemas/project";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
+import { tradeOptions } from "~/app/projects/shared";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -20,6 +25,13 @@ const quickAddTaskSchema = z.object({
   projectId: z.string().nullable(),
   status: taskStatusSchema,
   dueDate: plainDate.nullable(),
+  // Required in the domain schema — held nullable here so the select can
+  // start empty, with the refine forcing a real choice before submit. The
+  // `boolean` return annotation stops TS 5.5+ from inferring a narrowing
+  // type predicate (QuickAddDialog requires input === output).
+  trade: tradeSchema
+    .nullable()
+    .refine((v): boolean => v !== null, "Trade is required"),
 });
 type QuickAddTaskValues = z.infer<typeof quickAddTaskSchema>;
 
@@ -28,6 +40,7 @@ const defaultValues: QuickAddTaskValues = {
   projectId: null,
   status: "not_started",
   dueDate: null,
+  trade: null,
 };
 
 interface CreateTaskDialogProps {
@@ -59,7 +72,8 @@ export function CreateTaskDialog({
         status: values.status,
         dueDate: values.dueDate,
         dueEndDate: null,
-        category: null,
+        // Non-null by the schema refine above.
+        trade: values.trade!,
       })}
     >
       {(form) => (
@@ -76,6 +90,12 @@ export function CreateTaskDialog({
             name="status"
             label="Status"
             options={taskStatusOptions}
+          />
+          <SelectField
+            form={form}
+            name="trade"
+            label="Trade"
+            options={tradeOptions}
           />
           <SelectField
             form={form}

@@ -5,7 +5,7 @@ import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
-import { capitalize, getCategoryColor } from "../shared";
+import { capitalize, getCostTypeColor } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -20,32 +20,32 @@ export function PurchaseDonut({
   purchases,
   height = 350,
   centerLabel = "Total cost",
-  selectedCategory,
-  onCategoryClick,
+  selectedCostType,
+  onCostTypeClick,
 }: {
   purchases: PurchaseOut[];
   height?: number;
   centerLabel?: string;
-  /** Category key to highlight (drill-down selection); center label shows its total. */
-  selectedCategory?: string | null;
-  /** When set, slices are clickable and report their category key. */
-  onCategoryClick?: (categoryKey: string) => void;
+  /** Cost-type key to highlight (drill-down selection); center label shows its total. */
+  selectedCostType?: string | null;
+  /** When set, slices are clickable and report their cost-type key. */
+  onCostTypeClick?: (costTypeKey: string) => void;
 }) {
   const { data, total } = useMemo(() => {
-    const byCategory = sumByKey(
+    const byCostType = sumByKey(
       purchases,
-      (p) => p.category ?? "other",
+      (p) => p.costType ?? "other",
       (p) => p.cost,
     );
 
-    const data: DonutDatum[] = Array.from(byCategory.entries())
+    const data: DonutDatum[] = Array.from(byCostType.entries())
       .filter(([, value]) => value > 0)
       .sort((a, b) => b[1] - a[1])
-      .map(([category, value]) => ({
-        id: category,
-        label: capitalize(category),
+      .map(([costType, value]) => ({
+        id: costType,
+        label: capitalize(costType),
         value,
-        color: getCategoryColor(category),
+        color: getCostTypeColor(costType),
       }));
 
     const total = sumBy(data, (d) => d.value);
@@ -57,8 +57,8 @@ export function PurchaseDonut({
   }
 
   const selected =
-    selectedCategory != null
-      ? data.find((d) => d.id === selectedCategory)
+    selectedCostType != null
+      ? data.find((d) => d.id === selectedCostType)
       : undefined;
   const centerValue = selected?.value ?? total;
   const centerText = selected ? selected.label : centerLabel;
@@ -66,13 +66,13 @@ export function PurchaseDonut({
   return (
     <div
       style={{ height }}
-      className={onCategoryClick ? "[&_path]:cursor-pointer" : undefined}
+      className={onCostTypeClick ? "[&_path]:cursor-pointer" : undefined}
     >
       <ResponsivePie
         data={data}
         colors={(d) => d.data.color}
         onClick={
-          onCategoryClick ? (d) => onCategoryClick(String(d.id)) : undefined
+          onCostTypeClick ? (d) => onCostTypeClick(String(d.id)) : undefined
         }
         // Controlled while a slice is drilled in — the selected arc stays
         // popped out (activeOuterRadiusOffset). Uncontrolled hover otherwise.

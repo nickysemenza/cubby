@@ -1,10 +1,10 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { PurchaseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveTreeMap } from "@nivo/treemap";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import { getCategoryColor } from "../shared";
+import { getCostTypeColor, TRADE_LABELS } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -17,26 +17,29 @@ type TreeNode = {
 
 export function CategoryTreemap({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
-    // Build category → subcategory → cost hierarchy
-    const categories = new Map<string, Map<string, number>>();
+    // Build cost type → trade → cost hierarchy
+    const costTypes = new Map<string, Map<string, number>>();
 
     for (const p of purchases) {
-      const cat = p.category ?? "uncategorized";
-      const sub = p.subcategory ?? "other";
+      const costType = p.costType ?? "uncategorized";
+      const trade = p.trade ?? "other";
       const cost = p.cost ?? 0;
       if (cost <= 0) continue;
 
-      if (!categories.has(cat)) categories.set(cat, new Map());
-      const subs = categories.get(cat)!;
-      subs.set(sub, (subs.get(sub) ?? 0) + cost);
+      if (!costTypes.has(costType)) costTypes.set(costType, new Map());
+      const trades = costTypes.get(costType)!;
+      trades.set(trade, (trades.get(trade) ?? 0) + cost);
     }
 
-    const children: TreeNode[] = Array.from(categories.entries())
-      .map(([cat, subs]) => ({
-        name: cat,
-        color: getCategoryColor(cat),
-        children: Array.from(subs.entries())
-          .map(([sub, value]) => ({ name: sub, value }))
+    const children: TreeNode[] = Array.from(costTypes.entries())
+      .map(([costType, trades]) => ({
+        name: costType,
+        color: getCostTypeColor(costType),
+        children: Array.from(trades.entries())
+          .map(([trade, value]) => ({
+            name: TRADE_LABELS[trade as Trade] ?? trade,
+            value,
+          }))
           .sort((a, b) => b.value - a.value),
       }))
       .sort(
@@ -75,9 +78,9 @@ export function CategoryTreemap({ purchases }: { purchases: PurchaseOut[] }) {
         parentLabelTextColor="var(--background)"
         labelTextColor="var(--background)"
         colors={(node) => {
-          // pathComponents is [root, category, subcategory] — use index 1 for the category
-          const category = node.pathComponents[1] ?? node.pathComponents[0];
-          return getCategoryColor(category ?? null);
+          // pathComponents is [root, costType, trade] — use index 1 for the cost type
+          const costType = node.pathComponents[1] ?? node.pathComponents[0];
+          return getCostTypeColor(costType ?? null);
         }}
         borderWidth={2}
         borderColor="var(--card)"

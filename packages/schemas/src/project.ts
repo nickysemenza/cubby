@@ -53,17 +53,69 @@ export const taskStatusValues = [
 export const taskStatusSchema = z.enum(taskStatusValues);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
-export const purchaseCategoryValues = [
-  "materials",
-  "tools",
-  "services",
-] as const;
-export const purchaseCategorySchema = z.enum(purchaseCategoryValues);
-export type PurchaseCategory = z.infer<typeof purchaseCategorySchema>;
+export const costTypeValues = ["materials", "tools", "services"] as const;
+export const costTypeSchema = z.enum(costTypeValues);
+export type CostType = z.infer<typeof costTypeSchema>;
 
 export const purchaserValues = ["nicky", "rebecca", "both"] as const;
 export const purchaserSchema = z.enum(purchaserValues);
 export type Purchaser = z.infer<typeof purchaserSchema>;
+
+/**
+ * The trade/discipline a task or purchase belongs to (a phase of household
+ * work — "plumbing", "electrical", etc.) — shared between `task.trade` and
+ * `purchase.trade`. Human labels in `TRADE_LABELS` below.
+ */
+export const tradeValues = [
+  "planning",
+  "demolition",
+  "building",
+  "drywall",
+  "electrical",
+  "plumbing",
+  "mechanical",
+  "cabinetry",
+  "countertop",
+  "flooring",
+  "millwork",
+  "finishes",
+  "appliances",
+  "landscaping",
+  "logistics",
+  "metalworking",
+  "crafts",
+  "auto",
+  "other",
+] as const;
+export const tradeSchema = z.enum(tradeValues);
+export type Trade = z.infer<typeof tradeSchema>;
+
+/**
+ * Human-facing labels for `tradeValues` — single source of truth shared by
+ * server (MCP descriptions, embedding text) and client (selects/badges/chart
+ * labels). Never string-match/capitalize the raw enum value for display text.
+ */
+export const TRADE_LABELS: Record<Trade, string> = {
+  planning: "Planning",
+  demolition: "Demo & Cleanup",
+  building: "Building & Framing",
+  drywall: "Drywall",
+  electrical: "Electrical & Lighting",
+  plumbing: "Plumbing",
+  mechanical: "Mechanical / HVAC",
+  cabinetry: "Cabinetry",
+  countertop: "Countertops",
+  flooring: "Flooring",
+  millwork: "Trim & Millwork",
+  finishes: "Paint & Finishes",
+  appliances: "Appliances & Furniture",
+  landscaping: "Landscaping",
+  logistics: "Logistics & Moving",
+  metalworking: "Metalworking",
+  crafts: "Arts & Crafts",
+  auto: "Auto",
+  other: "Other",
+};
 
 // ---------------------------------------------------------------------------
 // Project
@@ -207,7 +259,7 @@ const taskFields = {
   parentTaskId: taskId.nullable(),
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable().describe("End of a due-date range"),
-  category: z.string().nullable().describe("Free-form category label"),
+  trade: tradeSchema,
 };
 
 const taskCreateShape = {
@@ -220,7 +272,6 @@ const taskCreateShape = {
   parentTaskId: taskId.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
-  category: z.string().nullable().default(null),
 };
 
 export const taskCreateInput = z.object(taskCreateShape);
@@ -246,7 +297,7 @@ export type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
 export const taskFilterFields = {
   status: taskStatusSchema.optional(),
   projectId: projectId.optional(),
-  category: z.string().optional(),
+  trade: tradeSchema.optional(),
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
   topLevelOnly: z.boolean().optional(),
@@ -260,7 +311,7 @@ export const taskSortableFields = [
   "name",
   "status",
   "dueDate",
-  "category",
+  "trade",
   "createdAt",
 ] as const;
 export type TaskSortField = (typeof taskSortableFields)[number];
@@ -348,8 +399,8 @@ const purchaseFields = {
   name: z.string().min(1),
   cost: z.number().nullable().describe("Dollars"),
   date: plainDate.nullable(),
-  category: purchaseCategorySchema.nullable(),
-  subcategory: z.string().nullable().describe("Free-form subcategory label"),
+  costType: costTypeSchema,
+  trade: tradeSchema,
   purchaser: purchaserSchema.nullable(),
   url: z.string().nullable(),
   notes: z.string().nullable(),
@@ -361,8 +412,6 @@ const purchaseCreateShape = {
   ...purchaseFields,
   cost: z.number().nullable().default(null),
   date: plainDate.nullable().default(null),
-  category: purchaseCategorySchema.nullable().default(null),
-  subcategory: z.string().nullable().default(null),
   purchaser: purchaserSchema.nullable().default(null),
   url: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
@@ -384,8 +433,8 @@ export const purchaseUpdateInput = z.object({
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
 export const purchaseFilterFields = {
-  category: purchaseCategorySchema.optional(),
-  subcategory: z.string().optional(),
+  costType: costTypeSchema.optional(),
+  trade: tradeSchema.optional(),
   purchaser: purchaserSchema.optional(),
   projectId: projectId.optional(),
   future: z.boolean().optional(),
@@ -398,7 +447,7 @@ export const purchaseSortableFields = [
   "name",
   "cost",
   "date",
-  "category",
+  "costType",
   "createdAt",
 ] as const;
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];

@@ -207,7 +207,7 @@ export const createTask = async (
       parentTaskId: data.parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
-      category: data.category,
+      trade: data.trade,
     });
     await logAuditEntry(tx, actor, {
       entityType: "task",
@@ -226,7 +226,7 @@ const AUDIT_FIELDS = [
   "parentTaskId",
   "dueDate",
   "dueEndDate",
-  "category",
+  "trade",
 ] as const;
 
 export const updateTask = async (
@@ -263,7 +263,7 @@ export const updateTask = async (
       parentTaskId: data.parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
-      category: data.category,
+      trade: data.trade,
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
 

@@ -16,7 +16,7 @@ type TaskRow = {
   parentTaskId: TaskOut["parentTaskId"];
   dueDate: string | null;
   dueEndDate: string | null;
-  category: string | null;
+  trade: TaskOut["trade"];
   createdAt: Date;
   updatedAt: Date;
   project: { name: string; deletedAt: Date | null } | null;
@@ -37,7 +37,7 @@ export const dbTaskToAPI = (
   parentTaskId: row.parentTaskId,
   dueDate: row.dueDate,
   dueEndDate: row.dueEndDate,
-  category: row.category,
+  trade: row.trade,
   // In practice unreachable, since a live task always blocks its project's
   // deletion (see project/crud.ts's PROJECT_HAS_TASKS guard) — but
   // resolveLiveJoinName still backstops a soft-deleted parent's name leaking.

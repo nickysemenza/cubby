@@ -1,11 +1,13 @@
 import type {
-  PurchaseCategory,
+  CostType,
   PurchaseOut,
   Purchaser,
+  Trade,
 } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, Info } from "lucide-react";
 import type { FC } from "react";
+import { TRADE_LABELS, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -22,9 +24,9 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
+  costTypeLabels,
+  costTypeOptions,
   futureFilterOptions,
-  purchaseCategoryLabels,
-  purchaseCategoryOptions,
   purchaserLabels,
   purchaserOptions,
 } from "./purchase-options";
@@ -104,40 +106,40 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       ),
     },
     {
-      label: "Category",
+      label: "Cost Type",
       value: (
         <EditableCell
-          value={purchase.category}
-          config={{ type: "select", options: purchaseCategoryOptions }}
-          onSave={async (category) => {
+          value={purchase.costType}
+          config={{ type: "select", options: costTypeOptions }}
+          onSave={async (costType) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!costType) return;
             await updateMutation.mutateAsync({
               id: purchase.id,
-              data: { category: category as PurchaseCategory | null },
+              data: { costType: costType as CostType },
             });
           }}
-          renderValue={(cat) =>
-            cat ? (
-              purchaseCategoryLabels[cat as PurchaseCategory]
-            ) : (
-              <NoneValue />
-            )
+          renderValue={(ct) =>
+            ct ? costTypeLabels[ct as CostType] : <NoneValue />
           }
         />
       ),
     },
     {
-      label: "Subcategory",
+      label: "Trade",
       value: (
         <EditableCell
-          value={purchase.subcategory}
-          config={{ type: "text" }}
-          onSave={async (subcategory) => {
+          value={purchase.trade}
+          config={{ type: "select", options: tradeOptions }}
+          onSave={async (trade) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!trade) return;
             await updateMutation.mutateAsync({
               id: purchase.id,
-              data: { subcategory },
+              data: { trade: trade as Trade },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
+          renderValue={(v) => (v ? TRADE_LABELS[v as Trade] : <NoneValue />)}
         />
       ),
     },
@@ -256,10 +258,8 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     },
     { label: "Date", value: purchase.date ?? "—" },
     {
-      label: "Category",
-      value: purchase.category
-        ? purchaseCategoryLabels[purchase.category]
-        : "—",
+      label: "Cost Type",
+      value: purchase.costType ? costTypeLabels[purchase.costType] : "—",
     },
   ];
 

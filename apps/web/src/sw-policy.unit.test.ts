@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { isBypassedPath, isCriticalPrecacheUrl } from "./sw-policy";
 
 describe("service-worker cache policy", () => {
-  it.each(["/api", "/api/session", "/trpc", "/trpc/recipe.list"])(
-    "never intercepts authenticated endpoint %s",
-    (path) => expect(isBypassedPath(path)).toBe(true),
-  );
+  it.each([
+    "/api",
+    "/api/session",
+    "/trpc",
+    "/trpc/recipe.list",
+  ])("never intercepts authenticated endpoint %s", (path) =>
+    expect(isBypassedPath(path)).toBe(true));
 
   it("treats the offline page, styles, and WASM as critical", () => {
     expect(isCriticalPrecacheUrl("/offline.html")).toBe(true);

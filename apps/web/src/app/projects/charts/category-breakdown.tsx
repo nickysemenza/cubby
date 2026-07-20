@@ -1,14 +1,14 @@
 import type { PurchaseOut } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
 import { Grid, Section } from "~/components/layout";
-import { capitalize, normalizeCategoryKey } from "../shared";
+import { capitalize, normalizeCostTypeKey } from "../shared";
 import { PurchaseDonut } from "./purchase-donut";
-import { SubcategoryBars } from "./subcategory-bars";
+import { TradeBars } from "./trade-bars";
 
 /**
- * The donut + subcategory-bars pair with click-to-drill-down: selecting a
+ * The donut + trade-bars pair with click-to-drill-down: selecting a
  * donut slice scopes the bars (and the donut's center label) to that
- * category. Owns its own `Section` wrappers — callers render it bare.
+ * cost type. Owns its own `Section` wrappers — callers render it bare.
  */
 export function CategoryBreakdown({
   purchases,
@@ -22,10 +22,10 @@ export function CategoryBreakdown({
   const [selected, setSelected] = useState<string | null>(null);
 
   // Selection can go stale when the purchases set changes underneath us
-  // (e.g. a /purchases filter removes the category) — derive, don't effect.
+  // (e.g. a /purchases filter removes the cost type) — derive, don't effect.
   const effectiveSelected =
     selected != null &&
-    purchases.some((p) => normalizeCategoryKey(p.category) === selected)
+    purchases.some((p) => normalizeCostTypeKey(p.costType) === selected)
       ? selected
       : null;
 
@@ -33,7 +33,7 @@ export function CategoryBreakdown({
     () =>
       effectiveSelected
         ? purchases.filter(
-            (p) => normalizeCategoryKey(p.category) === effectiveSelected,
+            (p) => normalizeCostTypeKey(p.costType) === effectiveSelected,
           )
         : purchases,
     [purchases, effectiveSelected],
@@ -46,15 +46,15 @@ export function CategoryBreakdown({
         description={
           effectiveSelected
             ? "Click the selected slice again to clear"
-            : "Click a slice to drill into its subcategories"
+            : "Click a slice to drill into its trades"
         }
       >
         <PurchaseDonut
           purchases={purchases}
           height={donutHeight}
           centerLabel={centerLabel}
-          selectedCategory={effectiveSelected}
-          onCategoryClick={(key) =>
+          selectedCostType={effectiveSelected}
+          onCostTypeClick={(key) =>
             setSelected((current) => (current === key ? null : key))
           }
         />
@@ -62,8 +62,8 @@ export function CategoryBreakdown({
       <Section
         title={
           effectiveSelected
-            ? `${capitalize(effectiveSelected)} — by subcategory`
-            : "Spending by Subcategory"
+            ? `${capitalize(effectiveSelected)} — by trade`
+            : "Spending by Trade"
         }
         description={
           effectiveSelected ? (
@@ -77,7 +77,7 @@ export function CategoryBreakdown({
           ) : undefined
         }
       >
-        <SubcategoryBars purchases={scoped} />
+        <TradeBars purchases={scoped} />
       </Section>
     </Grid>
   );
