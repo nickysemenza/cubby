@@ -7,11 +7,12 @@
  * - {@link getImageById}                      — fetch one image with its entity association
  * - {@link cullPendingImages}                 — delete stale unassociated PENDING rows and return their keys
  * - {@link associateImagesWithProduct}        — attach PENDING images to a product
+ * - {@link associateImagesWithRecipe}         — attach PENDING images to a recipe
  *
  * Storage/network orchestration lives in image-storage.service.ts.
  */
 
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectId, RecipeId } from "@cubby/schemas/identifiers";
 import {
   unsafeLocationId,
   unsafeProductId,
@@ -453,6 +454,42 @@ export const associateImagesWithProduct = async (
     productId,
     imageIds,
   );
+};
+
+/**
+ * Associate an image with a recipe. The recipe counterpart of
+ * {@link associateImagesWithProduct} (server-side scrape import — see
+ * `importRecipeImageFromUrl`).
+ */
+export const associateImagesWithRecipe = async (
+  db: Database,
+  recipeId: RecipeId,
+  imageIds: string[],
+): Promise<void> => {
+  await associatePendingImages(
+    getDb(db),
+    recipeImage,
+    "recipeId",
+    recipeId,
+    imageIds,
+  );
+};
+
+/**
+ * Does this recipe already have a (non-deleted) image attached? Guards the
+ * server-side import from re-fetching a hero photo into R2 on every re-import
+ * (`Image` has no source-URL column to dedupe on).
+ */
+export const recipeHasImages = async (
+  db: Database,
+  recipeId: RecipeId,
+): Promise<boolean> => {
+  const count = await countWhere(
+    db,
+    recipeImage,
+    and(eq(recipeImage.recipeId, recipeId), notDeleted(recipeImage)),
+  );
+  return count > 0;
 };
 
 /**

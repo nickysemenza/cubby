@@ -13,18 +13,16 @@ contradicts one belongs in a **Rejected** block, not in the open list.
 
 ## Recipes & Import
 
-### Image not persisted on the server import path
+### Notion hero image
 
-- [ ] **Scraped/Notion image not persisted on the server import path**: the scrape
-  *form* imports the image client-side via `image.importFromUrl`, but the server-side
-  import (`apps/web/src/server/repo/import-recipe-convert.ts`) drops
-  `ImportRecipe.image`. Fix: call the existing `importImageFromUrl(db, …)`
-  (`apps/web/src/server/services/image-storage.service.ts` — `services/image-import.ts`
-  is a working call-site template) during server-side import and attach the resulting
-  image id via the `recipeImage` join table. This is also the path for the deferred
-  Notion hero-image import — note Notion image URLs are signed/expiring, so they must
-  be fetched at import time. Do it **inline**: import is user-triggered and already
-  awaits a scrape, so it doesn't need the background queue.
+- [ ] **Notion hero image never reaches the import**: `notionPageToImportRecipe`
+  (`apps/web/src/server/utils/notion-recipe.ts`) drops the page's image blocks, so
+  `ImportRecipe.image` is always empty on the Notion sync. The persistence half is
+  already done — set `image` from the page's first image block and
+  `importRecipeImageFromUrl` (`apps/web/src/server/services/image-import.ts`, wired
+  into `recipe.insertImport`) is the template for attaching it. Notion image URLs are
+  signed/expiring, so they must be fetched at import time; the Notion sync upserts by
+  page id, and the helper no-ops when the recipe already has a photo.
 
 ### MCP recipe authoring (from real-use feedback)
 
