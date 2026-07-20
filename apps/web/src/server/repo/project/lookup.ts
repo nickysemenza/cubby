@@ -9,7 +9,7 @@ import type {
   ProjectOut,
 } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
-import { asc, eq, isNull, sql } from "drizzle-orm";
+import { asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
@@ -55,6 +55,27 @@ export const projectList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: ProjectOut[]; count: number }> => {
+  // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
+  // comment. Fetched up front so it can also resolve `includeSubProjects`
+  // below; own rollups are then only fetched for this page's projects plus
+  // their descendants (never the whole tree), and aggregated in TS.
+  const allRows = await allProjectParentRows(db);
+  const childrenByParent = buildChildrenMap(allRows);
+
+  // When scoped to a parent's subtree, resolve every live descendant id and
+  // match on that set (excluding the parent itself — same shape as the plain
+  // `parentProjectId` filter, just recursive); otherwise a direct-children match.
+  let parentCondition = filters.parentProjectId
+    ? eq(project.parentProjectId, filters.parentProjectId)
+    : undefined;
+  if (filters.parentProjectId && filters.includeSubProjects) {
+    const descendantIds = collectDescendantIds(
+      childrenByParent,
+      filters.parentProjectId,
+    );
+    parentCondition = inArray(project.id, descendantIds);
+  }
+
   const whereClause = buildSearchConditions(
     project,
     [{ column: project.name, term: filters.search }],
@@ -66,9 +87,7 @@ export const projectList = async (
         ? sql`${filters.location} = ANY(${project.locations})`
         : undefined,
       filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
-      filters.parentProjectId
-        ? eq(project.parentProjectId, filters.parentProjectId)
-        : undefined,
+      parentCondition,
     ],
   );
 
@@ -86,12 +105,6 @@ export const projectList = async (
   );
 
   const ids = rows.map((r) => r.id);
-
-  // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
-  // comment. Own rollups are then only fetched for this page's projects plus
-  // their descendants (never the whole tree), and aggregated in TS.
-  const allRows = await allProjectParentRows(db);
-  const childrenByParent = buildChildrenMap(allRows);
   const nameById = new Map(allRows.map((r) => [r.id, r.name]));
   const descendantIds = ids.flatMap((id) =>
     collectDescendantIds(childrenByParent, id),

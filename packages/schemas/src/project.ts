@@ -192,6 +192,9 @@ export const projectFilterFields = {
   topLevelOnly: z.boolean().optional(),
   /** Only this parent's live sub-projects. */
   parentProjectId: projectId.optional(),
+  // Only meaningful alongside `parentProjectId`: expands the filter to the
+  // whole live subtree under that parent, not just direct children.
+  includeSubProjects: z.boolean().optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
@@ -303,6 +306,11 @@ export const taskFilterFields = {
   topLevelOnly: z.boolean().optional(),
   /** Only this parent's live subtasks. */
   parentTaskId: taskId.optional(),
+  /**
+   * When combined with `projectId`, also match tasks in that project's live
+   * descendant sub-projects.
+   */
+  includeSubProjects: z.boolean().optional(),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
