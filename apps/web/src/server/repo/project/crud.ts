@@ -15,8 +15,8 @@ import type {
   ProjectUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or } from "drizzle-orm";
-import { countBy } from "es-toolkit";
-import type { Database } from "~/server/db";
+import { countBy, uniq } from "es-toolkit";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   project,
   projectDependency,
@@ -46,7 +46,18 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { projectDependencyIds, projectRollups } from "./analytics";
-import { dbProjectToAPI, EMPTY_PROJECT_ROLLUP } from "./helpers";
+import {
+  dbProjectToAPI,
+  EMPTY_PROJECT_OWN_ROLLUP,
+  EMPTY_PROJECT_SUBTREE_ROLLUP,
+} from "./helpers";
+import {
+  aggregateSubtreeRollups,
+  allProjectParentRows,
+  buildChildrenMap,
+  collectDescendantIds,
+  MAX_PROJECT_TREE_DEPTH,
+} from "./subtree";
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
 type ProjectUpdateData = ProjectUpdateInput["data"];
@@ -60,15 +71,28 @@ const projectReader = createEntityReader({
   entityName: "project",
   fetchById: fetchProjectById,
   fromDB: async (db, row) => {
+    // Whole-tree parent/child map — cheap single query (id/name/parentId
+    // only) — see subtree.ts's doc comment for why this is loaded in full
+    // rather than walked with per-row queries.
+    const allRows = await allProjectParentRows(db);
+    const childrenByParent = buildChildrenMap(allRows);
+    const descendantIds = collectDescendantIds(childrenByParent, row.id);
+
     const [rollups, deps] = await Promise.all([
-      projectRollups(db, [row.id]),
+      projectRollups(db, uniq([row.id, ...descendantIds])),
       projectDependencyIds(db, [row.id]),
     ]);
+    const subtreeRollups = aggregateSubtreeRollups(allRows, rollups);
+    const nameById = new Map(allRows.map((r) => [r.id, r.name]));
+
     return dbProjectToAPI(
       row,
-      rollups.get(row.id) ?? EMPTY_PROJECT_ROLLUP,
+      rollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+      subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],
+      row.parentProjectId ? (nameById.get(row.parentProjectId) ?? null) : null,
+      childrenByParent.get(row.id) ?? [],
     );
   },
   notFoundReason: "PROJECT_NOT_FOUND",
@@ -79,18 +103,68 @@ export const getProjectByID = (
   id: ProjectId,
 ): Promise<ProjectOut> => projectReader.getByID(db, id);
 
+/** The chosen parent must exist and be live. */
+async function assertParentProjectExists(
+  tx: DrizzleTransaction,
+  parentId: ProjectId,
+): Promise<void> {
+  const parent = await tx.query.project.findFirst({
+    where: and(eq(project.id, parentId), notDeleted(project)),
+    columns: { id: true },
+  });
+  if (!parent) {
+    throw createAppError(
+      "PROJECT_NOT_FOUND",
+      `Parent project ${parentId} not found`,
+    );
+  }
+}
+
+/**
+ * Walk `newParentId`'s ancestor chain (up to `MAX_PROJECT_TREE_DEPTH` hops,
+ * defensively) looking for `projectId` — true if setting the parent would
+ * make `projectId` its own ancestor. Mirrors
+ * repo/location/tree.ts's `wouldCreateParentCycle`.
+ */
+async function wouldCreateProjectCycle(
+  tx: DrizzleTransaction,
+  projectId: ProjectId,
+  newParentId: ProjectId,
+): Promise<boolean> {
+  if (projectId === newParentId) return true;
+
+  let currentId: ProjectId | null = newParentId;
+  let hops = 0;
+  while (currentId && hops < MAX_PROJECT_TREE_DEPTH) {
+    if (currentId === projectId) return true;
+    const row: { parentProjectId: ProjectId | null } | undefined =
+      await tx.query.project.findFirst({
+        where: eq(project.id, currentId),
+        columns: { parentProjectId: true },
+      });
+    currentId = row?.parentProjectId ?? null;
+    hops++;
+  }
+  return false;
+}
+
 export const createProject = async (
   db: Database,
   data: ProjectCreateInput,
   actor: ActorContext,
 ): Promise<ProjectOut> => {
   const id = await withTransaction(db, async (tx) => {
+    if (data.parentProjectId) {
+      await assertParentProjectExists(tx, data.parentProjectId);
+    }
+
     const created = await insertAndReturn(tx, project, {
       name: data.name,
       status: data.status,
       kind: data.kind,
       locations: data.locations,
       costEstimate: data.costEstimate,
+      parentProjectId: data.parentProjectId,
       startDate: data.startDate,
       endDate: data.endDate,
       icon: data.icon,
@@ -112,6 +186,7 @@ const AUDIT_FIELDS = [
   "kind",
   "locations",
   "costEstimate",
+  "parentProjectId",
   "startDate",
   "endDate",
   "icon",
@@ -134,12 +209,29 @@ export const updateProject = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
+    if (data.parentProjectId !== undefined && data.parentProjectId !== null) {
+      if (data.parentProjectId === id) {
+        throw createAppError(
+          "SELF_DEPENDENCY",
+          "A project cannot be its own parent.",
+        );
+      }
+      await assertParentProjectExists(tx, data.parentProjectId);
+      if (await wouldCreateProjectCycle(tx, id, data.parentProjectId)) {
+        throw createAppError(
+          "PROJECT_CYCLE",
+          "Cannot set parent: would create a circular reference.",
+        );
+      }
+    }
+
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
       kind: data.kind,
       locations: data.locations,
       costEstimate: data.costEstimate,
+      parentProjectId: data.parentProjectId,
       startDate: data.startDate,
       endDate: data.endDate,
       icon: data.icon,
@@ -195,8 +287,10 @@ export const updateProject = async (
 };
 
 /**
- * Soft-delete projects. Guards against orphaning live tasks/purchases (throws
- * `PROJECT_HAS_TASKS` / `PROJECT_HAS_PURCHASES`), then always hard-deletes the
+ * Soft-delete projects. Guards against orphaning live tasks/purchases/child
+ * projects (throws `PROJECT_HAS_TASKS` / `PROJECT_HAS_PURCHASES` /
+ * `PROJECT_HAS_CHILDREN` — no cascade, a child project stays a live orphan
+ * candidate until reparented or deleted itself), then always hard-deletes the
  * project's dependency edges in both directions — a `projectDependency` row
  * carries no meaning once either endpoint is gone, so it isn't soft-deleted —
  * and soft-deletes the project's images (mirrors product delete's
@@ -211,6 +305,22 @@ export const deleteProjects = async (
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, project, ids, "Project");
+
+    const liveChildren = await tx.query.project.findMany({
+      where: and(inArray(project.parentProjectId, ids), notDeleted(project)),
+      columns: { parentProjectId: true },
+    });
+    await assertNoDependents({
+      offendingParentIds: liveChildren.map((c) => c.parentProjectId),
+      fetchNames: (failedIds) =>
+        tx.query.project.findMany({
+          where: inArray(project.id, failedIds),
+          columns: { name: true },
+        }),
+      reason: "PROJECT_HAS_CHILDREN",
+      message: (count, names) =>
+        `Cannot delete ${count} project(s): ${names} still have sub-projects. Delete or reparent them first.`,
+    });
 
     const liveTasks = await tx.query.task.findMany({
       where: and(inArray(task.projectId, ids), notDeleted(task)),

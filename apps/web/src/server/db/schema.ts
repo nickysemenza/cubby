@@ -787,6 +787,13 @@ export const project = pgTable(
     // double precision (not `real`): this is a dollar ledger — float4 loses
     // cents above ~$16k, which the import reconciliation actually caught.
     costEstimate: doublePrecision("costEstimate"),
+    // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
+    // is its budget envelope; purchases/tasks attribute to it via their
+    // existing `projectId`, not a new relation. Cycle/self-parent guards live
+    // in repo/project/crud.ts (schema self-FK alone can't express "no cycle").
+    parentProjectId: uuid("parentProjectId")
+      .$type<ProjectId>()
+      .references((): AnyPgColumn => project.id),
     startDate: date("startDate", { mode: "string" }),
     endDate: date("endDate", { mode: "string" }),
     icon: text("icon"),
@@ -804,6 +811,7 @@ export const project = pgTable(
     index("Project_status_idx").on(table.status),
     index("Project_kind_idx").on(table.kind),
     index("Project_startDate_idx").on(table.startDate),
+    index("Project_parentProjectId_idx").on(table.parentProjectId),
     index("Project_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     index("Project_name_active_idx")
       .on(table.name)
@@ -1093,10 +1101,18 @@ export const imageRelations = relations(image, ({ many }) => ({
   projectImages: many(projectImage),
 }));
 
-export const projectRelations = relations(project, ({ many }) => ({
+export const projectRelations = relations(project, ({ one, many }) => ({
   tasks: many(task),
   purchases: many(purchase),
   images: many(projectImage),
+  parentProject: one(project, {
+    fields: [project.parentProjectId],
+    references: [project.id],
+    relationName: "ProjectToProject",
+  }),
+  childProjects: many(project, {
+    relationName: "ProjectToProject",
+  }),
   blockedBy: many(projectDependency, { relationName: "ProjectBlocked" }),
   blocking: many(projectDependency, { relationName: "ProjectBlocking" }),
 }));

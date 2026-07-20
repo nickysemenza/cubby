@@ -491,7 +491,16 @@ function ProjectCards({
   projects: ProjectOut[];
   coverImages: CoverImages | undefined;
 }) {
-  const [active, done] = partition(projects, (p) => p.status !== "done");
+  // Gallery is a top-level project grid — sub-projects show on their
+  // parent's own detail page (Sub-projects section), not as independent
+  // cards here. (The dashboard's `project.dashboard` fetch itself stays
+  // unfiltered — every other tab/chart on this page still sees the full set,
+  // e.g. dependency/spending charts that legitimately span the whole tree.)
+  const topLevelProjects = projects.filter((p) => !p.parentProjectId);
+  const [active, done] = partition(
+    topLevelProjects,
+    (p) => p.status !== "done",
+  );
 
   if (active.length === 0 && done.length === 0) {
     return (

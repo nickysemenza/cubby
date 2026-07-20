@@ -9,7 +9,6 @@
  * projects costs 4 queries total, not 200.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type { ProjectRollup } from "@cubby/schemas/project";
 import { and, inArray, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { projectDependency, purchase, task } from "~/server/db/schema";
@@ -18,10 +17,12 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { EMPTY_PROJECT_ROLLUP } from "./helpers";
+import { EMPTY_PROJECT_OWN_ROLLUP, type ProjectOwnRollup } from "./helpers";
 
 /**
- * SUM/COUNT rollups over live purchases and tasks, per project.
+ * SUM/COUNT rollups over live purchases and tasks, per project — this
+ * project's OWN aggregate only (never recursive; see repo/project/subtree.ts
+ * for the subtree total built on top of this).
  *
  * `spent` sums ALL live purchases including `future` (not-yet-made) ones —
  * this matches the retired Notion rollup's semantics (a planned spend still
@@ -31,10 +32,10 @@ import { EMPTY_PROJECT_ROLLUP } from "./helpers";
 export async function projectRollups(
   db: Database,
   projectIds: ProjectId[],
-): Promise<Map<ProjectId, ProjectRollup>> {
-  const out = new Map<ProjectId, ProjectRollup>();
+): Promise<Map<ProjectId, ProjectOwnRollup>> {
+  const out = new Map<ProjectId, ProjectOwnRollup>();
   if (projectIds.length === 0) return out;
-  for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_ROLLUP });
+  for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_OWN_ROLLUP });
 
   const [purchaseRows, taskRows] = await Promise.all([
     getDb(db)
@@ -59,7 +60,7 @@ export async function projectRollups(
 
   for (const row of purchaseRows) {
     if (!row.projectId) continue;
-    const existing = out.get(row.projectId) ?? { ...EMPTY_PROJECT_ROLLUP };
+    const existing = out.get(row.projectId) ?? { ...EMPTY_PROJECT_OWN_ROLLUP };
     out.set(row.projectId, {
       ...existing,
       spent: row.spent,
@@ -68,7 +69,7 @@ export async function projectRollups(
   }
   for (const row of taskRows) {
     if (!row.projectId) continue;
-    const existing = out.get(row.projectId) ?? { ...EMPTY_PROJECT_ROLLUP };
+    const existing = out.get(row.projectId) ?? { ...EMPTY_PROJECT_OWN_ROLLUP };
     out.set(row.projectId, {
       ...existing,
       taskCount: row.taskCount,

@@ -47,14 +47,14 @@ export function registerProjectTools(server: McpServer) {
     slim: slimProject,
     sort: { orderBy: "startDate", direction: "desc" },
     descriptions: {
-      list: "List household projects with status, kind, dates, cost estimate, spend/progress rollups, and dependency ids. Filter by status/kind/location/search.",
-      get: "Get a project by ID, including markdown notes (the former Notion page body), rollups, and blocked-by/blocking project ids.",
+      list: "List household projects with status, kind, dates, cost estimate, spend/progress rollups (own + subtree), parent/child project links, and dependency ids. Filter by status/kind/location/search/topLevelOnly/parentProjectId. Pass topLevelOnly=true to exclude sub-projects.",
+      get: "Get a project by ID, including markdown notes (the former Notion page body), own + subtree rollups, parent/child project links, and blocked-by/blocking project ids.",
       create:
-        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden).",
+        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden). Set parentProjectId to create it as a sub-project (arbitrary depth) — a phase/trade with its own costEstimate budget envelope; tasks/purchases still attribute to it via their own projectId.",
       update:
-        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one.",
+        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one. `parentProjectId` can be set/changed/cleared, subject to a cycle guard (a project can't become its own descendant).",
       delete:
-        "Soft-delete projects by IDs. Fails while live tasks or purchases still reference a project.",
+        "Soft-delete projects by IDs. Fails while live tasks, purchases, or sub-projects still reference a project.",
     },
     create: (caller, params) => caller.project.create(params),
   });

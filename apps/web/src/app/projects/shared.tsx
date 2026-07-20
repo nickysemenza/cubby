@@ -524,11 +524,18 @@ export function ProjectTable() {
       search: ts.getColumnFilter("name"),
       status: ts.getColumnFilter("status") as ProjectStatus | undefined,
       kind: ts.getColumnFilter("kind") as ProjectKind | undefined,
+      // Sub-projects are managed from their parent's detail page, not
+      // surfaced as independent rows here.
+      topLevelOnly: true,
     }),
     columns,
     filters,
     deletable: deletableConfig,
     nameEditable,
+    nameSuffix: (row) =>
+      row.childProjectIds.length > 0 ? (
+        <Badge variant="outline">{row.childProjectIds.length} sub</Badge>
+      ) : undefined,
     infinite: true,
     tableStateOptions,
   });

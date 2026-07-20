@@ -5,21 +5,34 @@
  *   (a) its own status is `blocked` (manual flag)                — kind "manual"
  *   (b) it has an open `taskDependency` edge to a live, non-done
  *       blocker task                                             — kind "task"
- *   (c) its `projectId` is set and that project has an open
- *       `projectDependency` edge to a live, non-done blocker
+ *   (c) its `projectId`, or ANY live ancestor of that project
+ *       (walking `parentProjectId` up, arbitrary depth), has an
+ *       open `projectDependency` edge to a live, non-done blocker
  *       project                                                  — kind "project"
+ *
+ * (c) only considers an ancestor's OWN blocked-by edges while that ancestor
+ * is itself live and non-done — a `done` intermediate ancestor doesn't
+ * propagate its edges (a finished phase can't still be "blocking" its own
+ * sub-projects), but the walk continues past it to check further-up
+ * ancestors. Reuses `projectsById` (live, non-done) as the membership test
+ * for "does this candidate project's own edges count" — no separate status
+ * fetch needed, just the id→parentProjectId map to walk with (see
+ * `allProjectParentRowsForActionable`).
  *
  * Actionable = live, status in {not_started, in_progress, later}, zero
  * blocked reasons. Every blocked reason (task/project kind) carries a
  * transitive "why" chain: starting at the nearest blocker, follow the FIRST
  * open edge at each hop (one representative path, not all paths), switching
  * from task nodes to project nodes when a task's own blockage comes from its
- * project's edge. Depth-capped and cycle-guarded (cross-pair cycles are
- * possible even though a single entity can't be blocked by itself — see
- * `replaceDependencyEdges`'s SELF_DEPENDENCY guard).
+ * project's (or an ancestor project's) edge — the chain itself never
+ * includes the ancestor hops, only the blocker side. Depth-capped and
+ * cycle-guarded (cross-pair cycles are possible even though a single entity
+ * can't be blocked by itself — see `replaceDependencyEdges`'s
+ * SELF_DEPENDENCY guard).
  *
- * Single-user scale: everything is batch-loaded (4 queries — live open
- * tasks, all task edges, live open projects, all project edges — plus one
+ * Single-user scale: everything is batch-loaded (5 queries — live open
+ * tasks, all task edges, live open projects, all project edges, all live
+ * projects' id/parentProjectId pairs for the ancestor walk — plus one
  * grouped subtask-count query) and computed in TS, no per-row queries.
  *
  * Subtask rows (`parentTaskId` set) are excluded from both `actionable` and
@@ -65,6 +78,35 @@ type OpenProjectNode = {
 type ChainNode = BlockedReason["chain"][number];
 
 const MAX_CHAIN_DEPTH = 10;
+/** Defensive cap on the ancestor walk — mirrors project/subtree.ts's
+ * `MAX_PROJECT_TREE_DEPTH`. A well-formed tree (cycles rejected at
+ * create/update time — see repo/project/crud.ts) never gets close to it. */
+const MAX_ANCESTOR_DEPTH = 100;
+
+/**
+ * `startId`'s live ancestor project ids, walking `parentProjectId` up
+ * (nearest first), depth-capped and cycle-guarded via a visited set. Does
+ * NOT filter by done/non-done — the caller checks that against `projectsById`
+ * per candidate (see the module doc comment on why a done ancestor doesn't
+ * propagate its edges but the walk still continues past it).
+ */
+function ancestorProjectIds(
+  startId: ProjectId,
+  parentProjectById: Map<ProjectId, ProjectId | null>,
+): ProjectId[] {
+  const out: ProjectId[] = [];
+  const visited = new Set<ProjectId>([startId]);
+  let currentId = parentProjectById.get(startId) ?? null;
+  let hops = 0;
+  while (currentId && hops < MAX_ANCESTOR_DEPTH) {
+    if (visited.has(currentId)) break;
+    visited.add(currentId);
+    out.push(currentId);
+    currentId = parentProjectById.get(currentId) ?? null;
+    hops++;
+  }
+  return out;
+}
 
 /**
  * Walk one representative path from `startId` (the nearest blocker),
@@ -153,31 +195,43 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 export async function listActionableTasks(
   db: Database,
 ): Promise<ActionableTasksOut> {
-  const [openTaskRows, taskEdgeRows, openProjectRows, projectEdgeRows] =
-    await Promise.all([
-      getDb(db).query.task.findMany({
-        where: and(notDeleted(task), ne(task.status, "done")),
-        ...relations.task.withProject,
-      }),
-      getDb(db)
-        .select({
-          taskId: taskDependency.taskId,
-          blockedByTaskId: taskDependency.blockedByTaskId,
-        })
-        .from(taskDependency)
-        .orderBy(asc(taskDependency.createdAt), asc(taskDependency.id)),
-      getDb(db)
-        .select({ id: project.id, name: project.name, status: project.status })
-        .from(project)
-        .where(and(notDeleted(project), ne(project.status, "done"))),
-      getDb(db)
-        .select({
-          projectId: projectDependency.projectId,
-          blockedByProjectId: projectDependency.blockedByProjectId,
-        })
-        .from(projectDependency)
-        .orderBy(asc(projectDependency.createdAt), asc(projectDependency.id)),
-    ]);
+  const [
+    openTaskRows,
+    taskEdgeRows,
+    openProjectRows,
+    projectEdgeRows,
+    allProjectParentRows,
+  ] = await Promise.all([
+    getDb(db).query.task.findMany({
+      where: and(notDeleted(task), ne(task.status, "done")),
+      ...relations.task.withProject,
+    }),
+    getDb(db)
+      .select({
+        taskId: taskDependency.taskId,
+        blockedByTaskId: taskDependency.blockedByTaskId,
+      })
+      .from(taskDependency)
+      .orderBy(asc(taskDependency.createdAt), asc(taskDependency.id)),
+    getDb(db)
+      .select({ id: project.id, name: project.name, status: project.status })
+      .from(project)
+      .where(and(notDeleted(project), ne(project.status, "done"))),
+    getDb(db)
+      .select({
+        projectId: projectDependency.projectId,
+        blockedByProjectId: projectDependency.blockedByProjectId,
+      })
+      .from(projectDependency)
+      .orderBy(asc(projectDependency.createdAt), asc(projectDependency.id)),
+    // ALL live projects (any status) — just enough to walk `parentProjectId`
+    // up from a task's project; done-ness is checked separately against
+    // `projectsById` per ancestor (see module doc comment).
+    getDb(db)
+      .select({ id: project.id, parentProjectId: project.parentProjectId })
+      .from(project)
+      .where(notDeleted(project)),
+  ]);
 
   const tasksById = new Map<TaskId, OpenTaskNode>(
     openTaskRows.map((row) => [
@@ -213,6 +267,10 @@ export async function listActionableTasks(
   for (const edge of projectEdgeRows) {
     pushTo(projectEdgesByOwner, edge.projectId, edge.blockedByProjectId);
   }
+
+  const parentProjectById = new Map<ProjectId, ProjectId | null>(
+    allProjectParentRows.map((row) => [row.id, row.parentProjectId]),
+  );
 
   // Subtask counts must include done subtasks, which `openTaskRows` (non-done
   // only) can't supply — a separate grouped query over ALL live subtasks.
@@ -262,22 +320,36 @@ export async function listActionableTasks(
       });
     }
 
-    if (row.projectId && projectsById.has(row.projectId)) {
-      for (const blockerProjectId of projectEdgesByOwner.get(row.projectId) ??
-        []) {
-        if (!projectsById.has(blockerProjectId)) continue;
-        reasons.push({
-          kind: "project",
-          chain: buildChain(
-            blockerProjectId,
-            "project",
-            `project:${row.projectId}`,
-            tasksById,
-            projectsById,
-            taskEdgesByOwner,
-            projectEdgesByOwner,
-          ),
-        });
+    if (row.projectId) {
+      // The task's own project, plus every live ancestor walking
+      // `parentProjectId` up (arbitrary depth) — a blocked-by edge on ANY of
+      // them blocks the task, not just the immediate project. Reusing
+      // `projectsById` (live, non-done) as the per-candidate membership test
+      // means a `done` ancestor's own edges are skipped entirely, while the
+      // walk still continues past it to check further-up ancestors.
+      const candidateProjectIds = [
+        row.projectId,
+        ...ancestorProjectIds(row.projectId, parentProjectById),
+      ];
+      for (const candidateProjectId of candidateProjectIds) {
+        if (!projectsById.has(candidateProjectId)) continue;
+        for (const blockerProjectId of projectEdgesByOwner.get(
+          candidateProjectId,
+        ) ?? []) {
+          if (!projectsById.has(blockerProjectId)) continue;
+          reasons.push({
+            kind: "project",
+            chain: buildChain(
+              blockerProjectId,
+              "project",
+              `project:${candidateProjectId}`,
+              tasksById,
+              projectsById,
+              taskEdgesByOwner,
+              projectEdgesByOwner,
+            ),
+          });
+        }
       }
     }
 

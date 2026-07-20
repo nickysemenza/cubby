@@ -10,12 +10,21 @@
  *                                handles the `blockedByIds` full-replacement
  *                                set, delete guards on live tasks/purchases)
  *   LOOKUP    → `lookup.ts`    (filtered/sorted/paginated list, id→name lookup)
- *   ANALYTICS → `analytics.ts` (batched cost/progress rollups + dependency-edge
- *                                reads, shared by crud.ts and lookup.ts)
+ *   ANALYTICS → `analytics.ts` (batched cost/progress OWN rollups + dependency-
+ *                                edge reads, shared by crud.ts and lookup.ts)
+ *   SUBTREE   → `subtree.ts`   (arbitrary-depth sub-project tree: descendant-id
+ *                                computation + recursive subtree rollup
+ *                                aggregation on top of analytics.ts's OWN
+ *                                rollups; internal to crud.ts/lookup.ts —
+ *                                task/actionable.ts's separate ancestor walk
+ *                                only needs id/parentProjectId, fetched inline
+ *                                there)
  *
  * Sibling relationships: referenced by `task.projectId` and `purchase.projectId`
  * (both nullable); `projectDependency` self-references `project` for the
- * blocked-by/blocking graph. `helpers.ts` (row→API mapping) is internal.
+ * blocked-by/blocking graph; `project.parentProjectId` self-references
+ * `project` for the sub-project tree (see `subtree.ts`). `helpers.ts` and
+ * `subtree.ts` (row→API mapping, tree aggregation) are internal.
  */
 
 export {

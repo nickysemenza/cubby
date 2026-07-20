@@ -41,6 +41,13 @@ describe("project repository", () => {
       purchaseCount: 0,
       taskCount: 0,
       doneTaskCount: 0,
+      subtree: {
+        spent: 0,
+        purchaseCount: 0,
+        taskCount: 0,
+        doneTaskCount: 0,
+        projectCount: 0,
+      },
     });
 
     const { data, count } = await projectList(ctx.db, {}, [], {
@@ -128,11 +135,19 @@ describe("project repository", () => {
     const result = await getProjectByID(ctx.db, project.id);
     // spent includes the future purchase — matches the retired Notion rollup's
     // semantics (a planned spend still counts toward the running total).
+    // subtree equals own here — this project is a leaf (no sub-projects).
     expect(result.rollup).toEqual({
       spent: 150,
       purchaseCount: 2,
       taskCount: 3,
       doneTaskCount: 1,
+      subtree: {
+        spent: 150,
+        purchaseCount: 2,
+        taskCount: 3,
+        doneTaskCount: 1,
+        projectCount: 0,
+      },
     });
   });
 
@@ -339,5 +354,302 @@ describe("project repository", () => {
 
     const projectAAfter = await getProjectByID(ctx.db, projectA.id);
     expect(projectAAfter.blockedByIds).toEqual([]);
+  });
+});
+
+describe("project repository — sub-projects (parentProjectId)", () => {
+  const ctx = withTestDb();
+
+  it("sets, changes, and clears parentProjectId", async () => {
+    const parentA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "parent a" }),
+      ctx.actor,
+    );
+    const parentB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "parent b" }),
+      ctx.actor,
+    );
+
+    const created = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "child at create",
+        parentProjectId: parentA.id,
+      }),
+      ctx.actor,
+    );
+    expect(created.parentProjectId).toBe(parentA.id);
+    expect(created.parentProjectName).toBe(parentA.name);
+
+    const parentAAfter = await getProjectByID(ctx.db, parentA.id);
+    expect(parentAAfter.childProjectIds).toEqual([created.id]);
+
+    const changed = await updateProject(
+      ctx.db,
+      created.id,
+      { parentProjectId: parentB.id },
+      ctx.actor,
+    );
+    expect(changed.parentProjectId).toBe(parentB.id);
+    expect(changed.parentProjectName).toBe(parentB.name);
+
+    const parentAAfterMove = await getProjectByID(ctx.db, parentA.id);
+    expect(parentAAfterMove.childProjectIds).toEqual([]);
+
+    const cleared = await updateProject(
+      ctx.db,
+      created.id,
+      { parentProjectId: null },
+      ctx.actor,
+    );
+    expect(cleared.parentProjectId).toBeNull();
+    expect(cleared.parentProjectName).toBeNull();
+  });
+
+  it("rejects a nonexistent or soft-deleted parentProjectId with NOT_FOUND", async () => {
+    const missingId = unsafeProjectId("00000000-0000-0000-0000-000000000000");
+    await expect(
+      createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "orphan create",
+          parentProjectId: missingId,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project not-found parent" }),
+      ctx.actor,
+    );
+    const deletedParent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "soon-deleted parent" }),
+      ctx.actor,
+    );
+    await deleteProjects(ctx.db, [deletedParent.id], ctx.actor);
+
+    await expect(
+      updateProject(
+        ctx.db,
+        project.id,
+        { parentProjectId: deletedParent.id },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("rejects a self-parent with SELF_DEPENDENCY", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project self-parent" }),
+      ctx.actor,
+    );
+
+    await expect(
+      updateProject(
+        ctx.db,
+        project.id,
+        { parentProjectId: project.id },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("rejects a cycle (A -> B -> C; making A a child of C) with PROJECT_CYCLE", async () => {
+    const a = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "cycle a" }),
+      ctx.actor,
+    );
+    const b = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "cycle b", parentProjectId: a.id }),
+      ctx.actor,
+    );
+    const c = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "cycle c", parentProjectId: b.id }),
+      ctx.actor,
+    );
+
+    // C is a descendant of A — making A a child of C would create a cycle.
+    await expect(
+      updateProject(ctx.db, a.id, { parentProjectId: c.id }, ctx.actor),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    // Unaffected: the original chain still holds.
+    const aAfter = await getProjectByID(ctx.db, a.id);
+    expect(aAfter.parentProjectId).toBeNull();
+  });
+
+  it("rejects deletion while live child projects still reference the parent, succeeds once reparented away", async () => {
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "parent with child" }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "child blocking delete",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteProjects(ctx.db, [parent.id], ctx.actor),
+    ).rejects.toThrow(/still have sub-projects/);
+
+    // Reparent the child away, then the delete succeeds — no cascade.
+    await updateProject(ctx.db, child.id, { parentProjectId: null }, ctx.actor);
+    await deleteProjects(ctx.db, [parent.id], ctx.actor);
+
+    const parentAfter = await getProjectByID(ctx.db, child.id).catch((e) => e);
+    expect(parentAfter).toBeDefined();
+  });
+
+  it("accumulates subtree rollups over 3 levels; a leaf's subtree equals its own numbers", async () => {
+    const grandparent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "subtree grandparent" }),
+      ctx.actor,
+    );
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "subtree parent",
+        parentProjectId: grandparent.id,
+      }),
+      ctx.actor,
+    );
+    const leaf = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "subtree leaf",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        name: "grandparent purchase",
+        projectId: grandparent.id,
+        cost: 10,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        name: "parent purchase",
+        projectId: parent.id,
+        cost: 20,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        name: "leaf purchase",
+        projectId: leaf.id,
+        cost: 40,
+      }),
+      ctx.actor,
+    );
+
+    const leafDoneTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "leaf done task", projectId: leaf.id }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, leafDoneTask.id, { status: "done" }, ctx.actor);
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "leaf open task", projectId: leaf.id }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "parent task", projectId: parent.id }),
+      ctx.actor,
+    );
+
+    const leafAfter = await getProjectByID(ctx.db, leaf.id);
+    expect(leafAfter.rollup.subtree).toEqual({
+      spent: leafAfter.rollup.spent,
+      purchaseCount: leafAfter.rollup.purchaseCount,
+      taskCount: leafAfter.rollup.taskCount,
+      doneTaskCount: leafAfter.rollup.doneTaskCount,
+      projectCount: 0,
+    });
+    expect(leafAfter.rollup.subtree.spent).toBe(40);
+
+    const parentAfter = await getProjectByID(ctx.db, parent.id);
+    expect(parentAfter.rollup.subtree).toEqual({
+      spent: 60, // 20 (own) + 40 (leaf)
+      purchaseCount: 2,
+      taskCount: 3, // 1 own + 2 leaf
+      doneTaskCount: 1,
+      projectCount: 1, // leaf
+    });
+
+    const grandparentAfter = await getProjectByID(ctx.db, grandparent.id);
+    expect(grandparentAfter.rollup.subtree).toEqual({
+      spent: 70, // 10 (own) + 20 (parent) + 40 (leaf)
+      purchaseCount: 3,
+      taskCount: 3,
+      doneTaskCount: 1,
+      projectCount: 2, // parent + leaf
+    });
+
+    // The list path aggregates the same way (batched over a page, not just
+    // the single-project reader).
+    const { data } = await projectList(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+    const grandparentRow = data.find((p) => p.id === grandparent.id);
+    expect(grandparentRow?.rollup.subtree).toEqual(
+      grandparentAfter.rollup.subtree,
+    );
+  });
+
+  it("filters the list by topLevelOnly and parentProjectId", async () => {
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "filter parent" }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "filter child",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    const topLevel = await projectList(ctx.db, { topLevelOnly: true }, [], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+    expect(topLevel.data.map((p) => p.id)).toContain(parent.id);
+    expect(topLevel.data.map((p) => p.id)).not.toContain(child.id);
+
+    const childrenOfParent = await projectList(
+      ctx.db,
+      { parentProjectId: parent.id },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(childrenOfParent.data.map((p) => p.id)).toEqual([child.id]);
   });
 });

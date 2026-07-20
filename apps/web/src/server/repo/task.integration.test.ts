@@ -225,6 +225,129 @@ describe("task repository — listActionableTasks", () => {
     expect(result.actionable.map((r) => r.id)).toContain(blocked.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(blocked.id);
   });
+
+  it("a task in a grandchild project is blocked when the ROOT ancestor has an open blocked-by edge", async () => {
+    const blockerProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "root blocker project" }),
+      ctx.actor,
+    );
+    const root = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "root project" }),
+      ctx.actor,
+    );
+    await updateProject(
+      ctx.db,
+      root.id,
+      { blockedByIds: [blockerProject.id] },
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "child project",
+        parentProjectId: root.id,
+      }),
+      ctx.actor,
+    );
+    const grandchild = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "grandchild project",
+        parentProjectId: child.id,
+      }),
+      ctx.actor,
+    );
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "task in a grandchild project",
+        projectId: grandchild.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await listActionableTasks(ctx.db);
+    const row = result.blocked.find((r) => r.task.id === t.id);
+
+    expect(row).toBeDefined();
+    expect(row?.reasons).toEqual([
+      {
+        kind: "project",
+        chain: [
+          {
+            id: blockerProject.id,
+            name: blockerProject.name,
+            status: blockerProject.status,
+            type: "project",
+          },
+        ],
+      },
+    ]);
+    expect(result.actionable.map((r) => r.id)).not.toContain(t.id);
+
+    // Unblocked once the root ancestor's blocker is marked done.
+    await updateProject(
+      ctx.db,
+      blockerProject.id,
+      { status: "done" },
+      ctx.actor,
+    );
+    const afterDone = await listActionableTasks(ctx.db);
+    expect(afterDone.actionable.map((r) => r.id)).toContain(t.id);
+    expect(afterDone.blocked.map((r) => r.task.id)).not.toContain(t.id);
+  });
+
+  it("a done intermediate ancestor's own blocked-by edges don't block", async () => {
+    const blockerProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "intermediate blocker project" }),
+      ctx.actor,
+    );
+    const root = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "root project two" }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "done intermediate child",
+        parentProjectId: root.id,
+      }),
+      ctx.actor,
+    );
+    // The intermediate ancestor (child) has its own open blocked-by edge, but
+    // is itself `done` — its edges must not propagate to the grandchild.
+    await updateProject(
+      ctx.db,
+      child.id,
+      { status: "done", blockedByIds: [blockerProject.id] },
+      ctx.actor,
+    );
+    const grandchild = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "grandchild under done intermediate",
+        parentProjectId: child.id,
+      }),
+      ctx.actor,
+    );
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "task under a done intermediate ancestor",
+        projectId: grandchild.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await listActionableTasks(ctx.db);
+
+    expect(result.actionable.map((r) => r.id)).toContain(t.id);
+    expect(result.blocked.map((r) => r.task.id)).not.toContain(t.id);
+  });
 });
 
 describe("task router — listActionable", () => {

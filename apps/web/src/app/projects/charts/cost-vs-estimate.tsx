@@ -13,16 +13,24 @@ type Datum = {
   estimate: number;
 };
 
-/** Actual spend comes off `project.rollup.spent` — see BudgetHealth. */
+/**
+ * Actual spend comes off `project.rollup.spent` — see BudgetHealth. A
+ * project with sub-projects uses its `subtree.spent` instead (own + every
+ * descendant), so a parent's bar reads as the whole envelope, not just what
+ * was logged directly against it.
+ */
 export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
     return projects
-      .filter((p) => p.rollup.spent > 0 && (p.costEstimate ?? 0) > 0)
       .map((p) => ({
         project: p.name,
-        actual: p.rollup.spent,
+        actual:
+          p.rollup.subtree.projectCount > 0
+            ? p.rollup.subtree.spent
+            : p.rollup.spent,
         estimate: p.costEstimate ?? 0,
       }))
+      .filter((d) => d.actual > 0 && d.estimate > 0)
       .sort(
         (a, b) =>
           Math.max(b.actual, b.estimate) - Math.max(a.actual, a.estimate),

@@ -14,18 +14,26 @@ type ProjectBudget = {
 /**
  * Actual spend comes straight off `project.rollup.spent` (a SQL aggregate over
  * live purchases including `future` ones) — no purchases prop needed anymore,
- * since a project's own rollup already is that sum.
+ * since a project's own rollup already is that sum. A project with
+ * sub-projects uses `subtree.spent` instead (own + every descendant), so its
+ * bar reads as the whole budget envelope.
  */
 export function BudgetHealth({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
     return projects
       .filter((p) => p.costEstimate && p.costEstimate > 0)
-      .map((p) => ({
-        name: p.name,
-        actual: p.rollup.spent,
-        estimate: p.costEstimate!,
-        pct: (p.rollup.spent / p.costEstimate!) * 100,
-      }))
+      .map((p) => {
+        const actual =
+          p.rollup.subtree.projectCount > 0
+            ? p.rollup.subtree.spent
+            : p.rollup.spent;
+        return {
+          name: p.name,
+          actual,
+          estimate: p.costEstimate!,
+          pct: (actual / p.costEstimate!) * 100,
+        };
+      })
       .sort((a, b) => b.pct - a.pct)
       .slice(0, 12) as ProjectBudget[];
   }, [projects]);

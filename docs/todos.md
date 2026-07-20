@@ -146,24 +146,14 @@ deliberate recount, never a running balance:
 ## Household tracker / ERP
 
 The tracker module (projects / tasks / purchases) is feature-complete standalone;
-the open work is connecting it to the rest of cubby. Two schema affordances already
-exist for this: `task.projectId` is nullable (inbox tasks) and `purchase.future`
-marks planned-not-yet-actual spend. Roughly priority order; sequencing between the
-first three is undecided.
+the open work is connecting it to the rest of cubby. Shipped from this section:
+`list_actionable_tasks` (+ /tasks Actionable view), `task.parentTaskId` one-level
+checklist subtasks, and `project.parentProjectId` arbitrary-depth sub-projects
+(the WBS — a sub-project's `costEstimate` is the budget envelope for a trade/phase,
+with subtree rollups on parents). Two schema affordances remain for what's below:
+`task.projectId` is nullable (inbox tasks) and `purchase.future` marks
+planned-not-yet-actual spend. Roughly priority order.
 
-- [ ] **`task.parentTaskId` subtasks**: additive nullable self-FK; one level of
-  checklist subtasks (`N/M` chip on the parent, parent status stays manual). Doubles
-  as the punch-list convention. Cheap while the schema is young.
-- [ ] **Ranged estimate purchases**: `costLow`/`costHigh` (nullable
-  `doublePrecision`, additive only — dev DB is prod Neon), meaningful while
-  `future`; `cost` stays the settled actual. A one-click *settle* records the actual
-  and flips `future` off; the range is **retained after settling** —
-  estimate-vs-actual accuracy is itself interesting data. Rollups
-  (`repo/project/analytics.ts`) grow a planned envelope: `plannedLow/High =
-  SUM(COALESCE(costLow|costHigh, other, cost))` over `future` purchases — stays a
-  SQL aggregate, never denormalized. UI: range input when `future`, `$50–70k` /
-  `≈ $60k` rendering distinct from settled costs, budget charts get a low–high band;
-  MCP purchase tools accept + return the fields.
 - [ ] **Purchase ↔ product / inventory bridge**: optional `purchase.productId` FK
   (services/one-offs stay unlinked); a convert-to-inventory flow on a settled
   purchase (pick/create product + location → `InventoryEntry` via the existing
@@ -176,10 +166,11 @@ first three is undecided.
   maintenance tasks (simple every-N-weeks/months interval on a template — not RRULE;
   next instance generated on completion; surfaces in needs-attention); an inbox view
   for project-less tasks + quick capture + "promote to project"; tracker Problems
-  detectors (overdue tasks, spend over `costEstimate`/envelope, stale `in_progress`
-  projects with no recent activity, past-date un-settled `future` purchases);
-  planned-vs-actual budget view (falls out of the envelope rollup — estimate band
-  vs. committed vs. actual, monthly cash-flow projection from `future` dates).
+  detectors (overdue tasks, subtree spend over a (sub-)project's `costEstimate`,
+  stale `in_progress` projects with no recent activity, past-date un-settled
+  `future` purchases); planned-vs-actual budget view (per sub-project:
+  `costEstimate` envelope vs. committed vs. actual via the subtree rollup,
+  monthly cash-flow projection from `future` dates).
 - [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
   optional product resolution, durable-vs-consumable flag → **have / need / buy**
   per project via the availability engine, shopping list from shortfalls. No
@@ -235,6 +226,11 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ### Rejected (recorded so they don't resurface)
 
+- **Ranged estimate purchases** (`costLow`/`costHigh` + a one-click settle) — modeled
+  an estimate as a proto-purchase, but in practice an estimate ("electrical is
+  10–15k") is an *envelope* that dozens of real purchases accrue against; nothing
+  settles 1:1. The envelope home is a **sub-project** with the existing single-point
+  `costEstimate`; actuals attribute via `projectId`. No ranges anywhere, for now.
 - **Monarch / finance sync** — purchases stay a hand-curated ledger.
 - **Receipt-export importers** (Amazon / Home Depot) — hostile, unmaintained
   formats; MCP conversational capture + a one-off throwaway script for backfill.

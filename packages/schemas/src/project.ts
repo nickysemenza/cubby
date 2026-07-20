@@ -75,6 +75,11 @@ const projectFields = {
   kind: projectKindSchema.nullable(),
   locations: z.array(z.string()).describe("House/site names, free-form"),
   costEstimate: z.number().nullable().describe("Budget estimate in dollars"),
+  // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
+  // is its budget envelope; purchases/tasks attribute to it via their
+  // existing `projectId`. Cycle/self-parent guards live in
+  // repo/project/crud.ts (depth is otherwise unrestricted).
+  parentProjectId: projectId.nullable(),
   startDate: plainDate.nullable(),
   endDate: plainDate.nullable(),
   icon: z.string().nullable().describe("Emoji shown next to the name"),
@@ -87,6 +92,7 @@ const projectCreateShape = {
   kind: projectKindSchema.nullable().default(null),
   locations: z.array(z.string()).default([]),
   costEstimate: z.number().nullable().default(null),
+  parentProjectId: projectId.nullable().default(null),
   startDate: plainDate.nullable().default(null),
   endDate: plainDate.nullable().default(null),
   icon: z.string().nullable().default(null),
@@ -130,6 +136,10 @@ export const projectFilterFields = {
   kind: projectKindSchema.optional(),
   location: z.string().optional().describe("Exact match against locations[]"),
   search: z.string().optional(),
+  /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
+  topLevelOnly: z.boolean().optional(),
+  /** Only this parent's live sub-projects. */
+  parentProjectId: projectId.optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
@@ -144,18 +154,38 @@ export const projectSortableFields = [
 ] as const;
 export type ProjectSortField = (typeof projectSortableFields)[number];
 
-/** SQL rollups over live tasks/purchases (see repo/project/analytics). */
+/**
+ * SUM/COUNT rollup over live tasks/purchases, at two scopes (see
+ * repo/project/analytics.ts + repo/project/subtree.ts):
+ *   - the top-level fields are this project's OWN aggregate (unchanged
+ *     since before sub-projects existed);
+ *   - `subtree` is the recursive total over this project + every live
+ *     descendant — `projectCount` is the live descendant count (0 for a
+ *     leaf, so a leaf's `subtree` always equals its own numbers). Computed
+ *     in TS at read time, never denormalized onto the row.
+ */
 export const projectRollup = z.object({
   spent: z.number().describe("SUM(cost) of live purchases"),
   purchaseCount: z.number().int(),
   taskCount: z.number().int(),
   doneTaskCount: z.number().int(),
+  subtree: z.object({
+    spent: z.number(),
+    purchaseCount: z.number().int(),
+    taskCount: z.number().int(),
+    doneTaskCount: z.number().int(),
+    projectCount: z.number().int().describe("Live descendant project count"),
+  }),
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
 
 export const projectOut = z.object({
   id: projectId,
   ...projectFields,
+  /** Null when the project has no parent, or the parent is gone/soft-deleted. */
+  parentProjectName: z.string().nullable(),
+  /** Live sub-project ids (direct children only). */
+  childProjectIds: z.array(projectId),
   blockedByIds: z.array(projectId),
   blockingIds: z.array(projectId),
   ...timestampedFields,
