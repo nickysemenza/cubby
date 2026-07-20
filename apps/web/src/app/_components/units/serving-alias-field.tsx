@@ -129,7 +129,7 @@ export function ServingAliasField({
           placeholder="serving"
         />
       </div>
-      <span className="pb-1.5 text-muted-foreground">=</span>
+      <span className="pb-2 text-muted-foreground">=</span>
       <div className="w-24">
         <Label htmlFor={gramsFieldId}>Grams</Label>
         <Input
