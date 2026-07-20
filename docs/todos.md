@@ -64,15 +64,24 @@ decision value.
 
 ## Nutrition & cost intelligence (WASM conversion)
 
-Now that all unit conversions go through WASM with compound unit support:
+Price-per-nutrient, daily-value %, nutrient-density comparisons, batch ingredient
+parsing (`parse_ingredient_lines`), and custom serving aliases all shipped. Remaining
+follow-ups:
 
-- [ ] **Price per nutrient**: Add "g protein → cent" mappings to calculate cost per gram of protein
-- [ ] **Daily value %**: Add "mg vitamin_c → % daily_value" mappings for nutrition labels
-- [ ] **Nutrient density comparisons**: Compare foods by protein-per-calorie ratios directly
-- [ ] **Batch ingredient parsing**: Parse entire recipe text and convert all amounts in one WASM call
-- [ ] **Custom unit aliases**: User-defined "1 serving = X g" with automatic nutrient calculation
+- [ ] **Replace `NutritionInfoTable` with `NutritionLabel`** on the USDA food pages —
+  the FDA-style label (with %DV) now coexists with the raw nutrient table on
+  product detail; decide whether the raw table still earns its place.
+- [ ] **`parse_scraped_recipe` could return parsed lines**: today it returns raw
+  ingredient strings and the import path batch-parses them separately; folding the
+  parse into the scrape export would save one boundary crossing on import.
 
 ### Rejected
+
+- **DV% as graph edges** ("90 mg vitamin_c = 100 %dv" per product graph) — a DV is a
+  regulatory constant, not a property of a food; no conversion routes *through* a DV
+  node, so edges would bloat every costing call for nothing. DV% is a display-time
+  scalar against `DAILY_VALUES` in `@cubby/usda-schemas` (same class as
+  `perServingRange`).
 
 - **Inventory depletion preview** ("if I make this recipe, how much of each nutrient
   will I have left?") — needs a precise running stock balance, which

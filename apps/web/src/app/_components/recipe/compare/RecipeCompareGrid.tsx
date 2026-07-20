@@ -7,6 +7,7 @@ import {
   formatNumberRange,
   rangeMidpoint,
 } from "~/lib/format-range";
+import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatCurrency } from "~/lib/utils";
@@ -99,6 +100,11 @@ const numericDetailFormat = (unit: string): AverageFormat => ({
 const currencyFormat: AverageFormat = {
   mean: (n) => formatCurrency(n),
   num: (n) => n.toFixed(2),
+};
+
+const proteinDensityFormat: AverageFormat = {
+  mean: (n) => `${n.toFixed(1)}g`,
+  num: (n) => n.toFixed(1),
 };
 
 /**
@@ -254,6 +260,34 @@ export const RecipeCompareGrid: React.FC<{
           : null,
       ),
     ),
+  );
+
+  // Protein density and price-per-nutrient, from the same headline totals as
+  // the rows above. Each combines two independently-ranged figures (cost vs.
+  // protein, protein vs. calories), so — unlike Cost/serving's single-scalar
+  // division — these render one point value from each figure's midpoint
+  // rather than propagating a compound range. `costPerNutrient`/
+  // `proteinPer100Kcal` already null-guard a missing/zero denominator, so a
+  // recipe with no protein or calorie data just shows a dash here.
+  const proteinDensity = (c: ComparedRecipe): number | null =>
+    c.headline
+      ? proteinPer100Kcal(
+          rangeMidpoint(c.headline.protein, c.headline.proteinUpper),
+          rangeMidpoint(c.headline.calories, c.headline.caloriesUpper),
+        )
+      : null;
+  const costPerProteinGram = (c: ComparedRecipe): number | null =>
+    c.headline
+      ? costPerNutrient(
+          rangeMidpoint(c.headline.cost, c.headline.costUpper),
+          rangeMidpoint(c.headline.protein, c.headline.proteinUpper),
+        )
+      : null;
+  const proteinDensityStats = computeStats(
+    present(compared.map(proteinDensity)),
+  );
+  const costPerProteinStats = computeStats(
+    present(compared.map(costPerProteinGram)),
   );
 
   return (
@@ -503,6 +537,34 @@ export const RecipeCompareGrid: React.FC<{
               <AverageCell
                 stats={proteinStats}
                 format={numericDetailFormat("g")}
+              />
+            }
+          />
+          <GridRow
+            label="Protein / 100 kcal"
+            recipes={compared}
+            renderCell={(c) => {
+              const v = proteinDensity(c);
+              return v != null ? `${v.toFixed(1)}g` : DASH;
+            }}
+            average={
+              <AverageCell
+                stats={proteinDensityStats}
+                format={proteinDensityFormat}
+              />
+            }
+          />
+          <GridRow
+            label="Cost / g protein"
+            recipes={compared}
+            renderCell={(c) => {
+              const v = costPerProteinGram(c);
+              return v != null ? formatCurrency(v) : DASH;
+            }}
+            average={
+              <AverageCell
+                stats={costPerProteinStats}
+                format={currencyFormat}
               />
             }
           />

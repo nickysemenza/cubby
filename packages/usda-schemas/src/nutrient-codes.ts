@@ -189,3 +189,41 @@ export function getNutrientUnitString(key: NutrientKey): string {
   const unit = info.unit.toLowerCase();
   return unit === key ? unit : `${unit} ${key}`;
 }
+
+/** FDA adult Daily Values (21 CFR 101.9(c), 2016 rule), in each nutrient's TIER1 unit
+ * (vitamin A µg RAE, folate µg DFE — matching USDA codes 320/417).
+ * kcal's 2000 is the label footnote reference amount, not a %DV. Every TIER1
+ * nutrient has an official 2016-rule DV, so this is a total `Record` — no
+ * `Partial` needed. */
+export const DAILY_VALUES: Record<NutrientKey, number> = {
+  protein: 50,
+  fat: 78,
+  carbs: 275,
+  fiber: 28,
+  kcal: 2000,
+  calcium: 1300,
+  iron: 18,
+  magnesium: 420,
+  potassium: 4700,
+  sodium: 2300,
+  zinc: 11,
+  selenium: 55,
+  vitamin_a: 900,
+  vitamin_d: 20,
+  vitamin_e: 15,
+  vitamin_k: 120,
+  vitamin_c: 90,
+  vitamin_b6: 1.7,
+  vitamin_b12: 2.4,
+  folate: 400,
+  cholesterol: 300,
+  saturated_fat: 20,
+};
+
+/**
+ * A nutrient amount's percent Daily Value, FDA label style (e.g. 18g fat →
+ * 23%). Callers omit %DV for `kcal` themselves — its DV entry is the label's
+ * reference-amount footnote, not a percentage.
+ */
+export const dailyValuePct = (key: NutrientKey, amount: number): number =>
+  (amount / DAILY_VALUES[key]) * 100;

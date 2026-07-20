@@ -1,6 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import {
+  Apple,
   BookOpen,
   ClipboardList,
   Clock,
@@ -35,6 +36,7 @@ import { cn } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
+import { NutritionLabel } from "../nutrition/NutritionLabel";
 import { RecipeTotalsCoverageButton } from "./RecipeCostingCoverage";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipePrepSheetView } from "./RecipePrepSheetView";
@@ -46,7 +48,11 @@ import { RecipeSpecView } from "./RecipeSpecView";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
-import { getIngredientName, getServingBasis } from "./recipe-utils";
+import {
+  divideNutrients,
+  getIngredientName,
+  getServingBasis,
+} from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { useRecipeTree } from "./useRecipeTree";
 
@@ -169,6 +175,22 @@ const RecipeDetailInner: React.FC<{
   }, [costingById, recipesForCosting, ingMap, recipeMap, recipe.id]);
   const totals = costing?.totals ?? null;
   const ingredientDataItems = costing?.rows ?? [];
+
+  // Nutrition Facts label data: totals divided down to one serving when the
+  // recipe has a serving basis (servings, or a "makes N units" yield),
+  // otherwise the whole-recipe totals as-is.
+  const servingBasis = getServingBasis(scaledRecipe);
+  const nutritionServingLabel = servingBasis
+    ? `per ${servingBasis.noun}`
+    : "whole recipe";
+  const nutritionDivisor = servingBasis?.divisor;
+  const nutritionNutrients = useMemo(
+    () =>
+      totals && nutritionDivisor
+        ? divideNutrients(totals.nutrients, nutritionDivisor)
+        : (totals?.nutrients ?? null),
+    [totals, nutritionDivisor],
+  );
 
   // Prioritized suggestions for every row blocking complete totals: ingredient
   // enrichment plus sub-recipe amount/yield/child-total fixes.
@@ -397,6 +419,24 @@ const RecipeDetailInner: React.FC<{
             <EntityImageList images={recipeImages.slice(1)} />
           </CardContent>
         </Card>
+      )}
+
+      {/* Nutrition Facts — collapsed by default, same details/summary pattern as
+          the prep sheet's shopping list. Independent of view mode: shows
+          whenever the costing engine has produced nutrient totals. */}
+      {nutritionNutrients && (
+        <details className="group rounded-lg border border-border bg-muted/30 px-4 py-2 print:hidden">
+          <summary className="eyebrow cursor-pointer marker:content-none">
+            <Apple className="mr-2 inline h-3 w-3 align-[-2px]" />
+            Nutrition
+          </summary>
+          <div className="mt-4">
+            <NutritionLabel
+              nutrients={nutritionNutrients}
+              servingLabel={nutritionServingLabel}
+            />
+          </div>
+        </details>
       )}
 
       {/* Debug mode: how the totals were produced (usage, rules, errors, paths) */}

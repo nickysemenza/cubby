@@ -18,12 +18,18 @@ interface ParseIngredientLinesOptions {
 export const parseIngredientLines = (
   lines: readonly string[],
   options: ParseIngredientLinesOptions = {},
-): ParsedIngredientLine[] =>
-  lines
+): ParsedIngredientLine[] => {
+  const filtered = lines
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => ({ raw: line, parsed: wasm.parse_ingredient(line) }))
+    .filter((line) => line.length > 0);
+  // One batch WASM call instead of one per line — output order matches input
+  // (contract guaranteed by parse_ingredient_lines), so lengths line up and
+  // `[i]!` is safe right after the length-matched zip.
+  const parsed = wasm.parse_ingredient_lines(filtered);
+  return filtered
+    .map((line, i) => ({ raw: line, parsed: parsed[i]! }))
     .filter((item) => !options.requireName || item.parsed.name.length > 0);
+};
 
 export const parsedIngredientNames = (
   parsed: readonly ParsedIngredientLine[],

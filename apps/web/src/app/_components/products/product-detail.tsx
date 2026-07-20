@@ -4,6 +4,7 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
+import { getNutrientUnitString } from "@cubby/usda-schemas";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import {
@@ -16,13 +17,15 @@ import {
   Scale,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
+import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { buttonVariants } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
+import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { cn } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import {
   type DetailHeroStat,
   type DetailSection,
@@ -30,6 +33,7 @@ import {
 } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
@@ -56,6 +60,27 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   });
 
   const isNonFood = isNonFoodCategory(product.category);
+
+  // Cost per gram of protein, via the same WASM graph conversion the costing
+  // engine uses: "1 g protein" resolved to kind "money" against this
+  // product's full synthesized mappings (stored + food + price edges — same
+  // graph UnitCoveragePanel below renders). A single-product graph carries at
+  // most one `each → dollar` price edge, so it never hits the dormant
+  // multi-priced-product collision documented in
+  // recipebridge/src/costing/engine.rs (that hazard is about an *ingredient's*
+  // merged multi-product graph, not a lone product's). Hidden entirely when
+  // the product has no price or no protein edge — there's no path to convert.
+  const proteinCost = safeConvertAmount(
+    { value: 1, unit: getNutrientUnitString("protein") },
+    mappings,
+    "money",
+  );
+  const costPerGramProtein =
+    proteinCost.isOk() &&
+    Number.isFinite(proteinCost.value.value) &&
+    proteinCost.value.value > 0
+      ? proteinCost.value.value
+      : null;
 
   // PDF manuals share the images relation — hero/gallery get only real
   // images; documents render in their own Manuals section.
@@ -116,16 +141,27 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           },
         ]
       : []),
-    // Custom section: Nutrition (only if available)
+    // Custom section: Nutrition (only if available) — the raw USDA nutrient
+    // table plus an FDA-style label view (per 100g, toggling to per-serving
+    // when a serving basis resolves — a custom "1 serving = X g" alias, a
+    // branded serving edge, or the food's USDA household portion), side by
+    // side so both readings of the same data coexist.
     ...(product.food?.nutritionInfo
       ? [
           {
             title: "Nutrition Information",
             icon: Apple,
             content: (
-              <MutedBox>
-                <NutritionInfoTable n={product.food.nutritionInfo} />
-              </MutedBox>
+              <Stack gap="md">
+                <ProductNutritionLabel
+                  nutrients={product.food.nutritionInfo.nutrientsPer100}
+                  mappings={mappings}
+                  portions={product.food.portionInfoRaw}
+                />
+                <MutedBox>
+                  <NutritionInfoTable n={product.food.nutritionInfo} />
+                </MutedBox>
+              </Stack>
             ),
           },
         ]
@@ -154,10 +190,21 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             icon: Scale,
             zone: "main" as const,
             content: (
-              <UnitCoveragePanel
-                mappings={mappings}
-                showCoverage={!isNonFood}
-              />
+              <Stack gap="sm">
+                {costPerGramProtein != null && (
+                  <Description>
+                    {formatCurrency(costPerGramProtein)} / g protein
+                  </Description>
+                )}
+                <UnitCoveragePanel
+                  mappings={mappings}
+                  showCoverage={!isNonFood}
+                  servingAlias={{
+                    productId: product.id,
+                    storedMappings: product.unitMappings,
+                  }}
+                />
+              </Stack>
             ),
           },
         ]),

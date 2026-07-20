@@ -47,11 +47,19 @@ export function RecipeUsagesTable({
 }) {
   const rows = useMemo<UsageRow[]>(() => {
     const knownNames = [ingredientName, ...(aliases ?? [])];
+    // One batch WASM call for the whole table instead of one per row — output
+    // order matches input (parse_ingredient_lines contract), so indexing by
+    // position below is safe. Rows without a rawLine feed "" through the
+    // batch call too (harmless — the result is only read when rawLine is
+    // truthy) rather than reshuffling indices for a sparse subset.
+    const parsedLines = wasm.parse_ingredient_lines(
+      usages.map((usage) => usage.rawLine ?? ""),
+    );
     return usages
-      .map((usage) => {
+      .map((usage, i) => {
         let drift: ParseDrift = { name: null, amounts: null, modifier: null };
         if (usage.rawLine) {
-          const fresh = wasm.parse_ingredient(usage.rawLine);
+          const fresh = parsedLines[i]!;
           drift = computeParseDrift(
             {
               knownNames,
