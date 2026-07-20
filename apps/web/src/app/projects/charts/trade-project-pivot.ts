@@ -1,4 +1,5 @@
 import type { ProjectOut, PurchaseOut } from "@cubby/schemas/project";
+import { sumBy } from "es-toolkit";
 
 /** Bucket for purchases with no project (or a project that isn't loaded). */
 export const NO_PROJECT_KEY = "_none";
@@ -104,7 +105,7 @@ export function buildTradeProjectPivot(
     columns.push({
       key: OTHER_PROJECTS_KEY,
       label: `Other projects (${rolled.length})`,
-      total: rolled.reduce((acc, [, total]) => acc + total, 0),
+      total: sumBy(rolled, ([, total]) => total),
     });
   }
 
@@ -130,7 +131,7 @@ export function buildTradeProjectPivot(
     .filter((row) => Object.values(row.cells).some((value) => value !== 0))
     .sort((a, b) => b.total - a.total);
 
-  const grandTotal = columns.reduce((acc, column) => acc + column.total, 0);
+  const grandTotal = sumBy(columns, (column) => column.total);
 
   return { rows, columns, grandTotal, maxCell };
 }
