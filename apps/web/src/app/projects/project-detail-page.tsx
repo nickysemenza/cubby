@@ -701,6 +701,16 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           } satisfies DetailHeroStat,
         ]
       : []),
+    // Null when nothing in the subtree is estimated — skip the stat rather
+    // than showing $0.
+    ...(hasSubtree && project.rollup.subtree.costEstimate !== null
+      ? [
+          {
+            label: "Estimate (incl. sub-projects)",
+            value: formatCurrency(project.rollup.subtree.costEstimate, 0),
+          } satisfies DetailHeroStat,
+        ]
+      : []),
   ];
 
   return (
@@ -752,7 +762,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
               >
                 <SpendingOverTime
                   purchases={chartPurchases}
-                  costEstimate={project.costEstimate}
+                  costEstimate={project.rollup.subtree.costEstimate}
                 />
               </Section>
 

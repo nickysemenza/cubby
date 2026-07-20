@@ -37,6 +37,7 @@ export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
   taskCount: 0,
   doneTaskCount: 0,
   projectCount: 0,
+  costEstimate: null,
 };
 
 export const dbProjectToAPI = (

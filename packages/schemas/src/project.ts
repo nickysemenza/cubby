@@ -227,6 +227,12 @@ export const projectRollup = z.object({
     taskCount: z.number().int(),
     doneTaskCount: z.number().int(),
     projectCount: z.number().int().describe("Live descendant project count"),
+    costEstimate: z
+      .number()
+      .nullable()
+      .describe(
+        "SUM of non-null costEstimates; null when the subtree has none",
+      ),
   }),
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
