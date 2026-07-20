@@ -91,8 +91,9 @@ export const importRecipeSchema = z.object({
   // yield line at import). Optional; the converter falls back to the parsed yield.
   servings: z.number().optional(),
   // Image URL extracted by the URL scraper (a public URL). EPUB hero photos are
-  // not modeled yet — see the hero-photos TODO above. Currently consumed by the
-  // scrape form's client-side image import, not persisted on the server path.
+  // not modeled yet — see the hero-photos TODO above. Consumed twice: the scrape
+  // form imports it client-side (PendingImageUpload's autoImportUrl), and the
+  // server import path (`recipe.insertImport`) fetches it into R2 inline.
   image: z.string().optional(),
 });
 export type ImportRecipe = z.infer<typeof importRecipeSchema>;
