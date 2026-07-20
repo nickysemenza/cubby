@@ -300,14 +300,13 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
 
   const handleMatrixCellClick = useCallback(
     (trade: Trade, costType: PivotCostKey | null) => {
-      // "other" is the pivot's null-costType bucket, never a filterable slug.
-      const next = costType === "other" ? null : costType;
       const clear =
-        activeMatrixCell?.trade === trade && activeMatrixCell.costType === next;
+        activeMatrixCell?.trade === trade &&
+        activeMatrixCell.costType === costType;
       table.getColumn("trade")?.setFilterValue(clear ? undefined : trade);
       table
         .getColumn("costType")
-        ?.setFilterValue(clear || next === null ? undefined : next);
+        ?.setFilterValue(clear || costType === null ? undefined : costType);
     },
     [table, activeMatrixCell],
   );

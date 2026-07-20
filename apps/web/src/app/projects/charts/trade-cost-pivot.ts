@@ -5,12 +5,10 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
-import { normalizeCostTypeKey } from "../shared";
 
-// Derived from the zod enum — not re-listed. "other" is the null-costType
-// bucket that normalizeCostTypeKey produces; it's not a real CostType.
-export const PIVOT_COST_KEYS = [...costTypeValues, "other"] as const;
-export type PivotCostKey = CostType | "other";
+// Derived from the zod enum — not re-listed.
+export const PIVOT_COST_KEYS = costTypeValues;
+export type PivotCostKey = CostType;
 
 type TradePivotRow = {
   trade: Trade;
@@ -29,7 +27,6 @@ const emptyCells = (): Record<PivotCostKey, number> => ({
   materials: 0,
   tools: 0,
   services: 0,
-  other: 0,
 });
 
 export function buildTradeCostPivot(purchases: PurchaseOut[]): TradeCostPivot {
@@ -37,7 +34,7 @@ export function buildTradeCostPivot(purchases: PurchaseOut[]): TradeCostPivot {
 
   for (const p of purchases) {
     const trade = p.trade;
-    const costType = normalizeCostTypeKey(p.costType);
+    const costType = p.costType;
     const cost = p.cost ?? 0;
 
     let entry = grouped.get(trade);

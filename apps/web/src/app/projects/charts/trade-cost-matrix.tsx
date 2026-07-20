@@ -40,9 +40,7 @@ export function TradeCostMatrix({
     return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
   }
 
-  const columns: PivotCostKey[] = PIVOT_COST_KEYS.filter(
-    (key) => key !== "other" || columnTotals.other > 0,
-  );
+  const columns: readonly PivotCostKey[] = PIVOT_COST_KEYS;
 
   return (
     <div className="overflow-x-auto">
