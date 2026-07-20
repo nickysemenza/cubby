@@ -49,7 +49,11 @@ function TasksPage() {
           ariaLabel="Tasks view"
           options={VIEW_SWITCHER_OPTIONS}
           value={view}
-          onValueChange={(v) => navigate({ search: { view: v } })}
+          onValueChange={(v) =>
+            // Merge, don't replace — a plain object here would drop `q` (and
+            // any table-search params) from the URL on every view switch.
+            navigate({ search: (prev) => ({ ...prev, view: v }) })
+          }
         />
 
         {view === "all" && (

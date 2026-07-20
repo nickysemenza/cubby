@@ -145,14 +145,13 @@ deliberate recount, never a running balance:
 
 ## Household tracker / ERP
 
-The tracker module (projects / tasks / purchases) is feature-complete standalone;
-the open work is connecting it to the rest of cubby. Shipped from this section:
-`list_actionable_tasks` (+ /tasks Actionable view), `task.parentTaskId` one-level
-checklist subtasks, and `project.parentProjectId` arbitrary-depth sub-projects
-(the WBS — a sub-project's `costEstimate` is the budget envelope for a trade/phase,
-with subtree rollups on parents). Two schema affordances remain for what's below:
-`task.projectId` is nullable (inbox tasks) and `purchase.future` marks
-planned-not-yet-actual spend. Roughly priority order.
+The tracker module (projects / tasks / purchases) is feature-complete standalone —
+including actionable-task reads, one-level checklist subtasks, and arbitrary-depth
+sub-projects (a sub-project's `costEstimate` is the budget envelope for a
+trade/phase, with subtree rollups on parents). The open work below connects it to
+the rest of cubby. Schema affordances already in place for it: `task.projectId` is
+nullable (inbox tasks) and `purchase.future` marks planned-not-yet-actual spend.
+Roughly priority order.
 
 - [ ] **Purchase ↔ product / inventory bridge**: optional `purchase.productId` FK
   (services/one-offs stay unlinked); a convert-to-inventory flow on a settled
