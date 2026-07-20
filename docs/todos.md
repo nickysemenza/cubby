@@ -50,12 +50,9 @@ prep/nested/matrix views + the `/recipes/$id/export` print route).
 
 Follow-on to client-side recipe scaling (multiplier/weight/ingredient anchors,
 `recipe-scaling.ts` + `RecipeScaleControl.tsx`). No new schema/table — fix data
-organically via the existing per-product `UnitMapping` mechanism.
-
-- [ ] **Salt convention**: distinct salts ("Diamond Crystal kosher salt" — already
-  in data — "Morton", "table salt") each carry their own density mapping; bare
-  "salt" defaults to table salt. Mostly data; document the default in `recipe-utils`.
-  Low urgency — salt barely moves totals.
+organically via the existing per-product `UnitMapping` mechanism — fill in a
+density when an ingredient shows up in a recipe's missing-weight list. Salts are
+done; bare "salt" stays aliased to Diamond Crystal.
 
 Parked: pan-size scaling, a global density reference table/seed, interactive
 parse-clarification, and the baker's-% compare "X-ray".
