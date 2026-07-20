@@ -9,7 +9,6 @@ type PurchaseRow = {
   date: string | null;
   costType: PurchaseOut["costType"];
   trade: PurchaseOut["trade"];
-  purchaser: PurchaseOut["purchaser"];
   url: string | null;
   notes: string | null;
   future: boolean;
@@ -26,7 +25,6 @@ export const dbPurchaseToAPI = (row: PurchaseRow): PurchaseOut => ({
   date: row.date,
   costType: row.costType,
   trade: row.trade,
-  purchaser: row.purchaser,
   url: row.url,
   notes: row.notes,
   future: row.future,

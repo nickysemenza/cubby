@@ -57,10 +57,6 @@ export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
 
-export const purchaserValues = ["nicky", "rebecca", "both"] as const;
-export const purchaserSchema = z.enum(purchaserValues);
-export type Purchaser = z.infer<typeof purchaserSchema>;
-
 /**
  * The trade/discipline a task or purchase belongs to (a phase of household
  * work — "plumbing", "electrical", etc.) — shared between `task.trade` and
@@ -227,6 +223,12 @@ export const projectRollup = z.object({
     taskCount: z.number().int(),
     doneTaskCount: z.number().int(),
     projectCount: z.number().int().describe("Live descendant project count"),
+    costEstimate: z
+      .number()
+      .nullable()
+      .describe(
+        "SUM of non-null costEstimates; null when the subtree has none",
+      ),
   }),
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
@@ -401,7 +403,6 @@ const purchaseFields = {
   date: plainDate.nullable(),
   costType: costTypeSchema,
   trade: tradeSchema,
-  purchaser: purchaserSchema.nullable(),
   url: z.string().nullable(),
   notes: z.string().nullable(),
   future: z.boolean().describe("Planned/not-yet-made purchase"),
@@ -412,7 +413,6 @@ const purchaseCreateShape = {
   ...purchaseFields,
   cost: z.number().nullable().default(null),
   date: plainDate.nullable().default(null),
-  purchaser: purchaserSchema.nullable().default(null),
   url: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
   future: z.boolean().default(false),
@@ -435,7 +435,6 @@ export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 export const purchaseFilterFields = {
   costType: costTypeSchema.optional(),
   trade: tradeSchema.optional(),
-  purchaser: purchaserSchema.optional(),
   projectId: projectId.optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).

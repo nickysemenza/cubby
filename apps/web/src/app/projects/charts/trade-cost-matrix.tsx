@@ -11,14 +11,30 @@ import {
   type PivotCostKey,
 } from "./trade-cost-pivot";
 
-const tradeLabel = (value: string): string =>
-  TRADE_LABELS[value as Trade] ?? value;
+const interactiveCell =
+  "block w-full text-right hover:ring-1 hover:ring-primary/40 hover:ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
 
-export function TradeCostMatrix({ purchases }: { purchases: PurchaseOut[] }) {
+const activeCellRing = "ring-2 ring-primary ring-inset";
+
+export type TradeCostCell = { trade: Trade; costType: PivotCostKey | null };
+
+export function TradeCostMatrix({
+  purchases,
+  onCellClick,
+  activeCell,
+}: {
+  purchases: PurchaseOut[];
+  /** `costType: null` is a row-total click (filter by trade alone). */
+  onCellClick?: (trade: Trade, costType: PivotCostKey | null) => void;
+  activeCell?: TradeCostCell | null;
+}) {
   const { rows, columnTotals, grandTotal, maxCell } = useMemo(
     () => buildTradeCostPivot(purchases),
     [purchases],
   );
+
+  const isActive = (trade: Trade, costType: PivotCostKey | null) =>
+    activeCell?.trade === trade && activeCell.costType === costType;
 
   if (rows.length === 0) {
     return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
@@ -56,29 +72,64 @@ export function TradeCostMatrix({ purchases }: { purchases: PurchaseOut[] }) {
                 scope="row"
                 className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
               >
-                {tradeLabel(row.trade)}
+                {TRADE_LABELS[row.trade]}
               </th>
               {columns.map((key) => {
                 const value = row.cells[key];
                 const bucket = heatBucket(value, maxCell);
+                const heat =
+                  value === 0
+                    ? "text-muted-foreground/30"
+                    : HEAT_CLASSES[bucket];
+                const label = value !== 0 ? formatCurrency(value, 0) : "·";
+                const title =
+                  value !== 0 ? formatCurrency(value, 2) : undefined;
+
+                if (!onCellClick) {
+                  return (
+                    <td key={key} className={cn(cellMono, heat)} title={title}>
+                      {label}
+                    </td>
+                  );
+                }
                 return (
-                  <td
-                    key={key}
-                    className={cn(
-                      cellMono,
-                      value === 0
-                        ? "text-muted-foreground/30"
-                        : HEAT_CLASSES[bucket],
-                    )}
-                    title={value !== 0 ? formatCurrency(value, 2) : undefined}
-                  >
-                    {value !== 0 ? formatCurrency(value, 0) : "·"}
+                  <td key={key} className="p-0">
+                    <button
+                      type="button"
+                      onClick={() => onCellClick(row.trade, key)}
+                      title={title}
+                      className={cn(
+                        cellMono,
+                        heat,
+                        interactiveCell,
+                        isActive(row.trade, key) && activeCellRing,
+                      )}
+                    >
+                      {label}
+                    </button>
                   </td>
                 );
               })}
-              <td className={cn(cellMono, "font-medium text-primary")}>
-                {formatCurrency(row.total, 0)}
-              </td>
+              {onCellClick ? (
+                <td className="p-0">
+                  <button
+                    type="button"
+                    onClick={() => onCellClick(row.trade, null)}
+                    className={cn(
+                      cellMono,
+                      "font-medium text-primary",
+                      interactiveCell,
+                      isActive(row.trade, null) && activeCellRing,
+                    )}
+                  >
+                    {formatCurrency(row.total, 0)}
+                  </button>
+                </td>
+              ) : (
+                <td className={cn(cellMono, "font-medium text-primary")}>
+                  {formatCurrency(row.total, 0)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

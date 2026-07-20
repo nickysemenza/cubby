@@ -88,7 +88,7 @@ export function capitalize(s: string): string {
 
 // -- Cost-type colors --
 
-export { getCostTypeColor, getPurchaserColor } from "~/lib/status-colors";
+export { getCostTypeColor } from "~/lib/status-colors";
 
 /**
  * `purchase.costType` is a strict enum, so this is just a null-coalesce —

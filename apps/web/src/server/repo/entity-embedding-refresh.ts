@@ -313,7 +313,6 @@ async function getPurchaseEmbeddingTexts(
       name: purchase.name,
       costType: purchase.costType,
       trade: purchase.trade,
-      purchaser: purchase.purchaser,
       notes: purchase.notes,
       projectName: project.name,
     })
@@ -626,7 +625,6 @@ export async function getEmbeddingTextForEntity(
           name: purchase.name,
           costType: purchase.costType,
           trade: purchase.trade,
-          purchaser: purchase.purchaser,
           notes: purchase.notes,
           projectName: project.name,
         })

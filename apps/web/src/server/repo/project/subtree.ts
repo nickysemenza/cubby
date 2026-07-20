@@ -27,6 +27,7 @@ export type ProjectParentRow = {
   id: ProjectId;
   name: string;
   parentProjectId: ProjectId | null;
+  costEstimate: number | null;
 };
 
 /** Depth cap for tree walks (children-map traversal, ancestor walks) —
@@ -46,6 +47,7 @@ export async function allProjectParentRows(
       id: project.id,
       name: project.name,
       parentProjectId: project.parentProjectId,
+      costEstimate: project.costEstimate,
     })
     .from(project)
     .where(notDeleted(project))
@@ -112,10 +114,13 @@ export function collectDescendantIds(
  * `ownRollups` fetch.
  */
 export function aggregateSubtreeRollups(
-  projects: ReadonlyArray<Pick<ProjectParentRow, "id" | "parentProjectId">>,
+  projects: ReadonlyArray<
+    Pick<ProjectParentRow, "id" | "parentProjectId" | "costEstimate">
+  >,
   ownRollups: Map<ProjectId, ProjectOwnRollup>,
 ): Map<ProjectId, ProjectSubtreeRollup> {
   const childrenByParent = buildChildrenMap(projects);
+  const estimateById = new Map(projects.map((p) => [p.id, p.costEstimate]));
   const memo = new Map<ProjectId, ProjectSubtreeRollup>();
 
   function computeFor(id: ProjectId, depth: number): ProjectSubtreeRollup {
@@ -128,6 +133,11 @@ export function aggregateSubtreeRollups(
     let taskCount = own.taskCount;
     let doneTaskCount = own.doneTaskCount;
     let projectCount = 0;
+    // costEstimate is nullable end-to-end: an unestimated subtree stays null
+    // rather than collapsing to a misleading $0.
+    const ownEstimate = estimateById.get(id) ?? null;
+    let costEstimate = ownEstimate ?? 0;
+    let hasEstimate = ownEstimate !== null;
 
     if (depth < MAX_PROJECT_TREE_DEPTH) {
       for (const childId of childrenByParent.get(id) ?? []) {
@@ -137,6 +147,10 @@ export function aggregateSubtreeRollups(
         taskCount += child.taskCount;
         doneTaskCount += child.doneTaskCount;
         projectCount += 1 + child.projectCount;
+        if (child.costEstimate !== null) {
+          costEstimate += child.costEstimate;
+          hasEstimate = true;
+        }
       }
     }
 
@@ -146,6 +160,7 @@ export function aggregateSubtreeRollups(
       taskCount,
       doneTaskCount,
       projectCount,
+      costEstimate: hasEstimate ? costEstimate : null,
     };
     memo.set(id, result);
     return result;

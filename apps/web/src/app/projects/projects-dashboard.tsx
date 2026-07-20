@@ -84,11 +84,6 @@ const PlannedVsActual = lazy(() =>
     default: m.PlannedVsActual,
   })),
 );
-const PurchaserSplit = lazy(() =>
-  import("./charts/purchaser-split").then((m) => ({
-    default: m.PurchaserSplit,
-  })),
-);
 const SpendingByProject = lazy(() =>
   import("./charts/spending-by-project").then((m) => ({
     default: m.SpendingByProject,
@@ -354,20 +349,12 @@ function DashboardContent({
                 <TradeProjectMatrix projects={projects} purchases={purchases} />
               </Section>
 
-              <Grid cols="pair">
-                <Section
-                  title="Who's Buying"
-                  description="Spend by purchaser, planned purchases included"
-                >
-                  <PurchaserSplit purchases={purchases} />
-                </Section>
-                <Section
-                  title="Planned vs Actual"
-                  description="Committed spend vs future-flagged purchases"
-                >
-                  <PlannedVsActual purchases={purchases} />
-                </Section>
-              </Grid>
+              <Section
+                title="Planned vs Actual"
+                description="Committed spend vs future-flagged purchases"
+              >
+                <PlannedVsActual purchases={purchases} />
+              </Section>
 
               <Section title="Spending Heatmap">
                 <SpendingHeatmap purchases={purchases} />
