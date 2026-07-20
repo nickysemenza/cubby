@@ -55,6 +55,7 @@ import {
   weekendBands,
 } from "./gantt-date";
 import type { DayRange, GanttRow } from "./gantt-model";
+import { clampWindow, spanOf } from "./gantt-window";
 
 // ---------------------------------------------------------------------------
 // Geometry — the one place row rhythm is defined. The left pane's `h-8` rows,
@@ -79,12 +80,6 @@ const MIN_BAR_WIDTH = 4;
 /** Envelope whisker end-cap half-height, in px. */
 const CAP_HALF_HEIGHT = 5;
 
-/** Narrowest window the user can zoom into. */
-const MIN_SPAN_DAYS = 14;
-/** Widest window = the data extent plus this much breathing room. */
-const MAX_SPAN_PAD_DAYS = 90;
-/** Fallback max span when there's no extent to clamp against (~10 years). */
-const FALLBACK_MAX_SPAN_DAYS = 3650;
 /** A pre-window tick's label is only pinned at x=0 if it has this much room. */
 const PINNED_LABEL_MIN_ROOM = 48;
 
@@ -124,30 +119,6 @@ export interface GanttChartProps {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
-
-function spanOf(range: DayRange): number {
-  return range.endDay - range.startDay + 1;
-}
-
-/**
- * Snaps a candidate window onto integer days and clamps its span into
- * `[MIN_SPAN_DAYS, extentSpan + MAX_SPAN_PAD_DAYS]`. The start is free — the
- * user may pan past the data on either side.
- */
-function clampWindow(next: DayRange, extent: DayRange | null): DayRange {
-  const maxSpan = Math.max(
-    MIN_SPAN_DAYS,
-    extent == null
-      ? FALLBACK_MAX_SPAN_DAYS
-      : spanOf(extent) + MAX_SPAN_PAD_DAYS,
-  );
-  const span = Math.min(
-    Math.max(Math.round(spanOf(next)), MIN_SPAN_DAYS),
-    maxSpan,
-  );
-  const startDay = Math.round(next.startDay);
-  return { startDay, endDay: startDay + span - 1 };
-}
 
 function sameWindow(a: DayRange, b: DayRange): boolean {
   return a.startDay === b.startDay && a.endDay === b.endDay;
