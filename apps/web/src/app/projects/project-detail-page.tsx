@@ -52,7 +52,6 @@ import { CategoryBreakdown } from "./charts/category-breakdown";
 import { CategoryTreemap } from "./charts/category-treemap";
 import { CategoryTrend } from "./charts/category-trend";
 import { PlannedVsActual } from "./charts/planned-vs-actual";
-import { PurchaserSplit } from "./charts/purchaser-split";
 import { SpendingOverTime } from "./charts/spending-over-time";
 import { TaskHeatmap } from "./charts/task-heatmap";
 import { CreateProjectDialog } from "./create-project-dialog";
@@ -777,20 +776,12 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 </Section>
               </Grid>
 
-              <Grid cols="pair">
-                <Section
-                  title="Who's Buying"
-                  description="Spend by purchaser, planned purchases included"
-                >
-                  <PurchaserSplit purchases={chartPurchases} />
-                </Section>
-                <Section
-                  title="Planned vs Actual"
-                  description="Committed spend vs future-flagged purchases"
-                >
-                  <PlannedVsActual purchases={chartPurchases} />
-                </Section>
-              </Grid>
+              <Section
+                title="Planned vs Actual"
+                description="Committed spend vs future-flagged purchases"
+              >
+                <PlannedVsActual purchases={chartPurchases} />
+              </Section>
             </>
           )}
 

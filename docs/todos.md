@@ -242,7 +242,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 - **Monarch / finance sync** — purchases stay a hand-curated ledger.
 - **Receipt-export importers** (Amazon / Home Depot) — hostile, unmaintained
   formats; MCP conversational capture + a one-off throwaway script for backfill.
-- **Purchaser as an entity** — `nicky|rebecca|both` stays a hardcoded enum.
 - **`project.locations` → Location FK** — free-text site names and the physical
   storage tree serve different purposes; revisit only if the BOM makes "materials
   for X are on shelf B" a real query.

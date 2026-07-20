@@ -52,7 +52,6 @@ export const purchaseList = async (
     [
       filters.costType ? eq(purchase.costType, filters.costType) : undefined,
       filters.trade ? eq(purchase.trade, filters.trade) : undefined,
-      filters.purchaser ? eq(purchase.purchaser, filters.purchaser) : undefined,
       projectCondition,
       filters.future !== undefined
         ? eq(purchase.future, filters.future)

@@ -3,7 +3,6 @@ import type {
   CostType,
   PurchaseFilters,
   PurchaseOut,
-  Purchaser,
   Trade,
 } from "@cubby/schemas/project";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -36,8 +35,6 @@ import {
   costTypeLabels,
   costTypeOptions,
   futureFilterOptions,
-  purchaserLabels,
-  purchaserOptions,
 } from "./purchase-options";
 
 /**
@@ -54,7 +51,6 @@ function buildPurchaseFilters(
     search: get("name"),
     costType: (get("costType") as CostType | undefined) || undefined,
     trade: (get("trade") as Trade | undefined) || undefined,
-    purchaser: (get("purchaser") as Purchaser | undefined) || undefined,
     projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
     future:
       futureFilter === undefined || futureFilter === ""
@@ -166,23 +162,6 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           },
         },
       }),
-      createFilterableSelectColumn(columnHelper, "purchaser", {
-        header: "Purchaser",
-        className: "w-28",
-        placeholder: "Filter by purchaser...",
-        selectOptions: purchaserOptions,
-        renderCell: (p: Purchaser | null) =>
-          p ? purchaserLabels[p] : <NoneValue />,
-        mobile: { slot: "meta", priority: 30 },
-        editable: {
-          onSave: async (newPurchaser, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { purchaser: newPurchaser },
-            });
-          },
-        },
-      }),
       createProjectLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 40, interactive: true },
@@ -260,12 +239,6 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         placeholder: "Filter by trade...",
         filterType: "select" as const,
         options: tradeOptions,
-      },
-      {
-        id: "purchaser",
-        placeholder: "Filter by purchaser...",
-        filterType: "select" as const,
-        options: purchaserOptions,
       },
       {
         id: "future",

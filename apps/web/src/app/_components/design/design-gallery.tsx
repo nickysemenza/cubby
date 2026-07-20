@@ -1490,7 +1490,6 @@ const PURCHASE_SAMPLE: PurchasePreview = {
   date: "2026-07-10",
   costType: "materials",
   trade: "building",
-  purchaser: "nicky",
   future: false,
   projectId: "sample-project",
   projectName: "Backyard Deck Rebuild",
