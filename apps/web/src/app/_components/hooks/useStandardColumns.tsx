@@ -74,6 +74,8 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * as the escape hatch for the next list-only entity.)
    */
   omitDetailLink?: boolean;
+  /** Extra content rendered inline after the standard name column's name. */
+  nameSuffix?: (row: TData) => ReactNode;
 }
 
 /**
@@ -98,6 +100,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   nameClassName,
   nameEditable,
   omitDetailLink,
+  nameSuffix,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
   // Shift-click range selection: anchor (last clicked row id) + modifier flag.
   // Refs are stable across renders, so they don't perturb the useMemo deps below.
@@ -163,6 +166,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           className: nameClassName,
           editable: nameEditable,
           omitDetailLink,
+          nameSuffix,
         }),
       );
     }
@@ -218,5 +222,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     nameClassName,
     nameEditable,
     omitDetailLink,
+    nameSuffix,
   ]);
 }

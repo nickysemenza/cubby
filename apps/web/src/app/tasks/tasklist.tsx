@@ -23,6 +23,18 @@ import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
 
+/**
+ * `N/M` checklist chip after a parent task's name. Module-level because
+ * `nameSuffix` sits in useStandardColumns' columns-`useMemo` dependency array
+ * — an inline arrow would churn the memo every render.
+ */
+const subtaskCountSuffix = (row: TaskOut): ReactNode =>
+  row.subtaskCount > 0 ? (
+    <Badge variant="outline">
+      {row.doneSubtaskCount}/{row.subtaskCount}
+    </Badge>
+  ) : undefined;
+
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
   actions?: ReactNode;
@@ -168,12 +180,16 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         search: ts.getColumnFilter("name"),
         status: ts.getColumnFilter("status") as TaskStatus | undefined,
         projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+        // Checklist subtasks are managed from their parent's detail page, not
+        // surfaced as independent rows here.
+        topLevelOnly: true,
       };
     },
     columns,
     filters,
     deletable: deletableConfig,
     nameEditable,
+    nameSuffix: subtaskCountSuffix,
     infinite: true,
     tableStateOptions,
   });

@@ -8,11 +8,13 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
+  FolderTree,
   ImageIcon,
   Info,
   Link2,
   ListChecks,
   Pencil,
+  Plus,
   ShoppingCart,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -34,6 +36,12 @@ import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
 import { Textarea } from "~/components/ui/textarea";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -47,6 +55,7 @@ import { PlannedVsActual } from "./charts/planned-vs-actual";
 import { PurchaserSplit } from "./charts/purchaser-split";
 import { SpendingOverTime } from "./charts/spending-over-time";
 import { TaskHeatmap } from "./charts/task-heatmap";
+import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
 import {
@@ -61,6 +70,7 @@ import {
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
 const NO_TASKS: TaskOut[] = [];
 const NO_PURCHASES: PurchaseOut[] = [];
+const NO_CHILD_PROJECTS: ProjectOut[] = [];
 
 /** Cap well above any real per-project row count (dozens at most) but within
  * the shared `MAX_PAGE_SIZE` — one page covers every task/purchase for a
@@ -70,7 +80,9 @@ const PROJECT_SCOPED_PAGE_SIZE = 500;
 
 export function projectTasksQueryParams(projectId: string) {
   return {
-    filters: { projectId },
+    // Checklist subtasks roll up to their parent everywhere (N/M chip);
+    // surfacing them here alongside the parent would double-count the work.
+    filters: { projectId, topLevelOnly: true },
     sort: { orderBy: "createdAt" as const, direction: "desc" as const },
     pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
   };
@@ -184,6 +196,64 @@ function EditableLocations({
   );
 }
 
+/**
+ * Direct children (arbitrary-depth sub-projects, but this section only lists
+ * one level down — a child's own children show on ITS detail page) — name
+ * link, status badge, own spent vs costEstimate. Always rendered (even with
+ * zero children) so the "New sub-project" button stays discoverable.
+ */
+function SubProjectsList({
+  projects,
+  onCreate,
+}: {
+  projects: ProjectOut[];
+  onCreate: () => void;
+}) {
+  return (
+    <Stack gap="sm">
+      {projects.length === 0 ? (
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No sub-projects yet</EmptyTitle>
+            <EmptyDescription>
+              Split this project into phases or trades with their own budget.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <Stack gap="xs">
+          {projects.map((child) => (
+            <Row key={child.id} justify="between" align="center" gap="sm">
+              <Row align="center" gap="xs">
+                <StatusIcon status={child.status} />
+                <EntityInlineLink
+                  entity="project"
+                  data={{ id: child.id, name: child.name }}
+                  compact
+                />
+                <Badge variant="outline">
+                  {PROJECT_STATUS_LABELS[child.status]}
+                </Badge>
+              </Row>
+              <span className="text-muted-foreground text-sm">
+                {formatCurrency(child.rollup.spent, 0)}
+                {child.costEstimate != null &&
+                  ` / ${formatCurrency(child.costEstimate, 0)}`}
+              </span>
+            </Row>
+          ))}
+        </Stack>
+      )}
+      <Row justify="end">
+        <Button type="button" variant="outline" size="sm" onClick={onCreate}>
+          <Plus className="h-3.5 w-3.5" />
+          New sub-project
+        </Button>
+      </Row>
+    </Stack>
+  );
+}
+
 export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const api = useTRPC();
 
@@ -203,6 +273,19 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   });
   const images = imageMap?.[project.id] ?? NO_IMAGES;
 
+  // Live direct children — full ProjectOut (own rollup/status/costEstimate)
+  // so the Sub-projects section can render a status badge + spend-vs-estimate
+  // line per row without a second fetch.
+  const { data: childProjectsPage } = useQuery(
+    api.project.list.queryOptions({
+      filters: { parentProjectId: project.id },
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 200 },
+    }),
+  );
+  const childProjects = childProjectsPage?.items ?? NO_CHILD_PROJECTS;
+  const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
+
   const updateMutation = useUpdateMutation({
     mutationFn: api.project.update.mutationOptions,
     entity: "project",
@@ -210,9 +293,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   });
 
   // Lightweight {id,name} projection (no rollups/dependency joins) — enough
-  // to resolve blockedByIds/blockingIds into linked badges. A project with a
-  // dangling reference to a deleted project (excluded from `options`) just
-  // drops out of the list, same as the old full-ProjectOut lookup did.
+  // to resolve blockedByIds/blockingIds into linked badges, and to populate
+  // the "Parent project" picker. A project with a dangling reference to a
+  // deleted project (excluded from `options`) just drops out of the list,
+  // same as the old full-ProjectOut lookup did.
   const { data: projectOptions } = useQuery(api.project.options.queryOptions());
   const projectNamesById = useMemo(() => {
     const map = new Map<string, string>();
@@ -228,6 +312,16 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       .filter((p): p is NonNullable<typeof p> => p != null);
   const blockedBy = resolveDependencyNames(project.blockedByIds);
   const blocking = resolveDependencyNames(project.blockingIds);
+
+  // Excludes itself — a project can't be its own parent (the server also
+  // rejects self-parent/cycles, this just keeps the picker sane).
+  const parentProjectOptions = useMemo(
+    () =>
+      (projectOptions ?? [])
+        .filter((p) => p.id !== project.id)
+        .map((p) => ({ value: p.id, label: p.name })),
+    [projectOptions, project.id],
+  );
 
   // Notes: house pattern is textarea-in → MarkdownText-out, toggled via the
   // section's headerAction — no rich markdown editor.
@@ -386,6 +480,36 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           : undefined,
     },
     {
+      label: "Parent project",
+      value: (
+        <EditableCell
+          value={project.parentProjectId}
+          config={{
+            type: "select",
+            options: parentProjectOptions,
+            placeholder: "No parent — top-level project",
+          }}
+          onSave={async (parentProjectId) => {
+            await updateMutation.mutateAsync({
+              id: project.id,
+              data: { parentProjectId },
+            });
+          }}
+          renderValue={(v) =>
+            v && project.parentProjectName ? (
+              <EntityInlineLink
+                entity="project"
+                data={{ id: v, name: project.parentProjectName }}
+                compact
+              />
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+    },
+    {
       label: "Locations",
       value: (
         <EditableLocations
@@ -439,6 +563,20 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             </Stack>
           )}
         </Stack>
+      ),
+    },
+    {
+      title: "Sub-projects",
+      icon: FolderTree,
+      headerAction:
+        childProjects.length > 0 ? (
+          <Badge variant="outline">{childProjects.length}</Badge>
+        ) : undefined,
+      content: (
+        <SubProjectsList
+          projects={childProjects}
+          onCreate={() => setIsCreatingSubProject(true)}
+        />
       ),
     },
     {
@@ -512,13 +650,48 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
   ];
 
+  const hasSubtree = project.rollup.subtree.projectCount > 0;
+
   const heroStats: DetailHeroStat[] = [
+    // A sub-project surfaces its parent right in the spec-plate header, same
+    // treatment as the task subtask breadcrumb.
+    ...(project.parentProjectId && project.parentProjectName
+      ? [
+          {
+            label: "Sub-project of",
+            value: (
+              <EntityInlineLink
+                entity="project"
+                data={{
+                  id: project.parentProjectId,
+                  name: project.parentProjectName,
+                }}
+                truncate
+              />
+            ),
+          } satisfies DetailHeroStat,
+        ]
+      : []),
     { label: "Spent", value: formatCurrency(project.rollup.spent, 0) },
     {
       label: "Tasks",
       value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,
     },
     { label: "Purchases", value: project.rollup.purchaseCount },
+    // Subtree totals alongside own — only shown once this project actually
+    // has descendants (own numbers already tell the whole story otherwise).
+    ...(hasSubtree
+      ? [
+          {
+            label: "Spent (incl. sub-projects)",
+            value: formatCurrency(project.rollup.subtree.spent, 0),
+          } satisfies DetailHeroStat,
+          {
+            label: "Tasks (incl. sub-projects)",
+            value: `${project.rollup.subtree.doneTaskCount}/${project.rollup.subtree.taskCount}`,
+          } satisfies DetailHeroStat,
+        ]
+      : []),
   ];
 
   return (
@@ -543,6 +716,12 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         sections={sections}
         rawData={project}
         heroImages={images}
+      />
+
+      <CreateProjectDialog
+        open={isCreatingSubProject}
+        onOpenChange={setIsCreatingSubProject}
+        defaultParentProjectId={project.id}
       />
 
       {/* Spending/task charts scoped to this project — full-bleed, below the

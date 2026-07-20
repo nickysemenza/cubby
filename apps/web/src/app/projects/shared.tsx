@@ -19,7 +19,7 @@ import {
 import { format } from "date-fns";
 import { partition } from "es-toolkit";
 import { ExternalLink, ListTodo, ShoppingCart } from "lucide-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
@@ -326,6 +326,16 @@ const PROJECT_KIND_FILTER_OPTIONS: FilterableComboboxItem[] = [
 ];
 
 /**
+ * `N sub` chip after a parent project's name. Module-level because
+ * `nameSuffix` sits in useStandardColumns' columns-`useMemo` dependency array
+ * — an inline arrow would churn the memo every render.
+ */
+const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
+  row.childProjectIds.length > 0 ? (
+    <Badge variant="outline">{row.childProjectIds.length} sub</Badge>
+  ) : undefined;
+
+/**
  * Renders through `useEntityList`/`useStandardColumns` (like `TaskList`/
  * `PurchaseList` above, and mirroring `tasklist.tsx`/`purchaselist.tsx`)
  * rather than a client-side `useReactTable` over the dashboard's
@@ -524,11 +534,15 @@ export function ProjectTable() {
       search: ts.getColumnFilter("name"),
       status: ts.getColumnFilter("status") as ProjectStatus | undefined,
       kind: ts.getColumnFilter("kind") as ProjectKind | undefined,
+      // Sub-projects are managed from their parent's detail page, not
+      // surfaced as independent rows here.
+      topLevelOnly: true,
     }),
     columns,
     filters,
     deletable: deletableConfig,
     nameEditable,
+    nameSuffix: subProjectCountSuffix,
     infinite: true,
     tableStateOptions,
   });

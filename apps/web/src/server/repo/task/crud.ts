@@ -13,8 +13,8 @@ import type {
   TaskOut,
   TaskUpdateInput,
 } from "@cubby/schemas/project";
-import { and, eq, inArray, or } from "drizzle-orm";
-import type { Database } from "~/server/db";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -79,15 +79,100 @@ export async function taskDependencyIds(
   );
 }
 
+/**
+ * Live subtask counts (total + done) for a set of parent task ids — one
+ * grouped query, batched exactly like `taskDependencyIds`/`projectRollups`'
+ * task rollup (never one query per parent). Counts ALL live subtasks
+ * including done ones, so callers whose row source already excludes done
+ * tasks (e.g. actionable.ts's open-task fetch) still get the right totals.
+ */
+export async function taskSubtaskCounts(
+  db: Database,
+  parentIds: TaskId[],
+): Promise<Map<TaskId, { count: number; doneCount: number }>> {
+  const out = new Map<TaskId, { count: number; doneCount: number }>();
+  if (parentIds.length === 0) return out;
+
+  const rows = await getDb(db)
+    .select({
+      parentTaskId: task.parentTaskId,
+      count: sql<number>`count(*)::int`,
+      doneCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
+    })
+    .from(task)
+    .where(and(inArray(task.parentTaskId, parentIds), notDeleted(task)))
+    .groupBy(task.parentTaskId);
+
+  for (const row of rows) {
+    if (!row.parentTaskId) continue;
+    out.set(row.parentTaskId, { count: row.count, doneCount: row.doneCount });
+  }
+  return out;
+}
+
+/**
+ * One-level subtask validation, shared by create/update:
+ *   - the chosen parent must exist and be live (TASK_NOT_FOUND otherwise)
+ *   - the chosen parent must not itself be a subtask (TASK_PARENT_IS_SUBTASK)
+ * Returns the parent's row (id/projectId/parentTaskId) so createTask can
+ * inherit `projectId`.
+ */
+async function validateParentTask(
+  tx: DrizzleTransaction,
+  parentId: TaskId,
+): Promise<{
+  id: TaskId;
+  projectId: TaskOut["projectId"];
+  parentTaskId: TaskOut["parentTaskId"];
+}> {
+  const parent = await tx.query.task.findFirst({
+    where: and(eq(task.id, parentId), notDeleted(task)),
+    columns: { id: true, projectId: true, parentTaskId: true },
+  });
+  if (!parent) {
+    throw createAppError("TASK_NOT_FOUND", `Parent task ${parentId} not found`);
+  }
+  if (parent.parentTaskId) {
+    throw createAppError(
+      "TASK_PARENT_IS_SUBTASK",
+      `Task ${parentId} is itself a subtask — only one level of subtasks is supported.`,
+    );
+  }
+  return parent;
+}
+
+/** Reject giving a parent to a task that already has live subtasks of its own. */
+async function assertNoLiveSubtasks(
+  tx: DrizzleTransaction,
+  id: TaskId,
+): Promise<void> {
+  const subtasks = await tx.query.task.findMany({
+    where: and(eq(task.parentTaskId, id), notDeleted(task)),
+    columns: { id: true },
+  });
+  if (subtasks.length > 0) {
+    throw createAppError(
+      "TASK_HAS_SUBTASKS",
+      `Task ${id} has ${subtasks.length} subtask(s) — a task with subtasks cannot itself become a subtask.`,
+    );
+  }
+}
+
 const taskReader = createEntityReader({
   entityName: "task",
   fetchById: fetchTaskWithProject,
   fromDB: async (db, row) => {
-    const deps = await taskDependencyIds(db, [row.id]);
+    const [deps, subtaskCounts] = await Promise.all([
+      taskDependencyIds(db, [row.id]),
+      taskSubtaskCounts(db, [row.id]),
+    ]);
+    const counts = subtaskCounts.get(row.id);
     return dbTaskToAPI(
       row,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],
+      counts?.count ?? 0,
+      counts?.doneCount ?? 0,
     );
   },
   notFoundReason: "TASK_NOT_FOUND",
@@ -102,10 +187,24 @@ export const createTask = async (
   actor: ActorContext,
 ): Promise<TaskOut> => {
   const id = await withTransaction(db, async (tx) => {
+    // `projectId` and `parentTaskId` both default to null through zod (see
+    // taskCreateShape), so the repo can't tell "omitted" from "explicitly
+    // null" — a null projectId alongside a parentTaskId is treated as
+    // "inherit the parent's project", which covers both cases and lets an
+    // explicit non-null projectId still win.
+    let projectId = data.projectId;
+    if (data.parentTaskId) {
+      const parent = await validateParentTask(tx, data.parentTaskId);
+      if (projectId == null) {
+        projectId = parent.projectId;
+      }
+    }
+
     const created = await insertAndReturn(tx, task, {
       name: data.name,
       status: data.status,
-      projectId: data.projectId,
+      projectId,
+      parentTaskId: data.parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
       category: data.category,
@@ -124,6 +223,7 @@ const AUDIT_FIELDS = [
   "name",
   "status",
   "projectId",
+  "parentTaskId",
   "dueDate",
   "dueEndDate",
   "category",
@@ -145,10 +245,22 @@ export const updateTask = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
+    if (data.parentTaskId !== undefined && data.parentTaskId !== null) {
+      if (data.parentTaskId === id) {
+        throw createAppError(
+          "SELF_DEPENDENCY",
+          "A task cannot be its own parent.",
+        );
+      }
+      await validateParentTask(tx, data.parentTaskId);
+      await assertNoLiveSubtasks(tx, id);
+    }
+
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
       projectId: data.projectId,
+      parentTaskId: data.parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
       category: data.category,
@@ -200,7 +312,12 @@ export const updateTask = async (
   return getTaskByID(db, id);
 };
 
-/** Soft-delete tasks, always hard-deleting their dependency edges in both directions first. */
+/**
+ * Soft-delete tasks. One-level cascade: a deleted task's live subtasks have
+ * no independent existence (they're checklist items represented via their
+ * parent), so they're soft-deleted alongside it — same dependency-edge
+ * hard-delete, audit, and embedding cleanup as the explicitly-requested ids.
+ */
 export const deleteTasks = async (
   db: Database,
   ids: TaskId[],
@@ -211,12 +328,18 @@ export const deleteTasks = async (
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
+    const liveSubtasks = await tx.query.task.findMany({
+      where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
+      columns: { id: true },
+    });
+    const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
+
     await tx
       .delete(taskDependency)
       .where(
         or(
-          inArray(taskDependency.taskId, ids),
-          inArray(taskDependency.blockedByTaskId, ids),
+          inArray(taskDependency.taskId, allIds),
+          inArray(taskDependency.blockedByTaskId, allIds),
         ),
       );
 
@@ -224,15 +347,15 @@ export const deleteTasks = async (
     await tx
       .update(task)
       .set({ deletedAt: now })
-      .where(and(inArray(task.id, ids), notDeleted(task)));
+      .where(and(inArray(task.id, allIds), notDeleted(task)));
 
     // Removal-path invariant: every delete path cleans up its embeddings in-tx.
-    await softDeleteEntityEmbeddingsTx(tx, "task", ids);
+    await softDeleteEntityEmbeddingsTx(tx, "task", allIds);
 
     await logAuditEntries(
       tx,
       actor,
-      ids.map((id) => ({
+      allIds.map((id) => ({
         entityType: "task" as const,
         entityId: id,
         action: "delete" as const,

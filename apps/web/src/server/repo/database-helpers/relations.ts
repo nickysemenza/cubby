@@ -44,6 +44,22 @@ const withProjectNameOnly = {
 } as const;
 
 /**
+ * Same as {@link withProjectNameOnly}, plus a task's own parent task's
+ * `{name, deletedAt}` — resolves `parentTaskName` for the subtask breadcrumb.
+ * Task-only (purchase has no self-relation).
+ */
+const withProjectAndParentTaskNameOnly = {
+  with: {
+    project: {
+      columns: { name: true, deletedAt: true },
+    },
+    parentTask: {
+      columns: { name: true, deletedAt: true },
+    },
+  },
+} as const;
+
+/**
  * Display order for recipe sections and section ingredients: explicit
  * `sortOrder` first, then createdAt/id so legacy rows (null sortOrder —
  * created before the column existed) come back in a stable, if arbitrary,
@@ -317,8 +333,11 @@ export const relations = {
     },
   },
   task: {
-    /** Task row + its parent project's `{name, deletedAt}` — see `withProjectNameOnly`. */
-    withProject: withProjectNameOnly,
+    /**
+     * Task row + its parent project's and parent task's `{name, deletedAt}` —
+     * see `withProjectAndParentTaskNameOnly`.
+     */
+    withProject: withProjectAndParentTaskNameOnly,
   },
   purchase: {
     /** Purchase row + its parent project's `{name, deletedAt}` — see `withProjectNameOnly`. */

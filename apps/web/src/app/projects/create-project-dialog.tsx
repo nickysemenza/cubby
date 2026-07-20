@@ -1,3 +1,4 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   plainDate,
   projectKindSchema,
@@ -36,11 +37,15 @@ const defaultValues: QuickAddProjectValues = {
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pre-set `parentProjectId` on the created project — the detail page's
+   * "New sub-project" button opens this dialog with the current project. */
+  defaultParentProjectId?: ProjectId;
 }
 
 export function CreateProjectDialog({
   open,
   onOpenChange,
+  defaultParentProjectId,
 }: CreateProjectDialogProps) {
   const api = useTRPC();
 
@@ -50,7 +55,7 @@ export function CreateProjectDialog({
       onOpenChange={onOpenChange}
       schema={quickAddProjectSchema}
       defaultValues={defaultValues}
-      title="New Project"
+      title={defaultParentProjectId ? "New Sub-project" : "New Project"}
       description="Start tracking a household undertaking — tasks and purchases attach to it afterward."
       mutationFn={api.project.create.mutationOptions}
       successMessage={(project) => `Added "${project.name}"`}
@@ -61,6 +66,7 @@ export function CreateProjectDialog({
         kind: values.kind,
         costEstimate: values.costEstimate,
         startDate: values.startDate,
+        parentProjectId: defaultParentProjectId ?? null,
       })}
     >
       {(form) => (

@@ -75,6 +75,11 @@ const projectFields = {
   kind: projectKindSchema.nullable(),
   locations: z.array(z.string()).describe("House/site names, free-form"),
   costEstimate: z.number().nullable().describe("Budget estimate in dollars"),
+  // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
+  // is its budget envelope; purchases/tasks attribute to it via their
+  // existing `projectId`. Cycle/self-parent guards live in
+  // repo/project/crud.ts (depth is otherwise unrestricted).
+  parentProjectId: projectId.nullable(),
   startDate: plainDate.nullable(),
   endDate: plainDate.nullable(),
   icon: z.string().nullable().describe("Emoji shown next to the name"),
@@ -87,6 +92,7 @@ const projectCreateShape = {
   kind: projectKindSchema.nullable().default(null),
   locations: z.array(z.string()).default([]),
   costEstimate: z.number().nullable().default(null),
+  parentProjectId: projectId.nullable().default(null),
   startDate: plainDate.nullable().default(null),
   endDate: plainDate.nullable().default(null),
   icon: z.string().nullable().default(null),
@@ -130,6 +136,10 @@ export const projectFilterFields = {
   kind: projectKindSchema.optional(),
   location: z.string().optional().describe("Exact match against locations[]"),
   search: z.string().optional(),
+  /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
+  topLevelOnly: z.boolean().optional(),
+  /** Only this parent's live sub-projects. */
+  parentProjectId: projectId.optional(),
 };
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
@@ -144,18 +154,38 @@ export const projectSortableFields = [
 ] as const;
 export type ProjectSortField = (typeof projectSortableFields)[number];
 
-/** SQL rollups over live tasks/purchases (see repo/project/analytics). */
+/**
+ * SUM/COUNT rollup over live tasks/purchases, at two scopes (see
+ * repo/project/analytics.ts + repo/project/subtree.ts):
+ *   - the top-level fields are this project's OWN aggregate (unchanged
+ *     since before sub-projects existed);
+ *   - `subtree` is the recursive total over this project + every live
+ *     descendant — `projectCount` is the live descendant count (0 for a
+ *     leaf, so a leaf's `subtree` always equals its own numbers). Computed
+ *     in TS at read time, never denormalized onto the row.
+ */
 export const projectRollup = z.object({
   spent: z.number().describe("SUM(cost) of live purchases"),
   purchaseCount: z.number().int(),
   taskCount: z.number().int(),
   doneTaskCount: z.number().int(),
+  subtree: z.object({
+    spent: z.number(),
+    purchaseCount: z.number().int(),
+    taskCount: z.number().int(),
+    doneTaskCount: z.number().int(),
+    projectCount: z.number().int().describe("Live descendant project count"),
+  }),
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
 
 export const projectOut = z.object({
   id: projectId,
   ...projectFields,
+  /** Null when the project has no parent, or the parent is gone/soft-deleted. */
+  parentProjectName: z.string().nullable(),
+  /** Live sub-project ids (direct children only). */
+  childProjectIds: z.array(projectId),
   blockedByIds: z.array(projectId),
   blockingIds: z.array(projectId),
   ...timestampedFields,
@@ -171,6 +201,10 @@ const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
   projectId: projectId.nullable(),
+  // One level of checklist subtasks — a subtask's own parentTaskId must be
+  // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
+  // an all-done checklist never auto-completes it.
+  parentTaskId: taskId.nullable(),
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable().describe("End of a due-date range"),
   category: z.string().nullable().describe("Free-form category label"),
@@ -180,6 +214,10 @@ const taskCreateShape = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
   projectId: projectId.nullable().default(null),
+  // If set and `projectId` is omitted, the created task inherits the
+  // parent's projectId (see repo/task/crud.ts's createTask) — one-time at
+  // create, no ongoing sync afterwards.
+  parentTaskId: taskId.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
   category: z.string().nullable().default(null),
@@ -210,6 +248,10 @@ export const taskFilterFields = {
   projectId: projectId.optional(),
   category: z.string().optional(),
   search: z.string().optional(),
+  /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
+  topLevelOnly: z.boolean().optional(),
+  /** Only this parent's live subtasks. */
+  parentTaskId: taskId.optional(),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -227,11 +269,76 @@ export const taskOut = z.object({
   id: taskId,
   ...taskFields,
   projectName: z.string().nullable(),
+  /** Null when the task has no parent, or the parent is gone/soft-deleted. */
+  parentTaskName: z.string().nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
+  /** Live subtask count (incl. done ones) — 0 for a subtask itself (one level). */
+  subtaskCount: z.number().int(),
+  doneSubtaskCount: z.number().int(),
   ...timestampedFields,
 });
 export type TaskOut = z.infer<typeof taskOut>;
+
+// ---------------------------------------------------------------------------
+// Actionable tasks (computed unblocked/blocked read — see
+// repo/task/actionable.ts for the exact semantics)
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a task is blocked, plus (for `task`/`project`) a transitive "why"
+ * chain: the representative path of entities you'd need to unblock, nearest
+ * blocker first. `manual` (the task's own status is `blocked`) carries no
+ * chain — there's nothing upstream to walk.
+ */
+export const blockedReasonSchema = z.object({
+  kind: z.enum(["manual", "task", "project"]),
+  chain: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      status: z.string(),
+      type: z.enum(["task", "project"]),
+    }),
+  ),
+});
+export type BlockedReason = z.infer<typeof blockedReasonSchema>;
+
+export const actionableTaskOut = z.object({
+  id: taskId,
+  ...taskFields,
+  projectName: z.string().nullable(),
+  blockedByIds: z.array(taskId),
+  blockingIds: z.array(taskId),
+  // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
+  // in sync by hand. Actionable/blocked rows are always top-level (subtask
+  // rows are excluded — see repo/task/actionable.ts), so these count the
+  // row's own live subtasks same as taskOut.
+  subtaskCount: z.number().int(),
+  doneSubtaskCount: z.number().int(),
+  ...timestampedFields,
+  isLater: z
+    .boolean()
+    .describe('status === "later" — sort/de-emphasize last in the UI'),
+});
+export type ActionableTaskOut = z.infer<typeof actionableTaskOut>;
+
+export const blockedTaskOut = z.object({
+  task: taskOut,
+  reasons: z.array(blockedReasonSchema),
+});
+export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
+
+/**
+ * `task.listActionable`'s output: every live, non-done task partitioned into
+ * unblocked (`actionable` — zero blocked reasons) and `blocked` (with the
+ * reason set + transitive why-chain).
+ */
+export const actionableTasksOut = z.object({
+  actionable: z.array(actionableTaskOut),
+  blocked: z.array(blockedTaskOut),
+});
+export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
 
 // ---------------------------------------------------------------------------
 // Purchase

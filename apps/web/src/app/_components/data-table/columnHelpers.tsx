@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -253,6 +254,11 @@ export function createNameColumn<T extends BaseRow>(
      * render plain text (still inline-editable) instead of `TableLink`.
      */
     omitDetailLink?: boolean;
+    /**
+     * Extra content rendered inline after the name (e.g. a subtask-count
+     * badge) — return `undefined`/`null` for rows with nothing to show.
+     */
+    nameSuffix?: (row: T) => ReactNode;
   },
 ) {
   const entityConfig = entities[entity];
@@ -279,6 +285,18 @@ export function createNameColumn<T extends BaseRow>(
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       const value = String(info.getValue());
+      const suffix = options?.nameSuffix?.(info.row.original);
+      // Only wrap when a suffix is actually present — every other entity's
+      // name column renders exactly as before (no extra markup).
+      const wrapWithSuffix = (nameEl: ReactNode) =>
+        suffix ? (
+          <Row align="center" gap="xs" className="min-w-0">
+            <span className="min-w-0 flex-1 truncate">{nameEl}</span>
+            {suffix}
+          </Row>
+        ) : (
+          nameEl
+        );
 
       // If editable, show EditableCell instead of link
       if (options?.editable) {
@@ -295,22 +313,26 @@ export function createNameColumn<T extends BaseRow>(
             )}
             config={{ type: "text" }}
             renderValue={(v) =>
-              options?.omitDetailLink ? (
-                <span className="block truncate">{v ?? ""}</span>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger render={<span className="block truncate" />}>
-                    <TableLink
-                      to={entities[entity].routes.detail}
-                      params={{ id: String(info.row.original.id) }}
+              wrapWithSuffix(
+                options?.omitDetailLink ? (
+                  <span className="block truncate">{v ?? ""}</span>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<span className="block truncate" />}
                     >
+                      <TableLink
+                        to={entities[entity].routes.detail}
+                        params={{ id: String(info.row.original.id) }}
+                      >
+                        {v ?? ""}
+                      </TableLink>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
                       {v ?? ""}
-                    </TableLink>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs">
-                    {v ?? ""}
-                  </TooltipContent>
-                </Tooltip>
+                    </TooltipContent>
+                  </Tooltip>
+                ),
               )
             }
           />
@@ -318,10 +340,10 @@ export function createNameColumn<T extends BaseRow>(
       }
 
       if (options?.omitDetailLink) {
-        return <span className="block truncate">{value}</span>;
+        return wrapWithSuffix(<span className="block truncate">{value}</span>);
       }
 
-      return (
+      return wrapWithSuffix(
         <Tooltip>
           <TooltipTrigger render={<span className="block truncate" />}>
             <TableLink
@@ -334,7 +356,7 @@ export function createNameColumn<T extends BaseRow>(
           <TooltipContent side="top" className="max-w-xs">
             {value}
           </TooltipContent>
-        </Tooltip>
+        </Tooltip>,
       );
     },
   };

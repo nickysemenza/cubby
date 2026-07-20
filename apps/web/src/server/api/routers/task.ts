@@ -6,6 +6,7 @@
 
 import { type TaskId, taskId } from "@cubby/schemas/identifiers";
 import {
+  actionableTasksOut,
   taskCreateInput,
   taskFiltersSchema,
   taskOut,
@@ -16,6 +17,7 @@ import {
   createTask,
   deleteTasks,
   getTaskByID,
+  listActionableTasks,
   taskList,
   updateTask,
 } from "~/server/repo/task";
@@ -24,7 +26,7 @@ import {
   createDeleteProcedure,
   createEntityCrudProcedures,
 } from "../crud-factory";
-import { createTRPCRouter } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const { getByID, list, create, update } = createEntityCrudProcedures({
   schemas: {
@@ -75,10 +77,21 @@ const deleteItem = createDeleteProcedure<TaskId>(async (services, ids) => {
   return undefined;
 }, taskId);
 
+/**
+ * The computed "what can I actually do" read behind the /tasks Actionable
+ * view: every live, non-done task partitioned into unblocked vs blocked
+ * (with transitive why-chains). No input, unpaginated — see
+ * repo/task/actionable.ts for the semantics.
+ */
+const listActionable = protectedProcedure
+  .output(actionableTasksOut)
+  .query(({ ctx }) => listActionableTasks(ctx.db));
+
 export const taskRouter = createTRPCRouter({
   getByID,
   list,
   create,
   update,
   delete: deleteItem,
+  listActionable,
 });

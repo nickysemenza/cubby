@@ -7,6 +7,7 @@
  */
 
 import {
+  actionableTasksOut,
   projectCreateInput,
   projectFilterFields,
   projectMcpListOut,
@@ -25,7 +26,9 @@ import {
 } from "@cubby/schemas/project";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  READ_ONLY_CLOSED,
   registerEntityCrudToolset,
+  registerRouterTool,
   slimProject,
   slimPurchase,
   slimTask,
@@ -44,14 +47,14 @@ export function registerProjectTools(server: McpServer) {
     slim: slimProject,
     sort: { orderBy: "startDate", direction: "desc" },
     descriptions: {
-      list: "List household projects with status, kind, dates, cost estimate, spend/progress rollups, and dependency ids. Filter by status/kind/location/search.",
-      get: "Get a project by ID, including markdown notes (the former Notion page body), rollups, and blocked-by/blocking project ids.",
+      list: "List household projects with status, kind, dates, cost estimate, spend/progress rollups (own + subtree), parent/child project links, and dependency ids. Filter by status/kind/location/search/topLevelOnly/parentProjectId. Pass topLevelOnly=true to exclude sub-projects.",
+      get: "Get a project by ID, including markdown notes (the former Notion page body), own + subtree rollups, parent/child project links, and blocked-by/blocking project ids.",
       create:
-        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden).",
+        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden). Set parentProjectId to create it as a sub-project (arbitrary depth) — a phase/trade with its own costEstimate budget envelope; tasks/purchases still attribute to it via their own projectId.",
       update:
-        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one.",
+        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one. `parentProjectId` can be set/changed/cleared, subject to a cycle guard (a project can't become its own descendant).",
       delete:
-        "Soft-delete projects by IDs. Fails while live tasks or purchases still reference a project.",
+        "Soft-delete projects by IDs. Fails while live tasks, purchases, or sub-projects still reference a project.",
     },
     create: (caller, params) => caller.project.create(params),
   });
@@ -68,15 +71,25 @@ export function registerProjectTools(server: McpServer) {
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
-      list: "List project tasks with status, due dates, category, project name, and dependency ids. Filter by status/projectId/category/search.",
-      get: "Get a task by ID, including blocked-by/blocking task ids.",
+      list: "List project tasks with status, due dates, category, project name, parent task, and subtask counts. Filter by status/projectId/category/search/topLevelOnly/parentTaskId. Pass topLevelOnly=true to exclude checklist subtasks.",
+      get: "Get a task by ID, including blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
       create:
-        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project.",
+        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project. Set parentTaskId to create it as a checklist subtask of another task — one level only (a subtask can't itself have subtasks), and projectId is inherited from the parent when omitted. A subtask's own status is independent — the parent never auto-completes.",
       update:
-        "Update a task's fields; `blockedByIds` replaces the full set of tasks blocking this one.",
-      delete: "Soft-delete tasks by IDs (dependency edges are cleaned up).",
+        "Update a task's fields; `blockedByIds` replaces the full set of tasks blocking this one. `parentTaskId` can be set/changed/cleared, subject to the one-level rule (a task with subtasks can't become a subtask, and a subtask can't itself be a parent).",
+      delete:
+        "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
     create: (caller, params) => caller.task.create(params),
+  });
+
+  registerRouterTool(server, {
+    name: "list_actionable_tasks",
+    description:
+      "Unblocked tasks you can act on now — live, not done, and blocked by nothing — plus blocked tasks with transitive why-chains explaining what's in the way (a manual blocked flag, a blocking task, or a blocking project, nearest blocker first).",
+    outputSchema: actionableTasksOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller) => caller.task.listActionable(),
   });
 
   registerEntityCrudToolset(server, {
