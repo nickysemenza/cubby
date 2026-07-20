@@ -55,6 +55,7 @@ function project(params: {
         taskCount: params.subtreeTaskCount ?? taskCount,
         doneTaskCount: params.subtreeDoneTaskCount ?? doneTaskCount,
         projectCount: 0,
+        costEstimate: null,
       },
     },
   };

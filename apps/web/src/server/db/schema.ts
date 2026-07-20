@@ -31,7 +31,6 @@ import {
   costTypeValues,
   projectKindValues,
   projectStatusValues,
-  purchaserValues,
   taskStatusValues,
   tradeValues,
 } from "@cubby/schemas/project";
@@ -915,7 +914,6 @@ export const purchase = pgTable(
     date: date("date", { mode: "string" }),
     costType: text("costType", { enum: costTypeValues }).notNull(),
     trade: text("trade", { enum: tradeValues }).notNull(),
-    purchaser: text("purchaser", { enum: purchaserValues }),
     url: text("url"),
     notes: text("notes"),
     // Planned/not-yet-made purchase (kept out of spend rollups' "actuals" views).

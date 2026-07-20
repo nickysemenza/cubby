@@ -1,10 +1,11 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { PurchaseOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
 import { Grid, Section, Stack } from "~/components/layout";
 import { capitalize, normalizeCostTypeKey } from "../shared";
 import { PurchaseDonut } from "./purchase-donut";
 import { TradeBars } from "./trade-bars";
-import { TradeCostMatrix } from "./trade-cost-matrix";
+import { type TradeCostCell, TradeCostMatrix } from "./trade-cost-matrix";
+import type { PivotCostKey } from "./trade-cost-pivot";
 
 /**
  * The donut + trade-bars pair with click-to-drill-down: selecting a
@@ -15,10 +16,14 @@ export function CategoryBreakdown({
   purchases,
   donutHeight = 300,
   centerLabel = "Total cost",
+  onMatrixCellClick,
+  activeMatrixCell,
 }: {
   purchases: PurchaseOut[];
   donutHeight?: number;
   centerLabel?: string;
+  onMatrixCellClick?: (trade: Trade, costType: PivotCostKey | null) => void;
+  activeMatrixCell?: TradeCostCell | null;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -82,8 +87,19 @@ export function CategoryBreakdown({
           <TradeBars purchases={scoped} />
         </Section>
       </Grid>
-      <Section title="Trade × Cost Type">
-        <TradeCostMatrix purchases={purchases} />
+      <Section
+        title="Trade × Cost Type"
+        description={
+          onMatrixCellClick
+            ? "Click a cell to filter the table; click it again to clear"
+            : undefined
+        }
+      >
+        <TradeCostMatrix
+          purchases={purchases}
+          onCellClick={onMatrixCellClick}
+          activeCell={activeMatrixCell}
+        />
       </Section>
     </Stack>
   );

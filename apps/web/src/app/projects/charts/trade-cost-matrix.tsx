@@ -4,43 +4,37 @@ import { useMemo } from "react";
 import { cn, formatCurrency } from "~/lib/utils";
 import { capitalize, TRADE_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
+import { cellMono, HEAT_CLASSES, heatBucket } from "./heat-scale";
 import {
   buildTradeCostPivot,
   PIVOT_COST_KEYS,
   type PivotCostKey,
 } from "./trade-cost-pivot";
 
-const cellMono = "px-2 py-2 text-right font-mono text-xs tabular-nums";
+const interactiveCell =
+  "block w-full text-right hover:ring-1 hover:ring-primary/40 hover:ring-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
 
-const tradeLabel = (value: string): string =>
-  TRADE_LABELS[value as Trade] ?? value;
+const activeCellRing = "ring-2 ring-primary ring-inset";
 
-// Dollar sums are heavy-tailed, so bucket on a sqrt-scaled ratio against the
-// grid-wide max (one shared scale, like Sheets' color-scale).
-function heatBucket(value: number, max: number): 0 | 1 | 2 | 3 | 4 | 5 {
-  if (value <= 0 || max <= 0) return 0;
-  const t = Math.sqrt(value / max);
-  if (t >= 0.85) return 5;
-  if (t >= 0.6) return 4;
-  if (t >= 0.35) return 3;
-  if (t >= 0.15) return 2;
-  return 1;
-}
+export type TradeCostCell = { trade: Trade; costType: PivotCostKey | null };
 
-const HEAT_CLASSES: Record<0 | 1 | 2 | 3 | 4 | 5, string> = {
-  0: "",
-  1: "bg-chart-seq-1",
-  2: "bg-chart-seq-2",
-  3: "bg-chart-seq-3",
-  4: "bg-chart-seq-4 text-background", // deep fills flip to paper ink
-  5: "bg-chart-seq-5 text-background",
-};
-
-export function TradeCostMatrix({ purchases }: { purchases: PurchaseOut[] }) {
+export function TradeCostMatrix({
+  purchases,
+  onCellClick,
+  activeCell,
+}: {
+  purchases: PurchaseOut[];
+  /** `costType: null` is a row-total click (filter by trade alone). */
+  onCellClick?: (trade: Trade, costType: PivotCostKey | null) => void;
+  activeCell?: TradeCostCell | null;
+}) {
   const { rows, columnTotals, grandTotal, maxCell } = useMemo(
     () => buildTradeCostPivot(purchases),
     [purchases],
   );
+
+  const isActive = (trade: Trade, costType: PivotCostKey | null) =>
+    activeCell?.trade === trade && activeCell.costType === costType;
 
   if (rows.length === 0) {
     return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
@@ -78,29 +72,64 @@ export function TradeCostMatrix({ purchases }: { purchases: PurchaseOut[] }) {
                 scope="row"
                 className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
               >
-                {tradeLabel(row.trade)}
+                {TRADE_LABELS[row.trade]}
               </th>
               {columns.map((key) => {
                 const value = row.cells[key];
                 const bucket = heatBucket(value, maxCell);
+                const heat =
+                  value === 0
+                    ? "text-muted-foreground/30"
+                    : HEAT_CLASSES[bucket];
+                const label = value !== 0 ? formatCurrency(value, 0) : "·";
+                const title =
+                  value !== 0 ? formatCurrency(value, 2) : undefined;
+
+                if (!onCellClick) {
+                  return (
+                    <td key={key} className={cn(cellMono, heat)} title={title}>
+                      {label}
+                    </td>
+                  );
+                }
                 return (
-                  <td
-                    key={key}
-                    className={cn(
-                      cellMono,
-                      value === 0
-                        ? "text-muted-foreground/30"
-                        : HEAT_CLASSES[bucket],
-                    )}
-                    title={value !== 0 ? formatCurrency(value, 2) : undefined}
-                  >
-                    {value !== 0 ? formatCurrency(value, 0) : "·"}
+                  <td key={key} className="p-0">
+                    <button
+                      type="button"
+                      onClick={() => onCellClick(row.trade, key)}
+                      title={title}
+                      className={cn(
+                        cellMono,
+                        heat,
+                        interactiveCell,
+                        isActive(row.trade, key) && activeCellRing,
+                      )}
+                    >
+                      {label}
+                    </button>
                   </td>
                 );
               })}
-              <td className={cn(cellMono, "font-medium text-primary")}>
-                {formatCurrency(row.total, 0)}
-              </td>
+              {onCellClick ? (
+                <td className="p-0">
+                  <button
+                    type="button"
+                    onClick={() => onCellClick(row.trade, null)}
+                    className={cn(
+                      cellMono,
+                      "font-medium text-primary",
+                      interactiveCell,
+                      isActive(row.trade, null) && activeCellRing,
+                    )}
+                  >
+                    {formatCurrency(row.total, 0)}
+                  </button>
+                </td>
+              ) : (
+                <td className={cn(cellMono, "font-medium text-primary")}>
+                  {formatCurrency(row.total, 0)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

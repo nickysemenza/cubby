@@ -177,7 +177,6 @@ const purchaseSearchTextInputSchema = z.object({
   name: z.string(),
   costType: nullableText,
   trade: nullableText,
-  purchaser: nullableText,
   notes: nullableText,
   projectName: nullableText,
 });
@@ -189,7 +188,6 @@ export function buildPurchaseEmbeddingText(purchase: PurchaseSearchTextInput) {
     field("purchase", parsed.name),
     field("cost type", parsed.costType),
     field("trade", parsed.trade),
-    field("purchaser", parsed.purchaser),
     field("project", parsed.projectName),
     field("notes", parsed.notes),
   ]);

@@ -47,6 +47,7 @@ describe("project repository", () => {
         taskCount: 0,
         doneTaskCount: 0,
         projectCount: 0,
+        costEstimate: null,
       },
     });
 
@@ -160,6 +161,7 @@ describe("project repository", () => {
         taskCount: 3,
         doneTaskCount: 1,
         projectCount: 0,
+        costEstimate: null,
       },
     });
   });
@@ -623,6 +625,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       taskCount: leafAfter.rollup.taskCount,
       doneTaskCount: leafAfter.rollup.doneTaskCount,
       projectCount: 0,
+      costEstimate: leafAfter.costEstimate,
     });
     expect(leafAfter.rollup.subtree.spent).toBe(40);
 
@@ -633,6 +636,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       taskCount: 3, // 1 own + 2 leaf
       doneTaskCount: 1,
       projectCount: 1, // leaf
+      costEstimate: null,
     });
 
     const grandparentAfter = await getProjectByID(ctx.db, grandparent.id);
@@ -642,6 +646,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       taskCount: 3,
       doneTaskCount: 1,
       projectCount: 2, // parent + leaf
+      costEstimate: null,
     });
 
     // The list path aggregates the same way (batched over a page, not just
@@ -654,6 +659,45 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(grandparentRow?.rollup.subtree).toEqual(
       grandparentAfter.rollup.subtree,
     );
+  });
+
+  it("sums subtree costEstimate over non-null values, null when the subtree has none", async () => {
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "estimate parent", costEstimate: 100 }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "estimate child",
+        parentProjectId: parent.id,
+        costEstimate: 50,
+      }),
+      ctx.actor,
+    );
+
+    expect(
+      (await getProjectByID(ctx.db, parent.id)).rollup.subtree.costEstimate,
+    ).toBe(150);
+
+    // A leaf's subtree estimate is just its own.
+    const childAfter = await getProjectByID(ctx.db, child.id);
+    expect(childAfter.rollup.subtree.costEstimate).toBe(
+      childAfter.costEstimate,
+    );
+    expect(childAfter.rollup.subtree.costEstimate).toBe(50);
+
+    // Parent unestimated, child estimated — the child's value still surfaces.
+    await updateProject(ctx.db, parent.id, { costEstimate: null }, ctx.actor);
+    expect(
+      (await getProjectByID(ctx.db, parent.id)).rollup.subtree.costEstimate,
+    ).toBe(50);
+
+    // Nothing in the subtree estimated — null, not 0.
+    await updateProject(ctx.db, child.id, { costEstimate: null }, ctx.actor);
+    const allNull = await getProjectByID(ctx.db, parent.id);
+    expect(allNull.rollup.subtree.costEstimate).toBeNull();
   });
 
   it("filters the list by topLevelOnly and parentProjectId", async () => {

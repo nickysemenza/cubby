@@ -1,9 +1,4 @@
-import type {
-  CostType,
-  PurchaseOut,
-  Purchaser,
-  Trade,
-} from "@cubby/schemas/project";
+import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, Info } from "lucide-react";
 import type { FC } from "react";
@@ -27,8 +22,6 @@ import {
   costTypeLabels,
   costTypeOptions,
   futureFilterOptions,
-  purchaserLabels,
-  purchaserOptions,
 } from "./purchase-options";
 
 interface PurchaseDetailProps {
@@ -140,24 +133,6 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
             });
           }}
           renderValue={(v) => (v ? TRADE_LABELS[v as Trade] : <NoneValue />)}
-        />
-      ),
-    },
-    {
-      label: "Purchaser",
-      value: (
-        <EditableCell
-          value={purchase.purchaser}
-          config={{ type: "select", options: purchaserOptions }}
-          onSave={async (purchaser) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { purchaser: purchaser as Purchaser | null },
-            });
-          }}
-          renderValue={(p) =>
-            p ? purchaserLabels[p as Purchaser] : <NoneValue />
-          }
         />
       ),
     },

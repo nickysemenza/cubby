@@ -77,7 +77,6 @@ export function CreatePurchaseDialog({
         // null before buildPayload runs.
         costType: values.costType!,
         trade: values.trade!,
-        purchaser: null,
         url: null,
         notes: null,
         future: false,

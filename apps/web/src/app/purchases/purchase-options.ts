@@ -1,4 +1,4 @@
-import { costTypeValues, purchaserValues } from "@cubby/schemas/project";
+import { costTypeValues } from "@cubby/schemas/project";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
 
@@ -13,20 +13,6 @@ export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
 export const costTypeOptions = buildSelectOptions(
   costTypeValues,
   costTypeLabels,
-);
-
-/** Human labels for the fixed purchaser enum. */
-export const purchaserLabels: Record<(typeof purchaserValues)[number], string> =
-  {
-    nicky: "Nicky",
-    rebecca: "Rebecca",
-    both: "Both",
-  };
-
-/** `{value,label}` options for the purchaser filter/inline-edit select. */
-export const purchaserOptions = buildSelectOptions(
-  purchaserValues,
-  purchaserLabels,
 );
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */

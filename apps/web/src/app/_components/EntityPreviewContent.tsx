@@ -4,7 +4,6 @@ import type {
   CostType,
   ProjectKind,
   ProjectStatus,
-  Purchaser,
   TaskStatus,
   Trade,
 } from "@cubby/schemas/project";
@@ -654,7 +653,6 @@ export type PurchasePreview = {
   date: string | null;
   costType: CostType | null;
   trade: Trade | null;
-  purchaser: Purchaser | null;
   future: boolean;
   projectId?: string | null;
   projectName?: string | null;
@@ -665,7 +663,6 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
     [
       vm.costType ? costTypeLabels[vm.costType] : null,
       vm.trade ? TRADE_LABELS[vm.trade] : null,
-      vm.purchaser,
     ]
       .filter(Boolean)
       .join(" · ") + (vm.future ? " · planned" : "");
@@ -714,7 +711,6 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
         date: data.date,
         costType: data.costType,
         trade: data.trade,
-        purchaser: data.purchaser,
         future: data.future,
         projectId: data.projectId,
         projectName: data.projectName,

@@ -1,8 +1,14 @@
-import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
+import type {
+  PurchaseFilters,
+  PurchaseOut,
+  Trade,
+} from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ChevronDown } from "lucide-react";
 import { lazy, Suspense } from "react";
+import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
+import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
 import { Grid, Stack } from "~/components/layout";
 import {
   Collapsible,
@@ -30,7 +36,15 @@ const NO_PURCHASES: PurchaseOut[] = [];
  * filtered set (not just the visible page) — the Notion-style "charts over a
  * filtered view". Open/closed state persists across visits.
  */
-export function PurchaseChartStrip({ filters }: { filters: PurchaseFilters }) {
+export function PurchaseChartStrip({
+  filters,
+  onMatrixCellClick,
+  activeMatrixCell,
+}: {
+  filters: PurchaseFilters;
+  onMatrixCellClick?: (trade: Trade, costType: PivotCostKey | null) => void;
+  activeMatrixCell?: TradeCostCell | null;
+}) {
   const api = useTRPC();
   const [open, setOpen] = useLocalStorage("purchases:charts-open", true);
 
@@ -79,6 +93,8 @@ export function PurchaseChartStrip({ filters }: { filters: PurchaseFilters }) {
                 purchases={purchases}
                 donutHeight={280}
                 centerLabel="Filtered total"
+                onMatrixCellClick={onMatrixCellClick}
+                activeMatrixCell={activeMatrixCell}
               />
             </Suspense>
           </Stack>

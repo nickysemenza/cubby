@@ -104,7 +104,7 @@ export function registerProjectTools(server: McpServer) {
     slim: slimPurchase,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
-      list: "List purchases (project spend ledger) with cost, date, costType/trade, purchaser, and project name. Filter by costType/trade/purchaser/projectId/future/search/includeSubProjects. Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own purchases.",
+      list: "List purchases (project spend ledger) with cost, date, costType/trade, and project name. Filter by costType/trade/projectId/future/search/includeSubProjects. Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own purchases.",
       get: "Get a purchase by ID.",
       create:
         "Log a purchase (costType materials|tools|services; set future=true for planned spend), optionally attached to a project.",

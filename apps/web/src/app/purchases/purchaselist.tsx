@@ -3,13 +3,14 @@ import type {
   CostType,
   PurchaseFilters,
   PurchaseOut,
-  Purchaser,
   Trade,
 } from "@cubby/schemas/project";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
+import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
 import { TRADE_LABELS, tradeOptions } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
@@ -34,8 +35,6 @@ import {
   costTypeLabels,
   costTypeOptions,
   futureFilterOptions,
-  purchaserLabels,
-  purchaserOptions,
 } from "./purchase-options";
 
 /**
@@ -52,7 +51,6 @@ function buildPurchaseFilters(
     search: get("name"),
     costType: (get("costType") as CostType | undefined) || undefined,
     trade: (get("trade") as Trade | undefined) || undefined,
-    purchaser: (get("purchaser") as Purchaser | undefined) || undefined,
     projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
     future:
       futureFilter === undefined || futureFilter === ""
@@ -164,23 +162,6 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           },
         },
       }),
-      createFilterableSelectColumn(columnHelper, "purchaser", {
-        header: "Purchaser",
-        className: "w-28",
-        placeholder: "Filter by purchaser...",
-        selectOptions: purchaserOptions,
-        renderCell: (p: Purchaser | null) =>
-          p ? purchaserLabels[p] : <NoneValue />,
-        mobile: { slot: "meta", priority: 30 },
-        editable: {
-          onSave: async (newPurchaser, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { purchaser: newPurchaser },
-            });
-          },
-        },
-      }),
       createProjectLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 40, interactive: true },
@@ -260,12 +241,6 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         options: tradeOptions,
       },
       {
-        id: "purchaser",
-        placeholder: "Filter by purchaser...",
-        filterType: "select" as const,
-        options: purchaserOptions,
-      },
-      {
         id: "future",
         placeholder: "Filter by status...",
         filterType: "select" as const,
@@ -318,9 +293,32 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     [columnFilters],
   );
 
+  const activeMatrixCell = useMemo<TradeCostCell | null>(() => {
+    const trade = chartFilters.trade;
+    return trade ? { trade, costType: chartFilters.costType ?? null } : null;
+  }, [chartFilters]);
+
+  const handleMatrixCellClick = useCallback(
+    (trade: Trade, costType: PivotCostKey | null) => {
+      // "other" is the pivot's null-costType bucket, never a filterable slug.
+      const next = costType === "other" ? null : costType;
+      const clear =
+        activeMatrixCell?.trade === trade && activeMatrixCell.costType === next;
+      table.getColumn("trade")?.setFilterValue(clear ? undefined : trade);
+      table
+        .getColumn("costType")
+        ?.setFilterValue(clear || next === null ? undefined : next);
+    },
+    [table, activeMatrixCell],
+  );
+
   return (
     <div>
-      <PurchaseChartStrip filters={chartFilters} />
+      <PurchaseChartStrip
+        filters={chartFilters}
+        onMatrixCellClick={handleMatrixCellClick}
+        activeMatrixCell={activeMatrixCell}
+      />
       <RTable
         table={table}
         isLoading={isLoading}
