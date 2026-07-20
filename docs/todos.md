@@ -22,23 +22,16 @@ from the relevant section — this file is the index, the plans are the depth.
 ### MCP recipe authoring (from real-use feedback)
 
 Follow-ons to the batch `resolve_ingredients` + `create_recipe_from_text` MCP tools
-(shipped 2026-06-15). Both are downstream of macro-aware nutrition: once a
-`get_recipe_nutrition(recipeId, servings) → {P,F,C,kcal}` tool exists (and ingredients
-auto-link to a USDA FDC entry on creation), much of the portion solver dissolves into an
-agent loop and the prep-sheet becomes mostly templating.
+(shipped 2026-06-15; the prep-sheet export also shipped, as the recipe-detail
+prep/nested/matrix views + the `/recipes/$id/export` print route).
 
 - [ ] **Portion solver**: a tool that takes a recipe + macro constraints (e.g. `<850
   kcal, >60g protein`, "lighter for person X") and solves the component gram weights in
   one shot, instead of the agent hand-iterating amounts. Niche; largely subsumed by the
-  agent once `get_recipe_nutrition` makes macros queryable. Build only if the
+  agent once macro-aware nutrition (below) makes macros queryable via a
+  `get_recipe_nutrition(recipeId, servings) → {P,F,C,kcal}` tool. Build only if the
   iterate-and-recheck loop stays painful in practice.
-- [x] ~~**Recipe → prep-sheet export**~~ — shipped as a **UI feature**, not an MCP tool:
-  three recipe-detail views — `prep` (components + combined shop), `nested` (Modernist-Cuisine
-  spec), and `matrix` (ingredient × component grid, row totals = combined shop) — plus a
-  print/export route (`/recipes/$id/export`) with Print + Copy-Markdown for each. All expand
-  the full sub-recipe closure (`recipe-tree.ts` + `useRecipeTree`); prep quantities are
-  as-used scaled, nested shows each batch at its own 100% base.
-- [ ] **Macro-aware nutrition (prereq for both above)**: add an ingredient-level USDA
+- [ ] **Macro-aware nutrition (prereq for the above)**: add an ingredient-level USDA
   `fdc_id` link (today `fdc_id` lives only on `Product`; for nutrition you want a
   canonical per-ingredient link, falling back to the product's), auto-attach a
   best-guess FDC entry during resolve-or-create, and surface P/F/C/kcal per serving.
@@ -98,26 +91,27 @@ Now that all unit conversions go through WASM with compound unit support:
 
 ## Mobile / PWA
 
-See [docs/plans/2026-06-02-mobile-web-implementation-plan.md](plans/2026-06-02-mobile-web-implementation-plan.md)
-for the full plan (app-shell service worker, critical-bundle, and route-skeletons
-already shipped). Remaining:
+App-shell service worker, critical-bundle trimming, route skeletons, iOS
+camera-permission recovery, and the bundled ZXing scanner (`barcode-detector`, no
+runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
 
-- [ ] **Scanner B1 — faster lock-on**: throttle detection to ~10–12 Hz, region-of-interest
-  crop on the central scan box (offscreen canvas), pick the most-central result when
-  multiple are detected. (`useBarcodeScanner.ts`)
-- [ ] **Scanner B2 — honest iOS permission recovery**: iOS Safari won't re-prompt once
-  camera is denied; detect the denied state and show the Settings → Safari → Camera fix
-  instead of a silently-failing `retry()`.
-- [ ] **Scanner B3 — continuous multi-add feedback**: running tally / recently-scanned
-  chip list + a success pulse per add, so a grocery haul can be ripped through without
-  watching the form.
+- [ ] **B1 — faster scanner lock-on**: detection currently runs `detector.detect(video)`
+  on the full frame every `requestAnimationFrame` and takes `results[0]`
+  (`useBarcodeScanner.ts`). Throttle to ~10–12 Hz, crop the central scan-box region to a
+  small offscreen canvas (must track the *displayed* reticle box, accounting for
+  `object-fit` on the `<video>`, or it decodes the wrong region), and pick the
+  most-central result when several are detected. Extract the ROI/throttle helper as a
+  pure function and unit-test it; verify lock-on feel manually on a real iPhone.
+- [ ] **B3 — continuous multi-add feedback**: a running tally + recently-scanned chip
+  list in `persistent-scanner.tsx`, so a grocery haul can be ripped through without
+  watching the form (the per-add success pulse already exists there).
 - [ ] **C3 — residual N+1 audit**: sweep products/recipes/inventory-detail for per-row
-  query fans and batch them the way `getByLocationIds` did. Timeboxed.
-- [ ] **Self-host the scanner ZXing WASM** (loads from jsDelivr CDN today → not precached
-  by the service worker; self-hosting enables faster first scan + offline scan).
-- [ ] **Trim eager Sentry init** in `router.tsx` (replay integration is the heavy part,
-  already prod-only-sampled); a temporary `rollup-plugin-visualizer` treemap would
-  confirm the next-biggest critical-path items first.
+  query fans and batch them the way `getByLocationIds` did. Network panel should show a
+  constant query count regardless of row count. Timeboxed.
+- [ ] **Sentry lazy-init (optional)**: init in `router.tsx` is already client-only with
+  dev tracing/replay disabled and replay prod-only; if ever picked up, run a temporary
+  `rollup-plugin-visualizer` treemap first to confirm it's still the biggest
+  critical-path item.
 
 ---
 
@@ -132,6 +126,32 @@ list (need vs. on-hand). Deferred:
   conversion-fail → skip + warn. The `mealRecipe` schema already leaves room for `cookedAt`.
 - [ ] Expiration-aware suggestions, FEFO consumption, meal labels, recurring meals,
   meal templates, nutrition goals (each its own future slice).
+
+---
+
+## Household tracker / ERP
+
+The tracker module (projects / tasks / purchases) is feature-complete standalone; the
+open work is connecting it to the rest of cubby. Depth lives in two plan docs — [the
+ERP roadmap](plans/2026-07-18-household-erp-roadmap.md) (near-term, specced) and [the
+long-term backlog](plans/2026-07-18-cubby-long-term-backlog.md) (north-star tiers).
+Sequencing between the Tier 0 items and ERP §1 is deliberately undecided.
+
+- [ ] **`list_actionable_tasks`** (Tier 0): a computed unblocked-tasks read over the
+  existing dependency edges — repo query + MCP tool + "what can I do this weekend"
+  view, with a transitive "why is this blocked" read.
+- [ ] **`task.parentTaskId` subtasks** (Tier 0): additive nullable self-FK; one level
+  of checklist subtasks with an `N/M` chip on the parent.
+- [ ] **Ranged estimate purchases** (ERP §1): `costLow`/`costHigh` on `future`
+  purchases, a one-click settle action, planned-envelope rollups + budget-band charts.
+- [ ] **Purchase ↔ product / inventory bridge** (ERP §2): optional
+  `purchase.productId`, convert-to-inventory flow, purchases as price observations.
+- [ ] **Maintenance + budgeting** (ERP §3): recurring maintenance tasks, inbox view
+  for project-less tasks, tracker Problems detectors, planned-vs-actual budget view.
+
+Beyond these, the long-term backlog doc holds the later tiers (synthesis views,
+ambient capture, Home Assistant integration, digital twin) and the
+explicitly-rejected list.
 
 ---
 
