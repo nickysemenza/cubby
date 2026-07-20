@@ -1,5 +1,7 @@
 [README.md](README.md) is the canonical source of truth for the project — architecture, monorepo layout, deploy targets, commands, entities, environment, and the roadmap. Read it first. This file contains only rules and anti-patterns for the Claude agent. When you need context that isn't a rule, go to README rather than embedding the answer here.
 
+The **[Tenets](README.md#tenets)** there are binding on design proposals: inventory never auto-decrements (no cook-and-consume), `fdc_id` is product-only (nutrition goes `ingredient → product → fdc_id`), and rare interactive work stays off the background queue. Don't propose a feature that contradicts one — say it's out of scope and why.
+
 ## Where logic lives (layering)
 
 Three layers, one rule: never recompute in a higher layer what a lower one already owns.
@@ -165,7 +167,7 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Mobile PWA
 
-**Target: iOS only** — no Android-specific APIs (e.g., `navigator.vibrate` is not available on iOS Safari). The installable app shell and offline fallback are shipped; [the mobile plan](docs/plans/2026-06-02-mobile-web-implementation-plan.md) tracks scanner UX and offline-data work that remains.
+**Target: iOS only** — no Android-specific APIs (e.g., `navigator.vibrate` is not available on iOS Safari). The installable app shell and offline fallback are shipped; [the Mobile / PWA backlog](docs/todos.md#mobile--pwa) tracks the scanner UX and perf work that remains.
 
 ## Colors / Design Tokens
 
