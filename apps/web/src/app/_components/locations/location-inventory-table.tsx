@@ -190,6 +190,7 @@ export function LocationInventoryTable({
           error={error}
           entity="inventory"
           bulkActionBar={bulkActionBar}
+          embedded
         />
       )}
 

@@ -67,12 +67,20 @@ export function HeaderFilter<TData>({
   }, [filterConfig.options, filterConfig.filterType, filterConfig.facetCount]);
 
   if (filterConfig.filterType === "select") {
+    // A select filter lives in a narrow column behind a chevron, and the
+    // combobox's <input> clips its placeholder with no ellipsis ("Filter by
+    // s"). Strip the verbose lead-in down to the bare noun ("status"). The full
+    // string stays on the config — `createFilterableSelectColumn` reuses it for
+    // the inline cell editor, where the long form reads right.
+    const shortPlaceholder = filterConfig.placeholder
+      .replace(/^filter by\s+/i, "")
+      .replace(/(\.{3}|…)$/, "");
     return (
       <FilterableCombobox
         items={facetedOptions}
         value={value || null}
         onValueChange={(v) => setValue(v ?? "")}
-        placeholder={filterConfig.placeholder}
+        placeholder={shortPlaceholder}
         className={`w-full ${inputClassName}`}
       />
     );

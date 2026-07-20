@@ -16,13 +16,22 @@ export function RowsPerPageSelect<TData>({
   table: Table<TData>;
   className?: string;
 }) {
+  // Several tables set a bespoke page size (a detail-page section's 10, a
+  // recipe's ingredient count). The combobox renders its *matching item's*
+  // label, so an off-scale size with no item shows a blank box — fold the
+  // current size into the options so the control always reads its real value.
+  const current = table.getState().pagination.pageSize;
+  const sizes = PAGE_SIZES.includes(current)
+    ? PAGE_SIZES
+    : [...PAGE_SIZES, current].sort((a, b) => a - b);
+
   return (
     <FilterableCombobox
-      items={PAGE_SIZES.map((pageSize) => ({
+      items={sizes.map((pageSize) => ({
         value: `${pageSize}`,
         label: `${pageSize}`,
       }))}
-      value={`${table.getState().pagination.pageSize}`}
+      value={`${current}`}
       onValueChange={(value) => {
         if (value) table.setPageSize(Number(value));
       }}

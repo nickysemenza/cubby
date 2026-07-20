@@ -215,7 +215,7 @@ export function TaskList({ tasks }: { tasks: TaskOut[] }) {
     getPaginationRowModel: getPaginationRowModel(),
     getRowId: (row) => row.id,
     initialState: {
-      pagination: { pageSize: 20 },
+      pagination: { pageSize: 25 },
     },
   });
 
@@ -230,7 +230,7 @@ export function TaskList({ tasks }: { tasks: TaskOut[] }) {
     );
   }
 
-  return <RTable table={table} />;
+  return <RTable table={table} embedded />;
 }
 
 // -- Purchase Table --
@@ -300,7 +300,7 @@ export function PurchaseList({ purchases }: { purchases: PurchaseOut[] }) {
     getPaginationRowModel: getPaginationRowModel(),
     getRowId: (row) => row.id,
     initialState: {
-      pagination: { pageSize: 20 },
+      pagination: { pageSize: 25 },
     },
   });
 
@@ -315,7 +315,7 @@ export function PurchaseList({ purchases }: { purchases: PurchaseOut[] }) {
     );
   }
 
-  return <RTable table={table} />;
+  return <RTable table={table} embedded />;
 }
 
 // -- Project Table --

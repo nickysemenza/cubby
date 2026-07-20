@@ -109,6 +109,14 @@ interface TTableProps<TItem> {
    * instead of floating at its centre.
    */
   verticalAlign?: "top" | "middle";
+  /**
+   * Table is nested inside a detail-page section rather than owning the page.
+   * Drops the page-level sticky chrome (toolbar / column header / pagination
+   * bar), which otherwise floats over the section's own rows, and hides the
+   * toolbar and pager entirely when they'd hold nothing but the View menu and
+   * a one-page pager.
+   */
+  embedded?: boolean;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -131,6 +139,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     onGroupedChange,
     getRowClassName,
     verticalAlign = "middle",
+    embedded = false,
   } = props;
 
   const {
@@ -162,6 +171,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     grouped,
     verticalAlign,
   });
+
+  // Embedded tables drop chrome that would carry no information: a toolbar
+  // holding only the View menu + page-size control, and a pager for a list that
+  // fits on one page (the rule mobile already applies to its inline pager).
+  const showToolbar =
+    !embedded ||
+    Boolean(
+      actions ?? bulkActionBar ?? additionalToolbarContent ?? groupConfig,
+    );
+  const showPagination = !embedded || table.getPageCount() > 1;
 
   // Helper to render status rows (loading, error, empty)
   const renderStatusRow = (content: ReactNode, height = "h-16") => (
@@ -341,48 +360,56 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             {
               ...(entity ? { "--row-accent": ENTITY_ACCENTS[entity] } : {}),
               // Header pins below the nav + the (dynamic) sticky toolbar.
-              "--table-header-top": `${NAV_HEIGHT + toolbarHeight}px`,
+              // Embedded tables aren't sticky at all, so the var is moot.
+              ...(embedded
+                ? {}
+                : { "--table-header-top": `${NAV_HEIGHT + toolbarHeight}px` }),
             } as React.CSSProperties
           }
         >
           {/* Sticky toolbar — pins just below the top nav. Holds view options,
               filters reset, the bulk-action bar, and a page-size control. */}
-          <div
-            ref={toolbarRef}
-            className="sticky top-[51px] z-40 border-border border-b bg-background"
-          >
-            <DataTableToolbar
-              table={table}
-              additionalContent={
-                <div className="flex items-center gap-2">
-                  {additionalToolbarContent}
-                  {groupConfig && onGroupedChange && (
-                    <Button
-                      variant="ghost"
-                      size="icon-lg"
-                      className="shrink-0"
-                      onClick={() => onGroupedChange(!grouped)}
-                      aria-label={
-                        grouped ? "Show flat list" : "Show grouped list"
-                      }
-                    >
-                      {grouped ? (
-                        <List className="h-4 w-4" />
-                      ) : (
-                        <LayoutList className="h-4 w-4" />
-                      )}
-                    </Button>
-                  )}
-                  {!infiniteScroll && (
-                    <RowsPerPageSelect table={table} className="h-7 w-16" />
-                  )}
-                </div>
-              }
-              actions={actions}
-              bulkActionBar={bulkActionBar}
-              className="px-4 py-1"
-            />
-          </div>
+          {showToolbar && (
+            <div
+              ref={toolbarRef}
+              className={cn(
+                "border-border border-b bg-background",
+                !embedded && "sticky top-[51px] z-40",
+              )}
+            >
+              <DataTableToolbar
+                table={table}
+                additionalContent={
+                  <div className="flex items-center gap-2">
+                    {additionalToolbarContent}
+                    {groupConfig && onGroupedChange && (
+                      <Button
+                        variant="ghost"
+                        size="icon-lg"
+                        className="shrink-0"
+                        onClick={() => onGroupedChange(!grouped)}
+                        aria-label={
+                          grouped ? "Show flat list" : "Show grouped list"
+                        }
+                      >
+                        {grouped ? (
+                          <List className="h-4 w-4" />
+                        ) : (
+                          <LayoutList className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                    {!infiniteScroll && (
+                      <RowsPerPageSelect table={table} className="h-7 w-16" />
+                    )}
+                  </div>
+                }
+                actions={actions}
+                bulkActionBar={bulkActionBar}
+                className="px-4 py-1"
+              />
+            </div>
+          )}
 
           {/* Table wrapper. No longer scrolls (the window does) — kept as the
               scrollMargin anchor and the focus target for keyboard row nav. */}
@@ -437,8 +464,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               containerClassName="overflow-visible"
             >
               <TableHeader
-                className="sticky z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0"
-                style={{ top: "var(--table-header-top)" }}
+                className={cn(
+                  "bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0",
+                  !embedded && "sticky z-30",
+                )}
+                style={
+                  embedded ? undefined : { top: "var(--table-header-top)" }
+                }
               >
                 {table.getHeaderGroups().map((headerGroup) => {
                   // Check if any column has a filter config
@@ -695,8 +727,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
       {/* Desktop: persistent pagination/status bar pinned to the viewport
           bottom (page-size + page nav stay reachable without scrolling). */}
-      {!isMobile && !infiniteScroll && (
-        <div className="sticky bottom-0 z-30 border-[var(--border)] border-t bg-background px-2 py-1">
+      {!isMobile && !infiniteScroll && showPagination && (
+        <div
+          className={cn(
+            "border-[var(--border)] border-t bg-background px-2 py-1",
+            !embedded && "sticky bottom-0 z-30",
+          )}
+        >
           <DataTablePagination table={table} timing={timing} />
         </div>
       )}

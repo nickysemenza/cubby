@@ -75,3 +75,4 @@ certificates
 lcov.info
 
 .pnpm-store.codex/
+.pnpm-store/

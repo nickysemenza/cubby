@@ -505,6 +505,7 @@ export const RecipeIngredientList: React.FC<{
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
         verticalAlign="top"
+        embedded
         getRowClassName={(row) =>
           // Wash estimated rows in a soft honey tint so usage-adjusted numbers
           // read as approximate at a glance, not just via the "est." markers.
