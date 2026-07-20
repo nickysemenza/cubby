@@ -13,17 +13,6 @@ contradicts one belongs in a **Rejected** block, not in the open list.
 
 ## Recipes & Import
 
-### Notion hero image
-
-- [ ] **Notion hero image never reaches the import**: `notionPageToImportRecipe`
-  (`apps/web/src/server/utils/notion-recipe.ts`) drops the page's image blocks, so
-  `ImportRecipe.image` is always empty on the Notion sync. The persistence half is
-  already done — set `image` from the page's first image block and
-  `importRecipeImageFromUrl` (`apps/web/src/server/services/image-import.ts`, wired
-  into `recipe.insertImport`) is the template for attaching it. Notion image URLs are
-  signed/expiring, so they must be fetched at import time; the Notion sync upserts by
-  page id, and the helper no-ops when the recipe already has a photo.
-
 ### MCP recipe authoring (from real-use feedback)
 
 Follow-ons to the batch `resolve_ingredients` + `create_recipe_from_text` MCP tools
