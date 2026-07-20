@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Wrench } from "lucide-react";
 import { useState } from "react";
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
+import { CategoryAudit } from "~/app/_components/insights/category-audit";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -121,6 +122,8 @@ function SettingsPage() {
               <DiagnosticsCard />
 
               <MaintenanceCard />
+
+              <CategoryAudit />
 
               <Button variant="outline" size="sm" onClick={resetFlags}>
                 Reset developer flags

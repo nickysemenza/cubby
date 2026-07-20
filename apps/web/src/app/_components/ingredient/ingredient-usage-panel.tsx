@@ -19,11 +19,18 @@ import { IngredientUsageChart } from "./ingredient-usage-chart";
 /**
  * Per-cookbook (or all-cookbooks) ingredient usage: a histogram of the most-used
  * ingredients plus a full table of how many recipes use each.
+ *
+ * With `limit` set (the homepage panel), the table is dropped entirely — its top
+ * rows would duplicate the histogram's ranking — and the chart is capped to
+ * `limit` bars with a "view all" footer link instead.
  */
 export function IngredientUsagePanel({
   cookbookId,
+  limit,
 }: {
   cookbookId?: CookbookId;
+  /** Compact mode: cap the chart to `limit` bars, skip the table. */
+  limit?: number;
 }) {
   const api = useTRPC();
   const { data, isLoading } = useQuery(
@@ -50,6 +57,22 @@ export function IngredientUsagePanel({
   }
 
   const { rows, totalRecipes } = data;
+
+  if (limit != null) {
+    return (
+      <Stack gap="sm">
+        <IngredientUsageChart rows={rows} maxBars={limit} />
+        {rows.length > limit && (
+          <Link
+            to="/ingredients"
+            className="text-primary text-xs hover:underline"
+          >
+            View all {rows.length} ingredients →
+          </Link>
+        )}
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap="lg">

@@ -1,17 +1,19 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { ListChecks, MapPin, PieChart, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount from "~/app/_components/homepage/entitycount";
+import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
-import { CategoryAudit } from "~/app/_components/insights/category-audit";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
-import { Section, Stack } from "~/components/layout";
+import { Grid, Section, Stack } from "~/components/layout";
+import { DashboardCard } from "~/components/layout/dashboard-card";
 import { LazyMount } from "~/components/lazy-mount";
 import { Page } from "~/components/page/Page";
 import { authClient } from "~/lib/auth-client";
@@ -88,65 +90,72 @@ function Home() {
       }
       fullWidth
     >
-      {/* Entity Stats + problems alert */}
+      {/* Red alert bar — only rendered when problems > 0. */}
+      <ProblemsBanner />
+
+      {/* Entity count ledger strip */}
       <EntityCount />
 
       {/* Two-column layout: activity ledger on the left, actions + pantry
-          value chart on the right. On mobile, create-actions surface first. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex flex-col gap-4 lg:order-2">
+          value chart on the right. On mobile, create-actions surface first
+          (order-2 on lg pushes them back to the right column). */}
+      <Grid cols="pair" gap="md">
+        <Stack className="lg:order-2">
           <QuickActionsCard />
           <PantryValueCard />
-        </div>
+        </Stack>
         <div className="lg:order-1">
           <RecentActivityFeed limit={6} />
         </div>
-      </div>
+      </Grid>
 
-      {/* Insights — the visualization sections folded in from the retired
-          /insights page. All sit below the fold, so each query-backed one is
-          LazyMount-gated: its queries fire only when scrolled near (home is
-          the most-visited route, and the co-occurrence/usage queries are the
-          heaviest reads — don't pay them on every landing). */}
-      <Section
-        title="Products by Category"
-        description="Distribution of products across categories. Click a slice to view products in that category."
-      >
-        <LazyMount>
-          <ProductCategoryDonut />
-        </LazyMount>
-      </Section>
+      {/* Insights — the visualization panels folded in from the retired
+          /insights page. All sit below the fold, so each is LazyMount-gated:
+          its queries fire only when scrolled near (home is the most-visited
+          route, and the co-occurrence/usage queries are the heaviest reads —
+          don't pay them on every landing). */}
+      <Section title="Insights">
+        <Grid cols="pair" gap="md">
+          <DashboardCard
+            icon={PieChart}
+            title="Products by Category"
+            description="Distribution across categories — click a slice to view products."
+          >
+            <LazyMount>
+              <ProductCategoryDonut />
+            </LazyMount>
+          </DashboardCard>
 
-      <Section title="Inventory by Location">
-        <LazyMount>
-          <LocationSunburst />
-        </LazyMount>
-      </Section>
+          <DashboardCard
+            icon={MapPin}
+            title="Inventory by Location"
+            description="Where inventory value sits across your locations."
+          >
+            <LazyMount>
+              <LocationSunburst />
+            </LazyMount>
+          </DashboardCard>
 
-      <Section
-        title="Ingredient Relationships"
-        description="Ingredients that appear together in multiple recipes are connected. Larger nodes indicate ingredients used in more recipes."
-      >
-        <LazyMount>
-          <IngredientNetwork />
-        </LazyMount>
-      </Section>
+          <DashboardCard
+            icon={Share2}
+            title="Ingredient Relationships"
+            description="Ingredients that co-occur across recipes; larger nodes are used more."
+          >
+            <LazyMount>
+              <IngredientNetwork />
+            </LazyMount>
+          </DashboardCard>
 
-      <Section
-        title="Ingredient Usage"
-        description="How many recipes use each ingredient. Scope to a cookbook, and merge near-duplicate names inline."
-      >
-        <LazyMount>
-          <IngredientUsageSection />
-        </LazyMount>
-      </Section>
-
-      {/* CategoryAudit is click-to-run — no query until the button, so no gate. */}
-      <Section
-        title="Category Audit"
-        description="Use AI to analyze your product catalog and suggest new categories that could better organize your inventory."
-      >
-        <CategoryAudit />
+          <DashboardCard
+            icon={ListChecks}
+            title="Ingredient Usage"
+            description="How many recipes use each ingredient; scope by cookbook."
+          >
+            <LazyMount>
+              <IngredientUsageSection />
+            </LazyMount>
+          </DashboardCard>
+        </Grid>
       </Section>
     </Page>
   );
@@ -158,7 +167,8 @@ function IngredientUsageSection() {
   return (
     <Stack>
       <CookbookSelect value={cookbookId} onChange={setCookbookId} />
-      <IngredientUsagePanel cookbookId={cookbookId} />
+      {/* 12 bars ≈ the network panel's 400px, so the insight row stays level. */}
+      <IngredientUsagePanel cookbookId={cookbookId} limit={12} />
     </Stack>
   );
 }

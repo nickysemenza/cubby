@@ -140,19 +140,26 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
         d3Force.forceCollide<NetworkNode>().radius((d) => getNodeRadius(d) + 5),
       );
 
-    simulation.on("tick", () => {
-      // Keep nodes within bounds
-      for (const node of nodesCopy) {
-        const r = getNodeRadius(node);
-        node.x = Math.max(r, Math.min(dimensions.width - r, node.x ?? 0));
-        node.y = Math.max(r, Math.min(dimensions.height - r, node.y ?? 0));
-      }
-      setSimulatedNodes([...nodesCopy]);
-      setSimulatedLinks([...linksCopy]);
-    });
+    // Static layout: run the simulation to completion synchronously, then push
+    // a single state update — instead of streaming ticks through React state.
+    // The old on("tick") → setState fired twice per tick and re-rendered
+    // thousands of SVG elements ~300× per mount, freezing the main thread
+    // (requestAnimationFrame stalled 30s+). We lose only the settling
+    // animation, the right trade for a below-the-fold homepage panel.
+    simulation.stop();
+    const tickCount = Math.ceil(
+      Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay()),
+    );
+    simulation.tick(tickCount);
 
-    // Run simulation for a bit then stop for performance
-    simulation.alpha(1).restart();
+    // Keep nodes within bounds (applied once, post-settle).
+    for (const node of nodesCopy) {
+      const r = getNodeRadius(node);
+      node.x = Math.max(r, Math.min(dimensions.width - r, node.x ?? 0));
+      node.y = Math.max(r, Math.min(dimensions.height - r, node.y ?? 0));
+    }
+    setSimulatedNodes([...nodesCopy]);
+    setSimulatedLinks([...linksCopy]);
 
     return () => {
       simulation.stop();
