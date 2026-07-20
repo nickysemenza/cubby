@@ -347,7 +347,15 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
     await sheet.getByLabel("Name").fill(name);
-    await sheet.getByLabel("Cost").fill("12.34");
+    // spinbutton role disambiguates from the "Open Select cost type" trigger,
+    // whose accessible name also contains "Cost" (same fix as the desktop
+    // purchases quick-add test above).
+    await sheet.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
+    // costType + trade are required (NOT NULL).
+    await sheet.getByPlaceholder("Select cost type").click();
+    await page.getByRole("option", { name: "Materials", exact: true }).click();
+    await sheet.getByPlaceholder("Select trade").click();
+    await page.getByRole("option", { name: "Other", exact: true }).click();
     await sheet.getByRole("button", { name: /^Create$/ }).click();
 
     // Sheet closes and the row lands, same round trip as the desktop
