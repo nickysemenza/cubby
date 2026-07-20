@@ -96,6 +96,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
    * itself — both affordances would be no-ops there.
    */
   omitDetailLink?: boolean;
+  /** Extra content rendered inline after the standard name column's name. */
+  nameSuffix?: (row: TData) => ReactNode;
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
@@ -176,6 +178,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   nameClassName,
   nameEditable,
   omitDetailLink,
+  nameSuffix,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
@@ -325,6 +328,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     nameClassName,
     nameEditable,
     omitDetailLink,
+    nameSuffix,
   });
 
   // Memoize getRowId to prevent recreating on every render

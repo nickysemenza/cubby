@@ -19,8 +19,13 @@
  * `replaceDependencyEdges`'s SELF_DEPENDENCY guard).
  *
  * Single-user scale: everything is batch-loaded (4 queries — live open
- * tasks, all task edges, live open projects, all project edges) and
- * computed in TS, no per-row queries.
+ * tasks, all task edges, live open projects, all project edges — plus one
+ * grouped subtask-count query) and computed in TS, no per-row queries.
+ *
+ * Subtask rows (`parentTaskId` set) are excluded from both `actionable` and
+ * `blocked` — a checklist item is represented via its parent, not
+ * independently. They still participate in `tasksById`/`taskEdgesByOwner`, so
+ * a why-chain can walk through one if an edge points at it.
  */
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import type {
@@ -39,6 +44,7 @@ import {
   taskDependency,
 } from "~/server/db/schema";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
+import { taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 
 /** The subset of a live, non-done task's fields the chain walk needs. */
@@ -208,14 +214,30 @@ export async function listActionableTasks(
     pushTo(projectEdgesByOwner, edge.projectId, edge.blockedByProjectId);
   }
 
+  // Subtask counts must include done subtasks, which `openTaskRows` (non-done
+  // only) can't supply — a separate grouped query over ALL live subtasks.
+  const subtaskCounts = await taskSubtaskCounts(
+    db,
+    openTaskRows.map((row) => row.id),
+  );
+
   const actionable: ActionableTasksOut["actionable"] = [];
   const blocked: BlockedTaskOut[] = [];
 
   for (const row of openTaskRows) {
+    // Checklist items are represented via their parent, not surfaced as
+    // independent actionable/blocked rows (they can still appear inside a
+    // why-chain below, via `tasksById`/`taskEdgesByOwner` — those stay
+    // unfiltered).
+    if (row.parentTaskId) continue;
+
+    const counts = subtaskCounts.get(row.id);
     const taskOutRow = dbTaskToAPI(
       row,
       blockedByIds.get(row.id) ?? [],
       blockingIds.get(row.id) ?? [],
+      counts?.count ?? 0,
+      counts?.doneCount ?? 0,
     );
 
     const reasons: BlockedReason[] = [];

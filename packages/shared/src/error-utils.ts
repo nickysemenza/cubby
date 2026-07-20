@@ -48,8 +48,11 @@ export const AppErrors = {
   PROJECT_HAS_TASKS: "PRECONDITION_FAILED",
   PROJECT_HAS_PURCHASES: "PRECONDITION_FAILED",
   // Generic (non-entity-specific): a blockedByIds replacement set contains
-  // the entity's own id.
+  // the entity's own id. Also reused for task.parentTaskId self-reference.
   SELF_DEPENDENCY: "BAD_REQUEST",
+  // task.parentTaskId: only one level of subtask nesting is supported.
+  TASK_PARENT_IS_SUBTASK: "BAD_REQUEST",
+  TASK_HAS_SUBTASKS: "BAD_REQUEST",
 
   // Conflict/duplicate
   PRODUCT_ALREADY_EXISTS: "CONFLICT",

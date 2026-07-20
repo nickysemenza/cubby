@@ -71,13 +71,14 @@ export function registerProjectTools(server: McpServer) {
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
-      list: "List project tasks with status, due dates, category, project name, and dependency ids. Filter by status/projectId/category/search.",
-      get: "Get a task by ID, including blocked-by/blocking task ids.",
+      list: "List project tasks with status, due dates, category, project name, parent task, and subtask counts. Filter by status/projectId/category/search/topLevelOnly/parentTaskId. Pass topLevelOnly=true to exclude checklist subtasks.",
+      get: "Get a task by ID, including blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
       create:
-        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project.",
+        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project. Set parentTaskId to create it as a checklist subtask of another task — one level only (a subtask can't itself have subtasks), and projectId is inherited from the parent when omitted. A subtask's own status is independent — the parent never auto-completes.",
       update:
-        "Update a task's fields; `blockedByIds` replaces the full set of tasks blocking this one.",
-      delete: "Soft-delete tasks by IDs (dependency edges are cleaned up).",
+        "Update a task's fields; `blockedByIds` replaces the full set of tasks blocking this one. `parentTaskId` can be set/changed/cleared, subject to the one-level rule (a task with subtasks can't become a subtask, and a subtask can't itself be a parent).",
+      delete:
+        "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
     create: (caller, params) => caller.task.create(params),
   });

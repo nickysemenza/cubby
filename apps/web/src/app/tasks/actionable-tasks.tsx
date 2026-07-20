@@ -155,11 +155,18 @@ function ActionableTasksBody({ data }: { data: ActionableTasksOut }) {
                   className={cn(t.isLater && "text-muted-foreground")}
                 >
                   <TableCell>
-                    <EntityInlineLink
-                      entity="task"
-                      data={{ id: t.id, name: t.name }}
-                      truncate
-                    />
+                    <Row align="center" gap="xs">
+                      <EntityInlineLink
+                        entity="task"
+                        data={{ id: t.id, name: t.name }}
+                        truncate
+                      />
+                      {t.subtaskCount > 0 && (
+                        <Badge variant="outline">
+                          {t.doneSubtaskCount}/{t.subtaskCount}
+                        </Badge>
+                      )}
+                    </Row>
                   </TableCell>
                   <TableCell>
                     <Badge variant={taskStatusBadgeVariant[t.status]}>
@@ -205,6 +212,11 @@ function ActionableTasksBody({ data }: { data: ActionableTasksOut }) {
                   <Badge variant={taskStatusBadgeVariant[bt.task.status]}>
                     {TASK_STATUS_LABELS[bt.task.status]}
                   </Badge>
+                  {bt.task.subtaskCount > 0 && (
+                    <Badge variant="outline">
+                      {bt.task.doneSubtaskCount}/{bt.task.subtaskCount}
+                    </Badge>
+                  )}
                 </Row>
                 <Stack gap="tight" className="pl-6">
                   {bt.reasons.map((reason, i) => (

@@ -1,3 +1,4 @@
+import { unsafeTaskId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   projectCreateInput,
@@ -8,7 +9,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { taskRouter } from "~/server/api/routers/task";
 import { createTestCaller } from "~/server/api/trpc";
 import { createProject, updateProject } from "~/server/repo/project";
-import { createTask, deleteTasks, updateTask } from "~/server/repo/task";
+import {
+  createTask,
+  deleteTasks,
+  getTaskByID,
+  taskList,
+  updateTask,
+} from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
 
 describe("task repository — listActionableTasks", () => {
@@ -243,5 +250,271 @@ describe("task router — listActionable", () => {
 
     // The .output() contract must accept real repo output (pins schema<->repo).
     expect(() => actionableTasksOut.parse(result)).not.toThrow();
+  });
+});
+
+// One level of checklist subtasks (task.parentTaskId). Parent status stays
+// fully manual — none of these assert any auto-completion of the parent.
+describe("task repository — subtasks (parentTaskId)", () => {
+  const ctx = withTestDb();
+
+  it("create with parentTaskId inherits the parent's projectId when omitted", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "subtask project" }),
+      ctx.actor,
+    );
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "parent task", projectId: project.id }),
+      ctx.actor,
+    );
+
+    const subtask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "subtask", parentTaskId: parent.id }),
+      ctx.actor,
+    );
+
+    expect(subtask.parentTaskId).toBe(parent.id);
+    expect(subtask.projectId).toBe(project.id);
+  });
+
+  it("create with parentTaskId and an explicit projectId keeps the explicit projectId", async () => {
+    const parentProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "parent project" }),
+      ctx.actor,
+    );
+    const otherProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "other project" }),
+      ctx.actor,
+    );
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "parent task",
+        projectId: parentProject.id,
+      }),
+      ctx.actor,
+    );
+
+    const subtask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "subtask with explicit project",
+        parentTaskId: parent.id,
+        projectId: otherProject.id,
+      }),
+      ctx.actor,
+    );
+
+    expect(subtask.projectId).toBe(otherProject.id);
+  });
+
+  it("rejects a parent that is itself a subtask — only one level of nesting", async () => {
+    const grandparent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "grandparent" }),
+      ctx.actor,
+    );
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "parent", parentTaskId: grandparent.id }),
+      ctx.actor,
+    );
+
+    await expect(
+      createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "grandchild",
+          parentTaskId: parent.id,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/only one level/i);
+  });
+
+  it("rejects giving a parent to a task that already has live subtasks", async () => {
+    const futureSubtask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "future subtask target" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "existing subtask",
+        parentTaskId: futureSubtask.id,
+      }),
+      ctx.actor,
+    );
+    const otherTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "other task" }),
+      ctx.actor,
+    );
+
+    await expect(
+      updateTask(
+        ctx.db,
+        futureSubtask.id,
+        { parentTaskId: otherTask.id },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/cannot itself become a subtask/i);
+  });
+
+  it("rejects a task being its own parent", async () => {
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "self parent" }),
+      ctx.actor,
+    );
+
+    await expect(
+      updateTask(ctx.db, t.id, { parentTaskId: t.id }, ctx.actor),
+    ).rejects.toThrow(/cannot be its own parent/i);
+  });
+
+  it("rejects a nonexistent parent (create and update)", async () => {
+    const bogus = unsafeTaskId("00000000-0000-0000-0000-000000000000");
+
+    await expect(
+      createTask(
+        ctx.db,
+        taskCreateInput.parse({ name: "orphan", parentTaskId: bogus }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/not found/i);
+
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "will get a bogus parent" }),
+      ctx.actor,
+    );
+    await expect(
+      updateTask(ctx.db, t.id, { parentTaskId: bogus }, ctx.actor),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("rejects a soft-deleted parent", async () => {
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "soon-deleted parent" }),
+      ctx.actor,
+    );
+    await deleteTasks(ctx.db, [parent.id], ctx.actor);
+
+    await expect(
+      createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "orphaned by deletion",
+          parentTaskId: parent.id,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("update can clear parentTaskId", async () => {
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "parent" }),
+      ctx.actor,
+    );
+    const subtask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "subtask", parentTaskId: parent.id }),
+      ctx.actor,
+    );
+
+    const updated = await updateTask(
+      ctx.db,
+      subtask.id,
+      { parentTaskId: null },
+      ctx.actor,
+    );
+
+    expect(updated.parentTaskId).toBeNull();
+    const reread = await getTaskByID(ctx.db, subtask.id);
+    expect(reread.parentTaskId).toBeNull();
+  });
+
+  it("taskList topLevelOnly excludes subtasks, and reports correct subtask counts", async () => {
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "checklist parent" }),
+      ctx.actor,
+    );
+    const doneSub = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "sub done", parentTaskId: parent.id }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, doneSub.id, { status: "done" }, ctx.actor);
+    const openSub = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "sub open", parentTaskId: parent.id }),
+      ctx.actor,
+    );
+
+    const { data: topLevel } = await taskList(
+      ctx.db,
+      { topLevelOnly: true },
+      [],
+      { pageIndex: 0, pageSize: 500 },
+    );
+    const topLevelIds = topLevel.map((t) => t.id);
+    expect(topLevelIds).toContain(parent.id);
+    expect(topLevelIds).not.toContain(doneSub.id);
+    expect(topLevelIds).not.toContain(openSub.id);
+
+    const parentRow = topLevel.find((t) => t.id === parent.id);
+    expect(parentRow?.subtaskCount).toBe(2);
+    expect(parentRow?.doneSubtaskCount).toBe(1);
+
+    const { data: subtasksOnly } = await taskList(
+      ctx.db,
+      { parentTaskId: parent.id },
+      [],
+      { pageIndex: 0, pageSize: 500 },
+    );
+    expect(subtasksOnly.map((t) => t.id).sort()).toEqual(
+      [doneSub.id, openSub.id].sort(),
+    );
+  });
+
+  it("listActionableTasks excludes subtask rows, and parent rows carry subtask counts", async () => {
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "actionable parent" }),
+      ctx.actor,
+    );
+    const doneSub = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "done sub", parentTaskId: parent.id }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, doneSub.id, { status: "done" }, ctx.actor);
+    const openSub = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "open sub", parentTaskId: parent.id }),
+      ctx.actor,
+    );
+
+    const result = await listActionableTasks(ctx.db);
+
+    expect(result.actionable.map((r) => r.id)).toContain(parent.id);
+    expect(result.actionable.map((r) => r.id)).not.toContain(openSub.id);
+    expect(result.blocked.map((r) => r.task.id)).not.toContain(openSub.id);
+    expect(result.blocked.map((r) => r.task.id)).not.toContain(doneSub.id);
+
+    const parentRow = result.actionable.find((r) => r.id === parent.id);
+    expect(parentRow?.subtaskCount).toBe(2);
+    expect(parentRow?.doneSubtaskCount).toBe(1);
   });
 });

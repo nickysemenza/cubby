@@ -1,8 +1,8 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
-import { useQueries } from "@tanstack/react-query";
-import { Info, Link2 } from "lucide-react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { Info, Link2, ListChecks } from "lucide-react";
 import type { FC } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { WithTaskSearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/shared";
@@ -10,6 +10,9 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
@@ -20,6 +23,7 @@ import {
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
@@ -35,6 +39,110 @@ interface TaskDetailProps {
 /** A blocked-by/blocking dependency link, name-only. */
 function TaskDependencyBadge({ id, name }: { id: string; name: string }) {
   return <EntityInlineLink entity="task" data={{ id, name }} compact />;
+}
+
+// Stable empty array — see CLAUDE.md's "unstable-hook-default" guard: an
+// inline `[]` here would allocate a fresh reference on every render while
+// the subtasks query is loading/disabled.
+const NO_SUBTASKS: TaskOut[] = [];
+
+const SUBTASKS_PAGINATION = { pageIndex: 0, pageSize: 200 } as const;
+const SUBTASKS_SORT = { orderBy: "createdAt", direction: "asc" } as const;
+
+/**
+ * The parent's checklist: live subtasks with a checkbox toggling
+ * done <-> not_started, a link to each subtask's own detail page, and an
+ * inline quick-add. Parent status stays fully manual — completing every
+ * subtask here never touches the parent's own status.
+ */
+function SubtaskChecklist({ task }: { task: TaskOut }) {
+  const api = useTRPC();
+  const [newSubtaskName, setNewSubtaskName] = useState("");
+
+  const { data: subtasksPage } = useQuery(
+    api.task.list.queryOptions({
+      filters: { parentTaskId: task.id },
+      sort: SUBTASKS_SORT,
+      pagination: SUBTASKS_PAGINATION,
+    }),
+  );
+  const subtasks = subtasksPage?.items ?? NO_SUBTASKS;
+
+  // This is its own component (not threaded TaskDetail's `updateMutation`
+  // prop), so it gets its own instance of the same "any field update"
+  // mutation the rest of the page's EditableCells use — same
+  // `taskMutationInvalidateKeys`, so toggling here also refreshes the
+  // parent's own subtaskCount/doneSubtaskCount.
+  const toggleMutation = useUpdateMutation({
+    mutationFn: api.task.update.mutationOptions,
+    entity: "task",
+    invalidateKeys: taskMutationInvalidateKeys,
+  });
+
+  const createMutation = useActionMutation({
+    mutationFn: api.task.create.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (created) => `Added "${created.name}"`,
+    onSuccess: () => setNewSubtaskName(""),
+  });
+
+  const addSubtask = () => {
+    const name = newSubtaskName.trim();
+    if (!name) return;
+    createMutation.mutate({ name, parentTaskId: task.id });
+  };
+
+  return (
+    <Stack gap="sm">
+      {subtasks.length === 0 ? (
+        <p className="text-muted-foreground text-sm">No subtasks yet.</p>
+      ) : (
+        <Stack gap="xs">
+          {subtasks.map((subtask) => (
+            <Row key={subtask.id} align="center" gap="sm">
+              <Checkbox
+                checked={subtask.status === "done"}
+                disabled={toggleMutation.isPending}
+                onCheckedChange={(checked) =>
+                  toggleMutation.mutate({
+                    id: subtask.id,
+                    data: { status: checked ? "done" : "not_started" },
+                  })
+                }
+              />
+              <EntityInlineLink
+                entity="task"
+                data={{ id: subtask.id, name: subtask.name }}
+                compact
+              />
+            </Row>
+          ))}
+        </Stack>
+      )}
+      <Row gap="sm" align="center">
+        <Input
+          value={newSubtaskName}
+          onChange={(e) => setNewSubtaskName(e.target.value)}
+          placeholder="Add a subtask..."
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addSubtask();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!newSubtaskName.trim() || createMutation.isPending}
+          onClick={addSubtask}
+        >
+          Add
+        </Button>
+      </Row>
+    </Stack>
+  );
 }
 
 export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
@@ -228,10 +336,44 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         </Stack>
       ),
     },
+    // Subtasks only apply to a top-level task — a subtask itself never gets
+    // its own checklist (one level only; see repo/task/crud.ts).
+    ...(task.parentTaskId
+      ? []
+      : [
+          {
+            title: "Subtasks",
+            icon: ListChecks,
+            headerAction:
+              task.subtaskCount > 0 ? (
+                <Badge variant="outline">
+                  {task.doneSubtaskCount}/{task.subtaskCount}
+                </Badge>
+              ) : undefined,
+            content: <SubtaskChecklist task={task} />,
+          } satisfies DetailSection,
+        ]),
     ...commonSections,
   ];
 
   const heroStats: DetailHeroStat[] = [
+    // A subtask surfaces its parent right in the spec-plate header (in place
+    // of "Project" — a subtask inherits its project from the parent, not
+    // independently, so the parent link is the more useful breadcrumb here).
+    ...(task.parentTaskId && task.parentTaskName
+      ? [
+          {
+            label: "Subtask of",
+            value: (
+              <EntityInlineLink
+                entity="task"
+                data={{ id: task.parentTaskId, name: task.parentTaskName }}
+                truncate
+              />
+            ),
+          } satisfies DetailHeroStat,
+        ]
+      : []),
     {
       label: "Category",
       value: task.category ?? <NoneValue />,

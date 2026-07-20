@@ -168,12 +168,21 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         search: ts.getColumnFilter("name"),
         status: ts.getColumnFilter("status") as TaskStatus | undefined,
         projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+        // Checklist subtasks are managed from their parent's detail page, not
+        // surfaced as independent rows here.
+        topLevelOnly: true,
       };
     },
     columns,
     filters,
     deletable: deletableConfig,
     nameEditable,
+    nameSuffix: (row) =>
+      row.subtaskCount > 0 ? (
+        <Badge variant="outline">
+          {row.doneSubtaskCount}/{row.subtaskCount}
+        </Badge>
+      ) : undefined,
     infinite: true,
     tableStateOptions,
   });

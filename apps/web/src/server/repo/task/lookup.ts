@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
@@ -16,7 +16,7 @@ import {
   getDb,
   relations,
 } from "~/server/repo/database-helpers";
-import { taskDependencyIds } from "./crud";
+import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 
 export const taskList = async (
@@ -32,6 +32,10 @@ export const taskList = async (
       filters.status ? eq(task.status, filters.status) : undefined,
       filters.projectId ? eq(task.projectId, filters.projectId) : undefined,
       filters.category ? eq(task.category, filters.category) : undefined,
+      filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
+      filters.parentTaskId
+        ? eq(task.parentTaskId, filters.parentTaskId)
+        : undefined,
     ],
   );
 
@@ -50,15 +54,21 @@ export const taskList = async (
   );
 
   const ids = rows.map((r) => r.id);
-  const deps = await taskDependencyIds(db, ids);
+  const [deps, subtaskCounts] = await Promise.all([
+    taskDependencyIds(db, ids),
+    taskSubtaskCounts(db, ids),
+  ]);
 
-  const data = rows.map((row) =>
-    dbTaskToAPI(
+  const data = rows.map((row) => {
+    const counts = subtaskCounts.get(row.id);
+    return dbTaskToAPI(
       row,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],
-    ),
-  );
+      counts?.count ?? 0,
+      counts?.doneCount ?? 0,
+    );
+  });
 
   return { data, count };
 };

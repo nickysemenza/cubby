@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
-import { entityEmbedding } from "~/server/db/schema";
+import { entityEmbedding, task, taskDependency } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import {
@@ -26,7 +26,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
-import { createTask, deleteTasks } from "~/server/repo/task";
+import { createTask, deleteTasks, updateTask } from "~/server/repo/task";
 
 // F1 regression guard: the inventory manifest has onDelete: [], so a repo/bulk
 // removal transaction is the ONLY place an inventory entry's search-embedding
@@ -236,6 +236,62 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     await deleteTasks(ctx.db, [task.id], TEST_ACTOR);
 
     expect(await embeddingDeletedAt("task", task.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  // task.parentTaskId one-level cascade: deleting a parent takes its live
+  // subtasks with it (they have no independent existence — a checklist item
+  // is represented via its parent). Same soft-delete/edge-cleanup/embedding
+  // treatment as the explicitly-requested id.
+  it("deleteTasks cascades to live subtasks (soft-deleted, edges cleaned, embeddings cleaned)", async () => {
+    const parentTask = await createTask(
+      ctx.db,
+      mock(taskCreateInput, {
+        overrides: { name: "Cascade Parent", parentTaskId: null },
+      }),
+      TEST_ACTOR,
+    );
+    const subtask = await createTask(
+      ctx.db,
+      mock(taskCreateInput, {
+        overrides: { name: "Cascade Subtask", parentTaskId: parentTask.id },
+      }),
+      TEST_ACTOR,
+    );
+    const blocker = await createTask(
+      ctx.db,
+      mock(taskCreateInput, {
+        overrides: { name: "Cascade Blocker", parentTaskId: null },
+      }),
+      TEST_ACTOR,
+    );
+    await updateTask(
+      ctx.db,
+      subtask.id,
+      { blockedByIds: [blocker.id] },
+      TEST_ACTOR,
+    );
+    await seedEmbedding("task", parentTask.id);
+    await seedEmbedding("task", subtask.id);
+
+    await deleteTasks(ctx.db, [parentTask.id], TEST_ACTOR);
+
+    const parentRow = await getDb(ctx.db).query.task.findFirst({
+      where: eq(task.id, parentTask.id),
+    });
+    const subtaskRow = await getDb(ctx.db).query.task.findFirst({
+      where: eq(task.id, subtask.id),
+    });
+    expect(parentRow?.deletedAt).not.toBeNull();
+    expect(subtaskRow?.deletedAt).not.toBeNull();
+
+    const remainingEdges = await getDb(ctx.db).query.taskDependency.findMany({
+      where: eq(taskDependency.taskId, subtask.id),
+    });
+    expect(remainingEdges).toHaveLength(0);
+
+    expect(await embeddingDeletedAt("task", parentTask.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("task", subtask.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 

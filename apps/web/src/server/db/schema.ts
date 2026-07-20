@@ -42,6 +42,7 @@ import {
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   date,
@@ -847,6 +848,12 @@ export const task = pgTable(
     projectId: uuid("projectId")
       .$type<ProjectId>()
       .references(() => project.id),
+    // One level of checklist subtasks — a subtask's own parentTaskId must be
+    // null (enforced in repo/task/crud.ts, not the schema). Parent status
+    // stays fully manual; an all-done checklist never auto-completes it.
+    parentTaskId: uuid("parentTaskId")
+      .$type<TaskId>()
+      .references((): AnyPgColumn => task.id),
     dueDate: date("dueDate", { mode: "string" }),
     dueEndDate: date("dueEndDate", { mode: "string" }),
     // Free-form label (organic Notion option set, intentionally not an enum).
@@ -862,6 +869,7 @@ export const task = pgTable(
     index("Task_projectId_idx").on(table.projectId),
     index("Task_status_idx").on(table.status),
     index("Task_dueDate_idx").on(table.dueDate),
+    index("Task_parentTaskId_idx").on(table.parentTaskId),
     index("Task_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
   ],
 );
@@ -1113,6 +1121,14 @@ export const taskRelations = relations(task, ({ one, many }) => ({
   project: one(project, {
     fields: [task.projectId],
     references: [project.id],
+  }),
+  parentTask: one(task, {
+    fields: [task.parentTaskId],
+    references: [task.id],
+    relationName: "TaskToTask",
+  }),
+  subtasks: many(task, {
+    relationName: "TaskToTask",
   }),
   blockedBy: many(taskDependency, { relationName: "TaskBlocked" }),
   blocking: many(taskDependency, { relationName: "TaskBlocking" }),

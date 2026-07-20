@@ -171,6 +171,10 @@ const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
   projectId: projectId.nullable(),
+  // One level of checklist subtasks — a subtask's own parentTaskId must be
+  // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
+  // an all-done checklist never auto-completes it.
+  parentTaskId: taskId.nullable(),
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable().describe("End of a due-date range"),
   category: z.string().nullable().describe("Free-form category label"),
@@ -180,6 +184,10 @@ const taskCreateShape = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
   projectId: projectId.nullable().default(null),
+  // If set and `projectId` is omitted, the created task inherits the
+  // parent's projectId (see repo/task/crud.ts's createTask) — one-time at
+  // create, no ongoing sync afterwards.
+  parentTaskId: taskId.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
   category: z.string().nullable().default(null),
@@ -210,6 +218,10 @@ export const taskFilterFields = {
   projectId: projectId.optional(),
   category: z.string().optional(),
   search: z.string().optional(),
+  /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
+  topLevelOnly: z.boolean().optional(),
+  /** Only this parent's live subtasks. */
+  parentTaskId: taskId.optional(),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -227,8 +239,13 @@ export const taskOut = z.object({
   id: taskId,
   ...taskFields,
   projectName: z.string().nullable(),
+  /** Null when the task has no parent, or the parent is gone/soft-deleted. */
+  parentTaskName: z.string().nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
+  /** Live subtask count (incl. done ones) — 0 for a subtask itself (one level). */
+  subtaskCount: z.number().int(),
+  doneSubtaskCount: z.number().int(),
   ...timestampedFields,
 });
 export type TaskOut = z.infer<typeof taskOut>;
@@ -263,6 +280,12 @@ export const actionableTaskOut = z.object({
   projectName: z.string().nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
+  // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
+  // in sync by hand. Actionable/blocked rows are always top-level (subtask
+  // rows are excluded — see repo/task/actionable.ts), so these count the
+  // row's own live subtasks same as taskOut.
+  subtaskCount: z.number().int(),
+  doneSubtaskCount: z.number().int(),
   ...timestampedFields,
   isLater: z
     .boolean()

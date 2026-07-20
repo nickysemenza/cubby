@@ -70,7 +70,9 @@ const PROJECT_SCOPED_PAGE_SIZE = 500;
 
 export function projectTasksQueryParams(projectId: string) {
   return {
-    filters: { projectId },
+    // Checklist subtasks roll up to their parent everywhere (N/M chip);
+    // surfacing them here alongside the parent would double-count the work.
+    filters: { projectId, topLevelOnly: true },
     sort: { orderBy: "createdAt" as const, direction: "desc" as const },
     pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
   };
