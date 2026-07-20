@@ -15,6 +15,15 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 - A **social app** — no feeds, public recipe sharing, or community
 - A **commerce tool** — no in-app buying, ordering, or cross-store price-shopping
 
+### Tenets
+
+Standing decisions that keep scope honest. A backlog item that contradicts one of these is rejected, not deferred.
+
+1. **Inventory is a ballpark, not a ledger.** For kitchen ingredients especially, a count is a stale-tolerant estimate — enough to answer *"do I have enough flour?"*, never precise enough to drive automatic math. Truth is restored by a deliberate [recount](docs/inventory-audit.md), never inferred from activity. **Nothing decrements inventory as a side effect** — there is no cook-a-recipe → deduct-the-ingredients flow, and there won't be. Consumption is always an explicit human act.
+2. **`fdc_id` belongs to the product, not the ingredient.** A USDA link describes a specific purchasable thing, not the abstract "flour". Ingredient nutrition resolves through the product (`ingredient → product → fdc_id`) — always one hop away, on purpose. Don't add a per-ingredient USDA column to shorten the hop.
+3. **Rare and interactive work stays interactive.** Cookbook/EPUB import runs a few times a year with a human watching; it needs no queue, retries, or DLQ. The background queue is for work that is frequent, unattended, or slow enough to break a request (embeddings, valuation, recompute) — not for making rare work look industrial.
+4. **One user, one household.** Every trade-off resolves toward one person's taste: no multi-user coordination, no restore/undo, no reservations or locking. Speed and recoverability beat correctness ceremony.
+
 ## ✨ Capabilities
 
 **Inventory**
@@ -22,6 +31,7 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 - Barcode scan for quick capture (mobile-optimized)
 - Bulk edit and move
 - Gallery, table, and visualization (treemap, sunburst) views
+- Phone-first recount/reconcile pass — the deliberate act that refreshes the ballpark (see [docs/inventory-audit.md](docs/inventory-audit.md))
 
 **Products**
 - Specific items (UPC, manufacturer, price, nutrition) or `misc:` placeholders
@@ -33,6 +43,17 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 - Ingredients can be other recipes (composition)
 - Side-by-side recipe comparison
 - Cost rollups via product unit mappings
+- Prep-sheet, nested (spec), and ingredient × component matrix views, plus a print/export route
+- Client-side scaling (multiplier / target weight / anchor ingredient)
+
+**Cookbooks**
+- Import a cookbook from an EPUB — chapters chunked and assembled into recipes (client-side WASM extraction, server-side LLM proxy)
+- Recipes keep a `recipeSource` pointer back to the cookbook they came from
+
+**Meals**
+- Plan recipes onto a calendar (week + table views), scaled per meal
+- Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown (display-only; see [Tenets](#tenets))
+- Suggestions — *"what can I make tonight?"* from what's on hand
 
 **USDA**
 - Full USDA FoodData Central database loaded into a sibling service
@@ -40,6 +61,7 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 
 **Locations**
 - Tree structure (house → room → shelf → bin)
+- Drag-drop arrange surface (tree + Miller-column board) for reparenting locations and moving items
 - Interactive graph, treemap, sunburst views
 - Printable QR-code shortcode labels
 
@@ -67,7 +89,7 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 - Installable PWA with splash screens
 - Touch-friendly cards and immersive barcode scanner
 - App-shell offline fallback with precached styles, fonts, and recipe WASM
-- *Offline data/mutation sync and swipe gestures remain planned — see [Roadmap](#-roadmap)*
+- *A true offline mutation queue is deliberately deferred — the app shell works offline, writes need the network*
 
 ## 🧱 Tech Stack
 
@@ -367,7 +389,8 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 ### Recently shipped
 
 - **Project tracker migration + maturation** — the household projects/tasks/purchases databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/purchases`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
-- **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction was deliberately scoped out — it lives under *Meal planning v2* below → [docs/todos.md](docs/todos.md)
+- **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
+- **Location arrange** — drag-drop reparenting of locations and items across a tree view and a Miller-column board, with an Unknown dock for unplaced items.
 
 ### Now
 
@@ -377,13 +400,12 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 - **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: ranged estimate purchases (a planned purchase carries a cost *range*, e.g. "electrical, $50–70k"), a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations), and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
-- **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
 
 ### Later
 
-- **Meal planning v2** — cook-and-consume inventory deduction (Phase 4), expiration-aware suggestions, FEFO consumption, meal templates, nutrition goals
-- **WASM deep cuts** — batch recipe parsing, custom unit aliases, inventory depletion preview
-- **Location drag-drop** in the tree view
+- **Nutrition & cost intelligence** — macro-aware nutrition through the product hop (see [Tenets](#tenets)), then price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
+- **Meal planning v2** — meal labels, recurring meals, meal templates, nutrition goals (no inventory deduction — see [Tenets](#tenets))
+- **WASM deep cuts** — batch recipe parsing, custom unit aliases
 - **Engineering backlog** — document test-placement criteria; persist scraped/Notion hero images on the server import path
 
 ## 📚 Further Docs

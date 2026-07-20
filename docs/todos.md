@@ -6,6 +6,9 @@ alternatives live next to the items they concern (there is no separate plans
 directory — detail beyond what an item carries here gets re-derived at build
 time, against the code as it exists then).
 
+Everything here is bounded by the [Tenets](../README.md#tenets). An idea that
+contradicts one belongs in a **Rejected** block, not in the open list.
+
 ---
 
 ## Recipes & Import
@@ -16,10 +19,12 @@ time, against the code as it exists then).
   *form* imports the image client-side via `image.importFromUrl`, but the server-side
   import (`apps/web/src/server/repo/import-recipe-convert.ts`) drops
   `ImportRecipe.image`. Fix: call the existing `importImageFromUrl(db, …)`
-  (`apps/web/src/server/repo/image.ts`) during server-side import and attach the
-  resulting image id. This is also the path for the deferred Notion hero-image import
-  — note Notion image URLs are signed/expiring, so they must be fetched at import time.
-  (Strongest fit for the async queue — see [Background Jobs](#background-jobs-cron--queue).)
+  (`apps/web/src/server/services/image-storage.service.ts` — `services/image-import.ts`
+  is a working call-site template) during server-side import and attach the resulting
+  image id via the `recipeImage` join table. This is also the path for the deferred
+  Notion hero-image import — note Notion image URLs are signed/expiring, so they must
+  be fetched at import time. Do it **inline**: import is user-triggered and already
+  awaits a scrape, so it doesn't need the background queue.
 
 ### MCP recipe authoring (from real-use feedback)
 
@@ -33,10 +38,13 @@ prep/nested/matrix views + the `/recipes/$id/export` print route).
   agent once macro-aware nutrition (below) makes macros queryable via a
   `get_recipe_nutrition(recipeId, servings) → {P,F,C,kcal}` tool. Build only if the
   iterate-and-recheck loop stays painful in practice.
-- [ ] **Macro-aware nutrition (prereq for the above)**: add an ingredient-level USDA
-  `fdc_id` link (today `fdc_id` lives only on `Product`; for nutrition you want a
-  canonical per-ingredient link, falling back to the product's), auto-attach a
-  best-guess FDC entry during resolve-or-create, and surface P/F/C/kcal per serving.
+- [ ] **Macro-aware nutrition (prereq for the above)**: surface P/F/C/kcal per serving
+  by resolving `ingredient → product → fdc_id` — the hop stays, per
+  [tenet 2](../README.md#tenets); `fdc_id` is **not** getting an ingredient-level
+  column. Work is therefore: pick the representative product for an ingredient that
+  has several, auto-attach a best-guess product/FDC entry during resolve-or-create,
+  and render an explicit "unmapped ingredient" state rather than a silently-wrong
+  total. Then expose `get_recipe_nutrition(recipeId, servings) → {P,F,C,kcal}`.
 
 ### Recipe scaling — density coverage (Phase 2)
 
@@ -79,15 +87,24 @@ Now that all unit conversions go through WASM with compound unit support:
 - [ ] **Nutrient density comparisons**: Compare foods by protein-per-calorie ratios directly
 - [ ] **Batch ingredient parsing**: Parse entire recipe text and convert all amounts in one WASM call
 - [ ] **Custom unit aliases**: User-defined "1 serving = X g" with automatic nutrient calculation
-- [ ] **Inventory depletion preview**: "If I make this recipe, how much of each nutrient will I have left?"
 
-### USDA edge search parity
+### Rejected
+
+- **Inventory depletion preview** ("if I make this recipe, how much of each nutrient
+  will I have left?") — needs a precise running stock balance, which
+  [tenet 1](../README.md#tenets) says inventory will never be. Cost/nutrition per
+  *recipe* is the useful half and already exists.
+
+### USDA
 
 - [ ] **Decide whether edge FTS should include brand fields**: the current D1/R2
   artifact indexes only `description`; the retired SQLite runtime also indexed
   `short_description`, `brand_name`, and `brand_owner`. Before the next full USDA
   rebuild, decide whether food-name-focused search is intentional or add those
   fields to restore brand-search parity.
+- [ ] **Retry USDA enrichment instead of silently degrading to `null`** when usda-api
+  is down — a small job kind on the background queue that already exists
+  (`server/background-queue.ts`), not new infrastructure.
 
 ---
 
@@ -120,14 +137,25 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
 ## Meal planning v2
 
 v1 shipped — calendar (week + table), per-meal scaling, and a display-only shopping
-list (need vs. on-hand). Deferred:
+list (need vs. on-hand). The shopping list stays **display-only**: it reads inventory,
+it never writes it. Deferred:
 
-- [ ] **Phase 4 — cook / consume inventory**: `meal.markCooked({ mealId })` converts each
-  scaled ingredient → inventory unit (WASM), deducts across entries in a transaction,
-  deletes zeroed entries, and writes audit logs; no-inventory → log shortfall,
-  conversion-fail → skip + warn. The `mealRecipe` schema already leaves room for `cookedAt`.
-- [ ] Expiration-aware suggestions, FEFO consumption, meal labels, recurring meals,
-  meal templates, nutrition goals (each its own future slice).
+- [ ] Meal labels, recurring meals, meal templates, nutrition goals (each its own
+  future slice).
+
+### Rejected
+
+Both die on [tenet 1](../README.md#tenets) — inventory is a ballpark refreshed by a
+deliberate recount, never a running balance:
+
+- **Phase 4 — cook / consume inventory.** `meal.markCooked` deducting each scaled
+  ingredient across entries in a transaction. Deducting from counts that are already
+  approximate and possibly months stale makes them *less* true, not more, and it puts
+  a silent write behind a one-tap action. Consumption stays an explicit human edit.
+- **Expiration-aware suggestions + FEFO consumption.** Nothing captures an expiry
+  date today — there is no such column on `InventoryEntry` — and FEFO is meaningless
+  without both per-lot dates and trustworthy counts. Would require inverting tenet 1
+  first.
 
 ---
 
@@ -248,42 +276,30 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ---
 
-## Background jobs (cron + queue)
-
-CF Workers cron triggers + a CF Queue (free tier: 10k ops/day — plenty) would
-let the web worker do server-side background work. Scoped 2026-06 and deferred:
-not worth the moving parts for a single user yet. Pattern when revisited: a job
-fn under `server/jobs/` reusing `buildCrudServices(db)`; handlers in
-`cf-server.ts` (`scheduled`/`queue`) share a prelude (BETTER_AUTH_SECRET bridge,
-`setCfEnv`, `withRequestDb`); producers gate on the binding's presence and fall
-back to fire-and-forget inline in dev (no binding under `vite dev`), mirroring
-`getBindingFetcher` in `cf-env.ts`. Note: cron/queue handlers can't be exercised
-under plain `vite dev` — only `wrangler dev` (Miniflare) or prod. (The two
-`// TODO: enqueue …` markers in `server/api/routers/recipe.ts` are the producer
-call sites waiting on this.)
-
-Queue (offload slow/flaky user-triggered work):
-
-- [ ] Persist scraped/Notion hero images async (see [Recipes & Import](#recipes--import) — strongest fit)
-- [ ] Cookbook EPUB import: per-chunk LLM `assemble_recipes` with retries + DLQ
-- [ ] USDA enrichment: retry instead of silently degrading to `null` when usda-api is down
-
-Cron (periodic, no trigger):
-
-- [ ] Recipe-totals drain backstop: self-heal `totalsComputedAt IS NULL` for off-page edits (reuse `RecipeCostingService.drainStale`); supplements the client poll + `recompute_recipe_totals` MCP backfill
-- [ ] Nightly USDA enrichment sweep: backfill products missing USDA links
-- [ ] Soft-delete + audit-trail retention purge (deletes are permanent UX-wise; the DB grows forever otherwise)
-- [ ] Inventory expiry flagging into the problems indicator
-- [ ] Costing drift health check on a timer (vs. manual parity runs)
-
----
-
-## Locations
-
-- [ ] Add drag-drop between locations in tree view
-
----
-
 ## Architecture / engineering
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
+
+### Background work — where it stands
+
+The **queue is shipped**, not pending: `BACKGROUND_QUEUE` → `cubby-background` with a
+DLQ (`apps/web/wrangler.jsonc`), the producer/consumer in
+`apps/web/src/server/background-queue.ts`, a jobs repo + router, and the
+`/background-jobs` batch page. Live job kinds are recipe-totals recompute, entity
+embedding refresh, location AI description/inventory refresh, and location valuation.
+Add a new kind there; don't re-scope "background jobs" as a project.
+
+### Rejected
+
+- **CF Workers cron triggers.** Every candidate was a backstop for a single user —
+  recipe-totals drain, nightly USDA sweep, soft-delete/audit retention purge, costing
+  drift check. The client poll plus the `recompute_recipe_totals` MCP backfill already
+  cover the drain; the rest doesn't earn a `scheduled` handler that can't be exercised
+  under `vite dev` (Miniflare or prod only). Revisit only when something actually rots
+  unattended. (Inventory expiry flagging is separately dead — see Meal planning v2's
+  Rejected block.)
+- **Queueing rare interactive work**, per [tenet 3](../README.md#tenets): cookbook
+  EPUB import (per-chunk `assemble_recipes` with retries + DLQ) and the scraped/Notion
+  hero-image import both run a handful of times with a human waiting. They stay
+  synchronous; the hero-image fix is a plain inline call — see
+  [Recipes & Import](#recipes--import).
