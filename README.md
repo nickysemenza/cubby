@@ -362,7 +362,7 @@ usdaClient.getFoodSummaryByID(fdcId);
 
 ## 🗺️ Roadmap
 
-Framed as **Now / Next / Later** (no dates — it's a personal project). Canonical plans live in [docs/plans/](docs/plans/); the links are pointers, not summaries, so they don't rot.
+Framed as **Now / Next / Later** (no dates — it's a personal project). The canonical backlog, with per-item design decisions inline, is [docs/todos.md](docs/todos.md); the links are pointers, not summaries, so they don't rot.
 
 ### Recently shipped
 
@@ -375,7 +375,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 ### Next
 
-- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: ranged estimate purchases (a planned purchase carries a cost *range*, e.g. "electrical, $50–70k"), a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations), and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) → [docs/plans/2026-07-18-household-erp-roadmap.md](docs/plans/2026-07-18-household-erp-roadmap.md)
+- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: ranged estimate purchases (a planned purchase carries a cost *range*, e.g. "electrical, $50–70k"), a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations), and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 - **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
 
@@ -390,7 +390,6 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 - [CLAUDE.md](CLAUDE.md) — agent rules, anti-patterns, required helpers
 - [docs/style-guide.md](docs/style-guide.md) — Tailwind/CSS conventions
-- [docs/todos.md](docs/todos.md) — work list
-- [docs/plans/](docs/plans/) — design docs for in-progress / upcoming features
+- [docs/todos.md](docs/todos.md) — the canonical backlog: goals + load-bearing design decisions + rejected alternatives
 - [docs/terminology.md](docs/terminology.md) — glossary disambiguating UI / code / DB names per concept
 - [docs/inventory-audit.md](docs/inventory-audit.md) — inventory audit/session flow: purpose, current behavior, known gaps, redesign direction

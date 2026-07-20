@@ -1,8 +1,10 @@
 # Cubby — Work List
 
-The canonical backlog. Grouped by theme; every item is open/deferred. Detailed,
-sequenced plans for the larger efforts live in [docs/plans/](plans/) and are linked
-from the relevant section — this file is the index, the plans are the depth.
+The canonical backlog — high-level goals with the load-bearing details inline.
+Grouped by theme; every item is open/deferred. Design decisions and rejected
+alternatives live next to the items they concern (there is no separate plans
+directory — detail beyond what an item carries here gets re-derived at build
+time, against the code as it exists then).
 
 ---
 
@@ -131,27 +133,118 @@ list (need vs. on-hand). Deferred:
 
 ## Household tracker / ERP
 
-The tracker module (projects / tasks / purchases) is feature-complete standalone; the
-open work is connecting it to the rest of cubby. Depth lives in two plan docs — [the
-ERP roadmap](plans/2026-07-18-household-erp-roadmap.md) (near-term, specced) and [the
-long-term backlog](plans/2026-07-18-cubby-long-term-backlog.md) (north-star tiers).
-Sequencing between the Tier 0 items and ERP §1 is deliberately undecided.
+The tracker module (projects / tasks / purchases) is feature-complete standalone;
+the open work is connecting it to the rest of cubby. Two schema affordances already
+exist for this: `task.projectId` is nullable (inbox tasks) and `purchase.future`
+marks planned-not-yet-actual spend. Roughly priority order; sequencing between the
+first three is undecided.
 
-- [ ] **`list_actionable_tasks`** (Tier 0): a computed unblocked-tasks read over the
-  existing dependency edges — repo query + MCP tool + "what can I do this weekend"
-  view, with a transitive "why is this blocked" read.
-- [ ] **`task.parentTaskId` subtasks** (Tier 0): additive nullable self-FK; one level
-  of checklist subtasks with an `N/M` chip on the parent.
-- [ ] **Ranged estimate purchases** (ERP §1): `costLow`/`costHigh` on `future`
-  purchases, a one-click settle action, planned-envelope rollups + budget-band charts.
-- [ ] **Purchase ↔ product / inventory bridge** (ERP §2): optional
-  `purchase.productId`, convert-to-inventory flow, purchases as price observations.
-- [ ] **Maintenance + budgeting** (ERP §3): recurring maintenance tasks, inbox view
-  for project-less tasks, tracker Problems detectors, planned-vs-actual budget view.
+- [ ] **`list_actionable_tasks`**: a computed unblocked-tasks read over the existing
+  dependency edges — repo query + MCP tool + "what can I do this weekend" view, with
+  a transitive "why is this blocked" read. Highest value-per-effort item here; also
+  the data the weekly standup agent (below) needs.
+- [ ] **`task.parentTaskId` subtasks**: additive nullable self-FK; one level of
+  checklist subtasks (`N/M` chip on the parent, parent status stays manual). Doubles
+  as the punch-list convention. Cheap while the schema is young.
+- [ ] **Ranged estimate purchases**: `costLow`/`costHigh` (nullable
+  `doublePrecision`, additive only — dev DB is prod Neon), meaningful while
+  `future`; `cost` stays the settled actual. A one-click *settle* records the actual
+  and flips `future` off; the range is **retained after settling** —
+  estimate-vs-actual accuracy is itself interesting data. Rollups
+  (`repo/project/analytics.ts`) grow a planned envelope: `plannedLow/High =
+  SUM(COALESCE(costLow|costHigh, other, cost))` over `future` purchases — stays a
+  SQL aggregate, never denormalized. UI: range input when `future`, `$50–70k` /
+  `≈ $60k` rendering distinct from settled costs, budget charts get a low–high band;
+  MCP purchase tools accept + return the fields.
+- [ ] **Purchase ↔ product / inventory bridge**: optional `purchase.productId` FK
+  (services/one-offs stay unlinked); a convert-to-inventory flow on a settled
+  purchase (pick/create product + location → `InventoryEntry` via the existing
+  capture path, purchase keeps a pointer to what it produced). Linked purchases
+  double as **price observations** — read-only purchase history on the product page
+  first; promoting into `product.price` is a later explicit step. New delete/convert
+  paths honor the removal-path invariant (embedding cleanup in-transaction).
+  Foundation for the BOM below.
+- [ ] **Maintenance + budgeting** (semi-independent, in value order): recurring
+  maintenance tasks (simple every-N-weeks/months interval on a template — not RRULE;
+  next instance generated on completion; surfaces in needs-attention); an inbox view
+  for project-less tasks + quick capture + "promote to project"; tracker Problems
+  detectors (overdue tasks, spend over `costEstimate`/envelope, stale `in_progress`
+  projects with no recent activity, past-date un-settled `future` purchases);
+  planned-vs-actual budget view (falls out of the envelope rollup — estimate band
+  vs. committed vs. actual, monthly cash-flow projection from `future` dates).
+- [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
+  optional product resolution, durable-vs-consumable flag → **have / need / buy**
+  per project via the availability engine, shopping list from shortfalls. No
+  reservations, no auto-decrement — audits are the backstop, "mark consumed" is an
+  optional explicit action.
 
-Beyond these, the long-term backlog doc holds the later tiers (synthesis views,
-ambient capture, Home Assistant integration, digital twin) and the
-explicitly-rejected list.
+### Longer-term (synthesis out, capture in)
+
+The data model is nearly complete; the long-run constraints are **capture friction
+in** (getting reality into the DB cheaply) and **synthesis out** (turning the record
+into decisions). Single-user tool — optimize for one household's taste.
+
+- [ ] **House timeline / "Year in the House"**: unified chronological views over the
+  already-timestamped record — scrollable house journal, before/after photo sliders,
+  annual wrapped-style report. Pure synthesis, zero new data entry.
+- [ ] **Weekly standup agent**: scheduled brief — what moved, what's blocked and
+  why, budget burn, what's schedulable this weekend given calendar + weather. Nearly
+  free once `list_actionable_tasks` lands.
+- [ ] **Household balance sheet**: generalize location valuation — capex forecast
+  from asset ages + expected lifespans ("roof and water heater both die in ~5 yrs:
+  ≈$14k"), cost-per-project analytics, insurance-claim / cost-basis exports. The
+  costing engine pointed at the house.
+- [ ] **Ambient capture**: every low-effort input path — voice memos from the shop,
+  an email-forwarding address that files what's sent to it, photo share-sheet, NFC
+  tags on machines (tap → service log). Flagship: voice via Home Assistant Assist
+  satellites routed to the MCP tools.
+- [ ] **Standing agents**: a *registrar* (watches Gmail for warranties / receipts /
+  orders, files against products & projects, approve-then-file), a *quartermaster*
+  (consumable inventory → drafted shopping list), a *foreman* (stale projects raised
+  in the brief).
+- [ ] **Digital twin / spatial memory**: knowledge attached to the location tree as
+  a building model — shutoff valves, breaker maps, paint-per-room. ⏰ **Hard,
+  unrepeatable deadline: before-drywall photos during the extension build** (wire
+  runs, pipe routes, blocking, pinned to the wall/room they live inside) — the only
+  item that cannot be captured later. Seedable from HA's area/device registry.
+- [ ] **Grow-to-table loop**: garden beds as locations, plantings as dated records,
+  **harvests become pantry inventory**, availability engine pointed at the yard
+  ("what can I cook from the garden this week").
+- [ ] **Heirloom outputs**: house manual for a future owner, printed project
+  yearbook, documented archive/export format — cubby's own graceful exit hatch.
+
+### Home Assistant integration (cross-cutting)
+
+HA is the *senses and voice*; cubby is the *memory and ledger*.
+
+- [ ] **HA → cubby**: runtime-based maintenance intervals (smart-plug / HVAC hours —
+  the automated version of hour-meters; manual tracking was rejected), measured
+  project ROI (before/after energy curves on the project detail page), sensor faults
+  (leak, sump over-cycling, freezer excursion) → tasks/Problems filed against the
+  right asset, weather stamping for daily logs + outdoor scheduling.
+- [ ] **Cubby → HA**: shopping-list bridge (cubby *computes* the list — food + BOM
+  shortfalls; HA todo lists display/speak it), glance dashboard (maintenance due,
+  weekend actionable tasks, tonight's meal).
+- Plumbing: agent-mediated works today (scheduled agents beside the HA MCP); add a
+  direct authed CF Worker webhook only for real-time sensor-grade events.
+
+### Rejected (recorded so they don't resurface)
+
+- **Monarch / finance sync** — purchases stay a hand-curated ledger.
+- **Receipt-export importers** (Amazon / Home Depot) — hostile, unmaintained
+  formats; MCP conversational capture + a one-off throwaway script for backfill.
+- **Purchaser as an entity** — `nicky|rebecca|both` stays a hardcoded enum.
+- **`project.locations` → Location FK** — free-text site names and the physical
+  storage tree serve different purposes; revisit only if the BOM makes "materials
+  for X are on shelf B" a real query.
+- **Specs/sizes registry**, **offcut/scrap inventory** — anal-detail cliff.
+- **Project templates / playbooks** — markdown notes at the right altitude beat a
+  template system.
+- **Manual hour-meter maintenance intervals** — only worth it automated via HA.
+- **Cross-project material allocation** — the complexity cliff where Procore lives;
+  at most an "also needed by project X" hint.
+- **Tracker restore/undo** — soft delete stays permanent-from-the-user's-view, as
+  everywhere else.
 
 ---
 
