@@ -151,10 +151,6 @@ exist for this: `task.projectId` is nullable (inbox tasks) and `purchase.future`
 marks planned-not-yet-actual spend. Roughly priority order; sequencing between the
 first three is undecided.
 
-- [ ] **`list_actionable_tasks`**: a computed unblocked-tasks read over the existing
-  dependency edges — repo query + MCP tool + "what can I do this weekend" view, with
-  a transitive "why is this blocked" read. Highest value-per-effort item here; also
-  the data the weekly standup agent (below) needs.
 - [ ] **`task.parentTaskId` subtasks**: additive nullable self-FK; one level of
   checklist subtasks (`N/M` chip on the parent, parent status stays manual). Doubles
   as the punch-list convention. Cheap while the schema is young.
@@ -199,9 +195,6 @@ into decisions). Single-user tool — optimize for one household's taste.
 - [ ] **House timeline / "Year in the House"**: unified chronological views over the
   already-timestamped record — scrollable house journal, before/after photo sliders,
   annual wrapped-style report. Pure synthesis, zero new data entry.
-- [ ] **Weekly standup agent**: scheduled brief — what moved, what's blocked and
-  why, budget burn, what's schedulable this weekend given calendar + weather. Nearly
-  free once `list_actionable_tasks` lands.
 - [ ] **Household balance sheet**: generalize location valuation — capex forecast
   from asset ages + expected lifespans ("roof and water heater both die in ~5 yrs:
   ≈$14k"), cost-per-project analytics, insurance-claim / cost-basis exports. The

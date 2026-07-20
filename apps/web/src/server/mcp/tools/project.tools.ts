@@ -7,6 +7,7 @@
  */
 
 import {
+  actionableTasksOut,
   projectCreateInput,
   projectFilterFields,
   projectMcpListOut,
@@ -25,7 +26,9 @@ import {
 } from "@cubby/schemas/project";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  READ_ONLY_CLOSED,
   registerEntityCrudToolset,
+  registerRouterTool,
   slimProject,
   slimPurchase,
   slimTask,
@@ -77,6 +80,15 @@ export function registerProjectTools(server: McpServer) {
       delete: "Soft-delete tasks by IDs (dependency edges are cleaned up).",
     },
     create: (caller, params) => caller.task.create(params),
+  });
+
+  registerRouterTool(server, {
+    name: "list_actionable_tasks",
+    description:
+      "Unblocked tasks you can act on now — live, not done, and blocked by nothing — plus blocked tasks with transitive why-chains explaining what's in the way (a manual blocked flag, a blocking task, or a blocking project, nearest blocker first).",
+    outputSchema: actionableTasksOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller) => caller.task.listActionable(),
   });
 
   registerEntityCrudToolset(server, {

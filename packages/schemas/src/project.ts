@@ -234,6 +234,60 @@ export const taskOut = z.object({
 export type TaskOut = z.infer<typeof taskOut>;
 
 // ---------------------------------------------------------------------------
+// Actionable tasks (computed unblocked/blocked read — see
+// repo/task/actionable.ts for the exact semantics)
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a task is blocked, plus (for `task`/`project`) a transitive "why"
+ * chain: the representative path of entities you'd need to unblock, nearest
+ * blocker first. `manual` (the task's own status is `blocked`) carries no
+ * chain — there's nothing upstream to walk.
+ */
+export const blockedReasonSchema = z.object({
+  kind: z.enum(["manual", "task", "project"]),
+  chain: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      status: z.string(),
+      type: z.enum(["task", "project"]),
+    }),
+  ),
+});
+export type BlockedReason = z.infer<typeof blockedReasonSchema>;
+
+export const actionableTaskOut = z.object({
+  id: taskId,
+  ...taskFields,
+  projectName: z.string().nullable(),
+  blockedByIds: z.array(taskId),
+  blockingIds: z.array(taskId),
+  ...timestampedFields,
+  isLater: z
+    .boolean()
+    .describe('status === "later" — sort/de-emphasize last in the UI'),
+});
+export type ActionableTaskOut = z.infer<typeof actionableTaskOut>;
+
+export const blockedTaskOut = z.object({
+  task: taskOut,
+  reasons: z.array(blockedReasonSchema),
+});
+export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
+
+/**
+ * `task.listActionable`'s output: every live, non-done task partitioned into
+ * unblocked (`actionable` — zero blocked reasons) and `blocked` (with the
+ * reason set + transitive why-chain).
+ */
+export const actionableTasksOut = z.object({
+  actionable: z.array(actionableTaskOut),
+  blocked: z.array(blockedTaskOut),
+});
+export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
+
+// ---------------------------------------------------------------------------
 // Purchase
 // ---------------------------------------------------------------------------
 

@@ -9,11 +9,14 @@
  *                          handles the `blockedByIds` full-replacement set,
  *                          exactly mirroring project/crud.ts's shape)
  *   LOOKUP → `lookup.ts` (filtered/sorted/paginated list)
+ *   ACTIONABLE → `actionable.ts` (computed unblocked/blocked read, batch
+ *                          loaded + graph-walked in TS — see its doc comment)
  *
  * Sibling relationships: `task.projectId` references `project`;
  * `taskDependency` self-references `task` for the blocked-by/blocking graph.
  * No rollups (unlike project) — `helpers.ts` (row→API mapping) is internal.
  */
+export { listActionableTasks } from "./actionable";
 export {
   createTask,
   deleteTasks,
