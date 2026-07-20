@@ -136,6 +136,8 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         mobile: { slot: "meta", priority: 20 },
         editable: {
           onSave: async (newCostType, purchase) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newCostType) return;
             await updatePurchaseMutation.mutateAsync({
               id: purchase.id,
               data: { costType: newCostType },
@@ -153,6 +155,8 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         mobile: { slot: "meta", priority: 60 },
         editable: {
           onSave: async (newTrade, purchase) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newTrade) return;
             await updatePurchaseMutation.mutateAsync({
               id: purchase.id,
               data: { trade: newTrade },

@@ -93,6 +93,8 @@ describe("project repository", () => {
     await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
         name: "test purchase made",
         projectId: project.id,
         cost: 100,
@@ -103,6 +105,8 @@ describe("project repository", () => {
     await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
         name: "test purchase future",
         projectId: project.id,
         cost: 50,
@@ -114,6 +118,7 @@ describe("project repository", () => {
     const doneTask = await createTask(
       ctx.db,
       taskCreateInput.parse({
+        trade: "other",
         name: "test task done",
         projectId: project.id,
         status: "not_started",
@@ -123,12 +128,20 @@ describe("project repository", () => {
     await updateTask(ctx.db, doneTask.id, { status: "done" }, ctx.actor);
     await createTask(
       ctx.db,
-      taskCreateInput.parse({ name: "test task two", projectId: project.id }),
+      taskCreateInput.parse({
+        trade: "other",
+        name: "test task two",
+        projectId: project.id,
+      }),
       ctx.actor,
     );
     await createTask(
       ctx.db,
-      taskCreateInput.parse({ name: "test task three", projectId: project.id }),
+      taskCreateInput.parse({
+        trade: "other",
+        name: "test task three",
+        projectId: project.id,
+      }),
       ctx.actor,
     );
 
@@ -292,6 +305,7 @@ describe("project repository", () => {
     await createTask(
       ctx.db,
       taskCreateInput.parse({
+        trade: "other",
         name: "test task blocking delete",
         projectId: projectWithTask.id,
       }),
@@ -309,6 +323,8 @@ describe("project repository", () => {
     await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
         name: "test purchase blocking delete",
         projectId: projectWithPurchase.id,
       }),
@@ -540,6 +556,8 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
         name: "grandparent purchase",
         projectId: grandparent.id,
         cost: 10,
@@ -549,6 +567,8 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
         name: "parent purchase",
         projectId: parent.id,
         cost: 20,
@@ -558,6 +578,8 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
         name: "leaf purchase",
         projectId: leaf.id,
         cost: 40,
@@ -567,18 +589,30 @@ describe("project repository — sub-projects (parentProjectId)", () => {
 
     const leafDoneTask = await createTask(
       ctx.db,
-      taskCreateInput.parse({ name: "leaf done task", projectId: leaf.id }),
+      taskCreateInput.parse({
+        trade: "other",
+        name: "leaf done task",
+        projectId: leaf.id,
+      }),
       ctx.actor,
     );
     await updateTask(ctx.db, leafDoneTask.id, { status: "done" }, ctx.actor);
     await createTask(
       ctx.db,
-      taskCreateInput.parse({ name: "leaf open task", projectId: leaf.id }),
+      taskCreateInput.parse({
+        trade: "other",
+        name: "leaf open task",
+        projectId: leaf.id,
+      }),
       ctx.actor,
     );
     await createTask(
       ctx.db,
-      taskCreateInput.parse({ name: "parent task", projectId: parent.id }),
+      taskCreateInput.parse({
+        trade: "other",
+        name: "parent task",
+        projectId: parent.id,
+      }),
       ctx.actor,
     );
 

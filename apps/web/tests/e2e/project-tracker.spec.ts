@@ -72,6 +72,10 @@ test.describe("Project tracker", () => {
     });
 
     await dialog.getByLabel("Name").fill(name);
+    // trade is required (NOT NULL) — same click-then-click-option drive as
+    // the Project SelectField below.
+    await dialog.getByPlaceholder("Select trade").click();
+    await page.getByRole("option", { name: "Other", exact: true }).click();
     await dialog.getByRole("button", { name: /^Create$/ }).click();
 
     // Dialog closes on success (onSuccess resets + calls onOpenChange(false)).
@@ -118,7 +122,14 @@ test.describe("Project tracker", () => {
     });
 
     await dialog.getByLabel("Name").fill(name);
-    await dialog.getByLabel("Cost").fill("24.99");
+    // spinbutton role disambiguates from the "Open Select cost type" trigger,
+    // whose accessible name also contains "Cost".
+    await dialog.getByRole("spinbutton", { name: "Cost" }).fill("24.99");
+    // costType + trade are required (NOT NULL).
+    await dialog.getByPlaceholder("Select cost type").click();
+    await page.getByRole("option", { name: "Materials", exact: true }).click();
+    await dialog.getByPlaceholder("Select trade").click();
+    await page.getByRole("option", { name: "Other", exact: true }).click();
     await dialog.getByRole("button", { name: /^Create$/ }).click();
 
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
@@ -213,6 +224,8 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
     await createDialog.getByLabel("Name").fill(name);
+    await createDialog.getByPlaceholder("Select trade").click();
+    await page.getByRole("option", { name: "Other", exact: true }).click();
     await createDialog.getByRole("button", { name: /^Create$/ }).click();
     await expect(createDialog).not.toBeVisible({ timeout: 10000 });
 
@@ -278,6 +291,8 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
     await taskDialog.getByLabel("Name").fill(taskName);
+    await taskDialog.getByPlaceholder("Select trade").click();
+    await page.getByRole("option", { name: "Other", exact: true }).click();
     await taskDialog.getByPlaceholder("Select project").click();
     await page.getByRole("option", { name: projectName }).click();
     await taskDialog.getByRole("button", { name: /^Create$/ }).click();

@@ -137,6 +137,8 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         mobile: { slot: "meta", priority: 50 },
         editable: {
           onSave: async (newTrade, task) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newTrade) return;
             await updateTaskMutation.mutateAsync({
               id: task.id,
               data: { trade: newTrade },
