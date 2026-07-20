@@ -18,7 +18,10 @@ interface DashboardCardProps {
 
 /**
  * Consistent card wrapper for dashboard/home page widgets.
- * Provides animated entrance, icon + title header, optional description and action.
+ * Provides icon + title header, optional description and action.
+ * Deliberately no entrance animation: it gated content visibility on an
+ * animation frame (blank cards on hidden/headless tabs), and the product
+ * register bans orchestrated page-load sequences anyway.
  */
 export function DashboardCard({
   icon: Icon,
@@ -28,7 +31,7 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <Card className="fade-in slide-in-from-bottom-2 flex animate-in flex-col duration-300">
+    <Card className="flex flex-col">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

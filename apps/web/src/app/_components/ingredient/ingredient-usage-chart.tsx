@@ -8,10 +8,16 @@ import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 // Cap the bar count so the chart stays legible; the full list lives in the table.
 const MAX_BARS = 25;
 
-export function IngredientUsageChart({ rows }: { rows: IngredientUsageRow[] }) {
+export function IngredientUsageChart({
+  rows,
+  maxBars = MAX_BARS,
+}: {
+  rows: IngredientUsageRow[];
+  maxBars?: number;
+}) {
   // Nivo draws horizontal bars bottom-up, so reverse to put the most-used on top.
   const data = rows
-    .slice(0, MAX_BARS)
+    .slice(0, maxBars)
     .map((r) => ({ ingredient: r.name, recipes: r.recipeCount }))
     .reverse();
 
