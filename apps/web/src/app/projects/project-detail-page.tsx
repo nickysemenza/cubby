@@ -51,6 +51,8 @@ import { formatCurrency } from "~/lib/utils";
 import { CategoryBreakdown } from "./charts/category-breakdown";
 import { CategoryTreemap } from "./charts/category-treemap";
 import { CategoryTrend } from "./charts/category-trend";
+import { CostBurnup } from "./charts/cost-burnup";
+import { ProjectGantt } from "./charts/gantt/ProjectGantt";
 import { PlannedVsActual } from "./charts/planned-vs-actual";
 import { PurchaserSplit } from "./charts/purchaser-split";
 import { SpendingOverTime } from "./charts/spending-over-time";
@@ -84,6 +86,31 @@ export function projectTasksQueryParams(projectId: string) {
     // surfacing them here alongside the parent would double-count the work.
     filters: { projectId, topLevelOnly: true },
     sort: { orderBy: "createdAt" as const, direction: "desc" as const },
+    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
+  };
+}
+
+/** The Gantt wants the whole subtree's work on one grid, so it can't reuse
+ * `projectTasksQueryParams`: it drops `topLevelOnly` (dated subtasks render as
+ * their parent's indented children) and adds `includeSubProjects` (sub-project
+ * tasks are rows under their sub-project's group row). Separate params ⇒
+ * separate cache entry, which is the point — the Tasks list stays direct,
+ * top-level-only. Exported so the route loader prefetches identically. */
+export function projectGanttTasksQueryParams(projectId: string) {
+  return {
+    filters: { projectId, includeSubProjects: true },
+    sort: { orderBy: "createdAt" as const, direction: "desc" as const },
+    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
+  };
+}
+
+/** The Gantt's sub-project rows span arbitrary depth, so it needs the whole
+ * live descendant subtree — not the direct-children query the Sub-projects
+ * section relies on. Kept separate for exactly that reason. */
+export function projectGanttSubtreeQueryParams(projectId: string) {
+  return {
+    filters: { parentProjectId: projectId, includeSubProjects: true },
+    sort: { orderBy: "name" as const, direction: "asc" as const },
     pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
   };
 }
@@ -294,6 +321,18 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   );
   const childProjects = childProjectsPage?.items ?? NO_CHILD_PROJECTS;
   const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
+
+  // Gantt-only fetches: the whole descendant subtree (projects + their tasks),
+  // separate from the direct-children/top-level-only queries above.
+  const { data: ganttTasksPage } = useQuery(
+    api.task.list.queryOptions(projectGanttTasksQueryParams(project.id)),
+  );
+  const ganttTasks = ganttTasksPage?.items ?? NO_TASKS;
+
+  const { data: ganttSubtreePage } = useQuery(
+    api.project.list.queryOptions(projectGanttSubtreeQueryParams(project.id)),
+  );
+  const ganttSubtreeProjects = ganttSubtreePage?.items ?? NO_CHILD_PROJECTS;
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.project.update.mutationOptions,
@@ -738,7 +777,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           panels). Purchases-dependent charts and the task timeline are gated
           independently — a project with tasks but no purchases (or vice
           versa) must still see its own section. */}
-      {(chartPurchases.length > 0 || projectTasks.length > 0) && (
+      {(chartPurchases.length > 0 ||
+        projectTasks.length > 0 ||
+        ganttTasks.length > 0 ||
+        ganttSubtreeProjects.length > 0) && (
         <Stack className="pt-4">
           {chartPurchases.length > 0 && (
             <>
@@ -782,6 +824,37 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 </Section>
               </Grid>
             </>
+          )}
+
+          {chartPurchases.length > 0 && (
+            <Section
+              title="Cost Burnup"
+              description="Cumulative spend against the estimate"
+            >
+              <CostBurnup
+                purchases={chartPurchases}
+                costEstimate={project.costEstimate}
+              />
+            </Section>
+          )}
+
+          {/* Gated on dated content existing at all: a project with no tasks
+              and no sub-projects has nothing to plot. */}
+          {(ganttTasks.length > 0 || ganttSubtreeProjects.length > 0) && (
+            <Section
+              title="Gantt"
+              description={
+                ganttSubtreeProjects.length > 0
+                  ? "Tasks and sub-projects across the whole subtree"
+                  : undefined
+              }
+            >
+              <ProjectGantt
+                projectId={project.id}
+                tasks={ganttTasks}
+                subtreeProjects={ganttSubtreeProjects}
+              />
+            </Section>
           )}
 
           {projectTasks.length > 0 && (

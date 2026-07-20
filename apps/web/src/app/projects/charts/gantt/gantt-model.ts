@@ -50,7 +50,9 @@ export interface GanttProjectRow {
   childCount: number;
 }
 
-export interface GanttTaskRow {
+/** Not exported by name: consumers narrow the `GanttRow` union on `kind`
+ * instead. Export it the day something genuinely needs to name it. */
+interface GanttTaskRow {
   kind: "task";
   id: string;
   name: string;
@@ -64,8 +66,9 @@ export interface GanttTaskRow {
   blockingIds: string[];
 }
 
-/** A lane header for the `groupBy: "kind"` portfolio mode — always shown expanded (round 1). */
-export interface GanttGroupRow {
+/** A lane header for the `groupBy: "kind"` portfolio mode — always shown
+ * expanded (round 1). Narrowed off `GanttRow`, not exported by name. */
+interface GanttGroupRow {
   kind: "group";
   id: string;
   label: string;
