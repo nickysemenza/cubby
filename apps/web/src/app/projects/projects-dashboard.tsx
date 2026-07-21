@@ -313,7 +313,7 @@ function DashboardContent({
               </Grid>
 
               <Section title="Top 10 Projects by Spending">
-                <SpendingByProject purchases={purchases} projects={projects} />
+                <SpendingByProject projects={projects} />
               </Section>
 
               <Section
