@@ -13,6 +13,8 @@ import {
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
+import { DatePickerInput } from "../date-picker-input";
 import {
   showAmountAndPrice,
   tryFormatAmount,
@@ -41,10 +43,16 @@ type EditableSelectConfig = {
   placeholder?: string;
 };
 
+type EditableDateConfig = {
+  type: "date";
+  placeholder?: string;
+};
+
 type EditableConfig =
   | EditableInputConfig
   | EditableCurrencyConfig
-  | EditableSelectConfig;
+  | EditableSelectConfig
+  | EditableDateConfig;
 
 interface UseEditableCellOptions<T> {
   value: T | null;
@@ -175,6 +183,19 @@ export function EditableCell<T>({
         value={value as string | null}
         onSave={onSave as (value: string | null) => Promise<void>}
         options={config.options}
+        placeholder={config.placeholder}
+        renderValue={renderValue as (value: string | null) => React.ReactNode}
+        clipboard={clipboard}
+      />
+    );
+  }
+
+  // Date type has its own specialized implementation
+  if (config.type === "date") {
+    return (
+      <EditableDateCellInternal
+        value={value as string | null}
+        onSave={onSave as (value: string | null) => Promise<void>}
         placeholder={config.placeholder}
         renderValue={renderValue as (value: string | null) => React.ReactNode}
         clipboard={clipboard}
@@ -570,6 +591,113 @@ function EditableSelectEditor({
       >
         <X className="h-3.5 w-3.5" />
       </Button>
+    </div>
+  );
+}
+
+function EditableDateCellInternal({
+  value,
+  onSave,
+  placeholder,
+  renderValue,
+  clipboard,
+}: {
+  value: string | null;
+  onSave: (value: string | null) => Promise<void>;
+  placeholder?: string;
+  renderValue: (value: string | null) => React.ReactNode;
+  clipboard?: CellClipboardSpec;
+}) {
+  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
+  const edit = useCellEditState(clipboard, (saved) =>
+    setOptimisticValue(saved as string | null),
+  );
+
+  return (
+    <>
+      <CellEditTrigger
+        ref={edit.triggerRef}
+        onStartEdit={() => edit.setIsEditing(true)}
+        clipboard={edit.clipboard}
+      >
+        {renderValue(displayValue)}
+      </CellEditTrigger>
+      {edit.isEditing && (
+        <CellEditorOverlay
+          anchorEl={edit.triggerRef.current}
+          onRequestCancel={edit.cancel}
+        >
+          <EditableDateEditor
+            value={value}
+            onSave={onSave}
+            placeholder={placeholder}
+            onCancel={edit.cancel}
+            onCommit={(nextValue) => {
+              setOptimisticValue(nextValue);
+              edit.cancel();
+            }}
+          />
+        </CellEditorOverlay>
+      )}
+    </>
+  );
+}
+
+/**
+ * Unlike the text/select editors, picking a day commits immediately — there's
+ * no separate Check/X confirm step. `DatePickerInput`'s own popover owns
+ * open/close; this just wires its `onChange` straight to `onSave`.
+ */
+function EditableDateEditor({
+  value,
+  onSave,
+  placeholder,
+  onCancel,
+  onCommit,
+}: {
+  value: string | null;
+  onSave: (value: string | null) => Promise<void>;
+  placeholder?: string;
+  onCancel: () => void;
+  onCommit: (value: string | null) => void;
+}) {
+  const [isPending, setIsPending] = useState(false);
+
+  const handleChange = useCallback(
+    async (next: string | null) => {
+      if (next === value) {
+        onCancel();
+        return;
+      }
+
+      setIsPending(true);
+      try {
+        await onSave(next);
+        onCommit(next);
+      } catch (err) {
+        toast.error(getErrorMessage(err));
+        onCancel();
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [value, onSave, onCancel, onCommit],
+  );
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    <div
+      className="inline-flex items-center gap-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <DatePickerInput
+        value={value}
+        onChange={(next) => void handleChange(next)}
+        placeholder={placeholder}
+        clearable
+        autoFocus
+        className={cn("w-40", isPending && "pointer-events-none opacity-50")}
+      />
     </div>
   );
 }

@@ -9,6 +9,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { TaskId } from "@cubby/schemas/identifiers";
 import type {
+  TaskBulkMoveInput,
+  TaskBulkStatusInput,
   TaskCreateInput,
   TaskOut,
   TaskUpdateInput,
@@ -18,6 +20,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  type AuditEntryInput,
   computeChanges,
   diffUnorderedIdSet,
   logAuditEntries,
@@ -37,6 +40,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
+import { assertProjectLive } from "~/server/repo/project";
 import { dbTaskToAPI } from "./helpers";
 
 /** `taskUpdateData` has no standalone type export — derive it from the input. */
@@ -181,6 +185,37 @@ const taskReader = createEntityReader({
 export const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
   taskReader.getByID(db, id);
 
+/**
+ * Batch by-id read for bulk-write results (`moveTasks`/`setTasksStatus`) — the
+ * same row shape/joins as `getTaskByID`, fetched with one `inArray` query plus
+ * the batched dependency/subtask-count reads instead of N one-by-one calls.
+ * File-local — only consumed by this file's own bulk writes below.
+ */
+const getTasksByIDs = async (
+  db: Database,
+  ids: TaskId[],
+): Promise<TaskOut[]> => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db).query.task.findMany({
+    where: and(inArray(task.id, ids), notDeleted(task)),
+    ...relations.task.withProject,
+  });
+  const [deps, subtaskCounts] = await Promise.all([
+    taskDependencyIds(db, ids),
+    taskSubtaskCounts(db, ids),
+  ]);
+  return rows.map((row) => {
+    const counts = subtaskCounts.get(row.id);
+    return dbTaskToAPI(
+      row,
+      deps.blockedBy.get(row.id) ?? [],
+      deps.blocking.get(row.id) ?? [],
+      counts?.count ?? 0,
+      counts?.doneCount ?? 0,
+    );
+  });
+};
+
 export const createTask = async (
   db: Database,
   data: TaskCreateInput,
@@ -310,6 +345,105 @@ export const updateTask = async (
   });
 
   return getTaskByID(db, id);
+};
+
+/**
+ * Bulk "move to project" — a plain `projectId` column write over `ids`, one
+ * transaction, one audit entry per row that actually changed. `projectId:
+ * null` moves every listed task to the inbox. Unlike the single-row
+ * `updateTask` there's no before/after row diff to lean on for validation, so
+ * the target project's liveness is checked explicitly (`assertProjectLive`) —
+ * the UI's project picker already filters to live projects, but the tRPC API
+ * is callable directly.
+ */
+export const moveTasks = async (
+  db: Database,
+  input: TaskBulkMoveInput,
+  actor: ActorContext,
+): Promise<TaskOut[]> => {
+  const { ids, projectId } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    if (projectId !== null) {
+      await assertProjectLive(tx, projectId);
+    }
+
+    const before = await tx.query.task.findMany({
+      where: and(inArray(task.id, ids), notDeleted(task)),
+      columns: { id: true, projectId: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(task)
+      .set({ projectId })
+      .where(and(inArray(task.id, ids), notDeleted(task)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, projectId }, [
+        "projectId",
+      ]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "task",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getTasksByIDs(db, updatedIds);
+};
+
+/**
+ * Bulk status write — a plain `status` column write over `ids`, mirroring
+ * `moveTasks`'s shape. A plain UPDATE with no recurrence/denormalization
+ * side-effects, same as `updateTask`'s status write — there's no "done"
+ * cascade in this schema today.
+ */
+export const setTasksStatus = async (
+  db: Database,
+  input: TaskBulkStatusInput,
+  actor: ActorContext,
+): Promise<TaskOut[]> => {
+  const { ids, status } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    const before = await tx.query.task.findMany({
+      where: and(inArray(task.id, ids), notDeleted(task)),
+      columns: { id: true, status: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(task)
+      .set({ status })
+      .where(and(inArray(task.id, ids), notDeleted(task)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, status }, ["status"]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "task",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getTasksByIDs(db, updatedIds);
 };
 
 /**

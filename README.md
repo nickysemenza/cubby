@@ -398,7 +398,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Next
 
-- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: ranged estimate purchases (a planned purchase carries a cost *range*, e.g. "electrical, $50–70k"), a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations), and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
+- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations) and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) — estimate envelopes live on a sub-project's single-point `costEstimate`, not on ranged purchases (see docs/todos.md's Rejected list) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 
 ### Later

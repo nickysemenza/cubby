@@ -1,8 +1,10 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
+import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
+import { ArrowRightLeft, ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   TASK_STATUS_LABELS,
   TradeBadge,
@@ -12,12 +14,14 @@ import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   createFilterableSelectColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -25,6 +29,8 @@ import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { SetTaskStatusDialog } from "../_components/tracker/set-task-status-dialog";
 import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
 
 /**
@@ -54,6 +60,8 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<TaskOut>(), []);
   const { options: projectOptions } = useProjectOptions();
+  const [bulkMoveItems, setBulkMoveItems] = useState<TaskOut[]>([]);
+  const [bulkStatusItems, setBulkStatusItems] = useState<TaskOut[]>([]);
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -68,6 +76,35 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     entityLabel: "Task",
     invalidateKeys: taskMutationInvalidateKeys,
   });
+
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "move",
+          label: "Move to project...",
+          icon: <ArrowRightLeft className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<TaskOut>[]) => {
+            setBulkMoveItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-status",
+          label: "Set status...",
+          icon: <ListChecks className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<TaskOut>[]) => {
+            setBulkStatusItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
 
   const projectFilterOptions = useMemo(
     () => [{ value: "", label: "All projects" }, ...projectOptions],
@@ -207,8 +244,37 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     deletable: deletableConfig,
     nameEditable,
     nameSuffix: subtaskCountSuffix,
+    bulkActions,
     infinite: true,
     tableStateOptions,
+  });
+
+  const bulkMoveMutation = useActionMutation({
+    mutationFn: api.task.bulkMove.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Moved ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkMoveItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkStatusMutation = useActionMutation({
+    mutationFn: api.task.bulkSetStatus.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkStatusItems([]);
+      table.resetRowSelection();
+    },
   });
 
   return (
@@ -229,6 +295,39 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       />
       <PreviewSheet />
       {deleteDialog}
+      {bulkMoveItems.length > 0 && (
+        <MoveToProjectDialog
+          open={bulkMoveItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkMoveItems([]);
+          }}
+          items={bulkMoveItems}
+          entityLabel="Task"
+          isPending={bulkMoveMutation.isPending}
+          onConfirm={async (projectId) => {
+            await bulkMoveMutation.mutateAsync({
+              ids: bulkMoveItems.map((t) => t.id),
+              projectId,
+            });
+          }}
+        />
+      )}
+      {bulkStatusItems.length > 0 && (
+        <SetTaskStatusDialog
+          open={bulkStatusItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkStatusItems([]);
+          }}
+          items={bulkStatusItems}
+          isPending={bulkStatusMutation.isPending}
+          onConfirm={async (status) => {
+            await bulkStatusMutation.mutateAsync({
+              ids: bulkStatusItems.map((t) => t.id),
+              status,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

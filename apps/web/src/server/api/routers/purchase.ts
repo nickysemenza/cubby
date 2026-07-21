@@ -5,8 +5,10 @@
 
 import { type PurchaseId, purchaseId } from "@cubby/schemas/identifiers";
 import {
+  purchaseBulkMoveInput,
   purchaseCreateInput,
   purchaseFiltersSchema,
+  purchaseListAndSideEffectsOut,
   purchaseOut,
   purchaseSortableFields,
   purchaseUpdateData,
@@ -16,9 +18,11 @@ import {
   createPurchase,
   deletePurchases,
   getPurchaseByID,
+  movePurchases,
   purchaseList,
   updatePurchase,
 } from "~/server/repo/purchase";
+import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -73,6 +77,27 @@ const chartData = protectedProcedure
     return data;
   });
 
+// Bulk "move to project" — projectId: null moves every listed purchase to the
+// inbox. Mirrors inventory.bulkMove/task.bulkMove's shape: one repo call
+// inside a transaction, then one wave-wide runMutationSideEffectsForEntities
+// so the embedding refresh for every moved purchase batches into a single
+// dispatch.
+const bulkMove = protectedProcedure
+  .input(purchaseBulkMoveInput)
+  .output(purchaseListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await movePurchases(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "purchase" as const, entityId: item.id },
+        source: "purchase.bulkMove",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 export const purchaseRouter = createTRPCRouter({
   getByID,
   list,
@@ -80,4 +105,5 @@ export const purchaseRouter = createTRPCRouter({
   update,
   delete: deleteItem,
   chartData,
+  bulkMove,
 });

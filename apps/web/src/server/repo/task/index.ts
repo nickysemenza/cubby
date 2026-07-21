@@ -21,6 +21,8 @@ export {
   createTask,
   deleteTasks,
   getTaskByID,
+  moveTasks,
+  setTasksStatus,
   updateTask,
 } from "./crud";
 export { taskList } from "./lookup";

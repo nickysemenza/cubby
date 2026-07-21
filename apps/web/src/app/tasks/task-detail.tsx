@@ -265,7 +265,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       value: (
         <EditableCell
           value={task.dueDate}
-          config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+          config={{ type: "date" }}
           onSave={async (dueDate) => {
             await updateMutation.mutateAsync({
               id: task.id,
@@ -281,7 +281,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       value: (
         <EditableCell
           value={task.dueEndDate}
-          config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+          config={{ type: "date" }}
           onSave={async (dueEndDate) => {
             await updateMutation.mutateAsync({
               id: task.id,

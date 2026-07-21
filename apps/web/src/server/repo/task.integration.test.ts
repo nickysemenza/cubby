@@ -1,4 +1,4 @@
-import { unsafeTaskId } from "@cubby/schemas/identifiers";
+import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   projectCreateInput,
@@ -8,11 +8,18 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import { taskRouter } from "~/server/api/routers/task";
 import { createTestCaller } from "~/server/api/trpc";
-import { createProject, updateProject } from "~/server/repo/project";
+import { getAuditLog } from "~/server/repo/audit-log";
+import {
+  createProject,
+  deleteProjects,
+  updateProject,
+} from "~/server/repo/project";
 import {
   createTask,
   deleteTasks,
   getTaskByID,
+  moveTasks,
+  setTasksStatus,
   taskList,
   updateTask,
 } from "~/server/repo/task";
@@ -700,5 +707,354 @@ describe("task repository — subtasks (parentTaskId)", () => {
     const parentRow = result.actionable.find((r) => r.id === parent.id);
     expect(parentRow?.subtaskCount).toBe(2);
     expect(parentRow?.doneSubtaskCount).toBe(1);
+  });
+});
+
+describe("task repository — moveTasks (bulk move to project)", () => {
+  const ctx = withTestDb();
+
+  it("moves tasks to another live project", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move tasks a" }),
+      ctx.actor,
+    );
+    const projectB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move tasks b" }),
+      ctx.actor,
+    );
+    const t1 = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "move me 1",
+        projectId: projectA.id,
+      }),
+      ctx.actor,
+    );
+    const t2 = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "move me 2",
+        projectId: projectA.id,
+      }),
+      ctx.actor,
+    );
+
+    const moved = await moveTasks(
+      ctx.db,
+      { ids: [t1.id, t2.id], projectId: projectB.id },
+      ctx.actor,
+    );
+    expect(moved.map((t) => t.projectId)).toEqual([projectB.id, projectB.id]);
+
+    const auditT1 = await getAuditLog(ctx.db, {
+      entityType: "task",
+      entityId: t1.id,
+      limit: 20,
+    });
+    expect(
+      auditT1.entries.some(
+        (e) =>
+          e.action === "update" &&
+          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
+            ?.projectId?.to === projectB.id,
+      ),
+    ).toBe(true);
+  });
+
+  it("moves tasks to null (the inbox)", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move to inbox project" }),
+      ctx.actor,
+    );
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "move to inbox",
+        projectId: project.id,
+      }),
+      ctx.actor,
+    );
+
+    const moved = await moveTasks(
+      ctx.db,
+      { ids: [t.id], projectId: null },
+      ctx.actor,
+    );
+    expect(moved.map((r) => r.projectId)).toEqual([null]);
+
+    // No project-scoped filter distinguishes "projectless" tasks beyond a
+    // plain read of projectId — assert directly against the re-read row.
+    const reread = await getTaskByID(ctx.db, t.id);
+    expect(reread.projectId).toBeNull();
+  });
+
+  it("rejects a nonexistent or soft-deleted target project with PROJECT_NOT_FOUND", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move tasks reject source" }),
+      ctx.actor,
+    );
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "reject target",
+        projectId: project.id,
+      }),
+      ctx.actor,
+    );
+    const bogusProjectId = unsafeProjectId(
+      "00000000-0000-0000-0000-000000000000",
+    );
+
+    await expect(
+      moveTasks(ctx.db, { ids: [t.id], projectId: bogusProjectId }, ctx.actor),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PROJECT_NOT_FOUND" },
+    });
+
+    const deletedProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "soon-deleted task target" }),
+      ctx.actor,
+    );
+    await deleteProjects(ctx.db, [deletedProject.id], ctx.actor);
+
+    await expect(
+      moveTasks(
+        ctx.db,
+        { ids: [t.id], projectId: deletedProject.id },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PROJECT_NOT_FOUND" },
+    });
+  });
+
+  it("leaves soft-deleted task ids in the input untouched", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move tasks untouched a" }),
+      ctx.actor,
+    );
+    const projectB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move tasks untouched b" }),
+      ctx.actor,
+    );
+    const live = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "still live",
+        projectId: projectA.id,
+      }),
+      ctx.actor,
+    );
+    const deleted = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "soon deleted",
+        projectId: projectA.id,
+      }),
+      ctx.actor,
+    );
+    await deleteTasks(ctx.db, [deleted.id], ctx.actor);
+
+    const moved = await moveTasks(
+      ctx.db,
+      { ids: [live.id, deleted.id], projectId: projectB.id },
+      ctx.actor,
+    );
+    expect(moved.map((t) => t.id)).toEqual([live.id]);
+  });
+
+  it("writes no audit entry for a row already in the target project (no-op)", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "move tasks noop project" }),
+      ctx.actor,
+    );
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "already there",
+        projectId: project.id,
+      }),
+      ctx.actor,
+    );
+
+    const before = await getAuditLog(ctx.db, {
+      entityType: "task",
+      entityId: t.id,
+      limit: 20,
+    });
+    const beforeCount = before.entries.length;
+
+    const moved = await moveTasks(
+      ctx.db,
+      { ids: [t.id], projectId: project.id },
+      ctx.actor,
+    );
+    expect(moved.map((r) => r.projectId)).toEqual([project.id]);
+
+    const after = await getAuditLog(ctx.db, {
+      entityType: "task",
+      entityId: t.id,
+      limit: 20,
+    });
+    // computeChanges sees no field diff (projectId unchanged) — moveTasks
+    // logs nothing for this row, same count as before the call.
+    expect(after.entries.length).toBe(beforeCount);
+  });
+});
+
+describe("task repository — setTasksStatus (bulk status write)", () => {
+  const ctx = withTestDb();
+
+  it("bulk-sets status to done and to in_progress", async () => {
+    const t1 = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "bulk status 1" }),
+      ctx.actor,
+    );
+    const t2 = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "bulk status 2" }),
+      ctx.actor,
+    );
+
+    const done = await setTasksStatus(
+      ctx.db,
+      { ids: [t1.id, t2.id], status: "done" },
+      ctx.actor,
+    );
+    expect(done.map((t) => t.status)).toEqual(["done", "done"]);
+
+    const inProgress = await setTasksStatus(
+      ctx.db,
+      { ids: [t1.id, t2.id], status: "in_progress" },
+      ctx.actor,
+    );
+    expect(inProgress.map((t) => t.status)).toEqual([
+      "in_progress",
+      "in_progress",
+    ]);
+  });
+
+  it("mixed no-op rows (already that status) don't fail, and skip the audit entry", async () => {
+    const already = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "already done",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const changing = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "will change" }),
+      ctx.actor,
+    );
+
+    const result = await setTasksStatus(
+      ctx.db,
+      { ids: [already.id, changing.id], status: "done" },
+      ctx.actor,
+    );
+    expect(result.map((t) => t.status)).toEqual(["done", "done"]);
+
+    const alreadyAudit = await getAuditLog(ctx.db, {
+      entityType: "task",
+      entityId: already.id,
+      limit: 20,
+    });
+    expect(
+      alreadyAudit.entries.some(
+        (e) =>
+          e.action === "update" &&
+          (e.changes as { status?: unknown } | null)?.status !== undefined,
+      ),
+    ).toBe(false);
+
+    const changingAudit = await getAuditLog(ctx.db, {
+      entityType: "task",
+      entityId: changing.id,
+      limit: 20,
+    });
+    expect(
+      changingAudit.entries.some(
+        (e) =>
+          e.action === "update" &&
+          (e.changes as { status?: { to: unknown } } | null)?.status?.to ===
+            "done",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("task router — bulkMove / bulkSetStatus", () => {
+  const ctx = withTestDb();
+  let taskCaller: ReturnType<
+    typeof createTestCaller<(typeof taskRouter)["_def"]["record"]>
+  >;
+
+  beforeEach(() => {
+    taskCaller = createTestCaller(taskRouter, ctx.db);
+  });
+
+  it("bulkMove returns items + sideEffects", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "router bulk move a" }),
+      ctx.actor,
+    );
+    const projectB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "router bulk move b" }),
+      ctx.actor,
+    );
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "router move me",
+        projectId: projectA.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await taskCaller.bulkMove({
+      ids: [t.id],
+      projectId: projectB.id,
+    });
+    expect(result.items.map((i) => i.projectId)).toEqual([projectB.id]);
+    expect(result.sideEffects).toBeDefined();
+  });
+
+  it("bulkSetStatus returns items + sideEffects", async () => {
+    const t = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "router status me" }),
+      ctx.actor,
+    );
+
+    const result = await taskCaller.bulkSetStatus({
+      ids: [t.id],
+      status: "done",
+    });
+    expect(result.items.map((i) => i.status)).toEqual(["done"]);
+    expect(result.sideEffects).toBeDefined();
   });
 });

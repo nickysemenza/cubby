@@ -7,8 +7,11 @@
 import { type TaskId, taskId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
+  taskBulkMoveInput,
+  taskBulkStatusInput,
   taskCreateInput,
   taskFiltersSchema,
+  taskListAndSideEffectsOut,
   taskOut,
   taskSortableFields,
   taskUpdateData,
@@ -19,9 +22,12 @@ import {
   deleteTasks,
   getTaskByID,
   listActionableTasks,
+  moveTasks,
+  setTasksStatus,
   taskList,
   updateTask,
 } from "~/server/repo/task";
+import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -85,6 +91,43 @@ const chartData = protectedProcedure
     return data;
   });
 
+// Bulk "move to project" — projectId: null moves every listed task to the
+// inbox. Mirrors inventory.bulkMove's shape: one repo call inside a
+// transaction, then one wave-wide runMutationSideEffectsForEntities so the
+// embedding refresh for every moved task batches into a single dispatch.
+const bulkMove = protectedProcedure
+  .input(taskBulkMoveInput)
+  .output(taskListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await moveTasks(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "task" as const, entityId: item.id },
+        source: "task.bulkMove",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
+// Bulk status write, same shape as bulkMove above.
+const bulkSetStatus = protectedProcedure
+  .input(taskBulkStatusInput)
+  .output(taskListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setTasksStatus(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "task" as const, entityId: item.id },
+        source: "task.bulkSetStatus",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 export const taskRouter = createTRPCRouter({
   getByID,
   list,
@@ -93,4 +136,6 @@ export const taskRouter = createTRPCRouter({
   delete: deleteItem,
   listActionable,
   chartData,
+  bulkMove,
+  bulkSetStatus,
 });

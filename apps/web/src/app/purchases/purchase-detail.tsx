@@ -87,7 +87,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       value: (
         <EditableCell
           value={purchase.date}
-          config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+          config={{ type: "date" }}
           onSave={async (date) => {
             await updateMutation.mutateAsync({
               id: purchase.id,

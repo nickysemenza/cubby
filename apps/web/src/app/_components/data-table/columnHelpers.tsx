@@ -32,6 +32,7 @@ import {
 } from "~/components/ui/tooltip";
 import type { EntityDetailRoute } from "~/entities/entities";
 import { entities } from "~/entities/entities";
+import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
   buildIngredientComboboxItem,
@@ -324,7 +325,20 @@ export function createNameColumn<T extends BaseRow>(
                 ) : (
                   <Tooltip>
                     <TooltipTrigger
-                      render={<span className="block truncate" />}
+                      render={
+                        // The link lives INSIDE the CellEditTrigger button, so
+                        // without this a click on the name text would both
+                        // navigate AND open the inline editor — a race that
+                        // resolves nondeterministically on slow machines (the
+                        // route swap can unmount the editor mid-edit; this
+                        // failed CI E2E). Text click = navigate only; the
+                        // pencil / button padding remains the edit affordance.
+                        // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
+                        <span
+                          className="block truncate"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      }
                     >
                       <TableLink
                         to={entities[entity].routes.detail}
@@ -1323,24 +1337,11 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
 }
 
 /**
- * Parse a "YYYY-MM-DD" plain-date string (no time component — a task due
- * date, a purchase date) into a local `Date` at midnight via its components,
- * rather than `new Date(isoString)` (which parses as UTC midnight and can
- * shift a day back for negative UTC offsets, e.g. US timezones).
- */
-function parsePlainDate(value: string): Date {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
-}
-
-/**
  * Creates a column for a plain "YYYY-MM-DD" calendar date (task `dueDate`,
  * purchase `date`) — an absolute "MMM d, yyyy", not the relative "5m ago" of
  * {@link createTimestampColumn} (which is for full timestamps and reads oddly
  * for a date that can be in the future). Read-only by default; pass
- * `editable` for an inline `EditableCell` text input (same YYYY-MM-DD
- * placeholder convention as the project/task detail pages' date fields — no
- * dedicated "date" input type in the shared editable-cell primitives yet).
+ * `editable` for an inline `EditableCell` date-picker.
  */
 export function createPlainDateColumn<
   T extends Record<string, unknown>,
@@ -1352,6 +1353,7 @@ export function createPlainDateColumn<
     header?: string;
     className?: string;
     mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
@@ -1368,6 +1370,7 @@ export function createPlainDateColumn<
       className: options?.className ?? "w-28",
       mono: true,
       mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
     },
     cell: (info) => {
       const value = info.getValue();
@@ -1384,7 +1387,7 @@ export function createPlainDateColumn<
               value,
               (v) => options.editable!.onSave(v, info.row.original),
             )}
-            config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+            config={{ type: "date" }}
             renderValue={renderValue}
           />
         );
