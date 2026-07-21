@@ -325,7 +325,20 @@ export function createNameColumn<T extends BaseRow>(
                 ) : (
                   <Tooltip>
                     <TooltipTrigger
-                      render={<span className="block truncate" />}
+                      render={
+                        // The link lives INSIDE the CellEditTrigger button, so
+                        // without this a click on the name text would both
+                        // navigate AND open the inline editor — a race that
+                        // resolves nondeterministically on slow machines (the
+                        // route swap can unmount the editor mid-edit; this
+                        // failed CI E2E). Text click = navigate only; the
+                        // pencil / button padding remains the edit affordance.
+                        // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
+                        <span
+                          className="block truncate"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      }
                     >
                       <TableLink
                         to={entities[entity].routes.detail}

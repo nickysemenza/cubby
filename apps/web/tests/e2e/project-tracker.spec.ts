@@ -194,8 +194,13 @@ test.describe("Project tracker", () => {
     // onto `useEntityList`) has an inline-editable name column, same as
     // tasks/purchases. `ProjectPill` (Needs Attention) renders a Link, not a
     // button, so this is unambiguous even before the edit.
+    //
+    // Click the PENCIL, not the button center: the name text inside the
+    // trigger is a detail-page link (text click = navigate, pencil/padding =
+    // edit), so a center click would leave the page instead of opening the
+    // editor.
     const editedName = `${name} (edited)`;
-    await page.getByRole("button", { name }).click();
+    await page.getByRole("button", { name }).locator("svg").click();
     const nameInput = page.locator("input:focus");
     await expect(nameInput).toBeVisible({ timeout: 5000 });
     await nameInput.fill(editedName);
