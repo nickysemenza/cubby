@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { selfLinkLabel } from "~/lib/link-label";
 import { cn } from "~/lib/utils";
 
 /**
@@ -53,11 +54,34 @@ const components = {
   em: (props: ElementProps<"em">) => (
     <em className="italic" {...clean(props)} />
   ),
-  a: (props: ElementProps<"a">) => (
-    <a
-      className={markdownAnchorClass}
-      target="_blank"
-      rel="noopener noreferrer"
+  a: (props: ElementProps<"a">) => {
+    const { href, children } = props;
+    // A link whose visible text is just its own URL (the Notion import left
+    // these in project notes) renders as a wall of raw URL; show a short
+    // host+path label instead, keeping the full URL on hover.
+    const label =
+      typeof children === "string" && href
+        ? selfLinkLabel(href, children)
+        : null;
+    return (
+      <a
+        className={markdownAnchorClass}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={label ? href : undefined}
+        {...clean(props)}
+      >
+        {label ?? children}
+      </a>
+    );
+  },
+  img: (props: ElementProps<"img">) => (
+    // Bounded thumbnail so a stray embed degrades gracefully instead of
+    // rendering full-bleed. Project images live in the gallery, not notes.
+    // biome-ignore lint/a11y/useAltText: alt comes through from the markdown source
+    <img
+      className="my-2 max-h-48 w-auto rounded-md"
+      loading="lazy"
       {...clean(props)}
     />
   ),
