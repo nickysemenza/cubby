@@ -124,7 +124,7 @@ const NO_TAGS: string[] = [];
 export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
-  const columnHelper = createColumnHelper<RecipeListItem>();
+  const columnHelper = useMemo(() => createColumnHelper<RecipeListItem>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
   const { data: tags = NO_TAGS } = useQuery(
     api.recipe.getAllTags.queryOptions(),

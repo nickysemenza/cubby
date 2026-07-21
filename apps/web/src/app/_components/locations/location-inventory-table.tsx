@@ -54,7 +54,7 @@ export function LocationInventoryTable({
   view,
 }: LocationInventoryTableProps) {
   const api = useTRPC();
-  const columnHelper = createColumnHelper<InventoryItem>();
+  const columnHelper = useMemo(() => createColumnHelper<InventoryItem>(), []);
   const [unitMappingProductIds, setUnitMappingProductIds] = useState<string[]>(
     [],
   );
@@ -108,16 +108,13 @@ export function LocationInventoryTable({
     [],
   );
 
-  const { table, data, isLoading, error, bulkActionBar } = useEntityList<
-    InventoryItem,
-    Record<string, never>
-  >({
-    entity: "inventory",
-    queryOptions: () =>
-      api.inventory.list.queryOptions(locationInventoryListInput(locationId)),
-    buildFilters: () => ({}),
-    filters: [],
-    columns: [
+  // Memoize columns to prevent recreating on every render. updateMutation is
+  // NOT in the dependency array because useMutation returns a new object
+  // every render, but the closure captures mutateAsync correctly and it's
+  // functionally stable — see productlist.tsx for the same pattern.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateMutation changes every render but is functionally stable
+  const columns = useMemo(
+    () => [
       columnHelper.accessor((row) => row.product.id, {
         id: "image",
         header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
@@ -146,6 +143,19 @@ export function LocationInventoryTable({
         getUnitMappings: (row) => unitMappingsByProductId[row.product.id] ?? [],
       }),
     ],
+    [columnHelper, unitMappingsByProductId],
+  );
+
+  const { table, data, isLoading, error, bulkActionBar } = useEntityList<
+    InventoryItem,
+    Record<string, never>
+  >({
+    entity: "inventory",
+    queryOptions: () =>
+      api.inventory.list.queryOptions(locationInventoryListInput(locationId)),
+    buildFilters: () => ({}),
+    filters: [],
+    columns,
     extraActions: (item) => (
       <>
         <Button

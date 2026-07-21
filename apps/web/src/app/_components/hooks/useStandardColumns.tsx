@@ -120,11 +120,6 @@ export function useStandardColumns<TData extends BaseListRow>({
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using filtersKey for deep comparison
   const stableFilters = useMemo(() => filters, [filtersKey]);
 
-  // Stabilize columns array - only update when length changes
-  // (column definitions are typically static, changes in length indicate real updates)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - columns are static, length change indicates real update
-  const stableColumns = useMemo(() => customColumns, [customColumns.length]);
-
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, shouldUseMappings } = useMemo(() => {
     const entityConfig = entities[entity];
@@ -181,7 +176,7 @@ export function useStandardColumns<TData extends BaseListRow>({
 
     // Add custom columns with automatic enableSorting based on sortableFields
     const sortableFields = getSortableFields(entity);
-    const processedColumns = stableColumns.map((col) => {
+    const processedColumns = customColumns.map((col) => {
       // If enableSorting is explicitly set, respect it
       if (col.enableSorting !== undefined) return col;
       // Get column id from id or accessorKey (need to cast for accessorKey access)
@@ -219,7 +214,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     return cols;
   }, [
     columnHelper,
-    stableColumns,
+    customColumns,
     entity,
     shouldUseMappings,
     standardColumns,
