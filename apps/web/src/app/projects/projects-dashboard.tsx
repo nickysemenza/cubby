@@ -1,7 +1,7 @@
 import type { ProjectDashboardOut, ProjectOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { countBy, partition, sumBy, uniq } from "es-toolkit";
+import { countBy, partition, uniq } from "es-toolkit";
 import { Calendar, DollarSign, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
@@ -51,12 +51,10 @@ import {
   TASK_STATUS_LABELS,
   TaskList,
 } from "./shared";
+import { splitPurchaseSpend } from "./spend";
 
 // Charts are Nivo/d3-heavy and each tab's panel is unmounted until selected, so
 // lazy-load them to keep their code out of the dashboard chunk until a tab opens.
-const BudgetHealth = lazy(() =>
-  import("./charts/budget-health").then((m) => ({ default: m.BudgetHealth })),
-);
 const CostVsEstimate = lazy(() =>
   import("./charts/cost-vs-estimate").then((m) => ({
     default: m.CostVsEstimate,
@@ -297,20 +295,15 @@ function DashboardContent({
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <Stack className="pt-4">
-              <Grid cols="pair">
-                <Section
-                  title="Cost vs Estimate"
-                  description="Projects with both spending and an estimate"
-                >
-                  <CostVsEstimate projects={projects} />
-                </Section>
-                <Section
-                  title="Budget Health"
-                  description="Top 12 projects by % of estimate spent"
-                >
-                  <BudgetHealth projects={projects} />
-                </Section>
-              </Grid>
+              {/* One budget chart (actual vs estimate, absolute $) + one spend
+                  chart (top spenders). Budget Health's % view was a third take
+                  on the same actual-vs-estimate relationship — dropped. */}
+              <Section
+                title="Cost vs Estimate"
+                description="Projects with both spending and an estimate"
+              >
+                <CostVsEstimate projects={projects} />
+              </Section>
 
               <Section title="Top 10 Projects by Spending">
                 <SpendingByProject projects={projects} />
@@ -431,24 +424,25 @@ function SummaryCards({
   tasks: ProjectDashboardOut["tasks"];
   purchases: ProjectDashboardOut["purchases"];
 }) {
-  const activeProjects = projects.filter((p) => p.status !== "done").length;
-  const activeTasks = tasks.filter((t) => t.status !== "done").length;
-  const totalSpend = sumBy(purchases, (p) => p.cost ?? 0);
-  const plannedSpend = sumBy(
-    purchases.filter((p) => p.future),
-    (p) => p.cost ?? 0,
-  );
+  // Headline counts and the status-badge breakdown must describe the SAME
+  // population, else "Active Projects: 8" sits above a "Done: 66" badge. Both
+  // count the active (non-done) set.
+  const activeProjectsList = projects.filter((p) => p.status !== "done");
+  const activeTasksList = tasks.filter((t) => t.status !== "done");
+  const spend = splitPurchaseSpend(purchases);
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <Card size="sm">
         <CardHeader>
           <CardDescription>Active Projects</CardDescription>
-          <CardTitle className="text-2xl">{activeProjects}</CardTitle>
+          <CardTitle className="text-2xl">
+            {activeProjectsList.length}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Row wrap gap="sm">
-            {Object.entries(countBy(projects, (p) => p.status)).map(
+            {Object.entries(countBy(activeProjectsList, (p) => p.status)).map(
               ([status, count]) => (
                 <Badge key={status} variant="outline">
                   {PROJECT_STATUS_LABELS[status as ProjectOut["status"]]}:{" "}
@@ -463,11 +457,11 @@ function SummaryCards({
       <Card size="sm">
         <CardHeader>
           <CardDescription>Active Tasks</CardDescription>
-          <CardTitle className="text-2xl">{activeTasks}</CardTitle>
+          <CardTitle className="text-2xl">{activeTasksList.length}</CardTitle>
         </CardHeader>
         <CardContent>
           <Row wrap gap="sm">
-            {Object.entries(countBy(tasks, (t) => t.status)).map(
+            {Object.entries(countBy(activeTasksList, (t) => t.status)).map(
               ([status, count]) => (
                 <Badge key={status} variant="outline">
                   {
@@ -485,16 +479,18 @@ function SummaryCards({
 
       <Card size="sm">
         <CardHeader>
-          <CardDescription>Total Spend</CardDescription>
+          <CardDescription>Actual Spend</CardDescription>
           <CardTitle className="text-2xl">
-            {formatCurrency(totalSpend, 0)}
+            {formatCurrency(spend.actual, 0)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Description size="xs">
             {purchases.length} purchases
-            {plannedSpend > 0 &&
-              ` · ${formatCurrency(plannedSpend, 0)} planned`}
+            {spend.committed > 0 &&
+              ` · ${formatCurrency(spend.committed, 0)} committed`}
+            {spend.contributions > 0 &&
+              ` · ${formatCurrency(spend.contributions, 0)} contributions`}
           </Description>
         </CardContent>
       </Card>

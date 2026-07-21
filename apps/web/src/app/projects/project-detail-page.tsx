@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   ShoppingCart,
+  Wallet,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
+import { BudgetStrip } from "./BudgetStrip";
 import { CategoryBreakdown } from "./charts/category-breakdown";
 import { ProjectGantt } from "./charts/gantt/ProjectGantt";
 import { PlannedVsActual } from "./charts/planned-vs-actual";
@@ -70,6 +72,7 @@ import {
   StatusIcon,
   TaskList,
 } from "./shared";
+import { splitPurchaseSpend } from "./spend";
 
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
 const NO_TASKS: TaskOut[] = [];
@@ -308,6 +311,25 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     [chartPurchases],
   );
 
+  // Decompose spend into actual / committed / contributions rather than showing
+  // one blended figure. Own-scope split feeds the hero; the whole-subtree split
+  // + subtree estimate feed the Budget card's reconciliation (own == subtree for
+  // a leaf project, so both collapse there).
+  const ownSpendSplit = useMemo(
+    () =>
+      splitPurchaseSpend(
+        chartPurchases.filter((p) => p.projectId === project.id),
+      ),
+    [chartPurchases, project.id],
+  );
+  const subtreeSpendSplit = useMemo(
+    () => splitPurchaseSpend(chartPurchases),
+    [chartPurchases],
+  );
+  const budgetEstimate =
+    project.rollup.subtree.costEstimate ?? project.costEstimate;
+  const showBudget = budgetEstimate != null || chartPurchases.length > 0;
+
   const { data: imageMap } = useQuery({
     ...api.image.imagesByProjectIds.queryOptions({ projectIds: [project.id] }),
     staleTime: 5 * 60 * 1000,
@@ -539,7 +561,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         />
       ),
     },
-    { label: "Spent", value: formatCurrency(project.rollup.spent, 0) },
     {
       label: "Progress",
       value:
@@ -650,113 +671,141 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
-  const sections: DetailSection[] = [
-    // Main column: Notes (when populated) then Tasks.
-    ...(hasNotesContent ? [notesSection] : []),
-    {
-      title: "Tasks",
-      icon: ListChecks,
-      // The board needs the full width; the list is happy in the main column.
-      zone: tasksView === "board" ? "full" : "main",
-      headerAction: (
-        <Row align="center" gap="sm">
-          {topLevelTasks.length > 0 && (
-            <Badge variant="outline">{topLevelTasks.length}</Badge>
-          )}
-          <ViewSwitcher
-            ariaLabel="Tasks view"
-            options={TASKS_VIEW_OPTIONS}
-            value={tasksView}
-            onValueChange={setTasksView}
-          />
-        </Row>
-      ),
-      content:
-        tasksView === "board" ? (
-          <TaskBoard
-            tasks={topLevelTasks}
-            cols="status"
-            lane={null}
-            filters={projectSubtreeTasksFilters(project.id)}
-            showProjectOnCards={hasSubtree}
-          />
-        ) : (
-          <TaskList tasks={topLevelTasks} />
-        ),
-    },
-    // Aside rail: metadata + (when empty) the slim Notes card.
-    {
-      title: "Overview",
-      icon: Info,
-      content: <BasicInfo fields={fields} />,
-    },
-    {
-      title: "Dependencies",
-      icon: Link2,
-      content: (
-        <Stack gap="sm">
-          <Stack gap="xs">
-            <p className="eyebrow my-0">Blocked by</p>
-            <DependencyPicker
-              value={blockedBy}
-              onSave={async (ids) => {
-                await updateMutation.mutateAsync({
-                  id: project.id,
-                  data: { blockedByIds: ids },
-                });
-              }}
-              SearchProvider={WithProjectSearch}
-              label="project"
-              excludeId={project.id}
-              renderReadChip={(item) => <DependencyBadge {...item} />}
-            />
-          </Stack>
-          {blocking.length > 0 && (
-            <Stack gap="xs">
-              <p className="eyebrow my-0">Blocks</p>
-              <Row wrap gap="sm">
-                {blocking.map((p) => (
-                  <DependencyBadge key={p.id} {...p} />
-                ))}
-              </Row>
-            </Stack>
-          )}
-        </Stack>
-      ),
-    },
-    {
-      title: "Sub-projects",
-      icon: FolderTree,
-      headerAction:
-        childProjects.length > 0 ? (
-          <Badge variant="outline">{childProjects.length}</Badge>
-        ) : undefined,
-      content: (
-        <SubProjectsList
-          projects={childProjects}
-          onCreate={() => setIsCreatingSubProject(true)}
+  const budgetSection: DetailSection = {
+    title: "Budget",
+    icon: Wallet,
+    zone: "main",
+    content: (
+      <BudgetStrip estimate={budgetEstimate} split={subtreeSpendSplit} />
+    ),
+  };
+
+  const tasksSection: DetailSection = {
+    title: "Tasks",
+    icon: ListChecks,
+    // The board needs the full width; the list is happy in the main column.
+    zone: tasksView === "board" ? "full" : "main",
+    headerAction: (
+      <Row align="center" gap="sm">
+        {topLevelTasks.length > 0 && (
+          <Badge variant="outline">{topLevelTasks.length}</Badge>
+        )}
+        <ViewSwitcher
+          ariaLabel="Tasks view"
+          options={TASKS_VIEW_OPTIONS}
+          value={tasksView}
+          onValueChange={setTasksView}
         />
+      </Row>
+    ),
+    content:
+      tasksView === "board" ? (
+        <TaskBoard
+          tasks={topLevelTasks}
+          cols="status"
+          lane={null}
+          filters={projectSubtreeTasksFilters(project.id)}
+          showProjectOnCards={hasSubtree}
+        />
+      ) : (
+        <TaskList tasks={topLevelTasks} showProjectColumn={hasSubtree} />
       ),
-    },
-    ...(hasNotesContent ? [] : [notesSection]),
-    {
-      title: "Purchases",
-      icon: ShoppingCart,
-      zone: "full",
-      headerAction:
-        chartPurchases.length > 0 ? (
-          <Badge variant="outline">{chartPurchases.length}</Badge>
-        ) : undefined,
-      content: (
-        <div ref={purchasesRef}>
-          <PurchaseList
-            purchases={sortedPurchases}
-            tradeFilter={activeMatrixCell?.trade ?? null}
-            costTypeFilter={activeMatrixCell?.costType ?? null}
+  };
+
+  const overviewSection: DetailSection = {
+    title: "Overview",
+    icon: Info,
+    content: <BasicInfo fields={fields} />,
+  };
+
+  const dependenciesSection: DetailSection = {
+    title: "Dependencies",
+    icon: Link2,
+    content: (
+      <Stack gap="sm">
+        <Stack gap="xs">
+          <p className="eyebrow my-0">Blocked by</p>
+          <DependencyPicker
+            value={blockedBy}
+            onSave={async (ids) => {
+              await updateMutation.mutateAsync({
+                id: project.id,
+                data: { blockedByIds: ids },
+              });
+            }}
+            SearchProvider={WithProjectSearch}
+            label="project"
+            excludeId={project.id}
+            renderReadChip={(item) => <DependencyBadge {...item} />}
           />
-        </div>
-      ),
-    },
+        </Stack>
+        {blocking.length > 0 && (
+          <Stack gap="xs">
+            <p className="eyebrow my-0">Blocks</p>
+            <Row wrap gap="sm">
+              {blocking.map((p) => (
+                <DependencyBadge key={p.id} {...p} />
+              ))}
+            </Row>
+          </Stack>
+        )}
+      </Stack>
+    ),
+  };
+
+  const subProjectsSection: DetailSection = {
+    title: "Sub-projects",
+    icon: FolderTree,
+    headerAction:
+      childProjects.length > 0 ? (
+        <Badge variant="outline">{childProjects.length}</Badge>
+      ) : undefined,
+    content: (
+      <SubProjectsList
+        projects={childProjects}
+        onCreate={() => setIsCreatingSubProject(true)}
+      />
+    ),
+  };
+
+  // Leaf projects lead with the ledger in the wide column (no sub-project tree to
+  // show, so the main column would otherwise sit empty under a short Tasks card);
+  // subtree projects keep the ledger as a full-width band and show the project
+  // column since rows span multiple sub-projects.
+  const purchasesSection: DetailSection = {
+    title: "Purchases",
+    icon: ShoppingCart,
+    zone: hasSubtree ? "full" : "main",
+    headerAction:
+      chartPurchases.length > 0 ? (
+        <Badge variant="outline">{chartPurchases.length}</Badge>
+      ) : undefined,
+    content: (
+      <div ref={purchasesRef}>
+        <PurchaseList
+          purchases={sortedPurchases}
+          tradeFilter={activeMatrixCell?.trade ?? null}
+          costTypeFilter={activeMatrixCell?.costType ?? null}
+          showProjectColumn={hasSubtree}
+        />
+      </div>
+    ),
+  };
+
+  const sections: DetailSection[] = [
+    // Main column: Notes (when populated), Budget, Tasks, then — for a leaf —
+    // the purchase ledger.
+    ...(hasNotesContent ? [notesSection] : []),
+    ...(showBudget ? [budgetSection] : []),
+    tasksSection,
+    ...(hasSubtree ? [] : [purchasesSection]),
+    // Aside rail: metadata + (when empty) the slim Notes card.
+    overviewSection,
+    dependenciesSection,
+    subProjectsSection,
+    ...(hasNotesContent ? [] : [notesSection]),
+    // Subtree projects show the ledger as a full-width band at the bottom.
+    ...(hasSubtree ? [purchasesSection] : []),
   ];
 
   const heroStats: DetailHeroStat[] = [
@@ -779,7 +828,15 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           } satisfies DetailHeroStat,
         ]
       : []),
-    { label: "Spent", value: formatCurrency(project.rollup.spent, 0) },
+    { label: "Actual", value: formatCurrency(ownSpendSplit.actual, 0) },
+    ...(ownSpendSplit.committed > 0
+      ? [
+          {
+            label: "Committed",
+            value: formatCurrency(ownSpendSplit.committed, 0),
+          } satisfies DetailHeroStat,
+        ]
+      : []),
     {
       label: "Tasks",
       value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,

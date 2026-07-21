@@ -209,7 +209,10 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 const taskHelper = createColumnHelper<TaskOut>();
 
-const taskColumns = [
+// The project link column is redundant on a leaf project's detail page (every
+// row links back to the project you're already on), so it's opt-out via
+// `showProjectColumn`.
+const buildTaskColumns = (showProjectColumn: boolean) => [
   createFilterableSelectColumn(taskHelper, "status", {
     header: "Status",
     className: "w-32",
@@ -226,7 +229,9 @@ const taskColumns = [
     cell: ({ row }) => row.original.name,
     enableSorting: true,
   }),
-  createProjectLinkColumn(taskHelper, { className: "w-40" }),
+  ...(showProjectColumn
+    ? [createProjectLinkColumn(taskHelper, { className: "w-40" })]
+    : []),
   taskHelper.accessor("trade", {
     header: "Trade",
     cell: ({ getValue }) => {
@@ -242,7 +247,17 @@ const taskColumns = [
   }),
 ];
 
-export function TaskList({ tasks }: { tasks: TaskOut[] }) {
+export function TaskList({
+  tasks,
+  showProjectColumn = true,
+}: {
+  tasks: TaskOut[];
+  showProjectColumn?: boolean;
+}) {
+  const columns = useMemo(
+    () => buildTaskColumns(showProjectColumn),
+    [showProjectColumn],
+  );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
     const active = activeTasks.sort((a, b) => {
@@ -256,7 +271,7 @@ export function TaskList({ tasks }: { tasks: TaskOut[] }) {
 
   const table = useReactTable({
     data: sortedData,
-    columns: taskColumns,
+    columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -285,7 +300,7 @@ export function TaskList({ tasks }: { tasks: TaskOut[] }) {
 
 const purchaseHelper = createColumnHelper<PurchaseOut>();
 
-const purchaseColumns = [
+const buildPurchaseColumns = (showProjectColumn: boolean) => [
   purchaseHelper.accessor("name", {
     header: "Purchase",
     cell: ({ row }) => {
@@ -305,7 +320,9 @@ const purchaseColumns = [
     },
     enableSorting: true,
   }),
-  createProjectLinkColumn(purchaseHelper, { className: "w-40" }),
+  ...(showProjectColumn
+    ? [createProjectLinkColumn(purchaseHelper, { className: "w-40" })]
+    : []),
   createFilterableSelectColumn(purchaseHelper, "costType", {
     header: "Cost Type",
     className: "w-28",
@@ -331,7 +348,13 @@ const purchaseColumns = [
     cell: ({ getValue }) => {
       const cost = getValue();
       if (cost == null) return null;
-      return <span className="font-medium">{formatCurrency(cost, 0)}</span>;
+      // Negative rows are credits/contributions (money in) — tint them so they
+      // don't read as spend.
+      return (
+        <span className={cn("font-medium", cost < 0 && "text-positive")}>
+          {formatCurrency(cost, 0)}
+        </span>
+      );
     },
     enableSorting: true,
   }),
@@ -345,15 +368,21 @@ export function PurchaseList({
   purchases,
   tradeFilter,
   costTypeFilter,
+  showProjectColumn = true,
 }: {
   purchases: PurchaseOut[];
   /** Controlled column filters, driven by the Trade × Cost Type pivot click. */
   tradeFilter?: Trade | null;
   costTypeFilter?: CostType | null;
+  showProjectColumn?: boolean;
 }) {
+  const columns = useMemo(
+    () => buildPurchaseColumns(showProjectColumn),
+    [showProjectColumn],
+  );
   const table = useReactTable({
     data: purchases,
-    columns: purchaseColumns,
+    columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

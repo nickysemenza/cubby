@@ -14,8 +14,9 @@ type Datum = {
 };
 
 /**
- * Actual spend comes off `project.rollup.spent` — see BudgetHealth. A
- * project with sub-projects uses its `subtree.spent` instead (own + every
+ * Actual spend comes off `project.rollup.spent` (a SQL aggregate over live
+ * purchases, including `future` ones). A project with sub-projects uses its
+ * `subtree.spent` instead (own + every
  * descendant), so a parent's bar reads as the whole envelope, not just what
  * was logged directly against it.
  */
