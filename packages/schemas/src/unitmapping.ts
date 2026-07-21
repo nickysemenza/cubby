@@ -1,6 +1,6 @@
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { amount, writeAmount } from "./codec";
+import { amount, positiveAmount } from "./codec";
 import { productId } from "./identifiers";
 
 const sourceMetadata = z.discriminatedUnion("type", [
@@ -34,10 +34,10 @@ export const unitMappingBase = z.object({
 });
 
 export const unitMappingInput = z.object({
-  a: writeAmount.describe(
+  a: positiveAmount.describe(
     'left side of the pair, e.g. { value: 8, unit: "oz" }',
   ),
-  b: writeAmount.describe(
+  b: positiveAmount.describe(
     'right side of the pair, e.g. { value: 10, unit: "dollar" }',
   ),
   source: z
@@ -55,10 +55,10 @@ export const unitMappingInput = z.object({
  */
 export const mcpUnitMappingInput = z
   .object({
-    a: writeAmount.describe(
+    a: positiveAmount.describe(
       'left side of the pair, e.g. { value: 8, unit: "oz" }',
     ),
-    b: writeAmount.describe(
+    b: positiveAmount.describe(
       'right side of the pair, e.g. { value: 10, unit: "dollar" }',
     ),
     source: z.string().optional(),

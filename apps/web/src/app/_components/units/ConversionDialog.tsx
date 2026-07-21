@@ -31,7 +31,7 @@ import type { BaseKind } from "~/lib/conversion-coverage";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
-import { ConversionCapabilities } from "./ConversionCapabilities";
+import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";
 import { kindIconMap } from "./kind-icons";
 import { UnitMappingGraph } from "./unit-mapping-graph";
 import { UnitMappingsTable } from "./unitmappingstable";
@@ -197,9 +197,8 @@ function ConversionDialogContent({
         )}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <ConversionCapabilities
+          <ConversionCapabilitiesSummary
             mappings={filteredMappings}
-            hideConvertButton={true}
             kinds={kinds}
           />
 

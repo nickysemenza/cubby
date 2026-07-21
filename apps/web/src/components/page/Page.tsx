@@ -7,7 +7,6 @@ import {
   PageHeader,
 } from "~/components/layouts/page-hero";
 import { useRouteEntity } from "~/hooks/useRouteEntity";
-import { HydrateClient } from "~/trpc/hydrate-client";
 
 interface PageBaseProps {
   /** Page title — the big heading (list) or the spec-plate name (detail). */
@@ -72,26 +71,24 @@ export function Page(props: PageProps) {
   // List-only header options, narrowed off the union.
   const list = props.variant !== "detail" ? props : undefined;
   return (
-    <HydrateClient>
-      <PageWrapper fullWidth={fullWidth}>
-        <div className={variant === "detail" ? "space-y-2" : undefined}>
-          <PageHeader
-            variant={variant}
-            title={title}
-            eyebrow={eyebrow}
-            entity={entity}
-            actions={actions}
-            compact={list?.compact}
-            decoration={list?.decoration}
-            heroStamp={detail?.heroStamp}
-            heroStats={detail?.heroStats}
-            heroNo={detail?.heroNo}
-            heroImages={detail?.heroImages}
-            rawData={detail?.rawData}
-          />
-          <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
-        </div>
-      </PageWrapper>
-    </HydrateClient>
+    <PageWrapper fullWidth={fullWidth}>
+      <div className={variant === "detail" ? "space-y-2" : undefined}>
+        <PageHeader
+          variant={variant}
+          title={title}
+          eyebrow={eyebrow}
+          entity={entity}
+          actions={actions}
+          compact={list?.compact}
+          decoration={list?.decoration}
+          heroStamp={detail?.heroStamp}
+          heroStats={detail?.heroStats}
+          heroNo={detail?.heroNo}
+          heroImages={detail?.heroImages}
+          rawData={detail?.rawData}
+        />
+        <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+      </div>
+    </PageWrapper>
   );
 }

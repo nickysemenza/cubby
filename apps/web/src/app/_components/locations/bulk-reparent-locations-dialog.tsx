@@ -10,7 +10,7 @@ import {
   getLocationId,
   requiredLocationField,
 } from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";

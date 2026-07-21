@@ -1,8 +1,7 @@
 import { JsonEditor } from "json-edit-react";
 import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import type { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { z } from "zod";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -36,8 +35,10 @@ export function EditableComponentDemo<T>({
   // Convert Zod schema to JSON Schema for validation hints
   const jsonSchema = useMemo(() => {
     try {
-      // biome-ignore lint/suspicious/noExplicitAny: intentional
-      return zodToJsonSchema(schema as any, { target: "jsonSchema7" });
+      return z.toJSONSchema(schema, {
+        target: "draft-07",
+        unrepresentable: "any",
+      });
     } catch {
       return undefined;
     }

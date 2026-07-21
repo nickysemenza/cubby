@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import { optionalLocationField } from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import {
   PersistentScanner,
   QR_CODE_FORMATS,

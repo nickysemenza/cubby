@@ -13,18 +13,12 @@ import { z } from "zod";
 import {
   getCaller,
   idParam,
-  READ_ONLY_CLOSED,
-  registerEntityDeleteTool,
-  registerEntityGetTool,
-  registerEntityListTool,
-  registerEntityUpdateTool,
+  registerEntityCrudToolset,
   registerMcpTool,
   respond,
   slimProduct,
   toUnitMappingInput,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
-  withIdInput,
 } from "./_shared";
 
 const productCreateMcpInput = mcpProductCreateInput.extend({
@@ -32,36 +26,27 @@ const productCreateMcpInput = mcpProductCreateInput.extend({
 }).shape;
 
 export function registerProductTools(server: McpServer) {
-  registerEntityListTool(server, {
-    name: "search_products",
-    description: "Search products by name, manufacturer, UPC, or category.",
-    router: "product",
+  registerEntityCrudToolset(server, {
+    entity: "product",
+    names: { list: "search_products" },
+    createInput: productCreateMcpInput,
+    updateShape: mcpProductUpdateInput.shape,
     filterFields: productFilterFields,
-    outputSchema: productMcpListOut,
+    mcpListOut: productMcpListOut,
+    out: productMcpOut,
     slim: slimProduct,
     sort: { orderBy: "name" },
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityGetTool(server, {
-    name: "get_product",
-    description: "Get a product by ID.",
-    router: "product",
-    idLabel: "Product",
-    outputSchema: productMcpOut,
-    slim: slimProduct,
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerMcpTool(server, {
-    name: "create_product",
-    description:
-      'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
-    inputSchema: productCreateMcpInput,
-    outputSchema: productMcpOut,
-    annotations: WRITE_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
+    descriptions: {
+      list: "Search products by name, manufacturer, UPC, or category.",
+      get: "Get a product by ID.",
+      create:
+        'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
+      update:
+        "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
+      delete:
+        "Soft-delete products by IDs. Fails if products have inventory entries.",
+    },
+    create: async (caller, params) => {
       const unitMappings = (
         (params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>) ??
         []
@@ -85,19 +70,8 @@ export function registerProductTools(server: McpServer) {
         price: (params.price as number | undefined) ?? null,
         unitMappings,
       });
-      return respond(result, slimProduct);
+      return result;
     },
-  });
-
-  registerEntityUpdateTool(server, {
-    name: "update_product",
-    description:
-      "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
-    inputSchema: withIdInput("Product", mcpProductUpdateInput.shape),
-    outputSchema: productMcpOut,
-    slim: slimProduct,
-    router: "product",
-    annotations: WRITE_CLOSED,
   });
 
   registerMcpTool(server, {
@@ -125,15 +99,6 @@ export function registerProductTools(server: McpServer) {
       });
       return respond(result, slimProduct);
     },
-  });
-
-  registerEntityDeleteTool(server, {
-    name: "delete_products",
-    description:
-      "Soft-delete products by IDs. Fails if products have inventory entries.",
-    router: "product",
-    entityLabel: "product",
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
   });
 
   registerMcpTool(server, {

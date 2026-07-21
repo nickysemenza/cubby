@@ -6,16 +6,16 @@ import { normalizeImportRecipe } from "~/lib/import-recipe-normalizer";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "../db";
 import { withTransaction } from "./database-helpers";
-import { findOrCreateIngredient } from "./ingredient";
+import { findOrCreateIngredient } from "./ingredient/crud";
 import {
   type CookbookRef,
-  findOrCreateRecipeLinkIngredient,
   getCookbookRecipeIdsByTitle,
   normalizeTitle,
   upsertCookbookRecipe,
   upsertNotionRecipe,
   upsertRecipe,
-} from "./recipe";
+} from "./recipe/crud";
+import { findOrCreateRecipeLinkIngredient } from "./recipe/update-helpers";
 
 /**
  * Per-import shared state, threaded through the converter when importing a whole

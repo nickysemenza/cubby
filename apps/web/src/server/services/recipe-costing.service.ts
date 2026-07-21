@@ -37,7 +37,7 @@ import {
   collectSubRecipeIds,
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
-import { dispatchBackgroundJobs } from "~/server/background-queue";
+import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";

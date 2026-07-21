@@ -14,12 +14,12 @@ import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { TruncatedList } from "../TruncatedList";
 import type { CellClipboardSpec } from "./cell-clipboard";
+import { EditableEntityCell } from "./editable-entity-cell";
 import {
   entityCellClipboard,
   type InventoryEntryBase,
   type InventoryRelatedEntity,
-} from "./columnHelpers";
-import { EditableEntityCell } from "./editable-entity-cell";
+} from "./inventory-column-helpers";
 
 /** A single (transient, structurally-cast) location shape read off a row's
  * related-entity accessor — {@link InventoryEntryBase}'s `location` field is

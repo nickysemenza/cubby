@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { entityEmbedding, ingredient } from "~/server/db/schema";
 import { deleteUnusedIngredients } from "../services/problems.service";
 import { getDb } from "./database-helpers";
+import { upsertImportRecipe } from "./import-recipe-convert";
 import { findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
@@ -13,7 +14,6 @@ import {
   findUnusedIngredients,
 } from "./problems";
 import { createProduct } from "./product";
-import { upsertImportRecipe } from "./recipe";
 import {
   makeImportRecipe,
   makeLocationInput,

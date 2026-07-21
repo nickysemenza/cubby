@@ -1,14 +1,14 @@
 import {
+  productLookupResponseSchema,
   searchResponseSchema,
   upcLookupInput,
-  upcLookupResponseSchema,
   upcSearchInput,
 } from "@cubby/upc-contract";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const lookup = protectedProcedure
   .input(upcLookupInput)
-  .output(upcLookupResponseSchema.nullable())
+  .output(productLookupResponseSchema.nullable())
   .query(async ({ ctx, input }) => {
     return await ctx.upcLookupClient.lookup(input.upc);
   });

@@ -561,6 +561,7 @@ const idsParam = (label: string) =>
   z.array(z.string()).describe(`Array of ${label} IDs to delete`);
 
 interface DynamicEntityRouter {
+  create(input: Record<string, unknown>): Promise<unknown>;
   getByID(input: { id: unknown }): Promise<unknown>;
   delete(input: { ids: string[] }): Promise<unknown>;
   update(input: {
@@ -660,10 +661,7 @@ function pickSchemaFilters(
   return out;
 }
 
-export function withIdInput(
-  idLabel: string,
-  dataShape: Record<string, z.ZodType>,
-) {
+function withIdInput(idLabel: string, dataShape: Record<string, z.ZodType>) {
   return { id: idParam(idLabel), ...dataShape };
 }
 
@@ -747,7 +745,7 @@ export function registerEntityDeleteTool(
   });
 }
 
-export function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
+function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
   server: McpServer,
   config: {
     name: string;
@@ -805,15 +803,21 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
   /** Singular slug — router key and get/create/update tool names (get_x, create_x, update_x). */
   entity: string;
   /** Plural slug — list/delete tool names (list_xs, delete_xs). */
-  entityPlural: string;
+  entityPlural?: string;
   /** Capitalized singular label for id params (e.g. "Project"); lowercased for delete's entityLabel. */
-  idLabel: string;
+  idLabel?: string;
   createInput: TCreateInput;
   updateShape: Record<string, z.ZodType>;
+  /** Use when the update schema already includes its id field. */
+  updateInput?: ZodSchemaLike;
   filterFields: Record<string, z.ZodType>;
   mcpListOut: z.ZodType;
   out: z.ZodType;
+  detailOut?: z.ZodType;
+  mutationOut?: z.ZodType;
   slim: Slim;
+  /** Set false when the detail output must not use the list/mutation projection. */
+  detailSlim?: Slim | false;
   sort: { orderBy: string; direction?: "asc" | "desc" };
   descriptions: {
     list: string;
@@ -822,7 +826,14 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
     update: string;
     delete: string;
   };
-  create: (
+  names?: Partial<
+    Record<"list" | "get" | "create" | "update" | "delete", string>
+  >;
+  operations?: Partial<
+    Record<"list" | "get" | "create" | "update" | "delete", boolean>
+  >;
+  paging?: { defaultPageSize?: number; maxPageSize?: number };
+  create?: (
     caller: Caller,
     params: InferSchemaLike<TCreateInput>,
   ) => Promise<unknown>;
@@ -840,54 +851,83 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
   server: McpServer,
   config: EntityCrudToolsetConfig<TCreateInput>,
 ) {
-  registerEntityListTool(server, {
-    name: `list_${config.entityPlural}`,
-    description: config.descriptions.list,
-    router: config.entity,
-    filterFields: config.filterFields,
-    outputSchema: config.mcpListOut,
-    slim: config.slim,
-    sort: config.sort,
-    annotations: READ_ONLY_CLOSED,
-  });
+  const enabled = (operation: keyof NonNullable<typeof config.operations>) =>
+    config.operations?.[operation] !== false;
+  const name = (
+    operation: "list" | "get" | "create" | "update" | "delete",
+    fallback: string,
+  ) => config.names?.[operation] ?? fallback;
+  const detailOut = config.detailOut ?? config.out;
+  const mutationOut = config.mutationOut ?? config.out;
+  const entityPlural = config.entityPlural ?? `${config.entity}s`;
+  const idLabel =
+    config.idLabel ??
+    `${config.entity[0]?.toUpperCase()}${config.entity.slice(1)}`;
 
-  registerEntityGetTool(server, {
-    name: `get_${config.entity}`,
-    description: config.descriptions.get,
-    router: config.entity,
-    idLabel: config.idLabel,
-    outputSchema: config.out,
-    slim: config.slim,
-    annotations: READ_ONLY_CLOSED,
-  });
+  if (enabled("list"))
+    registerEntityListTool(server, {
+      name: name("list", `list_${entityPlural}`),
+      description: config.descriptions.list,
+      router: config.entity,
+      filterFields: config.filterFields,
+      outputSchema: config.mcpListOut,
+      slim: config.slim,
+      sort: config.sort,
+      defaultPageSize: config.paging?.defaultPageSize,
+      maxPageSize: config.paging?.maxPageSize,
+      annotations: READ_ONLY_CLOSED,
+    });
 
-  registerEntityCreateTool(server, {
-    name: `create_${config.entity}`,
-    description: config.descriptions.create,
-    inputSchema: config.createInput,
-    outputSchema: config.out,
-    slim: config.slim,
-    annotations: WRITE_CLOSED,
-    create: config.create,
-  });
+  if (enabled("get"))
+    registerEntityGetTool(server, {
+      name: name("get", `get_${config.entity}`),
+      description: config.descriptions.get,
+      router: config.entity,
+      idLabel,
+      outputSchema: detailOut,
+      slim:
+        config.detailSlim === false
+          ? undefined
+          : (config.detailSlim ?? config.slim),
+      annotations: READ_ONLY_CLOSED,
+    });
 
-  registerEntityUpdateTool(server, {
-    name: `update_${config.entity}`,
-    description: config.descriptions.update,
-    inputSchema: withIdInput(config.idLabel, config.updateShape),
-    outputSchema: config.out,
-    slim: config.slim,
-    router: config.entity,
-    annotations: WRITE_CLOSED,
-  });
+  if (enabled("create"))
+    registerEntityCreateTool(server, {
+      name: name("create", `create_${config.entity}`),
+      description: config.descriptions.create,
+      inputSchema: config.createInput,
+      outputSchema: mutationOut,
+      slim: config.slim,
+      annotations: WRITE_CLOSED,
+      create:
+        config.create ??
+        ((caller, params) =>
+          getEntityRouter(caller, config.entity).create(
+            params as Record<string, unknown>,
+          )),
+    });
 
-  registerEntityDeleteTool(server, {
-    name: `delete_${config.entityPlural}`,
-    description: config.descriptions.delete,
-    router: config.entity,
-    entityLabel: config.idLabel.toLowerCase(),
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-  });
+  if (enabled("update"))
+    registerEntityUpdateTool(server, {
+      name: name("update", `update_${config.entity}`),
+      description: config.descriptions.update,
+      inputSchema:
+        config.updateInput ?? withIdInput(idLabel, config.updateShape),
+      outputSchema: mutationOut,
+      slim: config.slim,
+      router: config.entity,
+      annotations: WRITE_CLOSED,
+    });
+
+  if (enabled("delete"))
+    registerEntityDeleteTool(server, {
+      name: name("delete", `delete_${entityPlural}`),
+      description: config.descriptions.delete,
+      router: config.entity,
+      entityLabel: idLabel.toLowerCase(),
+      annotations: WRITE_DESTRUCTIVE_CLOSED,
+    });
 }
 
 /** Register a tool that calls a tRPC procedure and returns the result as-is. */

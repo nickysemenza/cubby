@@ -21,7 +21,6 @@ export const positiveAmount = amount.refine((a) => a.value > 0, {
   error: "Amount must be greater than zero",
   path: ["value"],
 });
-export const writeAmount = positiveAmount;
 
 // Section names must be 2+ chars to satisfy recipeSectionInput validation
 // downstream; drop anything shorter (or blank) to an unnamed section. Shared by

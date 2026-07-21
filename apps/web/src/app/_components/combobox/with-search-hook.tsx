@@ -8,7 +8,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -29,20 +29,27 @@ import {
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
 import {
-  CreateIngredientDialog,
-  CreateLocationDialog,
-  CreateProductDialog,
-} from "./create-entity-dialogs";
-import {
   pagination,
   useDeferredSearch,
   useEntitySearch,
   useEntitySearchWithDialog,
 } from "./entity-search-hooks";
 
-// Re-export the only Create*Dialog consumed outside this module (the recipe
-// form's ingredient preview table), so the public import path stays stable.
-export { CreateIngredientDialog };
+const CreateIngredientDialog = lazy(() =>
+  import("./create-entity-dialogs").then((module) => ({
+    default: module.CreateIngredientDialog,
+  })),
+);
+const CreateLocationDialog = lazy(() =>
+  import("./create-entity-dialogs").then((module) => ({
+    default: module.CreateLocationDialog,
+  })),
+);
+const CreateProductDialog = lazy(() =>
+  import("./create-entity-dialogs").then((module) => ({
+    default: module.CreateProductDialog,
+  })),
+);
 
 export interface WithEntitySearchProps<TId extends string = string> {
   children: (props: {
@@ -95,15 +102,19 @@ export function WithIngredientSearch({
 
   return (
     <>
-      <CreateIngredientDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        onCancel={closeDialog}
-        onCreate={(data) => createMutation.mutate(data)}
-        isPending={createMutation.isPending}
-        error={createMutation.error?.message}
-        initialName={pendingName}
-      />
+      {isDialogOpen && (
+        <Suspense fallback={null}>
+          <CreateIngredientDialog
+            isOpen
+            onOpenChange={setIsDialogOpen}
+            onCancel={closeDialog}
+            onCreate={(data) => createMutation.mutate(data)}
+            isPending={createMutation.isPending}
+            error={createMutation.error?.message}
+            initialName={pendingName}
+          />
+        </Suspense>
+      )}
       {children({
         items: data?.items.map(buildIngredientComboboxItem) ?? [],
         onSearchChange,
@@ -154,15 +165,19 @@ export function WithLocationSearch({
 
   return (
     <>
-      <CreateLocationDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        onCancel={closeDialog}
-        onCreate={async (data) => createMutation.mutateAsync(data)}
-        isPending={createMutation.isPending}
-        error={createMutation.error?.message}
-        initialName={pendingName}
-      />
+      {isDialogOpen && (
+        <Suspense fallback={null}>
+          <CreateLocationDialog
+            isOpen
+            onOpenChange={setIsDialogOpen}
+            onCancel={closeDialog}
+            onCreate={async (data) => createMutation.mutateAsync(data)}
+            isPending={createMutation.isPending}
+            error={createMutation.error?.message}
+            initialName={pendingName}
+          />
+        </Suspense>
+      )}
       {children({
         items: data?.items.map(buildLocationComboboxItem) ?? [],
         onSearchChange,
@@ -220,15 +235,19 @@ export function WithProductSearch({
 
   return (
     <>
-      <CreateProductDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        onCancel={closeDialog}
-        onCreate={(data) => createMutation.mutate(data)}
-        isPending={createMutation.isPending}
-        error={createMutation.error?.message}
-        initialName={pendingName}
-      />
+      {isDialogOpen && (
+        <Suspense fallback={null}>
+          <CreateProductDialog
+            isOpen
+            onOpenChange={setIsDialogOpen}
+            onCancel={closeDialog}
+            onCreate={(data) => createMutation.mutate(data)}
+            isPending={createMutation.isPending}
+            error={createMutation.error?.message}
+            initialName={pendingName}
+          />
+        </Suspense>
+      )}
       {children({
         items: data?.items.map(buildProductComboboxItem) ?? [],
         onSearchChange,

@@ -18,7 +18,7 @@ import { z } from "zod";
 import {
   dispatchBackgroundJobs,
   dispatchLocationValuationRecompute,
-} from "~/server/background-queue";
+} from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import {
   findInventoryEmbeddingRefsForLocations,

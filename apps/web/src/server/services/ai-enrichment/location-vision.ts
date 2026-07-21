@@ -24,7 +24,7 @@ import {
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
-import { dispatchBackgroundJobs } from "~/server/background-queue";
+import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";

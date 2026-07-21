@@ -20,12 +20,12 @@ import { useTRPCClient } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
-  ComboboxFieldWithSearch,
   NullableNumericField,
   NullableTextareaField,
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
+import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 import {
   type PendingDocument,
   PendingDocumentUpload,

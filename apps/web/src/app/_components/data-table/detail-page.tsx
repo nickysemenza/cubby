@@ -31,16 +31,13 @@ export interface DetailSection {
    * must explicitly promote their primary content to "main".
    */
   zone?: DetailZone;
-  /** @deprecated Sugar for `zone: "full"`. `zone` wins when both are set. */
-  fullWidth?: boolean;
   /** Right-aligned header slot: a toolbar, action cluster, or rolled-up stat. */
   headerAction?: ReactNode;
   /** Let inline popovers/comboboxes escape the ruled section card. */
   overflowVisible?: boolean;
 }
 
-const zoneOf = (section: DetailSection): DetailZone =>
-  section.zone ?? (section.fullWidth ? "full" : "aside");
+const zoneOf = (section: DetailSection): DetailZone => section.zone ?? "aside";
 
 /** A single section card. `index` only drives the staggered entrance animation. */
 function SectionCard({

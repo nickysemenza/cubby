@@ -1,6 +1,6 @@
 import { projectKindValues } from "@cubby/schemas/project";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { capitalize } from "./shared";
+import { capitalize } from "./project-formatting";
 
 /**
  * `{value,label}` options for the kind filter/quick-add select — labels

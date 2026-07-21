@@ -10,10 +10,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
-import {
-  type BackgroundQueueBatch,
-  processBackgroundQueueMessage,
-} from "./server/background-queue";
+import { processBackgroundQueueMessage } from "./server/background-queue";
+import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import { withTrace } from "./server/tracing";

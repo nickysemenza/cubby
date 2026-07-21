@@ -5,7 +5,7 @@
  * and reduce duplication. They handle combobox selection validation and amount fields.
  */
 
-import { writeAmount } from "@cubby/schemas/codec";
+import { positiveAmount } from "@cubby/schemas/codec";
 import type {
   IngredientId,
   LocationId,
@@ -125,7 +125,7 @@ export function getOptionalRecipeId(
 export const inventoryItemWithLocationFields = z.object({
   product: requiredProductField,
   location: requiredLocationField,
-  amount: writeAmount,
+  amount: positiveAmount,
 });
 
 /**
@@ -134,6 +134,6 @@ export const inventoryItemWithLocationFields = z.object({
  */
 export const inventoryItemWithIdFields = z.object({
   product: requiredProductField,
-  amount: writeAmount,
+  amount: positiveAmount,
   id: z.string().optional(),
 });

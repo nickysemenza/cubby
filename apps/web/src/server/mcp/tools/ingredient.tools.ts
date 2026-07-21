@@ -7,9 +7,9 @@ import {
   ingredientRawLinesBatchOut,
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateResponseOut,
+  ingredientUpdateData,
   type MergeSummaryOut,
   mcpIngredientCreateInput,
-  mcpIngredientUpdateInput,
 } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
@@ -18,52 +18,35 @@ import {
   formatToolError,
   getCaller,
   READ_ONLY_CLOSED,
-  registerEntityCreateTool,
-  registerEntityDeleteTool,
-  registerEntityGetTool,
-  registerEntityListTool,
-  registerEntityUpdateTool,
+  registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
   slimIngredient,
   structuredSuccessWithError,
   WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
-  withIdInput,
 } from "./_shared";
 
 export function registerIngredientTools(server: McpServer) {
-  registerEntityListTool(server, {
-    name: "search_ingredients",
-    description:
-      "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
-    router: "ingredient",
+  registerEntityCrudToolset(server, {
+    entity: "ingredient",
+    names: { list: "search_ingredients" },
+    createInput: mcpIngredientCreateInput.shape,
+    updateShape: ingredientUpdateData.shape,
     filterFields: ingredientFilterFields,
-    outputSchema: ingredientMcpListOut,
+    mcpListOut: ingredientMcpListOut,
+    out: ingredientMcpOut,
     slim: slimIngredient,
     sort: { orderBy: "name" },
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityGetTool(server, {
-    name: "get_ingredient",
-    description:
-      "Get a single ingredient by ID, including linked products and recipes it appears in.",
-    router: "ingredient",
-    idLabel: "Ingredient",
-    outputSchema: ingredientMcpOut,
-    slim: slimIngredient,
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityCreateTool(server, {
-    name: "create_ingredient",
-    description:
-      "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
-    inputSchema: mcpIngredientCreateInput.shape,
-    outputSchema: ingredientMcpOut,
-    slim: slimIngredient,
-    annotations: WRITE_CLOSED,
+    descriptions: {
+      list: "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
+      get: "Get a single ingredient by ID, including linked products and recipes it appears in.",
+      create:
+        "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
+      update: "Update an ingredient's name or aliases.",
+      delete:
+        "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
+    },
     create: (caller, params) =>
       caller.ingredient.create({
         name: params.name,
@@ -84,16 +67,6 @@ export function registerIngredientTools(server: McpServer) {
         .then((results: unknown) => ({
           results,
         })),
-  });
-
-  registerEntityUpdateTool(server, {
-    name: "update_ingredient",
-    description: "Update an ingredient's name or aliases.",
-    inputSchema: withIdInput("Ingredient", mcpIngredientUpdateInput.shape),
-    outputSchema: ingredientMcpOut,
-    slim: slimIngredient,
-    router: "ingredient",
-    annotations: WRITE_CLOSED,
   });
 
   registerMcpTool(server, {
@@ -137,15 +110,6 @@ export function registerIngredientTools(server: McpServer) {
         ? structuredSuccessWithError(payload, ingredientMergeBatchOut)
         : payload;
     },
-  });
-
-  registerEntityDeleteTool(server, {
-    name: "delete_ingredients",
-    description:
-      "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
-    router: "ingredient",
-    entityLabel: "ingredient",
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
   });
 
   registerMcpTool(server, {

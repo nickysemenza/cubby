@@ -5,7 +5,7 @@
 // dev server (plain Node via vite) setCfEnv is never called, so accessors
 // return undefined and callers fall back to public URLs + global fetch.
 
-import type { BackgroundQueueProducer } from "./background-queue";
+import type { BackgroundQueueProducer } from "./background-queue-types";
 
 let cfEnv: Env | undefined;
 

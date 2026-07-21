@@ -24,7 +24,7 @@ import {
 import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
-import { CreateIngredientDialog } from "../../combobox/with-search-hook";
+import { CreateIngredientDialog } from "../../combobox/create-entity-dialogs";
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";

@@ -26,39 +26,36 @@ import {
   idParam,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
-  registerEntityCreateTool,
-  registerEntityDeleteTool,
-  registerEntityGetTool,
-  registerEntityListTool,
-  registerEntityUpdateTool,
+  registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
   slimRecipe,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 export function registerRecipeTools(server: McpServer) {
-  registerEntityListTool(server, {
-    name: "list_recipes",
-    description:
-      "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
-    router: "recipe",
+  registerEntityCrudToolset(server, {
+    entity: "recipe",
+    names: { delete: "delete_recipe" },
+    createInput: mcpRecipeCreateInput,
+    updateShape: {},
+    updateInput: mcpRecipeUpdateInput,
     filterFields: recipeListFilterFields,
-    outputSchema: recipeMcpListOut,
+    mcpListOut: recipeMcpListOut,
+    out: recipeMcpOut,
+    detailOut: recipeDetailMcpOut,
+    detailSlim: false,
     slim: slimRecipe,
     sort: { orderBy: "name" },
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityGetTool(server, {
-    name: "get_recipe",
-    description:
-      "Get a recipe by ID, including sections, ingredients, and instructions.",
-    router: "recipe",
-    idLabel: "Recipe",
-    outputSchema: recipeDetailMcpOut,
-    annotations: READ_ONLY_CLOSED,
+    descriptions: {
+      list: "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
+      get: "Get a recipe by ID, including sections, ingredients, and instructions.",
+      create:
+        "Create a recipe from structured input (sections with ingredient IDs and instructions).",
+      update: "Update a recipe's fields. Only provided fields are changed.",
+      delete: "Soft-delete recipes by IDs.",
+    },
+    create: (caller, params) => caller.recipe.create(params),
   });
 
   registerRouterTool(server, {
@@ -170,35 +167,6 @@ export function registerRecipeTools(server: McpServer) {
       const result = await caller.recipe.insertImport(importRecipe);
       return { id: result.id };
     },
-  });
-
-  registerEntityCreateTool(server, {
-    name: "create_recipe",
-    description:
-      "Create a recipe from structured input (sections with ingredient IDs and instructions).",
-    inputSchema: mcpRecipeCreateInput,
-    outputSchema: recipeMcpOut,
-    slim: slimRecipe,
-    annotations: WRITE_CLOSED,
-    create: (caller, params) => caller.recipe.create(params),
-  });
-
-  registerEntityUpdateTool(server, {
-    name: "update_recipe",
-    description: "Update a recipe's fields. Only provided fields are changed.",
-    inputSchema: mcpRecipeUpdateInput,
-    outputSchema: recipeMcpOut,
-    slim: slimRecipe,
-    router: "recipe",
-    annotations: WRITE_CLOSED,
-  });
-
-  registerEntityDeleteTool(server, {
-    name: "delete_recipe",
-    description: "Soft-delete recipes by IDs.",
-    router: "recipe",
-    entityLabel: "recipe",
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
   });
 
   registerRouterTool(server, {

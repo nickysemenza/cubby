@@ -43,14 +43,14 @@ type UpdateShape<
  * @param opts.extend update-only fields the create shape lacks (e.g. `removeImageIds`)
  * @param opts.omit  server-managed create fields to drop from the update surface
  */
-export function deriveUpdateData<
+export function deriveUpdateFields<
   T extends z.ZodRawShape,
   const OmitK extends keyof T = never,
   E extends z.ZodRawShape = Record<never, never>,
 >(
   createShape: T,
   opts: { extend?: E; omit?: readonly OmitK[] } = {},
-): z.ZodObject<UpdateShape<T, OmitK, E>> {
+): UpdateShape<T, OmitK, E> {
   const omit = new Set<keyof T>(opts.omit ?? []);
   const shape: Record<string, z.ZodType> = {};
   const entries = Object.entries(createShape) as [keyof T, z.ZodType][];
@@ -65,5 +65,18 @@ export function deriveUpdateData<
     shape[key as string] = base.optional();
   }
   Object.assign(shape, opts.extend ?? {});
-  return z.object(shape) as z.ZodObject<UpdateShape<T, OmitK, E>>;
+  return shape as UpdateShape<T, OmitK, E>;
+}
+
+export function deriveUpdateData<
+  T extends z.ZodRawShape,
+  const OmitK extends keyof T = never,
+  E extends z.ZodRawShape = Record<never, never>,
+>(
+  createShape: T,
+  opts: { extend?: E; omit?: readonly OmitK[] } = {},
+): z.ZodObject<UpdateShape<T, OmitK, E>> {
+  return z.object(deriveUpdateFields(createShape, opts)) as z.ZodObject<
+    UpdateShape<T, OmitK, E>
+  >;
 }

@@ -18,9 +18,19 @@ describe("external fetch policy", () => {
     "http://10.0.0.1/file",
     "http://192.168.0.1/file",
     "http://[::1]/file",
+    "http://[::ffff:127.0.0.1]/file",
+    "http://[fe90::1]/file",
     "http://[fd00::1]/file",
   ])("rejects %s", (url) => {
     expect(() => validateExternalHttpUrl(url)).toThrow();
+  });
+
+  it.each([
+    "http://8.8.8.8/file",
+    "http://[2606:4700:4700::1111]/file",
+    "http://[::ffff:8.8.8.8]/file",
+  ])("allows public IP address %s", (url) => {
+    expect(validateExternalHttpUrl(url).protocol).toBe("http:");
   });
 
   it("strips sensitive URL parts from logs", () => {

@@ -1,5 +1,6 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
@@ -10,17 +11,8 @@ import EntityImageList from "../EntityImageList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { type UseEditModeReturn, useEditMode } from "./useEditMode";
 
-/** Map Entity type to AuditEntityType (they're now the same) */
-const entityToAuditType: Partial<Record<Entity, AuditEntityType>> = {
-  product: "product",
-  location: "location",
-  inventory: "inventory",
-  recipe: "recipe",
-  ingredient: "ingredient",
-  project: "project",
-  task: "task",
-  purchase: "purchase",
-};
+const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
+  entityManifest[entity].auditable;
 
 /** Base interface for entities that can have images */
 interface WithImages {
@@ -122,13 +114,12 @@ export function useEntityDetail<
         break;
 
       case "history": {
-        const auditType = entityToAuditType[entity];
-        if (auditType) {
+        if (isAuditableEntity(entity)) {
           commonSections.push({
             title: "History",
             icon: Clock,
             content: createElement(AuditLogList, {
-              entityType: auditType,
+              entityType: entity,
               entityId: data.id,
               showEntityLink: false,
             }),

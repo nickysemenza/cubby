@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { countBy, partition, sumBy, uniq } from "es-toolkit";
 import { Calendar, DollarSign, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
+import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -195,6 +196,7 @@ function DashboardContent({
   onFiltersChange: (f: Filters) => void;
 }) {
   const [view, setView] = useState<DashboardView>("overview");
+  const projectPreview = useEntityPreview("project");
   const availableStatuses = useMemo(
     () => uniq(data.projects.map((p) => p.status)),
     [data.projects],
@@ -389,7 +391,11 @@ function DashboardContent({
           <Stack className="pt-4">
             <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
-              <ProjectTable />
+              <ProjectTable
+                onRowClick={projectPreview.onRowClick}
+                onRowHover={projectPreview.onRowHover}
+                PreviewSheet={projectPreview.PreviewSheet}
+              />
             </Stack>
 
             <Stack as="section">

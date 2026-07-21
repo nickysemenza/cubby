@@ -11,7 +11,7 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "types:check": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --parallel types:check",
     "openapi:check": "pnpm --filter @cubby/usda-api generate:openapi:check",
-    "knip": "knip --exclude duplicates --no-config-hints",
+    "knip": "knip --no-config-hints",
     "dedupe:check": "pnpm dedupe --check",
     "audit:security": "node scripts/check-security-audit.mjs",
     "lint": "pnpm -r lint",

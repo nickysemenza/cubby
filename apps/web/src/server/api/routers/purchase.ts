@@ -19,14 +19,16 @@ import {
   purchaseList,
   updatePurchase,
 } from "~/server/repo/purchase";
-import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import {
-  createDeleteProcedure,
-  createEntityCrudProcedures,
-} from "../crud-factory";
+import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const { getByID, list, create, update } = createEntityCrudProcedures({
+const {
+  getByID,
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createSearchableEntityCrudProcedures({
   schemas: {
     createInput: purchaseCreateInput,
     updateInput: purchaseUpdateData,
@@ -40,41 +42,17 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       getPurchaseByID(services.db, id),
     list: async (services, filters, sort, pagination) =>
       purchaseList(services.db, filters, sort, pagination),
-    create: async (services, data) => {
-      const created = await createPurchase(
-        services.db,
-        data,
-        services.actorContext,
-      );
-      await runMutationSideEffects(services.db, {
-        action: "created",
-        entity: { entityType: "purchase", entityId: created.id },
-        source: "purchase.create",
-      });
-      return created;
-    },
-    update: async (services, id: PurchaseId, data) => {
-      const updated = await updatePurchase(
-        services.db,
-        id,
-        data,
-        services.actorContext,
-      );
-      await runMutationSideEffects(services.db, {
-        action: "updated",
-        entity: { entityType: "purchase", entityId: id },
-        source: "purchase.update",
-      });
-      return updated;
+    create: async (services, data) =>
+      createPurchase(services.db, data, services.actorContext),
+    update: async (services, id: PurchaseId, data) =>
+      updatePurchase(services.db, id, data, services.actorContext),
+    delete: async (services, ids) => {
+      await deletePurchases(services.db, ids, services.actorContext);
+      return undefined;
     },
   },
   entityName: "purchase",
 });
-
-const deleteItem = createDeleteProcedure<PurchaseId>(async (services, ids) => {
-  await deletePurchases(services.db, ids, services.actorContext);
-  return undefined;
-}, purchaseId);
 
 /**
  * Every purchase matching the filters, in one round trip — chart aggregates

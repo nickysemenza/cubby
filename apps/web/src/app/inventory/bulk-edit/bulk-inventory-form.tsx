@@ -18,11 +18,8 @@ import {
   inventoryItemWithIdFields,
   requiredLocationField,
 } from "~/app/_components/form-fields";
-import {
-  ComboboxFieldWithSearch,
-  FormWrapper,
-  getSubmitButtonText,
-} from "~/app/_components/form-utils";
+import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import {

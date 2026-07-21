@@ -3,7 +3,8 @@ import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { ingredient, recipe } from "~/server/db/schema";
-import { createRecipe, upsertImportRecipe } from "~/server/repo/recipe";
+import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
+import { createRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import {
   createIngredient,
