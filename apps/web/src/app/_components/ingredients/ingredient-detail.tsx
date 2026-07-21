@@ -13,16 +13,13 @@ import {
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import {
-  type DetailHeroStat,
-  type DetailSection,
-  DetailSections,
-} from "../data-table/detail-page";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";

@@ -565,9 +565,6 @@ importers:
       '@cubby/shared':
         specifier: workspace:*
         version: link:../shared
-      '@cubby/upc-contract':
-        specifier: workspace:*
-        version: link:../upc-contract
       '@cubby/usda-schemas':
         specifier: workspace:*
         version: link:../usda-schemas

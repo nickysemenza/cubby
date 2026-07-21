@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
-import type { EntityDetailRoute } from "~/entities/types";
+import type { EntityDetailRoute } from "~/entities/entities";
 
 const tableLinkVariants = cva("transition-colors hover:underline", {
   variants: {

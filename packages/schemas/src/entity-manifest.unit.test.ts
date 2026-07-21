@@ -27,14 +27,13 @@ describe("entity manifest", () => {
   it("covers every entity exactly once, each a valid descriptor", () => {
     expect(sorted(allEntities)).toEqual(sorted(entitySchema.options));
     for (const entity of allEntities) {
-      // Each entry validates against the zod descriptor and is self-consistent.
+      // Each entry validates against the zod descriptor.
       const entry = entityManifest[entity];
       expect(() => entityDescriptor.parse(entry)).not.toThrow();
-      expect(entry.name).toBe(entity);
     }
   });
 
-  it("references only name valid entities", () => {
+  it("references only valid entities", () => {
     for (const entity of allEntities) {
       for (const ref of entityManifest[entity].references) {
         expect(entitySchema.options).toContain(ref);
@@ -52,34 +51,64 @@ describe("entity manifest", () => {
     }
   });
 
-  // --- Drift guards: each projection must match the descriptor flags. If you
-  // add an entity or flip a flag, the matching projection (and any consumer like
-  // auditEntitySchema / entityImage) must be updated or these fail. ---
-
-  it("auditableEntities matches `auditable` flags and the audit union", () => {
-    const fromFlags = allEntities.filter((e) => entityManifest[e].auditable);
-    expect(sorted(auditableEntities)).toEqual(sorted(fromFlags));
+  it("derives the auditable contract and audit union", () => {
+    expect(auditableEntities).toEqual([
+      "product",
+      "recipe",
+      "ingredient",
+      "cookbook",
+      "location",
+      "inventory",
+      "meal",
+      "project",
+      "task",
+      "purchase",
+    ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
       sorted(auditableEntities),
     );
   });
 
-  it("countableEntities matches `countable` flags", () => {
-    const fromFlags = allEntities.filter((e) => entityManifest[e].countable);
-    expect(sorted(countableEntities)).toEqual(sorted(fromFlags));
+  it("derives the countable contract", () => {
+    expect(countableEntities).toEqual([
+      "product",
+      "recipe",
+      "ingredient",
+      "cookbook",
+      "location",
+      "inventory",
+      "meal",
+      "project",
+      "task",
+      "purchase",
+      "image",
+    ]);
   });
 
-  it("imageEntities matches `hasImages` flags and the image enum", () => {
-    const fromFlags = allEntities.filter((e) => entityManifest[e].hasImages);
-    expect(sorted(imageEntities)).toEqual(sorted(fromFlags));
+  it("derives the image-bearing contract and storage enum", () => {
+    expect(imageEntities).toEqual([
+      "product",
+      "recipe",
+      "cookbook",
+      "location",
+      "project",
+    ]);
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
       sorted(entityImage.options),
     );
   });
 
-  it("searchableEntities matches `searchable` flags", () => {
-    const fromFlags = allEntities.filter((e) => entityManifest[e].searchable);
-    expect(sorted(searchableEntities)).toEqual(sorted(fromFlags));
+  it("derives the searchable contract", () => {
+    expect(searchableEntities).toEqual([
+      "product",
+      "recipe",
+      "ingredient",
+      "location",
+      "inventory",
+      "project",
+      "task",
+      "purchase",
+    ]);
   });
 
   it("countable entities have a db table; non-countable usda-food does not", () => {

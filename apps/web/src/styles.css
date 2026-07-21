@@ -497,13 +497,6 @@
     Ledger surfaces - flat matte paper, no atmosphere
   */
 
-  /* gradient-mesh is retained as a no-op wrapper (still applied app-wide) — the
-     matte instrument panel has no radial blooms, gradients, or texture. Paper
-     is paper. */
-  .gradient-mesh {
-    position: relative;
-  }
-
   /* Table row hover - flat paper-alt wash + ultramarine spot rule on the left */
   .table-row-hover {
     @apply transition-colors duration-100;
@@ -642,9 +635,6 @@
   @media print {
     body {
       background: white;
-    }
-    .gradient-mesh::before {
-      display: none;
     }
     * {
       /* biome-ignore lint/complexity/noImportantStyles: print reset must beat shadow utilities */

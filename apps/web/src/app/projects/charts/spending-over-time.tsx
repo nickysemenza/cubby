@@ -10,14 +10,17 @@ import {
 import { formatCurrency } from "~/lib/utils";
 import {
   getCostTypeColor,
-  monthKey,
-  monthLabel,
   nivoChartTheme,
   normalizeCostTypeKey,
   TRADE_LABELS,
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import {
+  buildCumulativeSpendPoints,
+  buildStackedCumulativeSpend,
+  type PurchaseSeries,
+} from "./project-chart-data";
 
 /**
  * One cumulative-spend chart with three lenses, replacing the old
@@ -57,50 +60,6 @@ const TRADE_RAMP = [
 const OTHER_LABEL = "Other";
 const OTHER_COLOR = "var(--chart-neutral)";
 
-type StackedSeries = { id: string; data: { x: string; y: number }[] };
-
-/**
- * Monthly cumulative series, one per `keyOf(p)` group, sorted by final value
- * desc. Shared by the category and trade lenses (the group key is the only
- * difference between them).
- */
-function buildStackedCumulative(
-  purchases: PurchaseOut[],
-  keyOf: (p: PurchaseOut) => string,
-): StackedSeries[] {
-  const dated = purchases.filter((p) => p.date && p.cost != null);
-  if (dated.length === 0) return [];
-
-  const months = new Set<string>();
-  const byKeyMonth = new Map<string, Map<string, number>>();
-  for (const p of dated) {
-    const key = keyOf(p);
-    const month = monthKey(p.date!);
-    months.add(month);
-    if (!byKeyMonth.has(key)) byKeyMonth.set(key, new Map());
-    const monthMap = byKeyMonth.get(key)!;
-    monthMap.set(month, (monthMap.get(month) ?? 0) + (p.cost ?? 0));
-  }
-
-  const sortedMonths = Array.from(months).sort();
-  return Array.from(byKeyMonth.entries())
-    .map(([id, monthMap]) => {
-      let cumulative = 0;
-      return {
-        id,
-        data: sortedMonths.map((month) => {
-          cumulative += monthMap.get(month) ?? 0;
-          return { x: monthLabel(month), y: cumulative };
-        }),
-      };
-    })
-    .sort((a, b) => {
-      const lastA = a.data[a.data.length - 1]?.y ?? 0;
-      const lastB = b.data[b.data.length - 1]?.y ?? 0;
-      return lastB - lastA;
-    });
-}
-
 export function SpendingOverTime({
   purchases,
   costEstimate,
@@ -112,7 +71,7 @@ export function SpendingOverTime({
 
   const categorySeries = useMemo(
     () =>
-      buildStackedCumulative(purchases, (p) =>
+      buildStackedCumulativeSpend(purchases, (p) =>
         normalizeCostTypeKey(p.costType),
       ),
     [purchases],
@@ -138,7 +97,7 @@ export function SpendingOverTime({
     });
     if (ranked.length > TRADE_RAMP.length) colorById[OTHER_LABEL] = OTHER_COLOR;
 
-    const series = buildStackedCumulative(purchases, (p) =>
+    const series = buildStackedCumulativeSpend(purchases, (p) =>
       topTrades.has(p.trade) ? TRADE_LABELS[p.trade] : OTHER_LABEL,
     );
     return { tradeSeries: series, tradeColorById: colorById };
@@ -187,18 +146,10 @@ function TotalSpend({
   purchases: PurchaseOut[];
   costEstimate: number | null;
 }) {
-  const points = useMemo(() => {
-    const dated = purchases
-      .filter((p) => p.date != null && p.cost != null)
-      .sort((a, b) => a.date!.localeCompare(b.date!));
-    if (dated.length === 0) return [];
-
-    let cumulative = 0;
-    return dated.map((p) => {
-      cumulative += p.cost!;
-      return { x: p.date!, y: cumulative };
-    });
-  }, [purchases]);
+  const points = useMemo(
+    () => buildCumulativeSpendPoints(purchases),
+    [purchases],
+  );
 
   if (points.length === 0) {
     return <ChartEmpty icon={TrendingUp} title="No dated purchase data." />;
@@ -320,7 +271,7 @@ function StackedSpend({
   colorFor,
   costEstimate,
 }: {
-  series: StackedSeries[];
+  series: PurchaseSeries[];
   colorFor: (id: string) => string;
   costEstimate: number | null;
 }) {

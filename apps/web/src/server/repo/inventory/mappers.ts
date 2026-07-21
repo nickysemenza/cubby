@@ -18,23 +18,27 @@ import {
 } from "~/server/repo/product/mappers";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
+type InventoryEntryBaseDB = Pick<
+  InventoryEntryListDB,
+  "id" | "amount" | "valuation" | "verifiedAt" | "createdAt" | "updatedAt"
+>;
+
+const inventoryEntryBaseShape = (entry: InventoryEntryBaseDB) => ({
+  id: entry.id,
+  amount: parseInventoryAmount(entry.amount, entry.id),
+  valuation: entry.valuation,
+  verifiedAt: entry.verifiedAt,
+  createdAt: entry.createdAt,
+  updatedAt: entry.updatedAt,
+});
+
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
   const { product, location } = inventoryentry;
 
-  const parsedAmount = parseInventoryAmount(
-    inventoryentry.amount,
-    inventoryentry.id,
-  );
-
   return {
-    id: inventoryentry.id,
-    amount: parsedAmount,
-    valuation: inventoryentry.valuation,
-    verifiedAt: inventoryentry.verifiedAt,
-    createdAt: inventoryentry.createdAt,
-    updatedAt: inventoryentry.updatedAt,
+    ...inventoryEntryBaseShape(inventoryentry),
     location: {
       id: location.id,
       shortcode: unsafeLocationShortcode(location.shortcode),
@@ -64,18 +68,8 @@ export const dbInventoryEntryToListAPI: (
 ) => z.infer<typeof inventoryListItemOut> = (inventoryentry) => {
   const { product, location } = inventoryentry;
 
-  const parsedAmount = parseInventoryAmount(
-    inventoryentry.amount,
-    inventoryentry.id,
-  );
-
   return {
-    id: inventoryentry.id,
-    amount: parsedAmount,
-    valuation: inventoryentry.valuation,
-    verifiedAt: inventoryentry.verifiedAt,
-    createdAt: inventoryentry.createdAt,
-    updatedAt: inventoryentry.updatedAt,
+    ...inventoryEntryBaseShape(inventoryentry),
     location: {
       id: location.id,
       shortcode: unsafeLocationShortcode(location.shortcode),

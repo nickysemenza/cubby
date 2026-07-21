@@ -1,14 +1,12 @@
 import type { TaskOut } from "@cubby/schemas/project";
-import { ResponsiveCalendar } from "@nivo/calendar";
 import { CalendarClock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { formatDate, StatusIcon } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
+import { CalendarHeatmap } from "./calendar-heatmap";
 import { ChartEmpty } from "./chart-empty";
 
 export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-
   const { data, from, to, itemsByDay } = useMemo(() => {
     const byDay = new Map<string, number>();
     const itemsByDay = new Map<string, TaskOut[]>();
@@ -25,7 +23,12 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
     }));
 
     if (data.length === 0)
-      return { data: [], from: "", to: "", itemsByDay: new Map() };
+      return {
+        data: [],
+        from: "",
+        to: "",
+        itemsByDay: new Map<string, TaskOut[]>(),
+      };
 
     const dates = data.map((d) => d.day).sort();
     return {
@@ -40,85 +43,40 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
     return <ChartEmpty icon={CalendarClock} title="No tasks with due dates." />;
   }
 
-  const yearSpan =
-    new Date(to).getFullYear() - new Date(from).getFullYear() + 1;
-  const chartHeight = Math.max(180, yearSpan * 160);
-  const selectedItems: TaskOut[] = selectedDay
-    ? (itemsByDay.get(selectedDay) ?? [])
-    : [];
-
   return (
-    <div className="space-y-2">
-      <div style={{ height: chartHeight }}>
-        <ResponsiveCalendar
-          data={data}
-          from={from}
-          to={to}
-          emptyColor="var(--muted)"
-          colors={[
-            "var(--chart-seq-2)",
-            "var(--chart-seq-3)",
-            "var(--chart-seq-4)",
-            "var(--chart-seq-5)",
-          ]}
-          margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-          yearSpacing={40}
-          monthBorderColor="var(--border)"
-          dayBorderWidth={1}
-          dayBorderColor="var(--card)"
-          onClick={(day) => {
-            if ("value" in day && day.value) {
-              setSelectedDay(selectedDay === day.day ? null : day.day);
-            }
-          }}
-          tooltip={({ day, value }) => (
-            <ChartTooltip>
-              <strong>{day}</strong>: {value} task
-              {Number(value) !== 1 ? "s" : ""} due
-              <div className="text-muted-foreground text-xs">
-                Click to see tasks
-              </div>
-            </ChartTooltip>
-          )}
-          theme={{
-            text: { fill: "var(--foreground)" },
-            labels: { text: { fill: "var(--muted-foreground)", fontSize: 11 } },
-          }}
-        />
-      </div>
-      {selectedDay && selectedItems.length > 0 && (
-        <div className="rounded-md border border-[var(--border)] bg-muted/30 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-medium text-sm">
-              {formatDate(selectedDay)} — {selectedItems.length} task
-              {selectedItems.length !== 1 ? "s" : ""}
+    <CalendarHeatmap
+      data={data}
+      from={from}
+      to={to}
+      itemsByDay={itemsByDay}
+      tooltip={({ day, value }) => (
+        <ChartTooltip>
+          <strong>{day}</strong>: {value} task
+          {Number(value) !== 1 ? "s" : ""} due
+          <div className="text-muted-foreground text-xs">
+            Click to see tasks
+          </div>
+        </ChartTooltip>
+      )}
+      summary={(day, items) => (
+        <>
+          {formatDate(day)} — {items.length} task{items.length !== 1 ? "s" : ""}
+        </>
+      )}
+      renderItem={(task) => (
+        <div
+          key={task.id}
+          className="flex items-center gap-2 rounded px-2 py-1 text-xs"
+        >
+          <StatusIcon status={task.status} />
+          <span className="truncate">{task.name}</span>
+          {task.projectName && (
+            <span className="ml-auto shrink-0 text-muted-foreground">
+              {task.projectName}
             </span>
-            <button
-              type="button"
-              onClick={() => setSelectedDay(null)}
-              className="text-muted-foreground text-xs hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-          <div className="space-y-1">
-            {selectedItems.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center gap-2 rounded px-2 py-1 text-xs"
-              >
-                <StatusIcon status={t.status} />
-                <span className="truncate">{t.name}</span>
-                {t.projectName && (
-                  <span className="ml-auto shrink-0 text-muted-foreground">
-                    {t.projectName}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
-    </div>
+    />
   );
 }

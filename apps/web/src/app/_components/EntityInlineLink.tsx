@@ -19,6 +19,7 @@ import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn, formatCurrency } from "~/lib/utils";
 import { EntityPreviewLink } from "./EntityPreviewLink";
 import { LocationIcon } from "./locations/location-icons";
+import type { HoverPreviewEntity } from "./preview/preview-entities";
 
 // Minimal data shape - just id and name
 type MinimalEntityData = { id: string; name: string };
@@ -78,6 +79,15 @@ type EntityInlineLinkProps = {
 const linkClass =
   "group inline-flex max-w-full items-baseline gap-2 align-baseline text-foreground transition-colors hover:text-primary";
 
+interface EntityLinkBodyProps {
+  icon: ReactNode;
+  name: string;
+  metadata?: string;
+  compact?: boolean;
+  truncate?: boolean;
+  trailing?: ReactNode;
+}
+
 function EntityLinkBody({
   icon,
   name,
@@ -85,14 +95,7 @@ function EntityLinkBody({
   compact,
   truncate,
   trailing,
-}: {
-  icon: ReactNode;
-  name: string;
-  metadata?: string;
-  compact?: boolean;
-  truncate?: boolean;
-  trailing?: ReactNode;
-}) {
+}: EntityLinkBodyProps) {
   return (
     <>
       <span className="shrink-0 self-center">{icon}</span>
@@ -115,62 +118,77 @@ function EntityLinkBody({
   );
 }
 
+function PreviewEntityLink({
+  entity,
+  id,
+  openInNewTab,
+  className,
+  ...body
+}: EntityLinkBodyProps & {
+  entity: HoverPreviewEntity;
+  id: string;
+  openInNewTab?: boolean;
+  className: string;
+}) {
+  return (
+    <EntityPreviewLink
+      entity={entity}
+      id={id}
+      openInNewTab={openInNewTab}
+      className={className}
+    >
+      <EntityLinkBody {...body} />
+    </EntityPreviewLink>
+  );
+}
+
 export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
   const { openInNewTab, compact, truncate } = props;
   const wrapperClass = cn(linkClass, truncate && "min-w-0");
 
   return match(props)
     .with({ entity: "ingredient" }, ({ data }) => (
-      <EntityPreviewLink
+      <PreviewEntityLink
         entity="ingredient"
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={<EntityIcon entity="ingredient" size={12} colored />}
-          name={data.name}
-          compact={compact}
-          truncate={truncate}
-        />
-      </EntityPreviewLink>
+        icon={<EntityIcon entity="ingredient" size={12} colored />}
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .with({ entity: "recipe" }, ({ data }) => (
-      <EntityPreviewLink
+      <PreviewEntityLink
         entity="recipe"
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={<EntityIcon entity="recipe" size={12} colored />}
-          name={data.name}
-          compact={compact}
-          truncate={truncate}
-        />
-      </EntityPreviewLink>
+        icon={<EntityIcon entity="recipe" size={12} colored />}
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .with({ entity: "location" }, ({ data }) => (
-      <EntityPreviewLink
+      <PreviewEntityLink
         entity="location"
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={
-            data.type ? (
-              <LocationIcon type={data.type} size={12} colored />
-            ) : (
-              <EntityIcon entity="location" size={12} colored />
-            )
-          }
-          name={data.name}
-          metadata={data.type}
-          compact={compact}
-          truncate={truncate}
-        />
-      </EntityPreviewLink>
+        icon={
+          data.type ? (
+            <LocationIcon type={data.type} size={12} colored />
+          ) : (
+            <EntityIcon entity="location" size={12} colored />
+          )
+        }
+        name={data.name}
+        metadata={data.type}
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .with({ entity: "product" }, ({ data }) => {
       const isMisc = isMiscProduct(data.name);
@@ -178,20 +196,17 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
       const metadata = isMisc ? "misc" : data.manufacturer;
 
       return (
-        <EntityPreviewLink
+        <PreviewEntityLink
           entity="product"
           id={data.id}
           openInNewTab={openInNewTab}
           className={wrapperClass}
-        >
-          <EntityLinkBody
-            icon={<EntityIcon entity="product" size={12} colored />}
-            name={displayName}
-            metadata={metadata}
-            compact={compact}
-            truncate={truncate}
-          />
-        </EntityPreviewLink>
+          icon={<EntityIcon entity="product" size={12} colored />}
+          name={displayName}
+          metadata={metadata}
+          compact={compact}
+          truncate={truncate}
+        />
       );
     })
     .with({ entity: "inventory" }, ({ data }) => (
@@ -227,87 +242,75 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
       );
 
       return (
-        <EntityPreviewLink
+        <PreviewEntityLink
           entity="usda-food"
           id={usdaRouteId(data.fdc_id)}
           openInNewTab={openInNewTab}
           className={wrapperClass}
-        >
-          <EntityLinkBody
-            icon={icon}
-            name={text}
-            compact={compact}
-            truncate={truncate}
-            trailing={
-              dataType ? <UsdaDataTypeDot dataType={dataType} /> : undefined
-            }
-          />
-        </EntityPreviewLink>
+          icon={icon}
+          name={text}
+          compact={compact}
+          truncate={truncate}
+          trailing={
+            dataType ? <UsdaDataTypeDot dataType={dataType} /> : undefined
+          }
+        />
       );
     })
     .with({ entity: "project" }, ({ data }) => (
-      <EntityPreviewLink
+      <PreviewEntityLink
         entity="project"
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={
-            data.icon ? (
-              <span className="text-xs leading-none">{data.icon}</span>
-            ) : (
-              <EntityIcon entity="project" size={12} colored />
-            )
-          }
-          name={data.name}
-          metadata={
-            data.kind
-              ? capitalize(data.kind)
-              : data.status
-                ? PROJECT_STATUS_LABELS[data.status]
-                : undefined
-          }
-          compact={compact}
-          truncate={truncate}
-        />
-      </EntityPreviewLink>
+        icon={
+          data.icon ? (
+            <span className="text-xs leading-none">{data.icon}</span>
+          ) : (
+            <EntityIcon entity="project" size={12} colored />
+          )
+        }
+        name={data.name}
+        metadata={
+          data.kind
+            ? capitalize(data.kind)
+            : data.status
+              ? PROJECT_STATUS_LABELS[data.status]
+              : undefined
+        }
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .with({ entity: "task" }, ({ data }) => (
-      <EntityPreviewLink
+      <PreviewEntityLink
         entity="task"
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={<EntityIcon entity="task" size={12} colored />}
-          name={data.name}
-          metadata={data.projectName ?? undefined}
-          compact={compact}
-          truncate={truncate}
-        />
-      </EntityPreviewLink>
+        icon={<EntityIcon entity="task" size={12} colored />}
+        name={data.name}
+        metadata={data.projectName ?? undefined}
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .with({ entity: "purchase" }, ({ data }) => (
-      <EntityPreviewLink
+      <PreviewEntityLink
         entity="purchase"
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={<EntityIcon entity="purchase" size={12} colored />}
-          name={data.name}
-          metadata={
-            data.cost != null
-              ? formatCurrency(data.cost)
-              : (data.projectName ?? undefined)
-          }
-          compact={compact}
-          truncate={truncate}
-        />
-      </EntityPreviewLink>
+        icon={<EntityIcon entity="purchase" size={12} colored />}
+        name={data.name}
+        metadata={
+          data.cost != null
+            ? formatCurrency(data.cost)
+            : (data.projectName ?? undefined)
+        }
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .exhaustive();
 };

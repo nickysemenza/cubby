@@ -13,7 +13,6 @@
     "./identifiers": "./src/identifiers.ts",
     "./common": "./src/common.ts",
     "./pagination": "./src/pagination.ts",
-    "./csv": "./src/csv.ts",
     "./context": "./src/context.ts",
     "./ingredient": "./src/ingredient.ts",
     "./ingredient-cooccurrence": "./src/ingredient-cooccurrence.ts",
@@ -32,7 +31,6 @@
     "./mcp": "./src/mcp.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",
-    "./upc": "./src/upc.ts",
     "./usda": "./src/usda.ts",
     "./search": "./src/search.ts",
     "./suggestions": "./src/suggestions.ts",
@@ -55,7 +53,6 @@
   },
   "dependencies": {
     "@cubby/shared": "workspace:*",
-    "@cubby/upc-contract": "workspace:*",
     "@cubby/usda-schemas": "workspace:*",
     "zod": "^4.4.3"
   },

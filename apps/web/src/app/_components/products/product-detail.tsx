@@ -19,6 +19,7 @@ import {
 import { type FC, useCallback, useState } from "react";
 import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { buttonVariants } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -26,11 +27,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn, formatCurrency } from "~/lib/utils";
-import {
-  type DetailHeroStat,
-  type DetailSection,
-  DetailSections,
-} from "../data-table/detail-page";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";

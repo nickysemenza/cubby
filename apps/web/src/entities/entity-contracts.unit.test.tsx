@@ -1,5 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
+import {
+  type EntityDetailRoute,
+  type EntityListRoute,
+  type EntityNewRoute,
+  entities,
+} from "./entities";
 import { getEntityContract, standardEntities } from "./entity-contracts";
 
 // Guards the drift the "no tRPC router yet" stubs shipped with: every entity
@@ -24,5 +30,19 @@ describe("entity-contracts drift guard", () => {
 
   it.each(standardEntities)("%s can preview (has a detail page)", (entity) => {
     expect(getEntityContract(entity).canPreview).toBe(true);
+  });
+});
+
+describe("derived entity route unions", () => {
+  it("preserves detail, list, and new route literals", () => {
+    const detail: EntityDetailRoute = entities.recipe.routes.detail;
+    const list: EntityListRoute = entities.project.routes.list;
+    const create: EntityNewRoute = entities.location.routes.new;
+
+    expect([detail, list, create]).toEqual([
+      "/recipes/$id",
+      "/projects",
+      "/locations/new",
+    ]);
   });
 });

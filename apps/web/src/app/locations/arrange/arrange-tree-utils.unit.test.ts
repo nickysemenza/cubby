@@ -7,6 +7,7 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
+import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import {
   applyItemMove,
   applyLocationMove,
@@ -164,6 +165,47 @@ describe("isValidItemDrop", () => {
   });
   it("accepts a cross-location move", () => {
     expect(isValidItemDrop(L("shelfA"), L("shelfB"))).toBe(true);
+  });
+});
+
+describe("canDropOnArrangeTarget", () => {
+  const locationDrag = (locationId: string) => ({
+    arrangeDrag: "location",
+    locationId: L(locationId),
+    parentId: null,
+  });
+  const itemDrag = (sourceLocationId: string) => ({
+    arrangeDrag: "item",
+    inventoryEntryId: I("i1"),
+    amount: { value: 1, unit: "count" },
+    sourceLocationId: L(sourceLocationId),
+  });
+
+  it("applies cycle and same-parent rules to every location target", () => {
+    expect(
+      canDropOnArrangeTarget(buildTree(), L("bin1"), locationDrag("garage")),
+    ).toBe(false);
+    expect(
+      canDropOnArrangeTarget(buildTree(), L("garage"), locationDrag("shelfA")),
+    ).toBe(false);
+  });
+
+  it("allows nested locations, but not items, to move to the root target", () => {
+    expect(
+      canDropOnArrangeTarget(buildTree(), null, locationDrag("shelfA")),
+    ).toBe(true);
+    expect(canDropOnArrangeTarget(buildTree(), null, itemDrag("shelfA"))).toBe(
+      false,
+    );
+  });
+
+  it("allows cross-location item moves and rejects same-location no-ops", () => {
+    expect(
+      canDropOnArrangeTarget(buildTree(), L("shelfB"), itemDrag("shelfA")),
+    ).toBe(true);
+    expect(
+      canDropOnArrangeTarget(buildTree(), L("shelfA"), itemDrag("shelfA")),
+    ).toBe(false);
   });
 });
 

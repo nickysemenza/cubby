@@ -1,8 +1,8 @@
+import type { StatsResponse } from "@cubby/upc-contract";
 import { Hono } from "hono";
 import { sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
-import type { StatsResponse } from "../schemas/product";
 
 const stats = new Hono<{ Bindings: Env }>();
 

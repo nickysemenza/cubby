@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
@@ -6,8 +7,7 @@ import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Spinner } from "~/components/ui/spinner";
-import { entities } from "~/entities/entities";
-import type { Entity, EntityDetailRoute } from "~/entities/types";
+import { type EntityDetailRoute, entities } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { NutrientsSummary } from "../units/NutrientsSummary";

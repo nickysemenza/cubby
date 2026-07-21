@@ -1,17 +1,12 @@
-import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, Home } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { ArrangeColumn } from "./ArrangeColumn";
-import {
-  findNode,
-  isValidItemDrop,
-  isValidLocationDrop,
-} from "./arrange-tree-utils";
-import { type ArrangeDropData, asDragData } from "./arrange-types";
+import { findNode } from "./arrange-tree-utils";
 import { useAutoScroll } from "./use-arrange-dnd";
+import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeBoardProps {
   roots: InfLocation[];
@@ -185,32 +180,7 @@ function BreadcrumbCrumb({
   onClick,
 }: BreadcrumbCrumbProps) {
   const ref = useRef<HTMLButtonElement>(null);
-  const [isOver, setIsOver] = useState(false);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return dropTargetForElements({
-      element,
-      getData: (): ArrangeDropData & Record<string, unknown> => ({
-        arrangeTarget: true,
-        locationId,
-      }),
-      canDrop: ({ source }) => {
-        const drag = asDragData(source.data);
-        if (!drag) return false;
-        if (drag.arrangeDrag === "location")
-          return isValidLocationDrop(roots, drag.locationId, locationId);
-        return (
-          locationId !== null &&
-          isValidItemDrop(drag.sourceLocationId, locationId)
-        );
-      },
-      onDragEnter: () => setIsOver(true),
-      onDragLeave: () => setIsOver(false),
-      onDrop: () => setIsOver(false),
-    });
-  }, [locationId, roots]);
+  const isOver = useArrangeDropTarget({ ref, roots, locationId });
 
   return (
     <button

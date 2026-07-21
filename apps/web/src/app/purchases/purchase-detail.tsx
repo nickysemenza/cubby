@@ -4,6 +4,7 @@ import { ExternalLink, Info } from "lucide-react";
 import type { FC } from "react";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
@@ -11,7 +12,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
-  type DetailHeroStat,
   type DetailSection,
   DetailSections,
 } from "../_components/data-table/detail-page";

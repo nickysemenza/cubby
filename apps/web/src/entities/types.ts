@@ -1,54 +1,13 @@
 import type { LucideIcon } from "lucide-react";
 
-// Re-export entity types from @cubby/schemas for backward compatibility
-export type { Entity } from "@cubby/schemas/entity";
-
-/** All valid entity detail routes (e.g., /products/$id) */
-export type EntityDetailRoute =
-  | "/ingredients/$id"
-  | "/products/$id"
-  | "/recipes/$id"
-  | "/cookbooks/$cookbookId"
-  | "/locations/$id"
-  | "/inventory/$id"
-  | "/meals/$id"
-  | "/projects/$id"
-  | "/tasks/$id"
-  | "/purchases/$id"
-  | "/usda/$id"
-  | "/images/$id";
-
-/** All valid entity list routes (e.g., /products) */
-type EntityListRoute =
-  | "/ingredients"
-  | "/products"
-  | "/recipes"
-  | "/cookbooks"
-  | "/locations"
-  | "/inventory"
-  | "/meals"
-  | "/projects"
-  | "/tasks"
-  | "/purchases"
-  | "/usda"
-  | "/images";
-
-/** All valid entity "new" routes (e.g., /products/new) */
-type EntityNewRoute =
-  | "/ingredients/new"
-  | "/products/new"
-  | "/recipes/new"
-  | "/locations/new"
-  | "/inventory/new";
-
 /** Typed routes for an entity */
 interface EntityRoutes {
   /** Detail page route (e.g., "/products/$id") */
-  detail: EntityDetailRoute;
+  detail: string;
   /** List page route (e.g., "/products") */
-  list: EntityListRoute;
+  list: string;
   /** "New" page route - optional since not all entities have one */
-  new?: EntityNewRoute;
+  new?: string;
 }
 
 /** Common section types that can be auto-generated for detail pages */

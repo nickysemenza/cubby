@@ -1,22 +1,16 @@
-import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationRow } from "./ArrangeLocationRow";
-import {
-  childrenOf,
-  isValidItemDrop,
-  isValidLocationDrop,
-  pathToNode,
-} from "./arrange-tree-utils";
-import { type ArrangeDropData, asDragData } from "./arrange-types";
+import { childrenOf, pathToNode } from "./arrange-tree-utils";
 import { UnknownDock } from "./UnknownDock";
 import { useAutoScroll } from "./use-arrange-dnd";
+import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeTreeProps {
   roots: InfLocation[];
@@ -207,30 +201,11 @@ interface CollapsedRowProps {
  */
 function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [isOver, setIsOver] = useState(false);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return dropTargetForElements({
-      element,
-      getData: (): ArrangeDropData & Record<string, unknown> => ({
-        arrangeTarget: true,
-        locationId: node.id,
-      }),
-      canDrop: ({ source }) => {
-        const d = asDragData(source.data);
-        if (!d) return false;
-        if (d.arrangeDrag === "location") {
-          return isValidLocationDrop(roots, d.locationId, node.id);
-        }
-        return isValidItemDrop(d.sourceLocationId, node.id);
-      },
-      onDragEnter: () => setIsOver(true),
-      onDragLeave: () => setIsOver(false),
-      onDrop: () => setIsOver(false),
-    });
-  }, [node.id, roots]);
+  const isOver = useArrangeDropTarget({
+    ref,
+    roots,
+    locationId: node.id,
+  });
 
   const count = node.childCount ?? node.children?.length ?? 0;
 
@@ -269,32 +244,7 @@ function BreadcrumbSegment({
   onClick,
 }: BreadcrumbSegmentProps) {
   const ref = useRef<HTMLButtonElement>(null);
-  const [isOver, setIsOver] = useState(false);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return dropTargetForElements({
-      element,
-      getData: (): ArrangeDropData & Record<string, unknown> => ({
-        arrangeTarget: true,
-        locationId,
-      }),
-      canDrop: ({ source }) => {
-        const d = asDragData(source.data);
-        if (!d) return false;
-        if (d.arrangeDrag === "location") {
-          return isValidLocationDrop(roots, d.locationId, locationId);
-        }
-        return (
-          locationId !== null && isValidItemDrop(d.sourceLocationId, locationId)
-        );
-      },
-      onDragEnter: () => setIsOver(true),
-      onDragLeave: () => setIsOver(false),
-      onDrop: () => setIsOver(false),
-    });
-  }, [locationId, roots]);
+  const isOver = useArrangeDropTarget({ ref, roots, locationId });
 
   return (
     <button

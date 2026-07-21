@@ -3,12 +3,13 @@ import { useNavigate } from "@tanstack/react-router";
 import type { Table as ITable } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useCallback, useMemo, useRef } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
+import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
@@ -111,32 +112,8 @@ export function MobileCardView<TItem>({
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
-  // Infinite scroll sentinel — IntersectionObserver triggers fetchNextPage
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const fetchNextPage = infiniteScroll?.fetchNextPage;
-  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
+  const sentinelRef = useInfiniteScrollSentinel(infiniteScroll, "200px");
   const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
-
-  const handleIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
-        fetchNextPage?.();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
-  );
-
-  useEffect(() => {
-    if (!infiniteScroll) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(handleIntersect, {
-      rootMargin: "200px",
-    });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [infiniteScroll, handleIntersect]);
 
   // Check if table has row selection enabled
   const hasRowSelection = table.options.enableRowSelection !== false;
