@@ -1,10 +1,10 @@
+import { productSourceSchema, type SearchResponse } from "@cubby/upc-contract";
 import { Hono } from "hono";
 import { like, or, sql } from "drizzle-orm";
 import { clamp } from "es-toolkit";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { getImageUrl } from "../storage/images";
-import { productSourceSchema, type SearchResponse } from "../schemas/product";
 
 const search = new Hono<{ Bindings: Env }>();
 

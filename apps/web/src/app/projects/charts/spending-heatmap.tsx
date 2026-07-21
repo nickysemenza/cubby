@@ -1,141 +1,69 @@
 import type { PurchaseOut } from "@cubby/schemas/project";
-import { ResponsiveCalendar } from "@nivo/calendar";
-import { groupBy, sumBy } from "es-toolkit";
 import { CalendarDays } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { formatDate } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
+import { CalendarHeatmap } from "./calendar-heatmap";
 import { ChartEmpty } from "./chart-empty";
+import { buildPurchaseCalendar } from "./project-chart-data";
 
 export function SpendingHeatmap({ purchases }: { purchases: PurchaseOut[] }) {
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-
-  const { data, from, to, itemsByDay } = useMemo(() => {
-    const itemsByDay = groupBy(
-      purchases.filter((p) => p.date && p.cost),
-      (p) => p.date as string,
-    );
-
-    const data = Object.entries(itemsByDay).map(([day, items]) => ({
-      day,
-      value: sumBy(items, (p) => p.cost ?? 0),
-    }));
-
-    if (data.length === 0)
-      return {
-        data: [],
-        from: "",
-        to: "",
-        itemsByDay: {} as Record<string, PurchaseOut[]>,
-      };
-
-    const dates = data.map((d) => d.day).sort();
-    return {
-      data,
-      from: dates[0]!,
-      to: dates[dates.length - 1]!,
-      itemsByDay,
-    };
-  }, [purchases]);
+  const { data, from, to, itemsByDay } = useMemo(
+    () => buildPurchaseCalendar(purchases),
+    [purchases],
+  );
 
   if (data.length === 0) {
     return <ChartEmpty icon={CalendarDays} title="No dated purchases." />;
   }
 
-  const yearSpan =
-    new Date(to).getFullYear() - new Date(from).getFullYear() + 1;
-  const chartHeight = Math.max(180, yearSpan * 160);
-  const selectedItems: PurchaseOut[] = selectedDay
-    ? (itemsByDay[selectedDay] ?? [])
-    : [];
-
   return (
-    <div className="space-y-2">
-      <div style={{ height: chartHeight }}>
-        <ResponsiveCalendar
-          data={data}
-          from={from}
-          to={to}
-          emptyColor="var(--muted)"
-          colors={[
-            "var(--chart-seq-2)",
-            "var(--chart-seq-3)",
-            "var(--chart-seq-4)",
-            "var(--chart-seq-5)",
-          ]}
-          margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-          yearSpacing={40}
-          monthBorderColor="var(--border)"
-          dayBorderWidth={1}
-          dayBorderColor="var(--card)"
-          onClick={(day) => {
-            if ("value" in day && day.value) {
-              setSelectedDay(selectedDay === day.day ? null : day.day);
-            }
-          }}
-          tooltip={({ day, value }) => (
-            <ChartTooltip>
-              <strong>{day}</strong>: {formatCurrency(Number(value), 0)} spent
-              <div className="text-muted-foreground text-xs">
-                Click to see items
-              </div>
-            </ChartTooltip>
-          )}
-          theme={{
-            text: { fill: "var(--foreground)" },
-            labels: { text: { fill: "var(--muted-foreground)", fontSize: 11 } },
-          }}
-        />
-      </div>
-      {selectedDay && selectedItems.length > 0 && (
-        <div className="rounded-md border border-[var(--border)] bg-muted/30 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-medium text-sm">
-              {formatDate(selectedDay)} —{" "}
-              {formatCurrency(
-                selectedItems.reduce(
-                  (s: number, p: PurchaseOut) => s + (p.cost ?? 0),
-                  0,
-                ),
-                0,
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedDay(null)}
-              className="text-muted-foreground text-xs hover:text-foreground"
-            >
-              Close
-            </button>
+    <CalendarHeatmap
+      data={data}
+      from={from}
+      to={to}
+      itemsByDay={itemsByDay}
+      tooltip={({ day, value }) => (
+        <ChartTooltip>
+          <strong>{day}</strong>: {formatCurrency(Number(value), 0)} spent
+          <div className="text-muted-foreground text-xs">
+            Click to see items
           </div>
-          <div className="space-y-1">
-            {selectedItems.map((p) => (
-              <a
-                key={p.id}
-                href={p.url ?? undefined}
-                target={p.url ? "_blank" : undefined}
-                rel={p.url ? "noopener noreferrer" : undefined}
-                className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
-              >
-                <span className="truncate">{p.name}</span>
-                <div className="flex shrink-0 items-center gap-2">
-                  {p.projectName && (
-                    <span className="text-muted-foreground">
-                      {p.projectName}
-                    </span>
-                  )}
-                  {p.cost != null && (
-                    <span className="font-medium">
-                      {formatCurrency(p.cost, 0)}
-                    </span>
-                  )}
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
+        </ChartTooltip>
       )}
-    </div>
+      summary={(day, items) => (
+        <>
+          {formatDate(day)} —{" "}
+          {formatCurrency(
+            items.reduce((total, purchase) => total + (purchase.cost ?? 0), 0),
+            0,
+          )}
+        </>
+      )}
+      renderItem={(purchase) => (
+        <a
+          key={purchase.id}
+          href={purchase.url ?? undefined}
+          target={purchase.url ? "_blank" : undefined}
+          rel={purchase.url ? "noopener noreferrer" : undefined}
+          className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
+        >
+          <span className="truncate">{purchase.name}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            {purchase.projectName && (
+              <span className="text-muted-foreground">
+                {purchase.projectName}
+              </span>
+            )}
+            {purchase.cost != null && (
+              <span className="font-medium">
+                {formatCurrency(purchase.cost, 0)}
+              </span>
+            )}
+          </div>
+        </a>
+      )}
+    />
   );
 }

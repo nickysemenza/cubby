@@ -1,10 +1,7 @@
 import type { PurchaseOut } from "@cubby/schemas/project";
-import { ResponsiveLine } from "@nivo/line";
-import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
-import { formatCurrency } from "~/lib/utils";
-import { monthKey, monthLabel, nivoChartTheme } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
+import { CurrencyTrend } from "./currency-trend";
+import { buildProjectMonthlySeries } from "./project-chart-data";
 
 const PROJECT_COLORS = [
   "var(--chart-1)",
@@ -18,41 +15,7 @@ const PROJECT_COLORS = [
 ];
 
 export function MonthlyTrend({ purchases }: { purchases: PurchaseOut[] }) {
-  const data = useMemo(() => {
-    const dated = purchases.filter((p) => p.date && p.cost != null);
-    if (dated.length === 0) return [];
-
-    // Group by project + month
-    const months = new Set<string>();
-    const byProjectMonth = new Map<string, Map<string, number>>();
-
-    for (const p of dated) {
-      const project = p.projectName ?? "Unassigned";
-      const month = monthKey(p.date!);
-      months.add(month);
-
-      if (!byProjectMonth.has(project)) byProjectMonth.set(project, new Map());
-      const map = byProjectMonth.get(project)!;
-      map.set(month, (map.get(month) ?? 0) + (p.cost ?? 0));
-    }
-
-    const sortedMonths = Array.from(months).sort();
-    if (sortedMonths.length < 2) return [];
-
-    return Array.from(byProjectMonth.entries())
-      .map(([project, monthMap]) => ({
-        id: project,
-        data: sortedMonths.map((month) => ({
-          x: monthLabel(month),
-          y: monthMap.get(month) ?? 0,
-        })),
-      }))
-      .sort((a, b) => {
-        const totalA = sumBy(a.data, (d) => d.y);
-        const totalB = sumBy(b.data, (d) => d.y);
-        return totalB - totalA;
-      });
-  }, [purchases]);
+  const data = useMemo(() => buildProjectMonthlySeries(purchases), [purchases]);
 
   if (data.length === 0) {
     return (
@@ -63,66 +26,30 @@ export function MonthlyTrend({ purchases }: { purchases: PurchaseOut[] }) {
   }
 
   return (
-    <div className="h-[300px]">
-      <ResponsiveLine
-        data={data}
-        margin={{ top: 20, right: 130, bottom: 50, left: 70 }}
-        xScale={{ type: "point" }}
-        yScale={{ type: "linear", min: 0, stacked: true }}
-        axisBottom={{ tickRotation: -45 }}
-        axisLeft={{
-          format: (v: number) => formatCurrency(v, 0),
-        }}
-        enableArea
-        areaOpacity={0.3}
-        colors={(d) => {
-          const idx = data.findIndex((s) => s.id === d.id);
-          return (
-            PROJECT_COLORS[idx % PROJECT_COLORS.length] ?? PROJECT_COLORS[0]!
-          );
-        }}
-        pointSize={5}
-        pointColor="var(--card)"
-        pointBorderWidth={2}
-        pointBorderColor={{ from: "serieColor" }}
-        useMesh
-        enableSlices="x"
-        sliceTooltip={({ slice }) => (
-          <ChartTooltip>
-            <div className="mb-1 font-medium">
-              {slice.points[0]?.data.xFormatted}
-            </div>
-            {slice.points
-              .filter((p) => (p.data.y as number) > 0)
-              .map((point) => (
-                <div key={point.id} className="flex items-center gap-2">
-                  <div
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: point.seriesColor }}
-                  />
-                  <span className="max-w-[150px] truncate">
-                    {point.seriesId}
-                  </span>
-                  <strong className="ml-auto">
-                    {formatCurrency(point.data.y as number, 0)}
-                  </strong>
-                </div>
-              ))}
-          </ChartTooltip>
-        )}
-        legends={[
-          {
-            anchor: "bottom-right",
-            direction: "column",
-            translateX: 120,
-            itemWidth: 110,
-            itemHeight: 18,
-            symbolSize: 10,
-            symbolShape: "circle",
-          },
-        ]}
-        theme={nivoChartTheme}
-      />
-    </div>
+    <CurrencyTrend
+      data={data}
+      margin={{ top: 20, right: 130, bottom: 50, left: 70 }}
+      xScale={{ type: "point" }}
+      yScale={{ type: "linear", min: 0, stacked: true }}
+      axisBottom={{ tickRotation: -45 }}
+      areaOpacity={0.3}
+      colors={(datum) => {
+        const index = data.findIndex((series) => series.id === datum.id);
+        return PROJECT_COLORS[index % PROJECT_COLORS.length]!;
+      }}
+      filterZeroValues
+      seriesLabelClassName="max-w-[150px] truncate"
+      legends={[
+        {
+          anchor: "bottom-right",
+          direction: "column",
+          translateX: 120,
+          itemWidth: 110,
+          itemHeight: 18,
+          symbolSize: 10,
+          symbolShape: "circle",
+        },
+      ]}
+    />
   );
 }

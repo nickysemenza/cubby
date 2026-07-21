@@ -119,7 +119,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 | Path | Package | Role | Consumed by |
 |---|---|---|---|
 | [packages/wasm](packages/wasm) | `@cubby/recipebridge` | WASM bindings — built from `recipebridge/` Rust source via `pnpm run wasm` | `web` |
-| [packages/upc-contract](packages/upc-contract) | `@cubby/upc-contract` | Shared UPC request/response transport contract | `web`, `upc-lookup`, `schemas` |
+| [packages/upc-contract](packages/upc-contract) | `@cubby/upc-contract` | Shared UPC request/response transport contract | `web`, `upc-lookup` |
 | [packages/usda-contract](packages/usda-contract) | `@cubby/usda-contract` | ts-rest endpoint contract for the USDA API | `web`, `usda-api` |
 | [packages/usda-schemas](packages/usda-schemas) | `@cubby/usda-schemas` | Shared Zod schemas for USDA entities | `web`, `usda-api` |
 | [packages/schemas](packages/schemas) | `@cubby/schemas` | Cross-app Zod schemas | `web` |

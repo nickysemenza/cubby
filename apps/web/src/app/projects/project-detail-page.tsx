@@ -22,7 +22,6 @@ import { toast } from "sonner";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
 import {
-  type DetailHeroStat,
   type DetailSection,
   DetailSections,
 } from "~/app/_components/data-table/detail-page";
@@ -32,6 +31,7 @@ import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Section, Stack } from "~/components/layout";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";

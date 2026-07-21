@@ -18,8 +18,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import type { EntityDetailRoute } from "~/entities/entities";
 import { EntityIcon } from "~/entities/entities";
-import type { EntityDetailRoute } from "~/entities/types";
 import { useRecipeUsage } from "./recipe-usage-context";
 
 // Cap each section's initial render so one noisy detector (e.g. 50+ unit-coverage

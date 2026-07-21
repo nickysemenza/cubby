@@ -1,22 +1,12 @@
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ArrowDownToLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
-import {
-  isValidItemDrop,
-  isValidLocationDrop,
-  parentIdOf,
-} from "./arrange-tree-utils";
-import {
-  type ArrangeDropData,
-  asDragData,
-  type LocationDragData,
-} from "./arrange-types";
+import { parentIdOf } from "./arrange-tree-utils";
+import type { LocationDragData } from "./arrange-types";
+import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 /** Hover-to-drill delay: long enough to avoid firing on a pass-through drag. */
 const SPRING_LOAD_MS = 700;
@@ -45,7 +35,6 @@ export function ArrangeLocationRow({
 }: ArrangeLocationRowProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [isOver, setIsOver] = useState(false);
   const springTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always call the latest onDrill without re-registering the drop target.
@@ -54,18 +43,32 @@ export function ArrangeLocationRow({
 
   const hasChildren = (node.children?.length ?? 0) > 0;
 
+  const clearSpringTimer = () => {
+    if (springTimer.current !== null) {
+      clearTimeout(springTimer.current);
+      springTimer.current = null;
+    }
+  };
+
+  const isOver = useArrangeDropTarget({
+    ref,
+    roots,
+    locationId: node.id,
+    onDragEnter: () => {
+      if (hasChildren && springTimer.current === null) {
+        springTimer.current = setTimeout(() => {
+          onDrillRef.current(node.id);
+        }, SPRING_LOAD_MS);
+      }
+    },
+    onDragLeave: clearSpringTimer,
+    onDrop: clearSpringTimer,
+  });
+
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-
-    const clearSpringTimer = () => {
-      if (springTimer.current !== null) {
-        clearTimeout(springTimer.current);
-        springTimer.current = null;
-      }
-    };
-
-    const cleanupDraggable = draggable({
+    return draggable({
       element,
       getInitialData: (): LocationDragData & Record<string, unknown> => ({
         arrangeDrag: "location",
@@ -75,45 +78,14 @@ export function ArrangeLocationRow({
       onDragStart: () => setDragging(true),
       onDrop: () => setDragging(false),
     });
+  }, [node.id, roots]);
 
-    const cleanupDropTarget = dropTargetForElements({
-      element,
-      getData: (): ArrangeDropData & Record<string, unknown> => ({
-        arrangeTarget: true,
-        locationId: node.id,
-      }),
-      canDrop: ({ source }) => {
-        const d = asDragData(source.data);
-        if (!d) return false;
-        if (d.arrangeDrag === "location") {
-          return isValidLocationDrop(roots, d.locationId, node.id);
-        }
-        return isValidItemDrop(d.sourceLocationId, node.id);
-      },
-      onDragEnter: () => {
-        setIsOver(true);
-        if (hasChildren && springTimer.current === null) {
-          springTimer.current = setTimeout(() => {
-            onDrillRef.current(node.id);
-          }, SPRING_LOAD_MS);
-        }
-      },
-      onDragLeave: () => {
-        setIsOver(false);
-        clearSpringTimer();
-      },
-      onDrop: () => {
-        setIsOver(false);
-        clearSpringTimer();
-      },
-    });
-
-    return () => {
-      cleanupDraggable();
-      cleanupDropTarget();
-      clearSpringTimer();
-    };
-  }, [node.id, roots, hasChildren]);
+  useEffect(
+    () => () => {
+      if (springTimer.current !== null) clearTimeout(springTimer.current);
+    },
+    [],
+  );
 
   const itemCount =
     node.totalItemCount ??

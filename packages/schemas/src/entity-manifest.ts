@@ -17,7 +17,6 @@ import { type Entity, entitySchema } from "./entity";
 const mcpOp = z.enum(["get", "list", "create", "update", "delete"]);
 
 export const entityDescriptor = z.object({
-  name: entitySchema,
   /** pgTable name (matches schema.ts), or null for entities with no local table. */
   dbTable: z.string().nullable(),
   /** Branded id type name, for display; null where ids are unbranded/external. */
@@ -55,7 +54,6 @@ const ALL_MCP = ["get", "list", "create", "update", "delete"] as const;
 
 export const entityManifest = {
   product: {
-    name: "product",
     dbTable: "Product",
     idBrand: "ProductId",
     shortcodePrefix: SHORTCODE_PREFIX.product,
@@ -69,7 +67,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   recipe: {
-    name: "recipe",
     dbTable: "Recipe",
     idBrand: "RecipeId",
     shortcodePrefix: SHORTCODE_PREFIX.recipe,
@@ -85,7 +82,6 @@ export const entityManifest = {
     routerStyle: "custom",
   },
   ingredient: {
-    name: "ingredient",
     dbTable: "Ingredient",
     idBrand: "IngredientId",
     softDelete: true,
@@ -101,7 +97,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   cookbook: {
-    name: "cookbook",
     dbTable: "Cookbook",
     idBrand: "CookbookId",
     softDelete: true,
@@ -114,7 +109,6 @@ export const entityManifest = {
     routerStyle: "custom",
   },
   location: {
-    name: "location",
     dbTable: "Location",
     idBrand: "LocationId",
     shortcodePrefix: SHORTCODE_PREFIX.location,
@@ -128,7 +122,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   inventory: {
-    name: "inventory",
     dbTable: "InventoryEntry",
     idBrand: "InventoryId",
     softDelete: true,
@@ -141,7 +134,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   meal: {
-    name: "meal",
     dbTable: "Meal",
     idBrand: "MealId",
     softDelete: true,
@@ -154,7 +146,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   project: {
-    name: "project",
     dbTable: "Project",
     idBrand: "ProjectId",
     softDelete: true,
@@ -168,7 +159,6 @@ export const entityManifest = {
     routerStyle: "custom",
   },
   task: {
-    name: "task",
     dbTable: "Task",
     idBrand: "TaskId",
     softDelete: true,
@@ -182,7 +172,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   purchase: {
-    name: "purchase",
     dbTable: "Purchase",
     idBrand: "PurchaseId",
     softDelete: true,
@@ -195,7 +184,6 @@ export const entityManifest = {
     routerStyle: "crud-factory",
   },
   "usda-food": {
-    name: "usda-food",
     dbTable: null,
     idBrand: null,
     softDelete: false,
@@ -208,7 +196,6 @@ export const entityManifest = {
     routerStyle: "custom",
   },
   image: {
-    name: "image",
     dbTable: "Image",
     idBrand: null,
     softDelete: true,
@@ -235,61 +222,43 @@ export const entityReferences = (e: Entity): readonly Entity[] =>
   entityManifest[e].references;
 
 // ---------------------------------------------------------------------------
-// Derived projections — the meta-lists that previously lived as hand-maintained
-// tuples scattered across the package. These `as const` tuples preserve literal
-// types for zod `.extract()` / `.enum()`; entity-manifest.unit.test.ts asserts
-// each one stays in sync with the descriptor flags above (the drift guard).
+// Derived projections — the manifest flags are the only rosters. The conditional
+// type preserves each projection's literal entity union for zod and consumers.
 // ---------------------------------------------------------------------------
 
+type BooleanTrait = {
+  [K in keyof EntityDescriptor]-?: NonNullable<
+    EntityDescriptor[K]
+  > extends boolean
+    ? K
+    : never;
+}[keyof EntityDescriptor];
+
+type EntityWithTrait<K extends BooleanTrait> = {
+  [E in Entity]: EntityManifest[E] extends Record<K, true> ? E : never;
+}[Entity];
+
+const entitiesWithTrait = <K extends BooleanTrait>(
+  trait: K,
+): readonly EntityWithTrait<K>[] =>
+  Object.freeze(
+    allEntities.filter(
+      (entity): entity is EntityWithTrait<K> =>
+        (entityManifest[entity] as EntityDescriptor)[trait] === true,
+    ),
+  );
+
 /** Entities that write audit-log rows (drives `auditEntitySchema`). */
-export const auditableEntities = [
-  "product",
-  "recipe",
-  "ingredient",
-  "cookbook",
-  "location",
-  "inventory",
-  "meal",
-  "project",
-  "task",
-  "purchase",
-] as const;
+export const auditableEntities = entitiesWithTrait("auditable");
 
 /** Entities that can carry images (drives `entityImage`). */
-export const imageEntities = [
-  "product",
-  "recipe",
-  "cookbook",
-  "location",
-  "project",
-] as const;
+export const imageEntities = entitiesWithTrait("hasImages");
 
 /** Entities indexed by global lexical/semantic search. */
-export const searchableEntities = [
-  "product",
-  "recipe",
-  "ingredient",
-  "location",
-  "inventory",
-  "project",
-  "task",
-  "purchase",
-] as const;
+export const searchableEntities = entitiesWithTrait("searchable");
 
 /** Entities with a local soft-deletable table we can count. */
-export const countableEntities = [
-  "product",
-  "recipe",
-  "ingredient",
-  "cookbook",
-  "location",
-  "inventory",
-  "meal",
-  "project",
-  "task",
-  "purchase",
-  "image",
-] as const;
+export const countableEntities = entitiesWithTrait("countable");
 
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];

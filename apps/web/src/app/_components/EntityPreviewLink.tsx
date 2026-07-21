@@ -8,6 +8,7 @@ import {
 } from "~/components/ui/preview-card";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
+import type { HoverPreviewEntity } from "./preview/preview-entities";
 
 const EntityPreviewContent = lazy(() =>
   import("./EntityPreviewContent").then((module) => ({
@@ -31,18 +32,8 @@ const EntityPreviewContent = lazy(() =>
 export const dottedEntityLink =
   "underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid";
 
-type PreviewEntity =
-  | "recipe"
-  | "ingredient"
-  | "product"
-  | "usda-food"
-  | "location"
-  | "project"
-  | "task"
-  | "purchase";
-
 type EntityPreviewLinkProps = {
-  entity: PreviewEntity;
+  entity: HoverPreviewEntity;
   /** Route param id. For usda-food this is String(fdc_id). */
   id: string;
   /** The trigger content — a plain name, or a full pill body. */

@@ -39,6 +39,7 @@ import {
   type ManifestCardProps,
   PriceValue,
 } from "./preview/manifest-card";
+import type { HoverPreviewEntity } from "./preview/preview-entities";
 import { PreviewQuery } from "./preview/preview-query";
 import { coverageLabel, formatYield } from "./recipe/recipe-utils";
 
@@ -58,21 +59,11 @@ const usdaCrossLink = (fdcId: number): CrossLink => ({
 // mounts while the hovercard is open) and feed the view-model in. The view-model
 // types are the shared contract reused by the /design gallery's static samples.
 
-type PreviewEntity =
-  | "recipe"
-  | "ingredient"
-  | "product"
-  | "usda-food"
-  | "location"
-  | "project"
-  | "task"
-  | "purchase";
-
 export function EntityPreviewContent({
   entity,
   id,
 }: {
-  entity: PreviewEntity;
+  entity: HoverPreviewEntity;
   id: string;
 }) {
   return match(entity)

@@ -1,3 +1,10 @@
+import {
+  bulkLookupRequestSchema,
+  type ProductLookupPublicResponse,
+  type ProductLookupResponse,
+  type ProductNotFoundResponse,
+  productSourceSchema,
+} from "@cubby/upc-contract";
 import { withSpan } from "@cubby/worker-tracing";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { zValidator } from "@hono/zod-validator";
@@ -10,15 +17,6 @@ import { getProducts } from "../db/products";
 import { getFreshMisses } from "../db/misses";
 import { resolveProduct, resolveProductOutcome } from "../services/products";
 import { getImageUrl } from "../storage/images";
-import {
-  bulkLookupRequestSchema,
-  productSourceSchema,
-} from "../schemas/product";
-import type {
-  ProductLookupPublicResponse,
-  ProductLookupResponse,
-  ProductNotFoundResponse,
-} from "../schemas/product";
 import type { Product } from "../db/schema";
 import { UPC_REGEX } from "../util/upc";
 

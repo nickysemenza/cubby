@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
@@ -28,7 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
-import type { Entity, EntityDefinition } from "./types";
+import type { EntityDefinition } from "./types";
 
 const entityColor = (
   entity: Entity,
@@ -44,7 +45,7 @@ const entityColor = (
   border,
 });
 
-export const entities: Record<Entity, EntityDefinition> = {
+const entityDefinitions = {
   ingredient: {
     label: "Ingredient",
     pluralLabel: "Ingredients",
@@ -304,7 +305,23 @@ export const entities: Record<Entity, EntityDefinition> = {
       sortableFields: imageSortableFields,
     },
   },
-};
+} as const satisfies Record<Entity, EntityDefinition>;
+
+/** Route unions are derived from the definitions so links cannot drift. */
+export type EntityDetailRoute =
+  (typeof entityDefinitions)[Entity]["routes"]["detail"];
+export type EntityListRoute =
+  (typeof entityDefinitions)[Entity]["routes"]["list"];
+export type EntityNewRoute = {
+  [E in Entity]: (typeof entityDefinitions)[E]["routes"] extends {
+    new: infer TRoute extends string;
+  }
+    ? TRoute
+    : never;
+}[Entity];
+
+export const entities = entityDefinitions as typeof entityDefinitions &
+  Record<Entity, EntityDefinition>;
 
 /**
  * Get the list of server-sortable fields for an entity.

@@ -12,6 +12,7 @@ import {
 } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -22,7 +23,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
-  type DetailHeroStat,
   type DetailSection,
   DetailSections,
 } from "../_components/data-table/detail-page";

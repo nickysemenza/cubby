@@ -1,6 +1,6 @@
 /**
- * Shared inline markers for the recipe spec surfaces (RecipeSpecView,
- * RecipeNestedSpecView, RecipePrepSheetView). These small pill/badge/label
+ * Shared inline markers for the recipe spec surfaces (RecipeSpecView and
+ * RecipePrepSheetView). These small pill/badge/label
  * spans were duplicated verbatim across the three views; extracting them keeps
  * the engineering-view chrome visually consistent. Mirrors the EstimateMarker
  * pattern (plain styled <span>, no behavior).

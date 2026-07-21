@@ -1,5 +1,4 @@
 import type { FC, ReactNode } from "react";
-import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import {
   Card,
   CardAction,
@@ -12,10 +11,6 @@ import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
-
-// Re-exported for back-compat — the spec-plate ledger stat type now lives with
-// the unified PageHeader. Unmigrated detail pages import it from here.
-export type { DetailHeroStat };
 
 type DetailZone = "main" | "aside" | "full";
 

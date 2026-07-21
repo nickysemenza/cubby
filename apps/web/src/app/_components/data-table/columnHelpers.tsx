@@ -30,8 +30,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import type { EntityDetailRoute } from "~/entities/entities";
 import { entities } from "~/entities/entities";
-import type { EntityDetailRoute } from "~/entities/types";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
   buildIngredientComboboxItem,

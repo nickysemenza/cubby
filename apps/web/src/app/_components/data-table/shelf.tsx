@@ -1,13 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { LayoutGrid, LayoutList } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
 export type ShelfView = "shelf" | "table";
@@ -169,30 +170,7 @@ export function ShelfGrid<T>({
   infiniteScroll?: InfiniteScrollControls;
   emptyState?: ReactNode;
 }) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const fetchNextPage = infiniteScroll?.fetchNextPage;
-  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
-  const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
-
-  const handleIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
-        fetchNextPage?.();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
-  );
-
-  useEffect(() => {
-    if (!infiniteScroll) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(handleIntersect, {
-      rootMargin: "400px",
-    });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [infiniteScroll, handleIntersect]);
+  const sentinelRef = useInfiniteScrollSentinel(infiniteScroll, "400px");
 
   if (error) {
     return (

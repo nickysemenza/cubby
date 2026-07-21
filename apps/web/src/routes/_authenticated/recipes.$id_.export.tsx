@@ -15,9 +15,9 @@ import {
   gramMapFromCosting,
 } from "~/app/_components/recipe/IngredientQuantities";
 import { RecipeIngredientMatrixView } from "~/app/_components/recipe/RecipeIngredientMatrixView";
-import { RecipeNestedSpecView } from "~/app/_components/recipe/RecipeNestedSpecView";
 import { RecipePrepSheetView } from "~/app/_components/recipe/RecipePrepSheetView";
 import { RecipeScaleControl } from "~/app/_components/recipe/RecipeScaleControl";
+import { RecipeSpecView } from "~/app/_components/recipe/RecipeSpecView";
 import { recipeTreeToMarkdown } from "~/app/_components/recipe/recipe-export-markdown";
 import { scaleRecipe } from "~/app/_components/recipe/recipe-scaling";
 import { useRecipeTree } from "~/app/_components/recipe/useRecipeTree";
@@ -162,7 +162,7 @@ function RecipeExportPage() {
           ) : format === "matrix" ? (
             <RecipeIngredientMatrixView tree={tree} />
           ) : (
-            <RecipeNestedSpecView tree={tree} />
+            <RecipeSpecView tree={tree} variant="export" />
           )
         ) : (
           <div className="h-[300px]">

@@ -186,17 +186,19 @@ export function buildPaginatedResponse<T>(
   };
 }
 
+const paginatedMetaSchema = z.object({
+  pageIndex: z.number().int().nonnegative(),
+  pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
+  totalCount: z.number().int().nonnegative(),
+  // Full-filtered-set column aggregates (see buildPaginatedResponse).
+  sums: z.record(z.string(), z.number()).optional(),
+});
+
 export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
   entrySchema: Entry,
 ) {
   return z.object({
-    meta: z.object({
-      pageIndex: z.number().int().nonnegative(),
-      pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
-      totalCount: z.number().int().nonnegative(),
-      // Full-filtered-set column aggregates (see buildPaginatedResponse).
-      sums: z.record(z.string(), z.number()).optional(),
-    }),
+    meta: paginatedMetaSchema,
     items: z.array(entrySchema),
   });
 }
@@ -218,13 +220,7 @@ export function createPaginatedResponseSchemaWithContext<
   Entry extends z.ZodTypeAny,
 >(entrySchema: Entry, entityName: string) {
   return z.object({
-    meta: z.object({
-      pageIndex: z.number().int().nonnegative(),
-      pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
-      totalCount: z.number().int().nonnegative(),
-      // Full-filtered-set column aggregates (see buildPaginatedResponse).
-      sums: z.record(z.string(), z.number()).optional(),
-    }),
+    meta: paginatedMetaSchema,
     items: z.array(z.unknown()).transform((items, ctx) => {
       const results: z.infer<Entry>[] = [];
       let hasErrors = false;

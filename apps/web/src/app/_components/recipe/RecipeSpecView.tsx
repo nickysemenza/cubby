@@ -60,8 +60,13 @@ const DEPTH_RULE = [
 const depthRule = (depth: number): string =>
   DEPTH_RULE[Math.min(depth, DEPTH_RULE.length - 1)] ?? "var(--chart-1)";
 
-const rowGrid =
-  "grid grid-cols-[minmax(0,1fr)_4.5rem_4rem_3.5rem] items-baseline gap-x-2";
+type SpecVariant = "detail" | "export";
+
+const rowGrid: Record<SpecVariant, string> = {
+  detail:
+    "grid grid-cols-[minmax(0,1fr)_4.5rem_4rem_3.5rem] items-baseline gap-x-2",
+  export: "grid grid-cols-[minmax(0,1fr)_5rem_3.5rem] items-baseline gap-x-2",
+};
 
 /** Per-node base override: recipe id → the row chosen as that node's 100% base. */
 type BaseOverrides = Map<string, string>;
@@ -89,7 +94,7 @@ function ScalingCell({
   pct: number | null;
   noWeight: boolean;
   isBase: boolean;
-  onPick: () => void;
+  onPick?: () => void;
 }) {
   if (pct == null) {
     return (
@@ -100,6 +105,18 @@ function ScalingCell({
         )}
       >
         —
+      </span>
+    );
+  }
+  if (!onPick) {
+    return (
+      <span
+        className={cn(
+          "text-right font-mono text-xs tabular-nums",
+          isBase ? "font-medium text-primary" : "text-foreground/80",
+        )}
+      >
+        {formatScalingPct(pct)}
       </span>
     );
   }
@@ -128,6 +145,7 @@ function SpecRow({
   expanded,
   overrides,
   setBase,
+  variant,
 }: {
   row: RecipeTreeRow;
   node: RecipeTreeNode;
@@ -138,17 +156,18 @@ function SpecRow({
   expanded: Set<string>;
   overrides: BaseOverrides;
   setBase: (recipeId: string, rowId: string) => void;
+  variant: SpecVariant;
 }) {
   if (row.kind === "stub") {
     return (
-      <div className={rowGrid}>
+      <div className={rowGrid[variant]}>
         <span className="py-1 text-muted-foreground text-sm italic">
           {row.name}{" "}
           <StubWarning>
             {row.reason === "cycle" ? "↻ cycle" : "missing"}
           </StubWarning>
         </span>
-        <span />
+        {variant === "detail" && <span />}
         <span />
         <span />
       </div>
@@ -166,7 +185,7 @@ function SpecRow({
   const accentColor = isSubrecipe ? depthRule(row.child.depth) : undefined;
 
   const line = (
-    <div className={cn(rowGrid, "align-top")}>
+    <div className={cn(rowGrid[variant], "align-top")}>
       <span className="py-1 font-medium text-sm leading-snug">
         {isSubrecipe && (
           <span aria-hidden className="mr-1" style={{ color: accentColor }}>
@@ -194,12 +213,16 @@ function SpecRow({
         className="text-xs"
         emptyText="—"
       />
-      <CostCell node={node} rowId={row.id} />
+      {variant === "detail" && <CostCell node={node} rowId={row.id} />}
       <ScalingCell
         pct={pct}
         noWeight={noWeight}
         isBase={isBase}
-        onPick={() => setBase(node.recipe.id, row.id)}
+        onPick={
+          variant === "detail"
+            ? () => setBase(node.recipe.id, row.id)
+            : undefined
+        }
       />
     </div>
   );
@@ -218,6 +241,7 @@ function SpecRow({
           expanded={expanded}
           overrides={overrides}
           setBase={setBase}
+          variant={variant}
         />
       </div>
     </>
@@ -229,11 +253,13 @@ function SpecNode({
   expanded,
   overrides,
   setBase,
+  variant,
 }: {
   node: RecipeTreeNode;
   expanded: Set<string>;
   overrides: BaseOverrides;
   setBase: (recipeId: string, rowId: string) => void;
+  variant: SpecVariant;
 }) {
   const gramById = gramMapFromCosting(node.costing);
   const showSectionNames = node.sections.length > 1;
@@ -241,13 +267,16 @@ function SpecNode({
 
   // Re-anchorable base: the user's pick for this node, else its default
   // (flour/heaviest). Percentages are recomputed client-side from resolved grams.
-  const baseId = overrides.get(node.recipe.id) ?? node.baseRowId;
+  const baseId =
+    variant === "detail"
+      ? (overrides.get(node.recipe.id) ?? node.baseRowId)
+      : node.baseRowId;
   const pctById = useMemo(
     () =>
-      node.costing
+      variant === "detail" && node.costing
         ? computeScalingPercentages(node.costing, baseId)
         : new Map<string, number | null>(),
-    [node.costing, baseId],
+    [node.costing, baseId, variant],
   );
 
   return (
@@ -285,11 +314,18 @@ function SpecNode({
               row={row}
               node={node}
               baseId={baseId}
-              pct={pctById.get(row.id) ?? null}
+              pct={
+                variant === "detail"
+                  ? (pctById.get(row.id) ?? null)
+                  : "pct" in row
+                    ? row.pct
+                    : null
+              }
               gramById={gramById}
               expanded={expanded}
               overrides={overrides}
               setBase={setBase}
+              variant={variant}
             />
           ))}
           {section.steps.length > 0 && (
@@ -315,8 +351,10 @@ function SpecNode({
 // memo: skip re-renders from RecipeDetail's streaming churn (`tree` is stable).
 export const RecipeSpecView = memo(function RecipeSpecView({
   tree,
+  variant = "detail",
 }: {
   tree: RecipeTreeNode;
+  variant?: SpecVariant;
 }) {
   const recipe = tree.recipe;
   const expanded = useMemo(() => firstExpansionRowIds(tree), [tree]);
@@ -350,10 +388,15 @@ export const RecipeSpecView = memo(function RecipeSpecView({
         </MarkdownText>
       )}
 
-      <div className={cn(rowGrid, "eyebrow border-primary border-b-2 pb-2")}>
+      <div
+        className={cn(
+          rowGrid[variant],
+          "eyebrow border-primary border-b-2 pb-2",
+        )}
+      >
         <span>Ingredient</span>
         <span className="text-right">Qty</span>
-        <span className="text-right">Cost</span>
+        {variant === "detail" && <span className="text-right">Cost</span>}
         <span className="text-right">Scaling</span>
       </div>
 
@@ -363,16 +406,17 @@ export const RecipeSpecView = memo(function RecipeSpecView({
           expanded={expanded}
           overrides={overrides}
           setBase={setBase}
+          variant={variant}
         />
       </div>
 
-      {footnote && (
+      {variant === "detail" && footnote && (
         <p className="mt-4 font-heading text-primary text-xs italic">
           {footnote}
         </p>
       )}
 
-      {missingWeight.length > 0 && (
+      {variant === "detail" && missingWeight.length > 0 && (
         <p className="mt-2 font-mono text-2xs text-muted-foreground/70">
           Scaling omits{" "}
           <span className="text-warning">{uniq(missingWeight).join(", ")}</span>{" "}

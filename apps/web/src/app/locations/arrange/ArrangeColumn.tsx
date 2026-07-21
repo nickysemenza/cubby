@@ -1,17 +1,15 @@
-import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { HelpCircle, Home } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { cn } from "~/lib/utils";
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationCard } from "./ArrangeLocationCard";
-import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
-import { type ArrangeDropData, asDragData } from "./arrange-types";
+import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeColumnProps {
   /** The location this column represents (its cards are this location's children). Null = Home / top level. */
@@ -46,32 +44,7 @@ export function ArrangeColumn({
   pinned = false,
 }: ArrangeColumnProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [isOver, setIsOver] = useState(false);
-
-  useEffect(() => {
-    const element = bodyRef.current;
-    if (!element) return;
-    return dropTargetForElements({
-      element,
-      getData: (): ArrangeDropData & Record<string, unknown> => ({
-        arrangeTarget: true,
-        locationId,
-      }),
-      canDrop: ({ source }) => {
-        const drag = asDragData(source.data);
-        if (!drag) return false;
-        if (drag.arrangeDrag === "location")
-          return isValidLocationDrop(roots, drag.locationId, locationId);
-        return (
-          locationId !== null &&
-          isValidItemDrop(drag.sourceLocationId, locationId)
-        );
-      },
-      onDragEnter: () => setIsOver(true),
-      onDragLeave: () => setIsOver(false),
-      onDrop: () => setIsOver(false),
-    });
-  }, [locationId, roots]);
+  const isOver = useArrangeDropTarget({ ref: bodyRef, roots, locationId });
 
   const isEmpty = nodes.length === 0 && items.length === 0;
 

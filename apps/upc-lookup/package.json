@@ -3,13 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    "./schemas": {
-      "types": "./src/schemas/product.ts",
-      "import": "./src/schemas/product.ts",
-      "default": "./src/schemas/product.ts"
-    }
-  },
   "scripts": {
     "dev": "vite",
     "dev:local": "vite",

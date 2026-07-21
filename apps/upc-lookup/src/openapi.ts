@@ -1,11 +1,11 @@
 import { z } from "zod";
 import {
+  errorResponseSchema,
   productLookupResponseSchema,
   productNotFoundResponseSchema,
   searchResponseSchema,
   statsResponseSchema,
-  errorResponseSchema,
-} from "./schemas/product";
+} from "@cubby/upc-contract";
 
 // Convert Zod schemas to JSON Schema for OpenAPI
 function zodToJsonSchema(schema: z.ZodType): object {

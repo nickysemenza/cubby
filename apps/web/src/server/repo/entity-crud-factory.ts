@@ -116,7 +116,7 @@ export function createEntityCrud<
 ): EntityCrud<TOut, TUpdate, TId> {
   const manifest = entityManifest[config.entity];
   const reader = createEntityReader({
-    entityName: manifest.name,
+    entityName: config.entity,
     fetchById: config.fetchById,
     fromDB: config.fromDB,
     notFoundReason: config.notFoundReason,
@@ -146,7 +146,7 @@ export function createEntityCrud<
       );
       if (changes) {
         await logAuditEntry(db, actor, {
-          entityType: manifest.name,
+          entityType: config.entity,
           entityId: id,
           action: "update",
           changes,
