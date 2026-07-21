@@ -8,6 +8,7 @@ import {
   type TaskOut,
   type TaskStatus,
   TRADE_LABELS,
+  type Trade,
   tradeValues,
 } from "@cubby/schemas/project";
 import {
@@ -20,7 +21,31 @@ import {
 } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { partition } from "es-toolkit";
-import { ExternalLink, ListTodo, ShoppingCart } from "lucide-react";
+import {
+  Archive,
+  Car,
+  ClipboardList,
+  Droplets,
+  ExternalLink,
+  Fan,
+  Grid3x3,
+  Hammer,
+  ListTodo,
+  type LucideIcon,
+  PaintRoller,
+  Palette,
+  RectangleHorizontal,
+  Refrigerator,
+  Ruler,
+  Shapes,
+  ShoppingCart,
+  Square,
+  Trash2,
+  Trees,
+  Truck,
+  Wrench,
+  Zap,
+} from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import {
   createCurrencyColumn,
@@ -101,13 +126,78 @@ export function normalizeCostTypeKey(
   return costType ?? "other";
 }
 
-/** `{value,label}` options for the trade filter/inline-edit select — shared by tasks and purchases. */
-export const tradeOptions: FilterableComboboxItem[] = buildSelectOptions(
-  tradeValues,
-  TRADE_LABELS,
-);
+/**
+ * Monochrome Lucide glyph per trade — a scannable leading mark for badges and
+ * select rows. Icons live here (client) rather than in `@cubby/schemas` so the
+ * schema package stays presentation-free. Full-color emoji were deliberately
+ * dropped in the Notion migration; these `currentColor` glyphs sit on the
+ * Warm-Paper Ledger without the glossy clash.
+ */
+const TRADE_ICONS: Record<Trade, LucideIcon> = {
+  planning: ClipboardList,
+  demolition: Trash2,
+  building: Hammer,
+  drywall: Square,
+  electrical: Zap,
+  plumbing: Droplets,
+  mechanical: Fan,
+  cabinetry: Archive,
+  countertop: RectangleHorizontal,
+  flooring: Grid3x3,
+  millwork: Ruler,
+  finishes: PaintRoller,
+  appliances: Refrigerator,
+  landscaping: Trees,
+  logistics: Truck,
+  metalworking: Wrench,
+  crafts: Palette,
+  auto: Car,
+  other: Shapes,
+};
 
 export { TRADE_LABELS };
+
+/** Outline badge with the trade's leading glyph + label — the canonical trade chip. */
+export function TradeBadge({ trade }: { trade: Trade }) {
+  const Icon = TRADE_ICONS[trade];
+  return (
+    <Badge variant="outline">
+      <Icon />
+      {TRADE_LABELS[trade]}
+    </Badge>
+  );
+}
+
+/**
+ * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight
+ * spots like the Gantt name pane where the label is already present.
+ */
+export function TradeIcon({
+  trade,
+  className,
+}: {
+  trade: Trade;
+  className?: string;
+}) {
+  const Icon = TRADE_ICONS[trade];
+  return <Icon className={className} aria-label={TRADE_LABELS[trade]} />;
+}
+
+/**
+ * `{value,label,icon}` options for the trade filter/inline-edit select — shared
+ * by tasks and purchases. Not `buildSelectOptions` because that helper carries
+ * no icon; the glyph mirrors `TradeBadge` so the select and the chip match.
+ */
+export const tradeOptions: FilterableComboboxItem[] = tradeValues.map(
+  (value) => {
+    const Icon = TRADE_ICONS[value];
+    return {
+      value,
+      label: TRADE_LABELS[value],
+      icon: <Icon className="size-3.5 text-muted-foreground" />,
+    };
+  },
+);
 
 // -- Date helpers --
 
@@ -194,7 +284,7 @@ const taskColumns = [
     cell: ({ getValue }) => {
       const trade = getValue();
       if (!trade) return null;
-      return <Badge variant="outline">{TRADE_LABELS[trade]}</Badge>;
+      return <TradeBadge trade={trade} />;
     },
     enableSorting: true,
   }),
@@ -281,7 +371,7 @@ const purchaseColumns = [
     cell: ({ getValue }) => {
       const trade = getValue();
       if (!trade) return null;
-      return <Badge variant="outline">{TRADE_LABELS[trade]}</Badge>;
+      return <TradeBadge trade={trade} />;
     },
     enableSorting: true,
   }),

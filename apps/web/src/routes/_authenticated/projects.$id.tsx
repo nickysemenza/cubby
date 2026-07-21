@@ -2,6 +2,8 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import {
   ProjectDetailPage,
+  projectGanttSubtreeQueryParams,
+  projectGanttTasksQueryParams,
   projectPurchasesQueryParams,
   projectTasksQueryParams,
 } from "~/app/projects/project-detail-page";
@@ -30,6 +32,16 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
     void context.queryClient.prefetchQuery(
       context.trpc.purchase.list.queryOptions(
         projectPurchasesQueryParams(params.id),
+      ),
+    );
+    void context.queryClient.prefetchQuery(
+      context.trpc.task.list.queryOptions(
+        projectGanttTasksQueryParams(params.id),
+      ),
+    );
+    void context.queryClient.prefetchQuery(
+      context.trpc.project.list.queryOptions(
+        projectGanttSubtreeQueryParams(params.id),
       ),
     );
     void context.queryClient.prefetchQuery(

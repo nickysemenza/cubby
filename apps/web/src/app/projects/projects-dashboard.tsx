@@ -69,9 +69,14 @@ const DependencyGraph = lazy(() =>
 const MonthlyTrend = lazy(() =>
   import("./charts/monthly-trend").then((m) => ({ default: m.MonthlyTrend })),
 );
-const ProjectTimeline = lazy(() =>
-  import("./charts/project-timeline").then((m) => ({
-    default: m.ProjectTimeline,
+const PortfolioGantt = lazy(() =>
+  import("./charts/gantt/PortfolioGantt").then((m) => ({
+    default: m.PortfolioGantt,
+  })),
+);
+const TradeActivity = lazy(() =>
+  import("./charts/trade-activity").then((m) => ({
+    default: m.TradeActivity,
   })),
 );
 const CategoryBreakdown = lazy(() =>
@@ -322,8 +327,18 @@ function DashboardContent({
         {view === "charts" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <Stack className="pt-4">
-              <Section title="Project Timeline">
-                <ProjectTimeline projects={projects} />
+              <Section
+                title="Project Timeline"
+                description="Bars = own dates · whisker = sub-project span"
+              >
+                <PortfolioGantt projects={projects} />
+              </Section>
+
+              <Section
+                title="Trade Activity"
+                description="When each trade was last active, across all projects"
+              >
+                <TradeActivity tasks={tasks} />
               </Section>
 
               <Section

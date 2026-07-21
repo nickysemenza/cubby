@@ -2,7 +2,7 @@ import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, Info } from "lucide-react";
 import type { FC } from "react";
-import { TRADE_LABELS, tradeOptions } from "~/app/projects/shared";
+import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -132,7 +132,9 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
               data: { trade: trade as Trade },
             });
           }}
-          renderValue={(v) => (v ? TRADE_LABELS[v as Trade] : <NoneValue />)}
+          renderValue={(v) =>
+            v ? <TradeBadge trade={v as Trade} /> : <NoneValue />
+          }
         />
       ),
     },

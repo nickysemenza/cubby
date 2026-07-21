@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
-import { eq, isNull } from "drizzle-orm";
+import { eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
@@ -16,6 +16,11 @@ import {
   getDb,
   relations,
 } from "~/server/repo/database-helpers";
+import {
+  allProjectParentRows,
+  buildChildrenMap,
+  collectDescendantIds,
+} from "~/server/repo/project/subtree";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 
@@ -25,12 +30,29 @@ export const taskList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: TaskOut[]; count: number }> => {
+  // When scoped to a project subtree, resolve the project + every live
+  // descendant id and match on the whole set; otherwise a plain project match.
+  let projectCondition = filters.projectId
+    ? eq(task.projectId, filters.projectId)
+    : undefined;
+  if (filters.projectId && filters.includeSubProjects) {
+    const parentRows = await allProjectParentRows(db);
+    const descendantIds = collectDescendantIds(
+      buildChildrenMap(parentRows),
+      filters.projectId,
+    );
+    projectCondition = inArray(task.projectId, [
+      filters.projectId,
+      ...descendantIds,
+    ]);
+  }
+
   const whereClause = buildSearchConditions(
     task,
     [{ column: task.name, term: filters.search }],
     [
       filters.status ? eq(task.status, filters.status) : undefined,
-      filters.projectId ? eq(task.projectId, filters.projectId) : undefined,
+      projectCondition,
       filters.trade ? eq(task.trade, filters.trade) : undefined,
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId

@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo } from "react";
 import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
 import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
-import { TRADE_LABELS, tradeOptions } from "~/app/projects/shared";
+import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -149,7 +149,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         placeholder: "Filter by trade...",
         selectOptions: tradeOptions,
         renderCell: (trade: Trade | null) =>
-          trade ? TRADE_LABELS[trade] : <NoneValue />,
+          trade ? <TradeBadge trade={trade} /> : <NoneValue />,
         mobile: { slot: "meta", priority: 60 },
         editable: {
           onSave: async (newTrade, purchase) => {

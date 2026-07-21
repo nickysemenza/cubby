@@ -7,7 +7,7 @@ import { WithTaskSearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   formatDateRange,
-  TRADE_LABELS,
+  TradeBadge,
   tradeOptions,
 } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -254,7 +254,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               data: { trade: trade as Trade },
             });
           }}
-          renderValue={(v) => (v ? TRADE_LABELS[v as Trade] : <NoneValue />)}
+          renderValue={(v) =>
+            v ? <TradeBadge trade={v as Trade} /> : <NoneValue />
+          }
         />
       ),
     },
@@ -383,7 +385,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       : []),
     {
       label: "Trade",
-      value: task.trade ? TRADE_LABELS[task.trade] : <NoneValue />,
+      value: task.trade ? <TradeBadge trade={task.trade} /> : <NoneValue />,
     },
     {
       label: "Due",

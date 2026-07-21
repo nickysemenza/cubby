@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import {
   TASK_STATUS_LABELS,
-  TRADE_LABELS,
+  TradeBadge,
   tradeOptions,
 } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
@@ -133,7 +133,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         placeholder: "Filter by trade...",
         selectOptions: tradeOptions,
         renderCell: (trade: Trade | null) =>
-          trade ? TRADE_LABELS[trade] : <NoneValue />,
+          trade ? <TradeBadge trade={trade} /> : <NoneValue />,
         mobile: { slot: "meta", priority: 50 },
         editable: {
           onSave: async (newTrade, task) => {
