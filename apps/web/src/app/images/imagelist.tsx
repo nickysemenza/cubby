@@ -1,3 +1,4 @@
+import type { EntityImage } from "@cubby/schemas/entity";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -11,6 +12,25 @@ import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
+
+/**
+ * Owning-entity kind → EntityInlineLink entity. A full Record over
+ * `EntityImage` on purpose: adding a new image-owner enum member is a compile
+ * error until it's mapped here (a missing key used to flow `undefined` into
+ * EntityInlineLink's exhaustive ts-pattern match and crash the whole page —
+ * that's how PROJECT-owned images broke /images). `null` = no inline-link arm
+ * exists; the cell falls back to plain text.
+ */
+const IMAGE_ENTITY_LINK_KIND: Record<
+  EntityImage,
+  "product" | "location" | "recipe" | "project" | null
+> = {
+  PRODUCT: "product",
+  LOCATION: "location",
+  RECIPE: "recipe",
+  PROJECT: "project",
+  COOKBOOK: null,
+};
 
 export default function ImageList() {
   const api = useTRPC();
@@ -101,15 +121,16 @@ export default function ImageList() {
               return <NoneValue />;
             }
 
-            const entityMap = {
-              PRODUCT: "product",
-              LOCATION: "location",
-              RECIPE: "recipe",
-            } as const;
+            const entity = IMAGE_ENTITY_LINK_KIND[entityType];
+            if (!entity) {
+              // Owner kind without an EntityInlineLink arm (COOKBOOK today) —
+              // show the name as plain text rather than crashing the page.
+              return <span className="truncate">{entityName}</span>;
+            }
 
             return (
               <EntityInlineLink
-                entity={entityMap[entityType as keyof typeof entityMap]}
+                entity={entity}
                 data={{ id: entityId, name: entityName }}
                 compact
               />
