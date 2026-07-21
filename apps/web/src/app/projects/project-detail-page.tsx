@@ -708,7 +708,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           showProjectOnCards={hasSubtree}
         />
       ) : (
-        <TaskList tasks={topLevelTasks} showProjectColumn={hasSubtree} />
+        <TaskList tasks={topLevelTasks} />
       ),
   };
 
@@ -786,7 +786,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           purchases={sortedPurchases}
           tradeFilter={activeMatrixCell?.trade ?? null}
           costTypeFilter={activeMatrixCell?.costType ?? null}
-          showProjectColumn={hasSubtree}
         />
       </div>
     ),

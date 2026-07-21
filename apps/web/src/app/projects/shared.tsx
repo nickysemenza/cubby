@@ -52,6 +52,7 @@ import {
   createPlainDateColumn,
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
+import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import RTable from "~/app/_components/data-table/Table";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -77,7 +78,11 @@ import {
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { projectMutationInvalidateKeys } from "~/lib/query-keys";
+import {
+  projectMutationInvalidateKeys,
+  purchaseMutationInvalidateKeys,
+  taskMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -210,54 +215,95 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 const taskHelper = createColumnHelper<TaskOut>();
 
-// The project link column is redundant on a leaf project's detail page (every
-// row links back to the project you're already on), so it's opt-out via
-// `showProjectColumn`.
-const buildTaskColumns = (showProjectColumn: boolean) => [
-  createFilterableSelectColumn(taskHelper, "status", {
-    header: "Status",
-    className: "w-32",
-    placeholder: "Filter by status...",
-    selectOptions: taskStatusOptions,
-    renderCell: (status: TaskStatus) => (
-      <Badge variant={taskStatusBadgeVariant[status]}>
-        {TASK_STATUS_LABELS[status]}
-      </Badge>
-    ),
-  }),
-  taskHelper.accessor("name", {
-    header: "Task",
-    cell: ({ row }) => row.original.name,
-    enableSorting: true,
-  }),
-  ...(showProjectColumn
-    ? [createProjectLinkColumn(taskHelper, { className: "w-40" })]
-    : []),
-  taskHelper.accessor("trade", {
-    header: "Trade",
-    cell: ({ getValue }) => {
-      const trade = getValue();
-      if (!trade) return null;
-      return <TradeBadge trade={trade} />;
-    },
-    enableSorting: true,
-  }),
-  createPlainDateColumn(taskHelper, "dueDate", {
-    header: "Due",
-    className: "w-28",
-  }),
-];
+/**
+ * Column config here mirrors tasklist.tsx's (the `/tasks` index page)
+ * status/project/trade/dueDate columns — this embedded table can't share that
+ * hook (it renders a caller-supplied array with no server pagination/filters
+ * of its own via `useEntityList`), so the small duplication is accepted rather
+ * than forcing a shared abstraction. Keep both in sync if the editable field
+ * set changes; see the reciprocal comment there.
+ */
+export function TaskList({ tasks }: { tasks: TaskOut[] }) {
+  const api = useTRPC();
 
-export function TaskList({
-  tasks,
-  showProjectColumn = true,
-}: {
-  tasks: TaskOut[];
-  showProjectColumn?: boolean;
-}) {
+  const updateTaskMutation = useUpdateMutation({
+    mutationFn: api.task.update.mutationOptions,
+    entity: "task",
+    invalidateKeys: taskMutationInvalidateKeys,
+  });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo(
-    () => buildTaskColumns(showProjectColumn),
-    [showProjectColumn],
+    () => [
+      createFilterableSelectColumn(taskHelper, "status", {
+        header: "Status",
+        className: "w-32",
+        placeholder: "Filter by status...",
+        selectOptions: taskStatusOptions,
+        renderCell: (status: TaskStatus) => (
+          <Badge variant={taskStatusBadgeVariant[status]}>
+            {TASK_STATUS_LABELS[status]}
+          </Badge>
+        ),
+        editable: {
+          onSave: async (newStatus, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { status: newStatus },
+            });
+          },
+        },
+      }),
+      taskHelper.accessor("name", {
+        header: "Task",
+        cell: ({ row }) => row.original.name,
+        enableSorting: true,
+      }),
+      // Always shown (no leaf-project opt-out) — this is now the inline
+      // move-to-sub-project affordance, not just a display link.
+      createProjectLinkColumn(taskHelper, {
+        className: "w-40",
+        editable: {
+          onSave: async (newProjectId, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { projectId: newProjectId },
+            });
+          },
+        },
+      }),
+      createFilterableSelectColumn(taskHelper, "trade", {
+        header: "Trade",
+        className: "w-32",
+        placeholder: "Filter by trade...",
+        selectOptions: tradeOptions,
+        renderCell: (trade: Trade | null) =>
+          trade ? <TradeBadge trade={trade} /> : null,
+        editable: {
+          onSave: async (newTrade, task) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newTrade) return;
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { trade: newTrade },
+            });
+          },
+        },
+      }),
+      createPlainDateColumn(taskHelper, "dueDate", {
+        header: "Due",
+        className: "w-28",
+        editable: {
+          onSave: async (newDueDate, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { dueDate: newDueDate },
+            });
+          },
+        },
+      }),
+    ],
+    [],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -301,85 +347,200 @@ export function TaskList({
 
 const purchaseHelper = createColumnHelper<PurchaseOut>();
 
-const buildPurchaseColumns = (showProjectColumn: boolean) => [
-  purchaseHelper.accessor("name", {
-    header: "Purchase",
-    cell: ({ row }) => {
-      const url = row.original.url;
-      if (!url) return row.original.name;
-      return (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 hover:underline"
-        >
-          {row.original.name}
-          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-        </a>
-      );
-    },
-    enableSorting: true,
-  }),
-  ...(showProjectColumn
-    ? [createProjectLinkColumn(purchaseHelper, { className: "w-40" })]
-    : []),
-  createFilterableSelectColumn(purchaseHelper, "costType", {
-    header: "Cost Type",
-    className: "w-28",
-    placeholder: "Filter by cost type...",
-    selectOptions: costTypeOptions,
-    renderCell: (costType: CostType | null) =>
-      costType ? costTypeLabels[costType] : <NoneValue />,
-  }),
-  purchaseHelper.accessor("trade", {
-    header: "Trade",
-    // Exact-match so the pivot's controlled `trade` filter selects one trade
-    // (the default `includesString` would over-match substrings).
-    filterFn: "equalsString",
-    cell: ({ getValue }) => {
-      const trade = getValue();
-      if (!trade) return null;
-      return <TradeBadge trade={trade} />;
-    },
-    enableSorting: true,
-  }),
-  purchaseHelper.accessor("cost", {
-    header: "Cost",
-    cell: ({ getValue }) => {
-      const cost = getValue();
-      if (cost == null) return null;
-      // Negative rows are credits/contributions (money in) — tint them so they
-      // don't read as spend.
-      return (
-        <span className={cn("font-medium", cost < 0 && "text-positive")}>
-          {formatCurrency(cost, 0)}
-        </span>
-      );
-    },
-    enableSorting: true,
-  }),
-  createPlainDateColumn(purchaseHelper, "date", {
-    header: "Date",
-    className: "w-28",
-  }),
+/**
+ * Editable-select options for the embedded purchases table's Future/Status
+ * column — same "true"/"false" values as the index page's `futureFilterOptions`
+ * (~/app/purchases/purchase-options), but "Actual" rather than "Already made"
+ * to match this column's tighter "Status" header. Module-level: a stable
+ * reference for the column's `useMemo`.
+ */
+const futureEditOptions: FilterableComboboxItem[] = [
+  { value: "false", label: "Actual" },
+  { value: "true", label: "Planned" },
 ];
 
+/**
+ * Column config here mirrors purchaselist.tsx's (the `/purchases` index page)
+ * cost/date/costType/trade/project/future columns — this embedded table can't
+ * share that hook (it renders a caller-supplied array with no server
+ * pagination/filters of its own via `useEntityList`), so the small
+ * duplication is accepted rather than forcing a shared abstraction. Keep both
+ * in sync if the editable field set changes; see the reciprocal comment
+ * there.
+ */
 export function PurchaseList({
   purchases,
   tradeFilter,
   costTypeFilter,
-  showProjectColumn = true,
 }: {
   purchases: PurchaseOut[];
   /** Controlled column filters, driven by the Trade × Cost Type pivot click. */
   tradeFilter?: Trade | null;
   costTypeFilter?: CostType | null;
-  showProjectColumn?: boolean;
 }) {
+  const api = useTRPC();
+
+  const updatePurchaseMutation = useUpdateMutation({
+    mutationFn: api.purchase.update.mutationOptions,
+    entity: "purchase",
+    invalidateKeys: purchaseMutationInvalidateKeys,
+  });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
   const columns = useMemo(
-    () => buildPurchaseColumns(showProjectColumn),
-    [showProjectColumn],
+    () => [
+      purchaseHelper.accessor("name", {
+        header: "Purchase",
+        cell: ({ row }) => {
+          const url = row.original.url;
+          if (!url) return row.original.name;
+          return (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:underline"
+            >
+              {row.original.name}
+              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+            </a>
+          );
+        },
+        enableSorting: true,
+      }),
+      // Always shown (no leaf-project opt-out) — this is now the inline
+      // move-to-sub-project affordance, not just a display link.
+      createProjectLinkColumn(purchaseHelper, {
+        className: "w-40",
+        editable: {
+          onSave: async (newProjectId, purchase) => {
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { projectId: newProjectId },
+            });
+          },
+        },
+      }),
+      createFilterableSelectColumn(purchaseHelper, "costType", {
+        header: "Cost Type",
+        className: "w-28",
+        placeholder: "Filter by cost type...",
+        selectOptions: costTypeOptions,
+        renderCell: (costType: CostType | null) =>
+          costType ? costTypeLabels[costType] : <NoneValue />,
+        editable: {
+          onSave: async (newCostType, purchase) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!newCostType) return;
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { costType: newCostType },
+            });
+          },
+        },
+      }),
+      {
+        ...createFilterableSelectColumn(purchaseHelper, "trade", {
+          header: "Trade",
+          className: "w-32",
+          placeholder: "Filter by trade...",
+          selectOptions: tradeOptions,
+          renderCell: (trade: Trade | null) =>
+            trade ? <TradeBadge trade={trade} /> : null,
+          editable: {
+            onSave: async (newTrade, purchase) => {
+              // Required field — a cleared select is a no-op, not a null write.
+              if (!newTrade) return;
+              await updatePurchaseMutation.mutateAsync({
+                id: purchase.id,
+                data: { trade: newTrade },
+              });
+            },
+          },
+        }),
+        // Exact-match so the pivot's controlled `trade` filter selects one
+        // trade (the default `includesString` would over-match substrings).
+        // `createFilterableSelectColumn` doesn't expose a `filterFn` option,
+        // so this overrides it on the returned column def — load-bearing,
+        // don't drop it.
+        filterFn: "equalsString" as const,
+      },
+      purchaseHelper.accessor("cost", {
+        header: "Cost",
+        enableSorting: true,
+        meta: { numeric: true, className: "w-20" },
+        cell: (info) => {
+          const cost = info.getValue();
+          const purchase = info.row.original;
+          return (
+            <EditableCell
+              value={cost}
+              onSave={async (newCost) => {
+                await updatePurchaseMutation.mutateAsync({
+                  id: purchase.id,
+                  data: { cost: newCost },
+                });
+              }}
+              config={{ type: "currency" }}
+              renderValue={(v) => {
+                if (v == null) return null;
+                // Negative rows are credits/contributions (money in) — tint
+                // them so they don't read as spend. `createCurrencyColumn`
+                // can't express this per-value tint (its editable
+                // `renderValue` is fixed), so this stays a custom column that
+                // mirrors its `EditableCell` composition instead.
+                return (
+                  <span className={cn("font-medium", v < 0 && "text-positive")}>
+                    {formatCurrency(v, 0)}
+                  </span>
+                );
+              }}
+            />
+          );
+        },
+      }),
+      createPlainDateColumn(purchaseHelper, "date", {
+        header: "Date",
+        className: "w-28",
+        editable: {
+          onSave: async (newDate, purchase) => {
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { date: newDate },
+            });
+          },
+        },
+      }),
+      purchaseHelper.accessor((row) => (row.future ? "true" : "false"), {
+        id: "future",
+        header: "Status",
+        enableSorting: false,
+        meta: { className: "w-24" },
+        cell: (info) => {
+          const purchase = info.row.original;
+          return (
+            <EditableCell
+              value={info.getValue()}
+              onSave={async (newVal) => {
+                await updatePurchaseMutation.mutateAsync({
+                  id: purchase.id,
+                  data: { future: newVal === "true" },
+                });
+              }}
+              config={{ type: "select", options: futureEditOptions }}
+              renderValue={(v) =>
+                v === "true" ? (
+                  <Badge variant="warning">Planned</Badge>
+                ) : (
+                  <NoneValue />
+                )
+              }
+            />
+          );
+        },
+      }),
+    ],
+    [],
   );
   const table = useReactTable({
     data: purchases,

@@ -123,6 +123,11 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     [projectOptions],
   );
 
+  // Column config here is mirrored (not shared) by the embedded
+  // `PurchaseList` in `~/app/projects/shared.tsx` — that table renders a
+  // caller-supplied array with no server pagination/filters of its own, so it
+  // can't reuse this page's `useEntityList` wiring. Keep both in sync if the
+  // editable field set changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
