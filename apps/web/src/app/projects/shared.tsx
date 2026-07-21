@@ -45,7 +45,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useMemo } from "react";
+import { type ComponentType, type ReactNode, useEffect, useMemo } from "react";
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
@@ -316,6 +316,9 @@ const purchaseColumns = [
   }),
   purchaseHelper.accessor("trade", {
     header: "Trade",
+    // Exact-match so the pivot's controlled `trade` filter selects one trade
+    // (the default `includesString` would over-match substrings).
+    filterFn: "equalsString",
     cell: ({ getValue }) => {
       const trade = getValue();
       if (!trade) return null;
@@ -338,7 +341,16 @@ const purchaseColumns = [
   }),
 ];
 
-export function PurchaseList({ purchases }: { purchases: PurchaseOut[] }) {
+export function PurchaseList({
+  purchases,
+  tradeFilter,
+  costTypeFilter,
+}: {
+  purchases: PurchaseOut[];
+  /** Controlled column filters, driven by the Trade × Cost Type pivot click. */
+  tradeFilter?: Trade | null;
+  costTypeFilter?: CostType | null;
+}) {
   const table = useReactTable({
     data: purchases,
     columns: purchaseColumns,
@@ -351,6 +363,13 @@ export function PurchaseList({ purchases }: { purchases: PurchaseOut[] }) {
       pagination: { pageSize: 25 },
     },
   });
+
+  // Mirror the pivot's active cell onto the table's column filters. The
+  // pivot cost keys ARE `CostType`, so values pass straight through.
+  useEffect(() => {
+    table.getColumn("trade")?.setFilterValue(tradeFilter ?? undefined);
+    table.getColumn("costType")?.setFilterValue(costTypeFilter ?? undefined);
+  }, [table, tradeFilter, costTypeFilter]);
 
   if (purchases.length === 0) {
     return (

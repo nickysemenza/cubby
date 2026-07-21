@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import { capitalize, getCostTypeColor } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartTooltip, TooltipPurchaseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type DonutDatum = {
@@ -31,7 +31,7 @@ export function PurchaseDonut({
   /** When set, slices are clickable and report their cost-type key. */
   onCostTypeClick?: (costTypeKey: string) => void;
 }) {
-  const { data, total } = useMemo(() => {
+  const { data, total, purchasesByType } = useMemo(() => {
     const byCostType = sumByKey(
       purchases,
       (p) => p.costType ?? "other",
@@ -48,8 +48,17 @@ export function PurchaseDonut({
         color: getCostTypeColor(costType),
       }));
 
+    // Purchases behind each slice, for the tooltip's top-3 breakdown.
+    const purchasesByType = new Map<string, PurchaseOut[]>();
+    for (const p of purchases) {
+      const key = p.costType ?? "other";
+      const list = purchasesByType.get(key);
+      if (list) list.push(p);
+      else purchasesByType.set(key, [p]);
+    }
+
     const total = sumBy(data, (d) => d.value);
-    return { data, total };
+    return { data, total, purchasesByType };
   }, [purchases]);
 
   if (data.length === 0) {
@@ -97,6 +106,9 @@ export function PurchaseDonut({
             <span style={{ color: datum.color }}>{datum.label}</span>:{" "}
             <strong>{formatCurrency(datum.value, 0)}</strong> (
             {((datum.value / total) * 100).toFixed(1)}%)
+            <TooltipPurchaseBreakdown
+              purchases={purchasesByType.get(String(datum.id)) ?? []}
+            />
           </ChartTooltip>
         )}
         layers={[

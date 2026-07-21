@@ -1,11 +1,105 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { PurchaseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { TrendingUp } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Row, Stack } from "~/components/layout";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import { formatCurrency } from "~/lib/utils";
-import { nivoChartTheme } from "../shared";
+import {
+  getCostTypeColor,
+  monthKey,
+  monthLabel,
+  nivoChartTheme,
+  normalizeCostTypeKey,
+  TRADE_LABELS,
+} from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+
+/**
+ * One cumulative-spend chart with three lenses, replacing the old
+ * SpendingOverTime + CostBurnup + CategoryTrend trio (which all plotted the
+ * same cumulative curve, just un-split / split-by-cost-type):
+ *
+ * - **Total** — per-purchase daily cumulative line with Cost Burnup's
+ *   budget-crossing mechanics (negative-safe y-min, estimate marker that
+ *   colors positive/warning/destructive, over-estimate point coloring).
+ * - **By category** — monthly stacked cumulative areas per cost type.
+ * - **By trade** — same monthly stacked shape grouped by trade, with the top
+ *   6 trades on the warm categorical ramp and the rest folded into "Other".
+ *
+ * Negative purchases are real (refunds, the large negative family
+ * contributions) — never filter to `cost > 0`, or the curve stops
+ * reconciling with the project's actual spend.
+ */
+type SpendMode = "total" | "category" | "trade";
+
+const MODE_OPTIONS: ViewSwitcherOption<SpendMode>[] = [
+  { value: "total", label: "Total" },
+  { value: "category", label: "By category" },
+  { value: "trade", label: "By trade" },
+];
+
+// Warm categorical ramp for the top trades; everything past the top 6 folds
+// into a single neutral "Other" series (14 trades would swamp a stacked area
+// legend, and several share a Gantt phase color — ambiguous when stacked).
+const TRADE_RAMP = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+];
+const OTHER_LABEL = "Other";
+const OTHER_COLOR = "var(--chart-neutral)";
+
+type StackedSeries = { id: string; data: { x: string; y: number }[] };
+
+/**
+ * Monthly cumulative series, one per `keyOf(p)` group, sorted by final value
+ * desc. Shared by the category and trade lenses (the group key is the only
+ * difference between them).
+ */
+function buildStackedCumulative(
+  purchases: PurchaseOut[],
+  keyOf: (p: PurchaseOut) => string,
+): StackedSeries[] {
+  const dated = purchases.filter((p) => p.date && p.cost != null);
+  if (dated.length === 0) return [];
+
+  const months = new Set<string>();
+  const byKeyMonth = new Map<string, Map<string, number>>();
+  for (const p of dated) {
+    const key = keyOf(p);
+    const month = monthKey(p.date!);
+    months.add(month);
+    if (!byKeyMonth.has(key)) byKeyMonth.set(key, new Map());
+    const monthMap = byKeyMonth.get(key)!;
+    monthMap.set(month, (monthMap.get(month) ?? 0) + (p.cost ?? 0));
+  }
+
+  const sortedMonths = Array.from(months).sort();
+  return Array.from(byKeyMonth.entries())
+    .map(([id, monthMap]) => {
+      let cumulative = 0;
+      return {
+        id,
+        data: sortedMonths.map((month) => {
+          cumulative += monthMap.get(month) ?? 0;
+          return { x: monthLabel(month), y: cumulative };
+        }),
+      };
+    })
+    .sort((a, b) => {
+      const lastA = a.data[a.data.length - 1]?.y ?? 0;
+      const lastB = b.data[b.data.length - 1]?.y ?? 0;
+      return lastB - lastA;
+    });
+}
 
 export function SpendingOverTime({
   purchases,
@@ -14,37 +108,132 @@ export function SpendingOverTime({
   purchases: PurchaseOut[];
   costEstimate: number | null;
 }) {
-  const data = useMemo(() => {
-    // Filter to purchases with dates and costs, sort chronologically
-    const dated = purchases
-      .filter((p) => p.date && p.cost != null)
-      .sort((a, b) => a.date!.localeCompare(b.date!));
+  const [mode, setMode] = useState<SpendMode>("total");
 
+  const categorySeries = useMemo(
+    () =>
+      buildStackedCumulative(purchases, (p) =>
+        normalizeCostTypeKey(p.costType),
+      ),
+    [purchases],
+  );
+
+  // Trade lens: rank trades by absolute total, keep the top 6 on the ramp,
+  // fold the rest into one "Other" series. `colorById` maps the resulting
+  // series labels (TRADE_LABELS / "Other") to their tokens.
+  const { tradeSeries, tradeColorById } = useMemo(() => {
+    const totals = new Map<Trade, number>();
+    for (const p of purchases) {
+      if (!p.date || p.cost == null) continue;
+      totals.set(p.trade, (totals.get(p.trade) ?? 0) + Math.abs(p.cost));
+    }
+    const ranked = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
+    const topTrades = new Set(
+      ranked.slice(0, TRADE_RAMP.length).map(([t]) => t),
+    );
+
+    const colorById: Record<string, string> = {};
+    ranked.slice(0, TRADE_RAMP.length).forEach(([trade], i) => {
+      colorById[TRADE_LABELS[trade]] = TRADE_RAMP[i]!;
+    });
+    if (ranked.length > TRADE_RAMP.length) colorById[OTHER_LABEL] = OTHER_COLOR;
+
+    const series = buildStackedCumulative(purchases, (p) =>
+      topTrades.has(p.trade) ? TRADE_LABELS[p.trade] : OTHER_LABEL,
+    );
+    return { tradeSeries: series, tradeColorById: colorById };
+  }, [purchases]);
+
+  return (
+    <Stack gap="sm">
+      <Row justify="end">
+        <ViewSwitcher
+          options={MODE_OPTIONS}
+          value={mode}
+          onValueChange={setMode}
+          ariaLabel="Spending chart mode"
+        />
+      </Row>
+      {mode === "total" ? (
+        <TotalSpend purchases={purchases} costEstimate={costEstimate} />
+      ) : mode === "category" ? (
+        <StackedSpend
+          series={categorySeries}
+          colorFor={(id) => getCostTypeColor(id)}
+          costEstimate={costEstimate}
+        />
+      ) : (
+        <StackedSpend
+          series={tradeSeries}
+          colorFor={(id) => tradeColorById[id] ?? OTHER_COLOR}
+          costEstimate={costEstimate}
+        />
+      )}
+    </Stack>
+  );
+}
+
+/**
+ * Per-purchase daily cumulative line against `costEstimate`. The reference
+ * line and the points switch from positive/warning to destructive once
+ * cumulative spend passes the estimate, so "did this blow the budget, and
+ * when" reads at a glance. The cumulative curve isn't monotonic (negatives
+ * are real), so the y-min clamps to the lowest point.
+ */
+function TotalSpend({
+  purchases,
+  costEstimate,
+}: {
+  purchases: PurchaseOut[];
+  costEstimate: number | null;
+}) {
+  const points = useMemo(() => {
+    const dated = purchases
+      .filter((p) => p.date != null && p.cost != null)
+      .sort((a, b) => a.date!.localeCompare(b.date!));
     if (dated.length === 0) return [];
 
-    // Build cumulative spend series
     let cumulative = 0;
-    const points = dated.map((p) => {
+    return dated.map((p) => {
       cumulative += p.cost!;
       return { x: p.date!, y: cumulative };
     });
-
-    return [
-      {
-        id: "Cumulative Spend",
-        data: points,
-      },
-    ];
   }, [purchases]);
 
-  if (data.length === 0) {
+  if (points.length === 0) {
     return <ChartEmpty icon={TrendingUp} title="No dated purchase data." />;
   }
 
-  const maxY = data[0]!.data[data[0]!.data.length - 1]!.y;
-  const yMax = costEstimate
-    ? Math.max(maxY * 1.1, costEstimate * 1.15)
-    : maxY * 1.1;
+  const data = [{ id: "Cumulative Spend", data: points }];
+
+  const ys = points.map((p) => p.y);
+  const minY = Math.min(0, ...ys);
+  const maxY = Math.max(0, ...ys);
+  const finalSpend = points[points.length - 1]!.y;
+
+  const yMax = Math.max(
+    costEstimate ? Math.max(maxY * 1.1, costEstimate * 1.15) : maxY * 1.1,
+    10,
+  );
+  const yMin = minY < 0 ? minY * 1.1 : 0;
+
+  // Budget status drives the reference line + point coloring — destructive
+  // once over, warning when close (>=90%), positive otherwise. No estimate
+  // falls back to the neutral brand accent.
+  let statusColor = "var(--chart-1)";
+  let statusSuffix = "";
+  if (costEstimate != null && costEstimate > 0) {
+    const pct = finalSpend / costEstimate;
+    if (pct > 1) {
+      statusColor = "var(--destructive)";
+      statusSuffix = " — over budget";
+    } else if (pct >= 0.9) {
+      statusColor = "var(--warning)";
+      statusSuffix = " — nearly there";
+    } else {
+      statusColor = "var(--positive)";
+    }
+  }
 
   return (
     <div className="h-[300px]">
@@ -53,7 +242,7 @@ export function SpendingOverTime({
         margin={{ top: 20, right: 30, bottom: 50, left: 70 }}
         xScale={{ type: "time", format: "%Y-%m-%d", precision: "day" }}
         xFormat="time:%b %d"
-        yScale={{ type: "linear", min: 0, max: yMax }}
+        yScale={{ type: "linear", min: yMin, max: yMax }}
         axisBottom={{
           format: "%b %d",
           tickRotation: -45,
@@ -66,9 +255,19 @@ export function SpendingOverTime({
         areaOpacity={0.1}
         colors={["var(--chart-1)"]}
         pointSize={6}
-        pointColor="var(--card)"
+        pointColor={({ point }) => {
+          if (costEstimate == null) return "var(--card)";
+          return (point.data.y as number) > costEstimate
+            ? "var(--destructive)"
+            : "var(--card)";
+        }}
         pointBorderWidth={2}
-        pointBorderColor={{ from: "serieColor" }}
+        pointBorderColor={(point) => {
+          if (costEstimate == null) return "var(--chart-1)";
+          return (point.data.y as number) > costEstimate
+            ? "var(--destructive)"
+            : "var(--chart-1)";
+        }}
         useMesh
         enableSlices="x"
         sliceTooltip={({ slice }) => (
@@ -80,6 +279,97 @@ export function SpendingOverTime({
                 </span>
                 {": "}
                 <strong>{formatCurrency(point.data.y as number, 0)}</strong>
+              </div>
+            ))}
+          </ChartTooltip>
+        )}
+        markers={
+          costEstimate
+            ? [
+                {
+                  axis: "y",
+                  value: costEstimate,
+                  lineStyle: {
+                    stroke: statusColor,
+                    strokeWidth: 2,
+                    strokeDasharray: "8 4",
+                  },
+                  legend: `Estimate ${formatCurrency(costEstimate, 0)}${statusSuffix}`,
+                  legendPosition: "top-right",
+                  textStyle: {
+                    fill: statusColor,
+                    fontSize: 11,
+                  },
+                },
+              ]
+            : []
+        }
+        theme={nivoChartTheme}
+      />
+    </div>
+  );
+}
+
+/**
+ * Stacked cumulative monthly areas (category or trade lens). Needs 2+ months
+ * for a meaningful trend; the estimate is a plain destructive dashed marker
+ * (the per-series stack already carries the color signal).
+ */
+function StackedSpend({
+  series,
+  colorFor,
+  costEstimate,
+}: {
+  series: StackedSeries[];
+  colorFor: (id: string) => string;
+  costEstimate: number | null;
+}) {
+  const monthCount = series[0]?.data.length ?? 0;
+  if (series.length === 0 || monthCount < 2) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Not enough data for a trend (need 2+ months).
+      </p>
+    );
+  }
+
+  return (
+    <div className="h-[300px]">
+      <ResponsiveLine
+        data={series}
+        margin={{ top: 20, right: 110, bottom: 50, left: 70 }}
+        xScale={{ type: "point" }}
+        yScale={{ type: "linear", min: 0, stacked: true }}
+        axisBottom={{
+          tickRotation: -45,
+        }}
+        axisLeft={{
+          format: (v: number) => formatCurrency(v, 0),
+        }}
+        enableArea
+        areaOpacity={0.4}
+        colors={(d) => colorFor(String(d.id))}
+        pointSize={5}
+        pointColor="var(--card)"
+        pointBorderWidth={2}
+        pointBorderColor={{ from: "serieColor" }}
+        useMesh
+        enableSlices="x"
+        sliceTooltip={({ slice }) => (
+          <ChartTooltip>
+            <div className="mb-1 font-medium">
+              {slice.points[0]?.data.xFormatted}
+            </div>
+            {slice.points.map((point) => (
+              <div key={point.id} className="flex items-center gap-2">
+                <div
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: point.seriesColor }}
+                />
+                <span>{point.seriesId}</span>
+                <strong className="ml-auto">
+                  {formatCurrency(point.data.y as number, 0)}
+                </strong>
               </div>
             ))}
           </ChartTooltip>
@@ -105,9 +395,19 @@ export function SpendingOverTime({
               ]
             : []
         }
-        theme={{
-          ...nivoChartTheme,
-        }}
+        legends={[
+          {
+            anchor: "bottom-right",
+            direction: "column",
+            translateX: 100,
+            itemWidth: 90,
+            itemHeight: 20,
+            symbolSize: 10,
+            symbolShape: "circle",
+            itemTextColor: "var(--muted-foreground)",
+          },
+        ]}
+        theme={nivoChartTheme}
       />
     </div>
   );
