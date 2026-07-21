@@ -382,14 +382,16 @@ export function GanttChart({
   );
 
   // --- open-ended gradients ----------------------------------------------
-  // One `<defs>` gradient per distinct status colour in play, keyed off the
-  // component's `useId` so several Gantts on a page never collide.
+  // One `<defs>` gradient per distinct open-ended mark colour in play, keyed
+  // off the component's `useId` so several Gantts on a page never collide.
+  // MUST use `colorOf` (not the status colour) so a phase-coloured open-ended
+  // sub-project gets a matching gradient instead of falling back to a flat fill.
   const openEndedColors = useMemo(
     () =>
       uniq(
         rows
           .filter((row) => row.kind === "project" && row.openEnded)
-          .map((row) => getStatusChartColor(statusOf(row))),
+          .map((row) => colorOf(row)),
       ),
     [rows],
   );

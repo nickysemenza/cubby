@@ -834,7 +834,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             >
               <CostBurnup
                 purchases={chartPurchases}
-                costEstimate={project.costEstimate}
+                // Subtree estimate to match the subtree-inclusive `chartPurchases`
+                // (same as SpendingOverTime above) — the own estimate would
+                // under-report budget for a project with estimated sub-projects.
+                costEstimate={project.rollup.subtree.costEstimate}
               />
             </Section>
           )}

@@ -140,6 +140,35 @@ describe("buildPortfolioRows", () => {
     expect(row?.startDay).toBe(toDayIndex("2026-01-01"));
   });
 
+  it("does not emit a right-side envelope on an open-ended parent whose child ends later", () => {
+    // The open-ended bar already runs to the window edge, so a child ending
+    // after the parent's start is not a meaningful extension — no whisker.
+    const parent = project({ id: "parent", startDate: "2026-01-10" });
+    const child = project({
+      id: "child",
+      parentProjectId: "parent",
+      startDate: "2026-01-15",
+      endDate: "2026-06-01",
+    });
+    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
+    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    expect(parentRow?.openEnded).toBe(true);
+    expect(parentRow?.envelope).toBeNull();
+  });
+
+  it("still emits a left-side envelope on an open-ended parent whose child starts earlier", () => {
+    const parent = project({ id: "parent", startDate: "2026-01-10" });
+    const child = project({
+      id: "child",
+      parentProjectId: "parent",
+      startDate: "2025-11-01",
+      endDate: "2026-02-01",
+    });
+    const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
+    const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
+    expect(parentRow?.envelope?.startDay).toBe(toDayIndex("2025-11-01"));
+  });
+
   it("emits an envelope when a descendant's dates extend beyond the node's own bar", () => {
     const parent = project({
       id: "parent",

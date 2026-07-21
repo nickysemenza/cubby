@@ -180,7 +180,14 @@ function computeEnvelope(
     return { startDay: extent.min, endDay: extent.max };
   }
   const effectiveStart = ownStart ?? ownEnd ?? extent.min;
-  const effectiveEnd = ownEnd ?? ownStart ?? extent.max;
+  // An open-ended bar (start, no end) already renders to the window edge, so a
+  // descendant ending *after* the start isn't a meaningful extension — only a
+  // descendant starting *earlier* is. Treat the end as unbounded so we don't
+  // draw a spurious right-side whisker over an already open-ended bar.
+  const openEnded = ownStart != null && ownEnd == null;
+  const effectiveEnd = openEnded
+    ? Number.POSITIVE_INFINITY
+    : (ownEnd ?? ownStart ?? extent.max);
   if (extent.min < effectiveStart || extent.max > effectiveEnd) {
     return { startDay: extent.min, endDay: extent.max };
   }
