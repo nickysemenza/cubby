@@ -14,7 +14,7 @@ import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
-import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
+import { ChevronRight, Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -265,6 +265,14 @@ export function createNameColumn<T extends BaseRow>(
      * badge) — return `undefined`/`null` for rows with nothing to show.
      */
     nameSuffix?: (row: T) => ReactNode;
+    /**
+     * Render a tree expand/collapse affordance: a depth-proportional left
+     * indent plus a chevron toggle on rows that `getCanExpand()` (a fixed-width
+     * spacer keeps leaf names aligned). Only meaningful when the table wires
+     * `getSubRows`/`getExpandedRowModel`; inert (byte-identical output) when
+     * unset, so every non-tree entity table renders exactly as before.
+     */
+    expandable?: boolean;
   },
 ) {
   const entityConfig = entities[entity];
@@ -304,9 +312,54 @@ export function createNameColumn<T extends BaseRow>(
           nameEl
         );
 
+      // Tree affordance: depth indent + chevron toggle. Only applied when the
+      // `expandable` option is set (opt-in per table), so non-tree tables emit
+      // no extra markup. The indent is data-driven (row.depth), so an inline
+      // style is correct here — like the chart bars — not a spacing class.
+      const row = info.row;
+      const wrapExpandable = (content: ReactNode) => {
+        if (!options?.expandable) return content;
+        const expanded = row.getIsExpanded();
+        return (
+          <Row
+            align="center"
+            gap="xs"
+            className="min-w-0"
+            style={{ paddingLeft: `${row.depth * 1.25}rem` }}
+          >
+            {row.getCanExpand() ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-expanded={expanded}
+                aria-label={expanded ? "Collapse" : "Expand"}
+                // Toggle only — stop the click from bubbling to the row's
+                // onRowClick (which opens the preview sheet), matching how the
+                // in-cell actions menu / editable links fence their clicks.
+                onClick={(e) => {
+                  e.stopPropagation();
+                  row.getToggleExpandedHandler()();
+                }}
+              >
+                <ChevronRight
+                  className={cn(
+                    "transition-transform",
+                    expanded && "rotate-90",
+                  )}
+                />
+              </Button>
+            ) : (
+              // Equal-width spacer so leaf names align under parent names.
+              <span aria-hidden className="size-6 shrink-0" />
+            )}
+            <span className="min-w-0 flex-1 truncate">{content}</span>
+          </Row>
+        );
+      };
+
       // If editable, show EditableCell instead of link
       if (options?.editable) {
-        return (
+        return wrapExpandable(
           <EditableCell
             value={value}
             onSave={(newVal) =>
@@ -354,28 +407,32 @@ export function createNameColumn<T extends BaseRow>(
                 ),
               )
             }
-          />
+          />,
         );
       }
 
       if (options?.omitDetailLink) {
-        return wrapWithSuffix(<span className="block truncate">{value}</span>);
+        return wrapExpandable(
+          wrapWithSuffix(<span className="block truncate">{value}</span>),
+        );
       }
 
-      return wrapWithSuffix(
-        <Tooltip>
-          <TooltipTrigger render={<span className="block truncate" />}>
-            <TableLink
-              to={entities[entity].routes.detail}
-              params={{ id: String(info.row.original.id) }}
-            >
+      return wrapExpandable(
+        wrapWithSuffix(
+          <Tooltip>
+            <TooltipTrigger render={<span className="block truncate" />}>
+              <TableLink
+                to={entities[entity].routes.detail}
+                params={{ id: String(info.row.original.id) }}
+              >
+                {value}
+              </TableLink>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
               {value}
-            </TableLink>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs">
-            {value}
-          </TooltipContent>
-        </Tooltip>,
+            </TooltipContent>
+          </Tooltip>,
+        ),
       );
     },
   };

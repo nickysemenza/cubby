@@ -307,6 +307,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               key={row.id}
               row={row}
               isSelected={row.getIsSelected()}
+              isExpanded={row.getIsExpanded()}
               isFocused={focusedRowIndex === row.index}
               isDebugEnabled={isDebugEnabled}
               onRowClick={onRowClick}

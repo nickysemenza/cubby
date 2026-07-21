@@ -12,6 +12,13 @@ const MONO_CELL = "font-mono";
 export interface DesktopDataRowProps<TItem> {
   row: Row<TItem>;
   isSelected: boolean;
+  /**
+   * Snapshot of `row.getIsExpanded()` taken at parent render time (same
+   * pattern as `isSelected`). Exists purely for the memo compare — calling
+   * `getIsExpanded()` inside `rowPropsAreEqual` is useless because it's a live
+   * read of CURRENT table state, so previous vs next always match.
+   */
+  isExpanded: boolean;
   isFocused: boolean;
   isDebugEnabled: boolean;
   onRowClick?: (row: Row<TItem>) => void;
@@ -83,6 +90,11 @@ function rowPropsAreEqual<TItem>(
 ): boolean {
   return (
     previous.row.original === next.row.original &&
+    // Always-equal (false===false) for non-tree tables, so this is inert there;
+    // required so a toggled parent's chevron re-renders when its expanded state
+    // flips (row.original is unchanged by an expand/collapse). Compares the
+    // render-time snapshot prop — see the isExpanded doc comment.
+    previous.isExpanded === next.isExpanded &&
     previous.isSelected === next.isSelected &&
     previous.isFocused === next.isFocused &&
     previous.isDebugEnabled === next.isDebugEnabled &&

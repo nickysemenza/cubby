@@ -76,6 +76,12 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   omitDetailLink?: boolean;
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
+  /**
+   * Render the tree expand/collapse affordance (chevron + depth indent) on the
+   * standard name column. Forwarded to `createNameColumn`; inert when unset.
+   * Only meaningful when the table wires `getSubRows`/`getExpandedRowModel`.
+   */
+  expandable?: boolean;
 }
 
 /**
@@ -101,6 +107,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   nameEditable,
   omitDetailLink,
   nameSuffix,
+  expandable,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
   // Shift-click range selection: anchor (last clicked row id) + modifier flag.
   // Refs are stable across renders, so they don't perturb the useMemo deps below.
@@ -167,6 +174,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           editable: nameEditable,
           omitDetailLink,
           nameSuffix,
+          expandable,
         }),
       );
     }
@@ -223,5 +231,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     nameEditable,
     omitDetailLink,
     nameSuffix,
+    expandable,
   ]);
 }

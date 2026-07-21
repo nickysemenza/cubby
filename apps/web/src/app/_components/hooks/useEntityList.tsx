@@ -31,7 +31,7 @@ import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 import { type UseTableListOptions, useTableList } from "./useTableList";
 
 /** Base interface for entities in list views */
-interface BaseListRow {
+export interface BaseListRow {
   id: string;
   name?: string;
   createdAt?: string | Date;
@@ -41,7 +41,7 @@ interface BaseListRow {
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData> = ColumnDef<TData, any>;
 
-interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
+export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   /** The entity type */
   entity: Entity;
   /** tRPC queryOptions function */
@@ -114,7 +114,7 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   };
 }
 
-interface UseEntityListReturn<TData> {
+export interface UseEntityListReturn<TData> {
   /** Configured table instance */
   table: Table<TData>;
   /** Loaded unit mappings map (id -> mappings) */

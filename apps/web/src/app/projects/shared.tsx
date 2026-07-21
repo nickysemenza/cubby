@@ -53,8 +53,8 @@ import {
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
-import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
@@ -87,6 +87,7 @@ import {
   TRADE_LABELS,
 } from "./project-formatting";
 import { projectKindOptions } from "./project-options";
+import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 
 /**
  * Human-facing labels for the raw DB enum values (`@cubby/schemas/project`).
@@ -416,11 +417,6 @@ export function PurchaseList({
 
 // -- Project Table --
 
-const PROJECT_KIND_FILTER_OPTIONS: FilterableComboboxItem[] = [
-  { value: "", label: "All kinds" },
-  ...projectKindOptions,
-];
-
 /**
  * `N sub` chip after a parent project's name. Module-level because
  * `nameSuffix` sits in useStandardColumns' columns-`useMemo` dependency array
@@ -432,28 +428,43 @@ const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
   ) : undefined;
 
 /**
- * Renders through `useEntityList`/`useStandardColumns` (like `TaskList`/
- * `PurchaseList` above, and mirroring `tasklist.tsx`/`purchaselist.tsx`)
- * rather than a client-side `useReactTable` over the dashboard's
- * already-fetched+filtered `projects` array — it drives its own
- * `project.list` query instead (cache-independent of the dashboard's one
- * `project.dashboard` fetch). That's a deliberate trade against the
- * dashboard's status/kind/location filters (this table doesn't see them; it
- * has its own inline column filters + search), in exchange for server-backed
- * infinite scroll, inline editing, and delete — all free from `useEntityList`.
- * Takes no props; mounted bare from the dashboard's DATA tab.
+ * Renders through `useClientEntityList` over the dashboard's
+ * already-fetched-and-chip-filtered `projects` array — no query of its own.
+ * `buildProjectTree` nests sub-projects under their parent (WBS shape) so the
+ * table's rows mirror the project hierarchy instead of a flat list, with
+ * `useClientEntityList`'s `tree` option wiring TanStack's expand/collapse.
+ *
+ * This replaces an earlier design that ran its own independent `project.list`
+ * query specifically to get server-backed infinite scroll, inline editing,
+ * and delete — trading away visibility into the dashboard's status/kind/
+ * location chip filters to get them (the table had its own separate inline
+ * status/kind column filters instead). Now that `useClientEntityList` gives
+ * inline editing + delete over caller-supplied data, that trade-off is gone:
+ * the table always reflects exactly what the dashboard's chips show. Column
+ * filtering for status/kind moved to the dashboard's chips (`DashboardFilters`)
+ * — only the name search box remains local to this table.
  */
 export function ProjectTable({
+  projects,
   onRowClick,
   onRowHover,
   PreviewSheet,
 }: {
-  onRowClick: (row: TableRow<ProjectOut>) => void;
-  onRowHover: (row: TableRow<ProjectOut>) => void;
+  projects: ProjectOut[];
+  onRowClick: (row: TableRow<ProjectTreeRow>) => void;
+  onRowHover: (row: TableRow<ProjectTreeRow>) => void;
   PreviewSheet: ComponentType;
 }) {
   const api = useTRPC();
-  const columnHelper = useMemo(() => createColumnHelper<ProjectOut>(), []);
+  // Columns are helper'd over `ProjectTreeRow`, not `ProjectOut`: the client
+  // hook's rows are `ProjectOut & { subRows }`, and TanStack's `ColumnDef` is
+  // invariant in `TData`, so a `ProjectOut`-helper wouldn't typecheck against
+  // `useClientEntityList`'s table. `ProjectTreeRow` is a structural supertype
+  // of `ProjectOut` (every accessor below only reads `ProjectOut` fields), so
+  // this is a pure type-parameter swap — no behavior change.
+  const columnHelper = useMemo(() => createColumnHelper<ProjectTreeRow>(), []);
+
+  const treeData = useMemo(() => buildProjectTree(projects), [projects]);
 
   const updateProjectMutation = useUpdateMutation({
     mutationFn: api.project.update.mutationOptions,
@@ -461,7 +472,7 @@ export function ProjectTable({
     invalidateKeys: projectMutationInvalidateKeys,
   });
 
-  const nameEditable = useNameEditable<ProjectOut>(
+  const nameEditable = useNameEditable<ProjectTreeRow>(
     updateProjectMutation.mutateAsync,
   );
 
@@ -547,27 +558,42 @@ export function ProjectTable({
           );
         },
       }),
-      columnHelper.accessor((row) => row.rollup.spent, {
-        id: "actual",
-        header: "Actual",
-        enableSorting: true,
-        meta: { numeric: true, className: "w-24" },
-        cell: ({ row }) => {
-          const actual = row.original.rollup.spent;
-          if (actual === 0) return <NoneValue />;
-          const est = row.original.costEstimate;
-          const over = est != null && est > 0 && actual > est;
-          return (
-            <span
-              className={
-                over ? "font-medium text-destructive" : "text-positive"
-              }
-            >
-              {formatCurrency(actual, 0)}
-            </span>
-          );
+      columnHelper.accessor(
+        (row) =>
+          row.rollup.subtree.projectCount > 0
+            ? row.rollup.subtree.spent
+            : row.rollup.spent,
+        {
+          id: "actual",
+          header: "Actual",
+          enableSorting: true,
+          meta: { numeric: true, className: "w-24" },
+          cell: ({ row }) => {
+            const { rollup, costEstimate } = row.original;
+            const hasSubtree = rollup.subtree.projectCount > 0;
+            // subtree.spent/costEstimate are DB aggregates over LIVE
+            // descendants — not the currently chip-filtered `projects` view
+            // (same source, same caveat, as spending-by-project.tsx). A
+            // filtered-out child's spend still rolls up into its visible
+            // parent's "Actual" here.
+            const actual = hasSubtree ? rollup.subtree.spent : rollup.spent;
+            if (actual === 0) return <NoneValue />;
+            const est = hasSubtree
+              ? (rollup.subtree.costEstimate ?? costEstimate)
+              : costEstimate;
+            const over = est != null && est > 0 && actual > est;
+            return (
+              <span
+                className={
+                  over ? "font-medium text-destructive" : "text-positive"
+                }
+              >
+                {formatCurrency(actual, 0)}
+              </span>
+            );
+          },
         },
-      }),
+      ),
       createPlainDateColumn(columnHelper, "startDate", {
         header: "Start",
         className: "w-28",
@@ -598,71 +624,55 @@ export function ProjectTable({
     [columnHelper],
   );
 
+  // Status/kind/location filtering now lives in the dashboard's chips — only
+  // the name search stays as a local column filter.
   const filters = useMemo(
-    () => [
-      { id: "name", placeholder: "Search projects..." },
-      {
-        id: "status",
-        placeholder: "Filter by status...",
-        filterType: "select" as const,
-        options: PROJECT_STATUS_OPTIONS,
-      },
-      {
-        id: "kind",
-        placeholder: "Filter by kind...",
-        filterType: "select" as const,
-        options: PROJECT_KIND_FILTER_OPTIONS,
-      },
-    ],
+    () => [{ id: "name", placeholder: "Search projects..." }],
     [],
   );
 
   // defaultSortState always defaults to desc — matches the original
   // ProjectTable's `sorting: [{ id: "startDate", desc: true }]`.
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
-  const {
-    table,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-  } = useEntityList({
+  const { table, bulkActionBar, deleteDialog } = useClientEntityList({
     entity: "project",
-    queryOptions: api.project.list.queryOptions,
-    buildFilters: (ts) => ({
-      search: ts.getColumnFilter("name"),
-      status: ts.getColumnFilter("status") as ProjectStatus | undefined,
-      kind: ts.getColumnFilter("kind") as ProjectKind | undefined,
-      // Sub-projects are managed from their parent's detail page, not
-      // surfaced as independent rows here.
-      topLevelOnly: true,
-    }),
+    data: treeData,
     columns,
     filters,
     deletable: deletableConfig,
     nameEditable,
     nameSuffix: subProjectCountSuffix,
-    infinite: true,
     tableStateOptions,
+    tree: {
+      getSubRows: (row) => row.subRows,
+      expandable: true,
+      filterFromLeafRows: true,
+      paginateExpandedRows: false,
+      autoResetExpanded: false,
+    },
   });
+
+  // Auto-expand the whole tree while a name search is active, so a match
+  // nested several levels deep in the WBS is actually visible; collapse back
+  // once the search is cleared. Edge-triggered on `searching` alone (not
+  // every keystroke, and not on `table`, which is otherwise a stable ref) so
+  // this doesn't fight a user who manually expanded/collapsed specific rows
+  // mid-search.
+  const searching = Boolean(table.getColumn("name")?.getFilterValue());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally edge-triggered on `searching` only — see comment above
+  useEffect(() => {
+    table.toggleAllRowsExpanded(searching);
+  }, [searching]);
 
   return (
     <div>
       <RTable
         table={table}
-        isLoading={isLoading}
-        error={error}
         ariaLabel="Projects Table"
-        timing={timing}
         entity="project"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
       />
       <PreviewSheet />
       {deleteDialog}

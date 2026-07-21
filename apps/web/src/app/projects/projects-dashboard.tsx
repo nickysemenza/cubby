@@ -1,9 +1,9 @@
 import type { ProjectDashboardOut, ProjectOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { countBy, partition, uniq } from "es-toolkit";
 import { Calendar, DollarSign, Hammer } from "lucide-react";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -126,6 +126,8 @@ type CoverImages = RouterOutputs["image"]["imagesByProjectIds"];
 
 const NO_PROJECT_IDS: string[] = [];
 
+const route = getRouteApi("/_authenticated/projects/");
+
 export function ProjectsDashboard() {
   const api = useTRPC();
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -145,7 +147,39 @@ export function ProjectsDashboard() {
     enabled: projectIds.length > 0,
   });
 
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
+
+  // Keyed on the joined primitive values (not the array references
+  // themselves) so a fresh-array-per-parse from validateSearch doesn't
+  // rebuild the Sets — and every downstream memo keyed on `filters` — on
+  // every render.
+  const statusesKey = search.statuses?.join(",");
+  const kindsKey = search.kinds?.join(",");
+  const locationsKey = search.locations?.join(",");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives above, not the array references, on purpose
+  const filters = useMemo<Filters>(
+    () => ({
+      statuses: new Set(search.statuses ?? emptyFilters.statuses),
+      kinds: new Set(search.kinds ?? emptyFilters.kinds),
+      locations: new Set(search.locations ?? emptyFilters.locations),
+      dateRange: search.date ?? null,
+    }),
+    [statusesKey, kindsKey, locationsKey, search.date],
+  );
+
+  const handleFiltersChange = (next: Filters) => {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        statuses: next.statuses.size > 0 ? [...next.statuses] : undefined,
+        kinds: next.kinds.size > 0 ? [...next.kinds] : undefined,
+        locations: next.locations.size > 0 ? [...next.locations] : undefined,
+        date: next.dateRange ?? undefined,
+      }),
+      replace: true,
+    });
+  };
 
   if (isError) {
     // Distinct from the loading skeleton — a fetch failure must never read as
@@ -177,7 +211,11 @@ export function ProjectsDashboard() {
       data={data}
       coverImages={coverImages}
       filters={filters}
-      onFiltersChange={setFilters}
+      onFiltersChange={handleFiltersChange}
+      view={search.view ?? "overview"}
+      onViewChange={(v) =>
+        navigate({ search: (prev) => ({ ...prev, view: v }), replace: true })
+      }
     />
   );
 }
@@ -187,13 +225,16 @@ function DashboardContent({
   coverImages,
   filters,
   onFiltersChange,
+  view,
+  onViewChange,
 }: {
   data: ProjectDashboardOut;
   coverImages: CoverImages | undefined;
   filters: Filters;
   onFiltersChange: (f: Filters) => void;
+  view: DashboardView;
+  onViewChange: (v: DashboardView) => void;
 }) {
-  const [view, setView] = useState<DashboardView>("overview");
   const projectPreview = useEntityPreview("project");
   const availableStatuses = useMemo(
     () => uniq(data.projects.map((p) => p.status)),
@@ -287,7 +328,7 @@ function DashboardContent({
             ariaLabel="Dashboard view"
             options={DASHBOARD_VIEW_OPTIONS}
             value={view}
-            onValueChange={setView}
+            onValueChange={onViewChange}
           />
           <ProjectActions />
         </Row>
@@ -385,6 +426,7 @@ function DashboardContent({
             <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
               <ProjectTable
+                projects={projects}
                 onRowClick={projectPreview.onRowClick}
                 onRowHover={projectPreview.onRowHover}
                 PreviewSheet={projectPreview.PreviewSheet}

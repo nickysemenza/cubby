@@ -1,6 +1,8 @@
 import {
   type ColumnDef,
+  type ExpandedState,
   getCoreRowModel,
+  getExpandedRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
@@ -57,6 +59,28 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   columnSizing?: Record<string, number>;
   setColumnSize?: (columnId: string, width: number) => void;
   resetColumnSize?: (columnId: string) => void;
+  /**
+   * Opt-in expandable tree support. Return a row's children to render nested
+   * sub-rows. Expansion is enabled purely by the PRESENCE of `getSubRows` —
+   * `getExpandedRowModel` is wired only then, so callers that don't pass it get
+   * byte-identical behavior (no expanded row model in the pipeline at all).
+   */
+  getSubRows?: (row: TData) => TData[] | undefined;
+  /**
+   * Keep a parent visible when a descendant leaf matches the active filter.
+   * TanStack default is `true`; only forwarded when explicitly set.
+   */
+  filterFromLeafRows?: boolean;
+  /** Paginate expanded sub-rows alongside parents. TanStack default `true`. */
+  paginateExpandedRows?: boolean;
+  /** Reset expanded state when data/filters change. TanStack default `true`. */
+  autoResetExpanded?: boolean;
+  /**
+   * Controlled expansion state. Omit for uncontrolled expansion — TanStack
+   * manages it internally and `table.toggleAllRowsExpanded()` still works.
+   */
+  expanded?: ExpandedState;
+  onExpandedChange?: OnChangeFn<ExpandedState>;
 }
 
 interface ServerTotals {
@@ -102,6 +126,12 @@ export function useTableConfig<TData, GlobalFilterData>({
   columnSizing,
   setColumnSize,
   resetColumnSize,
+  getSubRows,
+  filterFromLeafRows,
+  paginateExpandedRows,
+  autoResetExpanded,
+  expanded,
+  onExpandedChange,
 }: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
   const {
     sorting,
@@ -129,6 +159,9 @@ export function useTableConfig<TData, GlobalFilterData>({
   );
   const paginationRowModel = useMemo(() => getPaginationRowModel<TData>(), []);
   const sortedRowModel = useMemo(() => getSortedRowModel<TData>(), []);
+  // Stable factory; only *wired* into the table when getSubRows is present, so
+  // it never enters the row-model pipeline for non-tree callers.
+  const expandedRowModel = useMemo(() => getExpandedRowModel<TData>(), []);
 
   // Memoize table options to prevent recreating on every render
   const tableOptions = useMemo(
@@ -168,6 +201,15 @@ export function useTableConfig<TData, GlobalFilterData>({
       ...(getRowId ? { getRowId } : {}),
       ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
       ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
+      // Expandable tree (opt-in): wire the expanded row model ONLY when the
+      // caller provides getSubRows, keeping the pipeline unchanged otherwise.
+      ...(getSubRows
+        ? { getSubRows, getExpandedRowModel: expandedRowModel }
+        : {}),
+      ...(filterFromLeafRows !== undefined ? { filterFromLeafRows } : {}),
+      ...(paginateExpandedRows !== undefined ? { paginateExpandedRows } : {}),
+      ...(autoResetExpanded !== undefined ? { autoResetExpanded } : {}),
+      ...(onExpandedChange ? { onExpandedChange } : {}),
       state: {
         sorting,
         columnFilters,
@@ -175,6 +217,7 @@ export function useTableConfig<TData, GlobalFilterData>({
         pagination,
         ...(globalFilter ? { globalFilter } : {}),
         ...(rowSelection ? { rowSelection } : {}),
+        ...(expanded !== undefined ? { expanded } : {}),
       },
       ...(onGlobalFilterChange ? { onGlobalFilterChange } : {}),
     }),
@@ -210,6 +253,13 @@ export function useTableConfig<TData, GlobalFilterData>({
       onRowSelectionChange,
       globalFilter,
       onGlobalFilterChange,
+      getSubRows,
+      expandedRowModel,
+      filterFromLeafRows,
+      paginateExpandedRows,
+      autoResetExpanded,
+      expanded,
+      onExpandedChange,
     ],
   );
 
