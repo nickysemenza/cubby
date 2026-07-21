@@ -89,9 +89,19 @@ export function TaskCard({
     task.status !== "done" &&
     task.dueDate < todayPlain();
 
+  // Blocker names resolve best-effort from the board's loaded dataset — a
+  // blocker that's a subtask or outside the current scope stays unnamed, so
+  // the badge keys off blockedByIds (never disappears) and the tooltip
+  // reports the unresolved remainder.
   const blockedByNames = task.blockedByIds
     .map((id) => taskById[id]?.name)
     .filter((name): name is string => name != null);
+  const unresolvedBlockerCount =
+    task.blockedByIds.length - blockedByNames.length;
+  const blockedByLabel =
+    blockedByNames.length === 0
+      ? `Blocked by ${task.blockedByIds.length} ${task.blockedByIds.length === 1 ? "task" : "tasks"}`
+      : `Blocked by ${blockedByNames.join(", ")}${unresolvedBlockerCount > 0 ? ` and ${unresolvedBlockerCount} more` : ""}`;
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: a native <button> can't wrap the nested project link + status menu; role="button" + onKeyDown keeps it operable.
@@ -187,7 +197,7 @@ export function TaskCard({
               />
             </span>
           )}
-          {blockedByNames.length > 0 && (
+          {task.blockedByIds.length > 0 && (
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -199,9 +209,7 @@ export function TaskCard({
                   </span>
                 }
               />
-              <TooltipContent>
-                Blocked by {blockedByNames.join(", ")}
-              </TooltipContent>
+              <TooltipContent>{blockedByLabel}</TooltipContent>
             </Tooltip>
           )}
         </Row>
