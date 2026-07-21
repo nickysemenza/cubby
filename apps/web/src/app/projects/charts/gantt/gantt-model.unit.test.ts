@@ -166,7 +166,12 @@ describe("buildPortfolioRows", () => {
     });
     const { rows } = buildPortfolioRows([parent, child], new Set(["parent"]));
     const parentRow = projectRowsOf(rows).find((r) => r.id === "parent");
-    expect(parentRow?.envelope?.startDay).toBe(toDayIndex("2025-11-01"));
+    // Whisker extends left to the child's start, but its end is clipped to the
+    // parent's own start — no right cap landing mid-bar over the open-ended bar.
+    expect(parentRow?.envelope).toEqual({
+      startDay: toDayIndex("2025-11-01"),
+      endDay: toDayIndex("2026-01-10"),
+    });
   });
 
   it("emits an envelope when a descendant's dates extend beyond the node's own bar", () => {

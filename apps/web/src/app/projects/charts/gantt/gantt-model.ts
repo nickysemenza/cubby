@@ -183,15 +183,20 @@ function computeEnvelope(
   // An open-ended bar (start, no end) already renders to the window edge, so a
   // descendant ending *after* the start isn't a meaningful extension — only a
   // descendant starting *earlier* is. Treat the end as unbounded so we don't
-  // draw a spurious right-side whisker over an already open-ended bar.
+  // draw a spurious right-side whisker over an already open-ended bar, AND clip
+  // the emitted envelope's end to the bar's own start so even a genuine
+  // left-extension whisker doesn't put a right end-cap mid-bar.
   const openEnded = ownStart != null && ownEnd == null;
   const effectiveEnd = openEnded
     ? Number.POSITIVE_INFINITY
     : (ownEnd ?? ownStart ?? extent.max);
-  if (extent.min < effectiveStart || extent.max > effectiveEnd) {
-    return { startDay: extent.min, endDay: extent.max };
-  }
-  return null;
+  const startsEarlier = extent.min < effectiveStart;
+  const endsLater = extent.max > effectiveEnd;
+  if (!startsEarlier && !endsLater) return null;
+  return {
+    startDay: extent.min,
+    endDay: openEnded ? effectiveStart : extent.max,
+  };
 }
 
 function computeProgress(project: ProjectOut, childCount: number): number {
