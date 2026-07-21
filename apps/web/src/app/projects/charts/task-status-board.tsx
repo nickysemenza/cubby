@@ -1,4 +1,5 @@
 import type { ProjectOut, TaskOut, TaskStatus } from "@cubby/schemas/project";
+import { taskStatusValues } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
@@ -6,14 +7,6 @@ import { NoneValue } from "~/components/ui/none-value";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
-
-const STATUS_ORDER: TaskStatus[] = [
-  "not_started",
-  "later",
-  "in_progress",
-  "blocked",
-  "done",
-];
 
 export function TaskStatusBoard({
   tasks,
@@ -71,7 +64,7 @@ export function TaskStatusBoard({
       })
       .slice(0, 15);
 
-    const statuses = STATUS_ORDER.filter((s) => statusSet.has(s));
+    const statuses = taskStatusValues.filter((s) => statusSet.has(s));
 
     return { grid: counts, projectRows, statuses };
   }, [tasks, projects]);

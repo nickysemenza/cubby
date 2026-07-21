@@ -2,10 +2,10 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, Home } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { cn } from "~/lib/utils";
 import { ArrangeColumn } from "./ArrangeColumn";
 import { findNode } from "./arrange-tree-utils";
-import { useAutoScroll } from "./use-arrange-dnd";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeBoardProps {
