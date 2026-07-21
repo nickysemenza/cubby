@@ -54,14 +54,14 @@ export function DatePickerInput({
     <Popover open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "flex h-7 w-full min-w-0 items-center gap-1 rounded-none border border-border bg-input/20 py-0.5 pr-1 pl-2 transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 hover:bg-input/30 max-sm:h-10",
+          "flex h-7 w-full min-w-0 items-center gap-1 rounded-none border border-border bg-input/20 pr-1 pl-2 transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 hover:bg-input/30 max-sm:h-10",
           className,
         )}
       >
         <PopoverTrigger
           aria-label={ariaLabel ?? placeholder}
           autoFocus={autoFocus}
-          className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm outline-none max-sm:text-base"
+          className="inline-flex min-w-0 flex-1 items-center gap-1 text-left text-sm outline-none max-sm:text-base"
         >
           <CalendarIcon className="size-3.5 shrink-0 text-muted-foreground" />
           <span
