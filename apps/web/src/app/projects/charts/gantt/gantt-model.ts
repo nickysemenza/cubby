@@ -48,6 +48,13 @@ export interface GanttProjectRow {
   blockingIds: string[];
   /** Live direct child count (0 for a leaf). */
   childCount: number;
+  /**
+   * Dominant trade of the sub-project's own tasks, when it has any — a
+   * sub-project like "Kitchen: Plumbing" is itself a trade phase, so its
+   * roll-up bar can carry the phase colour. `null` for portfolio-level
+   * projects (which map to a kind, not a trade) and taskless sub-projects.
+   */
+  trade: Trade | null;
 }
 
 /** Not exported by name: consumers narrow the `GanttRow` union on `kind`
@@ -192,6 +199,7 @@ function buildProjectRow(
   expanded: boolean,
   childCount: number,
   extent: Extent,
+  trade: Trade | null = null,
 ): GanttProjectRow {
   const startDay = ownStartDay(project);
   const endDay = ownEndDay(project);
@@ -211,7 +219,33 @@ function buildProjectRow(
     blockedByIds: project.blockedByIds,
     blockingIds: project.blockingIds,
     childCount,
+    trade,
   };
+}
+
+/**
+ * The most common trade among a project's own dated-or-undated tasks, or null
+ * when it has none. A sub-project is typically single-trade ("Kitchen:
+ * Plumbing"), so the mode is that trade; ties break by first-seen.
+ */
+function dominantTrade(
+  projectId: string,
+  tasksByProject: Record<string, TaskOut[]>,
+): Trade | null {
+  const own = tasksByProject[projectId] ?? [];
+  if (own.length === 0) return null;
+  const counts = new Map<Trade, number>();
+  let best: Trade | null = null;
+  let bestCount = 0;
+  for (const t of own) {
+    const next = (counts.get(t.trade) ?? 0) + 1;
+    counts.set(t.trade, next);
+    if (next > bestCount) {
+      bestCount = next;
+      best = t.trade;
+    }
+  }
+  return best;
 }
 
 function buildTaskRow(task: TaskOut, depth: number): GanttTaskRow {
@@ -358,6 +392,11 @@ export function buildProjectRows(
   const childrenByParent = groupBy(nonRootProjects, parentKey);
   const extents = computeSubtreeExtents(nonRootProjects, childrenByParent);
   const taskById = keyBy(tasks, (t) => t.id);
+  // Own tasks per project id, for the sub-project row's dominant-trade colour.
+  const tasksByProject = groupBy(
+    tasks.filter((t) => t.projectId != null),
+    (t) => t.projectId as string,
+  );
 
   function datedTaskRows(ownerId: string, depth: number): GanttTaskRow[] {
     const rows: GanttTaskRow[] = [];
@@ -396,6 +435,7 @@ export function buildProjectRows(
         isExpanded,
         kids.length,
         extent,
+        dominantTrade(project.id, tasksByProject),
       ),
     );
     if (isExpanded) {

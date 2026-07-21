@@ -43,6 +43,8 @@ import {
   formatDate,
   PROJECT_STATUS_LABELS,
   TASK_STATUS_LABELS,
+  TradeBadge,
+  TradeIcon,
 } from "../../shared";
 import { ChartTooltip } from "../ChartTooltip";
 import { ChartEmpty } from "../chart-empty";
@@ -56,6 +58,12 @@ import {
 } from "./gantt-date";
 import type { DayRange, GanttRow } from "./gantt-model";
 import { clampWindow, spanOf } from "./gantt-window";
+import {
+  getTradeColor,
+  PHASE_COLOR,
+  PHASE_LABEL,
+  presentPhases,
+} from "./trade-colors";
 
 // ---------------------------------------------------------------------------
 // Geometry — the one place row rhythm is defined. The left pane's `h-8` rows,
@@ -73,9 +81,16 @@ const NAME_PANE_INSET = 8;
 /** Extra left padding per depth level, in px. */
 const INDENT_PER_DEPTH = 12;
 
-const PROJECT_BAR_HEIGHT = 18;
+/** Multi-day task bar. */
 const TASK_BAR_HEIGHT = 14;
-/** A 1-day task must still be visible at any zoom level. */
+/** Sub-project / project roll-up bar — slim, so structure reads as structure
+ * rather than as the fattest task on screen. */
+const SUMMARY_BAR_HEIGHT = 7;
+/** How far the roll-up end brackets drop below the summary bar. */
+const SUMMARY_BRACKET_DROP = 4;
+/** Half-diagonal of a milestone diamond (a 1-day task). */
+const MILESTONE_HALF = 6;
+/** A multi-day bar must stay visible at any zoom level. */
 const MIN_BAR_WIDTH = 4;
 /** Envelope whisker end-cap half-height, in px. */
 const CAP_HALF_HEIGHT = 5;
@@ -168,6 +183,59 @@ function barRangeOf(
       return { startDay: start, endDay: end };
     })
     .exhaustive();
+}
+
+/** A 1-day task renders as a milestone diamond rather than a bar. */
+function isMilestone(row: GanttRow): boolean {
+  return row.kind === "task" && row.startDay === row.endDay;
+}
+
+/**
+ * Fill hue. Tasks are coloured by **trade** (the encoding that survives
+ * completion — a done project goes all-green by status but keeps its trade
+ * mix); projects/sub-projects have no trade, so they carry their **status**
+ * colour, which is what the portfolio view reads by.
+ */
+function colorOf(row: GanttRow): string {
+  return (
+    match(row)
+      .with({ kind: "task" }, (r) => getTradeColor(r.trade))
+      // A sub-project that maps to a trade phase ("Kitchen: Plumbing") carries
+      // its phase colour so the collapsed view is a phase map, not a wall of
+      // one status hue; portfolio-level projects (trade null) fall back to status.
+      .with({ kind: "project" }, (r) =>
+        r.trade != null
+          ? getTradeColor(r.trade)
+          : getStatusChartColor(r.status),
+      )
+      .with({ kind: "group" }, () => "var(--chart-neutral)")
+      .exhaustive()
+  );
+}
+
+/**
+ * How a mark's *fill* expresses status, orthogonally to its hue (trade) and
+ * shape (row type): hollow = not started, part-filled = in progress, solid =
+ * done, and a loud `--destructive` ring = blocked (status wins there — it's
+ * the one state you must not miss). `later` reads as a dashed hollow outline.
+ */
+function fillStyleOf(row: GanttRow): {
+  /** 0..1 of the mark filled solid. */
+  frac: number;
+  /** Outline colour — red for blocked, else the mark's own hue. */
+  stroke: string;
+  /** Dashed outline (a `later` task — parked, not yet active). */
+  dashed: boolean;
+  blocked: boolean;
+} {
+  const status = statusOf(row);
+  const blocked = status === "blocked";
+  return {
+    frac: progressOf(row),
+    stroke: blocked ? "var(--destructive)" : colorOf(row),
+    dashed: status === "later",
+    blocked,
+  };
 }
 
 function dependencyCountOf(row: GanttRow): number {
@@ -598,69 +666,26 @@ export function GanttChart({
               );
             })}
 
-            {/* 4. Bars. */}
+            {/* 4. Marks — diamond (milestone) · bar (multi-day task) ·
+                roll-up (sub-project). Hue = trade, fill = status. */}
             {rows.map((row, i) => {
               const range = barRangeOf(row);
               if (range == null) return null;
-              const barHeight =
-                row.kind === "task" ? TASK_BAR_HEIGHT : PROJECT_BAR_HEIGHT;
-              const y = i * ROW_HEIGHT + (ROW_HEIGHT - barHeight) / 2;
               const x1 = toX(range.startDay);
               const x2 = range.endDay == null ? width : toX(range.endDay + 1);
               if (x2 < 0 || x1 > width) return null;
-              const barWidth = Math.max(MIN_BAR_WIDTH, x2 - x1);
-              const color = getStatusChartColor(statusOf(row));
-              const gradientId =
-                range.endDay == null ? gradientIdFor(color) : null;
-              const fill = gradientId == null ? color : `url(#${gradientId})`;
-              const progress = progressOf(row);
-              const onChain = chainIds?.has(row.id) ?? false;
-
               return (
-                <g key={`bar-${row.id}`} opacity={isDimmed(row) ? 0.35 : 1}>
-                  <rect
-                    x={x1}
-                    y={y}
-                    width={barWidth}
-                    height={barHeight}
-                    fill={fill}
-                    opacity={0.25}
-                    rx={1}
+                <g key={`mark-${row.id}`} opacity={isDimmed(row) ? 0.35 : 1}>
+                  <RowMark
+                    row={row}
+                    index={i}
+                    range={range}
+                    toX={toX}
+                    width={width}
+                    gradientIdFor={gradientIdFor}
+                    clipId={`${gradientBase}-clip-${i}`}
+                    onChain={chainIds?.has(row.id) ?? false}
                   />
-                  {progress > 0 && (
-                    <rect
-                      x={x1}
-                      y={y}
-                      width={Math.max(MIN_BAR_WIDTH, barWidth * progress)}
-                      height={barHeight}
-                      fill={fill}
-                      opacity={0.9}
-                      rx={1}
-                    />
-                  )}
-                  {onChain && (
-                    <rect
-                      x={x1}
-                      y={y}
-                      width={barWidth}
-                      height={barHeight}
-                      fill="none"
-                      stroke="var(--foreground)"
-                      strokeWidth={1.5}
-                      rx={1}
-                    />
-                  )}
-                  {range.endDay == null && (
-                    <line
-                      x1={x1 + barWidth}
-                      x2={x1 + barWidth}
-                      y1={y}
-                      y2={y + barHeight}
-                      stroke={color}
-                      strokeWidth={1.5}
-                      strokeDasharray="2 2"
-                    />
-                  )}
                 </g>
               );
             })}
@@ -756,6 +781,8 @@ export function GanttChart({
         </div>
       </Row>
 
+      {!isEmpty && <GanttLegend rows={rows} />}
+
       {hoveredRow != null && pointer != null && (
         <ChartTooltip
           className="pointer-events-none absolute z-20 max-w-[16rem]"
@@ -780,6 +807,168 @@ function statusOf(row: GanttRow): string | null {
   return match(row)
     .with({ kind: "group" }, () => null)
     .otherwise((r) => r.status);
+}
+
+/**
+ * One row's mark, dispatched by shape:
+ *   - milestone (1-day task) -> diamond
+ *   - multi-day task         -> bar
+ *   - sub-project / project  -> slim roll-up bar with drop brackets
+ *
+ * Three orthogonal channels: **hue** = trade (tasks) or status (projects),
+ * **shape** = row type, **fill** = status (hollow -> part -> solid, plus a
+ * red ring for blocked). Kept a component so the `<clipPath>` for a
+ * part-filled milestone is scoped to the row that needs it.
+ */
+function RowMark({
+  row,
+  index,
+  range,
+  toX,
+  width,
+  gradientIdFor,
+  clipId,
+  onChain,
+}: {
+  row: GanttRow;
+  index: number;
+  range: { startDay: number; endDay: number | null };
+  toX: (day: number) => number;
+  width: number;
+  gradientIdFor: (color: string) => string | null;
+  clipId: string;
+  onChain: boolean;
+}) {
+  const cy = index * ROW_HEIGHT + ROW_HEIGHT / 2;
+  const color = colorOf(row);
+  const { frac, stroke, dashed, blocked } = fillStyleOf(row);
+
+  // --- milestone: a diamond centred on its single day ---------------------
+  if (isMilestone(row)) {
+    const cx = toX(range.startDay + 0.5);
+    const h = MILESTONE_HALF;
+    const points = `${cx},${cy - h} ${cx + h},${cy} ${cx},${cy + h} ${cx - h},${cy}`;
+    return (
+      <>
+        <polygon
+          points={points}
+          fill={frac >= 1 ? color : "none"}
+          stroke={stroke}
+          strokeWidth={blocked ? 2 : 1.5}
+          strokeDasharray={dashed ? "2 2" : undefined}
+        />
+        {frac > 0 && frac < 1 && (
+          <>
+            <clipPath id={clipId}>
+              <rect x={cx - h} y={cy - h} width={2 * h * frac} height={2 * h} />
+            </clipPath>
+            <polygon
+              points={points}
+              fill={color}
+              clipPath={`url(#${clipId})`}
+            />
+          </>
+        )}
+        {onChain && (
+          <polygon
+            points={points}
+            fill="none"
+            stroke="var(--foreground)"
+            strokeWidth={1.5}
+          />
+        )}
+      </>
+    );
+  }
+
+  // --- bar (multi-day task) or roll-up (sub-project) ----------------------
+  const isSummary = row.kind === "project";
+  const barHeight = isSummary ? SUMMARY_BAR_HEIGHT : TASK_BAR_HEIGHT;
+  const y = index * ROW_HEIGHT + (ROW_HEIGHT - barHeight) / 2;
+  const x1 = toX(range.startDay);
+  const x2 = range.endDay == null ? width : toX(range.endDay + 1);
+  const barWidth = Math.max(MIN_BAR_WIDTH, x2 - x1);
+  const openEnded = range.endDay == null;
+  // Only open-ended projects have a gradient; `gradientIdFor` returns null for
+  // anything else, in which case a solid fill is correct.
+  const gradientId = openEnded ? gradientIdFor(color) : null;
+  const paint = gradientId != null ? `url(#${gradientId})` : color;
+
+  return (
+    <>
+      {/* Faint track — the hollow base a not-started bar reads as. */}
+      <rect
+        x={x1}
+        y={y}
+        width={barWidth}
+        height={barHeight}
+        fill={paint}
+        opacity={0.15}
+        rx={1}
+      />
+      <rect
+        x={x1}
+        y={y}
+        width={barWidth}
+        height={barHeight}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={blocked ? 1.75 : 1}
+        strokeDasharray={dashed ? "3 2" : undefined}
+        rx={1}
+      />
+      {/* Solid portion — done fraction (projects: real progress). */}
+      {frac > 0 && (
+        <rect
+          x={x1}
+          y={y}
+          width={Math.max(MIN_BAR_WIDTH, barWidth * frac)}
+          height={barHeight}
+          fill={paint}
+          opacity={0.9}
+          rx={1}
+        />
+      )}
+      {/* Roll-up drop brackets — the classic summary silhouette. */}
+      {isSummary && (
+        <>
+          <path
+            d={`M ${x1} ${y} L ${x1 + 6} ${y} L ${x1} ${y + barHeight + SUMMARY_BRACKET_DROP} Z`}
+            fill={stroke}
+          />
+          {!openEnded && (
+            <path
+              d={`M ${x2} ${y} L ${x2 - 6} ${y} L ${x2} ${y + barHeight + SUMMARY_BRACKET_DROP} Z`}
+              fill={stroke}
+            />
+          )}
+        </>
+      )}
+      {openEnded && (
+        <line
+          x1={x1 + barWidth}
+          x2={x1 + barWidth}
+          y1={y}
+          y2={y + barHeight}
+          stroke={color}
+          strokeWidth={1.5}
+          strokeDasharray="2 2"
+        />
+      )}
+      {onChain && (
+        <rect
+          x={x1}
+          y={y}
+          width={barWidth}
+          height={barHeight}
+          fill="none"
+          stroke="var(--foreground)"
+          strokeWidth={1.5}
+          rx={1}
+        />
+      )}
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -858,6 +1047,14 @@ function NameCell({
       ) : (
         <span className="h-3 w-3 shrink-0" />
       )}
+      {row.kind === "task" && (
+        // Muted trade glyph — the 20-way distinction the six phase hues can't
+        // carry on their own; colour stays on the marks, not the name pane.
+        <TradeIcon
+          trade={row.trade}
+          className="size-3 shrink-0 text-muted-foreground"
+        />
+      )}
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs",
@@ -912,11 +1109,124 @@ function TooltipBody({ row }: { row: GanttRow }) {
       <div className="truncate font-medium">{row.name}</div>
       <div className="font-mono text-muted-foreground text-xs">{dates}</div>
       <div className="text-muted-foreground text-xs">{statusLabelOf(row)}</div>
+      {row.kind === "task" && (
+        <div className="pt-1">
+          <TradeBadge trade={row.trade} />
+        </div>
+      )}
       {row.kind === "project" && row.progress > 0 && (
         <div className="font-mono text-muted-foreground text-xs">
           {Math.round(row.progress * 100)}% complete
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A grey mini-bar mirroring how the chart draws status via *fill* — hollow,
+ * part-filled, solid, or a red-ringed blocked. Grey on purpose: it teaches the
+ * fill channel (status) in isolation, leaving the colour channel (trade) to
+ * the swatches beside it.
+ */
+function StatusGlyph({
+  frac,
+  blocked = false,
+  label,
+}: {
+  frac: number;
+  blocked?: boolean;
+  label: string;
+}) {
+  const stroke = blocked ? "var(--destructive)" : "var(--muted-foreground)";
+  return (
+    <Row align="center" gap="tight">
+      <svg width={14} height={10} aria-hidden="true">
+        <rect
+          x={0.75}
+          y={0.75}
+          width={12.5}
+          height={8.5}
+          fill="var(--muted-foreground)"
+          opacity={0.12}
+          rx={1}
+        />
+        {frac > 0 && (
+          <rect
+            x={0.75}
+            y={0.75}
+            width={12.5 * frac}
+            height={8.5}
+            fill="var(--muted-foreground)"
+            opacity={0.75}
+            rx={1}
+          />
+        )}
+        <rect
+          x={0.75}
+          y={0.75}
+          width={12.5}
+          height={8.5}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={blocked ? 1.5 : 1}
+          rx={1}
+        />
+      </svg>
+      {label}
+    </Row>
+  );
+}
+
+/**
+ * Compact key under the chart: the status fill scale (always — it's the
+ * non-obvious channel), plus a build-phase colour strip when the chart has
+ * task rows. Only phases actually on the chart are listed; the exact trade
+ * within a phase is read from each row's glyph and label.
+ */
+function GanttLegend({ rows }: { rows: GanttRow[] }) {
+  const phases = useMemo(
+    () =>
+      presentPhases(
+        // Tasks always carry a trade; a sub-project row carries its dominant
+        // one — so the legend covers the collapsed (summary-only) view too.
+        rows.flatMap((r) =>
+          r.kind === "task"
+            ? [r.trade]
+            : r.kind === "project" && r.trade != null
+              ? [r.trade]
+              : [],
+        ),
+      ),
+    [rows],
+  );
+
+  return (
+    <Row
+      wrap
+      align="center"
+      gap="md"
+      className="px-1 pt-2 text-2xs text-muted-foreground"
+    >
+      <Row wrap align="center" gap="sm">
+        <StatusGlyph frac={0} label="To do" />
+        <StatusGlyph frac={0.5} label="In progress" />
+        <StatusGlyph frac={1} label="Done" />
+        <StatusGlyph frac={0} blocked label="Blocked" />
+      </Row>
+      {phases.length > 0 && (
+        <Row wrap align="center" gap="sm">
+          {phases.map((phase) => (
+            <Row key={phase} align="center" gap="tight">
+              <span
+                className="inline-block size-2 shrink-0 rounded-[1px]"
+                style={{ backgroundColor: PHASE_COLOR[phase] }}
+              />
+              {PHASE_LABEL[phase]}
+            </Row>
+          ))}
+        </Row>
+      )}
+    </Row>
   );
 }
