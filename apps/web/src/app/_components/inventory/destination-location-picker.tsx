@@ -23,7 +23,7 @@ import {
   getOptionalLocationId,
   optionalLocationField,
 } from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 

@@ -1,6 +1,11 @@
 import { z } from "zod";
+import {
+  deriveUpdateData,
+  deriveUpdateFields,
+  timestampedFields,
+} from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
-import { amount, writeAmount } from "./codec";
+import { amount, positiveAmount } from "./codec";
 import { requiredName } from "./common";
 import {
   cookbookId,
@@ -44,16 +49,14 @@ export type RecipeSortField = (typeof recipeSortableFields)[number];
 const sectionIngredientIngredientOut = z.object({
   id: ingredientId,
   name: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
   aliases: z.array(z.string()).optional(),
 });
 
 const recipeTopLevelFields = {
   id: recipeId,
   name: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
   meta: recipeMeta,
   // Strong provenance, derived from the DB columns on read. Output-only for now
   // (`meta.url` still drives the write path); nullish so older rows are lenient.
@@ -97,8 +100,7 @@ export const sectionIngredientOut = z.discriminatedUnion("type", [
     // modifier. Null for rows created before capture, or manual/UI edits.
     rawLine: z.string().nullish(),
     modifier: z.string().nullish(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    ...timestampedFields,
     type: z.literal("ingredient"),
     recipe: z.null(),
     ingredient: sectionIngredientIngredientOut,
@@ -110,8 +112,7 @@ export const sectionIngredientOut = z.discriminatedUnion("type", [
     // modifier. Null for rows created before capture, or manual/UI edits.
     rawLine: z.string().nullish(),
     modifier: z.string().nullish(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
+    ...timestampedFields,
     type: z.literal("recipe"),
     recipe: recipeTopLevel,
     ingredient: z.null(),
@@ -125,21 +126,20 @@ export const recipeSectionOut = z.object({
   name: z.string().nullable(),
   ingredients: z.array(sectionIngredientOut),
   instructions: z.array(z.object({ instruction: z.string() })),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
 
-export const recipeWithSectionsOut = z.object({
+export const recipeGraphOut = z.object({
   ...recipeTopLevelFields,
   sections: z.array(recipeSectionOut),
   // Precomputed cost/calorie rollup (null until first computed). Populated by
   // recipe.list; getByID may leave it null (the detail page computes its own).
   totals: recipeTotals.nullish(),
 });
-export type RecipeWithSectionsOut = z.infer<typeof recipeWithSectionsOut>;
+export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
 const recipeOutFields = {
   ...recipeTopLevelFields,
@@ -159,9 +159,6 @@ export const recipeWithSideEffectsOut = z.object({
 
 // Full recipe graph without media. Used by costing/sub-recipe closure fetches
 // that need sections but deliberately do not load images.
-export const recipeGraphOut = recipeWithSectionsOut;
-export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
-
 export const recipeGraphListOut = z.array(recipeGraphOut);
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section
@@ -220,7 +217,7 @@ export const recipeIngredientInput = z.discriminatedUnion("type", [
     type: z.literal("ingredient"),
     ingredientId: ingredientId,
     recipeId: z.null(),
-    amounts: z.array(writeAmount),
+    amounts: z.array(positiveAmount),
     id: id.optional(),
     ...ingredientProvenance,
   }),
@@ -228,7 +225,7 @@ export const recipeIngredientInput = z.discriminatedUnion("type", [
     type: z.literal("recipe"),
     recipeId: recipeId,
     ingredientId: z.null(),
-    amounts: z.array(writeAmount),
+    amounts: z.array(positiveAmount),
     id: id.optional(),
     ...ingredientProvenance,
   }),
@@ -265,7 +262,7 @@ export const recipeListFilterFields = {
 
 // Descriptions surface to MCP clients through the explicit `mcpRecipe*Shape`
 // exports below; keep create-required fields and update-optional fields separate.
-export const recipeCreateInput = z.object({
+const recipeWritableShape = {
   name: requiredName("Recipe name").describe("Recipe name"),
   meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
   yield: recipeYieldSchema
@@ -286,39 +283,22 @@ export const recipeCreateInput = z.object({
     .describe(
       "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
     ),
-  pendingImageIds: z.array(z.uuid()).optional(),
-});
+};
 
-export const recipeUpdateData = z.object({
-  name: requiredName("Recipe name").describe("Recipe name").optional(),
-  meta: recipeMeta
-    .describe("Source metadata, e.g. { url } of the web source")
-    .optional(),
-  yield: recipeYieldSchema
-    .nullable()
-    .optional()
-    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
-  servings: recipeServings
-    .nullable()
-    .optional()
-    .describe("Number of servings (positive integer)"),
-  tags: recipeTags.nullable().optional().describe("Free-form tags"),
-  notes: recipeNotes
-    .nullable()
-    .optional()
-    .describe("Freeform markdown headnote/intro plus tips"),
-  sections: z
-    .array(recipeSectionInput)
-    .optional()
-    .describe(
-      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
-    ),
+const recipeCreateShape = {
+  ...recipeWritableShape,
   pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
-  imageOrder: z
-    .array(z.uuid())
-    .optional()
-    .describe("existing image ids in display order; first = cover"),
+};
+export const recipeCreateInput = z.object(recipeCreateShape);
+
+export const recipeUpdateData = deriveUpdateData(recipeCreateShape, {
+  extend: {
+    removeImageIds: z.array(z.uuid()).optional(),
+    imageOrder: z
+      .array(z.uuid())
+      .optional()
+      .describe("existing image ids in display order; first = cover"),
+  },
 });
 
 export const recipeUpdateInput = z.object({
@@ -353,55 +333,12 @@ export const recipeIdInput = z.object({
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
-export const mcpRecipeCreateInput = z.object({
-  name: requiredName("Recipe name").describe("Recipe name"),
-  meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
-  yield: recipeYieldSchema
-    .nullable()
-    .optional()
-    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
-  servings: recipeServings
-    .nullable()
-    .optional()
-    .describe("Number of servings (positive integer)"),
-  tags: recipeTags.nullable().optional().describe("Free-form tags"),
-  notes: recipeNotes
-    .nullable()
-    .optional()
-    .describe("Freeform markdown headnote/intro plus tips"),
-  sections: z
-    .array(recipeSectionInput)
-    .describe(
-      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
-    ),
-});
-
-export const mcpRecipeUpdateInput = z.object({
+export const mcpRecipeCreateInput = z.object(recipeWritableShape);
+const mcpRecipeUpdateFields = {
   id: recipeId.describe("Recipe ID"),
-  name: requiredName("Recipe name").describe("Recipe name").optional(),
-  meta: recipeMeta
-    .describe("Source metadata, e.g. { url } of the web source")
-    .optional(),
-  yield: recipeYieldSchema
-    .nullable()
-    .optional()
-    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
-  servings: recipeServings
-    .nullable()
-    .optional()
-    .describe("Number of servings (positive integer)"),
-  tags: recipeTags.nullable().optional().describe("Free-form tags"),
-  notes: recipeNotes
-    .nullable()
-    .optional()
-    .describe("Freeform markdown headnote/intro plus tips"),
-  sections: z
-    .array(recipeSectionInput)
-    .optional()
-    .describe(
-      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
-    ),
-});
+  ...deriveUpdateFields(recipeWritableShape),
+};
+export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
 
 /** Slim MCP projection of a recipe list row. */
 export const recipeMcpOut = z.object({

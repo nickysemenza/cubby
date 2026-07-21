@@ -31,10 +31,8 @@ import {
   getLocationId,
   optionalLocationField,
 } from "~/app/_components/form-fields";
-import {
-  ComboboxFieldWithSearch,
-  FormWrapper,
-} from "~/app/_components/form-utils";
+import { FormWrapper } from "~/app/_components/form-utils";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import {
   DestinationLocationField,
   resolveDestination,

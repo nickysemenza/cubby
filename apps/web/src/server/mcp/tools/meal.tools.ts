@@ -1,13 +1,13 @@
 import {
-  mcpMealAddRecipeInput,
-  mcpMealCreateInput,
-  mcpMealUpdateInput,
+  mealAddRecipeInput,
+  mealCreateInput,
   mealDate,
   mealFilterFields,
   mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
   mealScale,
+  mealUpdateData,
   shoppingListOut,
 } from "@cubby/schemas/meal";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,74 +15,35 @@ import { z } from "zod";
 import {
   getCaller,
   READ_ONLY_CLOSED,
-  registerEntityCreateTool,
-  registerEntityDeleteTool,
-  registerEntityGetTool,
-  registerEntityListTool,
-  registerEntityUpdateTool,
+  registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
   respond,
   respondList,
   slimMeal,
   WRITE_CLOSED,
-  WRITE_DESTRUCTIVE_CLOSED,
-  withIdInput,
 } from "./_shared";
 
 export function registerMealTools(server: McpServer) {
-  registerEntityListTool(server, {
-    name: "list_meals",
-    description:
-      "List meals (planned eating occasions), most recent first, optionally bounded by a date range.",
-    router: "meal",
+  registerEntityCrudToolset(server, {
+    entity: "meal",
+    createInput: mealCreateInput.shape,
+    updateShape: mealUpdateData.shape,
     filterFields: mealFilterFields,
-    outputSchema: mealMcpListOut,
+    mcpListOut: mealMcpListOut,
+    out: mealMcpOut,
     slim: slimMeal,
     sort: { orderBy: "date", direction: "desc" },
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityGetTool(server, {
-    name: "get_meal",
-    description:
-      "Get a single meal by ID, including its planned recipes and cost/calorie totals.",
-    router: "meal",
-    idLabel: "Meal",
-    outputSchema: mealMcpOut,
-    slim: slimMeal,
-    annotations: READ_ONLY_CLOSED,
-  });
-
-  registerEntityCreateTool(server, {
-    name: "create_meal",
-    description:
-      "Create a meal on a calendar day. Optionally include recipes (by recipe ID) to plan in one call; use list_recipes/get_recipe to resolve IDs.",
-    inputSchema: mcpMealCreateInput.shape,
-    outputSchema: mealMcpOut,
-    slim: slimMeal,
-    annotations: WRITE_CLOSED,
-    create: (caller, params) => caller.meal.create(params),
-  });
-
-  registerEntityUpdateTool(server, {
-    name: "update_meal",
-    description:
-      "Update a meal's date, name, or sort order. Recipes are managed via add/update/remove_meal_recipe.",
-    inputSchema: withIdInput("Meal", mcpMealUpdateInput.shape),
-    outputSchema: mealMcpOut,
-    slim: slimMeal,
-    router: "meal",
-    annotations: WRITE_CLOSED,
-  });
-
-  registerEntityDeleteTool(server, {
-    name: "delete_meals",
-    description:
-      "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
-    router: "meal",
-    entityLabel: "meal",
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    descriptions: {
+      list: "List meals (planned eating occasions), most recent first, optionally bounded by a date range.",
+      get: "Get a single meal by ID, including its planned recipes and cost/calorie totals.",
+      create:
+        "Create a meal on a calendar day. Optionally include recipes (by recipe ID) to plan in one call; use list_recipes/get_recipe to resolve IDs.",
+      update:
+        "Update a meal's date, name, or sort order. Recipes are managed via add/update/remove_meal_recipe.",
+      delete:
+        "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
+    },
   });
 
   registerRouterTool(server, {
@@ -122,7 +83,7 @@ export function registerMealTools(server: McpServer) {
     name: "add_recipe_to_meal",
     description:
       "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
-    inputSchema: mcpMealAddRecipeInput.shape,
+    inputSchema: mealAddRecipeInput.shape,
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {

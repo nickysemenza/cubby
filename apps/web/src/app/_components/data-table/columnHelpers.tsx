@@ -61,6 +61,11 @@ import {
   type FilterableComboboxItem,
 } from "./editable-cell";
 import { EditableEntityCell } from "./editable-entity-cell";
+import {
+  entityCellClipboard,
+  type InventoryEntryBase,
+  type InventoryRelatedEntity,
+} from "./inventory-column-helpers";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
 
 /** Configuration for inline column header filters */
@@ -555,25 +560,6 @@ export function createUnitMappingsColumn<T extends { id: string }>(
   });
 }
 
-export interface InventoryEntryBase {
-  id: string;
-  amount: Amount;
-  // Optional related entities - either location (in ProductList) or product (in LocationList)
-  location?: { id: string; name: string; type: LocationType };
-  product?: { id: string; name: string; manufacturer: string };
-}
-
-// Discriminated union for inventory column entity types
-export type InventoryRelatedEntity =
-  | {
-      entity: "location";
-      data: { id: string; name: string; type: LocationType };
-    }
-  | {
-      entity: "product";
-      data: { id: string; name: string; manufacturer: string };
-    };
-
 /**
  * Creates a column that displays inventory entries with amounts and related entity pills.
  * Used in ProductList (shows locations) and LocationList (shows products).
@@ -946,30 +932,6 @@ const entityPickers = {
  * any location cell). Text paste is rejected — id resolution by name would be
  * guesswork; server-side validation still applies to the pasted id.
  */
-export function entityCellClipboard(
-  entity: string,
-  item: ComboboxItem | null,
-  save: (id: never) => Promise<void>,
-): CellClipboardSpec {
-  return {
-    kindKey: `entity:${entity}`,
-    getCopyPayload: () =>
-      item ? { text: item.name, json: { id: item.id, name: item.name } } : null,
-    onPasteValue: async ({ json }) => {
-      const pasted = json as { id?: unknown; name?: unknown } | undefined;
-      if (
-        !pasted ||
-        typeof pasted.id !== "string" ||
-        typeof pasted.name !== "string"
-      ) {
-        throw new Error(`Paste a ${entity} cell here`);
-      }
-      await save(pasted.id as never);
-      return { id: pasted.id, name: pasted.name };
-    },
-  };
-}
-
 interface SingleEntityEditableConfig<T, TId extends string> {
   onSave: (newId: TId | null, row: T) => Promise<void>;
   /** Allow saving null (clear the relation). */

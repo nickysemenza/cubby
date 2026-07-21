@@ -18,7 +18,8 @@ import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -186,6 +187,69 @@ export async function findTrackerEmbeddingRefsForProjects(
   ];
 }
 
+type LiveIdLoader = (db: Database, ids: string[]) => Promise<Set<string>>;
+
+const createLiveIdLoader =
+  (
+    table: PgTable,
+    idColumn: AnyPgColumn,
+    deletedAtColumn: AnyPgColumn,
+    parseId: (id: string) => string,
+  ): LiveIdLoader =>
+  async (db, ids) => {
+    const rows = await getDb(db)
+      .select({ id: idColumn })
+      .from(table)
+      .where(and(inArray(idColumn, ids.map(parseId)), isNull(deletedAtColumn)));
+    return new Set(rows.map(({ id }) => String(id)));
+  };
+
+const liveIdLoaders = {
+  product: createLiveIdLoader(
+    product,
+    product.id,
+    product.deletedAt,
+    unsafeProductId,
+  ),
+  recipe: createLiveIdLoader(
+    recipe,
+    recipe.id,
+    recipe.deletedAt,
+    unsafeRecipeId,
+  ),
+  ingredient: createLiveIdLoader(
+    ingredient,
+    ingredient.id,
+    ingredient.deletedAt,
+    unsafeIngredientId,
+  ),
+  location: createLiveIdLoader(
+    location,
+    location.id,
+    location.deletedAt,
+    unsafeLocationId,
+  ),
+  inventory: createLiveIdLoader(
+    inventoryEntry,
+    inventoryEntry.id,
+    inventoryEntry.deletedAt,
+    unsafeInventoryId,
+  ),
+  project: createLiveIdLoader(
+    project,
+    project.id,
+    project.deletedAt,
+    unsafeProjectId,
+  ),
+  task: createLiveIdLoader(task, task.id, task.deletedAt, unsafeTaskId),
+  purchase: createLiveIdLoader(
+    purchase,
+    purchase.id,
+    purchase.deletedAt,
+    unsafePurchaseId,
+  ),
+} satisfies Record<SearchableEntity, LiveIdLoader>;
+
 export async function findOrphanedEntityEmbeddings(
   db: Database,
 ): Promise<OrphanedEntityEmbedding[]> {
@@ -210,100 +274,7 @@ export async function findOrphanedEntityEmbeddings(
   for (const [type, ids] of byType.entries()) {
     const uniqueIds = uniq(ids);
     if (uniqueIds.length === 0) continue;
-    switch (type) {
-      case "product": {
-        const found = await getDb(db).query.product.findMany({
-          where: and(
-            inArray(product.id, uniqueIds.map(unsafeProductId)),
-            notDeleted(product),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "location": {
-        const found = await getDb(db).query.location.findMany({
-          where: and(
-            inArray(location.id, uniqueIds.map(unsafeLocationId)),
-            notDeleted(location),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "ingredient": {
-        const found = await getDb(db).query.ingredient.findMany({
-          where: and(
-            inArray(ingredient.id, uniqueIds.map(unsafeIngredientId)),
-            notDeleted(ingredient),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "recipe": {
-        const found = await getDb(db).query.recipe.findMany({
-          where: and(
-            inArray(recipe.id, uniqueIds.map(unsafeRecipeId)),
-            notDeleted(recipe),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "inventory": {
-        const found = await getDb(db).query.inventoryEntry.findMany({
-          where: and(
-            inArray(inventoryEntry.id, uniqueIds.map(unsafeInventoryId)),
-            notDeleted(inventoryEntry),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "project": {
-        const found = await getDb(db).query.project.findMany({
-          where: and(
-            inArray(project.id, uniqueIds.map(unsafeProjectId)),
-            notDeleted(project),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "task": {
-        const found = await getDb(db).query.task.findMany({
-          where: and(
-            inArray(task.id, uniqueIds.map(unsafeTaskId)),
-            notDeleted(task),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      case "purchase": {
-        const found = await getDb(db).query.purchase.findMany({
-          where: and(
-            inArray(purchase.id, uniqueIds.map(unsafePurchaseId)),
-            notDeleted(purchase),
-          ),
-          columns: { id: true },
-        });
-        liveByType.set(type, new Set(found.map((row) => row.id)));
-        break;
-      }
-      default: {
-        const exhaustive: never = type;
-        throw new Error(`Unsupported searchable entity: ${exhaustive}`);
-      }
-    }
+    liveByType.set(type, await liveIdLoaders[type](db, uniqueIds));
   }
 
   return rows.filter(

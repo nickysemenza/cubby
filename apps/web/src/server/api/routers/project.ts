@@ -28,14 +28,16 @@ import {
 } from "~/server/repo/project";
 import { purchaseList } from "~/server/repo/purchase";
 import { taskList } from "~/server/repo/task";
-import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
-import {
-  createDeleteProcedure,
-  createEntityCrudProcedures,
-} from "../crud-factory";
+import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const { getByID, list, create, update } = createEntityCrudProcedures({
+const {
+  getByID,
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createSearchableEntityCrudProcedures({
   schemas: {
     createInput: projectCreateInput,
     updateInput: projectUpdateData,
@@ -48,41 +50,17 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     getByID: async (services, id: ProjectId) => getProjectByID(services.db, id),
     list: async (services, filters, sort, pagination) =>
       projectList(services.db, filters, sort, pagination),
-    create: async (services, data) => {
-      const created = await createProject(
-        services.db,
-        data,
-        services.actorContext,
-      );
-      await runMutationSideEffects(services.db, {
-        action: "created",
-        entity: { entityType: "project", entityId: created.id },
-        source: "project.create",
-      });
-      return created;
-    },
-    update: async (services, id: ProjectId, data) => {
-      const updated = await updateProject(
-        services.db,
-        id,
-        data,
-        services.actorContext,
-      );
-      await runMutationSideEffects(services.db, {
-        action: "updated",
-        entity: { entityType: "project", entityId: id },
-        source: "project.update",
-      });
-      return updated;
+    create: async (services, data) =>
+      createProject(services.db, data, services.actorContext),
+    update: async (services, id: ProjectId, data) =>
+      updateProject(services.db, id, data, services.actorContext),
+    delete: async (services, ids) => {
+      await deleteProjects(services.db, ids, services.actorContext);
+      return undefined;
     },
   },
   entityName: "project",
 });
-
-const deleteItem = createDeleteProcedure<ProjectId>(async (services, ids) => {
-  await deleteProjects(services.db, ids, services.actorContext);
-  return undefined;
-}, projectId);
 
 /** Everything the projects dashboard renders, in one round trip. */
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };

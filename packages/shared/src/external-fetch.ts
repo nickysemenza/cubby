@@ -1,3 +1,5 @@
+import ipaddr from "ipaddr.js";
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_REDIRECTS = 5;
 export const MAX_EXTERNAL_HTML_BYTES = 5 * 1024 * 1024;
@@ -25,33 +27,26 @@ export class ExternalFetchError extends Error {
   }
 }
 
-function isPrivateIpv4(host: string): boolean {
-  const parts = host.split(".");
-  if (parts.length !== 4) return false;
-  const octets = parts.map(Number);
-  if (
-    octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
-  ) {
-    return false;
-  }
-  const [a, b] = octets as [number, number, number, number];
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
-  );
-}
+const BLOCKED_IPV4_RANGES = [
+  "0.0.0.0/8",
+  "10.0.0.0/8",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+].map((range) => ipaddr.IPv4.parseCIDR(range));
 
-function isPrivateIpv6(host: string): boolean {
-  const normalized = host.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
-  if (!normalized.includes(":")) return false;
-  if (normalized === "::" || normalized === "::1") return true;
-  if (normalized.startsWith("fe80") || /^f[cd]/.test(normalized)) return true;
-  const ipv4Tail = normalized.split(":").pop();
-  return Boolean(ipv4Tail?.includes(".") && isPrivateIpv4(ipv4Tail));
+const BLOCKED_IPV6_RANGES = ["::/128", "::1/128", "fe80::/10", "fc00::/7"].map(
+  (range) => ipaddr.IPv6.parseCIDR(range),
+);
+
+function isPrivateIp(host: string): boolean {
+  const normalized = host.replace(/^\[/, "").replace(/\]$/, "");
+  if (!ipaddr.isValid(normalized)) return false;
+  const address = ipaddr.process(normalized);
+  return address.kind() === "ipv4"
+    ? BLOCKED_IPV4_RANGES.some((range) => address.match(range))
+    : BLOCKED_IPV6_RANGES.some((range) => address.match(range));
 }
 
 /** Validate a user/upstream-controlled URL before a server-side fetch. */
@@ -84,8 +79,7 @@ export function validateExternalHttpUrl(value: string | URL): URL {
     BLOCKED_HOSTNAMES.has(host) ||
     host.endsWith(".localhost") ||
     host.endsWith(".local") ||
-    isPrivateIpv4(host) ||
-    isPrivateIpv6(host)
+    isPrivateIp(host)
   ) {
     throw new ExternalFetchError(
       "External URL points to a private or local host",

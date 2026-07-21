@@ -7,10 +7,8 @@ import {
   backgroundDrainOutSchema,
   backgroundJobIdInputSchema,
 } from "@cubby/schemas/background-jobs";
-import {
-  drainQueuedBackgroundJobs,
-  redispatchQueuedBatchJobs,
-} from "~/server/background-queue";
+import { redispatchQueuedBatchJobs } from "~/server/background-dispatch";
+import { drainQueuedBackgroundJobs } from "~/server/background-queue";
 import { createAppError } from "~/server/errors/app-error";
 import {
   cancelQueuedJobsForBatch,

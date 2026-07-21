@@ -20,7 +20,6 @@ import {
 } from "~/app/_components/form-fields";
 import { Card, CardContent } from "~/components/ui/card";
 import {
-  ComboboxFieldWithSearch,
   type CreateModeProps,
   detectComboboxIdChange,
   type EditModeProps,
@@ -29,6 +28,7 @@ import {
   SideBySideFields,
   submitOrCancel,
 } from "../form-utils";
+import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 import { AmountFieldGroup } from "./amount-field-group";
 
 // Form schema using shared field schemas

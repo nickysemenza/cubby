@@ -1,11 +1,9 @@
 import { z } from "zod";
+import { timestampedFields } from "./base-entity";
 import { id } from "./identifiers";
 
 export const dbTimestampsOut = z
-  .object({
-    createdAt: z.date(),
-    updatedAt: z.date(),
-  })
+  .object(timestampedFields)
   .describe("db timestamps for an API response");
 
 export function extractDbTimestampsFromDBRec<

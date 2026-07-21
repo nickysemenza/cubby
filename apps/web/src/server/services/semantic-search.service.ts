@@ -4,8 +4,9 @@ import type {
   SearchDebugOut,
   SearchResultItem,
 } from "@cubby/schemas/search";
+import { searchableEntities } from "@cubby/schemas/search";
 import { getErrorMessage } from "~/lib/error-utils";
-import { dispatchBackgroundJobs } from "~/server/background-queue";
+import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import {
   findSemanticEntityCandidates,
@@ -31,16 +32,7 @@ import {
 } from "~/server/semantic/ranking";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [
-  "product",
-  "recipe",
-  "ingredient",
-  "location",
-  "inventory",
-  "project",
-  "task",
-  "purchase",
-];
+const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
 
 async function semanticSearchCandidates(
   db: Database,

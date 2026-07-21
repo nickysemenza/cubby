@@ -90,5 +90,9 @@
   "ignoreDependencies": ["zod"],
   "ignoreBinaries": ["wasm-pack"],
   "ignoreWorkspaces": ["packages/wasm"],
+  "rules": {
+    "duplicates": "error",
+    "cycles": "error"
+  },
   "tags": ["-lintignore"]
 }

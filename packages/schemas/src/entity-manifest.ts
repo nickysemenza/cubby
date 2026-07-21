@@ -30,6 +30,8 @@ export const entityDescriptor = z.object({
   auditable: z.boolean(),
   /** Can carry images (drives the image entity enum). */
   hasImages: z.boolean(),
+  /** Participates in global lexical/semantic search and entity embeddings. */
+  searchable: z.boolean(),
   /** Has a local, soft-deletable table we can count (drives entity counts). */
   countable: z.boolean(),
   /** Non-default count filter, beyond `notDeleted`. */
@@ -60,6 +62,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: true,
+    searchable: true,
     countable: true,
     references: ["ingredient", "image", "usda-food"],
     mcp: ALL_MCP,
@@ -73,6 +76,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: true,
+    searchable: true,
     countable: true,
     // recipe→recipe: a recipe can use another recipe as a sub-recipe ingredient
     // (the sub-recipe dependency the costing/availability engines cascade through).
@@ -87,6 +91,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
+    searchable: true,
     countable: true,
     // Rows with a non-null recipeId are recipe-as-ingredient pointers, not real
     // ingredients — the list/count surfaces exclude them.
@@ -102,6 +107,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: true,
+    searchable: false,
     countable: true,
     references: ["image"],
     mcp: ["list"],
@@ -115,6 +121,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: true,
+    searchable: true,
     countable: true,
     references: ["location", "image"],
     mcp: ALL_MCP,
@@ -127,6 +134,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
+    searchable: true,
     countable: true,
     references: ["product", "location"],
     mcp: ALL_MCP,
@@ -139,6 +147,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
+    searchable: false,
     countable: true,
     references: ["recipe"],
     mcp: ALL_MCP,
@@ -151,6 +160,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: true,
+    searchable: true,
     countable: true,
     // project→project: Blocked-by/Blocking dependency edges (ProjectDependency).
     references: ["project", "image"],
@@ -164,6 +174,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
+    searchable: true,
     countable: true,
     // task→task: Blocked-by/Blocking dependency edges (TaskDependency).
     references: ["project", "task"],
@@ -177,6 +188,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: true,
     hasImages: false,
+    searchable: true,
     countable: true,
     references: ["project"],
     mcp: ALL_MCP,
@@ -189,6 +201,7 @@ export const entityManifest = {
     softDelete: false,
     auditable: false,
     hasImages: false,
+    searchable: false,
     countable: false,
     references: [],
     mcp: ["get", "list"],
@@ -201,6 +214,7 @@ export const entityManifest = {
     softDelete: true,
     auditable: false,
     hasImages: false,
+    searchable: false,
     countable: true,
     references: [],
     mcp: [],
@@ -250,6 +264,18 @@ export const imageEntities = [
   "project",
 ] as const;
 
+/** Entities indexed by global lexical/semantic search. */
+export const searchableEntities = [
+  "product",
+  "recipe",
+  "ingredient",
+  "location",
+  "inventory",
+  "project",
+  "task",
+  "purchase",
+] as const;
+
 /** Entities with a local soft-deletable table we can count. */
 export const countableEntities = [
   "product",
@@ -267,3 +293,4 @@ export const countableEntities = [
 
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];
+export type SearchableEntity = (typeof searchableEntities)[number];

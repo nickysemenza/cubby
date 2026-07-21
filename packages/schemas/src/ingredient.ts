@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { timestampedFields } from "./base-entity";
+import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { id, ingredientId, recipeId } from "./identifiers";
@@ -22,9 +22,7 @@ export const ingredientBaseFields = {
   aliases: z.array(z.string()).describe("Alternate names for this ingredient"),
 };
 
-export const ingredientFields = z.object(ingredientBaseFields);
-
-export const ingredientBase = ingredientFields;
+export const ingredientBase = z.object(ingredientBaseFields);
 
 /**
  * List/search filters for ingredients. Field names match the MCP
@@ -224,24 +222,27 @@ export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
  * Input schema for creating ingredients. Overrides the base `name` (lax for
  * reads) with a non-empty constraint; keep the mock hint for test fixtures.
  */
-export const ingredientCreateInput = z.object({
+const ingredientCreateShape = {
   name: requiredName("Ingredient name")
     .describe("Ingredient name")
     .meta({ mock: "food.ingredient" }),
   aliases: ingredientBaseFields.aliases.default([]),
   naKinds: z.array(baseKind).optional().default([]),
-});
+};
+export const ingredientCreateInput = z.object(ingredientCreateShape);
 export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
 
-export const ingredientUpdateData = z.object({
-  name: requiredName("Ingredient name")
-    .describe("New name")
-    .meta({ mock: "food.ingredient" })
-    .optional(),
-  aliases: ingredientBaseFields.aliases
-    .optional()
-    .describe("New aliases (replaces existing list)"),
-  naKinds: z.array(baseKind).optional(),
+export const ingredientUpdateData = deriveUpdateData(ingredientCreateShape, {
+  omit: ["name", "aliases"],
+  extend: {
+    name: requiredName("Ingredient name")
+      .describe("New name")
+      .meta({ mock: "food.ingredient" })
+      .optional(),
+    aliases: ingredientBaseFields.aliases
+      .optional()
+      .describe("New aliases (replaces existing list)"),
+  },
 });
 
 /**
@@ -313,13 +314,9 @@ export const ingredientResolvableNamesInput = z.object({
 });
 
 export const mcpIngredientCreateInput = z.object({
-  name: requiredName("Ingredient name")
-    .describe("Ingredient name")
-    .meta({ mock: "food.ingredient" }),
-  aliases: ingredientBaseFields.aliases.default([]),
+  name: ingredientCreateShape.name,
+  aliases: ingredientCreateShape.aliases,
 });
-export const mcpIngredientUpdateInput = ingredientUpdateData;
-
 const ingredientMcpProductRefFields = {
   id: z.string(),
   name: z.string(),

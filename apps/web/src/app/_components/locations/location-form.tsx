@@ -19,7 +19,6 @@ import { Card, CardContent } from "~/components/ui/card";
 import { useImageState } from "~/hooks/useImageState";
 import {
   buildUpdateObject,
-  ComboboxFieldWithSearch,
   type CreateModeProps,
   detectComboboxIdChange,
   type EditModeProps,
@@ -28,6 +27,7 @@ import {
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
+import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 import { PendingImageUpload } from "../PendingImageUpload";
 import { TypeFieldWithAI } from "./type-field-with-ai";
 

@@ -1,9 +1,9 @@
 import {
   bulkLookupResponseSchema,
+  productLookupResponseSchema,
   type SearchResponse,
   searchResponseSchema,
   type UPCLookupResponse,
-  upcLookupResponseSchema,
 } from "@cubby/upc-contract";
 import { chunk } from "es-toolkit";
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
@@ -86,7 +86,7 @@ export class UPCLookupClient {
         }
 
         const data = await res.json();
-        const parsed = upcLookupResponseSchema.safeParse(data);
+        const parsed = productLookupResponseSchema.safeParse(data);
 
         if (!parsed.success) {
           console.warn("[UPC Lookup] Response parse error:", parsed.error);

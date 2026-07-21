@@ -6,7 +6,6 @@ import {
   globalSearchInputSchema,
   globalSearchOut,
   type SearchResultItem,
-  searchDebugInputSchema,
   searchDebugOutSchema,
   semanticBackfillInputSchema,
   semanticBackfillOutSchema,
@@ -33,7 +32,7 @@ const global = protectedProcedure
 export const searchRouter = createTRPCRouter({
   global,
   debug: protectedProcedure
-    .input(searchDebugInputSchema)
+    .input(globalSearchInputSchema)
     .output(searchDebugOutSchema)
     .query(async ({ ctx, input }) => {
       return await debugHybridSearch(ctx.db, input.query, input.limit);

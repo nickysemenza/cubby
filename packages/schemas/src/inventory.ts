@@ -303,6 +303,3 @@ export const inventoryMcpBulkMoveOut =
 export const inventoryDuplicateFindOut = createItemsResponseSchema(
   duplicateUniqueProductSchema,
 );
-
-export const inventoryCreateInput = inventoryCreatePayloadData;
-export const inventoryUpdatePayload = inventoryUpdatePayloadData;

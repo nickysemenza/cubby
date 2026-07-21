@@ -9,7 +9,10 @@ import type { DataType } from "@cubby/usda-schemas";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
-import { capitalize, PROJECT_STATUS_LABELS } from "~/app/projects/shared";
+import {
+  capitalize,
+  PROJECT_STATUS_LABELS,
+} from "~/app/projects/project-formatting";
 import { EntityIcon } from "~/entities/entities";
 import { usdaRouteId } from "~/entities/entity-query";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";

@@ -682,9 +682,6 @@ export function UnifiedTextField<
   );
 }
 
-// Re-export ComboboxFieldWithSearch from its dedicated file
-export { ComboboxFieldWithSearch } from "./form-utils/combobox-field-with-search";
-
 /**
  * Select field over a **fixed, in-memory option list** (enums, small static
  * sets). Backed by {@link FilterableCombobox} for type-to-filter.

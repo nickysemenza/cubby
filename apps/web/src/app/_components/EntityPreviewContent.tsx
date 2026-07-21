@@ -15,16 +15,18 @@ import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
+import { match } from "ts-pattern";
 import {
   capitalize,
   formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,
-} from "~/app/projects/shared";
+} from "~/app/projects/project-formatting";
 import { costTypeLabels } from "~/app/purchases/purchase-options";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { EntityIcon } from "~/entities/entities";
+import { fdcIdFromParam } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -35,10 +37,9 @@ import {
   type CrossLink,
   ManifestCard,
   type ManifestCardProps,
-  PreviewDeleted,
-  PreviewLoading,
   PriceValue,
 } from "./preview/manifest-card";
+import { PreviewQuery } from "./preview/preview-query";
 import { coverageLabel, formatYield } from "./recipe/recipe-utils";
 
 // Cross-link to the USDA food behind an ingredient/product (built identically
@@ -56,6 +57,37 @@ const usdaCrossLink = (fdcId: number): CrossLink => ({
 // wrappers (*PreviewContent) fetch via tRPC getByID (React-Query cached, only
 // mounts while the hovercard is open) and feed the view-model in. The view-model
 // types are the shared contract reused by the /design gallery's static samples.
+
+type PreviewEntity =
+  | "recipe"
+  | "ingredient"
+  | "product"
+  | "usda-food"
+  | "location"
+  | "project"
+  | "task"
+  | "purchase";
+
+export function EntityPreviewContent({
+  entity,
+  id,
+}: {
+  entity: PreviewEntity;
+  id: string;
+}) {
+  return match(entity)
+    .with("recipe", () => <RecipePreviewContent recipeId={id} />)
+    .with("ingredient", () => <IngredientPreviewContent ingredientId={id} />)
+    .with("product", () => <ProductPreviewContent productId={id} />)
+    .with("usda-food", () => (
+      <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />
+    ))
+    .with("location", () => <LocationPreviewContent locationId={id} />)
+    .with("project", () => <ProjectPreviewContent projectId={id} />)
+    .with("task", () => <TaskPreviewContent taskId={id} />)
+    .with("purchase", () => <PurchasePreviewContent purchaseId={id} />)
+    .exhaustive();
+}
 
 // ── Recipe ──────────────────────────────────────────────────────────────────
 
@@ -134,50 +166,47 @@ export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
 
 export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
-    trpc.recipe.getByID.queryOptions({ id: recipeId }),
-  );
-
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Recipe" />;
-
-  // Whole-recipe macros from persisted totals (kept off the row until a recipe
-  // is recomputed — older rows lack these fields, so buildNutrients drops them
-  // and the block is omitted).
-  const t = data.totals;
-  const macros = buildNutrients(
-    RECIPE_MACRO_KEYS.reduce<Partial<Record<NutrientKey, number | undefined>>>(
-      (acc, key) => {
-        acc[key] = t?.[`${key}Total`];
-        return acc;
-      },
-      {},
-    ),
-  );
+  const query = useQuery(trpc.recipe.getByID.queryOptions({ id: recipeId }));
 
   return (
-    <ManifestCard
-      {...toRecipeCard({
-        id: recipeId,
-        name: data.name,
-        yieldText: data.yield?.value
-          ? `makes ${formatYield(data.yield)}`
-          : data.servings
-            ? `${data.servings} servings`
-            : undefined,
-        cost: data.totals?.costTotal,
-        calories: data.totals?.caloriesTotal,
-        nutrients: Object.keys(macros).length > 0 ? macros : undefined,
-        nutrientsLabel: "Per recipe",
-        costCovered: data.totals?.costCovered,
-        nutritionCovered: data.totals?.caloriesCovered,
-        ingredientCount:
-          data.totals?.ingredientCount ??
-          sumBy(data.sections, (s) => s.ingredients.length),
-        stepCount: sumBy(data.sections, (s) => s.instructions.length),
-        thumbUrl: data.images[0]?.url,
-      })}
-    />
+    <PreviewQuery query={query} label="Recipe">
+      {(data) => {
+        // Whole-recipe macros from persisted totals. Older rows may not have
+        // them yet, so buildNutrients drops missing values.
+        const macros = buildNutrients(
+          RECIPE_MACRO_KEYS.reduce<
+            Partial<Record<NutrientKey, number | undefined>>
+          >((acc, key) => {
+            acc[key] = data.totals?.[`${key}Total`];
+            return acc;
+          }, {}),
+        );
+        return (
+          <ManifestCard
+            {...toRecipeCard({
+              id: recipeId,
+              name: data.name,
+              yieldText: data.yield?.value
+                ? `makes ${formatYield(data.yield)}`
+                : data.servings
+                  ? `${data.servings} servings`
+                  : undefined,
+              cost: data.totals?.costTotal,
+              calories: data.totals?.caloriesTotal,
+              nutrients: Object.keys(macros).length > 0 ? macros : undefined,
+              nutrientsLabel: "Per recipe",
+              costCovered: data.totals?.costCovered,
+              nutritionCovered: data.totals?.caloriesCovered,
+              ingredientCount:
+                data.totals?.ingredientCount ??
+                sumBy(data.sections, (s) => s.ingredients.length),
+              stepCount: sumBy(data.sections, (s) => s.instructions.length),
+              thumbUrl: data.images[0]?.url,
+            })}
+          />
+        );
+      }}
+    </PreviewQuery>
   );
 }
 
@@ -230,36 +259,39 @@ export function IngredientPreviewContent({
   ingredientId: string;
 }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
+  const query = useQuery(
     trpc.ingredient.getByID.queryOptions({ id: ingredientId }),
   );
 
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Ingredient" />;
-
-  const prices = data.product
-    .map((prod) => prod.price)
-    .filter((v): v is number => v != null);
-
   return (
-    <ManifestCard
-      {...toIngredientCard({
-        id: ingredientId,
-        name: data.name,
-        aliases: data.aliases ?? [],
-        nutrients: data.product.find((prod) => prod.food?.nutritionInfo)?.food
-          ?.nutritionInfo.nutrientsPer100,
-        cheapestPrice: prices.length > 0 ? Math.min(...prices) : undefined,
-        multiplePrices: prices.length > 1,
-        recipeCount: data.appearsInRecipes.length,
-        usdaFdcId: data.product.find((prod) => prod.food)?.food?.fdc_id,
-        products: data.product.map((prod) => ({
-          id: prod.id,
-          name: prod.name,
-          manufacturer: prod.manufacturer,
-        })),
-      })}
-    />
+    <PreviewQuery query={query} label="Ingredient">
+      {(data) => {
+        const prices = data.product
+          .map((prod) => prod.price)
+          .filter((value): value is number => value != null);
+        return (
+          <ManifestCard
+            {...toIngredientCard({
+              id: ingredientId,
+              name: data.name,
+              aliases: data.aliases ?? [],
+              nutrients: data.product.find((prod) => prod.food?.nutritionInfo)
+                ?.food?.nutritionInfo.nutrientsPer100,
+              cheapestPrice:
+                prices.length > 0 ? Math.min(...prices) : undefined,
+              multiplePrices: prices.length > 1,
+              recipeCount: data.appearsInRecipes.length,
+              usdaFdcId: data.product.find((prod) => prod.food)?.food?.fdc_id,
+              products: data.product.map((prod) => ({
+                id: prod.id,
+                name: prod.name,
+                manufacturer: prod.manufacturer,
+              })),
+            })}
+          />
+        );
+      }}
+    </PreviewQuery>
   );
 }
 
@@ -305,38 +337,37 @@ export function toProductCard(vm: ProductPreview): ManifestCardProps {
 
 export function ProductPreviewContent({ productId }: { productId: string }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
-    trpc.product.getByID.queryOptions({ id: productId }),
-  );
-
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Product" />;
-
-  const isMisc = isMiscProduct(data.name);
-  const manufacturer =
-    !isMisc &&
-    data.manufacturer &&
-    !isUnspecifiedManufacturer(data.manufacturer)
-      ? data.manufacturer
-      : null;
+  const query = useQuery(trpc.product.getByID.queryOptions({ id: productId }));
 
   return (
-    <ManifestCard
-      {...toProductCard({
-        id: productId,
-        name: isMisc ? getMiscDisplayName(data.name) : data.name,
-        identity:
-          [isMisc ? "misc" : manufacturer, data.category]
-            .filter(Boolean)
-            .join(" · ") || undefined,
-        nutrients: data.food?.nutritionInfo.nutrientsPer100,
-        price: data.price ?? undefined,
-        upc: data.upc ?? undefined,
-        thumbUrl: data.images.find((img) => !isDocumentFile(img))?.url,
-        // Resolved USDA food (explicit fdc_id or UPC-matched) lives on `food`.
-        usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
-      })}
-    />
+    <PreviewQuery query={query} label="Product">
+      {(data) => {
+        const isMisc = isMiscProduct(data.name);
+        const manufacturer =
+          !isMisc &&
+          data.manufacturer &&
+          !isUnspecifiedManufacturer(data.manufacturer)
+            ? data.manufacturer
+            : null;
+        return (
+          <ManifestCard
+            {...toProductCard({
+              id: productId,
+              name: isMisc ? getMiscDisplayName(data.name) : data.name,
+              identity:
+                [isMisc ? "misc" : manufacturer, data.category]
+                  .filter(Boolean)
+                  .join(" · ") || undefined,
+              nutrients: data.food?.nutritionInfo.nutrientsPer100,
+              price: data.price ?? undefined,
+              upc: data.upc ?? undefined,
+              thumbUrl: data.images.find((img) => !isDocumentFile(img))?.url,
+              usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
+            })}
+          />
+        );
+      }}
+    </PreviewQuery>
   );
 }
 
@@ -390,28 +421,27 @@ export function toUsdaCard(vm: UsdaPreview): ManifestCardProps {
 
 export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
-    trpc.usda.getByID.queryOptions({ id: fdcId }),
-  );
-
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Food" />;
+  const query = useQuery(trpc.usda.getByID.queryOptions({ id: fdcId }));
 
   return (
-    <ManifestCard
-      {...toUsdaCard({
-        fdcId,
-        name: data.foodInfo.description || "Unnamed Food",
-        dataType: data.foodInfo.data_type,
-        brand:
-          data.brandedFoodInfo?.brand_name ??
-          data.brandedFoodInfo?.brand_owner ??
-          undefined,
-        nutrients: data.nutritionInfo.nutrientsPer100,
-        linkedProductId: data.linkedProducts[0]?.id,
-        linkedProductName: data.linkedProducts[0]?.name,
-      })}
-    />
+    <PreviewQuery query={query} label="Food">
+      {(data) => (
+        <ManifestCard
+          {...toUsdaCard({
+            fdcId,
+            name: data.foodInfo.description || "Unnamed Food",
+            dataType: data.foodInfo.data_type,
+            brand:
+              data.brandedFoodInfo?.brand_name ??
+              data.brandedFoodInfo?.brand_owner ??
+              undefined,
+            nutrients: data.nutritionInfo.nutrientsPer100,
+            linkedProductId: data.linkedProducts[0]?.id,
+            linkedProductName: data.linkedProducts[0]?.name,
+          })}
+        />
+      )}
+    </PreviewQuery>
   );
 }
 
@@ -457,26 +487,27 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
 
 export function LocationPreviewContent({ locationId }: { locationId: string }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
+  const query = useQuery(
     trpc.location.getByID.queryOptions({ id: locationId }),
   );
 
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Location" />;
-
   return (
-    <ManifestCard
-      {...toLocationCard({
-        id: locationId,
-        name: data.name,
-        type: data.type,
-        parent: data.parent
-          ? { id: data.parent.id, name: data.parent.name }
-          : undefined,
-        itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
-        subCount: data.childCount ?? data.children?.length ?? undefined,
-      })}
-    />
+    <PreviewQuery query={query} label="Location">
+      {(data) => (
+        <ManifestCard
+          {...toLocationCard({
+            id: locationId,
+            name: data.name,
+            type: data.type,
+            parent: data.parent
+              ? { id: data.parent.id, name: data.parent.name }
+              : undefined,
+            itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
+            subCount: data.childCount ?? data.children?.length ?? undefined,
+          })}
+        />
+      )}
+    </PreviewQuery>
   );
 }
 
@@ -546,29 +577,28 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
 
 export function ProjectPreviewContent({ projectId }: { projectId: string }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
-    trpc.project.getByID.queryOptions({ id: projectId }),
-  );
-
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Project" />;
+  const query = useQuery(trpc.project.getByID.queryOptions({ id: projectId }));
 
   return (
-    <ManifestCard
-      {...toProjectCard({
-        id: projectId,
-        name: data.name,
-        icon: data.icon,
-        status: data.status,
-        kind: data.kind,
-        locations: data.locations,
-        spent: data.rollup.spent,
-        costEstimate: data.costEstimate,
-        taskCount: data.rollup.taskCount,
-        doneTaskCount: data.rollup.doneTaskCount,
-        purchaseCount: data.rollup.purchaseCount,
-      })}
-    />
+    <PreviewQuery query={query} label="Project">
+      {(data) => (
+        <ManifestCard
+          {...toProjectCard({
+            id: projectId,
+            name: data.name,
+            icon: data.icon,
+            status: data.status,
+            kind: data.kind,
+            locations: data.locations,
+            spent: data.rollup.spent,
+            costEstimate: data.costEstimate,
+            taskCount: data.rollup.taskCount,
+            doneTaskCount: data.rollup.doneTaskCount,
+            purchaseCount: data.rollup.purchaseCount,
+          })}
+        />
+      )}
+    </PreviewQuery>
   );
 }
 
@@ -621,26 +651,25 @@ export function toTaskCard(vm: TaskPreview): ManifestCardProps {
 
 export function TaskPreviewContent({ taskId }: { taskId: string }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
-    trpc.task.getByID.queryOptions({ id: taskId }),
-  );
-
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Task" />;
+  const query = useQuery(trpc.task.getByID.queryOptions({ id: taskId }));
 
   return (
-    <ManifestCard
-      {...toTaskCard({
-        id: taskId,
-        name: data.name,
-        status: data.status,
-        trade: data.trade,
-        dueDate: data.dueDate,
-        dueEndDate: data.dueEndDate,
-        projectId: data.projectId,
-        projectName: data.projectName,
-      })}
-    />
+    <PreviewQuery query={query} label="Task">
+      {(data) => (
+        <ManifestCard
+          {...toTaskCard({
+            id: taskId,
+            name: data.name,
+            status: data.status,
+            trade: data.trade,
+            dueDate: data.dueDate,
+            dueEndDate: data.dueEndDate,
+            projectId: data.projectId,
+            projectName: data.projectName,
+          })}
+        />
+      )}
+    </PreviewQuery>
   );
 }
 
@@ -695,26 +724,27 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
 
 export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(
+  const query = useQuery(
     trpc.purchase.getByID.queryOptions({ id: purchaseId }),
   );
 
-  if (isLoading) return <PreviewLoading />;
-  if (!data) return <PreviewDeleted label="Purchase" />;
-
   return (
-    <ManifestCard
-      {...toPurchaseCard({
-        id: purchaseId,
-        name: data.name,
-        cost: data.cost,
-        date: data.date,
-        costType: data.costType,
-        trade: data.trade,
-        future: data.future,
-        projectId: data.projectId,
-        projectName: data.projectName,
-      })}
-    />
+    <PreviewQuery query={query} label="Purchase">
+      {(data) => (
+        <ManifestCard
+          {...toPurchaseCard({
+            id: purchaseId,
+            name: data.name,
+            cost: data.cost,
+            date: data.date,
+            costType: data.costType,
+            trade: data.trade,
+            future: data.future,
+            projectId: data.projectId,
+            projectName: data.projectName,
+          })}
+        />
+      )}
+    </PreviewQuery>
   );
 }

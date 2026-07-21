@@ -7,7 +7,6 @@ import {
   projectStatusValues,
   type TaskOut,
   type TaskStatus,
-  TRADE_LABELS,
   type Trade,
   tradeValues,
 } from "@cubby/schemas/project";
@@ -17,9 +16,9 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type Row as TableRow,
   useReactTable,
 } from "@tanstack/react-table";
-import { format } from "date-fns";
 import { partition } from "es-toolkit";
 import {
   Archive,
@@ -46,7 +45,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import { type ComponentType, type ReactNode, useMemo } from "react";
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
@@ -56,7 +55,6 @@ import {
 import RTable from "~/app/_components/data-table/Table";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
@@ -83,6 +81,11 @@ import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
+import {
+  capitalize,
+  PROJECT_STATUS_LABELS,
+  TRADE_LABELS,
+} from "./project-formatting";
 import { projectKindOptions } from "./project-options";
 
 /**
@@ -91,40 +94,27 @@ import { projectKindOptions } from "./project-options";
  * across the dashboard/detail page/charts — never string-match the raw enum
  * value for display text.
  */
-export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
-  planning: "Planning",
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-};
-
 // Task labels live with the task options (see the note there on import
 // direction); re-exported here for this file's many existing consumers.
 export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
+export {
+  capitalize,
+  formatDate,
+  formatDateRange,
+  monthKey,
+  monthLabel,
+  normalizeCostTypeKey,
+  PROJECT_STATUS_LABELS,
+  TRADE_LABELS,
+} from "./project-formatting";
 
 /** Status select options for the detail page's inline `EditableCell` status field. */
 export const PROJECT_STATUS_OPTIONS: FilterableComboboxItem[] =
   buildSelectOptions(projectStatusValues, PROJECT_STATUS_LABELS);
 
-/** Title-cases a single lowercase enum-ish token (project kind, cost type). */
-export function capitalize(s: string): string {
-  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 // -- Cost-type colors --
 
 export { getCostTypeColor } from "~/lib/status-colors";
-
-/**
- * `purchase.costType` is a strict enum, so this is just a null-coalesce —
- * kept as a named helper since every chart file already calls it as the
- * "cost type or other" bucket key.
- */
-export function normalizeCostTypeKey(
-  costType: CostType | null,
-): CostType | "other" {
-  return costType ?? "other";
-}
 
 /**
  * Monochrome Lucide glyph per trade — a scannable leading mark for badges and
@@ -154,8 +144,6 @@ const TRADE_ICONS: Record<Trade, LucideIcon> = {
   auto: Car,
   other: Shapes,
 };
-
-export { TRADE_LABELS };
 
 /** Outline badge with the trade's leading glyph + label — the canonical trade chip. */
 export function TradeBadge({ trade }: { trade: Trade }) {
@@ -198,19 +186,6 @@ export const tradeOptions: FilterableComboboxItem[] = tradeValues.map(
     };
   },
 );
-
-// -- Date helpers --
-
-export function monthKey(dateStr: string): string {
-  return dateStr.slice(0, 7);
-}
-
-export function monthLabel(key: string): string {
-  const [year, month] = key.split("-");
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-}
-
 // -- Chart theme (consistent across all Nivo charts) --
 
 export {
@@ -228,33 +203,6 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
     className.split(" ").find((c) => c.startsWith("text-")) ??
     "text-muted-foreground";
   return Icon ? <Icon className={cn("h-4 w-4 shrink-0", textClass)} /> : null;
-}
-
-// -- Date formatting --
-
-/**
- * Parses a "YYYY-MM-DD" plain-date string (no time component) into a local
- * `Date` at midnight via its components, rather than `new Date(iso+"T00:00:00")`.
- * Mirrors the private `parsePlainDate` helper in columnHelpers.tsx (not
- * exported from there, so duplicated here) — same day-precision guarantee its
- * comment documents.
- */
-function parsePlainDate(value: string): Date {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
-}
-
-export function formatDate(iso: string): string {
-  return format(parsePlainDate(iso), "MMM d");
-}
-
-export function formatDateRange(
-  start: string | null,
-  end: string | null,
-): string {
-  if (!start) return "No date";
-  if (!end) return formatDate(start);
-  return `${formatDate(start)} — ${formatDate(end)}`;
 }
 
 // -- Task Table --
@@ -447,7 +395,15 @@ const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
  * infinite scroll, inline editing, and delete — all free from `useEntityList`.
  * Takes no props; mounted bare from the dashboard's DATA tab.
  */
-export function ProjectTable() {
+export function ProjectTable({
+  onRowClick,
+  onRowHover,
+  PreviewSheet,
+}: {
+  onRowClick: (row: TableRow<ProjectOut>) => void;
+  onRowHover: (row: TableRow<ProjectOut>) => void;
+  PreviewSheet: ComponentType;
+}) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<ProjectOut>(), []);
 
@@ -616,8 +572,6 @@ export function ProjectTable() {
   // defaultSortState always defaults to desc — matches the original
   // ProjectTable's `sorting: [{ id: "startDate", desc: true }]`.
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("project");
-
   const {
     table,
     isLoading,

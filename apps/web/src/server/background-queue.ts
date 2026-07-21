@@ -1,24 +1,12 @@
-import {
-  type BackgroundBatchRef,
-  type BackgroundBatchSource,
-  type BackgroundJobKind,
-  backgroundJobPayloadSchema,
-} from "@cubby/schemas/background-jobs";
+import { backgroundJobPayloadSchema } from "@cubby/schemas/background-jobs";
 import { unsafeLocationId, unsafeRecipeId } from "@cubby/schemas/identifiers";
-import { getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
-  addBackgroundJobsToBatch,
-  type CreateBackgroundJobInput,
-  createBackgroundBatchWithJobs,
   failOrRetryBackgroundJob,
   findQueuedBackgroundJobs,
   finishBackgroundJob,
-  getBackgroundBatchDetail,
   getBackgroundJob,
   markBackgroundJobRunning,
-  setBackgroundBatchProcessor,
-  toBackgroundBatchRef,
 } from "~/server/repo/background-jobs";
 import {
   getEmbeddingTextForEntity,
@@ -30,133 +18,15 @@ import {
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
 import {
+  BACKGROUND_MESSAGE_VERSION,
+  type BackgroundQueueDeliveredMessage,
+} from "./background-queue-types";
+import {
   describeLocation,
   detectInventoryItems,
   isLocationHasNoImagesToAnalyzeError,
 } from "./services/ai-enrichment/location-vision";
 import { LocationValuationService } from "./services/location-valuation.service";
-
-const BACKGROUND_MESSAGE_VERSION = 1;
-
-interface BackgroundQueueMessage {
-  messageVersion: number;
-  batchId: string;
-  jobId: string;
-  kind: BackgroundJobKind;
-}
-
-export interface BackgroundQueueProducer {
-  send(body: BackgroundQueueMessage): Promise<void>;
-  sendBatch(
-    messages: Iterable<{ body: BackgroundQueueMessage }>,
-  ): Promise<void>;
-}
-
-export interface BackgroundQueueDeliveredMessage {
-  readonly body: BackgroundQueueMessage;
-  ack(): void;
-  retry(): void;
-}
-
-export interface BackgroundQueueBatch {
-  readonly messages: readonly BackgroundQueueDeliveredMessage[];
-}
-
-interface DispatchBackgroundJobsInput {
-  kind: BackgroundJobKind;
-  source: BackgroundBatchSource;
-  metadata?: unknown;
-  batchId?: string;
-  jobs: CreateBackgroundJobInput[];
-}
-
-interface DispatchBackgroundJobsResult {
-  batchId: string;
-  jobIds: string[];
-  batch: BackgroundBatchRef;
-}
-
-async function getDispatchedBatchRef(
-  db: Database,
-  batchId: string,
-): Promise<BackgroundBatchRef> {
-  const detail = await getBackgroundBatchDetail(db, batchId);
-  if (!detail) {
-    throw new Error(`Background batch ${batchId} was not found after dispatch`);
-  }
-  return toBackgroundBatchRef(detail);
-}
-
-export async function dispatchBackgroundJobs(
-  db: Database,
-  input: DispatchBackgroundJobsInput,
-): Promise<DispatchBackgroundJobsResult> {
-  const result = input.batchId
-    ? {
-        batchId: input.batchId,
-        jobIds: await addBackgroundJobsToBatch(db, input.batchId, input.jobs),
-      }
-    : await createBackgroundBatchWithJobs(db, input);
-
-  if (result.jobIds.length === 0) {
-    return {
-      ...result,
-      batch: await getDispatchedBatchRef(db, result.batchId),
-    };
-  }
-
-  const queue = getBackgroundQueue();
-  if (queue) {
-    await setBackgroundBatchProcessor(db, result.batchId, "queue");
-    await sendBackgroundMessages(
-      queue,
-      result.batchId,
-      input.kind,
-      result.jobIds,
-    );
-    return {
-      ...result,
-      batch: await getDispatchedBatchRef(db, result.batchId),
-    };
-  }
-
-  await setBackgroundBatchProcessor(db, result.batchId, "inline");
-  for (const jobId of result.jobIds) {
-    // Mirror the queue consumer's retry handling: a "retry" outcome resets the
-    // job to "queued" (attempts++), so re-run inline until terminal. Terminates
-    // because failOrRetryBackgroundJob returns "failed" once attempts hit max.
-    let outcome = await processBackgroundJob(db, jobId);
-    while (outcome === "retry") {
-      outcome = await processBackgroundJob(db, jobId);
-    }
-  }
-
-  return {
-    ...result,
-    batch: await getDispatchedBatchRef(db, result.batchId),
-  };
-}
-
-async function sendBackgroundMessages(
-  queue: BackgroundQueueProducer,
-  batchId: string,
-  kind: BackgroundJobKind,
-  jobIds: string[],
-): Promise<void> {
-  for (let i = 0; i < jobIds.length; i += 100) {
-    const chunk = jobIds.slice(i, i + 100);
-    await queue.sendBatch(
-      chunk.map((jobId) => ({
-        body: {
-          messageVersion: BACKGROUND_MESSAGE_VERSION,
-          batchId,
-          jobId,
-          kind,
-        },
-      })),
-    );
-  }
-}
 
 export async function processBackgroundQueueMessage(
   db: Database,
@@ -191,61 +61,7 @@ export async function drainQueuedBackgroundJobs(
   return { processed };
 }
 
-/**
- * Re-dispatch a batch's currently-"queued" jobs after a manual retry. Retrying
- * only resets DB status; without this, in production the CF queue consumer never
- * receives a wakeup and the jobs sit idle. Mirrors the dispatch tail: queue in
- * prod, drain inline in dev (re-running on "retry" until terminal).
- */
-export async function redispatchQueuedBatchJobs(
-  db: Database,
-  batchId: string,
-): Promise<void> {
-  const detail = await getBackgroundBatchDetail(db, batchId);
-  if (!detail) return;
-  const queuedJobIds = detail.jobs
-    .filter((job) => job.status === "queued")
-    .map((job) => job.id);
-  if (queuedJobIds.length === 0) return;
-
-  const queue = getBackgroundQueue();
-  if (queue) {
-    await setBackgroundBatchProcessor(db, batchId, "queue");
-    await sendBackgroundMessages(queue, batchId, detail.kind, queuedJobIds);
-    return;
-  }
-
-  await setBackgroundBatchProcessor(db, batchId, "inline");
-  for (const jobId of queuedJobIds) {
-    let outcome = await processBackgroundJob(db, jobId);
-    while (outcome === "retry") {
-      outcome = await processBackgroundJob(db, jobId);
-    }
-  }
-}
-
-export async function dispatchLocationValuationRecompute(
-  db: Database,
-  reason: string,
-): Promise<DispatchBackgroundJobsResult> {
-  return await dispatchBackgroundJobs(db, {
-    kind: "location-valuation.recompute",
-    source: "mutation",
-    metadata: { source: reason, reason },
-    jobs: [
-      {
-        kind: "location-valuation.recompute",
-        // Valuation is a whole-tree recompute, so one job per mutation wave is
-        // enough. A stable dedupeKey collapses duplicates within a batch instead
-        // of fanning out N recomputes (callers enqueue this at most once/wave).
-        dedupeKey: "location-valuation.recompute",
-        payload: { reason },
-      },
-    ],
-  });
-}
-
-async function processBackgroundJob(
+export async function processBackgroundJob(
   db: Database,
   jobId: string,
 ): Promise<"succeeded" | "skipped" | "retry" | "failed"> {

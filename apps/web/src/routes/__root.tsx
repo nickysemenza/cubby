@@ -20,7 +20,7 @@ import { BottomNav } from "~/app/_components/navigation/bottom-nav";
 import { RouteErrorComponent } from "~/components/route-error";
 import { RouteNotFound } from "~/components/route-not-found";
 import { Toaster } from "~/components/ui/sonner";
-import { DebugContextProvider, useDebug } from "~/hooks/useDebug";
+import { useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
@@ -239,34 +239,32 @@ function RootComponent() {
 
   return (
     <Provider queryClient={queryClient}>
-      <DebugContextProvider>
-        <div className="flex min-h-dvh flex-col">
-          <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
-            <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
-              <MainNav className="mx-0" onSearchClick={openCommandMenu} />
-            </div>
+      <div className="flex min-h-dvh flex-col">
+        <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
+          <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
+            <MainNav className="mx-0" onSearchClick={openCommandMenu} />
           </div>
-          <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
-            {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
-            <PerfProfiler id="route">
-              <Outlet />
-            </PerfProfiler>
-          </main>
-          <AppFooter />
         </div>
-        <BottomNav />
-        {commandMenuMounted && (
-          <React.Suspense fallback={null}>
-            <GlobalCommandMenu
-              open={commandMenuOpen}
-              onOpenChange={setCommandMenuOpen}
-            />
-          </React.Suspense>
-        )}
-        <Toaster />
-        <PerfOverlayMount />
-        <DevtoolsWrapper />
-      </DebugContextProvider>
+        <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
+          {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
+          <PerfProfiler id="route">
+            <Outlet />
+          </PerfProfiler>
+        </main>
+        <AppFooter />
+      </div>
+      <BottomNav />
+      {commandMenuMounted && (
+        <React.Suspense fallback={null}>
+          <GlobalCommandMenu
+            open={commandMenuOpen}
+            onOpenChange={setCommandMenuOpen}
+          />
+        </React.Suspense>
+      )}
+      <Toaster />
+      <PerfOverlayMount />
+      <DevtoolsWrapper />
     </Provider>
   );
 }

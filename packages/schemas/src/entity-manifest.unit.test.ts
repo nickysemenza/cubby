@@ -9,6 +9,7 @@ import {
   entityManifest,
   entityReferences,
   imageEntities,
+  searchableEntities,
 } from "./entity-manifest";
 
 const sorted = (xs: readonly string[]) => [...xs].sort();
@@ -74,6 +75,11 @@ describe("entity manifest", () => {
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
       sorted(entityImage.options),
     );
+  });
+
+  it("searchableEntities matches `searchable` flags", () => {
+    const fromFlags = allEntities.filter((e) => entityManifest[e].searchable);
+    expect(sorted(searchableEntities)).toEqual(sorted(fromFlags));
   });
 
   it("countable entities have a db table; non-countable usda-food does not", () => {

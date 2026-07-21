@@ -37,8 +37,6 @@ import {
 export function registerProjectTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "project",
-    entityPlural: "projects",
-    idLabel: "Project",
     createInput: projectCreateInput.shape,
     updateShape: projectUpdateData.shape,
     filterFields: projectFilterFields,
@@ -61,8 +59,6 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "task",
-    entityPlural: "tasks",
-    idLabel: "Task",
     createInput: taskCreateInput.shape,
     updateShape: taskUpdateData.shape,
     filterFields: taskFilterFields,
@@ -94,8 +90,6 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "purchase",
-    entityPlural: "purchases",
-    idLabel: "Purchase",
     createInput: purchaseCreateInput.shape,
     updateShape: purchaseUpdateData.shape,
     filterFields: purchaseFilterFields,

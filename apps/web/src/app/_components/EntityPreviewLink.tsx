@@ -1,23 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { match } from "ts-pattern";
+import { lazy, Suspense } from "react";
 import {
   PreviewCard,
   PreviewCardContent,
   PreviewCardTrigger,
 } from "~/components/ui/preview-card";
+import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
-import { fdcIdFromParam } from "~/entities/entity-query";
-import {
-  IngredientPreviewContent,
-  LocationPreviewContent,
-  ProductPreviewContent,
-  ProjectPreviewContent,
-  PurchasePreviewContent,
-  RecipePreviewContent,
-  TaskPreviewContent,
-  UsdaFoodPreviewContent,
-} from "./EntityPreviewContent";
+
+const EntityPreviewContent = lazy(() =>
+  import("./EntityPreviewContent").then((module) => ({
+    default: module.EntityPreviewContent,
+  })),
+);
 
 // A link to a recipe/ingredient detail page that, on hover/focus, opens a
 // compact preview hovercard (lazily fetched). The shared core behind both the
@@ -81,20 +77,15 @@ export function EntityPreviewLink({
         {children}
       </PreviewCardTrigger>
       <PreviewCardContent>
-        {match(entity)
-          .with("recipe", () => <RecipePreviewContent recipeId={id} />)
-          .with("ingredient", () => (
-            <IngredientPreviewContent ingredientId={id} />
-          ))
-          .with("product", () => <ProductPreviewContent productId={id} />)
-          .with("usda-food", () => (
-            <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />
-          ))
-          .with("location", () => <LocationPreviewContent locationId={id} />)
-          .with("project", () => <ProjectPreviewContent projectId={id} />)
-          .with("task", () => <TaskPreviewContent taskId={id} />)
-          .with("purchase", () => <PurchasePreviewContent purchaseId={id} />)
-          .exhaustive()}
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-4">
+              <Spinner className="text-muted-foreground" />
+            </div>
+          }
+        >
+          <EntityPreviewContent entity={entity} id={id} />
+        </Suspense>
       </PreviewCardContent>
     </PreviewCard>
   );

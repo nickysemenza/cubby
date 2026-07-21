@@ -1,21 +1,28 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
+const entityKey = <TEntity extends string>(entity: TEntity) =>
+  [entity] as const;
+const procedureKey = <TEntity extends string, TProcedure extends string>(
+  entity: TEntity,
+  procedure: TProcedure,
+) => [entity, procedure] as const;
+
 /**
  * Centralized query key definitions for React Query.
  * Use these constants to ensure consistency across query invalidations.
  */
 export const queryKeys = {
   inventory: {
-    all: ["inventory"] as const,
-    list: ["inventory", "list"] as const,
+    all: entityKey("inventory"),
+    list: procedureKey("inventory", "list"),
   },
   image: {
-    all: ["image"] as const,
-    list: ["image", "list"] as const,
+    all: entityKey("image"),
+    list: procedureKey("image", "list"),
   },
   usda: {
-    all: ["usda"] as const,
-    list: ["usda", "list"] as const,
+    all: entityKey("usda"),
+    list: procedureKey("usda", "list"),
   },
   product: {
     // Broad prefix — invalidate every product query (list / search / getByID …)
@@ -23,68 +30,68 @@ export const queryKeys = {
     // (product.list) both refresh after any product create/update/delete. The
     // picker reads a different key than the table, so a list-only invalidation
     // would leave its options stale.
-    all: ["product"] as const,
+    all: entityKey("product"),
   },
   location: {
-    list: ["location", "list"] as const,
-    makeTree: ["location", "makeTree"] as const,
+    list: procedureKey("location", "list"),
+    makeTree: procedureKey("location", "makeTree"),
     // Broad prefix — invalidate every location query (list / makeTree / getByID)
     // so persisted valuation rollups are re-read after an inventory/price change.
-    all: ["location"] as const,
+    all: entityKey("location"),
   },
   ingredient: {
-    list: ["ingredient", "list"] as const,
-    getByName: ["ingredient", "getByName"] as const,
+    list: procedureKey("ingredient", "list"),
+    getByName: procedureKey("ingredient", "getByName"),
     // Broad prefix — invalidate every ingredient query (list / getByName /
     // getByID …) after an enrich/merge/update so all consumers re-read.
-    all: ["ingredient"] as const,
+    all: entityKey("ingredient"),
   },
   problems: {
     // Broad prefix — invalidate every problems query so a fix re-reads whichever
     // cost-grouped detector query (getFast / getCoverage / getUpc) owns the
     // resolved card.
-    all: ["problems"] as const,
+    all: entityKey("problems"),
   },
   search: {
-    all: ["search"] as const,
+    all: entityKey("search"),
   },
   dashboard: {
-    counts: ["dashboard", "counts"] as const,
+    counts: procedureKey("dashboard", "counts"),
   },
   debug: {
-    timing: ["debug", "timing"] as const,
+    timing: procedureKey("debug", "timing"),
   },
   recipe: {
-    list: ["recipe", "list"] as const,
-    getByID: ["recipe", "getByID"] as const,
+    list: procedureKey("recipe", "list"),
+    getByID: procedureKey("recipe", "getByID"),
     // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
     // so its key mirrors that tRPC path.
-    listCookbooks: ["recipe", "listCookbooks"] as const,
-    all: ["recipe"] as const,
+    listCookbooks: procedureKey("recipe", "listCookbooks"),
+    all: entityKey("recipe"),
   },
   cookbook: {
-    all: ["recipe", "listCookbooks"] as const,
+    all: procedureKey("recipe", "listCookbooks"),
   },
   meal: {
-    list: ["meal", "list"] as const,
-    getByID: ["meal", "getByID"] as const,
-    byDateRange: ["meal", "byDateRange"] as const,
-    shoppingList: ["meal", "shoppingList"] as const,
-    all: ["meal"] as const,
+    list: procedureKey("meal", "list"),
+    getByID: procedureKey("meal", "getByID"),
+    byDateRange: procedureKey("meal", "byDateRange"),
+    shoppingList: procedureKey("meal", "shoppingList"),
+    all: entityKey("meal"),
   },
   project: {
-    list: ["project", "list"] as const,
-    getByID: ["project", "getByID"] as const,
-    dashboard: ["project", "dashboard"] as const,
-    all: ["project"] as const,
+    list: procedureKey("project", "list"),
+    getByID: procedureKey("project", "getByID"),
+    dashboard: procedureKey("project", "dashboard"),
+    all: entityKey("project"),
   },
   task: {
-    list: ["task", "list"] as const,
-    all: ["task"] as const,
+    list: procedureKey("task", "list"),
+    all: entityKey("task"),
   },
   purchase: {
-    list: ["purchase", "list"] as const,
-    all: ["purchase"] as const,
+    list: procedureKey("purchase", "list"),
+    all: entityKey("purchase"),
   },
 } as const;
 

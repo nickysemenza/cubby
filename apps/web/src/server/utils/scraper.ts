@@ -10,11 +10,6 @@ import {
 } from "@cubby/shared/external-fetch";
 import { wasm } from "~/lib/wasm";
 
-/** @deprecated Import validateExternalHttpUrl from @cubby/shared instead. */
-export const assertScrapableUrl = (url: string): void => {
-  validateExternalHttpUrl(url);
-};
-
 const isChefStepsHost = (url: string): boolean => {
   try {
     const host = new URL(url).hostname;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { ingredientAvailabilityStatus } from "./availability";
 import { ingredientId, mealId, mealRecipeId, recipeId } from "./identifiers";
 import { mealDate, mealScale } from "./meal-shared";
@@ -42,20 +43,19 @@ export const mealRecipeInput = z.object({
 });
 export type MealRecipeInput = z.infer<typeof mealRecipeInput>;
 
-export const mealCreateInput = z.object({
+const mealCreateShape = {
   date: mealDate,
   name: z.string().nullable().optional(),
   sortOrder: z.number().int().nullable().optional(),
   // Optional: create a meal with its recipes in one call.
   recipes: z.array(mealRecipeInput).optional(),
-});
+};
+export const mealCreateInput = z.object(mealCreateShape);
 export type MealCreateInput = z.infer<typeof mealCreateInput>;
 
 /** Mutable meal fields (recipes are managed via addRecipe/updateRecipe/removeRecipe). */
-export const mealUpdateData = z.object({
-  date: mealDate.optional(),
-  name: z.string().nullable().optional(),
-  sortOrder: z.number().int().nullable().optional(),
+export const mealUpdateData = deriveUpdateData(mealCreateShape, {
+  omit: ["recipes"],
 });
 export const mealUpdateInput = z.object({
   id: mealId,
@@ -93,10 +93,6 @@ export const mealFilterFields = {
 export const mealFiltersSchema = z.object(mealFilterFields);
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
 
-export const mcpMealCreateInput = mealCreateInput;
-export const mcpMealUpdateInput = mealUpdateData;
-export const mcpMealAddRecipeInput = mealAddRecipeInput;
-
 /** Cost/calorie totals scaled by a meal-recipe's multiplier. */
 export const scaledTotals = costCalorieTotals;
 export type ScaledTotals = z.infer<typeof scaledTotals>;
@@ -119,8 +115,7 @@ export const mealRecipeOut = z.object({
   sortOrder: z.number().int().nullable(),
   /** recipe.totals x scale, or null when totals are absent/stale. */
   scaledTotals: scaledTotals.nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
@@ -141,8 +136,7 @@ export const mealOut = z.object({
   sortOrder: z.number().int().nullable(),
   recipes: z.array(mealRecipeOut),
   totals: mealTotals,
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 export type MealOut = z.infer<typeof mealOut>;
 

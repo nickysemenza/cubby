@@ -1,18 +1,8 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import type { Entity } from "./entity";
+import { searchableEntities } from "./entity-manifest";
 
-/** Searchable entities - subset of Entity excluding "usda-food" and "image" */
-export const searchableEntities = [
-  "product",
-  "recipe",
-  "ingredient",
-  "location",
-  "inventory",
-  "project",
-  "task",
-  "purchase",
-] as const satisfies readonly Entity[];
+export { searchableEntities } from "./entity-manifest";
 
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
@@ -142,7 +132,6 @@ export const semanticBackfillOutSchema = z.object({
   skipped: z.number().int().nonnegative(),
 });
 
-export const searchDebugInputSchema = globalSearchInputSchema;
 export const searchDebugOutSchema = z.object({
   query: z.string(),
   lexical: z.array(searchResultItemSchema),

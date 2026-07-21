@@ -18,7 +18,7 @@ import {
   ingredientRawLinesBatchOut,
   ingredientResolveOrCreateResponseOut,
   mcpIngredientCreateInput,
-  mcpIngredientUpdateInput,
+  ingredientUpdateData,
   type IngredientMcpOut,
 } from "./ingredient";
 import {
@@ -32,16 +32,16 @@ import {
   locationMcpListOut,
   locationMcpOut,
   mcpLocationCreateInput,
-  mcpLocationUpdateInput,
+  locationUpdateData,
   type LocationMcpOut,
 } from "./location";
 import {
   mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
-  mcpMealAddRecipeInput,
-  mcpMealCreateInput,
-  mcpMealUpdateInput,
+  mealAddRecipeInput,
+  mealCreateInput,
+  mealUpdateData,
   shoppingListOut,
   type MealMcpOut,
 } from "./meal";
@@ -80,12 +80,12 @@ export { type McpUnitMappingInput, mcpUnitMappingInput };
 
 export {
   mcpIngredientCreateInput,
-  mcpIngredientUpdateInput,
+  ingredientUpdateData,
   mcpLocationCreateInput,
-  mcpLocationUpdateInput,
-  mcpMealAddRecipeInput,
-  mcpMealCreateInput,
-  mcpMealUpdateInput,
+  locationUpdateData,
+  mealAddRecipeInput,
+  mealCreateInput,
+  mealUpdateData,
   mcpProductCreateInput,
   mcpProductUpdateInput,
   mcpRecipeCreateInput,
@@ -175,7 +175,6 @@ export { globalSearchInputSchema };
 export const recipeAvailabilityMcpOut = z.object({
   recipes: recipeAvailabilityListOut,
 });
-export const cookableRecipesOut = recipeAvailabilityMcpOut;
 
 export const scrapeRecipeMcpOut = importRecipeSchema;
 

@@ -12,7 +12,7 @@ import {
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
-import { upsertCookbookRecipeFromCookbook } from "./recipe";
+import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { cookbookRecipe } from "./repo.fixtures";
 
 describe("cookbook repository", () => {

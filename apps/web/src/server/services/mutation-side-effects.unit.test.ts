@@ -13,7 +13,7 @@ const findInventoryEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
 const findInventoryEmbeddingRefsForLocationsMock = vi.hoisted(() => vi.fn());
 const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
 
-vi.mock("~/server/background-queue", () => ({
+vi.mock("~/server/background-dispatch", () => ({
   dispatchBackgroundJobs: dispatchBackgroundJobsMock,
   dispatchLocationValuationRecompute: dispatchLocationValuationRecomputeMock,
 }));

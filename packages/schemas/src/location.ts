@@ -275,7 +275,6 @@ export const mcpLocationCreateInput = z.object({
     "Parent location id — nest this location under another (omit/null for a top-level location).",
   ),
 });
-export const mcpLocationUpdateInput = locationUpdateData;
 
 /** Slim MCP projection of a location row (list or detail). */
 export const locationMcpOut = z.object({

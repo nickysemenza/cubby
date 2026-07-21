@@ -37,7 +37,6 @@ export const productLookupResponseSchema = z.object({
   cached: z.boolean(),
 });
 export type ProductLookupResponse = z.infer<typeof productLookupResponseSchema>;
-export const upcLookupResponseSchema = productLookupResponseSchema;
 export type UPCLookupResponse = ProductLookupResponse;
 
 export const productNotFoundResponseSchema = z.object({
@@ -47,7 +46,6 @@ export const productNotFoundResponseSchema = z.object({
 export type ProductNotFoundResponse = z.infer<
   typeof productNotFoundResponseSchema
 >;
-export const upcLookupNotFoundSchema = productNotFoundResponseSchema;
 export type UPCLookupNotFound = ProductNotFoundResponse;
 
 export const searchResponseSchema = z.object({

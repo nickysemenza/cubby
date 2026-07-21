@@ -15,12 +15,14 @@ import {
   type SortParams,
   sortPaginationFields,
 } from "@cubby/schemas/pagination";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import type { AvailabilityService } from "~/server/services/availability.service";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { protectedProcedure } from "./trpc";
 
@@ -359,6 +361,96 @@ export function createEntityCrudProcedures<
     list,
     create,
     update,
+  };
+}
+
+/** Standard CRUD for searchable entities whose create/update mutations refresh embeddings. */
+export function createSearchableEntityCrudProcedures<
+  SCreate extends ZodSchema,
+  SUpdate extends ZodSchema,
+  TEntity extends SearchableEntity,
+  TId extends Extract<
+    Parameters<typeof runMutationSideEffects>[1]["entity"],
+    { entityType: TEntity }
+  >["entityId"],
+  TOutput extends { id: TId },
+  TFilters,
+>({
+  schemas,
+  repository,
+  entityName,
+}: {
+  schemas: {
+    createInput: SCreate;
+    updateInput: SUpdate;
+    output: ZodSchema<TOutput>;
+    filters: ZodSchema<TFilters>;
+    sort?: {
+      sortableFields: readonly [string, ...string[]];
+      defaultSort: string;
+      groupableFields?: readonly [string, ...string[]];
+    };
+    idSchema: z.ZodType<unknown>;
+  };
+  repository: {
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    list: (
+      ctx: ProtectedCrudServices,
+      filters: TFilters,
+      sorts: SortParams[],
+      pagination: PaginationParams,
+      groupBy?: string,
+    ) => Promise<{ data: TOutput[]; count: number }>;
+    create: (
+      ctx: ProtectedCrudServices,
+      data: z.infer<SCreate>,
+    ) => Promise<TOutput>;
+    update: (
+      ctx: ProtectedCrudServices,
+      id: TId,
+      data: z.infer<SUpdate>,
+    ) => Promise<TOutput>;
+    delete: (
+      ctx: ProtectedCrudServices,
+      ids: TId[],
+    ) => Promise<BackgroundBatchRef[] | undefined>;
+  };
+  entityName: TEntity;
+}) {
+  const entityRef = (entityId: TId) =>
+    ({ entityType: entityName, entityId }) as Extract<
+      Parameters<typeof runMutationSideEffects>[1]["entity"],
+      { entityType: TEntity }
+    >;
+  const procedures = createEntityCrudProcedures({
+    schemas,
+    repository: {
+      ...repository,
+      create: async (ctx, data) => {
+        const created = await repository.create(ctx, data);
+        await runMutationSideEffects(ctx.db, {
+          action: "created",
+          entity: entityRef(created.id),
+          source: `${entityName}.create`,
+        });
+        return created;
+      },
+      update: async (ctx, id: TId, data) => {
+        const updated = await repository.update(ctx, id, data);
+        await runMutationSideEffects(ctx.db, {
+          action: "updated",
+          entity: entityRef(id),
+          source: `${entityName}.update`,
+        });
+        return updated;
+      },
+    },
+    entityName,
+  });
+
+  return {
+    ...procedures,
+    delete: createDeleteProcedure(repository.delete, schemas.idSchema),
   };
 }
 

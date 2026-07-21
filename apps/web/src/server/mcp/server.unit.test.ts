@@ -1,9 +1,12 @@
+import type { Entity } from "@cubby/schemas/entity";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   createMcpServer,
   listMcpToolCatalog,
@@ -14,6 +17,7 @@ import {
 import {
   getRegisteredTool,
   registerEntityCreateTool,
+  registerEntityCrudToolset,
   slimRecipe,
   stripMockFromJsonSchema,
   WRITE_CLOSED,
@@ -86,6 +90,61 @@ describe("stripMockFromJsonSchema", () => {
         },
       },
     });
+  });
+});
+
+describe("registerEntityCrudToolset", () => {
+  it("supports operation selection, names, paging, and separate outputs", async () => {
+    const server = new McpServer({ name: "t", version: "1.0.0" });
+    const listOut = z.object({ items: z.array(z.object({ id: z.string() })) });
+    const detailOut = z.object({ id: z.string(), detail: z.string() });
+    const mutationOut = z.object({ id: z.string(), changed: z.boolean() });
+    registerEntityCrudToolset(server, {
+      entity: "widget",
+      names: { list: "search_widgets" },
+      operations: { delete: false },
+      paging: { defaultPageSize: 7, maxPageSize: 9 },
+      createInput: { name: z.string() },
+      updateShape: { name: z.string().optional() },
+      filterFields: { search: z.string().optional() },
+      mcpListOut: listOut,
+      out: mutationOut,
+      detailOut,
+      mutationOut,
+      slim: (value) => value as Record<string, unknown>,
+      sort: { orderBy: "name" },
+      descriptions: {
+        list: "list",
+        get: "get",
+        create: "create",
+        update: "update",
+        delete: "delete",
+      },
+    });
+
+    expect(getRegisteredTool(server, "search_widgets")?.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    });
+    const list = vi.fn().mockResolvedValue({ meta: {}, items: [] });
+    await callTool(server, "search_widgets", {}, { widget: { list } });
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pagination: { pageIndex: 0, pageSize: 7 },
+      }),
+    );
+    expect(getRegisteredTool(server, "get_widget")?.outputSchema).toBe(
+      detailOut,
+    );
+    expect(getRegisteredTool(server, "create_widget")?.outputSchema).toBe(
+      mutationOut,
+    );
+    expect(getRegisteredTool(server, "update_widget")?.outputSchema).toBe(
+      mutationOut,
+    );
+    expect(getRegisteredTool(server, "delete_widgets")).toBeUndefined();
   });
 });
 
@@ -308,6 +367,49 @@ describe("createMcpServer registration", () => {
 });
 
 describe("listMcpToolCatalog", () => {
+  it("keeps manifest MCP operations aligned with registered tools", async () => {
+    type Operation = "list" | "get" | "create" | "update" | "delete";
+    const slugs: Record<
+      Entity,
+      [
+        singular: string,
+        plural: string,
+        overrides?: Partial<Record<Operation, string>>,
+      ]
+    > = {
+      product: ["product", "products", { list: "search_products" }],
+      recipe: ["recipe", "recipes", { delete: "delete_recipe" }],
+      ingredient: ["ingredient", "ingredients", { list: "search_ingredients" }],
+      cookbook: ["cookbook", "cookbooks"],
+      location: ["location", "locations"],
+      inventory: [
+        "inventory_entry",
+        "inventory_entries",
+        { list: "list_inventory" },
+      ],
+      meal: ["meal", "meals"],
+      project: ["project", "projects"],
+      task: ["task", "tasks"],
+      purchase: ["purchase", "purchases"],
+      "usda-food": ["usda_food", "usda_foods", { list: "search_usda_foods" }],
+      image: ["image", "images"],
+    };
+    const catalog = new Set(
+      (await listMcpToolCatalog()).tools.map(({ name }) => name),
+    );
+
+    for (const entity of allEntities) {
+      const [singular, plural, overrides = {}] = slugs[entity];
+      for (const operation of entityManifest[entity].mcp) {
+        const defaultSlug =
+          operation === "list" || operation === "delete" ? plural : singular;
+        expect(
+          catalog.has(overrides[operation] ?? `${operation}_${defaultSlug}`),
+        ).toBe(true);
+      }
+    }
+  });
+
   it("advertises outputSchema on every tool with no mock metadata", async () => {
     const { tools } = await listMcpToolCatalog();
     expect(tools.length).toBeGreaterThan(50);
