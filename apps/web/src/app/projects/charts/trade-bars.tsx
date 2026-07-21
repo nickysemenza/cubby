@@ -10,7 +10,7 @@ import {
   nivoCurrencyAxis,
   TRADE_LABELS,
 } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
+import { ChartTooltip, TooltipPurchaseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 import { buildTradeCostPivot, PIVOT_COST_KEYS } from "./trade-cost-pivot";
 
@@ -26,15 +26,25 @@ const tradeLabel = (value: string): string =>
   TRADE_LABELS[value as Trade] ?? value;
 
 export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
-  const data = useMemo<BarDatum[]>(() => {
+  const { data, purchasesByCell } = useMemo(() => {
     const { rows } = buildTradeCostPivot(purchases);
     // Stacked bars can't render negative-net rows — drop them here (the
     // matrix keeps them). The helper sorts total DESC, but nivo horizontal
     // bars render bottom-up — reverse to keep the biggest-on-top visual.
-    return rows
+    const data: BarDatum[] = rows
       .filter((row) => row.total > 0)
       .map((row) => ({ trade: row.trade, ...row.cells, total: row.total }))
       .reverse();
+
+    // Purchases behind each `trade|costType` segment, for the tooltip.
+    const purchasesByCell = new Map<string, PurchaseOut[]>();
+    for (const p of purchases) {
+      const key = `${p.trade}|${p.costType}`;
+      const list = purchasesByCell.get(key);
+      if (list) list.push(p);
+      else purchasesByCell.set(key, [p]);
+    }
+    return { data, purchasesByCell };
   }, [purchases]);
 
   if (data.length === 0) {
@@ -71,6 +81,9 @@ export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
           <ChartTooltip>
             <strong>{tradeLabel(String(indexValue))}</strong> — {id}:{" "}
             <span style={{ color }}>{formatCurrency(value, 0)}</span>
+            <TooltipPurchaseBreakdown
+              purchases={purchasesByCell.get(`${indexValue}|${id}`) ?? []}
+            />
           </ChartTooltip>
         )}
         legends={[

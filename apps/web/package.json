@@ -59,7 +59,6 @@
     "@nivo/calendar": "^0.99.0",
     "@nivo/line": "^0.99.0",
     "@nivo/pie": "^0.99.0",
-    "@nivo/treemap": "^0.99.0",
     "@notionhq/client": "^5.23.2",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.78.0",

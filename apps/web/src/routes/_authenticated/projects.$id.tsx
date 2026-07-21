@@ -3,9 +3,8 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import {
   ProjectDetailPage,
   projectGanttSubtreeQueryParams,
-  projectGanttTasksQueryParams,
-  projectPurchasesQueryParams,
-  projectTasksQueryParams,
+  projectSubtreePurchasesFilters,
+  projectSubtreeTasksFilters,
 } from "~/app/projects/project-detail-page";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
@@ -27,16 +26,13 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
     // Same params as the component's own queries (see project-detail-page.tsx)
     // so they land in the same cache entry instead of double-fetching.
     void context.queryClient.prefetchQuery(
-      context.trpc.task.list.queryOptions(projectTasksQueryParams(params.id)),
-    );
-    void context.queryClient.prefetchQuery(
-      context.trpc.purchase.list.queryOptions(
-        projectPurchasesQueryParams(params.id),
+      context.trpc.task.chartData.queryOptions(
+        projectSubtreeTasksFilters(params.id),
       ),
     );
     void context.queryClient.prefetchQuery(
-      context.trpc.task.list.queryOptions(
-        projectGanttTasksQueryParams(params.id),
+      context.trpc.purchase.chartData.queryOptions(
+        projectSubtreePurchasesFilters(params.id),
       ),
     );
     void context.queryClient.prefetchQuery(

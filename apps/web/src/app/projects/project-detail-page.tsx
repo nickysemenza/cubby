@@ -4,12 +4,12 @@ import type {
   ProjectStatus,
   PurchaseOut,
   TaskOut,
+  Trade,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileText,
   FolderTree,
-  ImageIcon,
   Info,
   Link2,
   ListChecks,
@@ -17,7 +17,7 @@ import {
   Plus,
   ShoppingCart,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
@@ -27,12 +27,11 @@ import {
   DetailSections,
 } from "~/app/_components/data-table/detail-page";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
-import EntityImageList from "~/app/_components/EntityImageList";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
-import { Grid, Row, Section, Stack } from "~/components/layout";
+import { Row, Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -49,13 +48,12 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { CategoryBreakdown } from "./charts/category-breakdown";
-import { CategoryTreemap } from "./charts/category-treemap";
-import { CategoryTrend } from "./charts/category-trend";
-import { CostBurnup } from "./charts/cost-burnup";
 import { ProjectGantt } from "./charts/gantt/ProjectGantt";
 import { PlannedVsActual } from "./charts/planned-vs-actual";
 import { SpendingOverTime } from "./charts/spending-over-time";
 import { TaskHeatmap } from "./charts/task-heatmap";
+import type { TradeCostCell } from "./charts/trade-cost-matrix";
+import type { PivotCostKey } from "./charts/trade-cost-pivot";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
@@ -73,34 +71,23 @@ const NO_TASKS: TaskOut[] = [];
 const NO_PURCHASES: PurchaseOut[] = [];
 const NO_CHILD_PROJECTS: ProjectOut[] = [];
 
-/** Cap well above any real per-project row count (dozens at most) but within
- * the shared `MAX_PAGE_SIZE` — one page covers every task/purchase for a
- * single project. Exported so the route loader can prefetch with the exact
+/** Cap well above any real subtree size (hundreds at most) but within the
+ * shared `MAX_PAGE_SIZE` — one page covers the Gantt's whole descendant
+ * project subtree. Exported so the route loader can prefetch with the exact
  * same params (identical query key ⇒ cache hit, no duplicate fetch). */
 const PROJECT_SCOPED_PAGE_SIZE = 500;
 
-export function projectTasksQueryParams(projectId: string) {
-  return {
-    // Checklist subtasks roll up to their parent everywhere (N/M chip);
-    // surfacing them here alongside the parent would double-count the work.
-    filters: { projectId, topLevelOnly: true },
-    sort: { orderBy: "createdAt" as const, direction: "desc" as const },
-    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
-  };
+/** The task/purchase `chartData` endpoints take the bare filters object (no
+ * sort/pagination wrapper — they fetch-all). One subtree fetch feeds the
+ * Gantt, the Tasks table, the Task Timeline, and the spend charts; the table
+ * and timeline filter it to top-level tasks client-side. Exported so the
+ * route loader prefetches the identical key. */
+export function projectSubtreeTasksFilters(projectId: string) {
+  return { projectId, includeSubProjects: true };
 }
 
-/** The Gantt wants the whole subtree's work on one grid, so it can't reuse
- * `projectTasksQueryParams`: it drops `topLevelOnly` (dated subtasks render as
- * their parent's indented children) and adds `includeSubProjects` (sub-project
- * tasks are rows under their sub-project's group row). Separate params ⇒
- * separate cache entry, which is the point — the Tasks list stays direct,
- * top-level-only. Exported so the route loader prefetches identically. */
-export function projectGanttTasksQueryParams(projectId: string) {
-  return {
-    filters: { projectId, includeSubProjects: true },
-    sort: { orderBy: "createdAt" as const, direction: "desc" as const },
-    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
-  };
+export function projectSubtreePurchasesFilters(projectId: string) {
+  return { projectId, includeSubProjects: true };
 }
 
 /** The Gantt's sub-project rows span arbitrary depth, so it needs the whole
@@ -110,14 +97,6 @@ export function projectGanttSubtreeQueryParams(projectId: string) {
   return {
     filters: { parentProjectId: projectId, includeSubProjects: true },
     sort: { orderBy: "name" as const, direction: "asc" as const },
-    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
-  };
-}
-
-export function projectPurchasesQueryParams(projectId: string) {
-  return {
-    filters: { projectId },
-    sort: { orderBy: "date" as const, direction: "desc" as const },
     pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
   };
 }
@@ -283,23 +262,35 @@ function SubProjectsList({
 export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const api = useTRPC();
 
-  const { data: tasksPage } = useQuery(
-    api.task.list.queryOptions(projectTasksQueryParams(project.id)),
+  // One subtree fetch (project + every live descendant) feeds the Gantt, the
+  // Tasks table, the Task Timeline, and the spend charts.
+  const { data: subtreeTasks = NO_TASKS } = useQuery(
+    api.task.chartData.queryOptions(projectSubtreeTasksFilters(project.id)),
   );
-  const projectTasks = tasksPage?.items ?? NO_TASKS;
-
-  const { data: purchasesPage } = useQuery(
-    api.purchase.list.queryOptions(projectPurchasesQueryParams(project.id)),
+  // Tasks table + Task Timeline show top-level tasks only — checklist subtasks
+  // roll up to their parent everywhere (N/M chip); surfacing them here would
+  // double-count the work. The Gantt keeps the full result (dated subtasks
+  // render as their parent's indented children).
+  const topLevelTasks = useMemo(
+    () => subtreeTasks.filter((t) => t.parentTaskId == null),
+    [subtreeTasks],
   );
-  const projectPurchases = purchasesPage?.items ?? NO_PURCHASES;
 
-  // Charts aggregate the project PLUS its whole sub-project subtree (the
-  // Purchases list tab stays direct-only, on `projectPurchases`).
   const { data: chartPurchases = NO_PURCHASES } = useQuery(
-    api.purchase.chartData.queryOptions({
-      projectId: project.id,
-      includeSubProjects: true,
-    }),
+    api.purchase.chartData.queryOptions(
+      projectSubtreePurchasesFilters(project.id),
+    ),
+  );
+  // chartData returns date asc; the table wants newest first, nulls last.
+  const sortedPurchases = useMemo(
+    () =>
+      [...chartPurchases].sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return b.date.localeCompare(a.date);
+      }),
+    [chartPurchases],
   );
 
   const { data: imageMap } = useQuery({
@@ -321,13 +312,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const childProjects = childProjectsPage?.items ?? NO_CHILD_PROJECTS;
   const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
 
-  // Gantt-only fetches: the whole descendant subtree (projects + their tasks),
-  // separate from the direct-children/top-level-only queries above.
-  const { data: ganttTasksPage } = useQuery(
-    api.task.list.queryOptions(projectGanttTasksQueryParams(project.id)),
-  );
-  const ganttTasks = ganttTasksPage?.items ?? NO_TASKS;
-
+  // The Gantt's sub-project rows need the whole descendant project subtree
+  // (separate from the direct-children query the Sub-projects section uses).
   const { data: ganttSubtreePage } = useQuery(
     api.project.list.queryOptions(projectGanttSubtreeQueryParams(project.id)),
   );
@@ -390,6 +376,26 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     } finally {
       setNotesPending(false);
     }
+  };
+
+  // Trade × Cost Type pivot → Purchases table filter + scroll-into-view.
+  // Clicking the same cell again clears the filter.
+  const [activeMatrixCell, setActiveMatrixCell] =
+    useState<TradeCostCell | null>(null);
+  const purchasesRef = useRef<HTMLDivElement>(null);
+
+  const handleMatrixCellClick = (
+    trade: Trade,
+    costType: PivotCostKey | null,
+  ) => {
+    setActiveMatrixCell((current) => {
+      const clear = current?.trade === trade && current.costType === costType;
+      return clear ? null : { trade, costType };
+    });
+    purchasesRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
 
   const fields: BasicInfoField[] = [
@@ -572,7 +578,77 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
   ];
 
+  // Notes lead the main column when they have content (or are being edited);
+  // otherwise they collapse to a slim aside card whose "No notes yet." body +
+  // Edit action keep the section discoverable without eating the wide column.
+  const hasNotesContent = isEditingNotes || !!project.notes?.trim();
+  const notesSection: DetailSection = {
+    title: "Notes",
+    icon: FileText,
+    zone: hasNotesContent ? "main" : "aside",
+    headerAction: isEditingNotes ? undefined : (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setNotesDraft(project.notes ?? "");
+          setIsEditingNotes(true);
+        }}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edit
+      </Button>
+    ),
+    content: isEditingNotes ? (
+      <Stack gap="sm">
+        <Textarea
+          value={notesDraft}
+          onChange={(e) => setNotesDraft(e.target.value)}
+          rows={8}
+          placeholder="Freeform markdown notes..."
+          disabled={notesPending}
+          autoFocus
+        />
+        <Row gap="xs">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void saveNotes()}
+            disabled={notesPending}
+          >
+            Save
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsEditingNotes(false)}
+            disabled={notesPending}
+          >
+            Cancel
+          </Button>
+        </Row>
+      </Stack>
+    ) : (
+      <ProjectNotes notes={project.notes} />
+    ),
+  };
+
   const sections: DetailSection[] = [
+    // Main column: Notes (when populated) then Tasks.
+    ...(hasNotesContent ? [notesSection] : []),
+    {
+      title: "Tasks",
+      icon: ListChecks,
+      zone: "main",
+      headerAction:
+        topLevelTasks.length > 0 ? (
+          <Badge variant="outline">{topLevelTasks.length}</Badge>
+        ) : undefined,
+      content: <TaskList tasks={topLevelTasks} />,
+    },
+    // Aside rail: metadata + (when empty) the slim Notes card.
     {
       title: "Overview",
       icon: Info,
@@ -626,74 +702,24 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         />
       ),
     },
-    {
-      title: "Images",
-      icon: ImageIcon,
-      content: <EntityImageList images={images} />,
-    },
-    {
-      title: "Notes",
-      icon: FileText,
-      zone: "main",
-      headerAction: isEditingNotes ? undefined : (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setNotesDraft(project.notes ?? "");
-            setIsEditingNotes(true);
-          }}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit
-        </Button>
-      ),
-      content: isEditingNotes ? (
-        <Stack gap="sm">
-          <Textarea
-            value={notesDraft}
-            onChange={(e) => setNotesDraft(e.target.value)}
-            rows={8}
-            placeholder="Freeform markdown notes..."
-            disabled={notesPending}
-            autoFocus
-          />
-          <Row gap="xs">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void saveNotes()}
-              disabled={notesPending}
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setIsEditingNotes(false)}
-              disabled={notesPending}
-            >
-              Cancel
-            </Button>
-          </Row>
-        </Stack>
-      ) : (
-        <ProjectNotes notes={project.notes} />
-      ),
-    },
-    {
-      title: "Tasks",
-      icon: ListChecks,
-      zone: "full",
-      content: <TaskList tasks={projectTasks} />,
-    },
+    ...(hasNotesContent ? [] : [notesSection]),
     {
       title: "Purchases",
       icon: ShoppingCart,
       zone: "full",
-      content: <PurchaseList purchases={projectPurchases} />,
+      headerAction:
+        chartPurchases.length > 0 ? (
+          <Badge variant="outline">{chartPurchases.length}</Badge>
+        ) : undefined,
+      content: (
+        <div ref={purchasesRef}>
+          <PurchaseList
+            purchases={sortedPurchases}
+            tradeFilter={activeMatrixCell?.trade ?? null}
+            costTypeFilter={activeMatrixCell?.costType ?? null}
+          />
+        </div>
+      ),
     },
   ];
 
@@ -736,6 +762,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           {
             label: "Tasks (incl. sub-projects)",
             value: `${project.rollup.subtree.doneTaskCount}/${project.rollup.subtree.taskCount}`,
+          } satisfies DetailHeroStat,
+          {
+            label: "Purchases (incl. sub-projects)",
+            value: project.rollup.subtree.purchaseCount,
           } satisfies DetailHeroStat,
         ]
       : []),
@@ -781,14 +811,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         defaultParentProjectId={project.id}
       />
 
-      {/* Spending/task charts scoped to this project — full-bleed, below the
-          card grid (same treatment as the /projects list page's own chart
-          panels). Purchases-dependent charts and the task timeline are gated
-          independently — a project with tasks but no purchases (or vice
-          versa) must still see its own section. */}
+      {/* Spending/task charts scoped to this project PLUS its whole sub-project
+          subtree — full-bleed, below the card grid (same treatment as the
+          /projects list page's own chart panels). Purchases-dependent charts
+          and the task timeline are gated independently — a project with tasks
+          but no purchases (or vice versa) must still see its own section. */}
       {(chartPurchases.length > 0 ||
-        projectTasks.length > 0 ||
-        ganttTasks.length > 0 ||
+        subtreeTasks.length > 0 ||
         ganttSubtreeProjects.length > 0) && (
         <Stack className="pt-4">
           {chartPurchases.length > 0 && (
@@ -796,9 +825,9 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
               <Section
                 title="Spending Over Time"
                 description={
-                  childProjects.length > 0
-                    ? "Includes sub-project purchases"
-                    : undefined
+                  hasSubtree
+                    ? "Cumulative spend against the estimate · includes sub-project purchases"
+                    : "Cumulative spend against the estimate"
                 }
               >
                 <SpendingOverTime
@@ -807,44 +836,30 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 />
               </Section>
 
-              <CategoryBreakdown purchases={chartPurchases} donutHeight={350} />
-
-              <Grid cols="pair">
-                <Section title="Category Treemap">
-                  <CategoryTreemap purchases={chartPurchases} />
-                </Section>
-                <Section title="Category Trend">
-                  <CategoryTrend purchases={chartPurchases} />
-                </Section>
-              </Grid>
-
-              <Section
-                title="Planned vs Actual"
-                description="Committed spend vs future-flagged purchases"
-              >
-                <PlannedVsActual purchases={chartPurchases} />
-              </Section>
-            </>
-          )}
-
-          {chartPurchases.length > 0 && (
-            <Section
-              title="Cost Burnup"
-              description="Cumulative spend against the estimate"
-            >
-              <CostBurnup
+              <CategoryBreakdown
                 purchases={chartPurchases}
-                // Subtree estimate to match the subtree-inclusive `chartPurchases`
-                // (same as SpendingOverTime above) — the own estimate would
-                // under-report budget for a project with estimated sub-projects.
-                costEstimate={project.rollup.subtree.costEstimate}
+                donutHeight={350}
+                onMatrixCellClick={handleMatrixCellClick}
+                activeMatrixCell={activeMatrixCell}
               />
-            </Section>
+
+              {/* With zero future-flagged purchases this just restates the
+                  pivot's column totals — only worth its own section when
+                  something is actually planned. */}
+              {chartPurchases.some((p) => p.future) && (
+                <Section
+                  title="Planned vs Actual"
+                  description="Committed spend vs future-flagged purchases"
+                >
+                  <PlannedVsActual purchases={chartPurchases} />
+                </Section>
+              )}
+            </>
           )}
 
           {/* Gated on dated content existing at all: a project with no tasks
               and no sub-projects has nothing to plot. */}
-          {(ganttTasks.length > 0 || ganttSubtreeProjects.length > 0) && (
+          {(subtreeTasks.length > 0 || ganttSubtreeProjects.length > 0) && (
             <Section
               title="Gantt"
               description={
@@ -855,15 +870,15 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             >
               <ProjectGantt
                 projectId={project.id}
-                tasks={ganttTasks}
+                tasks={subtreeTasks}
                 subtreeProjects={ganttSubtreeProjects}
               />
             </Section>
           )}
 
-          {projectTasks.length > 0 && (
+          {topLevelTasks.length > 0 && (
             <Section title="Task Timeline">
-              <TaskHeatmap tasks={projectTasks} />
+              <TaskHeatmap tasks={topLevelTasks} />
             </Section>
           )}
         </Stack>

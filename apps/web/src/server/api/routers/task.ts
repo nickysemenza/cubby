@@ -13,6 +13,7 @@ import {
   taskSortableFields,
   taskUpdateData,
 } from "@cubby/schemas/project";
+import { z } from "zod";
 import {
   createTask,
   deleteTasks,
@@ -65,6 +66,25 @@ const listActionable = protectedProcedure
   .output(actionableTasksOut)
   .query(({ ctx }) => listActionableTasks(ctx.db));
 
+/**
+ * Every task matching the filters, in one round trip — chart/Gantt aggregates
+ * happen client-side, and `list`'s 500-row page cap would silently truncate a
+ * big subtree (same fetch-all convention as purchase.chartData).
+ */
+const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
+const chartData = protectedProcedure
+  .input(taskFiltersSchema)
+  .output(z.array(taskOut))
+  .query(async ({ ctx, input }) => {
+    const { data } = await taskList(
+      ctx.db,
+      input,
+      [{ orderBy: "createdAt", direction: "desc" }],
+      FETCH_ALL,
+    );
+    return data;
+  });
+
 export const taskRouter = createTRPCRouter({
   getByID,
   list,
@@ -72,4 +92,5 @@ export const taskRouter = createTRPCRouter({
   update,
   delete: deleteItem,
   listActionable,
+  chartData,
 });

@@ -1,6 +1,13 @@
 import type { PurchaseOut, Trade } from "@cubby/schemas/project";
+import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
-import { useMemo } from "react";
+import { Fragment, type ReactElement, useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
+import {
+  PreviewCard,
+  PreviewCardContent,
+  PreviewCardTrigger,
+} from "~/components/ui/preview-card";
 import { cn, formatCurrency } from "~/lib/utils";
 import { capitalize, TRADE_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
@@ -18,6 +25,37 @@ const activeCellRing = "ring-2 ring-primary ring-inset";
 
 export type TradeCostCell = { trade: Trade; costType: PivotCostKey | null };
 
+/** The purchases behind one cell, top 8 by cost + a "+N more" roll-up. */
+function CellPreview({ purchases }: { purchases: PurchaseOut[] }) {
+  const sorted = [...purchases].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
+  const top = sorted.slice(0, 8);
+  const rest = sorted.slice(8);
+  const restTotal = sumBy(rest, (p) => p.cost ?? 0);
+
+  return (
+    <Stack gap="tight">
+      {top.map((p) => (
+        <Row key={p.id} justify="between" align="baseline" gap="sm">
+          <span className="truncate">
+            {p.name}
+            {p.projectName && (
+              <span className="text-muted-foreground"> · {p.projectName}</span>
+            )}
+          </span>
+          <span className="shrink-0 font-mono tabular-nums">
+            {formatCurrency(p.cost ?? 0, 0)}
+          </span>
+        </Row>
+      ))}
+      {rest.length > 0 && (
+        <div className="text-muted-foreground">
+          +{rest.length} more · {formatCurrency(restTotal, 0)}
+        </div>
+      )}
+    </Stack>
+  );
+}
+
 export function TradeCostMatrix({
   purchases,
   onCellClick,
@@ -33,8 +71,38 @@ export function TradeCostMatrix({
     [purchases],
   );
 
+  // Per-cell purchase lists behind the hover previews: `trade|costType` for
+  // the body cells, `trade|total` for the row-total cells.
+  const purchasesByCell = useMemo(() => {
+    const map = new Map<string, PurchaseOut[]>();
+    const push = (key: string, p: PurchaseOut) => {
+      const list = map.get(key);
+      if (list) list.push(p);
+      else map.set(key, [p]);
+    };
+    for (const p of purchases) {
+      push(`${p.trade}|${p.costType}`, p);
+      push(`${p.trade}|total`, p);
+    }
+    return map;
+  }, [purchases]);
+
   const isActive = (trade: Trade, costType: PivotCostKey | null) =>
     activeCell?.trade === trade && activeCell.costType === costType;
+
+  // Wrap a cell's trigger element in the hover preview when it has purchases.
+  const withPreview = (trigger: ReactElement, key: string) => {
+    const cellPurchases = purchasesByCell.get(key);
+    if (!cellPurchases || cellPurchases.length === 0) return trigger;
+    return (
+      <PreviewCard>
+        <PreviewCardTrigger render={trigger} />
+        <PreviewCardContent align="start" side="bottom">
+          <CellPreview purchases={cellPurchases} />
+        </PreviewCardContent>
+      </PreviewCard>
+    );
+  };
 
   if (rows.length === 0) {
     return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
@@ -84,49 +152,65 @@ export function TradeCostMatrix({
                   value !== 0 ? formatCurrency(value, 2) : undefined;
 
                 if (!onCellClick) {
-                  return (
-                    <td key={key} className={cn(cellMono, heat)} title={title}>
+                  const cell = (
+                    <td className={cn(cellMono, heat)} title={title}>
                       {label}
                     </td>
+                  );
+                  return (
+                    <Fragment key={key}>
+                      {value !== 0
+                        ? withPreview(cell, `${row.trade}|${key}`)
+                        : cell}
+                    </Fragment>
                   );
                 }
                 return (
                   <td key={key} className="p-0">
-                    <button
-                      type="button"
-                      onClick={() => onCellClick(row.trade, key)}
-                      title={title}
-                      className={cn(
-                        cellMono,
-                        heat,
-                        interactiveCell,
-                        isActive(row.trade, key) && activeCellRing,
-                      )}
-                    >
-                      {label}
-                    </button>
+                    {withPreview(
+                      <button
+                        type="button"
+                        onClick={() => onCellClick(row.trade, key)}
+                        title={title}
+                        className={cn(
+                          cellMono,
+                          heat,
+                          interactiveCell,
+                          isActive(row.trade, key) && activeCellRing,
+                        )}
+                      >
+                        {label}
+                      </button>,
+                      `${row.trade}|${key}`,
+                    )}
                   </td>
                 );
               })}
               {onCellClick ? (
                 <td className="p-0">
-                  <button
-                    type="button"
-                    onClick={() => onCellClick(row.trade, null)}
-                    className={cn(
-                      cellMono,
-                      "font-medium text-primary",
-                      interactiveCell,
-                      isActive(row.trade, null) && activeCellRing,
-                    )}
-                  >
-                    {formatCurrency(row.total, 0)}
-                  </button>
+                  {withPreview(
+                    <button
+                      type="button"
+                      onClick={() => onCellClick(row.trade, null)}
+                      className={cn(
+                        cellMono,
+                        "font-medium text-primary",
+                        interactiveCell,
+                        isActive(row.trade, null) && activeCellRing,
+                      )}
+                    >
+                      {formatCurrency(row.total, 0)}
+                    </button>,
+                    `${row.trade}|total`,
+                  )}
                 </td>
               ) : (
-                <td className={cn(cellMono, "font-medium text-primary")}>
-                  {formatCurrency(row.total, 0)}
-                </td>
+                withPreview(
+                  <td className={cn(cellMono, "font-medium text-primary")}>
+                    {formatCurrency(row.total, 0)}
+                  </td>,
+                  `${row.trade}|total`,
+                )
               )}
             </tr>
           ))}
