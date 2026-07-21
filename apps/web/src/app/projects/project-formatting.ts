@@ -1,6 +1,7 @@
 import type { CostType, ProjectStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { format } from "date-fns";
+import { parsePlainDate } from "~/lib/plain-date";
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   planning: "Planning",
@@ -30,11 +31,6 @@ export function monthLabel(key: string): string {
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 }
-
-const parsePlainDate = (value: string): Date => {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
-};
 
 export const formatDate = (date: string): string =>
   format(parsePlainDate(date), "MMM d");

@@ -5,10 +5,11 @@ import type {
   PurchaseOut,
   Trade,
 } from "@cubby/schemas/project";
+import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ExternalLink } from "lucide-react";
+import { ArrowRightLeft, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
 import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
@@ -16,6 +17,7 @@ import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
@@ -23,6 +25,7 @@ import {
   createProjectLinkColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -30,11 +33,14 @@ import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
 import { PurchaseChartStrip } from "./purchase-charts";
 import {
   costTypeLabels,
   costTypeOptions,
+  dateRangeOptions,
   futureFilterOptions,
+  resolveDateRange,
 } from "./purchase-options";
 
 /**
@@ -56,6 +62,7 @@ function buildPurchaseFilters(
       futureFilter === undefined || futureFilter === ""
         ? undefined
         : futureFilter === "true",
+    ...resolveDateRange(get("date")),
   };
 }
 
@@ -74,6 +81,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
+  const [bulkMoveItems, setBulkMoveItems] = useState<PurchaseOut[]>([]);
 
   const updatePurchaseMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -90,6 +98,25 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     entityLabel: "Purchase",
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
+
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "move",
+          label: "Move to project...",
+          icon: <ArrowRightLeft className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<PurchaseOut>[]) => {
+            setBulkMoveItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
 
   const projectFilterOptions = useMemo(
     () => [{ value: "", label: "All projects" }, ...projectOptions],
@@ -115,6 +142,11 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         header: "Date",
         className: "w-28",
         mobile: { slot: "subtitle", priority: 15 },
+        filterConfig: {
+          placeholder: "Date…",
+          filterType: "select",
+          options: dateRangeOptions,
+        },
         editable: {
           onSave: async (newDate, purchase) => {
             await updatePurchaseMutation.mutateAsync({
@@ -229,6 +261,12 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     () => [
       { id: "name", placeholder: "Search purchases..." },
       {
+        id: "date",
+        placeholder: "Date…",
+        filterType: "select" as const,
+        options: dateRangeOptions,
+      },
+      {
         id: "costType",
         placeholder: "Filter by cost type...",
         filterType: "select" as const,
@@ -276,8 +314,23 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     filters,
     deletable: deletableConfig,
     nameEditable,
+    bulkActions,
     infinite: true,
     tableStateOptions,
+  });
+
+  const bulkMoveMutation = useActionMutation({
+    mutationFn: api.purchase.bulkMove.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Moved ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkMoveItems([]);
+      table.resetRowSelection();
+    },
   });
 
   // Mirror the table's active filters for the chart strip. Reading
@@ -334,6 +387,23 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
       />
       <PreviewSheet />
       {deleteDialog}
+      {bulkMoveItems.length > 0 && (
+        <MoveToProjectDialog
+          open={bulkMoveItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkMoveItems([]);
+          }}
+          items={bulkMoveItems}
+          entityLabel="Purchase"
+          isPending={bulkMoveMutation.isPending}
+          onConfirm={async (projectId) => {
+            await bulkMoveMutation.mutateAsync({
+              ids: bulkMoveItems.map((p) => p.id),
+              projectId,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

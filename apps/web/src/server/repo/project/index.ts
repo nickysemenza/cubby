@@ -28,6 +28,7 @@
  */
 
 export {
+  assertProjectLive,
   createProject,
   deleteProjects,
   getProjectByID,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { projectId, purchaseId, taskId } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
@@ -299,6 +300,24 @@ export const taskUpdateInput = z.object({
 });
 export type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
 
+/**
+ * Bulk "move to project" — `projectId: null` moves every listed task to the
+ * inbox (no project). Same nullable-projectId semantics as a single
+ * `taskUpdateData.projectId` write, batched over `ids`.
+ */
+export const taskBulkMoveInput = z.object({
+  ids: z.array(taskId).min(1),
+  projectId: projectId.nullable(),
+});
+export type TaskBulkMoveInput = z.infer<typeof taskBulkMoveInput>;
+
+/** Bulk status write — same enum as a single `taskUpdateData.status` write. */
+export const taskBulkStatusInput = z.object({
+  ids: z.array(taskId).min(1),
+  status: taskStatusSchema,
+});
+export type TaskBulkStatusInput = z.infer<typeof taskBulkStatusInput>;
+
 export const taskFilterFields = {
   status: taskStatusSchema.optional(),
   projectId: projectId.optional(),
@@ -340,6 +359,19 @@ export const taskOut = z.object({
   ...timestampedFields,
 });
 export type TaskOut = z.infer<typeof taskOut>;
+
+/**
+ * Bulk task write output — the updated rows plus any background work the
+ * write enqueued (embedding refresh), mirroring inventory's
+ * `*ListAndSideEffectsOut` shape.
+ */
+export const taskListAndSideEffectsOut = z.object({
+  items: z.array(taskOut),
+  sideEffects: mutationSideEffectsSchema,
+});
+export type TaskListAndSideEffectsOut = z.infer<
+  typeof taskListAndSideEffectsOut
+>;
 
 // ---------------------------------------------------------------------------
 // Actionable tasks (computed unblocked/blocked read — see
@@ -440,6 +472,17 @@ export const purchaseUpdateInput = z.object({
 });
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
+/**
+ * Bulk "move to project" — `projectId: null` moves every listed purchase to
+ * the inbox (no project). Same nullable-projectId semantics as a single
+ * `purchaseUpdateData.projectId` write, batched over `ids`.
+ */
+export const purchaseBulkMoveInput = z.object({
+  ids: z.array(purchaseId).min(1),
+  projectId: projectId.nullable(),
+});
+export type PurchaseBulkMoveInput = z.infer<typeof purchaseBulkMoveInput>;
+
 export const purchaseFilterFields = {
   costType: costTypeSchema.optional(),
   trade: tradeSchema.optional(),
@@ -449,6 +492,12 @@ export const purchaseFilterFields = {
   includeSubProjects: z.boolean().optional(),
   future: z.boolean().optional(),
   search: z.string().optional(),
+  dateFrom: plainDate
+    .optional()
+    .describe("Inclusive lower bound on purchase date"),
+  dateTo: plainDate
+    .optional()
+    .describe("Inclusive upper bound on purchase date"),
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -469,6 +518,19 @@ export const purchaseOut = z.object({
   ...timestampedFields,
 });
 export type PurchaseOut = z.infer<typeof purchaseOut>;
+
+/**
+ * Bulk purchase write output — the updated rows plus any background work the
+ * write enqueued (embedding refresh), mirroring inventory's
+ * `*ListAndSideEffectsOut` shape.
+ */
+export const purchaseListAndSideEffectsOut = z.object({
+  items: z.array(purchaseOut),
+  sideEffects: mutationSideEffectsSchema,
+});
+export type PurchaseListAndSideEffectsOut = z.infer<
+  typeof purchaseListAndSideEffectsOut
+>;
 
 // ---------------------------------------------------------------------------
 // MCP / dashboard projections

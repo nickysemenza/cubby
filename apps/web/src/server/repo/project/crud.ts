@@ -103,21 +103,36 @@ export const getProjectByID = (
   id: ProjectId,
 ): Promise<ProjectOut> => projectReader.getByID(db, id);
 
+/**
+ * The referenced project must exist and be live. Guards `parentProjectId`
+ * writes (this file) and any other write that points a foreign key straight
+ * at a project id without going through a picker that already filters to live
+ * projects — task/purchase bulk-move (`repo/task/crud.ts`'s `moveTasks`,
+ * `repo/purchase/crud.ts`'s `movePurchases`) reuse this rather than
+ * re-implementing the same live-row check.
+ */
+export async function assertProjectLive(
+  tx: DrizzleTransaction,
+  id: ProjectId,
+): Promise<void> {
+  const live = await tx.query.project.findFirst({
+    where: and(eq(project.id, id), notDeleted(project)),
+    columns: { id: true },
+  });
+  if (!live) {
+    throw createAppError(
+      "PROJECT_NOT_FOUND",
+      `Project ${id} does not exist or has been deleted`,
+    );
+  }
+}
+
 /** The chosen parent must exist and be live. */
 async function assertParentProjectExists(
   tx: DrizzleTransaction,
   parentId: ProjectId,
 ): Promise<void> {
-  const parent = await tx.query.project.findFirst({
-    where: and(eq(project.id, parentId), notDeleted(project)),
-    columns: { id: true },
-  });
-  if (!parent) {
-    throw createAppError(
-      "PROJECT_NOT_FOUND",
-      `Parent project ${parentId} not found`,
-    );
-  }
+  await assertProjectLive(tx, parentId);
 }
 
 /**

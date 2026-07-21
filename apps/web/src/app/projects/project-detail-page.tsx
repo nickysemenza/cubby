@@ -479,7 +479,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       value: (
         <EditableCell
           value={project.startDate}
-          config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+          config={{ type: "date" }}
           onSave={async (startDate) => {
             await updateMutation.mutateAsync({
               id: project.id,
@@ -495,7 +495,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       value: (
         <EditableCell
           value={project.endDate}
-          config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+          config={{ type: "date" }}
           onSave={async (endDate) => {
             await updateMutation.mutateAsync({
               id: project.id,

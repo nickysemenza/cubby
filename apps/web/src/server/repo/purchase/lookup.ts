@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import { eq, inArray } from "drizzle-orm";
+import { eq, gte, inArray, lte } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
 import {
@@ -56,6 +56,11 @@ export const purchaseList = async (
       filters.future !== undefined
         ? eq(purchase.future, filters.future)
         : undefined,
+      // Rows with a null `date` (common on `future` purchases — nothing to
+      // date yet) fall out of any date window by plain SQL comparison
+      // semantics; that's intended, not a bug to work around.
+      filters.dateFrom ? gte(purchase.date, filters.dateFrom) : undefined,
+      filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
     ],
   );
 

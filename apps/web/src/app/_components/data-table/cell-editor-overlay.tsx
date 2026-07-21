@@ -102,14 +102,18 @@ export function CellEditorOverlay({
   }, [onRequestCancel]);
 
   // Click-outside cancels. DOM containment (not React tree) is the reliable
-  // check here: the combobox dropdown is its own body-level portal, so allow
-  // clicks inside any [data-combobox-popup] to keep the editor open.
+  // check here: the combobox dropdown and the `Popover` primitive (e.g. the
+  // date-picker's Calendar) are their own body-level portals, so allow
+  // clicks inside either to keep the editor open.
   React.useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
       const target = event.target as Element | null;
       if (!target) return;
       if (overlayRef.current?.contains(target)) return;
-      if (target.closest?.("[data-combobox-popup]")) return;
+      if (
+        target.closest?.('[data-combobox-popup], [data-slot="popover-content"]')
+      )
+        return;
       if (anchorEl?.contains(target)) return;
       onRequestCancel();
     };

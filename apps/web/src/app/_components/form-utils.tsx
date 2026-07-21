@@ -21,6 +21,7 @@ import { useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
+import { DatePickerInput } from "./date-picker-input";
 import { FormFieldGroup } from "./forms/form-field-group";
 
 // Build-time guard so the bundler eliminates the @hookform/devtools import (and
@@ -324,10 +325,10 @@ export function RequiredTextareaField<
 
 /**
  * A plain "YYYY-MM-DD" calendar-date field (task due date, purchase date,
- * project start/end date) — a raw `<input type="date">` already returns that
- * exact string, so no parsing/formatting is needed on either side. There's no
- * shared date-picker component in the app yet (see `add-to-meal.tsx` for the
- * same raw-input pattern).
+ * project start/end date) — backed by the shared `DatePickerInput`, which
+ * speaks the same "YYYY-MM-DD" string end to end (see `add-to-meal.tsx` for
+ * the raw `<input type="date">` pattern this intentionally doesn't share —
+ * that page's native inputs are out of scope for this component).
  */
 export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   form,
@@ -349,15 +350,11 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
-          <Input
-            id={name}
-            type="date"
-            value={(field.value as string | null) ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              field.onChange(v === "" ? null : v);
-            }}
-            aria-invalid={fieldState.invalid}
+          <DatePickerInput
+            value={(field.value as string | null) ?? null}
+            onChange={(v) => field.onChange(v)}
+            clearable
+            aria-label={label}
           />
         </FormFieldGroup>
       )}
