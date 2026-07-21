@@ -54,7 +54,9 @@ function TasksPage() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <Page variant="list" title="Tasks" fullWidth>
+    // The board's natural width is its fixed column tracks, not the full
+    // viewport — only the list view needs the wide, unconstrained container.
+    <Page variant="list" title="Tasks" fullWidth={view !== "board"}>
       <Stack gap="md">
         <ViewSwitcher
           ariaLabel="Tasks view"

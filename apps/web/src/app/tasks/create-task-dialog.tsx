@@ -1,9 +1,13 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   plainDate,
+  type TaskStatus,
+  type Trade,
   taskStatusSchema,
   tradeSchema,
 } from "@cubby/schemas/project";
+import { useMemo } from "react";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -35,25 +39,40 @@ const quickAddTaskSchema = z.object({
 });
 type QuickAddTaskValues = z.infer<typeof quickAddTaskSchema>;
 
-const defaultValues: QuickAddTaskValues = {
-  name: "",
-  projectId: null,
-  status: "not_started",
-  dueDate: null,
-  trade: null,
-};
-
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Pre-fill fields from a board quick-add click (status/project/trade axis,
+   * or a swimlane cell carrying both). The board hoists one dialog instance
+   * and conditionally mounts it per click, so these are only read once, on
+   * mount — a fresh mount per preset (see `TaskBoard`'s `pendingPreset`).
+   */
+  presetStatus?: TaskStatus;
+  presetProjectId?: ProjectId | null;
+  presetTrade?: Trade;
 }
 
 export function CreateTaskDialog({
   open,
   onOpenChange,
+  presetStatus,
+  presetProjectId,
+  presetTrade,
 }: CreateTaskDialogProps) {
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
+
+  const defaultValues = useMemo<QuickAddTaskValues>(
+    () => ({
+      name: "",
+      projectId: presetProjectId ?? null,
+      status: presetStatus ?? "not_started",
+      dueDate: null,
+      trade: presetTrade ?? null,
+    }),
+    [presetProjectId, presetStatus, presetTrade],
+  );
 
   return (
     <QuickAddDialog

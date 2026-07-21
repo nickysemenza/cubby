@@ -1,8 +1,10 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { keyBy } from "es-toolkit";
-import { Fragment, useMemo, useRef } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { Row } from "~/components/layout";
+import { cn } from "~/lib/utils";
+import { CreateTaskDialog } from "../create-task-dialog";
 import {
   axisColorChip,
   axisKey,
@@ -14,6 +16,7 @@ import {
 } from "./BoardColumn";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 import { buildColumns, buildLanes, cellTasks } from "./board-model";
+import type { TaskCreatePreset } from "./board-types";
 import { useBoardDnd } from "./use-board-dnd";
 import {
   type BoardTaskFilters,
@@ -21,7 +24,17 @@ import {
 } from "./use-board-mutations";
 
 /** A board column's fixed track width — keep in sync with the grid template below. */
-const COLUMN_WIDTH = "18rem";
+const COLUMN_WIDTH = "16rem";
+/** The swimlane label track width (grid template's first column). */
+const LANE_LABEL_WIDTH = "8rem";
+
+/**
+ * Default vertical bound for the standalone `/tasks?view=board` page: nav bar
+ * + page header + the view switcher and board-controls rows above it. The
+ * project detail embed (a card section, less chrome above it) passes a
+ * shorter fixed bound instead — see its `TaskBoard` usage.
+ */
+const DEFAULT_MAX_HEIGHT = "max-h-[calc(100dvh-18rem)]";
 
 interface TaskBoardProps {
   tasks: TaskOut[];
@@ -35,6 +48,12 @@ interface TaskBoardProps {
   filters: BoardTaskFilters;
   /** Whether cards may show the project link (off when a single project owns the board). */
   showProjectOnCards: boolean;
+  /**
+   * Tailwind max-height class bounding the board's vertical scroll region —
+   * column headers stay pinned (`sticky top-0`) while cards scroll beneath.
+   * Optional; defaults to a bound sized for the standalone board page.
+   */
+  maxHeightClassName?: string;
 }
 
 /**
@@ -48,12 +67,22 @@ export function TaskBoard({
   lane,
   filters,
   showProjectOnCards,
+  maxHeightClassName = DEFAULT_MAX_HEIGHT,
 }: TaskBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
   const { moveTask } = useBoardMutations(filters);
   useBoardDnd({ moveTask });
+
+  // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
+  // column header or an empty cell sets this, which mounts the dialog fresh
+  // with that click's preset; closing unmounts it, so the next click always
+  // gets a clean form (CreateTaskDialog's `useForm` only reads its defaults
+  // once, on mount).
+  const [pendingPreset, setPendingPreset] = useState<TaskCreatePreset | null>(
+    null,
+  );
 
   const columns = useMemo(() => buildColumns(tasks, cols), [tasks, cols]);
   const lanes = useMemo(
@@ -89,59 +118,90 @@ export function TaskBoard({
     [columns, tasks],
   );
 
-  if (lanes) {
-    return (
-      <div ref={scrollRef} className="overflow-x-auto">
-        <div
-          className="grid min-w-max gap-2"
-          style={{
-            gridTemplateColumns: `10rem repeat(${columns.length}, ${COLUMN_WIDTH})`,
-          }}
-        >
-          <div />
-          {columns.map((column, i) => (
-            <ColumnHeader
-              key={axisKey(column)}
-              column={column}
-              count={columnCounts[i] ?? 0}
-            />
-          ))}
-          {lanes.map((laneKey) => (
-            <Fragment key={axisKey(laneKey)}>
-              <Row align="center" gap="tight" className="min-w-0 pt-1">
-                {axisColorChip(laneKey)}
-                <span className="truncate font-medium text-muted-foreground text-sm">
-                  {axisLabel(laneKey)}
-                </span>
-              </Row>
-              {columns.map((column) => (
-                <BoardCell
-                  key={axisKey(column)}
-                  tasks={tasks}
-                  column={column}
-                  lane={laneKey}
-                  cardProps={cardProps}
-                />
-              ))}
-            </Fragment>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Sticky header cells: opaque paper background so cards scroll under them
+  // cleanly, pinned to the top of the shared vertical scroll region below.
+  const stickyHeaderClassName = "sticky top-0 z-10 bg-background";
 
-  return (
+  const board = lanes ? (
     <div ref={scrollRef} className="overflow-x-auto">
-      <Row align="stretch" gap="sm" className="min-w-max pb-2">
+      <div
+        className={cn(
+          "grid min-w-max gap-2 overflow-y-auto",
+          maxHeightClassName,
+        )}
+        style={{
+          gridTemplateColumns: `${LANE_LABEL_WIDTH} repeat(${columns.length}, ${COLUMN_WIDTH})`,
+        }}
+      >
+        <div className={stickyHeaderClassName} />
+        {columns.map((column, i) => (
+          <ColumnHeader
+            key={axisKey(column)}
+            column={column}
+            count={columnCounts[i] ?? 0}
+            onQuickAdd={setPendingPreset}
+            className={stickyHeaderClassName}
+          />
+        ))}
+        {lanes.map((laneKey) => (
+          <Fragment key={axisKey(laneKey)}>
+            <Row align="center" gap="tight" className="min-w-0 pt-1">
+              {axisColorChip(laneKey)}
+              <span className="truncate font-medium text-muted-foreground text-sm">
+                {axisLabel(laneKey)}
+              </span>
+            </Row>
+            {columns.map((column) => (
+              <BoardCell
+                key={axisKey(column)}
+                tasks={tasks}
+                column={column}
+                lane={laneKey}
+                cardProps={cardProps}
+                onQuickAdd={setPendingPreset}
+                // Each cell scrolls independently so one busy lane×column
+                // intersection doesn't stretch the whole shared grid row.
+                className="max-h-64 overflow-y-auto"
+              />
+            ))}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <div ref={scrollRef} className="overflow-x-auto">
+      <Row
+        align="stretch"
+        gap="sm"
+        className={cn("min-w-max overflow-y-hidden pb-2", maxHeightClassName)}
+      >
         {columns.map((column) => (
           <BoardColumn
             key={axisKey(column)}
             tasks={tasks}
             column={column}
             cardProps={cardProps}
+            onQuickAdd={setPendingPreset}
           />
         ))}
       </Row>
     </div>
+  );
+
+  return (
+    <>
+      {board}
+      {pendingPreset && (
+        <CreateTaskDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPendingPreset(null);
+          }}
+          presetStatus={pendingPreset.status}
+          presetProjectId={pendingPreset.projectId}
+          presetTrade={pendingPreset.trade}
+        />
+      )}
+    </>
   );
 }

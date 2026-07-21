@@ -706,6 +706,9 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           lane={null}
           filters={projectSubtreeTasksFilters(project.id)}
           showProjectOnCards={hasSubtree}
+          // A card section on the detail page, not the whole viewport — a
+          // shorter fixed bound than the standalone board page's default.
+          maxHeightClassName="max-h-[70vh]"
         />
       ) : (
         <TaskList tasks={topLevelTasks} />
