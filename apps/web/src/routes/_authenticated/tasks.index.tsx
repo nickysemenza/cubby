@@ -6,6 +6,7 @@ import {
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ActionableTasks } from "~/app/tasks/actionable-tasks";
+import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
 import { TaskActions } from "~/app/tasks/task-actions";
 import { TaskList } from "~/app/tasks/tasklist";
 import { Stack } from "~/components/layout";
@@ -15,21 +16,31 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 
-const viewOptions = ["all", "actionable"] as const;
+const viewOptions = ["all", "actionable", "board"] as const;
 type ViewOption = (typeof viewOptions)[number];
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "all", label: "All" },
   { value: "actionable", label: "Actionable" },
+  { value: "board", label: "Board" },
 ];
 
 const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   view: z.enum(viewOptions).optional().catch(undefined),
+  // Board layout: column axis + swimlane axis. `lane` is normalized to only
+  // apply when `cols === "status"` inside TasksBoardView.
+  cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
+  lane: z.enum(["project", "trade"]).optional().catch(undefined),
   ...tableSearchFields,
 });
 
-const searchDefaults = { q: undefined, view: undefined } as const;
+const searchDefaults = {
+  q: undefined,
+  view: undefined,
+  cols: undefined,
+  lane: undefined,
+} as const;
 
 export const Route = createFileRoute("/_authenticated/tasks/")({
   validateSearch: searchSchema,
@@ -61,6 +72,8 @@ function TasksPage() {
         )}
 
         {view === "actionable" && <ActionableTasks />}
+
+        {view === "board" && <TasksBoardView />}
       </Stack>
     </Page>
   );

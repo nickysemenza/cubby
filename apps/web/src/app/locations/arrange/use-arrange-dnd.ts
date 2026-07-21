@@ -1,8 +1,7 @@
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { type RefObject, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { match } from "ts-pattern";
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import { asDragData, asDropData, type ItemDragData } from "./arrange-types";
@@ -68,13 +67,4 @@ export function useArrangeDnd({
       },
     });
   }, []);
-}
-
-/** Register edge auto-scroll on a scroll container while a drag is in progress. */
-export function useAutoScroll(ref: RefObject<HTMLElement | null>): void {
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    return autoScrollForElements({ element });
-  }, [ref]);
 }

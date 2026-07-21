@@ -29,6 +29,7 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { TaskBoard } from "~/app/tasks/board/TaskBoard";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Section, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -43,6 +44,10 @@ import {
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
@@ -68,6 +73,12 @@ import {
 
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
 const NO_TASKS: TaskOut[] = [];
+
+/** List/Board toggle for the project-detail Tasks section (local, no URL params). */
+const TASKS_VIEW_OPTIONS: ViewSwitcherOption<"list" | "board">[] = [
+  { value: "list", label: "List" },
+  { value: "board", label: "Board" },
+];
 const NO_PURCHASES: PurchaseOut[] = [];
 const NO_CHILD_PROJECTS: ProjectOut[] = [];
 
@@ -275,6 +286,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     () => subtreeTasks.filter((t) => t.parentTaskId == null),
     [subtreeTasks],
   );
+  // Whether this project owns descendant sub-projects — gates the board's
+  // per-card project link (otherwise every card is the same project).
+  const hasSubtree = project.rollup.subtree.projectCount > 0;
+  const [tasksView, setTasksView] = useState<"list" | "board">("list");
 
   const { data: chartPurchases = NO_PURCHASES } = useQuery(
     api.purchase.chartData.queryOptions(
@@ -641,12 +656,33 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     {
       title: "Tasks",
       icon: ListChecks,
-      zone: "main",
-      headerAction:
-        topLevelTasks.length > 0 ? (
-          <Badge variant="outline">{topLevelTasks.length}</Badge>
-        ) : undefined,
-      content: <TaskList tasks={topLevelTasks} />,
+      // The board needs the full width; the list is happy in the main column.
+      zone: tasksView === "board" ? "full" : "main",
+      headerAction: (
+        <Row align="center" gap="sm">
+          {topLevelTasks.length > 0 && (
+            <Badge variant="outline">{topLevelTasks.length}</Badge>
+          )}
+          <ViewSwitcher
+            ariaLabel="Tasks view"
+            options={TASKS_VIEW_OPTIONS}
+            value={tasksView}
+            onValueChange={setTasksView}
+          />
+        </Row>
+      ),
+      content:
+        tasksView === "board" ? (
+          <TaskBoard
+            tasks={topLevelTasks}
+            cols="status"
+            lane={null}
+            filters={projectSubtreeTasksFilters(project.id)}
+            showProjectOnCards={hasSubtree}
+          />
+        ) : (
+          <TaskList tasks={topLevelTasks} />
+        ),
     },
     // Aside rail: metadata + (when empty) the slim Notes card.
     {
@@ -722,8 +758,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       ),
     },
   ];
-
-  const hasSubtree = project.rollup.subtree.projectCount > 0;
 
   const heroStats: DetailHeroStat[] = [
     // A sub-project surfaces its parent right in the spec-plate header, same

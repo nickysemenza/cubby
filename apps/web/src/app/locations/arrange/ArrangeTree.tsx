@@ -2,6 +2,7 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
 import { useRef, useState } from "react";
+import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
@@ -9,7 +10,6 @@ import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationRow } from "./ArrangeLocationRow";
 import { childrenOf, pathToNode } from "./arrange-tree-utils";
 import { UnknownDock } from "./UnknownDock";
-import { useAutoScroll } from "./use-arrange-dnd";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeTreeProps {
