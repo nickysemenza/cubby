@@ -30,7 +30,9 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
+import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Section, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -241,26 +243,39 @@ function SubProjectsList({
         </Empty>
       ) : (
         <Stack gap="xs">
-          {projects.map((child) => (
-            <Row key={child.id} justify="between" align="center" gap="sm">
-              <Row align="center" gap="xs">
-                <StatusIcon status={child.status} />
-                <EntityInlineLink
-                  entity="project"
-                  data={{ id: child.id, name: child.name }}
-                  compact
-                />
-                <Badge variant="outline">
-                  {PROJECT_STATUS_LABELS[child.status]}
-                </Badge>
+          {projects.map((child) => {
+            // Subtree-aware, matching the projects table + hero: a child with
+            // its own descendants shows its whole subtree; `actualSpent` (money
+            // out, excluding planned + contributions) mirrors the hero's
+            // "Actual" so a sub-project's number never means something the
+            // parent's doesn't.
+            const childHasSubtree = child.rollup.subtree.projectCount > 0;
+            const spent = childHasSubtree
+              ? child.rollup.subtree.actualSpent
+              : child.rollup.actualSpent;
+            const estimate = childHasSubtree
+              ? child.rollup.subtree.costEstimate
+              : child.costEstimate;
+            return (
+              <Row key={child.id} justify="between" align="center" gap="sm">
+                <Row align="center" gap="xs">
+                  <StatusIcon status={child.status} />
+                  <EntityInlineLink
+                    entity="project"
+                    data={{ id: child.id, name: child.name }}
+                    compact
+                  />
+                  <Badge variant="outline">
+                    {PROJECT_STATUS_LABELS[child.status]}
+                  </Badge>
+                </Row>
+                <span className="text-muted-foreground text-sm">
+                  {formatCurrency(spent, 0)}
+                  {estimate != null && ` / ${formatCurrency(estimate, 0)}`}
+                </span>
               </Row>
-              <span className="text-muted-foreground text-sm">
-                {formatCurrency(child.rollup.spent, 0)}
-                {child.costEstimate != null &&
-                  ` / ${formatCurrency(child.costEstimate, 0)}`}
-              </span>
-            </Row>
-          ))}
+            );
+          })}
         </Stack>
       )}
       <Row justify="end">
@@ -348,6 +363,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   );
   const childProjects = childProjectsPage?.items ?? NO_CHILD_PROJECTS;
   const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [isCreatingPurchase, setIsCreatingPurchase] = useState(false);
 
   // The Gantt's sub-project rows need the whole descendant project subtree
   // (separate from the direct-children query the Sub-projects section uses).
@@ -563,10 +580,14 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
     {
       label: "Progress",
-      value:
-        project.rollup.taskCount > 0
-          ? `${project.rollup.doneTaskCount}/${project.rollup.taskCount} tasks`
-          : undefined,
+      // Subtree-aware to match the hero: a parent shows its whole subtree's
+      // task progress, a leaf its own (own == subtree for a leaf).
+      value: (() => {
+        const r = hasSubtree ? project.rollup.subtree : project.rollup;
+        return r.taskCount > 0
+          ? `${r.doneTaskCount}/${r.taskCount} tasks`
+          : undefined;
+      })(),
     },
     {
       label: "Parent project",
@@ -611,6 +632,12 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           }}
         />
       ),
+    },
+    {
+      label: "Last updated",
+      // UTC ISO date — deterministic across server/client render (a locale/tz
+      // format here would risk a hydration mismatch on this SSR'd page).
+      value: project.updatedAt.toISOString().slice(0, 10),
     },
   ];
 
@@ -696,6 +723,15 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           value={tasksView}
           onValueChange={setTasksView}
         />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsCreatingTask(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New task
+        </Button>
       </Row>
     ),
     content:
@@ -711,7 +747,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           maxHeightClassName="max-h-[70vh]"
         />
       ) : (
-        <TaskList tasks={topLevelTasks} />
+        <TaskList tasks={topLevelTasks} showProjectColumn={hasSubtree} />
       ),
   };
 
@@ -779,16 +815,29 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     title: "Purchases",
     icon: ShoppingCart,
     zone: hasSubtree ? "full" : "main",
-    headerAction:
-      chartPurchases.length > 0 ? (
-        <Badge variant="outline">{chartPurchases.length}</Badge>
-      ) : undefined,
+    headerAction: (
+      <Row align="center" gap="sm">
+        {chartPurchases.length > 0 && (
+          <Badge variant="outline">{chartPurchases.length}</Badge>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsCreatingPurchase(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New purchase
+        </Button>
+      </Row>
+    ),
     content: (
       <div ref={purchasesRef}>
         <PurchaseList
           purchases={sortedPurchases}
           tradeFilter={activeMatrixCell?.trade ?? null}
           costTypeFilter={activeMatrixCell?.costType ?? null}
+          showProjectColumn={hasSubtree}
         />
       </div>
     ),
@@ -839,13 +888,21 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           } satisfies DetailHeroStat,
         ]
       : []),
-    {
-      label: "Tasks",
-      value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,
-    },
-    { label: "Purchases", value: project.rollup.purchaseCount },
-    // Subtree totals alongside own — only shown once this project actually
-    // has descendants (own numbers already tell the whole story otherwise).
+    // Own Tasks/Purchases only when this is a leaf — a subtree project shows
+    // the fuller "(incl. sub-projects)" versions below instead, keeping the
+    // spec-plate to ~6 stats so the mono values aren't truncated.
+    ...(hasSubtree
+      ? []
+      : [
+          {
+            label: "Tasks",
+            value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,
+          } satisfies DetailHeroStat,
+          {
+            label: "Purchases",
+            value: project.rollup.purchaseCount,
+          } satisfies DetailHeroStat,
+        ]),
     ...(hasSubtree
       ? [
           {
@@ -902,6 +959,18 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         open={isCreatingSubProject}
         onOpenChange={setIsCreatingSubProject}
         defaultParentProjectId={project.id}
+      />
+
+      <CreateTaskDialog
+        open={isCreatingTask}
+        onOpenChange={setIsCreatingTask}
+        presetProjectId={project.id}
+      />
+
+      <CreatePurchaseDialog
+        open={isCreatingPurchase}
+        onOpenChange={setIsCreatingPurchase}
+        presetProjectId={project.id}
       />
 
       {/* Spending/task charts scoped to this project PLUS its whole sub-project

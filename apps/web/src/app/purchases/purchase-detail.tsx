@@ -1,7 +1,8 @@
 import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
-import { Link } from "@tanstack/react-router";
 import { ExternalLink, Info } from "lucide-react";
 import type { FC } from "react";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -16,6 +17,8 @@ import {
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
+import { entityCellClipboard } from "../_components/data-table/inventory-column-helpers";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
@@ -196,7 +199,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       value: (
         <EditableCell
           value={purchase.notes}
-          config={{ type: "text" }}
+          config={{ type: "text", multiline: true, rows: 4 }}
           onSave={async (notes) => {
             await updateMutation.mutateAsync({
               id: purchase.id,
@@ -209,13 +212,47 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     },
     {
       label: "Project",
-      value: purchase.projectId ? (
-        <Link to="/projects/$id" params={{ id: purchase.projectId }}>
-          <Badge variant="outline" className="cursor-pointer hover:bg-muted">
-            {purchase.projectName}
-          </Badge>
-        </Link>
-      ) : undefined,
+      value: (
+        <EditableEntityCell
+          value={
+            purchase.projectId && purchase.projectName
+              ? { id: purchase.projectId, name: purchase.projectName }
+              : null
+          }
+          label="project"
+          clearable
+          trigger="pencil"
+          onSave={async (newProjectId) => {
+            await updateMutation.mutateAsync({
+              id: purchase.id,
+              data: { projectId: newProjectId },
+            });
+          }}
+          clipboard={entityCellClipboard(
+            "project",
+            purchase.projectId && purchase.projectName
+              ? { id: purchase.projectId, name: purchase.projectName }
+              : null,
+            async (newProjectId) => {
+              await updateMutation.mutateAsync({
+                id: purchase.id,
+                data: { projectId: newProjectId },
+              });
+            },
+          )}
+          SearchProvider={WithProjectSearch}
+          renderValue={(v) =>
+            v ? (
+              <EntityInlineLink
+                entity="project"
+                data={{ id: v.id, name: v.name }}
+              />
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
     },
   ];
 

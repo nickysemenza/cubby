@@ -10,6 +10,7 @@ import {
   taskBulkMoveInput,
   taskBulkReorderInput,
   taskBulkStatusInput,
+  taskBulkTradeInput,
   taskCreateInput,
   taskFiltersSchema,
   taskListAndSideEffectsOut,
@@ -26,6 +27,7 @@ import {
   moveTasks,
   reorderTasks,
   setTasksStatus,
+  setTasksTrade,
   taskList,
   updateTask,
 } from "~/server/repo/task";
@@ -130,6 +132,23 @@ const bulkSetStatus = protectedProcedure
     return { items, sideEffects: { backgroundBatches } };
   });
 
+// Bulk trade write, same shape as bulkSetStatus above.
+const bulkSetTrade = protectedProcedure
+  .input(taskBulkTradeInput)
+  .output(taskListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setTasksTrade(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "task" as const, entityId: item.id },
+        source: "task.bulkSetTrade",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 // Board drag-to-prioritize "materialize" path (see board-model.ts
 // computeRank). One repo call inside a transaction re-ranks a run of cards and
 // optionally applies the dragged card's axis move. Side-effects (embedding
@@ -162,5 +181,6 @@ export const taskRouter = createTRPCRouter({
   chartData,
   bulkMove,
   bulkSetStatus,
+  bulkSetTrade,
   bulkReorder,
 });

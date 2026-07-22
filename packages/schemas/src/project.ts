@@ -217,12 +217,33 @@ export type ProjectSortField = (typeof projectSortableFields)[number];
  *     in TS at read time, never denormalized onto the row.
  */
 export const projectRollup = z.object({
-  spent: z.number().describe("SUM(cost) of live purchases"),
+  spent: z
+    .number()
+    .describe(
+      "SUM(cost) of live purchases — the blended net (actualSpent + committedSpent − contributions), including planned + offsets",
+    ),
+  // The `spent` figure above blends three economically distinct quantities;
+  // these split it so callers can show a true money-out "Actual" that matches
+  // the detail hero / BudgetStrip decomposition instead of the net blend.
+  actualSpent: z
+    .number()
+    .describe("SUM(cost) where cost > 0 and not future — money already spent"),
+  committedSpent: z
+    .number()
+    .describe("SUM(cost) where cost > 0 and future — planned, not yet spent"),
+  contributions: z
+    .number()
+    .describe(
+      "SUM(-cost) where cost < 0 — offsets/credits, positive magnitude",
+    ),
   purchaseCount: z.number().int(),
   taskCount: z.number().int(),
   doneTaskCount: z.number().int(),
   subtree: z.object({
     spent: z.number(),
+    actualSpent: z.number(),
+    committedSpent: z.number(),
+    contributions: z.number(),
     purchaseCount: z.number().int(),
     taskCount: z.number().int(),
     doneTaskCount: z.number().int(),
@@ -324,6 +345,13 @@ export const taskBulkStatusInput = z.object({
 });
 export type TaskBulkStatusInput = z.infer<typeof taskBulkStatusInput>;
 
+/** Bulk trade write — same enum as a single `taskUpdateData.trade` write. */
+export const taskBulkTradeInput = z.object({
+  ids: z.array(taskId).min(1),
+  trade: tradeSchema,
+});
+export type TaskBulkTradeInput = z.infer<typeof taskBulkTradeInput>;
+
 /**
  * The axis fields a board drag can change on the dragged card — the same
  * subset a single board drop writes (status/project/trade), minus `sortOrder`
@@ -369,6 +397,10 @@ export const taskFilterFields = {
    * descendant sub-projects.
    */
   includeSubProjects: z.boolean().optional(),
+  /** Inclusive lower bound on a task's due date (matches `dueDate`). */
+  dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
+  /** Inclusive upper bound on a task's due date (matches `dueDate`). */
+  dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -519,6 +551,22 @@ export const purchaseBulkMoveInput = z.object({
   projectId: projectId.nullable(),
 });
 export type PurchaseBulkMoveInput = z.infer<typeof purchaseBulkMoveInput>;
+
+/** Bulk trade write — same enum as a single `purchaseUpdateData.trade` write. */
+export const purchaseBulkTradeInput = z.object({
+  ids: z.array(purchaseId).min(1),
+  trade: tradeSchema,
+});
+export type PurchaseBulkTradeInput = z.infer<typeof purchaseBulkTradeInput>;
+
+/** Bulk cost-type write — same enum as a single `purchaseUpdateData.costType`. */
+export const purchaseBulkCostTypeInput = z.object({
+  ids: z.array(purchaseId).min(1),
+  costType: costTypeSchema,
+});
+export type PurchaseBulkCostTypeInput = z.infer<
+  typeof purchaseBulkCostTypeInput
+>;
 
 export const purchaseFilterFields = {
   costType: costTypeSchema.optional(),

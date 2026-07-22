@@ -27,11 +27,17 @@ function proj(id: string, parentProjectId?: string): ProjectOut {
     updatedAt: new Date(),
     rollup: {
       spent: 0,
+      actualSpent: 0,
+      committedSpent: 0,
+      contributions: 0,
       purchaseCount: 0,
       taskCount: 0,
       doneTaskCount: 0,
       subtree: {
         spent: 0,
+        actualSpent: 0,
+        committedSpent: 0,
+        contributions: 0,
         purchaseCount: 0,
         taskCount: 0,
         doneTaskCount: 0,

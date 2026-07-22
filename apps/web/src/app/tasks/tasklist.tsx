@@ -2,24 +2,20 @@ import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ListChecks } from "lucide-react";
+import { ArrowRightLeft, ListChecks, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
-  TASK_STATUS_LABELS,
-  TradeBadge,
+  taskDueColumn,
+  taskStatusColumn,
+  taskTradeColumn,
   tradeOptions,
 } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
-import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import {
-  createFilterableSelectColumn,
-  createPlainDateColumn,
-  createProjectLinkColumn,
-} from "../_components/data-table/columnHelpers";
+import { createProjectLinkColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -30,8 +26,13 @@ import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import { SetTaskStatusDialog } from "../_components/tracker/set-task-status-dialog";
-import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
+import {
+  dueRangeOptions,
+  resolveDueRange,
+  taskStatusOptions,
+} from "./task-options";
 
 /**
  * `N/M` checklist chip after a parent task's name. Module-level because
@@ -62,6 +63,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const { options: projectOptions } = useProjectOptions();
   const [bulkMoveItems, setBulkMoveItems] = useState<TaskOut[]>([]);
   const [bulkStatusItems, setBulkStatusItems] = useState<TaskOut[]>([]);
+  const [bulkTradeItems, setBulkTradeItems] = useState<TaskOut[]>([]);
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -100,6 +102,16 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
             return { success: true };
           },
         },
+        {
+          id: "set-trade",
+          label: "Set trade...",
+          icon: <Wrench className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<TaskOut>[]) => {
+            setBulkTradeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
       ],
       clearSelectionOnComplete: false,
     }),
@@ -111,34 +123,23 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     [projectOptions],
   );
 
-  // Column config here is mirrored (not shared) by the embedded `TaskList` in
-  // `~/app/projects/shared.tsx` — that table renders a caller-supplied array
-  // with no server pagination/filters of its own, so it can't reuse this
-  // page's `useEntityList` wiring. Keep both in sync if the editable field set
-  // changes.
+  // The status / due / trade columns come from the shared factories in
+  // `~/app/projects/shared.tsx`, also used by the embedded `TaskList` on the
+  // project detail page — so the two can't drift. This page passes its own
+  // mobile projections; the project + name columns stay inline here.
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createFilterableSelectColumn(columnHelper, "status", {
-        header: "Status",
-        className: "w-32",
-        placeholder: "Filter by status...",
-        selectOptions: taskStatusOptions,
-        renderCell: (status: TaskStatus) => (
-          <Badge variant={taskStatusBadgeVariant[status]}>
-            {TASK_STATUS_LABELS[status]}
-          </Badge>
-        ),
-        mobile: { slot: "subtitle", priority: 10 },
-        editable: {
-          onSave: async (newStatus, task) => {
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { status: newStatus },
-            });
-          },
+      taskStatusColumn(
+        columnHelper,
+        async (status, task) => {
+          await updateTaskMutation.mutateAsync({
+            id: task.id,
+            data: { status },
+          });
         },
-      }),
+        { mobile: { slot: "subtitle", priority: 10 } },
+      ),
       createProjectLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 30, interactive: true },
@@ -156,38 +157,26 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
           },
         },
       }),
-      createPlainDateColumn(columnHelper, "dueDate", {
-        header: "Due",
-        className: "w-28",
-        mobile: { slot: "meta", priority: 40, interactive: true },
-        editable: {
-          onSave: async (newDueDate, task) => {
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { dueDate: newDueDate },
-            });
-          },
+      taskDueColumn(
+        columnHelper,
+        async (dueDate, task) => {
+          await updateTaskMutation.mutateAsync({
+            id: task.id,
+            data: { dueDate },
+          });
         },
-      }),
-      createFilterableSelectColumn(columnHelper, "trade", {
-        header: "Trade",
-        className: "w-32",
-        placeholder: "Filter by trade...",
-        selectOptions: tradeOptions,
-        renderCell: (trade: Trade | null) =>
-          trade ? <TradeBadge trade={trade} /> : <NoneValue />,
-        mobile: { slot: "meta", priority: 50 },
-        editable: {
-          onSave: async (newTrade, task) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!newTrade) return;
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { trade: newTrade },
-            });
-          },
+        { mobile: { slot: "meta", priority: 40, interactive: true } },
+      ),
+      taskTradeColumn(
+        columnHelper,
+        async (trade, task) => {
+          await updateTaskMutation.mutateAsync({
+            id: task.id,
+            data: { trade },
+          });
         },
-      }),
+        { mobile: { slot: "meta", priority: 50 } },
+      ),
     ],
     [columnHelper, projectFilterOptions],
   );
@@ -206,6 +195,12 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         placeholder: "Filter by trade...",
         filterType: "select" as const,
         options: tradeOptions,
+      },
+      {
+        id: "due",
+        placeholder: "Filter by due date...",
+        filterType: "select" as const,
+        options: dueRangeOptions,
       },
       {
         id: "project",
@@ -239,6 +234,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         status: ts.getColumnFilter("status") as TaskStatus | undefined,
         trade: ts.getColumnFilter("trade") as Trade | undefined,
         projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+        ...resolveDueRange(ts.getColumnFilter("due")),
         // Checklist subtasks are managed from their parent's detail page, not
         // surfaced as independent rows here.
         topLevelOnly: true,
@@ -278,6 +274,20 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       ),
     onSuccess: () => {
       setBulkStatusItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkTradeMutation = useActionMutation({
+    mutationFn: api.task.bulkSetTrade.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkTradeItems([]);
       table.resetRowSelection();
     },
   });
@@ -329,6 +339,25 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
             await bulkStatusMutation.mutateAsync({
               ids: bulkStatusItems.map((t) => t.id),
               status,
+            });
+          }}
+        />
+      )}
+      {bulkTradeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkTradeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkTradeItems([]);
+          }}
+          items={bulkTradeItems}
+          isPending={bulkTradeMutation.isPending}
+          options={tradeOptions}
+          fieldLabel="Trade"
+          itemNoun="Task"
+          onConfirm={async (trade) => {
+            await bulkTradeMutation.mutateAsync({
+              ids: bulkTradeItems.map((t) => t.id),
+              trade: trade as Trade,
             });
           }}
         />

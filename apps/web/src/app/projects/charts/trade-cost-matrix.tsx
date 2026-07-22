@@ -25,9 +25,13 @@ const activeCellRing = "ring-2 ring-primary ring-inset";
 
 export type TradeCostCell = { trade: Trade; costType: PivotCostKey | null };
 
-/** The purchases behind one cell, top 8 by cost + a "+N more" roll-up. */
+/** The purchases behind one cell, top 8 by magnitude + a "+N more" roll-up. */
 function CellPreview({ purchases }: { purchases: PurchaseOut[] }) {
-  const sorted = [...purchases].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
+  // Sort by absolute value so a large-magnitude negative (e.g. the −$75k family
+  // contribution) surfaces at the top instead of sinking into the rest bucket.
+  const sorted = [...purchases].sort(
+    (a, b) => Math.abs(b.cost ?? 0) - Math.abs(a.cost ?? 0),
+  );
   const top = sorted.slice(0, 8);
   const rest = sorted.slice(8);
   const restTotal = sumBy(rest, (p) => p.cost ?? 0);

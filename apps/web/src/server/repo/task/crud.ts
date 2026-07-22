@@ -12,6 +12,7 @@ import type {
   TaskBulkMoveInput,
   TaskBulkReorderInput,
   TaskBulkStatusInput,
+  TaskBulkTradeInput,
   TaskCreateInput,
   TaskOut,
   TaskUpdateInput,
@@ -432,6 +433,51 @@ export const setTasksStatus = async (
     const auditEntries: AuditEntryInput[] = [];
     for (const row of before) {
       const changes = computeChanges(row, { id: row.id, status }, ["status"]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "task",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getTasksByIDs(db, updatedIds);
+};
+
+/**
+ * Bulk trade write — a plain `trade` column write over `ids`, mirroring
+ * `setTasksStatus`. A trade change is embedding-relevant, but (like the other
+ * bulk writes here) the router runs one wave-wide side-effect dispatch, so
+ * this stays a plain audited UPDATE.
+ */
+export const setTasksTrade = async (
+  db: Database,
+  input: TaskBulkTradeInput,
+  actor: ActorContext,
+): Promise<TaskOut[]> => {
+  const { ids, trade } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    const before = await tx.query.task.findMany({
+      where: and(inArray(task.id, ids), notDeleted(task)),
+      columns: { id: true, trade: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(task)
+      .set({ trade })
+      .where(and(inArray(task.id, ids), notDeleted(task)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, trade }, ["trade"]);
       if (changes) {
         auditEntries.push({
           entityType: "task",

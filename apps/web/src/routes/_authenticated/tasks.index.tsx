@@ -7,6 +7,8 @@ import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ActionableTasks } from "~/app/tasks/actionable-tasks";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
+import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
+import { TasksTimelineView } from "~/app/tasks/TasksTimelineView";
 import { TaskActions } from "~/app/tasks/task-actions";
 import { TaskList } from "~/app/tasks/tasklist";
 import { Stack } from "~/components/layout";
@@ -16,13 +18,14 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 
-const viewOptions = ["all", "actionable", "board"] as const;
+const viewOptions = ["all", "actionable", "board", "timeline"] as const;
 type ViewOption = (typeof viewOptions)[number];
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "all", label: "All" },
   { value: "actionable", label: "Actionable" },
   { value: "board", label: "Board" },
+  { value: "timeline", label: "Timeline" },
 ];
 
 const searchSchema = z.object({
@@ -50,14 +53,28 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
 });
 
 function TasksPage() {
-  const { q, view = "all" } = Route.useSearch();
+  const search = Route.useSearch();
+  const { q } = search;
+  // Default to the actionable "what can I do next" view rather than the full
+  // list, which is dominated by completed tasks. A search deep-link (`q`) still
+  // lands on the All list so its seeded search isn't silently ignored.
+  const view = search.view ?? (q ? "all" : "actionable");
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
     // The board's natural width is its fixed column tracks, not the full
     // viewport — only the list view needs the wide, unconstrained container.
-    <Page variant="list" title="Tasks" fullWidth={view !== "board"}>
+    <Page
+      variant="list"
+      title="Tasks"
+      fullWidth={view !== "board"}
+      // Header-level "New task" so it's reachable from every view (the default
+      // Actionable view has no list toolbar to hang it off).
+      actions={<TaskActions />}
+    >
       <Stack gap="md">
+        <TasksStatsStrip />
+
         <ViewSwitcher
           ariaLabel="Tasks view"
           options={VIEW_SWITCHER_OPTIONS}
@@ -69,13 +86,13 @@ function TasksPage() {
           }
         />
 
-        {view === "all" && (
-          <TaskList initialSearch={q} actions={<TaskActions />} />
-        )}
+        {view === "all" && <TaskList initialSearch={q} />}
 
         {view === "actionable" && <ActionableTasks />}
 
         {view === "board" && <TasksBoardView />}
+
+        {view === "timeline" && <TasksTimelineView />}
       </Stack>
     </Page>
   );

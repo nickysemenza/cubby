@@ -7,23 +7,23 @@ import type {
 } from "@cubby/schemas/project";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ExternalLink } from "lucide-react";
+import { ArrowRightLeft, ExternalLink, Tag, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
 import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
-import { TradeBadge, tradeOptions } from "~/app/projects/shared";
-import { Badge } from "~/components/ui/badge";
-import { NoneValue } from "~/components/ui/none-value";
+import {
+  purchaseCostColumn,
+  purchaseCostTypeColumn,
+  purchaseDateColumn,
+  purchaseFutureColumn,
+  purchaseTradeColumn,
+  tradeOptions,
+} from "~/app/projects/shared";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import {
-  createCurrencyColumn,
-  createFilterableSelectColumn,
-  createPlainDateColumn,
-  createProjectLinkColumn,
-} from "../_components/data-table/columnHelpers";
+import { createProjectLinkColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -34,9 +34,9 @@ import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import { PurchaseChartStrip } from "./purchase-charts";
 import {
-  costTypeLabels,
   costTypeOptions,
   dateRangeOptions,
   futureFilterOptions,
@@ -82,6 +82,8 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   const [bulkMoveItems, setBulkMoveItems] = useState<PurchaseOut[]>([]);
+  const [bulkTradeItems, setBulkTradeItems] = useState<PurchaseOut[]>([]);
+  const [bulkCostTypeItems, setBulkCostTypeItems] = useState<PurchaseOut[]>([]);
 
   const updatePurchaseMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -112,6 +114,26 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
             return { success: true };
           },
         },
+        {
+          id: "set-trade",
+          label: "Set trade...",
+          icon: <Wrench className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<PurchaseOut>[]) => {
+            setBulkTradeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-cost-type",
+          label: "Set cost type...",
+          icon: <Tag className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<PurchaseOut>[]) => {
+            setBulkCostTypeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
       ],
       clearSelectionOnComplete: false,
     }),
@@ -123,82 +145,62 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     [projectOptions],
   );
 
-  // Column config here is mirrored (not shared) by the embedded
-  // `PurchaseList` in `~/app/projects/shared.tsx` — that table renders a
-  // caller-supplied array with no server pagination/filters of its own, so it
-  // can't reuse this page's `useEntityList` wiring. Keep both in sync if the
-  // editable field set changes.
+  // The cost / date / costType / trade / future columns come from the shared
+  // factories in `~/app/projects/shared.tsx`, also used by the embedded
+  // `PurchaseList` on the project detail page — so the two can't drift. This
+  // page passes its own mobile projections + filter configs and keeps default
+  // cents (no `decimals`/`signedTone`); the project + name + url columns stay
+  // inline here.
   // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createCurrencyColumn(columnHelper, "cost", {
-        header: "Cost",
-        mobile: { slot: "trailing", priority: 10, interactive: true },
-        editable: {
-          onSave: async (newCost, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { cost: newCost },
-            });
+      purchaseCostColumn(
+        columnHelper,
+        async (cost, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { cost },
+          });
+        },
+        { mobile: { slot: "trailing", priority: 10, interactive: true } },
+      ),
+      purchaseDateColumn(
+        columnHelper,
+        async (date, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { date },
+          });
+        },
+        {
+          mobile: { slot: "subtitle", priority: 15 },
+          filterConfig: {
+            placeholder: "Date…",
+            filterType: "select",
+            options: dateRangeOptions,
           },
         },
-      }),
-      createPlainDateColumn(columnHelper, "date", {
-        header: "Date",
-        className: "w-28",
-        mobile: { slot: "subtitle", priority: 15 },
-        filterConfig: {
-          placeholder: "Date…",
-          filterType: "select",
-          options: dateRangeOptions,
+      ),
+      purchaseCostTypeColumn(
+        columnHelper,
+        async (costType, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { costType },
+          });
         },
-        editable: {
-          onSave: async (newDate, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { date: newDate },
-            });
-          },
+        { mobile: { slot: "meta", priority: 20 } },
+      ),
+      purchaseTradeColumn(
+        columnHelper,
+        async (trade, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { trade },
+          });
         },
-      }),
-      createFilterableSelectColumn(columnHelper, "costType", {
-        header: "Cost Type",
-        className: "w-28",
-        placeholder: "Filter by cost type...",
-        selectOptions: costTypeOptions,
-        renderCell: (costType: CostType | null) =>
-          costType ? costTypeLabels[costType] : <NoneValue />,
-        mobile: { slot: "meta", priority: 20 },
-        editable: {
-          onSave: async (newCostType, purchase) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!newCostType) return;
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { costType: newCostType },
-            });
-          },
-        },
-      }),
-      createFilterableSelectColumn(columnHelper, "trade", {
-        header: "Trade",
-        className: "w-32",
-        placeholder: "Filter by trade...",
-        selectOptions: tradeOptions,
-        renderCell: (trade: Trade | null) =>
-          trade ? <TradeBadge trade={trade} /> : <NoneValue />,
-        mobile: { slot: "meta", priority: 60 },
-        editable: {
-          onSave: async (newTrade, purchase) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!newTrade) return;
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { trade: newTrade },
-            });
-          },
-        },
-      }),
+        { mobile: { slot: "meta", priority: 60 } },
+      ),
       createProjectLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 40, interactive: true },
@@ -216,12 +218,15 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           },
         },
       }),
-      columnHelper.accessor((row) => row.future, {
-        id: "future",
-        header: "Status",
-        enableSorting: false,
-        meta: {
-          className: "w-24",
+      purchaseFutureColumn(
+        columnHelper,
+        async (future, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { future },
+          });
+        },
+        {
           mobile: { slot: "meta", priority: 50 },
           filterConfig: {
             placeholder: "Filter by status...",
@@ -229,13 +234,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
             options: futureFilterOptions,
           },
         },
-        cell: (info) =>
-          info.getValue() ? (
-            <Badge variant="warning">Planned</Badge>
-          ) : (
-            <NoneValue />
-          ),
-      }),
+      ),
       columnHelper.accessor((row) => row.url, {
         id: "url",
         header: "",
@@ -338,6 +337,34 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     },
   });
 
+  const bulkTradeMutation = useActionMutation({
+    mutationFn: api.purchase.bulkSetTrade.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkTradeItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkCostTypeMutation = useActionMutation({
+    mutationFn: api.purchase.bulkSetCostType.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkCostTypeItems([]);
+      table.resetRowSelection();
+    },
+  });
+
   // Mirror the table's active filters for the chart strip. Reading
   // `table.getState()` is reactive — the table re-renders this component on
   // every filter change.
@@ -405,6 +432,44 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
             await bulkMoveMutation.mutateAsync({
               ids: bulkMoveItems.map((p) => p.id),
               projectId,
+            });
+          }}
+        />
+      )}
+      {bulkTradeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkTradeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkTradeItems([]);
+          }}
+          items={bulkTradeItems}
+          isPending={bulkTradeMutation.isPending}
+          options={tradeOptions}
+          fieldLabel="Trade"
+          itemNoun="Purchase"
+          onConfirm={async (trade) => {
+            await bulkTradeMutation.mutateAsync({
+              ids: bulkTradeItems.map((p) => p.id),
+              trade: trade as Trade,
+            });
+          }}
+        />
+      )}
+      {bulkCostTypeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkCostTypeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkCostTypeItems([]);
+          }}
+          items={bulkCostTypeItems}
+          isPending={bulkCostTypeMutation.isPending}
+          options={costTypeOptions}
+          fieldLabel="Cost Type"
+          itemNoun="Purchase"
+          onConfirm={async (costType) => {
+            await bulkCostTypeMutation.mutateAsync({
+              ids: bulkCostTypeItems.map((p) => p.id),
+              costType: costType as CostType,
             });
           }}
         />

@@ -1,6 +1,8 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
+import { useMemo } from "react";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -36,33 +38,43 @@ const quickAddPurchaseSchema = z.object({
 });
 type QuickAddPurchaseValues = z.infer<typeof quickAddPurchaseSchema>;
 
-const buildDefaultValues = (): QuickAddPurchaseValues => ({
-  name: "",
-  cost: null,
-  date: format(new Date(), "yyyy-MM-dd"),
-  projectId: null,
-  costType: null,
-  trade: null,
-});
-
 interface CreatePurchaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Pre-fill the project from a project detail page's "New purchase" button.
+   * Read once, on mount — the caller conditionally mounts a fresh dialog
+   * instance per click (see `CreateTaskDialog`'s `presetProjectId`).
+   */
+  presetProjectId?: ProjectId | null;
 }
 
 export function CreatePurchaseDialog({
   open,
   onOpenChange,
+  presetProjectId,
 }: CreatePurchaseDialogProps) {
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
+
+  const defaultValues = useMemo<QuickAddPurchaseValues>(
+    () => ({
+      name: "",
+      cost: null,
+      date: format(new Date(), "yyyy-MM-dd"),
+      projectId: presetProjectId ?? null,
+      costType: null,
+      trade: null,
+    }),
+    [presetProjectId],
+  );
 
   return (
     <QuickAddDialog
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddPurchaseSchema}
-      defaultValues={buildDefaultValues}
+      defaultValues={defaultValues}
       title="New Purchase"
       description="Log what you bought (or plan to) — the fastest way to keep a project's cost honest."
       mutationFn={api.purchase.create.mutationOptions}

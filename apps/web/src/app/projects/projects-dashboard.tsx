@@ -2,7 +2,7 @@ import type { ProjectDashboardOut, ProjectOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { countBy, partition, uniq } from "es-toolkit";
-import { Calendar, DollarSign, Hammer } from "lucide-react";
+import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
 import { lazy, Suspense, useMemo } from "react";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { Grid, Row, Section, Stack } from "~/components/layout";
@@ -336,23 +336,29 @@ function DashboardContent({
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <Stack className="pt-4">
-              {/* One budget chart (actual vs estimate, absolute $) + one spend
-                  chart (top spenders). Budget Health's % view was a third take
-                  on the same actual-vs-estimate relationship — dropped. */}
+              {/* Two distinct lenses on spend: Cost vs Estimate is budget
+                  HEALTH (% of estimate, so Wedding's $175K doesn't dwarf every
+                  other bar), scoped to projects that have an estimate at all.
+                  Top 10 by Spending is raw dollar ranking across every
+                  project (estimated or not), clickable through to the
+                  project. */}
               <Section
                 title="Cost vs Estimate"
-                description="Projects with both spending and an estimate"
+                description="% of budget spent — projects with an estimate only"
               >
                 <CostVsEstimate projects={projects} />
               </Section>
 
-              <Section title="Top 10 Projects by Spending">
+              <Section
+                title="Top 10 Projects by Spending"
+                description="Raw dollar totals, regardless of whether a project has an estimate"
+              >
                 <SpendingByProject projects={projects} />
               </Section>
 
               <Section
                 title="Task Status Board"
-                description="Top 15 projects, sorted by date"
+                description="Projects with the most open work first"
               >
                 <TaskStatusBoard tasks={tasks} projects={projects} />
               </Section>
@@ -612,6 +618,19 @@ function ProjectCard({
   project: ProjectOut;
   coverUrl: string | undefined;
 }) {
+  // subtree degenerates to the project's own numbers for a leaf project (see
+  // subtree.ts), so this is safe to use uniformly rather than branching on
+  // subtree.projectCount. `actualSpent` (money out, excluding planned +
+  // contributions) mirrors the detail hero / table "Actual" — using the net
+  // `spent` here would fold planned spend and negative contributions into the
+  // badge (e.g. a −$75k contribution reading as "-$65,000 spent").
+  const spent = project.rollup.subtree.actualSpent;
+  // Compare against the subtree estimate to match the subtree spend scope; fall
+  // back to the project's own estimate when the subtree has none.
+  const estimate = project.rollup.subtree.costEstimate ?? project.costEstimate;
+  const hasEstimate = estimate != null;
+  const overBudget = estimate != null && spent > estimate;
+
   return (
     <Link to="/projects/$id" params={{ id: project.id }} className="block">
       <Card
@@ -647,10 +666,24 @@ function ProjectCard({
                 {loc}
               </Badge>
             ))}
-            {project.costEstimate != null && (
+            {hasEstimate && (
               <Badge variant="outline">
                 <DollarSign className="h-3 w-3" />
-                {formatCurrency(project.costEstimate, 0)}
+                {formatCurrency(estimate ?? 0, 0)}
+              </Badge>
+            )}
+            {spent !== 0 && (
+              <Badge
+                variant={
+                  hasEstimate
+                    ? overBudget
+                      ? "destructive"
+                      : "positive"
+                    : "outline"
+                }
+              >
+                <Wallet className="h-3 w-3" />
+                {formatCurrency(spent, 0)} spent
               </Badge>
             )}
             {(project.startDate || project.endDate) && (

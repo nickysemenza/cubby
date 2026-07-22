@@ -12,6 +12,7 @@ import {
   type FilterableComboboxItem,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { DatePickerInput } from "../date-picker-input";
@@ -31,6 +32,14 @@ type EditableInputConfig = {
   prefix?: string;
   step?: string;
   placeholder?: string;
+  /**
+   * Text-only: render a multi-line <Textarea> editor instead of a single-line
+   * <Input>. Commits on blur / Cmd+Enter, cancels on Escape (plain Enter
+   * inserts a newline). No-op for `type: "number"`.
+   */
+  multiline?: boolean;
+  /** Rows for the multiline textarea (default 4). */
+  rows?: number;
 };
 
 type EditableCurrencyConfig = {
@@ -363,6 +372,9 @@ function EditableInputEditor<T>({
     : "placeholder" in config
       ? config.placeholder
       : undefined;
+  const multiline =
+    !isCurrency && "multiline" in config ? config.multiline : false;
+  const rows = !isCurrency && "rows" in config ? config.rows : undefined;
 
   const parse = useCallback(
     (s: string): T | null => {
@@ -419,35 +431,54 @@ function EditableInputEditor<T>({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
+        // Multiline: plain Enter inserts a newline; Cmd/Ctrl+Enter commits.
+        if (multiline && !(e.metaKey || e.ctrlKey)) return;
         e.preventDefault();
         void handleSave();
       } else if (e.key === "Escape") {
         onCancel();
       }
     },
-    [handleSave, onCancel],
+    [handleSave, onCancel, multiline],
   );
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
     <div
-      className="inline-flex items-center gap-1"
+      className={cn(
+        "inline-flex gap-1",
+        multiline ? "items-start" : "items-center",
+      )}
       onClick={(e) => e.stopPropagation()}
     >
       {prefix && (
         <span className="text-muted-foreground text-sm">{prefix}</span>
       )}
-      <Input
-        type={inputType}
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className="h-7 w-32"
-        step={step}
-        placeholder={placeholder}
-        autoFocus
-        disabled={isPending}
-      />
+      {multiline ? (
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => void handleSave()}
+          className="w-64"
+          rows={rows ?? 4}
+          placeholder={placeholder}
+          autoFocus
+          disabled={isPending}
+        />
+      ) : (
+        <Input
+          type={inputType}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="h-7 w-32"
+          step={step}
+          placeholder={placeholder}
+          autoFocus
+          disabled={isPending}
+        />
+      )}
       <Button
         size="icon"
         variant="ghost"

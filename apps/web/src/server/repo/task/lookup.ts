@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
-import { eq, inArray, isNull } from "drizzle-orm";
+import { eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
@@ -57,6 +57,18 @@ export const taskList = async (
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId
         ? eq(task.parentTaskId, filters.parentTaskId)
+        : undefined,
+      // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
+      // ranged task still inside its window isn't treated as overdue, matching
+      // the "overdue" semantics used on the board/stat tiles.
+      filters.dueFrom
+        ? gte(
+            sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
+            filters.dueFrom,
+          )
+        : undefined,
+      filters.dueTo
+        ? lte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, filters.dueTo)
         : undefined,
     ],
   );

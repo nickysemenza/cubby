@@ -881,6 +881,15 @@ export function createCurrencyColumn<
      * where zero is a real value.
      */
     zeroAsEmpty?: boolean;
+    /** Fraction digits for the displayed value (default 2). Pass 0 for the
+     * whole-dollar density the embedded project tables use. */
+    decimals?: number;
+    /**
+     * Tint by sign instead of the flat positive green: a negative value
+     * (a credit/contribution — money in) renders `text-positive`, a positive
+     * value (spend) renders neutral. Default false keeps the flat-green look.
+     */
+    signedTone?: boolean;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: number | null, row: T) => Promise<void>;
@@ -888,8 +897,14 @@ export function createCurrencyColumn<
   },
 ) {
   const zeroAsEmpty = options?.zeroAsEmpty ?? true;
+  const decimals = options?.decimals;
+  const signedTone = options?.signedTone ?? false;
   const isEmpty = (v: number | null | undefined): v is null | undefined | 0 =>
     v === null || v === undefined || (zeroAsEmpty && v === 0);
+  // Flat green by default; sign-tinted columns leave positive spend neutral and
+  // green only the credits, so a refund never reads as spend.
+  const toneClass = (v: number) =>
+    signedTone ? (v < 0 ? "text-positive" : "font-medium") : "text-positive";
   return columnHelper.accessor((row) => row[accessor] as number | null, {
     id: String(accessor),
     header: options?.header,
@@ -910,9 +925,12 @@ export function createCurrencyColumn<
           return val != null ? acc + val : acc;
         }, 0);
       if (total === 0) return null;
+      // Honor signedTone: a net-positive total (spend) stays neutral, a
+      // negative total (net credit) greens — matching the cell values above so
+      // the footer never reads as the wrong sign.
       return (
-        <span className="font-mono text-positive tabular-nums">
-          {formatCurrency(total)}
+        <span className={cn("font-mono tabular-nums", toneClass(total))}>
+          {formatCurrency(total, decimals)}
         </span>
       );
     },
@@ -936,7 +954,9 @@ export function createCurrencyColumn<
               isEmpty(v) ? (
                 <NoneValue />
               ) : (
-                <span className="text-positive">{formatCurrency(v)}</span>
+                <span className={toneClass(v)}>
+                  {formatCurrency(v, decimals)}
+                </span>
               )
             }
           />
@@ -944,7 +964,9 @@ export function createCurrencyColumn<
       }
 
       if (isEmpty(val)) return <NoneValue />;
-      return <span className="text-positive">{formatCurrency(val)}</span>;
+      return (
+        <span className={toneClass(val)}>{formatCurrency(val, decimals)}</span>
+      );
     },
   });
 }

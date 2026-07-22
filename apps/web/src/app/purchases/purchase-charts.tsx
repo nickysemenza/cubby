@@ -9,7 +9,7 @@ import { ChevronDown } from "lucide-react";
 import { lazy, Suspense } from "react";
 import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
 import type { PivotCostKey } from "~/app/projects/charts/trade-cost-pivot";
-import { Grid, Stack } from "~/components/layout";
+import { Grid, Section, Stack } from "~/components/layout";
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,6 +26,23 @@ import { formatCurrency } from "~/lib/utils";
 const CategoryBreakdown = lazy(() =>
   import("~/app/projects/charts/category-breakdown").then((m) => ({
     default: m.CategoryBreakdown,
+  })),
+);
+
+// Temporal lens over the same filtered set. No whole-purchases cost estimate
+// exists, so `costEstimate` is null — the chart degrades gracefully (no
+// over-budget marker, neutral point coloring). Negative-safe by design.
+const SpendingOverTime = lazy(() =>
+  import("~/app/projects/charts/spending-over-time").then((m) => ({
+    default: m.SpendingOverTime,
+  })),
+);
+
+// Cadence lens: net spend bucketed by calendar month — surfaces recurring
+// installments and spend rhythm that a cumulative curve smooths away.
+const MonthlySpend = lazy(() =>
+  import("~/app/purchases/charts/monthly-spend").then((m) => ({
+    default: m.MonthlySpend,
   })),
 );
 
@@ -97,6 +114,17 @@ export function PurchaseChartStrip({
                 activeMatrixCell={activeMatrixCell}
               />
             </Suspense>
+            <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+              <SpendingOverTime purchases={purchases} costEstimate={null} />
+            </Suspense>
+            <Section
+              title="Monthly Spend"
+              description="Net spend per calendar month — recurring installments and spend rhythm show up as a repeating pattern. Negative months (refunds, credits) render below the axis."
+            >
+              <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+                <MonthlySpend purchases={purchases} />
+              </Suspense>
+            </Section>
           </Stack>
         )}
       </CollapsibleContent>

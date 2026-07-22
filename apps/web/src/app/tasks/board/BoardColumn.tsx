@@ -1,7 +1,7 @@
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { Plus } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { getTradeColor } from "~/app/projects/charts/gantt/trade-colors";
 import { Row, Stack } from "~/components/layout";
@@ -9,7 +9,7 @@ import { Button } from "~/components/ui/button";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import { TASK_STATUS_LABELS } from "../task-options";
-import { cellTasks } from "./board-model";
+import { cellTasks, DONE_COLUMN_CAP } from "./board-model";
 import {
   type BoardColumnKey,
   type BoardLaneKey,
@@ -141,11 +141,18 @@ export function BoardCell({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const isOver = useBoardDropTarget({ ref, column, lane });
+  // Reveals the cell's hidden done work — see cellTasks' `expanded` doc.
+  const [expanded, setExpanded] = useState(false);
   const { cards, totalCount, hiddenDoneCount } = useMemo(
-    () => cellTasks(tasks, column, lane),
-    [tasks, column, lane],
+    () => cellTasks(tasks, column, lane, expanded),
+    [tasks, column, lane, expanded],
   );
   const quickAddEligible = onQuickAdd != null && isQuickAddEligible(column);
+  const isCappedDoneColumn =
+    column.kind === "status" &&
+    column.status === "done" &&
+    totalCount > DONE_COLUMN_CAP;
+  const canCollapse = hiddenDoneCount > 0 || isCappedDoneColumn;
 
   return (
     <div
@@ -184,15 +191,32 @@ export function BoardCell({
             onSetStatus={(status) => cardProps.onSetStatus(task.id, status)}
           />
         ))}
-        {hiddenDoneCount > 0 && (
-          <p className="px-1 text-2xs text-muted-foreground">
+        {!expanded && hiddenDoneCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+          >
             + {hiddenDoneCount} done
-          </p>
+          </button>
         )}
-        {totalCount - hiddenDoneCount > cards.length && (
-          <p className="px-1 text-2xs text-muted-foreground">
+        {!expanded && totalCount - hiddenDoneCount > cards.length && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+          >
             Showing {cards.length} of {totalCount}
-          </p>
+          </button>
+        )}
+        {expanded && canCollapse && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+          >
+            Show less
+          </button>
         )}
       </Stack>
     </div>
