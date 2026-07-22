@@ -64,7 +64,14 @@ function TasksPage() {
   return (
     // The board's natural width is its fixed column tracks, not the full
     // viewport — only the list view needs the wide, unconstrained container.
-    <Page variant="list" title="Tasks" fullWidth={view !== "board"}>
+    <Page
+      variant="list"
+      title="Tasks"
+      fullWidth={view !== "board"}
+      // Header-level "New task" so it's reachable from every view (the default
+      // Actionable view has no list toolbar to hang it off).
+      actions={<TaskActions />}
+    >
       <Stack gap="md">
         <TasksStatsStrip />
 
@@ -79,9 +86,7 @@ function TasksPage() {
           }
         />
 
-        {view === "all" && (
-          <TaskList initialSearch={q} actions={<TaskActions />} />
-        )}
+        {view === "all" && <TaskList initialSearch={q} />}
 
         {view === "actionable" && <ActionableTasks />}
 

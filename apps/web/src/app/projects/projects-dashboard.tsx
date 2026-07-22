@@ -358,7 +358,7 @@ function DashboardContent({
 
               <Section
                 title="Task Status Board"
-                description="Active projects with open tasks, most remaining work first"
+                description="Projects with the most open work first"
               >
                 <TaskStatusBoard tasks={tasks} projects={projects} />
               </Section>
@@ -620,10 +620,16 @@ function ProjectCard({
 }) {
   // subtree degenerates to the project's own numbers for a leaf project (see
   // subtree.ts), so this is safe to use uniformly rather than branching on
-  // subtree.projectCount.
-  const spent = project.rollup.subtree.spent;
-  const hasEstimate = project.costEstimate != null;
-  const overBudget = hasEstimate && spent > (project.costEstimate ?? 0);
+  // subtree.projectCount. `actualSpent` (money out, excluding planned +
+  // contributions) mirrors the detail hero / table "Actual" — using the net
+  // `spent` here would fold planned spend and negative contributions into the
+  // badge (e.g. a −$75k contribution reading as "-$65,000 spent").
+  const spent = project.rollup.subtree.actualSpent;
+  // Compare against the subtree estimate to match the subtree spend scope; fall
+  // back to the project's own estimate when the subtree has none.
+  const estimate = project.rollup.subtree.costEstimate ?? project.costEstimate;
+  const hasEstimate = estimate != null;
+  const overBudget = estimate != null && spent > estimate;
 
   return (
     <Link to="/projects/$id" params={{ id: project.id }} className="block">
@@ -663,7 +669,7 @@ function ProjectCard({
             {hasEstimate && (
               <Badge variant="outline">
                 <DollarSign className="h-3 w-3" />
-                {formatCurrency(project.costEstimate ?? 0, 0)}
+                {formatCurrency(estimate ?? 0, 0)}
               </Badge>
             )}
             {spent !== 0 && (

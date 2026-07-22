@@ -925,8 +925,11 @@ export function createCurrencyColumn<
           return val != null ? acc + val : acc;
         }, 0);
       if (total === 0) return null;
+      // Honor signedTone: a net-positive total (spend) stays neutral, a
+      // negative total (net credit) greens — matching the cell values above so
+      // the footer never reads as the wrong sign.
       return (
-        <span className="font-mono text-positive tabular-nums">
+        <span className={cn("font-mono tabular-nums", toneClass(total))}>
           {formatCurrency(total, decimals)}
         </span>
       );
