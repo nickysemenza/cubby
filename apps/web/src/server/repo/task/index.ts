@@ -11,20 +11,26 @@
  *   LOOKUP → `lookup.ts` (filtered/sorted/paginated list)
  *   ACTIONABLE → `actionable.ts` (computed unblocked/blocked read, batch
  *                          loaded + graph-walked in TS — see its doc comment)
+ *   SUMMARY → `summary.ts` (cheap SQL counts for the summary strip)
+ *   BOARD  → `board.ts`  (active/recentDone/doneCount read for the board view)
  *
  * Sibling relationships: `task.projectId` references `project`;
  * `taskDependency` self-references `task` for the blocked-by/blocking graph.
  * No rollups (unlike project) — `helpers.ts` (row→API mapping) is internal.
  */
 export { listActionableTasks } from "./actionable";
+export { getTaskBoard } from "./board";
 export {
   createTask,
   deleteTasks,
   getTaskByID,
+  getTasksByIDs,
   moveTasks,
   reorderTasks,
+  setTasksDueDate,
   setTasksStatus,
   setTasksTrade,
   updateTask,
 } from "./crud";
 export { taskList } from "./lookup";
+export { getTaskSummary } from "./summary";

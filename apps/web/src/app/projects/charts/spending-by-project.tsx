@@ -1,4 +1,4 @@
-import type { ProjectOut } from "@cubby/schemas/project";
+import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
@@ -9,35 +9,30 @@ import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 /**
- * Spend comes off `project.rollup.spent` (a SQL aggregate over live purchases,
- * including `future` ones). A project with sub-projects uses its
- * `subtree.spent` instead (own + every descendant), so a
- * parent's bar reads as the whole envelope, not just what was logged directly
- * against it.
+ * `data` is `portfolioAnalytics`'s `spendingByProject` — subtree `spent`
+ * (net actual + committed + credits) per project matching the dashboard's
+ * current filter scope, already sorted server-side (see repo/project/
+ * portfolio-analytics.ts).
  */
-export function SpendingByProject({ projects }: { projects: ProjectOut[] }) {
+export function SpendingByProject({
+  data: rows,
+}: {
+  data: ProjectPortfolioAnalyticsOut["spendingByProject"];
+}) {
   const navigate = useNavigate();
 
   const data = useMemo(
     () =>
-      projects
-        // Top-level only: a parent's bar already includes descendant spend via
-        // subtree.spent, so letting sub-projects render their own bars would
-        // double-count them (same filter as ProjectCards).
-        .filter((p) => !p.parentProjectId)
-        .map((p) => ({
-          project: p.name,
-          id: p.id,
-          cost:
-            p.rollup.subtree.projectCount > 0
-              ? p.rollup.subtree.spent
-              : p.rollup.spent,
-        }))
-        .filter((d) => d.cost > 0)
-        .sort((a, b) => b.cost - a.cost)
+      rows
+        .filter((r) => r.spend > 0)
         .slice(0, 10)
+        .map((r) => ({
+          project: r.projectName,
+          id: r.projectId,
+          cost: r.spend,
+        }))
         .reverse(),
-    [projects],
+    [rows],
   );
 
   if (data.length === 0) {

@@ -3,10 +3,13 @@ import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
 import { useMemo } from "react";
+import { Controller } from "react-hook-form";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { tradeOptions } from "~/app/projects/shared";
+import { Row } from "~/components/layout";
+import { Switch } from "~/components/ui/switch";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -15,26 +18,24 @@ import {
   SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
+import { FormFieldGroup } from "../_components/forms/form-field-group";
 import { costTypeOptions } from "./purchase-options";
+
+const today = () => format(new Date(), "yyyy-MM-dd");
 
 // projectId stays a plain string here (not the branded `projectId` schema) —
 // it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
 // applied at the tRPC-call boundary in buildPayload via `unsafeProjectId`.
+// `name` is the only truly required field — `trade`/`costType` now default
+// (see `defaultValues` below) rather than forcing a choice via `.refine()`.
 const quickAddPurchaseSchema = z.object({
   name: z.string().min(1, "Name is required"),
   cost: z.number().nullable(),
   date: plainDate.nullable(),
   projectId: z.string().nullable(),
-  // Required in the domain schema — held nullable here so the select can start
-  // empty, with the refine forcing a real choice before submit. The `boolean`
-  // return annotations stop TS 5.5+ from inferring a narrowing type predicate,
-  // which would change the parsed shape (QuickAddDialog requires input === output).
-  costType: costTypeSchema
-    .nullable()
-    .refine((v): boolean => v !== null, "Cost type is required"),
-  trade: tradeSchema
-    .nullable()
-    .refine((v): boolean => v !== null, "Trade is required"),
+  costType: costTypeSchema,
+  trade: tradeSchema,
+  future: z.boolean(),
 });
 type QuickAddPurchaseValues = z.infer<typeof quickAddPurchaseSchema>;
 
@@ -61,10 +62,14 @@ export function CreatePurchaseDialog({
     () => ({
       name: "",
       cost: null,
-      date: format(new Date(), "yyyy-MM-dd"),
+      date: today(),
       projectId: presetProjectId ?? null,
-      costType: null,
-      trade: null,
+      // "other"/"materials" are the least-wrong defaults for a fresh quick
+      // capture — most household purchases are an untriaged materials buy;
+      // both are one click to correct via the row's inline-editable columns.
+      costType: "materials",
+      trade: "other",
+      future: false,
     }),
     [presetProjectId],
   );
@@ -85,13 +90,11 @@ export function CreatePurchaseDialog({
         cost: values.cost,
         date: values.date,
         projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
-        // Non-null by the schema refines above — zod has already rejected
-        // null before buildPayload runs.
-        costType: values.costType!,
-        trade: values.trade!,
+        costType: values.costType,
+        trade: values.trade,
         url: null,
         notes: null,
-        future: false,
+        future: values.future,
       })}
     >
       {(form) => (
@@ -111,7 +114,54 @@ export function CreatePurchaseDialog({
             step="0.01"
             prefix="$"
           />
-          <PlainDateField form={form} name="date" label="Date" />
+          <Controller
+            control={form.control}
+            name="future"
+            render={({ field: futureField }) => (
+              <>
+                <FormFieldGroup label="Planned">
+                  <Row align="center" gap="sm">
+                    <Switch
+                      checked={futureField.value}
+                      onCheckedChange={(checked) => {
+                        futureField.onChange(checked);
+                        // Untouched-and-still-today's-default date flips with
+                        // the toggle: Planned clears it (no expected date
+                        // yet), Actual re-defaults it to today. A date the
+                        // user has actually edited (`dirtyFields.date`) is
+                        // left alone either way. `shouldDirty: false` on
+                        // these programmatic writes keeps `dirtyFields.date`
+                        // reserved for genuine user edits.
+                        const dateTouched = Boolean(
+                          form.formState.dirtyFields.date,
+                        );
+                        const currentDate = form.getValues("date");
+                        if (checked) {
+                          if (!dateTouched && currentDate === today()) {
+                            form.setValue("date", null, {
+                              shouldDirty: false,
+                            });
+                          }
+                        } else if (currentDate === null) {
+                          form.setValue("date", today(), {
+                            shouldDirty: false,
+                          });
+                        }
+                      }}
+                    />
+                    <span className="text-muted-foreground text-sm">
+                      {futureField.value ? "Not bought yet" : "Already bought"}
+                    </span>
+                  </Row>
+                </FormFieldGroup>
+                <PlainDateField
+                  form={form}
+                  name="date"
+                  label={futureField.value ? "Expected date" : "Purchase date"}
+                />
+              </>
+            )}
+          />
           <SelectField
             form={form}
             name="costType"

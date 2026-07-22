@@ -1,6 +1,9 @@
-import type { ProjectOut, TaskOut, TaskStatus } from "@cubby/schemas/project";
+import type {
+  ProjectOut,
+  ProjectTaskStatusBreakdown,
+  TaskStatus,
+} from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
-import { sum } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
@@ -8,81 +11,79 @@ import { getStatusChartColor } from "~/lib/status-colors";
 import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
+/** `breakdown` -> per-status count lookup, in column order. */
+function counts(row: ProjectTaskStatusBreakdown, status: TaskStatus): number {
+  switch (status) {
+    case "not_started":
+      return row.notStarted;
+    case "later":
+      return row.later;
+    case "in_progress":
+      return row.inProgress;
+    case "blocked":
+      return row.blocked;
+    case "done":
+      return row.done;
+  }
+}
+
+/**
+ * `breakdown` is `dashboardSummary`'s `taskStatusByProject` — a per-project ×
+ * status count computed server-side (see repo/project/dashboard-summary.ts),
+ * one row per project already in `dashboardSummary`'s (active-by-default)
+ * scope. `projects` supplies display names/start dates. Tasks with no
+ * project ("Unassigned") aren't represented — `taskStatusByProject` is keyed
+ * strictly by project id — a scope reduction from the old client-computed
+ * version, which folded unassigned tasks into their own row.
+ */
 export function TaskStatusBoard({
-  tasks,
+  breakdown,
   projects,
 }: {
-  tasks: TaskOut[];
+  breakdown: ProjectTaskStatusBreakdown[];
   projects: ProjectOut[];
 }) {
-  const { grid, projectRows, statuses } = useMemo(() => {
-    const projectMap = new Map<string, ProjectOut>(
-      projects.map((p) => [p.id, p]),
-    );
-
-    // Count tasks per project × status — keyed by project id (falling back
-    // to a fixed "unassigned" sentinel), not name: project names aren't
-    // unique, so a name-keyed grid would merge distinct same-named projects
-    // into a single row.
-    const counts = new Map<string, Map<TaskStatus, number>>();
-    const namesByKey = new Map<string, string>();
-    const projectKeys = new Set<string>();
+  const { rows, statuses } = useMemo(() => {
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
     const statusSet = new Set<TaskStatus>();
 
-    for (const t of tasks) {
-      const key = t.projectId ?? "unassigned";
-      const status = t.status;
-      projectKeys.add(key);
-      namesByKey.set(key, t.projectName ?? "Unassigned");
-      statusSet.add(status);
-
-      if (!counts.has(key)) counts.set(key, new Map());
-      const row = counts.get(key)!;
-      row.set(status, (row.get(status) ?? 0) + 1);
-    }
-
-    // Active projects only, most remaining (non-done) work first. A done
-    // project's row is all checked boxes — low signal next to projects with
-    // real open work, and previously it could crowd out active projects
-    // whenever there weren't 15 of them to fill the board. Tasks with no
-    // project ("Unassigned") are always in-scope.
-    const projectRows = Array.from(projectKeys)
-      .map((key) => {
-        const proj = projectMap.get(key);
-        const statusCounts = counts.get(key);
-        const total = sum(Array.from(statusCounts?.values() ?? []));
-        const doneCount = statusCounts?.get("done") ?? 0;
+    const rows = breakdown
+      .map((row) => {
+        const proj = projectMap.get(row.projectId);
+        const total = row.notStarted + row.later + row.inProgress + row.blocked;
+        for (const status of taskStatusValues) {
+          if (counts(row, status) > 0) statusSet.add(status);
+        }
         return {
-          key,
-          name: namesByKey.get(key) ?? "Unassigned",
+          projectId: row.projectId,
+          name: proj?.name ?? "Unknown project",
           date: proj?.startDate ?? "",
-          total,
-          remaining: total - doneCount,
+          breakdown: row,
+          remaining: total,
         };
       })
-      .filter((row) => projectMap.get(row.key)?.status !== "done")
+      // Most open work first, then most recently started.
+      .filter((row) => row.remaining > 0)
       .sort((a, b) => {
-        // Most open work first...
         if (a.remaining !== b.remaining) return b.remaining - a.remaining;
-        // ...then most recently started.
         if (a.date && b.date) return b.date.localeCompare(a.date);
         if (a.date) return -1;
         if (b.date) return 1;
-        return b.total - a.total;
+        return 0;
       })
       .slice(0, 15);
 
     const statuses = taskStatusValues.filter((s) => statusSet.has(s));
 
-    return { grid: counts, projectRows, statuses };
-  }, [tasks, projects]);
+    return { rows, statuses };
+  }, [breakdown, projects]);
 
-  if (projectRows.length === 0) {
+  if (rows.length === 0) {
     return (
       <ChartEmpty
         icon={ListChecks}
         title={
-          tasks.length === 0
+          breakdown.length === 0
             ? "No task data."
             : "No active projects with open tasks."
         }
@@ -92,9 +93,7 @@ export function TaskStatusBoard({
 
   const maxCount = Math.max(
     1,
-    ...projectRows.flatMap((p) =>
-      statuses.map((s) => grid.get(p.key)?.get(s) ?? 0),
-    ),
+    ...rows.flatMap((r) => statuses.map((s) => counts(r.breakdown, s))),
   );
 
   return (
@@ -116,13 +115,13 @@ export function TaskStatusBoard({
           </tr>
         </thead>
         <tbody>
-          {projectRows.map((row) => (
-            <tr key={row.key} className="border-border/50 border-t">
+          {rows.map((row) => (
+            <tr key={row.projectId} className="border-border/50 border-t">
               <td className="max-w-[150px] truncate py-2 pr-2 font-medium">
                 {row.name}
               </td>
               {statuses.map((status) => {
-                const count = grid.get(row.key)?.get(status) ?? 0;
+                const count = counts(row.breakdown, status);
                 const intensity = count / maxCount;
                 const color = getStatusChartColor(status);
 

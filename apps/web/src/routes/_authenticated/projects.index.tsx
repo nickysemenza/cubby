@@ -10,7 +10,7 @@ const searchSchema = z.object({
   locations: z.array(z.string()).optional().catch(undefined),
   date: z.string().optional().catch(undefined),
   view: z
-    .enum(["overview", "charts", "data", "gallery"])
+    .enum(["overview", "analytics", "data", "gallery", "history"])
     .optional()
     .catch(undefined),
   // ProjectTable's sort/page URL sync writes to this route already — a
@@ -23,7 +23,7 @@ const searchDefaults = {
   kinds: undefined,
   locations: undefined,
   date: undefined,
-  view: undefined,
+  view: "overview",
 } as const;
 
 export const Route = createFileRoute("/_authenticated/projects/")({

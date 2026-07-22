@@ -24,18 +24,15 @@ import { taskStatusOptions } from "./task-options";
 // projectId stays a plain string here (not the branded `projectId` schema) —
 // it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
 // applied at the tRPC-call boundary in buildPayload via `unsafeProjectId`.
+// `trade` is required in the domain schema but NOT here — quick capture only
+// requires `name`; an omitted trade defaults to "other" in `buildPayload`
+// below, matching the domain default used elsewhere (e.g. bulk trade actions).
 const quickAddTaskSchema = z.object({
   name: z.string().min(1, "Name is required"),
   projectId: z.string().nullable(),
   status: taskStatusSchema,
   dueDate: plainDate.nullable(),
-  // Required in the domain schema — held nullable here so the select can
-  // start empty, with the refine forcing a real choice before submit. The
-  // `boolean` return annotation stops TS 5.5+ from inferring a narrowing
-  // type predicate (QuickAddDialog requires input === output).
-  trade: tradeSchema
-    .nullable()
-    .refine((v): boolean => v !== null, "Trade is required"),
+  trade: tradeSchema.nullable(),
 });
 type QuickAddTaskValues = z.infer<typeof quickAddTaskSchema>;
 
@@ -91,8 +88,8 @@ export function CreateTaskDialog({
         status: values.status,
         dueDate: values.dueDate,
         dueEndDate: null,
-        // Non-null by the schema refine above.
-        trade: values.trade!,
+        // Default when the trade field is left unset — see the schema note.
+        trade: values.trade ?? "other",
       })}
     >
       {(form) => (
@@ -115,6 +112,7 @@ export function CreateTaskDialog({
             name="trade"
             label="Trade"
             options={tradeOptions}
+            nullable
           />
           <SelectField
             form={form}

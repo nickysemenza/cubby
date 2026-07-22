@@ -1,61 +1,21 @@
-import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { endOfWeek, format, startOfWeek } from "date-fns";
-import { useMemo } from "react";
+import { getRouteApi } from "@tanstack/react-router";
 import { Grid } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
 import { useTRPC } from "~/integrations/trpc/react";
 
-/** Stable empty default — never a fresh `[]` per render (would churn memos). */
-const NO_TASKS: TaskOut[] = [];
+const route = getRouteApi("/_authenticated/tasks/");
 
-interface TaskStats {
-  /** Non-done tasks. */
-  totalOpen: number;
-  /** Non-done tasks whose effective due date (`dueEndDate ?? dueDate`) is
-   * before today. */
-  overdue: number;
-  /** Non-done tasks whose effective due date falls within this calendar
-   * week (local time). */
-  dueThisWeek: number;
-  /** `status === "blocked"`, regardless of due date. */
-  blocked: number;
-}
-
-/**
- * Plain "YYYY-MM-DD" strings sort chronologically as strings — same trick
- * `resolveDueRange` (task-options.ts) uses for the due-date filter — so this
- * needs no Date parsing at all.
- */
-function computeTaskStats(tasks: TaskOut[]): TaskStats {
-  const today = new Date();
-  const todayStr = format(today, "yyyy-MM-dd");
-  const weekFromStr = format(startOfWeek(today), "yyyy-MM-dd");
-  const weekToStr = format(endOfWeek(today), "yyyy-MM-dd");
-
-  let totalOpen = 0;
-  let overdue = 0;
-  let dueThisWeek = 0;
-  let blocked = 0;
-
-  for (const task of tasks) {
-    const isDone = task.status === "done";
-    if (!isDone) totalOpen++;
-    if (task.status === "blocked") blocked++;
-
-    if (isDone) continue;
-    const effectiveDue = task.dueEndDate ?? task.dueDate;
-    if (effectiveDue == null) continue;
-    if (effectiveDue < todayStr) overdue++;
-    else if (effectiveDue >= weekFromStr && effectiveDue <= weekToStr)
-      dueThisWeek++;
-  }
-
-  return { totalOpen, overdue, dueThisWeek, blocked };
-}
-
-const SKELETON_TILES = ["total", "overdue", "week", "blocked"] as const;
+const SKELETON_TILES = [
+  "total",
+  "next",
+  "later",
+  "inbox",
+  "overdue",
+  "week",
+  "blocked",
+] as const;
 
 function StatsSkeleton() {
   return (
@@ -67,24 +27,79 @@ function StatsSkeleton() {
   );
 }
 
-/** Compact counts strip above the Tasks page's `ViewSwitcher` — the same
- * fetch-all `chartData` query the board and timeline use, so it's already
- * warm from cache on most visits. */
+/**
+ * One clickable stat — navigates (merge, not replace, so `q`/table-search
+ * params survive) to the view that surfaces the underlying tasks.
+ */
+function StatLink({
+  label,
+  value,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left transition-colors hover:text-foreground"
+    >
+      <StatTile label={label}>{value}</StatTile>
+    </button>
+  );
+}
+
+/**
+ * Compact counts strip above the Tasks page's `ViewSwitcher` — backed by the
+ * cheap `task.summary` read (server-computed counts) rather than a
+ * fetch-everything `chartData` reduced client-side. Each tile links to the
+ * view that surfaces those tasks.
+ */
 export function TasksStatsStrip() {
   const api = useTRPC();
-  const { data: tasks = NO_TASKS, isLoading } = useQuery(
-    api.task.chartData.queryOptions({}),
-  );
-  const stats = useMemo(() => computeTaskStats(tasks), [tasks]);
+  const navigate = route.useNavigate();
+  const { data, isLoading } = useQuery(api.task.summary.queryOptions());
 
-  if (isLoading) return <StatsSkeleton />;
+  if (isLoading || !data) return <StatsSkeleton />;
+
+  const goTo = (view: "next" | "inbox") =>
+    navigate({ search: (prev) => ({ ...prev, view }) });
 
   return (
     <Grid cols="summary">
-      <StatTile label="Total open">{stats.totalOpen}</StatTile>
-      <StatTile label="Overdue">{stats.overdue}</StatTile>
-      <StatTile label="Due this week">{stats.dueThisWeek}</StatTile>
-      <StatTile label="Blocked">{stats.blocked}</StatTile>
+      <StatLink
+        label="Total open"
+        value={data.totalOpen}
+        onClick={() => goTo("next")}
+      />
+      <StatLink label="Next" value={data.next} onClick={() => goTo("next")} />
+      <StatLink
+        label="Someday"
+        value={data.later}
+        onClick={() => goTo("next")}
+      />
+      <StatLink
+        label="Inbox"
+        value={data.inbox}
+        onClick={() => goTo("inbox")}
+      />
+      <StatLink
+        label="Overdue"
+        value={data.overdue}
+        onClick={() => goTo("next")}
+      />
+      <StatLink
+        label="Due in 7 days"
+        value={data.dueThisWeek}
+        onClick={() => goTo("next")}
+      />
+      <StatLink
+        label="Blocked"
+        value={data.blocked}
+        onClick={() => goTo("next")}
+      />
     </Grid>
   );
 }

@@ -1,4 +1,4 @@
-import type { ProjectOut } from "@cubby/schemas/project";
+import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
@@ -21,23 +21,26 @@ type Datum = {
  * puts every project on the same 0–100%(+) axis regardless of size, with a
  * 100% reference line marking the budget itself.
  *
- * Both actual and estimate come off `project.rollup.subtree` (own + every
- * live descendant) — for a leaf project with no sub-projects, `subtree`
- * degenerates to that project's own numbers (see subtree.ts), so this is
- * safe to use uniformly instead of branching on `subtree.projectCount`.
+ * `data` is `portfolioAnalytics`'s `costVsEstimate` — subtree actual/estimate
+ * per project matching the dashboard's current filter scope, computed
+ * server-side (see repo/project/portfolio-analytics.ts; that scope isn't
+ * top-level-only, so a matched parent+child pair can each show their own
+ * subtree total, same double-counting judgment call as dashboard-summary.ts's
+ * `actualSpend`). `committed` isn't plotted here — this chart is about money
+ * already spent vs budget, not the committed pipeline.
  */
-export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
+export function CostVsEstimate({
+  data: rows,
+}: {
+  data: ProjectPortfolioAnalyticsOut["costVsEstimate"];
+}) {
   const data = useMemo(() => {
     return (
-      projects
-        // Top-level only: a parent's bar already includes descendant spend/
-        // estimate via subtree.*, so letting sub-projects render their own
-        // bars would double-count them (same filter as ProjectCards).
-        .filter((p) => !p.parentProjectId)
-        .map((p) => ({
-          project: p.name,
-          actual: p.rollup.subtree.spent,
-          estimate: p.rollup.subtree.costEstimate,
+      rows
+        .map((r) => ({
+          project: r.projectName,
+          actual: r.actual,
+          estimate: r.estimate,
         }))
         // No estimate (null or 0) means "% of estimate" is undefined — leave
         // those projects off the chart rather than showing a misleading N/A
@@ -60,7 +63,7 @@ export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
         .sort((a, b) => b.percent - a.percent)
         .slice(0, 15)
     );
-  }, [projects]);
+  }, [rows]);
 
   if (data.length === 0) {
     return <ChartEmpty icon={DollarSign} title="No cost data." />;

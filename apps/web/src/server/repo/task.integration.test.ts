@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
+import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { taskRouter } from "~/server/api/routers/task";
 import { createTestCaller } from "~/server/api/trpc";
 import { getAuditLog } from "~/server/repo/audit-log";
@@ -17,7 +18,9 @@ import {
 import {
   createTask,
   deleteTasks,
+  getTaskBoard,
   getTaskByID,
+  getTaskSummary,
   moveTasks,
   setTasksStatus,
   taskList,
@@ -37,7 +40,7 @@ describe("task repository — listActionableTasks", () => {
 
     const result = await listActionableTasks(ctx.db);
 
-    expect(result.actionable.map((r) => r.id)).toContain(t.id);
+    expect(result.next.map((r) => r.id)).toContain(t.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(t.id);
   });
 
@@ -75,12 +78,12 @@ describe("task repository — listActionableTasks", () => {
         ],
       },
     ]);
-    expect(beforeDone.actionable.map((r) => r.id)).not.toContain(blocked.id);
+    expect(beforeDone.next.map((r) => r.id)).not.toContain(blocked.id);
 
     await updateTask(ctx.db, blocker.id, { status: "done" }, ctx.actor);
 
     const afterDone = await listActionableTasks(ctx.db);
-    expect(afterDone.actionable.map((r) => r.id)).toContain(blocked.id);
+    expect(afterDone.next.map((r) => r.id)).toContain(blocked.id);
     expect(afterDone.blocked.map((r) => r.task.id)).not.toContain(blocked.id);
   });
 
@@ -145,10 +148,11 @@ describe("task repository — listActionableTasks", () => {
     const row = result.blocked.find((r) => r.task.id === t.id);
 
     expect(row?.reasons).toEqual([{ kind: "manual", chain: [] }]);
-    expect(result.actionable.map((r) => r.id)).not.toContain(t.id);
+    expect(result.next.map((r) => r.id)).not.toContain(t.id);
+    expect(result.later.map((r) => r.id)).not.toContain(t.id);
   });
 
-  it("a later task with no blockers is actionable, with isLater true", async () => {
+  it("a later task with no blockers appears in `later`, not `next`", async () => {
     const t = await createTask(
       ctx.db,
       taskCreateInput.parse({
@@ -160,10 +164,10 @@ describe("task repository — listActionableTasks", () => {
     );
 
     const result = await listActionableTasks(ctx.db);
-    const row = result.actionable.find((r) => r.id === t.id);
 
-    expect(row).toBeDefined();
-    expect(row?.isLater).toBe(true);
+    expect(result.later.map((r) => r.id)).toContain(t.id);
+    expect(result.next.map((r) => r.id)).not.toContain(t.id);
+    expect(result.blocked.map((r) => r.task.id)).not.toContain(t.id);
   });
 
   it("builds the transitive chain (A blocked by B, B blocked by C -> A's chain = [B, C])", async () => {
@@ -216,7 +220,7 @@ describe("task repository — listActionableTasks", () => {
 
     const result = await listActionableTasks(ctx.db);
 
-    expect(result.actionable.map((r) => r.id)).toContain(blocked.id);
+    expect(result.next.map((r) => r.id)).toContain(blocked.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(blocked.id);
   });
 
@@ -244,7 +248,7 @@ describe("task repository — listActionableTasks", () => {
 
     const result = await listActionableTasks(ctx.db);
 
-    expect(result.actionable.map((r) => r.id)).toContain(blocked.id);
+    expect(result.next.map((r) => r.id)).toContain(blocked.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(blocked.id);
   });
 
@@ -308,7 +312,7 @@ describe("task repository — listActionableTasks", () => {
         ],
       },
     ]);
-    expect(result.actionable.map((r) => r.id)).not.toContain(t.id);
+    expect(result.next.map((r) => r.id)).not.toContain(t.id);
 
     // Unblocked once the root ancestor's blocker is marked done.
     await updateProject(
@@ -318,7 +322,7 @@ describe("task repository — listActionableTasks", () => {
       ctx.actor,
     );
     const afterDone = await listActionableTasks(ctx.db);
-    expect(afterDone.actionable.map((r) => r.id)).toContain(t.id);
+    expect(afterDone.next.map((r) => r.id)).toContain(t.id);
     expect(afterDone.blocked.map((r) => r.task.id)).not.toContain(t.id);
   });
 
@@ -369,8 +373,204 @@ describe("task repository — listActionableTasks", () => {
 
     const result = await listActionableTasks(ctx.db);
 
-    expect(result.actionable.map((r) => r.id)).toContain(t.id);
+    expect(result.next.map((r) => r.id)).toContain(t.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(t.id);
+  });
+
+  it("orders `next`: overdue first, then effective due date ascending, then in_progress before not_started, then name", async () => {
+    const yesterday = householdDaysAgo(1);
+    const tomorrow = householdDaysFromNow(1);
+
+    const noDueZ = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "Z no due date" }),
+      ctx.actor,
+    );
+    const noDueA = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "A no due date" }),
+      ctx.actor,
+    );
+    const dueTomorrowInProgress = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "due tomorrow, in progress",
+        dueDate: tomorrow,
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const dueTomorrowNotStarted = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "due tomorrow, not started",
+        dueDate: tomorrow,
+      }),
+      ctx.actor,
+    );
+    const overdue = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "overdue task",
+        dueDate: yesterday,
+      }),
+      ctx.actor,
+    );
+
+    const result = await listActionableTasks(ctx.db);
+    const relevantIds = new Set([
+      noDueZ.id,
+      noDueA.id,
+      dueTomorrowInProgress.id,
+      dueTomorrowNotStarted.id,
+      overdue.id,
+    ]);
+    const ordered = result.next
+      .filter((r) => relevantIds.has(r.id))
+      .map((r) => r.id);
+
+    expect(ordered).toEqual([
+      overdue.id,
+      dueTomorrowInProgress.id,
+      dueTomorrowNotStarted.id,
+      noDueA.id,
+      noDueZ.id,
+    ]);
+  });
+
+  it("orders `later`: due date ascending (nulls last), then updatedAt descending", async () => {
+    const soon = householdDaysFromNow(1);
+    const later = householdDaysFromNow(2);
+
+    const dueLater = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "later, due further out",
+        dueDate: later,
+        status: "later",
+      }),
+      ctx.actor,
+    );
+    const dueSoon = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "later, due sooner",
+        dueDate: soon,
+        status: "later",
+      }),
+      ctx.actor,
+    );
+    const noDueOlderUpdate = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "no due, updated later",
+        status: "later",
+      }),
+      ctx.actor,
+    );
+    const noDueNewerCreate = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "no due, created later",
+        status: "later",
+      }),
+      ctx.actor,
+    );
+    // Touch noDueOlderUpdate's row after noDueNewerCreate was inserted, so its
+    // updatedAt is now the more recent of the two no-due rows.
+    await updateTask(
+      ctx.db,
+      noDueOlderUpdate.id,
+      { trade: "other" },
+      ctx.actor,
+    );
+
+    const result = await listActionableTasks(ctx.db);
+    const relevantIds = new Set([
+      dueLater.id,
+      dueSoon.id,
+      noDueOlderUpdate.id,
+      noDueNewerCreate.id,
+    ]);
+    const ordered = result.later
+      .filter((r) => relevantIds.has(r.id))
+      .map((r) => r.id);
+
+    expect(ordered).toEqual([
+      dueSoon.id,
+      dueLater.id,
+      noDueOlderUpdate.id,
+      noDueNewerCreate.id,
+    ]);
+  });
+
+  it("orders `blocked`: effective due date ascending (nulls last), then name ascending", async () => {
+    const soon = householdDaysFromNow(1);
+    const later = householdDaysFromNow(2);
+
+    const blockedNoDueZ = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "Z blocked, no due",
+        status: "blocked",
+      }),
+      ctx.actor,
+    );
+    const blockedNoDueA = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "A blocked, no due",
+        status: "blocked",
+      }),
+      ctx.actor,
+    );
+    const blockedDueLater = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "blocked, due further out",
+        status: "blocked",
+        dueDate: later,
+      }),
+      ctx.actor,
+    );
+    const blockedDueSoon = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "blocked, due sooner",
+        status: "blocked",
+        dueDate: soon,
+      }),
+      ctx.actor,
+    );
+
+    const result = await listActionableTasks(ctx.db);
+    const relevantIds = new Set([
+      blockedNoDueZ.id,
+      blockedNoDueA.id,
+      blockedDueLater.id,
+      blockedDueSoon.id,
+    ]);
+    const ordered = result.blocked
+      .filter((r) => relevantIds.has(r.task.id))
+      .map((r) => r.task.id);
+
+    expect(ordered).toEqual([
+      blockedDueSoon.id,
+      blockedDueLater.id,
+      blockedNoDueA.id,
+      blockedNoDueZ.id,
+    ]);
   });
 });
 
@@ -699,12 +899,13 @@ describe("task repository — subtasks (parentTaskId)", () => {
 
     const result = await listActionableTasks(ctx.db);
 
-    expect(result.actionable.map((r) => r.id)).toContain(parent.id);
-    expect(result.actionable.map((r) => r.id)).not.toContain(openSub.id);
+    expect(result.next.map((r) => r.id)).toContain(parent.id);
+    expect(result.next.map((r) => r.id)).not.toContain(openSub.id);
+    expect(result.later.map((r) => r.id)).not.toContain(openSub.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(openSub.id);
     expect(result.blocked.map((r) => r.task.id)).not.toContain(doneSub.id);
 
-    const parentRow = result.actionable.find((r) => r.id === parent.id);
+    const parentRow = result.next.find((r) => r.id === parent.id);
     expect(parentRow?.subtaskCount).toBe(2);
     expect(parentRow?.doneSubtaskCount).toBe(1);
   });
@@ -1056,5 +1257,276 @@ describe("task router — bulkMove / bulkSetStatus", () => {
     });
     expect(result.items.map((i) => i.status)).toEqual(["done"]);
     expect(result.sideEffects).toBeDefined();
+  });
+});
+
+describe("task repository — getTaskSummary", () => {
+  const ctx = withTestDb();
+
+  it("computes each count via its own scope, excluding done tasks and subtasks", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "summary project" }),
+      ctx.actor,
+    );
+    const openInProject = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "open in project",
+        projectId: project.id,
+      }),
+      ctx.actor,
+    );
+    const inboxOpen = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "inbox open" }),
+      ctx.actor,
+    );
+    const laterTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "inbox later",
+        status: "later",
+      }),
+      ctx.actor,
+    );
+    const blockedTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "inbox blocked",
+        status: "blocked",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "inbox done",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const overdueTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "overdue",
+        dueDate: householdDaysAgo(1),
+      }),
+      ctx.actor,
+    );
+    const dueThisWeekTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "due this week",
+        dueDate: householdDaysFromNow(3),
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "due too far out",
+        dueDate: householdDaysFromNow(10),
+      }),
+      ctx.actor,
+    );
+    // A subtask of a counted top-level task — excluded from every top-level
+    // count (checklist items are represented via their parent) AND from
+    // next/later/blocked (listActionableTasks excludes subtask rows).
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "subtask, never counted",
+        parentTaskId: openInProject.id,
+      }),
+      ctx.actor,
+    );
+
+    const summary = await getTaskSummary(ctx.db);
+
+    // totalOpen: every top-level non-done task above — openInProject,
+    // inboxOpen, laterTask, blockedTask, overdueTask, dueThisWeekTask, and the
+    // "due too far out" task = 7 (excludes the done task and the subtask).
+    expect(summary.totalOpen).toBe(7);
+    // inbox: same set minus openInProject (has a projectId) = 6.
+    expect(summary.inbox).toBe(6);
+    expect(summary.overdue).toBe(1);
+    expect(summary.dueThisWeek).toBe(1);
+    // next/later/blocked mirror listActionableTasks's partitioning: laterTask
+    // and blockedTask are pulled out of `next`.
+    expect(summary.next).toBe(5);
+    expect(summary.later).toBe(1);
+    expect(summary.blocked).toBe(1);
+
+    // Sanity-check the specific rows landed where expected via the reused
+    // listActionableTasks call.
+    const actionable = await listActionableTasks(ctx.db);
+    expect(actionable.next.map((r) => r.id)).toEqual(
+      expect.arrayContaining([
+        openInProject.id,
+        inboxOpen.id,
+        overdueTask.id,
+        dueThisWeekTask.id,
+      ]),
+    );
+    expect(actionable.later.map((r) => r.id)).toEqual([laterTask.id]);
+    expect(actionable.blocked.map((r) => r.task.id)).toEqual([blockedTask.id]);
+  });
+});
+
+describe("task repository — getTaskBoard", () => {
+  const ctx = withTestDb();
+
+  it("scopes active/recentDone/doneCount to the given project, ordering recentDone by updatedAt desc", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "board project" }),
+      ctx.actor,
+    );
+    const otherProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "board other project" }),
+      ctx.actor,
+    );
+
+    const active1 = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "board active 1",
+        projectId: project.id,
+      }),
+      ctx.actor,
+    );
+    const active2 = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "board active 2",
+        projectId: project.id,
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const doneOlder = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "board done older",
+        projectId: project.id,
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const doneNewer = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "board done newer",
+        projectId: project.id,
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    // Touch doneOlder after doneNewer was created, so it becomes the more
+    // recently updated of the two done rows.
+    await updateTask(ctx.db, doneOlder.id, { trade: "other" }, ctx.actor);
+
+    // Out-of-scope rows — a different project's active + done task, neither
+    // should appear in this project-scoped board read.
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "other project active",
+        projectId: otherProject.id,
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "other project done",
+        projectId: otherProject.id,
+        status: "done",
+      }),
+      ctx.actor,
+    );
+
+    const board = await getTaskBoard(ctx.db, { projectId: project.id });
+
+    expect(board.active.map((t) => t.id).sort()).toEqual(
+      [active1.id, active2.id].sort(),
+    );
+    expect(board.doneCount).toBe(2);
+    // Most recently updated first — doneOlder was touched after doneNewer's
+    // creation, so it now sorts first.
+    expect(board.recentDone.map((t) => t.id)).toEqual([
+      doneOlder.id,
+      doneNewer.id,
+    ]);
+  });
+
+  it("filters `active` by search, and includes descendant-project tasks with includeSubProjects", async () => {
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "board parent project" }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "board child project",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+    const inParent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "zzz-searchable parent task",
+        projectId: parent.id,
+      }),
+      ctx.actor,
+    );
+    const inChild = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "child task",
+        projectId: child.id,
+      }),
+      ctx.actor,
+    );
+
+    const withoutSubProjects = await getTaskBoard(ctx.db, {
+      projectId: parent.id,
+    });
+    expect(withoutSubProjects.active.map((t) => t.id)).toEqual([inParent.id]);
+
+    const withSubProjects = await getTaskBoard(ctx.db, {
+      projectId: parent.id,
+      includeSubProjects: true,
+    });
+    expect(withSubProjects.active.map((t) => t.id).sort()).toEqual(
+      [inParent.id, inChild.id].sort(),
+    );
+
+    const searched = await getTaskBoard(ctx.db, {
+      projectId: parent.id,
+      includeSubProjects: true,
+      search: "zzz-searchable",
+    });
+    expect(searched.active.map((t) => t.id)).toEqual([inParent.id]);
   });
 });

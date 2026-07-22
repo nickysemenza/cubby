@@ -7,6 +7,9 @@
 import { type TaskId, taskId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
+  taskBoardInput,
+  taskBoardOut,
+  taskBulkDueDateInput,
   taskBulkMoveInput,
   taskBulkReorderInput,
   taskBulkStatusInput,
@@ -16,16 +19,20 @@ import {
   taskListAndSideEffectsOut,
   taskOut,
   taskSortableFields,
+  taskSummaryOut,
   taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import {
   createTask,
   deleteTasks,
+  getTaskBoard,
   getTaskByID,
+  getTaskSummary,
   listActionableTasks,
   moveTasks,
   reorderTasks,
+  setTasksDueDate,
   setTasksStatus,
   setTasksTrade,
   taskList,
@@ -67,10 +74,10 @@ const {
 });
 
 /**
- * The computed "what can I actually do" read behind the /tasks Actionable
- * view: every live, non-done task partitioned into unblocked vs blocked
- * (with transitive why-chains). No input, unpaginated — see
- * repo/task/actionable.ts for the semantics.
+ * The computed "what can I actually do" read behind the /tasks Next view:
+ * every live, non-done task partitioned into unblocked-`next`,
+ * unblocked-`later`, and `blocked` (with transitive why-chains). No input,
+ * unpaginated — see repo/task/actionable.ts for the semantics/ordering.
  */
 const listActionable = protectedProcedure
   .output(actionableTasksOut)
@@ -149,6 +156,23 @@ const bulkSetTrade = protectedProcedure
     return { items, sideEffects: { backgroundBatches } };
   });
 
+// Bulk due-date write, same shape as bulkSetTrade above.
+const bulkSetDueDate = protectedProcedure
+  .input(taskBulkDueDateInput)
+  .output(taskListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setTasksDueDate(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "task" as const, entityId: item.id },
+        source: "task.bulkSetDueDate",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 // Board drag-to-prioritize "materialize" path (see board-model.ts
 // computeRank). One repo call inside a transaction re-ranks a run of cards and
 // optionally applies the dragged card's axis move. Side-effects (embedding
@@ -171,6 +195,27 @@ const bulkReorder = protectedProcedure
     return { items, sideEffects: { backgroundBatches } };
   });
 
+/**
+ * Cheap counts for the /tasks summary strip — `totalOpen`/`next`/`later`/
+ * `inbox`/`overdue`/`dueThisWeek`/`blocked` — replacing a full-history fetch
+ * done client-side. No input; see repo/task/summary.ts for the exact
+ * SQL/reuse per count.
+ */
+const summary = protectedProcedure
+  .output(taskSummaryOut)
+  .query(({ ctx }) => getTaskSummary(ctx.db));
+
+/**
+ * The board's data source: every active (non-done) top-level task matching
+ * the filters, plus the 20 most-recently-updated done tasks and the true
+ * done count — replacing the old `chartData({topLevelOnly: true})`
+ * fetch-everything-then-cap-client-side pattern. See repo/task/board.ts.
+ */
+const board = protectedProcedure
+  .input(taskBoardInput)
+  .output(taskBoardOut)
+  .query(({ ctx, input }) => getTaskBoard(ctx.db, input));
+
 export const taskRouter = createTRPCRouter({
   getByID,
   list,
@@ -179,8 +224,11 @@ export const taskRouter = createTRPCRouter({
   delete: deleteItem,
   listActionable,
   chartData,
+  summary,
+  board,
   bulkMove,
   bulkSetStatus,
   bulkSetTrade,
+  bulkSetDueDate,
   bulkReorder,
 });

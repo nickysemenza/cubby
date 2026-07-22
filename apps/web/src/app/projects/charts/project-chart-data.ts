@@ -84,12 +84,3 @@ export function buildStackedCumulativeSpend(
     (a, b) => (b.data.at(-1)?.y ?? 0) - (a.data.at(-1)?.y ?? 0),
   );
 }
-
-export function buildProjectMonthlySeries(purchases: PurchaseOut[]) {
-  return buildMonthlySeries(
-    purchases,
-    (purchase) => purchase.projectName ?? "Unassigned",
-    false,
-    2,
-  );
-}

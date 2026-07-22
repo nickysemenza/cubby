@@ -9,6 +9,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { TaskId } from "@cubby/schemas/identifiers";
 import type {
+  TaskBulkDueDateInput,
   TaskBulkMoveInput,
   TaskBulkReorderInput,
   TaskBulkStatusInput,
@@ -192,9 +193,10 @@ export const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
  * Batch by-id read for bulk-write results (`moveTasks`/`setTasksStatus`) — the
  * same row shape/joins as `getTaskByID`, fetched with one `inArray` query plus
  * the batched dependency/subtask-count reads instead of N one-by-one calls.
- * File-local — only consumed by this file's own bulk writes below.
+ * Exported for `repo/project/create-from-tasks.ts`'s promotion read-back
+ * (its moved-task ids need the same batched shape, not N `getTaskByID` calls).
  */
-const getTasksByIDs = async (
+export const getTasksByIDs = async (
   db: Database,
   ids: TaskId[],
 ): Promise<TaskOut[]> => {
@@ -478,6 +480,52 @@ export const setTasksTrade = async (
     const auditEntries: AuditEntryInput[] = [];
     for (const row of before) {
       const changes = computeChanges(row, { id: row.id, trade }, ["trade"]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "task",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getTasksByIDs(db, updatedIds);
+};
+
+/**
+ * Bulk due-date write — a plain `dueDate`/`dueEndDate` column pair write over
+ * `ids`, mirroring `setTasksStatus`/`setTasksTrade`.
+ */
+export const setTasksDueDate = async (
+  db: Database,
+  input: TaskBulkDueDateInput,
+  actor: ActorContext,
+): Promise<TaskOut[]> => {
+  const { ids, dueDate, dueEndDate } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    const before = await tx.query.task.findMany({
+      where: and(inArray(task.id, ids), notDeleted(task)),
+      columns: { id: true, dueDate: true, dueEndDate: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(task)
+      .set({ dueDate, dueEndDate })
+      .where(and(inArray(task.id, ids), notDeleted(task)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, dueDate, dueEndDate }, [
+        "dueDate",
+        "dueEndDate",
+      ]);
       if (changes) {
         auditEntries.push({
           entityType: "task",

@@ -1,3 +1,4 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -5,7 +6,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
-import { eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { eq, gte, inArray, isNull, lte, ne, type SQL, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
@@ -24,28 +25,42 @@ import {
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 
+/**
+ * The `task.projectId` WHERE condition for a `projectId` + `includeSubProjects`
+ * filter pair: a plain equality match, or — when `includeSubProjects` is set —
+ * an `inArray` over the project plus every live descendant (walking
+ * `parentProjectId` down via project/subtree.ts's shared helpers). `undefined`
+ * when no `projectId` filter is given (no condition added). Shared by
+ * `taskList` and `getTaskBoard` so the subtree-expansion logic lives in one
+ * place.
+ */
+export async function buildTaskProjectCondition(
+  db: Database,
+  projectId: ProjectId | undefined,
+  includeSubProjects: boolean | undefined,
+): Promise<SQL | undefined> {
+  if (!projectId) return undefined;
+  if (!includeSubProjects) return eq(task.projectId, projectId);
+
+  const parentRows = await allProjectParentRows(db);
+  const descendantIds = collectDescendantIds(
+    buildChildrenMap(parentRows),
+    projectId,
+  );
+  return inArray(task.projectId, [projectId, ...descendantIds]);
+}
+
 export const taskList = async (
   db: Database,
   filters: TaskFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: TaskOut[]; count: number }> => {
-  // When scoped to a project subtree, resolve the project + every live
-  // descendant id and match on the whole set; otherwise a plain project match.
-  let projectCondition = filters.projectId
-    ? eq(task.projectId, filters.projectId)
-    : undefined;
-  if (filters.projectId && filters.includeSubProjects) {
-    const parentRows = await allProjectParentRows(db);
-    const descendantIds = collectDescendantIds(
-      buildChildrenMap(parentRows),
-      filters.projectId,
-    );
-    projectCondition = inArray(task.projectId, [
-      filters.projectId,
-      ...descendantIds,
-    ]);
-  }
+  const projectCondition = await buildTaskProjectCondition(
+    db,
+    filters.projectId,
+    filters.includeSubProjects,
+  );
 
   const whereClause = buildSearchConditions(
     task,
@@ -53,6 +68,7 @@ export const taskList = async (
     [
       filters.status ? eq(task.status, filters.status) : undefined,
       projectCondition,
+      filters.noProject ? isNull(task.projectId) : undefined,
       filters.trade ? eq(task.trade, filters.trade) : undefined,
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId
@@ -70,6 +86,13 @@ export const taskList = async (
       filters.dueTo
         ? lte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, filters.dueTo)
         : undefined,
+      // Completion scope: undefined/"all" adds no condition (today's default,
+      // unchanged) — see taskCompletionSchema.
+      filters.completion === "open"
+        ? ne(task.status, "done")
+        : filters.completion === "done"
+          ? eq(task.status, "done")
+          : undefined,
     ],
   );
 

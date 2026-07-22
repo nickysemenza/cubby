@@ -8,6 +8,8 @@ import type {
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ChevronDown,
+  ChevronRight,
   FileText,
   FolderTree,
   Info,
@@ -39,6 +41,11 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import {
   Empty,
   EmptyDescription,
@@ -95,9 +102,13 @@ const PROJECT_SCOPED_PAGE_SIZE = 500;
 
 /** The task/purchase `chartData` endpoints take the bare filters object (no
  * sort/pagination wrapper — they fetch-all). One subtree fetch feeds the
- * Gantt, the Tasks table, the Task Timeline, and the spend charts; the table
- * and timeline filter it to top-level tasks client-side. Exported so the
- * route loader prefetches the identical key. */
+ * Gantt, the Task Timeline, the Task Board view, and the Budget/spend
+ * charts — all of which need the whole (incl. done/past) subtree picture.
+ * The Tasks/Purchases *list* views intentionally do NOT read from this
+ * fetch (see `openTaskFilters`/`plannedPurchaseFilters` etc. below) — a
+ * completed project with hundreds of historical rows shouldn't pull them
+ * all in just to render its default (open-tasks / recent-purchases) view.
+ * Exported so the route loader prefetches the identical key. */
 export function projectSubtreeTasksFilters(projectId: string) {
   return { projectId, includeSubProjects: true };
 }
@@ -105,6 +116,19 @@ export function projectSubtreeTasksFilters(projectId: string) {
 export function projectSubtreePurchasesFilters(projectId: string) {
   return { projectId, includeSubProjects: true };
 }
+
+/** Cap for the Tasks section's scoped open/history `task.list` queries —
+ * generous relative to any real project's task count, within the shared
+ * `MAX_PAGE_SIZE`. */
+const TASKS_SECTION_PAGE_SIZE = 500;
+
+/** Cap for the Purchases section's scoped planned/history `purchase.list`
+ * queries — same rationale as `TASKS_SECTION_PAGE_SIZE`. */
+const PURCHASES_SECTION_PAGE_SIZE = 500;
+
+/** The default "recent actual purchases" page is deliberately small — it's a
+ * glance, not the ledger (History expands to the full purchase list). */
+const RECENT_PURCHASES_PAGE_SIZE = 15;
 
 /** The Gantt's sub-project rows span arbitrary depth, so it needs the whole
  * live descendant subtree — not the direct-children query the Sub-projects
@@ -292,12 +316,14 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const api = useTRPC();
 
   // One subtree fetch (project + every live descendant) feeds the Gantt, the
-  // Tasks table, the Task Timeline, and the spend charts.
+  // Task Timeline, and the Board view — all of which need the whole (incl.
+  // done) picture. The default List view uses the separate scoped
+  // `openTasks`/`doneTasks` queries below instead (see their comment).
   const { data: subtreeTasks = NO_TASKS } = useQuery(
     api.task.chartData.queryOptions(projectSubtreeTasksFilters(project.id)),
   );
-  // Tasks table + Task Timeline show top-level tasks only — checklist subtasks
-  // roll up to their parent everywhere (N/M chip); surfacing them here would
+  // Task Timeline shows top-level tasks only — checklist subtasks roll up to
+  // their parent everywhere (N/M chip); surfacing them here would
   // double-count the work. The Gantt keeps the full result (dated subtasks
   // render as their parent's indented children).
   const topLevelTasks = useMemo(
@@ -309,22 +335,129 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const hasSubtree = project.rollup.subtree.projectCount > 0;
   const [tasksView, setTasksView] = useState<"list" | "board">("list");
 
+  // Tasks section (List view): scoped to open (non-done) tasks only — a
+  // completed project can carry hundreds of historical tasks, and those
+  // shouldn't be fetched/rendered on initial load just to show the active
+  // work. Separate from `subtreeTasks` above (Board view keeps using that
+  // one — its optimistic drag/drop patches the `task.chartData` cache keyed
+  // on those exact filters, so it can't be pointed at a different query).
+  const openTaskFilters = useMemo(
+    () => ({
+      projectId: project.id,
+      includeSubProjects: true,
+      completion: "open" as const,
+    }),
+    [project.id],
+  );
+  const { data: openTasksPage } = useQuery(
+    api.task.list.queryOptions({
+      filters: openTaskFilters,
+      pagination: { pageIndex: 0, pageSize: TASKS_SECTION_PAGE_SIZE },
+    }),
+  );
+  const openTasks = openTasksPage?.items ?? NO_TASKS;
+  const topLevelOpenTasks = useMemo(
+    () => openTasks.filter((t) => t.parentTaskId == null),
+    [openTasks],
+  );
+
+  // History: completed tasks, fetched only once the disclosure below is
+  // opened — `enabled` keeps this off the initial page load entirely.
+  const [isTaskHistoryOpen, setIsTaskHistoryOpen] = useState(false);
+  const doneTaskFilters = useMemo(
+    () => ({
+      projectId: project.id,
+      includeSubProjects: true,
+      completion: "done" as const,
+    }),
+    [project.id],
+  );
+  const { data: doneTasksPage } = useQuery({
+    ...api.task.list.queryOptions({
+      filters: doneTaskFilters,
+      pagination: { pageIndex: 0, pageSize: TASKS_SECTION_PAGE_SIZE },
+    }),
+    enabled: isTaskHistoryOpen,
+  });
+  const doneTasks = doneTasksPage?.items ?? NO_TASKS;
+  const topLevelDoneTasks = useMemo(
+    () => doneTasks.filter((t) => t.parentTaskId == null),
+    [doneTasks],
+  );
+
+  // Full subtree purchase history — feeds the Budget card + the spend charts
+  // below, both of which need the complete picture. The Purchases section's
+  // *list* view intentionally does NOT read from this (see the scoped
+  // planned/recent/history queries further down) — a completed project's
+  // full purchase ledger shouldn't be fetched/rendered just to show the
+  // section's default (planned + recent) view.
   const { data: chartPurchases = NO_PURCHASES } = useQuery(
     api.purchase.chartData.queryOptions(
       projectSubtreePurchasesFilters(project.id),
     ),
   );
-  // chartData returns date asc; the table wants newest first, nulls last.
-  const sortedPurchases = useMemo(
+
+  // Purchases section (default view): planned purchases + a small recency-
+  // capped page of already-made ones, rather than the full ledger above.
+  const plannedPurchaseFilters = useMemo(
+    () => ({
+      projectId: project.id,
+      includeSubProjects: true,
+      future: true,
+    }),
+    [project.id],
+  );
+  const { data: plannedPurchasesPage } = useQuery(
+    api.purchase.list.queryOptions({
+      filters: plannedPurchaseFilters,
+      pagination: { pageIndex: 0, pageSize: PURCHASES_SECTION_PAGE_SIZE },
+    }),
+  );
+  const plannedPurchases = plannedPurchasesPage?.items ?? NO_PURCHASES;
+
+  const recentActualPurchaseFilters = useMemo(
+    () => ({
+      projectId: project.id,
+      includeSubProjects: true,
+      future: false,
+    }),
+    [project.id],
+  );
+  // `purchase.list`'s default sort (date desc, nulls last) is exactly what's
+  // wanted here, so no explicit `sort` is passed.
+  const { data: recentActualPurchasesPage } = useQuery(
+    api.purchase.list.queryOptions({
+      filters: recentActualPurchaseFilters,
+      pagination: { pageIndex: 0, pageSize: RECENT_PURCHASES_PAGE_SIZE },
+    }),
+  );
+  const recentActualPurchases =
+    recentActualPurchasesPage?.items ?? NO_PURCHASES;
+
+  // Merge the two bounded pages for display — each page is independently
+  // sorted, so the combined list needs its own newest-first, nulls-last pass.
+  const defaultSectionPurchases = useMemo(
     () =>
-      [...chartPurchases].sort((a, b) => {
+      [...plannedPurchases, ...recentActualPurchases].sort((a, b) => {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
         if (!b.date) return -1;
         return b.date.localeCompare(a.date);
       }),
-    [chartPurchases],
+    [plannedPurchases, recentActualPurchases],
   );
+
+  // History: the full purchase ledger, fetched only once the disclosure
+  // below is opened — `enabled` keeps this off the initial page load.
+  const [isPurchaseHistoryOpen, setIsPurchaseHistoryOpen] = useState(false);
+  const { data: purchaseHistoryPage } = useQuery({
+    ...api.purchase.list.queryOptions({
+      filters: projectSubtreePurchasesFilters(project.id),
+      pagination: { pageIndex: 0, pageSize: PURCHASES_SECTION_PAGE_SIZE },
+    }),
+    enabled: isPurchaseHistoryOpen,
+  });
+  const purchaseHistory = purchaseHistoryPage?.items ?? NO_PURCHASES;
 
   // Decompose spend into actual / committed / contributions rather than showing
   // one blended figure. Own-scope split feeds the hero; the whole-subtree split
@@ -444,6 +577,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   ) => {
     setActiveMatrixCell((current) => {
       const clear = current?.trade === trade && current.costType === costType;
+      // The pivot is built from the full subtree ledger (`chartPurchases`) —
+      // a matched purchase may not be in the section's default bounded view,
+      // so expand History to the full list rather than filtering to nothing.
+      if (!clear) setIsPurchaseHistoryOpen(true);
       return clear ? null : { trade, costType };
     });
     purchasesRef.current?.scrollIntoView({
@@ -707,6 +844,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
+  // Board view keeps showing the full (incl. done) subtree — see the
+  // `subtreeTasks` comment above; List view is the scoped open-tasks set.
+  const visibleTaskCount =
+    tasksView === "board" ? topLevelTasks.length : topLevelOpenTasks.length;
+
   const tasksSection: DetailSection = {
     title: "Tasks",
     icon: ListChecks,
@@ -714,8 +856,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     zone: tasksView === "board" ? "full" : "main",
     headerAction: (
       <Row align="center" gap="sm">
-        {topLevelTasks.length > 0 && (
-          <Badge variant="outline">{topLevelTasks.length}</Badge>
+        {visibleTaskCount > 0 && (
+          <Badge variant="outline">{visibleTaskCount}</Badge>
         )}
         <ViewSwitcher
           ariaLabel="Tasks view"
@@ -740,14 +882,41 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           tasks={topLevelTasks}
           cols="status"
           lane={null}
-          filters={projectSubtreeTasksFilters(project.id)}
+          cacheTarget={{
+            source: "chartData",
+            filters: projectSubtreeTasksFilters(project.id),
+          }}
           showProjectOnCards={hasSubtree}
           // A card section on the detail page, not the whole viewport — a
           // shorter fixed bound than the standalone board page's default.
           maxHeightClassName="max-h-[70vh]"
         />
       ) : (
-        <TaskList tasks={topLevelTasks} showProjectColumn={hasSubtree} />
+        <Stack gap="sm">
+          <TaskList tasks={topLevelOpenTasks} showProjectColumn={hasSubtree} />
+          <Collapsible
+            open={isTaskHistoryOpen}
+            onOpenChange={setIsTaskHistoryOpen}
+          >
+            <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
+              {isTaskHistoryOpen ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              History
+              {isTaskHistoryOpen &&
+                topLevelDoneTasks.length > 0 &&
+                ` (${topLevelDoneTasks.length})`}
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <TaskList
+                tasks={topLevelDoneTasks}
+                showProjectColumn={hasSubtree}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        </Stack>
       ),
   };
 
@@ -817,8 +986,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     zone: hasSubtree ? "full" : "main",
     headerAction: (
       <Row align="center" gap="sm">
-        {chartPurchases.length > 0 && (
-          <Badge variant="outline">{chartPurchases.length}</Badge>
+        {defaultSectionPurchases.length > 0 && (
+          <Badge variant="outline">{defaultSectionPurchases.length}</Badge>
         )}
         <Button
           type="button"
@@ -833,12 +1002,38 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
     content: (
       <div ref={purchasesRef}>
-        <PurchaseList
-          purchases={sortedPurchases}
-          tradeFilter={activeMatrixCell?.trade ?? null}
-          costTypeFilter={activeMatrixCell?.costType ?? null}
-          showProjectColumn={hasSubtree}
-        />
+        <Stack gap="sm">
+          <PurchaseList
+            purchases={defaultSectionPurchases}
+            tradeFilter={activeMatrixCell?.trade ?? null}
+            costTypeFilter={activeMatrixCell?.costType ?? null}
+            showProjectColumn={hasSubtree}
+          />
+          <Collapsible
+            open={isPurchaseHistoryOpen}
+            onOpenChange={setIsPurchaseHistoryOpen}
+          >
+            <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
+              {isPurchaseHistoryOpen ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              History
+              {isPurchaseHistoryOpen &&
+                purchaseHistory.length > 0 &&
+                ` (${purchaseHistory.length})`}
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <PurchaseList
+                purchases={purchaseHistory}
+                tradeFilter={activeMatrixCell?.trade ?? null}
+                costTypeFilter={activeMatrixCell?.costType ?? null}
+                showProjectColumn={hasSubtree}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        </Stack>
       </div>
     ),
   };

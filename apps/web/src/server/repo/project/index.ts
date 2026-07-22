@@ -19,6 +19,16 @@
  *                                task/actionable.ts's separate ancestor walk
  *                                only needs id/parentProjectId, fetched inline
  *                                there)
+ *   DASHBOARD → `dashboard-summary.ts` / `portfolio-analytics.ts` (the
+ *                                Overview/Charts reads behind
+ *                                `project.dashboardSummary` /
+ *                                `project.portfolioAnalytics` — bounded
+ *                                summaries + on-demand chart aggregates,
+ *                                replacing the old fetch-all
+ *                                `project.dashboard`), backed by
+ *                                `attention.ts` (the server-side Needs
+ *                                Attention detector) and `dashboard-shared.ts`
+ *                                (their common filter-scope SQL)
  *
  * Sibling relationships: referenced by `task.projectId` and `purchase.projectId`
  * (both nullable); `projectDependency` self-references `project` for the
@@ -27,6 +37,7 @@
  * `subtree.ts` (row→API mapping, tree aggregation) are internal.
  */
 
+export { computeAttentionItems } from "./attention";
 export {
   assertProjectLive,
   createProject,
@@ -34,4 +45,6 @@ export {
   getProjectByID,
   updateProject,
 } from "./crud";
+export { projectDashboardSummary } from "./dashboard-summary";
 export { projectList, projectNameOptions } from "./lookup";
+export { projectPortfolioAnalytics } from "./portfolio-analytics";

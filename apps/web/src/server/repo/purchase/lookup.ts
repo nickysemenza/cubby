@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import { eq, gte, inArray, lte } from "drizzle-orm";
+import { eq, gte, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
 import {
@@ -23,12 +23,17 @@ import {
 } from "~/server/repo/project/subtree";
 import { dbPurchaseToAPI } from "./helpers";
 
-export const purchaseList = async (
+/**
+ * Translate `PurchaseFilters` into the exact Drizzle WHERE clause used to
+ * scope purchase rows. Shared by `purchaseList` (the ledger) and
+ * `purchaseAnalytics` (repo/purchase/analytics.ts) so the two can never
+ * drift under the same filter set — the plan's hard invariant is "ledger
+ * totals and analytics totals always agree".
+ */
+export const buildPurchaseWhereClause = async (
   db: Database,
   filters: PurchaseFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-): Promise<{ data: PurchaseOut[]; count: number }> => {
+): Promise<SQL | undefined> => {
   // When scoped to a project subtree, resolve the project + every live
   // descendant id and match on the whole set; otherwise a plain project match.
   let projectCondition = filters.projectId
@@ -46,7 +51,7 @@ export const purchaseList = async (
     ]);
   }
 
-  const whereClause = buildSearchConditions(
+  return buildSearchConditions(
     purchase,
     [{ column: purchase.name, term: filters.search }],
     [
@@ -61,8 +66,18 @@ export const purchaseList = async (
       // semantics; that's intended, not a bug to work around.
       filters.dateFrom ? gte(purchase.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
+      filters.costIsNull ? isNull(purchase.cost) : undefined,
     ],
   );
+};
+
+export const purchaseList = async (
+  db: Database,
+  filters: PurchaseFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+): Promise<{ data: PurchaseOut[]; count: number }> => {
+  const whereClause = await buildPurchaseWhereClause(db, filters);
 
   const orderByArray = buildOrderBy(purchase, sorts, [
     ...purchaseSortableFields,
