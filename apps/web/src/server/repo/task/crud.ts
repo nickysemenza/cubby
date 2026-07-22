@@ -10,6 +10,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { TaskId } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkMoveInput,
+  TaskBulkReorderInput,
   TaskBulkStatusInput,
   TaskCreateInput,
   TaskOut,
@@ -27,6 +28,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  batchUpdateWithCaseWhen,
   buildPartialUpdateValues,
   dependencyIdsFor,
   getDb,
@@ -299,6 +301,7 @@ export const updateTask = async (
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
       trade: data.trade,
+      sortOrder: data.sortOrder,
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
 
@@ -441,6 +444,75 @@ export const setTasksStatus = async (
     await logAuditEntries(tx, actor, auditEntries);
 
     return before.map((row) => row.id);
+  });
+
+  return getTasksByIDs(db, updatedIds);
+};
+
+/**
+ * Bulk manual-reorder — the board's "materialize" path. Re-assigns sparse
+ * `sortOrder` values to a run of cards (one CASE-WHEN UPDATE via
+ * {@link batchUpdateWithCaseWhen}) and, when the drop also crossed cells,
+ * applies the dragged card's own axis change (`move`) in the same transaction.
+ *
+ * The rank write is deliberately un-audited — manual priority is ephemeral and
+ * a materialize touches many rows; only the `move`'s axis change (if any) is
+ * logged, mirroring `updateTask`'s status/project/trade diff.
+ */
+export const reorderTasks = async (
+  db: Database,
+  input: TaskBulkReorderInput,
+  actor: ActorContext,
+): Promise<TaskOut[]> => {
+  const { ranks, move } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    if (move != null && move.patch.projectId != null) {
+      await assertProjectLive(tx, move.patch.projectId);
+    }
+
+    // Every ranked id maps to its own new sortOrder — a single CASE-WHEN
+    // UPDATE, not one round-trip per card. STEP-spaced integers, so the
+    // helper's `::real` cast is lossless here (fine-grained midpoint writes go
+    // through the single-update path in updateTask, which keeps full double
+    // precision).
+    await batchUpdateWithCaseWhen(
+      tx,
+      task,
+      ranks.map((r) => ({ id: r.id, sortOrder: r.sortOrder })),
+    );
+
+    if (move != null) {
+      const axisValues = buildPartialUpdateValues({
+        status: move.patch.status,
+        projectId: move.patch.projectId,
+        trade: move.patch.trade,
+      });
+      if (Object.keys(axisValues).length > 0) {
+        const before = await tx.query.task.findFirst({
+          where: and(eq(task.id, move.id), notDeleted(task)),
+        });
+        const updated = await updateLiveAndReturn(
+          tx,
+          task,
+          axisValues,
+          move.id,
+        );
+        const changes = before
+          ? computeChanges(before, updated, ["status", "projectId", "trade"])
+          : undefined;
+        if (changes) {
+          await logAuditEntry(tx, actor, {
+            entityType: "task",
+            entityId: move.id,
+            action: "update",
+            changes,
+          });
+        }
+      }
+    }
+
+    return ranks.map((r) => r.id);
   });
 
   return getTasksByIDs(db, updatedIds);

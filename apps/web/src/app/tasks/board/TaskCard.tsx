@@ -26,10 +26,18 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "../task-options";
-import type { TaskCardDragData } from "./board-types";
+import type {
+  BoardColumnKey,
+  BoardLaneKey,
+  TaskCardDragData,
+} from "./board-types";
+import { useBoardCardDropTarget } from "./use-board-card-drop-target";
 
 interface TaskCardProps {
   task: TaskOut;
+  /** The cell this card lives in — the reorder drop target's coordinates. */
+  column: BoardColumnKey;
+  lane: BoardLaneKey | null;
   /** Full loaded dataset keyed by id — resolves blocked-by names for the tooltip. */
   taskById: Record<string, TaskOut>;
   /** Show the project link (hidden when the project is redundant with a column/lane). */
@@ -55,6 +63,8 @@ function formatDue(value: string): string {
  */
 export function TaskCard({
   task,
+  column,
+  lane,
   taskById,
   showProject,
   showTrade,
@@ -64,6 +74,17 @@ export function TaskCard({
   const ref = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const navigate = useNavigate();
+
+  // The Done column ranks by recency, not manually — its cards opt out of
+  // being reorder targets (drops fall through to the cell as a status change).
+  const rankDisabled = column.kind === "status" && column.status === "done";
+  const closestEdge = useBoardCardDropTarget({
+    ref,
+    column,
+    lane,
+    taskId: task.id,
+    disabled: rankDisabled,
+  });
 
   useEffect(() => {
     const element = ref.current;
@@ -117,10 +138,19 @@ export function TaskCard({
         }
       }}
       className={cn(
-        "group block cursor-grab border border-[var(--border)] bg-card p-2 text-left transition-colors hover:border-primary/50 active:cursor-grabbing",
+        "group relative block cursor-grab border border-[var(--border)] bg-card p-2 text-left transition-colors hover:border-primary/50 active:cursor-grabbing",
         dragging && "opacity-40",
       )}
     >
+      {closestEdge && (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-x-0 h-0.5 bg-primary",
+            closestEdge === "top" ? "top-0" : "bottom-0",
+          )}
+          aria-hidden
+        />
+      )}
       <Stack gap="snug">
         <Row align="start" justify="between" gap="tight">
           <span className="line-clamp-2 font-medium text-sm">{task.name}</span>

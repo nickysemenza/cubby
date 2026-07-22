@@ -22,6 +22,7 @@ export {
   deleteTasks,
   getTaskByID,
   moveTasks,
+  reorderTasks,
   setTasksStatus,
   updateTask,
 } from "./crud";

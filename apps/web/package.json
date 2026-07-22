@@ -38,6 +38,7 @@
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^2.0.1",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.0.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
     "@base-ui/react": "^1.6.0",
     "@better-auth/api-key": "^1.6.23",
     "@better-auth/passkey": "^1.6.23",

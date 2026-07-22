@@ -80,6 +80,7 @@ function task(params: {
     dueDate: params.dueDate ?? null,
     dueEndDate: params.dueEndDate ?? null,
     trade: "other",
+    sortOrder: null,
     projectName: null,
     parentTaskName: null,
     blockedByIds: [],

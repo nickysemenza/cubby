@@ -266,6 +266,10 @@ const taskFields = {
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable().describe("End of a due-date range"),
   trade: tradeSchema,
+  // Board-only manual priority within a cell (drag-to-prioritize). Null =
+  // unranked (derived dueDate/name order); ranked cards sort ahead by
+  // ascending sortOrder. Never a table sort field — see taskSortableFields.
+  sortOrder: z.number().nullable(),
 };
 
 const taskCreateShape = {
@@ -278,6 +282,8 @@ const taskCreateShape = {
   parentTaskId: taskId.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
+  // New tasks are unranked (land per derived sort); a drag assigns a rank.
+  sortOrder: z.number().nullable().default(null),
 };
 
 export const taskCreateInput = z.object(taskCreateShape);
@@ -317,6 +323,37 @@ export const taskBulkStatusInput = z.object({
   status: taskStatusSchema,
 });
 export type TaskBulkStatusInput = z.infer<typeof taskBulkStatusInput>;
+
+/**
+ * The axis fields a board drag can change on the dragged card — the same
+ * subset a single board drop writes (status/project/trade), minus `sortOrder`
+ * (which the reorder carries separately). Folded into `taskBulkReorderInput`
+ * so a cross-cell drop that materializes ranks applies its move in the same
+ * transaction.
+ */
+export const taskBoardMovePatch = z.object({
+  status: taskStatusSchema.optional(),
+  projectId: projectId.nullable().optional(),
+  trade: tradeSchema.optional(),
+});
+export type TaskBoardMovePatch = z.infer<typeof taskBoardMovePatch>;
+
+/**
+ * Bulk manual-reorder write — the board's "materialize" path (see
+ * board-model.ts computeRank). `ranks` re-assigns sparse `sortOrder` values to
+ * a run of cards when a single midpoint isn't representable (degenerate gap or
+ * an insert into the unranked tail); `move` optionally carries the dragged
+ * card's own axis change when the drop also crossed cells. Capped so a
+ * pathological cell can't issue an unbounded write.
+ */
+export const taskBulkReorderInput = z.object({
+  ranks: z
+    .array(z.object({ id: taskId, sortOrder: z.number() }))
+    .min(1)
+    .max(200),
+  move: z.object({ id: taskId, patch: taskBoardMovePatch }).optional(),
+});
+export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
   status: taskStatusSchema.optional(),

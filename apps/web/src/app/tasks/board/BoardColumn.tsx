@@ -175,6 +175,8 @@ export function BoardCell({
           <TaskCard
             key={task.id}
             task={task}
+            column={column}
+            lane={lane}
             taskById={cardProps.taskById}
             showProject={cardProps.showProject}
             showTrade={cardProps.showTrade}

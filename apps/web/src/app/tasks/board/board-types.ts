@@ -40,11 +40,27 @@ export type BoardDropData = {
   lane: BoardLaneKey | null;
 };
 
+/**
+ * A card drop target: nested inside a cell target, it names the card the drop
+ * landed on so the reorder knows "above/below card X". Carries the cell's
+ * column/lane too, so a same-cell reorder (whose cell target `canDrop` returns
+ * false — no axis change) can still resolve its coordinates from this alone.
+ * The closest edge ("top"/"bottom") rides along via `attachClosestEdge`.
+ */
+export type BoardCardDropData = {
+  taskBoardCardTarget: true;
+  column: BoardColumnKey;
+  lane: BoardLaneKey | null;
+  targetTaskId: TaskId;
+};
+
 /** The fields a single drop can write — a subset of `taskUpdateData`. */
 export type TaskBoardPatch = {
   status?: TaskStatus;
   projectId?: ProjectId | null;
   trade?: Trade;
+  /** Manual priority within the target cell (drag-to-prioritize). */
+  sortOrder?: number;
 };
 
 /**
@@ -94,4 +110,10 @@ export function asDropData(
   data: Record<string | symbol, unknown>,
 ): BoardDropData | null {
   return data.taskBoardTarget === true ? (data as BoardDropData) : null;
+}
+
+export function asCardDropData(
+  data: Record<string | symbol, unknown>,
+): BoardCardDropData | null {
+  return data.taskBoardCardTarget === true ? (data as BoardCardDropData) : null;
 }

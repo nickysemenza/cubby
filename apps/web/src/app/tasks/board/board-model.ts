@@ -1,4 +1,4 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { taskStatusValues, tradeValues } from "@cubby/schemas/project";
 import { match } from "ts-pattern";
@@ -27,8 +27,16 @@ export const INBOX_LABEL = "Inbox";
 
 const NAMELESS_PROJECT = "Untitled project";
 
-/** dueDate ascending with nulls last, then name — the derived card order. */
+/**
+ * Cell ordering: manual `sortOrder` ascending first (nulls last, so ranked
+ * cards form a "manual prefix"), then the derived order — dueDate ascending
+ * with nulls last, then name. Unranked cards keep today's derived order below
+ * the ranked prefix. The Done column opts out of this entirely (see cellTasks).
+ */
 export function compareCards(a: TaskOut, b: TaskOut): number {
+  const ra = a.sortOrder ?? Number.POSITIVE_INFINITY;
+  const rb = b.sortOrder ?? Number.POSITIVE_INFINITY;
+  if (ra !== rb) return ra - rb;
   if (a.dueDate !== b.dueDate) {
     if (a.dueDate == null) return 1;
     if (b.dueDate == null) return -1;
@@ -178,10 +186,16 @@ function laneReassign(
  * cell). A status-column drop writes `status`; if that cell sits in a differing
  * swimlane, the lane reassignment (`projectId`/`trade`) rides along. A
  * project/trade-column drop writes only that axis.
+ *
+ * When `sortOrder` is supplied (a card-edge drop whose rank resolves to a
+ * single midpoint — see {@link computeRank}), it folds into the patch and the
+ * result is never null: a pure in-cell reprioritize (empty axis patch) is still
+ * a change. Omit `sortOrder` for cell/empty-space drops — today's behavior.
  */
 export function computeMove(
   drag: TaskCardDragData,
   drop: { column: BoardColumnKey; lane: BoardLaneKey | null },
+  sortOrder?: number,
 ): TaskBoardPatch | null {
   const patch: TaskBoardPatch = match(drop.column)
     .with({ kind: "status" }, (col): TaskBoardPatch => {
@@ -201,5 +215,74 @@ export function computeMove(
     )
     .exhaustive();
 
+  if (sortOrder !== undefined) return { ...patch, sortOrder };
   return Object.keys(patch).length === 0 ? null : patch;
+}
+
+/** Sparse spacing between manual ranks — an insert between two ranks is a midpoint. */
+const RANK_STEP = 1024;
+/** Below this, two adjacent ranks are too close to bisect — materialize instead. */
+const RANK_EPSILON = 1e-9;
+
+/**
+ * A rank computation's outcome. `single` — the dragged card gets one new
+ * `sortOrder` (the common midpoint / append case), folded into the single
+ * `task.update`. `materialize` — a run of cards needs fresh STEP-spaced ranks
+ * (no single midpoint is representable), written via `task.bulkReorder`; the
+ * list always includes the dragged card at its new position.
+ */
+export type RankOutcome =
+  | { kind: "single"; sortOrder: number }
+  | { kind: "materialize"; ranks: { id: TaskId; sortOrder: number }[] };
+
+/**
+ * Pure rank math for a card-edge drop. `cellCardsSorted` is the target cell's
+ * display order (compareCards) WITH the dragged card already inserted at
+ * `targetIndex` (its intended new position); neighbors are the cards on either
+ * side, excluding the dragged card itself.
+ *
+ *   - both neighbors ranked → midpoint (degenerate gap → materialize the cell)
+ *   - before ranked only    → after the last ranked card (before + STEP)
+ *   - after ranked only     → at the very top (after − STEP)
+ *   - neither ranked        → materialize the manual prefix through the insert
+ *     point inclusive (STEP-spaced); cards below stay unranked
+ */
+export function computeRank(
+  cellCardsSorted: TaskOut[],
+  targetIndex: number,
+): RankOutcome {
+  const before = targetIndex > 0 ? cellCardsSorted[targetIndex - 1] : undefined;
+  const after =
+    targetIndex < cellCardsSorted.length - 1
+      ? cellCardsSorted[targetIndex + 1]
+      : undefined;
+  const beforeRank = before?.sortOrder ?? null;
+  const afterRank = after?.sortOrder ?? null;
+
+  const materializePrefix = (throughIndex: number): RankOutcome => ({
+    kind: "materialize",
+    ranks: cellCardsSorted
+      .slice(0, throughIndex + 1)
+      .map((card, i) => ({ id: card.id, sortOrder: (i + 1) * RANK_STEP })),
+  });
+
+  if (beforeRank != null && afterRank != null) {
+    if (afterRank - beforeRank < RANK_EPSILON) {
+      // Degenerate gap — re-space the whole cell, dragged card in place.
+      return materializePrefix(cellCardsSorted.length - 1);
+    }
+    return {
+      kind: "single",
+      sortOrder: beforeRank + (afterRank - beforeRank) / 2,
+    };
+  }
+  if (beforeRank != null) {
+    return { kind: "single", sortOrder: beforeRank + RANK_STEP };
+  }
+  if (afterRank != null) {
+    return { kind: "single", sortOrder: afterRank - RANK_STEP };
+  }
+  // Neither neighbor ranked — promote the run from the top of the cell through
+  // the insertion point (inclusive of the dragged card) into the manual prefix.
+  return materializePrefix(targetIndex);
 }

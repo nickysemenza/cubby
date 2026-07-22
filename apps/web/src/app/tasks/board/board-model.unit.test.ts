@@ -7,6 +7,7 @@ import {
   cellTasks,
   compareCards,
   computeMove,
+  computeRank,
   DONE_COLUMN_CAP,
   INBOX_LABEL,
 } from "./board-model";
@@ -20,6 +21,7 @@ function task(params: {
   projectName?: string | null;
   trade?: TaskOut["trade"];
   dueDate?: string | null;
+  sortOrder?: number | null;
   updatedAt?: Date;
 }): TaskOut {
   return {
@@ -34,6 +36,7 @@ function task(params: {
     dueDate: params.dueDate ?? null,
     dueEndDate: null,
     trade: params.trade ?? "other",
+    sortOrder: params.sortOrder ?? null,
     blockedByIds: [],
     blockingIds: [],
     subtaskCount: 0,
@@ -70,6 +73,91 @@ describe("compareCards", () => {
     const a = task({ id: "a", name: "Zebra", dueDate: "2026-01-01" });
     const b = task({ id: "b", name: "Apple", dueDate: "2026-01-01" });
     expect([a, b].sort(compareCards).map((t) => t.id)).toEqual(["b", "a"]);
+  });
+
+  it("puts a ranked card ahead of an unranked one, even with a later due date", () => {
+    // Ranked card has the WORSE derived order (later due date) but wins.
+    const ranked = task({ id: "a", dueDate: "2026-12-01", sortOrder: 1024 });
+    const unranked = task({ id: "b", dueDate: "2026-01-01" });
+    expect([unranked, ranked].sort(compareCards).map((t) => t.id)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it("orders two ranked cards by ascending sortOrder", () => {
+    const a = task({ id: "a", sortOrder: 2048 });
+    const b = task({ id: "b", sortOrder: 1024 });
+    expect([a, b].sort(compareCards).map((t) => t.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("computeRank", () => {
+  // Helper: build a cell with the dragged card already inserted at `at`.
+  const ordered = (
+    specs: { id: string; sortOrder?: number | null }[],
+  ): TaskOut[] => specs.map((s) => task({ id: s.id, sortOrder: s.sortOrder }));
+
+  it("midpoints between two ranked neighbors", () => {
+    // [R1(1024), D, R2(2048)] — dragged at index 1, both neighbors ranked.
+    const cards = ordered([
+      { id: "r1", sortOrder: 1024 },
+      { id: "d", sortOrder: null },
+      { id: "r2", sortOrder: 2048 },
+    ]);
+    expect(computeRank(cards, 1)).toEqual({ kind: "single", sortOrder: 1536 });
+  });
+
+  it("materializes the whole cell when the gap between ranks is degenerate", () => {
+    // Two adjacent ranks collide (gap 0) — re-space every card, dragged in place.
+    const cards = ordered([
+      { id: "r1", sortOrder: 1024 },
+      { id: "d", sortOrder: null },
+      { id: "r2", sortOrder: 1024 },
+    ]);
+    expect(computeRank(cards, 1)).toEqual({
+      kind: "materialize",
+      ranks: [
+        { id: "r1", sortOrder: 1024 },
+        { id: "d", sortOrder: 2048 },
+        { id: "r2", sortOrder: 3072 },
+      ],
+    });
+  });
+
+  it("appends after the last ranked card (before ranked only)", () => {
+    // [R1(1024), D, U] — insert after the ranked prefix, before the unranked tail.
+    const cards = ordered([
+      { id: "r1", sortOrder: 1024 },
+      { id: "d", sortOrder: null },
+      { id: "u", sortOrder: null },
+    ]);
+    expect(computeRank(cards, 1)).toEqual({ kind: "single", sortOrder: 2048 });
+  });
+
+  it("inserts above the top ranked card (after ranked only)", () => {
+    // [D, R1(1024), ...] — dragged at the very top, only the after-neighbor ranked.
+    const cards = ordered([
+      { id: "d", sortOrder: null },
+      { id: "r1", sortOrder: 1024 },
+    ]);
+    expect(computeRank(cards, 0)).toEqual({ kind: "single", sortOrder: 0 });
+  });
+
+  it("materializes the prefix through the insert point in the unranked tail", () => {
+    // All unranked; dragged dropped between u1 and u2 → promote u1 + dragged.
+    const cards = ordered([
+      { id: "u1", sortOrder: null },
+      { id: "d", sortOrder: null },
+      { id: "u2", sortOrder: null },
+    ]);
+    expect(computeRank(cards, 1)).toEqual({
+      kind: "materialize",
+      ranks: [
+        { id: "u1", sortOrder: 1024 },
+        { id: "d", sortOrder: 2048 },
+      ],
+    });
   });
 });
 
@@ -194,6 +282,50 @@ describe("cellTasks", () => {
     expect(hiddenDoneCount).toBe(2);
   });
 
+  it("ignores sortOrder in the Done column — it stays recency-ordered", () => {
+    // A stale sortOrder must not reorder Done (it sorts by updatedAt desc).
+    const tasks = [
+      task({
+        id: "old",
+        status: "done",
+        sortOrder: 1024,
+        updatedAt: new Date(2026, 0, 1),
+      }),
+      task({
+        id: "recent",
+        status: "done",
+        sortOrder: 9999,
+        updatedAt: new Date(2026, 0, 2),
+      }),
+    ];
+    const { cards } = cellTasks(
+      tasks,
+      { kind: "status", status: "done" },
+      null,
+    );
+    // Recency wins despite `recent` having the larger sortOrder.
+    expect(cards.map((t) => t.id)).toEqual(["recent", "old"]);
+  });
+
+  it("orders a non-done cell by sortOrder ahead of the derived order", () => {
+    const tasks = [
+      task({ id: "a", status: "not_started", dueDate: "2026-01-01" }),
+      task({
+        id: "b",
+        status: "not_started",
+        dueDate: "2026-12-01",
+        sortOrder: 1024,
+      }),
+    ];
+    const { cards } = cellTasks(
+      tasks,
+      { kind: "status", status: "not_started" },
+      null,
+    );
+    // Ranked `b` leads even though `a` has the earlier due date.
+    expect(cards.map((t) => t.id)).toEqual(["b", "a"]);
+  });
+
   it("respects the lane when filtering", () => {
     const tasks = [
       task({ id: "a", status: "not_started", projectId: "p1" }),
@@ -289,5 +421,25 @@ describe("computeMove", () => {
         lane: null,
       }),
     ).toBeNull();
+  });
+
+  it("folds sortOrder into a cross-cell status drop", () => {
+    expect(
+      computeMove(
+        drag(t),
+        { column: { kind: "status", status: "in_progress" }, lane: null },
+        5120,
+      ),
+    ).toEqual({ status: "in_progress", sortOrder: 5120 });
+  });
+
+  it("is never null when sortOrder is supplied — a pure in-cell reprioritize is a change", () => {
+    expect(
+      computeMove(
+        drag(t),
+        { column: { kind: "status", status: "not_started" }, lane: null },
+        3072,
+      ),
+    ).toEqual({ sortOrder: 3072 });
   });
 });

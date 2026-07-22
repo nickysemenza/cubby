@@ -72,8 +72,8 @@ export function TaskBoard({
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
-  const { moveTask } = useBoardMutations(filters);
-  useBoardDnd({ moveTask });
+  const { moveTask, reorderTasks } = useBoardMutations(filters);
+  useBoardDnd({ tasks, moveTask, reorderTasks });
 
   // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
   // column header or an empty cell sets this, which mounts the dialog fresh

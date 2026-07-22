@@ -865,6 +865,12 @@ export const task = pgTable(
     dueDate: date("dueDate", { mode: "string" }),
     dueEndDate: date("dueEndDate", { mode: "string" }),
     trade: text("trade", { enum: tradeValues }).notNull(),
+    // Board-only manual priority within a cell (drag-to-prioritize). Nullable:
+    // ranked cards form a sparse "manual prefix", unranked cards keep the
+    // derived (dueDate/name) order below them. Sparse doubles so an insert
+    // between two ranks is a midpoint write (see board-model.ts computeRank);
+    // NOT a table sort field. Double precision like cost/costEstimate.
+    sortOrder: doublePrecision("sortOrder"),
     notionPageId: text("notionPageId"),
     ...baseTimestamps(),
     ...softDeletedAt(),

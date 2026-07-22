@@ -8,6 +8,7 @@ import { type TaskId, taskId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   taskBulkMoveInput,
+  taskBulkReorderInput,
   taskBulkStatusInput,
   taskCreateInput,
   taskFiltersSchema,
@@ -23,6 +24,7 @@ import {
   getTaskByID,
   listActionableTasks,
   moveTasks,
+  reorderTasks,
   setTasksStatus,
   taskList,
   updateTask,
@@ -128,6 +130,28 @@ const bulkSetStatus = protectedProcedure
     return { items, sideEffects: { backgroundBatches } };
   });
 
+// Board drag-to-prioritize "materialize" path (see board-model.ts
+// computeRank). One repo call inside a transaction re-ranks a run of cards and
+// optionally applies the dragged card's axis move. Side-effects (embedding
+// refresh) run ONLY for the axis-moved card — a pure sortOrder write doesn't
+// change embedding text — not for every re-ranked row.
+const bulkReorder = protectedProcedure
+  .input(taskBulkReorderInput)
+  .output(taskListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await reorderTasks(ctx.db, input, ctx.actorContext);
+    const movedIds = input.move ? [input.move.id] : [];
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      movedIds.map((id) => ({
+        action: "updated" as const,
+        entity: { entityType: "task" as const, entityId: id },
+        source: "task.bulkReorder",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 export const taskRouter = createTRPCRouter({
   getByID,
   list,
@@ -138,4 +162,5 @@ export const taskRouter = createTRPCRouter({
   chartData,
   bulkMove,
   bulkSetStatus,
+  bulkReorder,
 });
