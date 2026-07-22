@@ -11,6 +11,7 @@ import {
   tradeValues,
 } from "@cubby/schemas/project";
 import {
+  type ColumnHelper,
   createColumnHelper,
   getCoreRowModel,
   getFilteredRowModel,
@@ -22,6 +23,7 @@ import {
 import { partition } from "es-toolkit";
 import {
   Archive,
+  ArrowRightLeft,
   Car,
   ClipboardList,
   Droplets,
@@ -29,6 +31,7 @@ import {
   Fan,
   Grid3x3,
   Hammer,
+  ListChecks,
   ListTodo,
   type LucideIcon,
   PaintRoller,
@@ -39,25 +42,42 @@ import {
   Shapes,
   ShoppingCart,
   Square,
+  Tag,
   Trash2,
   Trees,
   Truck,
   Wrench,
   Zap,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useEffect, useMemo } from "react";
+import {
+  type ComponentType,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { BulkActionBar } from "~/app/_components/data-table/BulkActionBar";
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
+  type FilterConfig,
+  type MobileColumnMeta,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
+import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
+import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { MoveToProjectDialog } from "~/app/_components/tracker/move-to-project-dialog";
+import { SetFieldDialog } from "~/app/_components/tracker/set-field-dialog";
+import { SetTaskStatusDialog } from "~/app/_components/tracker/set-task-status-dialog";
 import {
   costTypeLabels,
   costTypeOptions,
@@ -83,6 +103,7 @@ import {
   purchaseMutationInvalidateKeys,
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -215,13 +236,91 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 const taskHelper = createColumnHelper<TaskOut>();
 
+// --- Shared task/purchase column factories ---
+// These bake the renderCell + select options + editable field-mapping shared by
+// the `/tasks` & `/purchases` index pages (tasklist.tsx / purchaselist.tsx, via
+// `useEntityList`) and the embedded tables below (raw `useReactTable` over a
+// caller-supplied array). Each returns ONE column def; callers pass their own
+// `mobile` / `filterConfig` / density knobs. The project column already has its
+// own shared factory (`createProjectLinkColumn`); the name column differs per
+// caller, so both are left inline.
+
+/** Status column — badge render + `status` write. */
+export function taskStatusColumn(
+  helper: ColumnHelper<TaskOut>,
+  save: (status: TaskStatus, task: TaskOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createFilterableSelectColumn(helper, "status", {
+    header: "Status",
+    className: "w-32",
+    placeholder: "Filter by status...",
+    selectOptions: taskStatusOptions,
+    renderCell: (status: TaskStatus) => (
+      <Badge variant={taskStatusBadgeVariant[status]}>
+        {TASK_STATUS_LABELS[status]}
+      </Badge>
+    ),
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newStatus, task) => {
+        await save(newStatus, task);
+      },
+    },
+  });
+}
+
+/** Trade column — glyph badge + required `trade` write. `emptyAsNull` renders an
+ * empty cell (embedded tables) instead of the muted dash (index pages). */
+export function taskTradeColumn(
+  helper: ColumnHelper<TaskOut>,
+  save: (trade: Trade, task: TaskOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta; emptyAsNull?: boolean },
+) {
+  return createFilterableSelectColumn(helper, "trade", {
+    header: "Trade",
+    className: "w-32",
+    placeholder: "Filter by trade...",
+    selectOptions: tradeOptions,
+    renderCell: (trade: Trade | null) =>
+      trade ? (
+        <TradeBadge trade={trade} />
+      ) : opts?.emptyAsNull ? null : (
+        <NoneValue />
+      ),
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newTrade, task) => {
+        // Required field — a cleared select is a no-op, not a null write.
+        if (!newTrade) return;
+        await save(newTrade, task);
+      },
+    },
+  });
+}
+
+/** Due-date column — inline date-picker + `dueDate` write. */
+export function taskDueColumn(
+  helper: ColumnHelper<TaskOut>,
+  save: (dueDate: string | null, task: TaskOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createPlainDateColumn(helper, "dueDate", {
+    header: "Due",
+    className: "w-28",
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newDueDate, task) => {
+        await save(newDueDate, task);
+      },
+    },
+  });
+}
+
 /**
- * Column config here mirrors tasklist.tsx's (the `/tasks` index page)
- * status/project/trade/dueDate columns — this embedded table can't share that
- * hook (it renders a caller-supplied array with no server pagination/filters
- * of its own via `useEntityList`), so the small duplication is accepted rather
- * than forcing a shared abstraction. Keep both in sync if the editable field
- * set changes; see the reciprocal comment there.
+ * The embedded task table renders a caller-supplied array (no server
+ * pagination/filters of its own via `useEntityList`), so it wires its columns
+ * from the shared factories above rather than this page's `useEntityList`.
  */
 export function TaskList({
   tasks,
@@ -236,6 +335,11 @@ export function TaskList({
   showProjectColumn?: boolean;
 }) {
   const api = useTRPC();
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
+  const [bulkMoveItems, setBulkMoveItems] = useState<TaskOut[]>([]);
+  const [bulkStatusItems, setBulkStatusItems] = useState<TaskOut[]>([]);
+  const [bulkTradeItems, setBulkTradeItems] = useState<TaskOut[]>([]);
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -243,27 +347,52 @@ export function TaskList({
     invalidateKeys: taskMutationInvalidateKeys,
   });
 
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "move",
+          label: "Move to project...",
+          icon: <ArrowRightLeft className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: TableRow<TaskOut>[]) => {
+            setBulkMoveItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-status",
+          label: "Set status...",
+          icon: <ListChecks className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: TableRow<TaskOut>[]) => {
+            setBulkStatusItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-trade",
+          label: "Set trade...",
+          icon: <Wrench className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: TableRow<TaskOut>[]) => {
+            setBulkTradeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
+  const bulkActionsState = useBulkActions({ config: bulkActions });
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createFilterableSelectColumn(taskHelper, "status", {
-        header: "Status",
-        className: "w-32",
-        placeholder: "Filter by status...",
-        selectOptions: taskStatusOptions,
-        renderCell: (status: TaskStatus) => (
-          <Badge variant={taskStatusBadgeVariant[status]}>
-            {TASK_STATUS_LABELS[status]}
-          </Badge>
-        ),
-        editable: {
-          onSave: async (newStatus, task) => {
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { status: newStatus },
-            });
-          },
-        },
+      buildSelectColumn<TaskOut>(lastSelectedIdRef, shiftKeyRef),
+      taskStatusColumn(taskHelper, async (status, task) => {
+        await updateTaskMutation.mutateAsync({ id: task.id, data: { status } });
       }),
       taskHelper.accessor("name", {
         header: "Task",
@@ -287,35 +416,21 @@ export function TaskList({
             }),
           ]
         : []),
-      createFilterableSelectColumn(taskHelper, "trade", {
-        header: "Trade",
-        className: "w-32",
-        placeholder: "Filter by trade...",
-        selectOptions: tradeOptions,
-        renderCell: (trade: Trade | null) =>
-          trade ? <TradeBadge trade={trade} /> : null,
-        editable: {
-          onSave: async (newTrade, task) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!newTrade) return;
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { trade: newTrade },
-            });
-          },
+      taskTradeColumn(
+        taskHelper,
+        async (trade, task) => {
+          await updateTaskMutation.mutateAsync({
+            id: task.id,
+            data: { trade },
+          });
         },
-      }),
-      createPlainDateColumn(taskHelper, "dueDate", {
-        header: "Due",
-        className: "w-28",
-        editable: {
-          onSave: async (newDueDate, task) => {
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { dueDate: newDueDate },
-            });
-          },
-        },
+        { emptyAsNull: true },
+      ),
+      taskDueColumn(taskHelper, async (dueDate, task) => {
+        await updateTaskMutation.mutateAsync({
+          id: task.id,
+          data: { dueDate },
+        });
       }),
     ],
     [showProjectColumn],
@@ -339,8 +454,53 @@ export function TaskList({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getRowId: (row) => row.id,
+    enableRowSelection: true,
+    state: { rowSelection: bulkActionsState.rowSelection },
+    onRowSelectionChange: bulkActionsState.onRowSelectionChange,
     initialState: {
       pagination: { pageSize: 25 },
+    },
+  });
+
+  const bulkMoveMutation = useActionMutation({
+    mutationFn: api.task.bulkMove.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Moved ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkMoveItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkStatusMutation = useActionMutation({
+    mutationFn: api.task.bulkSetStatus.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkStatusItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkTradeMutation = useActionMutation({
+    mutationFn: api.task.bulkSetTrade.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkTradeItems([]);
+      table.resetRowSelection();
     },
   });
 
@@ -355,7 +515,78 @@ export function TaskList({
     );
   }
 
-  return <RTable table={table} embedded />;
+  const bulkActionBar =
+    bulkActionsState.selectedCount > 0 ? (
+      <BulkActionBar
+        selectedCount={bulkActionsState.selectedCount}
+        selectedRows={table.getFilteredSelectedRowModel().rows}
+        actions={bulkActionsState.getAvailableActions(
+          table.getFilteredSelectedRowModel().rows,
+        )}
+        onExecute={bulkActionsState.executeAction}
+        onClearSelection={bulkActionsState.clearSelection}
+        isExecuting={bulkActionsState.isExecuting}
+        currentAction={bulkActionsState.currentAction}
+      />
+    ) : null;
+
+  return (
+    <>
+      <RTable table={table} embedded bulkActionBar={bulkActionBar} />
+      {bulkMoveItems.length > 0 && (
+        <MoveToProjectDialog
+          open={bulkMoveItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkMoveItems([]);
+          }}
+          items={bulkMoveItems}
+          entityLabel="Task"
+          isPending={bulkMoveMutation.isPending}
+          onConfirm={async (projectId) => {
+            await bulkMoveMutation.mutateAsync({
+              ids: bulkMoveItems.map((t) => t.id),
+              projectId,
+            });
+          }}
+        />
+      )}
+      {bulkStatusItems.length > 0 && (
+        <SetTaskStatusDialog
+          open={bulkStatusItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkStatusItems([]);
+          }}
+          items={bulkStatusItems}
+          isPending={bulkStatusMutation.isPending}
+          onConfirm={async (status) => {
+            await bulkStatusMutation.mutateAsync({
+              ids: bulkStatusItems.map((t) => t.id),
+              status,
+            });
+          }}
+        />
+      )}
+      {bulkTradeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkTradeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkTradeItems([]);
+          }}
+          items={bulkTradeItems}
+          isPending={bulkTradeMutation.isPending}
+          options={tradeOptions}
+          fieldLabel="Trade"
+          itemNoun="Task"
+          onConfirm={async (trade) => {
+            await bulkTradeMutation.mutateAsync({
+              ids: bulkTradeItems.map((t) => t.id),
+              trade: trade as Trade,
+            });
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 // -- Purchase Table --
@@ -374,14 +605,164 @@ const futureEditOptions: FilterableComboboxItem[] = [
   { value: "true", label: "Planned" },
 ];
 
+// --- Shared purchase column factories (see the task factories above) ---
+
+/** Cost-type column — label render + required `costType` write. */
+export function purchaseCostTypeColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (costType: CostType, purchase: PurchaseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createFilterableSelectColumn(helper, "costType", {
+    header: "Cost Type",
+    className: "w-28",
+    placeholder: "Filter by cost type...",
+    selectOptions: costTypeOptions,
+    renderCell: (costType: CostType | null) =>
+      costType ? costTypeLabels[costType] : <NoneValue />,
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newCostType, purchase) => {
+        // Required field — a cleared select is a no-op, not a null write.
+        if (!newCostType) return;
+        await save(newCostType, purchase);
+      },
+    },
+  });
+}
+
+/** Trade column — glyph badge + required `trade` write. `exactFilter` sets
+ * `filterFn: "equalsString"` (the pivot's controlled trade filter must select
+ * one trade, not substring-match); `emptyAsNull` renders an empty cell instead
+ * of the muted dash. */
+export function purchaseTradeColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (trade: Trade, purchase: PurchaseOut) => Promise<void>,
+  opts?: {
+    mobile?: MobileColumnMeta;
+    emptyAsNull?: boolean;
+    exactFilter?: boolean;
+  },
+) {
+  const column = createFilterableSelectColumn(helper, "trade", {
+    header: "Trade",
+    className: "w-32",
+    placeholder: "Filter by trade...",
+    selectOptions: tradeOptions,
+    renderCell: (trade: Trade | null) =>
+      trade ? (
+        <TradeBadge trade={trade} />
+      ) : opts?.emptyAsNull ? null : (
+        <NoneValue />
+      ),
+    mobile: opts?.mobile,
+    editable: {
+      onSave: async (newTrade, purchase) => {
+        // Required field — a cleared select is a no-op, not a null write.
+        if (!newTrade) return;
+        await save(newTrade, purchase);
+      },
+    },
+  });
+  // `createFilterableSelectColumn` doesn't expose a `filterFn` option, so the
+  // exact-match override is applied on the returned column def — load-bearing
+  // for the pivot's single-trade selection, don't drop it.
+  return opts?.exactFilter
+    ? { ...column, filterFn: "equalsString" as const }
+    : column;
+}
+
+/** Cost column — `decimals`/`signedTone` tune the embedded whole-dollar,
+ * sign-tinted look; the index page omits them for default cents + flat green. */
+export function purchaseCostColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (cost: number | null, purchase: PurchaseOut) => Promise<void>,
+  opts?: {
+    className?: string;
+    mobile?: MobileColumnMeta;
+    decimals?: number;
+    signedTone?: boolean;
+  },
+) {
+  return createCurrencyColumn(helper, "cost", {
+    header: "Cost",
+    className: opts?.className,
+    mobile: opts?.mobile,
+    decimals: opts?.decimals,
+    signedTone: opts?.signedTone,
+    editable: {
+      onSave: async (newCost, purchase) => {
+        await save(newCost, purchase);
+      },
+    },
+  });
+}
+
+/** Date column — inline date-picker + `date` write. */
+export function purchaseDateColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (date: string | null, purchase: PurchaseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta; filterConfig?: FilterConfig },
+) {
+  return createPlainDateColumn(helper, "date", {
+    header: "Date",
+    className: "w-28",
+    mobile: opts?.mobile,
+    filterConfig: opts?.filterConfig,
+    editable: {
+      onSave: async (newDate, purchase) => {
+        await save(newDate, purchase);
+      },
+    },
+  });
+}
+
+/** Future/Status column — the editable "Actual"/"Planned" select over the
+ * boolean `future` field. */
+export function purchaseFutureColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (future: boolean, purchase: PurchaseOut) => Promise<void>,
+  opts?: {
+    className?: string;
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+  },
+) {
+  return helper.accessor((row) => (row.future ? "true" : "false"), {
+    id: "future",
+    header: "Status",
+    enableSorting: false,
+    meta: {
+      className: opts?.className ?? "w-24",
+      mobile: opts?.mobile,
+      filterConfig: opts?.filterConfig,
+    },
+    cell: (info) => {
+      const purchase = info.row.original;
+      return (
+        <EditableCell
+          value={info.getValue()}
+          onSave={async (newVal) => {
+            await save(newVal === "true", purchase);
+          }}
+          config={{ type: "select", options: futureEditOptions }}
+          renderValue={(v) =>
+            v === "true" ? (
+              <Badge variant="warning">Planned</Badge>
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      );
+    },
+  });
+}
+
 /**
- * Column config here mirrors purchaselist.tsx's (the `/purchases` index page)
- * cost/date/costType/trade/project/future columns — this embedded table can't
- * share that hook (it renders a caller-supplied array with no server
- * pagination/filters of its own via `useEntityList`), so the small
- * duplication is accepted rather than forcing a shared abstraction. Keep both
- * in sync if the editable field set changes; see the reciprocal comment
- * there.
+ * The embedded purchase table renders a caller-supplied array (no server
+ * pagination/filters of its own via `useEntityList`), so it wires its columns
+ * from the shared factories above rather than this page's `useEntityList`.
  */
 export function PurchaseList({
   purchases,
@@ -401,6 +782,11 @@ export function PurchaseList({
   showProjectColumn?: boolean;
 }) {
   const api = useTRPC();
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
+  const [bulkMoveItems, setBulkMoveItems] = useState<PurchaseOut[]>([]);
+  const [bulkTradeItems, setBulkTradeItems] = useState<PurchaseOut[]>([]);
+  const [bulkCostTypeItems, setBulkCostTypeItems] = useState<PurchaseOut[]>([]);
 
   const updatePurchaseMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -408,9 +794,50 @@ export function PurchaseList({
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
 
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "move",
+          label: "Move to project...",
+          icon: <ArrowRightLeft className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
+            setBulkMoveItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-trade",
+          label: "Set trade...",
+          icon: <Wrench className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
+            setBulkTradeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-cost-type",
+          label: "Set cost type...",
+          icon: <Tag className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
+            setBulkCostTypeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
+  const bulkActionsState = useBulkActions({ config: bulkActions });
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
+      buildSelectColumn<PurchaseOut>(lastSelectedIdRef, shiftKeyRef),
       purchaseHelper.accessor("name", {
         header: "Purchase",
         cell: ({ row }) => {
@@ -447,106 +874,47 @@ export function PurchaseList({
             }),
           ]
         : []),
-      createFilterableSelectColumn(purchaseHelper, "costType", {
-        header: "Cost Type",
-        className: "w-28",
-        placeholder: "Filter by cost type...",
-        selectOptions: costTypeOptions,
-        renderCell: (costType: CostType | null) =>
-          costType ? costTypeLabels[costType] : <NoneValue />,
-        editable: {
-          onSave: async (newCostType, purchase) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!newCostType) return;
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { costType: newCostType },
-            });
-          },
-        },
+      purchaseCostTypeColumn(purchaseHelper, async (costType, purchase) => {
+        await updatePurchaseMutation.mutateAsync({
+          id: purchase.id,
+          data: { costType },
+        });
       }),
-      {
-        ...createFilterableSelectColumn(purchaseHelper, "trade", {
-          header: "Trade",
-          className: "w-32",
-          placeholder: "Filter by trade...",
-          selectOptions: tradeOptions,
-          renderCell: (trade: Trade | null) =>
-            trade ? <TradeBadge trade={trade} /> : null,
-          editable: {
-            onSave: async (newTrade, purchase) => {
-              // Required field — a cleared select is a no-op, not a null write.
-              if (!newTrade) return;
-              await updatePurchaseMutation.mutateAsync({
-                id: purchase.id,
-                data: { trade: newTrade },
-              });
-            },
-          },
-        }),
-        // Exact-match so the pivot's controlled `trade` filter selects one
-        // trade (the default `includesString` would over-match substrings).
-        // `createFilterableSelectColumn` doesn't expose a `filterFn` option,
-        // so this overrides it on the returned column def — load-bearing,
-        // don't drop it.
-        filterFn: "equalsString" as const,
-      },
       // Negative rows are credits/contributions (money in) — `signedTone`
-      // greens them so they don't read as spend, while positive spend stays
-      // neutral; `decimals: 0` keeps the embedded table's whole-dollar density.
-      createCurrencyColumn(purchaseHelper, "cost", {
-        header: "Cost",
-        className: "w-20",
-        decimals: 0,
-        signedTone: true,
-        editable: {
-          onSave: async (newCost, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { cost: newCost },
-            });
-          },
+      // greens them so they don't read as spend; `decimals: 0` keeps the
+      // embedded table's whole-dollar density. `exactFilter` keeps the pivot's
+      // controlled trade filter to a single trade.
+      purchaseTradeColumn(
+        purchaseHelper,
+        async (trade, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { trade },
+          });
         },
+        { emptyAsNull: true, exactFilter: true },
+      ),
+      purchaseCostColumn(
+        purchaseHelper,
+        async (cost, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { cost },
+          });
+        },
+        { className: "w-20", decimals: 0, signedTone: true },
+      ),
+      purchaseDateColumn(purchaseHelper, async (date, purchase) => {
+        await updatePurchaseMutation.mutateAsync({
+          id: purchase.id,
+          data: { date },
+        });
       }),
-      createPlainDateColumn(purchaseHelper, "date", {
-        header: "Date",
-        className: "w-28",
-        editable: {
-          onSave: async (newDate, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { date: newDate },
-            });
-          },
-        },
-      }),
-      purchaseHelper.accessor((row) => (row.future ? "true" : "false"), {
-        id: "future",
-        header: "Status",
-        enableSorting: false,
-        meta: { className: "w-24" },
-        cell: (info) => {
-          const purchase = info.row.original;
-          return (
-            <EditableCell
-              value={info.getValue()}
-              onSave={async (newVal) => {
-                await updatePurchaseMutation.mutateAsync({
-                  id: purchase.id,
-                  data: { future: newVal === "true" },
-                });
-              }}
-              config={{ type: "select", options: futureEditOptions }}
-              renderValue={(v) =>
-                v === "true" ? (
-                  <Badge variant="warning">Planned</Badge>
-                ) : (
-                  <NoneValue />
-                )
-              }
-            />
-          );
-        },
+      purchaseFutureColumn(purchaseHelper, async (future, purchase) => {
+        await updatePurchaseMutation.mutateAsync({
+          id: purchase.id,
+          data: { future },
+        });
       }),
     ],
     [showProjectColumn],
@@ -559,6 +927,9 @@ export function PurchaseList({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getRowId: (row) => row.id,
+    enableRowSelection: true,
+    state: { rowSelection: bulkActionsState.rowSelection },
+    onRowSelectionChange: bulkActionsState.onRowSelectionChange,
     initialState: {
       pagination: { pageSize: 25 },
     },
@@ -571,6 +942,48 @@ export function PurchaseList({
     table.getColumn("costType")?.setFilterValue(costTypeFilter ?? undefined);
   }, [table, tradeFilter, costTypeFilter]);
 
+  const bulkMoveMutation = useActionMutation({
+    mutationFn: api.purchase.bulkMove.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Moved ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkMoveItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkTradeMutation = useActionMutation({
+    mutationFn: api.purchase.bulkSetTrade.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkTradeItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkCostTypeMutation = useActionMutation({
+    mutationFn: api.purchase.bulkSetCostType.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkCostTypeItems([]);
+      table.resetRowSelection();
+    },
+  });
+
   if (purchases.length === 0) {
     return (
       <Empty variant="minimal" className="py-6">
@@ -582,7 +995,81 @@ export function PurchaseList({
     );
   }
 
-  return <RTable table={table} embedded />;
+  const bulkActionBar =
+    bulkActionsState.selectedCount > 0 ? (
+      <BulkActionBar
+        selectedCount={bulkActionsState.selectedCount}
+        selectedRows={table.getFilteredSelectedRowModel().rows}
+        actions={bulkActionsState.getAvailableActions(
+          table.getFilteredSelectedRowModel().rows,
+        )}
+        onExecute={bulkActionsState.executeAction}
+        onClearSelection={bulkActionsState.clearSelection}
+        isExecuting={bulkActionsState.isExecuting}
+        currentAction={bulkActionsState.currentAction}
+      />
+    ) : null;
+
+  return (
+    <>
+      <RTable table={table} embedded bulkActionBar={bulkActionBar} />
+      {bulkMoveItems.length > 0 && (
+        <MoveToProjectDialog
+          open={bulkMoveItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkMoveItems([]);
+          }}
+          items={bulkMoveItems}
+          entityLabel="Purchase"
+          isPending={bulkMoveMutation.isPending}
+          onConfirm={async (projectId) => {
+            await bulkMoveMutation.mutateAsync({
+              ids: bulkMoveItems.map((p) => p.id),
+              projectId,
+            });
+          }}
+        />
+      )}
+      {bulkTradeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkTradeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkTradeItems([]);
+          }}
+          items={bulkTradeItems}
+          isPending={bulkTradeMutation.isPending}
+          options={tradeOptions}
+          fieldLabel="Trade"
+          itemNoun="Purchase"
+          onConfirm={async (trade) => {
+            await bulkTradeMutation.mutateAsync({
+              ids: bulkTradeItems.map((p) => p.id),
+              trade: trade as Trade,
+            });
+          }}
+        />
+      )}
+      {bulkCostTypeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkCostTypeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkCostTypeItems([]);
+          }}
+          items={bulkCostTypeItems}
+          isPending={bulkCostTypeMutation.isPending}
+          options={costTypeOptions}
+          fieldLabel="Cost Type"
+          itemNoun="Purchase"
+          onConfirm={async (costType) => {
+            await bulkCostTypeMutation.mutateAsync({
+              ids: bulkCostTypeItems.map((p) => p.id),
+              costType: costType as CostType,
+            });
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 // -- Project Table --
