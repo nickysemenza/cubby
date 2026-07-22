@@ -91,7 +91,7 @@ export function TasksStatsStrip() {
         onClick={() => goTo("next")}
       />
       <StatLink
-        label="Due this week"
+        label="Due in 7 days"
         value={data.dueThisWeek}
         onClick={() => goTo("next")}
       />

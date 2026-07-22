@@ -1,7 +1,7 @@
 /**
  * Single-user household — hardcoded rather than configurable.
  */
-export const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
+const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
 
 /**
  * Household-local calendar date, e.g. "2026-07-22". Never derive this via

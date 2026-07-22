@@ -47,7 +47,7 @@ const ATTENTION_GROUPS: Array<{
     icon: AlertTriangle,
     iconClassName: "h-3.5 w-3.5 text-warning",
     title: (n) =>
-      `${n} stalled project${n !== 1 ? "s" : ""} (no purchases in 30 days)`,
+      `${n} stalled project${n !== 1 ? "s" : ""} (no activity in 30 days)`,
   },
   {
     type: "past_due_planned_purchase",

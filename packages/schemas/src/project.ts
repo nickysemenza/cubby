@@ -561,6 +561,12 @@ export const taskSummaryOut = z.object({
   later: z.number().int(),
   inbox: z.number().int(),
   overdue: z.number().int(),
+  /**
+   * A rolling 7-day window (today through +7 days), NOT the calendar week
+   * `task-options.ts`'s `resolveDueRange("week")` filter preset uses — the UI
+   * labels this tile "Due in 7 days" rather than "Due this week" specifically
+   * to avoid implying they're the same count.
+   */
   dueThisWeek: z.number().int(),
   blocked: z.number().int(),
 });
@@ -715,11 +721,11 @@ export type PurchaseListAndSideEffectsOut = z.infer<
 // ---------------------------------------------------------------------------
 
 /**
- * `purchase.analytics`'s input — the SAME shape as `purchaseFiltersSchema` so
- * ledger totals and analytics totals always agree under the same filter set.
+ * `purchase.analytics`'s input is `purchaseFiltersSchema` directly — the SAME
+ * shape as the ledger's filters — so ledger totals and analytics totals
+ * always agree under the same filter set. No separate alias: a value-level
+ * re-export of the identical schema is a duplicate export, not a real type.
  */
-export const purchaseAnalyticsInput = purchaseFiltersSchema;
-export type PurchaseAnalyticsInput = z.infer<typeof purchaseAnalyticsInput>;
 
 /** actual+committed+credits+net+count, the shared shape every aggregate row carries. */
 const purchaseAggregateFields = {
@@ -824,10 +830,13 @@ export type ProjectDashboardFilters = z.infer<
   typeof projectDashboardFiltersSchema
 >;
 
-export const projectDashboardSummaryInput = projectDashboardFiltersSchema;
-export type ProjectDashboardSummaryInput = z.infer<
-  typeof projectDashboardSummaryInput
->;
+/**
+ * `project.dashboardSummary`'s input is `projectDashboardFiltersSchema`
+ * directly — no separate value alias (a re-export of the identical schema is
+ * a duplicate export, not a real type). Kept as a type-only alias since
+ * `repo/project/dashboard-summary.ts` names it explicitly.
+ */
+export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
 
 export const projectPortfolioAnalyticsInput = z.object({
   ...projectDashboardFilterFields,

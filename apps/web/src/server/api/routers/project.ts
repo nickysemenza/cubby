@@ -17,7 +17,7 @@ import {
   createProjectFromTasksInput,
   createProjectFromTasksOut,
   projectCreateInput,
-  projectDashboardSummaryInput,
+  projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
   projectFiltersSchema,
   projectOptionsOut,
@@ -76,7 +76,7 @@ const {
 
 /** `/projects?view=overview`'s bounded summary read — see repo/project/dashboard-summary.ts. */
 const dashboardSummary = protectedProcedure
-  .input(projectDashboardSummaryInput)
+  .input(projectDashboardFiltersSchema)
   .output(projectDashboardSummaryOut)
   .query(({ ctx, input }) => projectDashboardSummary(ctx.db, input));
 

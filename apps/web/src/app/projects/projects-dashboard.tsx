@@ -447,7 +447,10 @@ function OverviewView({
 
       <NeedsAttention items={data.attention} />
 
-      <Section title="Active Projects">
+      {/* "Projects", not "Active Projects" — the summary tile above already
+          says that; identical text on both would be a strict-mode-locator
+          collision in e2e tests and a redundant label for a real reader. */}
+      <Section title="Projects">
         <ProjectCards projects={data.projects} coverImages={coverImages} />
         {data.completedCount > 0 && (
           <Link

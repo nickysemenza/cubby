@@ -5,7 +5,6 @@
 
 import { type PurchaseId, purchaseId } from "@cubby/schemas/identifiers";
 import {
-  purchaseAnalyticsInput,
   purchaseAnalyticsOut,
   purchaseBulkCostTypeInput,
   purchaseBulkMoveInput,
@@ -91,7 +90,7 @@ const chartData = protectedProcedure
  * the SQL; `chartData` stays in place for whatever else still fetches raw rows.
  */
 const analytics = protectedProcedure
-  .input(purchaseAnalyticsInput)
+  .input(purchaseFiltersSchema)
   .output(purchaseAnalyticsOut)
   .query(({ ctx, input }) => purchaseAnalytics(ctx.db, input));
 

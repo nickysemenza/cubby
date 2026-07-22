@@ -10,8 +10,10 @@
  *                                edges, no rollups, so the shared factory
  *                                fits directly)
  *   LOOKUP    → `lookup.ts`    (filtered/sorted/paginated list; also exports
- *                                `buildPurchaseWhereClause`, the shared filter
- *                                translation `analytics.ts` reuses)
+ *                                `buildPurchaseWhereClause` for `analytics.ts`
+ *                                to import directly — not re-exported here,
+ *                                it's an internal sibling seam, not a public
+ *                                barrel surface)
  *   ANALYTICS → `analytics.ts` (server-side grouped SQL aggregates for charts)
  *
  * Sibling relationships: `purchase.projectId` references `project` (feeds its
@@ -29,4 +31,4 @@ export {
   setPurchasesTrade,
   updatePurchase,
 } from "./crud";
-export { buildPurchaseWhereClause, purchaseList } from "./lookup";
+export { purchaseList } from "./lookup";
