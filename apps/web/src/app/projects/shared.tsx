@@ -491,38 +491,21 @@ export function PurchaseList({
         // don't drop it.
         filterFn: "equalsString" as const,
       },
-      purchaseHelper.accessor("cost", {
+      // Negative rows are credits/contributions (money in) — `signedTone`
+      // greens them so they don't read as spend, while positive spend stays
+      // neutral; `decimals: 0` keeps the embedded table's whole-dollar density.
+      createCurrencyColumn(purchaseHelper, "cost", {
         header: "Cost",
-        enableSorting: true,
-        meta: { numeric: true, className: "w-20" },
-        cell: (info) => {
-          const cost = info.getValue();
-          const purchase = info.row.original;
-          return (
-            <EditableCell
-              value={cost}
-              onSave={async (newCost) => {
-                await updatePurchaseMutation.mutateAsync({
-                  id: purchase.id,
-                  data: { cost: newCost },
-                });
-              }}
-              config={{ type: "currency" }}
-              renderValue={(v) => {
-                if (v == null) return null;
-                // Negative rows are credits/contributions (money in) — tint
-                // them so they don't read as spend. `createCurrencyColumn`
-                // can't express this per-value tint (its editable
-                // `renderValue` is fixed), so this stays a custom column that
-                // mirrors its `EditableCell` composition instead.
-                return (
-                  <span className={cn("font-medium", v < 0 && "text-positive")}>
-                    {formatCurrency(v, 0)}
-                  </span>
-                );
-              }}
-            />
-          );
+        className: "w-20",
+        decimals: 0,
+        signedTone: true,
+        editable: {
+          onSave: async (newCost, purchase) => {
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { cost: newCost },
+            });
+          },
         },
       }),
       createPlainDateColumn(purchaseHelper, "date", {

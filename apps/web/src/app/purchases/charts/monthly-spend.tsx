@@ -51,6 +51,13 @@ export function MonthlySpend({ purchases }: { purchases: PurchaseOut[] }) {
     return <ChartEmpty icon={CalendarDays} title="No dated purchase data." />;
   }
 
+  // Thin the month axis to ~12 labels — every bar labeled overlaps once the
+  // range spans years.
+  const stride = Math.ceil(data.length / 12);
+  const monthTicks = data
+    .map((d) => d.label)
+    .filter((_, i) => i % stride === 0);
+
   return (
     <div className="h-[300px]">
       <ResponsiveBar
@@ -67,11 +74,12 @@ export function MonthlySpend({ purchases }: { purchases: PurchaseOut[] }) {
           tickSize: 0,
           tickPadding: 8,
           tickRotation: -45,
+          tickValues: monthTicks,
         }}
         axisLeft={nivoCurrencyAxis}
-        label={(d) => formatCurrency(d.value ?? 0, 0)}
-        labelSkipHeight={16}
-        labelTextColor="var(--background)"
+        // Per-bar value labels collide on narrow bars; the tooltip carries the
+        // exact figure on hover instead.
+        enableLabel={false}
         enableGridX={false}
         enableGridY
         tooltip={({ data: d }) => (

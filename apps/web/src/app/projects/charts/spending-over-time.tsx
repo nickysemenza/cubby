@@ -162,6 +162,21 @@ function TotalSpend({
   const maxY = Math.max(0, ...ys);
   const finalSpend = points[points.length - 1]!.y;
 
+  // Thin the x-axis to the date span — a fixed "every 2 weeks" turns ~100
+  // overlapping rotated ticks when the data spans years (the whole-purchases
+  // view). Show the year once the range crosses one.
+  const firstX = String(points[0]!.x);
+  const lastX = String(points[points.length - 1]!.x);
+  const spanDays = (Date.parse(lastX) - Date.parse(firstX)) / 86_400_000;
+  const { tickSpec, tickFmt } =
+    spanDays > 730
+      ? { tickSpec: "every 3 months", tickFmt: "%b '%y" }
+      : spanDays > 365
+        ? { tickSpec: "every 2 months", tickFmt: "%b '%y" }
+        : spanDays > 120
+          ? { tickSpec: "every month", tickFmt: "%b %d" }
+          : { tickSpec: "every 2 weeks", tickFmt: "%b %d" };
+
   const yMax = Math.max(
     costEstimate ? Math.max(maxY * 1.1, costEstimate * 1.15) : maxY * 1.1,
     10,
@@ -195,9 +210,9 @@ function TotalSpend({
         xFormat="time:%b %d"
         yScale={{ type: "linear", min: yMin, max: yMax }}
         axisBottom={{
-          format: "%b %d",
+          format: tickFmt,
           tickRotation: -45,
-          tickValues: "every 2 weeks",
+          tickValues: tickSpec,
         }}
         axisLeft={{
           format: (v: number) => formatCurrency(v, 0),
@@ -284,6 +299,13 @@ function StackedSpend({
     );
   }
 
+  // Thin the month axis to ~12 labels max — a point scale draws every category
+  // by default, so a multi-year range overlaps badly.
+  const stride = Math.ceil(monthCount / 12);
+  const monthTicks = series[0]!.data
+    .map((d) => String(d.x))
+    .filter((_, i) => i % stride === 0);
+
   return (
     <div className="h-[300px]">
       <ResponsiveLine
@@ -293,6 +315,7 @@ function StackedSpend({
         yScale={{ type: "linear", min: 0, stacked: true }}
         axisBottom={{
           tickRotation: -45,
+          tickValues: monthTicks,
         }}
         axisLeft={{
           format: (v: number) => formatCurrency(v, 0),
