@@ -1,10 +1,27 @@
-import type { ProjectDashboardOut, ProjectOut } from "@cubby/schemas/project";
+import type {
+  ProjectDashboardSummaryOut,
+  ProjectKind,
+  ProjectOut,
+  ProjectPortfolioAnalyticsOut,
+  ProjectStatus,
+  PurchaseOut,
+  TaskOut,
+} from "@cubby/schemas/project";
+import { projectStatusValues } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { countBy, partition, uniq } from "es-toolkit";
-import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
-import { lazy, Suspense, useMemo } from "react";
+import { format } from "date-fns";
+import { partition, uniq } from "es-toolkit";
+import {
+  Calendar,
+  DollarSign,
+  Hammer,
+  History as HistoryIcon,
+  Wallet,
+} from "lucide-react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -15,7 +32,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
 import {
   Empty,
   EmptyActions,
@@ -26,11 +42,13 @@ import {
 } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
+import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 
 import {
@@ -43,15 +61,14 @@ import { NeedsAttention } from "./needs-attention";
 import { ProjectActions } from "./project-actions";
 import {
   capitalize,
+  formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
   ProjectTable,
   PurchaseList,
   StatusIcon,
-  TASK_STATUS_LABELS,
   TaskList,
 } from "./shared";
-import { splitPurchaseSpend } from "./spend";
 
 // Charts are Nivo/d3-heavy and each tab's panel is unmounted until selected, so
 // lazy-load them to keep their code out of the dashboard chunk until a tab opens.
@@ -60,32 +77,17 @@ const CostVsEstimate = lazy(() =>
     default: m.CostVsEstimate,
   })),
 );
-const DependencyGraph = lazy(() =>
-  import("./charts/dependency-graph").then((m) => ({
-    default: m.DependencyGraph,
-  })),
-);
 const MonthlyTrend = lazy(() =>
   import("./charts/monthly-trend").then((m) => ({ default: m.MonthlyTrend })),
-);
-const PortfolioGantt = lazy(() =>
-  import("./charts/gantt/PortfolioGantt").then((m) => ({
-    default: m.PortfolioGantt,
-  })),
 );
 const TradeActivity = lazy(() =>
   import("./charts/trade-activity").then((m) => ({
     default: m.TradeActivity,
   })),
 );
-const CategoryBreakdown = lazy(() =>
-  import("./charts/category-breakdown").then((m) => ({
-    default: m.CategoryBreakdown,
-  })),
-);
-const PlannedVsActual = lazy(() =>
-  import("./charts/planned-vs-actual").then((m) => ({
-    default: m.PlannedVsActual,
+const PlannedVsActualByMonth = lazy(() =>
+  import("./charts/planned-vs-actual-by-month").then((m) => ({
+    default: m.PlannedVsActualByMonth,
   })),
 );
 const SpendingByProject = lazy(() =>
@@ -93,18 +95,10 @@ const SpendingByProject = lazy(() =>
     default: m.SpendingByProject,
   })),
 );
-const SpendingHeatmap = lazy(() =>
-  import("./charts/spending-heatmap").then((m) => ({
-    default: m.SpendingHeatmap,
+const OpenTasksByProject = lazy(() =>
+  import("./charts/open-tasks-by-project").then((m) => ({
+    default: m.OpenTasksByProject,
   })),
-);
-const TradeProjectMatrix = lazy(() =>
-  import("./charts/trade-project-matrix").then((m) => ({
-    default: m.TradeProjectMatrix,
-  })),
-);
-const TaskHeatmap = lazy(() =>
-  import("./charts/task-heatmap").then((m) => ({ default: m.TaskHeatmap })),
 );
 const TaskStatusBoard = lazy(() =>
   import("./charts/task-status-board").then((m) => ({
@@ -112,43 +106,113 @@ const TaskStatusBoard = lazy(() =>
   })),
 );
 
-type DashboardView = "overview" | "charts" | "data" | "gallery";
+type DashboardView = "overview" | "analytics" | "data" | "gallery" | "history";
 
 const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
   { value: "overview", label: "Overview" },
-  { value: "charts", label: "Charts" },
+  { value: "analytics", label: "Analytics" },
   { value: "data", label: "Data" },
   { value: "gallery", label: "Gallery" },
+  { value: "history", label: "History" },
 ];
 
-/** Cover image (first attached image) per project id — keyed lookup for the gallery tab. */
+/** Cover image (first attached image) per project id — keyed lookup for the gallery/overview cards. */
 type CoverImages = RouterOutputs["image"]["imagesByProjectIds"];
 
 const NO_PROJECT_IDS: string[] = [];
+const NO_PROJECTS: ProjectOut[] = [];
+const NO_TASKS: TaskOut[] = [];
+const NO_PURCHASES: PurchaseOut[] = [];
 
 const route = getRouteApi("/_authenticated/projects/");
 
 export function ProjectsDashboard() {
-  const api = useTRPC();
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    ...api.project.dashboard.queryOptions(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const projectIds = useMemo(
-    () => data?.projects.map((p) => p.id) ?? NO_PROJECT_IDS,
-    [data],
-  );
-
-  // Cover images load lazily on their own query — doesn't block dashboard render.
-  const { data: coverImages } = useQuery({
-    ...api.image.imagesByProjectIds.queryOptions({ projectIds }),
-    staleTime: 5 * 60 * 1000,
-    enabled: projectIds.length > 0,
-  });
-
   const search = route.useSearch();
   const navigate = route.useNavigate();
+  const view: DashboardView = search.view ?? "overview";
+
+  const onViewChange = (v: DashboardView) =>
+    navigate({ search: (prev) => ({ ...prev, view: v }), replace: true });
+
+  // History has its own scope (forced to `status: done`) and its own local
+  // kind/location/completion-year filters — it doesn't share the
+  // statuses/kinds/locations/date chips the other four views use, so it gets
+  // its own top-level branch rather than one more `view === ...` block deep
+  // inside MainDashboard.
+  if (view === "history") {
+    return <HistoryView view={view} onViewChange={onViewChange} />;
+  }
+
+  return <MainDashboard view={view} onViewChange={onViewChange} />;
+}
+
+// -- Toolbar (shared across every view) --
+
+function DashboardToolbar({
+  view,
+  onViewChange,
+}: {
+  view: DashboardView;
+  onViewChange: (v: DashboardView) => void;
+}) {
+  return (
+    <Row justify="between" align="center" wrap gap="sm">
+      <ViewSwitcher
+        ariaLabel="Dashboard view"
+        options={DASHBOARD_VIEW_OPTIONS}
+        value={view}
+        onValueChange={onViewChange}
+      />
+      <ProjectActions />
+    </Row>
+  );
+}
+
+function DashboardErrorState({
+  error,
+  onRetry,
+}: {
+  error: unknown;
+  onRetry: () => void;
+}) {
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyIcon icon={Hammer} />
+        <EmptyTitle>Couldn't load the project dashboard</EmptyTitle>
+        <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyActions>
+        <Button type="button" variant="outline" onClick={onRetry}>
+          Retry
+        </Button>
+      </EmptyActions>
+    </Empty>
+  );
+}
+
+// -- Main dashboard: overview / analytics / data / gallery --
+
+/**
+ * `dashboardSummary` is fetched for all four of these views — it's the
+ * bounded, cheap Overview read (summary counts, active-project list w/
+ * rollups, task-status breakdown, upcoming tasks, Needs Attention, filter
+ * options), and Data/Gallery reuse its `projects` list rather than issuing
+ * their own query. Only `portfolioAnalytics` (chart aggregates) and the
+ * Data view's raw task/purchase fetch-alls are gated behind their own view,
+ * per the whole point of splitting the old fetch-all `project.dashboard`.
+ */
+function MainDashboard({
+  view,
+  onViewChange,
+}: {
+  view: Exclude<DashboardView, "history">;
+  onViewChange: (v: DashboardView) => void;
+}) {
+  const api = useTRPC();
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
+  const projectPreview = useEntityPreview("project");
 
   // Keyed on the joined primitive values (not the array references
   // themselves) so a fresh-array-per-parse from validateSearch doesn't
@@ -181,25 +245,456 @@ export function ProjectsDashboard() {
     });
   };
 
-  if (isError) {
-    // Distinct from the loading skeleton — a fetch failure must never read as
-    // "still loading" forever.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives, not the Set references
+  const scopeInput = useMemo(
+    () => ({
+      statusScope:
+        filters.statuses.size > 0
+          ? ([...filters.statuses] as ProjectStatus[])
+          : undefined,
+      kinds:
+        filters.kinds.size > 0
+          ? ([...filters.kinds] as ProjectKind[])
+          : undefined,
+      locations:
+        filters.locations.size > 0 ? [...filters.locations] : undefined,
+    }),
+    [statusesKey, kindsKey, locationsKey],
+  );
+
+  const dateBounds = filters.dateRange
+    ? dateRangeBounds(filters.dateRange)
+    : null;
+
+  const dashboardQuery = useQuery({
+    ...api.project.dashboardSummary.queryOptions(scopeInput),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Chart aggregates are ONLY fetched once the Analytics tab is actually
+  // selected — the whole point of splitting `project.dashboard` in two.
+  const analyticsQuery = useQuery({
+    ...api.project.portfolioAnalytics.queryOptions({
+      ...scopeInput,
+      dateFrom: dateBounds?.from,
+      dateTo: dateBounds?.to,
+    }),
+    staleTime: 5 * 60 * 1000,
+    enabled: view === "analytics",
+  });
+
+  // Data view's raw task/purchase tables — also gated to their own tab, not
+  // fetched on every dashboard load. Date bounds apply server-side; the
+  // kind/location/status chips (which only project.dashboardSummary
+  // understands) are applied client-side below via the resulting project id
+  // set, same as the old client-side filtering.
+  const dataViewActive = view === "data";
+  const { data: allTasks = NO_TASKS } = useQuery({
+    ...api.task.chartData.queryOptions({
+      dueFrom: dateBounds?.from,
+      dueTo: dateBounds?.to,
+    }),
+    enabled: dataViewActive,
+  });
+  const { data: allPurchases = NO_PURCHASES } = useQuery({
+    ...api.purchase.chartData.queryOptions({
+      dateFrom: dateBounds?.from,
+      dateTo: dateBounds?.to,
+    }),
+    enabled: dataViewActive,
+  });
+
+  const projects = dashboardQuery.data?.projects ?? NO_PROJECTS;
+
+  const { scopedTasks, scopedPurchases } = useMemo(() => {
+    if (!dataViewActive) {
+      return { scopedTasks: NO_TASKS, scopedPurchases: NO_PURCHASES };
+    }
+    // Keyed by id, not name — project names aren't unique, so a name-keyed
+    // join here would cross-contaminate tasks/purchases across same-named
+    // projects.
+    const projectIds = new Set(projects.map((p) => p.id));
+    return {
+      scopedTasks: allTasks.filter(
+        (t) => !t.projectId || projectIds.has(t.projectId),
+      ),
+      scopedPurchases: allPurchases.filter(
+        (p) => !p.projectId || projectIds.has(p.projectId),
+      ),
+    };
+  }, [dataViewActive, projects, allTasks, allPurchases]);
+
+  // Overview's project cards and Gallery both show cover images; the other
+  // views don't render any project cards, so skip the query entirely there.
+  const showImages = view === "overview" || view === "gallery";
+  const imageProjectIds = showImages
+    ? projects.map((p) => p.id)
+    : NO_PROJECT_IDS;
+  const { data: coverImages } = useQuery({
+    ...api.image.imagesByProjectIds.queryOptions({
+      projectIds: imageProjectIds,
+    }),
+    staleTime: 5 * 60 * 1000,
+    enabled: imageProjectIds.length > 0,
+  });
+
+  // Distinct purchase/task years, for the shared filter bar's "Date" chip —
+  // only populated once the Data view's fetch-alls have loaded at least once
+  // this session (no dedicated server endpoint for "distinct years" exists,
+  // and the two relative presets (3m/12m) still work everywhere regardless).
+  const availableYears = useMemo(
+    () =>
+      uniq(
+        [...allTasks.map((t) => t.dueDate), ...allPurchases.map((p) => p.date)]
+          .filter((d): d is string => d != null)
+          .map((d) => d.slice(0, 4)),
+      )
+        .sort()
+        .reverse(),
+    [allTasks, allPurchases],
+  );
+
+  if (dashboardQuery.isError) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyIcon icon={Hammer} />
-          <EmptyTitle>Couldn't load the project dashboard</EmptyTitle>
-          <EmptyDescription>
-            {error.message || "Something went wrong."}
-          </EmptyDescription>
-        </EmptyHeader>
-        <EmptyActions>
-          <Button type="button" variant="outline" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </EmptyActions>
-      </Empty>
+      <DashboardErrorState
+        error={dashboardQuery.error}
+        onRetry={() => dashboardQuery.refetch()}
+      />
     );
+  }
+
+  if (dashboardQuery.isLoading || !dashboardQuery.data) {
+    return <DashboardSkeleton />;
+  }
+
+  const data = dashboardQuery.data;
+
+  return (
+    <Stack>
+      <DashboardToolbar view={view} onViewChange={onViewChange} />
+
+      <DashboardFilters
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        availableStatuses={[...projectStatusValues]}
+        availableKinds={data.filterOptions.kinds}
+        availableLocations={data.filterOptions.locations}
+        availableYears={availableYears}
+      />
+
+      {view === "overview" && (
+        <OverviewView data={data} coverImages={coverImages} />
+      )}
+
+      {view === "analytics" && (
+        <AnalyticsView
+          data={analyticsQuery.data}
+          isLoading={analyticsQuery.isLoading}
+        />
+      )}
+
+      {view === "data" && (
+        <DataViewContent
+          projects={projects}
+          tasks={scopedTasks}
+          purchases={scopedPurchases}
+          projectPreview={projectPreview}
+        />
+      )}
+
+      {view === "gallery" && (
+        <div className="pt-4">
+          <ProjectCards projects={projects} coverImages={coverImages} />
+        </div>
+      )}
+    </Stack>
+  );
+}
+
+// -- Overview --
+
+function OverviewView({
+  data,
+  coverImages,
+}: {
+  data: ProjectDashboardSummaryOut;
+  coverImages: CoverImages | undefined;
+}) {
+  const summaryItems = useMemo<SummaryItem[]>(
+    () => [
+      { label: "Active Projects", value: data.summary.activeProjectCount },
+      { label: "Open Tasks", value: data.summary.openTaskCount },
+      {
+        label: "Spend",
+        value: data.summary.actualSpend,
+        formatter: (v) => formatCurrency(Number(v), 0),
+        caption:
+          data.summary.committedSpend > 0
+            ? `+${formatCurrency(data.summary.committedSpend, 0)} committed`
+            : undefined,
+      },
+    ],
+    [data.summary],
+  );
+
+  return (
+    <Stack className="pt-4">
+      <StatGrid>
+        {summaryItems.map((item) => (
+          <StatTile key={item.label} item={item} />
+        ))}
+      </StatGrid>
+
+      <NeedsAttention items={data.attention} />
+
+      <Section title="Active Projects">
+        <ProjectCards projects={data.projects} coverImages={coverImages} />
+        {data.completedCount > 0 && (
+          <Link
+            to="/projects"
+            search={{ view: "history" }}
+            className="text-muted-foreground text-xs hover:text-foreground hover:underline"
+          >
+            {data.completedCount} completed project
+            {data.completedCount !== 1 ? "s" : ""} — view history →
+          </Link>
+        )}
+      </Section>
+
+      <Section
+        title="Task Status"
+        description="Projects with the most open work first"
+      >
+        <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+          <TaskStatusBoard
+            breakdown={data.taskStatusByProject}
+            projects={data.projects}
+          />
+        </Suspense>
+      </Section>
+
+      <NextWork tasks={data.nextTasks} />
+    </Stack>
+  );
+}
+
+function NextWork({ tasks }: { tasks: TaskOut[] }) {
+  if (tasks.length === 0) return null;
+
+  return (
+    <Section
+      title="Next Work"
+      description="Upcoming actionable tasks across your projects"
+    >
+      <Stack gap="xs">
+        {tasks.map((task) => (
+          <Row key={task.id} align="center" gap="sm" className="text-sm">
+            <StatusIcon status={task.status} />
+            <Link
+              to="/tasks/$id"
+              params={{ id: task.id }}
+              className="truncate hover:underline"
+            >
+              {task.name}
+            </Link>
+            {task.projectName && (
+              <span className="shrink-0 text-muted-foreground text-xs">
+                {task.projectName}
+              </span>
+            )}
+            {task.dueDate && (
+              <span className="ml-auto shrink-0 text-muted-foreground text-xs">
+                {formatDate(task.dueDate)}
+              </span>
+            )}
+          </Row>
+        ))}
+      </Stack>
+    </Section>
+  );
+}
+
+// -- Analytics --
+
+/**
+ * Every chart here is sourced from `portfolioAnalytics`'s pre-aggregated
+ * fields (see repo/project/portfolio-analytics.ts) — never raw
+ * projects/tasks/purchases, which this endpoint deliberately doesn't return.
+ * Charts whose old raw-data shape has no server aggregate equivalent
+ * (Project Timeline/Gantt, Project Dependencies, Category Breakdown,
+ * Spending Heatmap, Spend-by-Trade pivot matrix) were dropped rather than
+ * inventing new server aggregates — see the task report.
+ */
+function AnalyticsView({
+  data,
+  isLoading,
+}: {
+  data: ProjectPortfolioAnalyticsOut | undefined;
+  isLoading: boolean;
+}) {
+  if (isLoading || !data) {
+    return <Skeleton className="h-[400px] w-full" />;
+  }
+
+  return (
+    <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+      <Stack className="pt-4">
+        <Section
+          title="Cost vs Estimate"
+          description="% of budget spent — projects with an estimate only"
+        >
+          <CostVsEstimate data={data.costVsEstimate} />
+        </Section>
+
+        <Section
+          title="Top 10 Projects by Spending"
+          description="Raw dollar totals, regardless of whether a project has an estimate"
+        >
+          <SpendingByProject data={data.spendingByProject} />
+        </Section>
+
+        <Section
+          title="Monthly Spending Trend"
+          description="Actual vs committed spend, by month"
+        >
+          <MonthlyTrend data={data.monthlySpend} />
+        </Section>
+
+        <Section
+          title="Planned vs Actual"
+          description="Committed spend vs future-flagged purchases, by month"
+        >
+          <PlannedVsActualByMonth data={data.plannedVsActual} />
+        </Section>
+
+        <Section
+          title="Spend by Trade"
+          description="Actual + committed spend per trade"
+        >
+          <TradeActivity data={data.tradeActivity} />
+        </Section>
+
+        <Section
+          title="Open Tasks by Project"
+          description="Where open work is concentrated"
+        >
+          <OpenTasksByProject data={data.taskHeatmap} />
+        </Section>
+      </Stack>
+    </Suspense>
+  );
+}
+
+// -- Data --
+
+function DataViewContent({
+  projects,
+  tasks,
+  purchases,
+  projectPreview,
+}: {
+  projects: ProjectOut[];
+  tasks: TaskOut[];
+  purchases: PurchaseOut[];
+  projectPreview: ReturnType<typeof useEntityPreview>;
+}) {
+  return (
+    <Stack className="pt-4">
+      <Stack as="section">
+        <h2 className="font-heading font-semibold text-xl">Projects</h2>
+        <ProjectTable
+          projects={projects}
+          onRowClick={projectPreview.onRowClick}
+          onRowHover={projectPreview.onRowHover}
+          PreviewSheet={projectPreview.PreviewSheet}
+        />
+      </Stack>
+
+      <Stack as="section">
+        <h2 className="font-heading font-semibold text-xl">Tasks</h2>
+        <TaskList tasks={tasks} />
+      </Stack>
+
+      <Stack as="section">
+        <h2 className="font-heading font-semibold text-xl">Purchases</h2>
+        <PurchaseList purchases={purchases} />
+      </Stack>
+    </Stack>
+  );
+}
+
+// -- History --
+
+/** `project.endDate` (a plain "YYYY-MM-DD" date) when set; otherwise the
+ * household-local year the project was last touched (a reasonable proxy for
+ * "completed" — there's no dedicated `completedAt` column). */
+function completionYear(project: ProjectOut): string {
+  return (project.endDate ?? format(project.updatedAt, "yyyy-MM-dd")).slice(
+    0,
+    4,
+  );
+}
+
+/**
+ * Completed top-level projects — its own scope (`statusScope: ["done"]`,
+ * unfiltered by the shared statuses/kinds/locations/date chips) and its own
+ * local kind/location/completion-year filters, reusing `ProjectTable` (same
+ * component the Data view uses) for the actual browsing surface.
+ */
+function HistoryView({
+  view,
+  onViewChange,
+}: {
+  view: DashboardView;
+  onViewChange: (v: DashboardView) => void;
+}) {
+  const api = useTRPC();
+  const projectPreview = useEntityPreview("project");
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    ...api.project.dashboardSummary.queryOptions({ statusScope: ["done"] }),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [kind, setKind] = useState<string | null>(null);
+  const [location, setLocation] = useState<string | null>(null);
+  const [year, setYear] = useState<string | null>(null);
+
+  const topLevelDone = useMemo(
+    () => (data?.projects ?? NO_PROJECTS).filter((p) => !p.parentProjectId),
+    [data],
+  );
+
+  const availableKinds = useMemo(
+    () =>
+      uniq(
+        topLevelDone
+          .map((p) => p.kind)
+          .filter((k): k is NonNullable<typeof k> => k != null),
+      ),
+    [topLevelDone],
+  );
+  const availableLocations = useMemo(
+    () => uniq(topLevelDone.flatMap((p) => p.locations)),
+    [topLevelDone],
+  );
+  const availableCompletionYears = useMemo(
+    () => uniq(topLevelDone.map(completionYear)).sort().reverse(),
+    [topLevelDone],
+  );
+
+  const filtered = useMemo(
+    () =>
+      topLevelDone.filter(
+        (p) =>
+          (!kind || p.kind === kind) &&
+          (!location || p.locations.includes(location)) &&
+          (!year || completionYear(p) === year),
+      ),
+    [topLevelDone, kind, location, year],
+  );
+
+  if (isError) {
+    return <DashboardErrorState error={error} onRetry={() => refetch()} />;
   }
 
   if (isLoading || !data) {
@@ -207,346 +702,96 @@ export function ProjectsDashboard() {
   }
 
   return (
-    <DashboardContent
-      data={data}
-      coverImages={coverImages}
-      filters={filters}
-      onFiltersChange={handleFiltersChange}
-      view={search.view ?? "overview"}
-      onViewChange={(v) =>
-        navigate({ search: (prev) => ({ ...prev, view: v }), replace: true })
-      }
-    />
-  );
-}
-
-function DashboardContent({
-  data,
-  coverImages,
-  filters,
-  onFiltersChange,
-  view,
-  onViewChange,
-}: {
-  data: ProjectDashboardOut;
-  coverImages: CoverImages | undefined;
-  filters: Filters;
-  onFiltersChange: (f: Filters) => void;
-  view: DashboardView;
-  onViewChange: (v: DashboardView) => void;
-}) {
-  const projectPreview = useEntityPreview("project");
-  const availableStatuses = useMemo(
-    () => uniq(data.projects.map((p) => p.status)),
-    [data.projects],
-  );
-  const availableKinds = useMemo(
-    () => uniq(data.projects.map((p) => p.kind).filter((k) => k != null)),
-    [data.projects],
-  );
-  const availableLocations = useMemo(
-    () => uniq(data.projects.flatMap((p) => p.locations)),
-    [data.projects],
-  );
-  const availableYears = useMemo(
-    () =>
-      uniq(
-        [
-          ...data.purchases.map((p) => p.date),
-          ...data.tasks.map((t) => t.dueDate),
-        ]
-          .filter((d) => d != null)
-          .map((d) => d.slice(0, 4)),
-      )
-        .sort()
-        .reverse(),
-    [data.purchases, data.tasks],
-  );
-
-  const { projects, tasks, purchases } = useMemo(() => {
-    let projects = data.projects;
-
-    if (filters.statuses.size > 0) {
-      projects = projects.filter((p) => filters.statuses.has(p.status));
-    }
-    if (filters.kinds.size > 0) {
-      projects = projects.filter((p) => p.kind && filters.kinds.has(p.kind));
-    }
-    if (filters.locations.size > 0) {
-      projects = projects.filter((p) =>
-        p.locations.some((l) => filters.locations.has(l)),
-      );
-    }
-
-    // Keyed by id, not name — project names aren't unique, so a name-keyed
-    // join here would cross-contaminate tasks/purchases across same-named
-    // projects.
-    const projectIds = new Set(projects.map((p) => p.id));
-    let tasks = data.tasks.filter(
-      (t) => !t.projectId || projectIds.has(t.projectId),
-    );
-    let purchases = data.purchases.filter(
-      (p) => !p.projectId || projectIds.has(p.projectId),
-    );
-
-    // Date scope applies to the time-stamped entities only — a project isn't
-    // "in" a month, so the project list never shrinks under a date filter.
-    // Undated rows (incl. most future purchases) are excluded by design.
-    const bounds = filters.dateRange
-      ? dateRangeBounds(filters.dateRange)
-      : null;
-    if (bounds) {
-      tasks = tasks.filter(
-        (t) => t.dueDate && t.dueDate >= bounds.from && t.dueDate <= bounds.to,
-      );
-      purchases = purchases.filter(
-        (p) => p.date && p.date >= bounds.from && p.date <= bounds.to,
-      );
-    }
-
-    return { projects, tasks, purchases };
-  }, [data, filters]);
-
-  return (
     <Stack>
-      <SummaryCards projects={projects} tasks={tasks} purchases={purchases} />
+      <DashboardToolbar view={view} onViewChange={onViewChange} />
 
-      <DashboardFilters
-        filters={filters}
-        onFiltersChange={onFiltersChange}
-        availableStatuses={availableStatuses}
-        availableKinds={availableKinds}
-        availableLocations={availableLocations}
-        availableYears={availableYears}
-      />
+      <Row wrap gap="lg">
+        <SingleSelectFilterGroup
+          label="Kind"
+          options={availableKinds}
+          value={kind}
+          onChange={setKind}
+          formatLabel={capitalize}
+        />
+        <SingleSelectFilterGroup
+          label="Location"
+          options={availableLocations}
+          value={location}
+          onChange={setLocation}
+        />
+        <SingleSelectFilterGroup
+          label="Completed"
+          options={availableCompletionYears}
+          value={year}
+          onChange={setYear}
+        />
+      </Row>
 
-      <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
-
-      <Stack>
-        <Row justify="between" align="center" wrap gap="sm">
-          <ViewSwitcher
-            ariaLabel="Dashboard view"
-            options={DASHBOARD_VIEW_OPTIONS}
-            value={view}
-            onValueChange={onViewChange}
-          />
-          <ProjectActions />
-        </Row>
-
-        {view === "overview" && (
-          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <Stack className="pt-4">
-              {/* Two distinct lenses on spend: Cost vs Estimate is budget
-                  HEALTH (% of estimate, so Wedding's $175K doesn't dwarf every
-                  other bar), scoped to projects that have an estimate at all.
-                  Top 10 by Spending is raw dollar ranking across every
-                  project (estimated or not), clickable through to the
-                  project. */}
-              <Section
-                title="Cost vs Estimate"
-                description="% of budget spent — projects with an estimate only"
-              >
-                <CostVsEstimate projects={projects} />
-              </Section>
-
-              <Section
-                title="Top 10 Projects by Spending"
-                description="Raw dollar totals, regardless of whether a project has an estimate"
-              >
-                <SpendingByProject projects={projects} />
-              </Section>
-
-              <Section
-                title="Task Status Board"
-                description="Projects with the most open work first"
-              >
-                <TaskStatusBoard tasks={tasks} projects={projects} />
-              </Section>
-            </Stack>
-          </Suspense>
-        )}
-
-        {view === "charts" && (
-          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <Stack className="pt-4">
-              <Section
-                title="Project Timeline"
-                description="Bars = own dates · whisker = sub-project span"
-              >
-                <PortfolioGantt projects={projects} />
-              </Section>
-
-              <Section
-                title="Trade Activity"
-                description="When each trade was last active, across all projects"
-              >
-                <TradeActivity tasks={tasks} />
-              </Section>
-
-              <Section
-                title="Project Dependencies"
-                description="Arrows show blocking relationships between projects"
-              >
-                <DependencyGraph projects={projects} />
-              </Section>
-
-              <Section title="Monthly Spending Trend">
-                <MonthlyTrend purchases={purchases} />
-              </Section>
-
-              <CategoryBreakdown
-                purchases={purchases}
-                centerLabel="All projects"
-              />
-
-              <Section
-                title="Spend by Trade"
-                description="Committed spend, sub-projects folded into their root project"
-              >
-                <TradeProjectMatrix projects={projects} purchases={purchases} />
-              </Section>
-
-              <Section
-                title="Planned vs Actual"
-                description="Committed spend vs future-flagged purchases"
-              >
-                <PlannedVsActual purchases={purchases} />
-              </Section>
-
-              <Section title="Spending Heatmap">
-                <SpendingHeatmap purchases={purchases} />
-              </Section>
-
-              <Section
-                title="Task Heatmap"
-                description="Task due dates across all projects"
-              >
-                <TaskHeatmap tasks={tasks} />
-              </Section>
-            </Stack>
-          </Suspense>
-        )}
-
-        {view === "data" && (
-          <Stack className="pt-4">
-            <Stack as="section">
-              <h2 className="font-heading font-semibold text-xl">Projects</h2>
-              <ProjectTable
-                projects={projects}
-                onRowClick={projectPreview.onRowClick}
-                onRowHover={projectPreview.onRowHover}
-                PreviewSheet={projectPreview.PreviewSheet}
-              />
-            </Stack>
-
-            <Stack as="section">
-              <h2 className="font-heading font-semibold text-xl">Tasks</h2>
-              <TaskList tasks={tasks} />
-            </Stack>
-
-            <Stack as="section">
-              <h2 className="font-heading font-semibold text-xl">Purchases</h2>
-              <PurchaseList purchases={purchases} />
-            </Stack>
-          </Stack>
-        )}
-
-        {view === "gallery" && (
-          <div className="pt-4">
-            <ProjectCards projects={projects} coverImages={coverImages} />
-          </div>
-        )}
-      </Stack>
+      {filtered.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyIcon icon={HistoryIcon} />
+            <EmptyTitle>No completed projects</EmptyTitle>
+            <EmptyDescription>
+              {topLevelDone.length === 0
+                ? "Nothing has wrapped up yet."
+                : "Adjust your filters."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ProjectTable
+          projects={filtered}
+          onRowClick={projectPreview.onRowClick}
+          onRowHover={projectPreview.onRowHover}
+          PreviewSheet={projectPreview.PreviewSheet}
+        />
+      )}
     </Stack>
   );
 }
 
-// -- Summary Cards --
-
-function SummaryCards({
-  projects,
-  tasks,
-  purchases,
+function SingleSelectFilterGroup({
+  label,
+  options,
+  value,
+  onChange,
+  formatLabel = (v) => v,
 }: {
-  projects: ProjectDashboardOut["projects"];
-  tasks: ProjectDashboardOut["tasks"];
-  purchases: ProjectDashboardOut["purchases"];
+  label: string;
+  options: string[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+  formatLabel?: (value: string) => string;
 }) {
-  // Headline counts and the status-badge breakdown must describe the SAME
-  // population, else "Active Projects: 8" sits above a "Done: 66" badge. Both
-  // count the active (non-done) set.
-  const activeProjectsList = projects.filter((p) => p.status !== "done");
-  const activeTasksList = tasks.filter((t) => t.status !== "done");
-  const spend = splitPurchaseSpend(purchases);
+  if (options.length === 0) return null;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <Card size="sm">
-        <CardHeader>
-          <CardDescription>Active Projects</CardDescription>
-          <CardTitle className="text-2xl">
-            {activeProjectsList.length}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Row wrap gap="sm">
-            {Object.entries(countBy(activeProjectsList, (p) => p.status)).map(
-              ([status, count]) => (
-                <Badge key={status} variant="outline">
-                  {PROJECT_STATUS_LABELS[status as ProjectOut["status"]]}:{" "}
-                  {count}
-                </Badge>
-              ),
-            )}
-          </Row>
-        </CardContent>
-      </Card>
-
-      <Card size="sm">
-        <CardHeader>
-          <CardDescription>Active Tasks</CardDescription>
-          <CardTitle className="text-2xl">{activeTasksList.length}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Row wrap gap="sm">
-            {Object.entries(countBy(activeTasksList, (t) => t.status)).map(
-              ([status, count]) => (
-                <Badge key={status} variant="outline">
-                  {
-                    TASK_STATUS_LABELS[
-                      status as (typeof tasks)[number]["status"]
-                    ]
-                  }
-                  : {count}
-                </Badge>
-              ),
-            )}
-          </Row>
-        </CardContent>
-      </Card>
-
-      <Card size="sm">
-        <CardHeader>
-          <CardDescription>Actual Spend</CardDescription>
-          <CardTitle className="text-2xl">
-            {formatCurrency(spend.actual, 0)}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Description size="xs">
-            {purchases.length} purchases
-            {spend.committed > 0 &&
-              ` · ${formatCurrency(spend.committed, 0)} committed`}
-            {spend.contributions > 0 &&
-              ` · ${formatCurrency(spend.contributions, 0)} contributions`}
-          </Description>
-        </CardContent>
-      </Card>
-    </div>
+    <Row align="center" wrap gap="sm">
+      <span className="font-medium text-muted-foreground text-xs">
+        {label}:
+      </span>
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(value === option ? null : option)}
+          aria-pressed={value === option}
+          aria-label={`${label}: ${formatLabel(option)}${value === option ? " (active)" : ""}`}
+        >
+          <Badge
+            variant={value === option ? "default" : "outline"}
+            className="cursor-pointer"
+          >
+            {formatLabel(option)}
+          </Badge>
+        </button>
+      ))}
+    </Row>
   );
 }
 
-// -- Project Cards --
+// -- Project Cards (Overview + Gallery) --
 
 function ProjectCards({
   projects,
@@ -555,11 +800,8 @@ function ProjectCards({
   projects: ProjectOut[];
   coverImages: CoverImages | undefined;
 }) {
-  // Gallery is a top-level project grid — sub-projects show on their
-  // parent's own detail page (Sub-projects section), not as independent
-  // cards here. (The dashboard's `project.dashboard` fetch itself stays
-  // unfiltered — every other tab/chart on this page still sees the full set,
-  // e.g. dependency/spending charts that legitimately span the whole tree.)
+  // Top-level only — sub-projects show on their parent's own detail page
+  // (Sub-projects section), not as independent cards here.
   const topLevelProjects = projects.filter((p) => !p.parentProjectId);
   const [active, done] = partition(
     topLevelProjects,

@@ -20,15 +20,25 @@
  * `allProjectParentRowsForActionable`).
  *
  * Actionable = live, status in {not_started, in_progress, later}, zero
- * blocked reasons. Every blocked reason (task/project kind) carries a
- * transitive "why" chain: starting at the nearest blocker, follow the FIRST
- * open edge at each hop (one representative path, not all paths), switching
- * from task nodes to project nodes when a task's own blockage comes from its
- * project's (or an ancestor project's) edge — the chain itself never
- * includes the ancestor hops, only the blocker side. Depth-capped and
- * cycle-guarded (cross-pair cycles are possible even though a single entity
- * can't be blocked by itself — see `replaceDependencyEdges`'s
- * SELF_DEPENDENCY guard).
+ * blocked reasons — partitioned into `next` (not_started/in_progress) and
+ * `later` (later) rather than one array with an `isLater` flag, since
+ * Next/Later render as distinct UI sections. Every blocked reason
+ * (task/project kind) carries a transitive "why" chain: starting at the
+ * nearest blocker, follow the FIRST open edge at each hop (one
+ * representative path, not all paths), switching from task nodes to project
+ * nodes when a task's own blockage comes from its project's (or an ancestor
+ * project's) edge — the chain itself never includes the ancestor hops, only
+ * the blocker side. Depth-capped and cycle-guarded (cross-pair cycles are
+ * possible even though a single entity can't be blocked by itself — see
+ * `replaceDependencyEdges`'s SELF_DEPENDENCY guard).
+ *
+ * Ordering: `next` sorts overdue-first (effective due date `dueEndDate ??
+ * dueDate` before today), then effective due date ascending (nulls last),
+ * then `in_progress` before `not_started`, then name ascending. `later`
+ * sorts by due date ascending (nulls last, using the plain `dueDate` — a
+ * someday item's range is less meaningful than a committed task's), then
+ * `updatedAt` descending. `blocked` sorts by effective due date ascending
+ * (nulls last), then name ascending.
  *
  * Single-user scale: everything is batch-loaded (5 queries — live open
  * tasks, all task edges, live open projects, all project edges, all live
@@ -42,6 +52,7 @@
  */
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import type {
+  ActionableTaskOut,
   ActionableTasksOut,
   BlockedReason,
   BlockedTaskOut,
@@ -49,6 +60,7 @@ import type {
   TaskStatus,
 } from "@cubby/schemas/project";
 import { and, asc, ne } from "drizzle-orm";
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   project,
@@ -192,6 +204,66 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   }
 }
 
+/** A task/blocked-row's effective due date — `dueEndDate ?? dueDate`. */
+function effectiveDueDate(row: {
+  dueDate: string | null;
+  dueEndDate: string | null;
+}): string | null {
+  return row.dueEndDate ?? row.dueDate;
+}
+
+/**
+ * `next` order: overdue (effective due date before `today`) first, then
+ * effective due date ascending (nulls last), then `in_progress` before
+ * `not_started`, then name ascending.
+ */
+function compareNext(
+  a: ActionableTaskOut,
+  b: ActionableTaskOut,
+  today: string,
+): number {
+  const aDue = effectiveDueDate(a);
+  const bDue = effectiveDueDate(b);
+  const aOverdue = aDue != null && aDue < today;
+  const bOverdue = bDue != null && bDue < today;
+  if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+  if (aDue !== bDue) {
+    if (aDue == null) return 1;
+    if (bDue == null) return -1;
+    return aDue.localeCompare(bDue);
+  }
+  if (a.status !== b.status) {
+    return a.status === "in_progress" ? -1 : 1;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+/**
+ * `later` order: plain due date ascending (nulls last — someday items'
+ * ranges are less meaningful than a committed task's, so this uses `dueDate`
+ * rather than the effective/range date), then `updatedAt` descending.
+ */
+function compareLater(a: ActionableTaskOut, b: ActionableTaskOut): number {
+  if (a.dueDate !== b.dueDate) {
+    if (a.dueDate == null) return 1;
+    if (b.dueDate == null) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  }
+  return b.updatedAt.getTime() - a.updatedAt.getTime();
+}
+
+/** `blocked` order: effective due date ascending (nulls last), then name ascending. */
+function compareBlocked(a: BlockedTaskOut, b: BlockedTaskOut): number {
+  const aDue = effectiveDueDate(a.task);
+  const bDue = effectiveDueDate(b.task);
+  if (aDue !== bDue) {
+    if (aDue == null) return 1;
+    if (bDue == null) return -1;
+    return aDue.localeCompare(bDue);
+  }
+  return a.task.name.localeCompare(b.task.name);
+}
+
 export async function listActionableTasks(
   db: Database,
 ): Promise<ActionableTasksOut> {
@@ -279,8 +351,10 @@ export async function listActionableTasks(
     openTaskRows.map((row) => row.id),
   );
 
-  const actionable: ActionableTasksOut["actionable"] = [];
+  const next: ActionableTaskOut[] = [];
+  const later: ActionableTaskOut[] = [];
   const blocked: BlockedTaskOut[] = [];
+  const today = householdLocalDate();
 
   for (const row of openTaskRows) {
     // Checklist items are represented via their parent, not surfaced as
@@ -354,11 +428,19 @@ export async function listActionableTasks(
     }
 
     if (reasons.length === 0) {
-      actionable.push({ ...taskOutRow, isLater: row.status === "later" });
+      if (row.status === "later") {
+        later.push(taskOutRow);
+      } else {
+        next.push(taskOutRow);
+      }
     } else {
       blocked.push({ task: taskOutRow, reasons });
     }
   }
 
-  return { actionable, blocked };
+  next.sort((a, b) => compareNext(a, b, today));
+  later.sort(compareLater);
+  blocked.sort(compareBlocked);
+
+  return { next, later, blocked };
 }

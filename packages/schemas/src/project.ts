@@ -54,6 +54,16 @@ export const taskStatusValues = [
 export const taskStatusSchema = z.enum(taskStatusValues);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
+/**
+ * Completion scope for a task list/board/summary query. Omitted (undefined)
+ * means "all" — existing generic callers (e.g. `task.list`) keep today's
+ * full-history behavior; daily-use views (Next, Board) pass `"open"`
+ * explicitly.
+ */
+export const taskCompletionValues = ["all", "open", "done"] as const;
+export const taskCompletionSchema = z.enum(taskCompletionValues);
+export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
+
 export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
@@ -352,6 +362,14 @@ export const taskBulkTradeInput = z.object({
 });
 export type TaskBulkTradeInput = z.infer<typeof taskBulkTradeInput>;
 
+/** Bulk due-date write — same nullable pair as a single task update. */
+export const taskBulkDueDateInput = z.object({
+  ids: z.array(taskId).min(1),
+  dueDate: plainDate.nullable(),
+  dueEndDate: plainDate.nullable(),
+});
+export type TaskBulkDueDateInput = z.infer<typeof taskBulkDueDateInput>;
+
 /**
  * The axis fields a board drag can change on the dragged card — the same
  * subset a single board drop writes (status/project/trade), minus `sortOrder`
@@ -401,6 +419,15 @@ export const taskFilterFields = {
   dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
   /** Inclusive upper bound on a task's due date (matches `dueDate`). */
   dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
+  /** Completion scope — see `taskCompletionSchema`. Undefined = "all". */
+  completion: taskCompletionSchema
+    .optional()
+    .describe('Undefined = "all" (today\'s default, unchanged)'),
+  /**
+   * `true` matches tasks with `projectId IS NULL` — the Inbox predicate.
+   * Mutually meaningful only when `projectId` is omitted.
+   */
+  noProject: z.boolean().optional(),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -442,6 +469,27 @@ export type TaskListAndSideEffectsOut = z.infer<
   typeof taskListAndSideEffectsOut
 >;
 
+/**
+ * Inbox → project promotion: create a new project and move the given tasks
+ * onto it in one transaction (see `project.createFromTasks`). Neither side
+ * persists if the other fails.
+ */
+export const createProjectFromTasksInput = z.object({
+  taskIds: z.array(taskId).min(1),
+  project: projectCreateInput,
+});
+export type CreateProjectFromTasksInput = z.infer<
+  typeof createProjectFromTasksInput
+>;
+
+export const createProjectFromTasksOut = z.object({
+  project: projectOut,
+  tasks: z.array(taskOut),
+});
+export type CreateProjectFromTasksOut = z.infer<
+  typeof createProjectFromTasksOut
+>;
+
 // ---------------------------------------------------------------------------
 // Actionable tasks (computed unblocked/blocked read — see
 // repo/task/actionable.ts for the exact semantics)
@@ -479,9 +527,6 @@ export const actionableTaskOut = z.object({
   subtaskCount: z.number().int(),
   doneSubtaskCount: z.number().int(),
   ...timestampedFields,
-  isLater: z
-    .boolean()
-    .describe('status === "later" — sort/de-emphasize last in the UI'),
 });
 export type ActionableTaskOut = z.infer<typeof actionableTaskOut>;
 
@@ -492,15 +537,55 @@ export const blockedTaskOut = z.object({
 export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
 
 /**
- * `task.listActionable`'s output: every live, non-done task partitioned into
- * unblocked (`actionable` — zero blocked reasons) and `blocked` (with the
- * reason set + transitive why-chain).
+ * `task.listActionable`'s output: every live, non-done, unblocked task split
+ * into `next` (status `not_started`/`in_progress`) and `later` (status
+ * `later`) — separate arrays instead of one `actionable` array with an
+ * `isLater` flag, since Next/Later render as distinct UI sections. `blocked`
+ * carries the reason set + transitive why-chain, unchanged.
  */
 export const actionableTasksOut = z.object({
-  actionable: z.array(actionableTaskOut),
+  next: z.array(actionableTaskOut),
+  later: z.array(actionableTaskOut),
   blocked: z.array(blockedTaskOut),
 });
 export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
+
+/**
+ * `task.summary`'s output — cheap counts for the tasks-page summary strip,
+ * replacing a full-history fetch. Each count corresponds to a `/tasks` view
+ * or filter the UI links to directly.
+ */
+export const taskSummaryOut = z.object({
+  totalOpen: z.number().int(),
+  next: z.number().int(),
+  later: z.number().int(),
+  inbox: z.number().int(),
+  overdue: z.number().int(),
+  dueThisWeek: z.number().int(),
+  blocked: z.number().int(),
+});
+export type TaskSummaryOut = z.infer<typeof taskSummaryOut>;
+
+/** `task.board`'s input — the axes a board view can scope by. */
+export const taskBoardInput = z.object({
+  projectId: projectId.optional(),
+  includeSubProjects: z.boolean().optional(),
+  search: z.string().optional(),
+});
+export type TaskBoardInput = z.infer<typeof taskBoardInput>;
+
+/**
+ * `task.board`'s output: every active (non-done) top-level task the board
+ * renders, plus at most 20 recently-completed cards for the collapsed
+ * History column/count — full completed history loads separately
+ * (`completion: "done"` on `task.list`), not through the board.
+ */
+export const taskBoardOut = z.object({
+  active: z.array(taskOut),
+  recentDone: z.array(taskOut),
+  doneCount: z.number().int(),
+});
+export type TaskBoardOut = z.infer<typeof taskBoardOut>;
 
 // ---------------------------------------------------------------------------
 // Purchase
@@ -583,6 +668,13 @@ export const purchaseFilterFields = {
   dateTo: plainDate
     .optional()
     .describe("Inclusive upper bound on purchase date"),
+  /**
+   * `true` matches purchases with a null `cost`. Combined with
+   * `trade: "other"`, this is the Unclassified-purchase predicate
+   * (`trade='other' AND cost IS NULL`) — deliberately NOT a `costType`
+   * value, since `costType` stays a clean 3-value enum.
+   */
+  costIsNull: z.boolean().optional(),
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -618,6 +710,93 @@ export type PurchaseListAndSideEffectsOut = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
+// Purchase analytics (server-side chart aggregates — see
+// repo/purchase/analytics.ts for the SQL)
+// ---------------------------------------------------------------------------
+
+/**
+ * `purchase.analytics`'s input — the SAME shape as `purchaseFiltersSchema` so
+ * ledger totals and analytics totals always agree under the same filter set.
+ */
+export const purchaseAnalyticsInput = purchaseFiltersSchema;
+export type PurchaseAnalyticsInput = z.infer<typeof purchaseAnalyticsInput>;
+
+/** actual+committed+credits+net+count, the shared shape every aggregate row carries. */
+const purchaseAggregateFields = {
+  actual: z.number(),
+  committed: z.number(),
+  credits: z.number(),
+  net: z.number(),
+  count: z.number().int(),
+};
+
+export const purchaseAnalyticsSummary = z.object({
+  ...purchaseAggregateFields,
+  actualCount: z.number().int(),
+  plannedCount: z.number().int(),
+});
+export type PurchaseAnalyticsSummary = z.infer<typeof purchaseAnalyticsSummary>;
+
+export const purchaseCostTypeAggregate = z.object({
+  costType: costTypeSchema,
+  ...purchaseAggregateFields,
+});
+export type PurchaseCostTypeAggregate = z.infer<
+  typeof purchaseCostTypeAggregate
+>;
+
+export const purchaseTradeAggregate = z.object({
+  trade: tradeSchema,
+  ...purchaseAggregateFields,
+});
+export type PurchaseTradeAggregate = z.infer<typeof purchaseTradeAggregate>;
+
+export const purchaseTradeCostAggregate = z.object({
+  trade: tradeSchema,
+  costType: costTypeSchema,
+  ...purchaseAggregateFields,
+});
+export type PurchaseTradeCostAggregate = z.infer<
+  typeof purchaseTradeCostAggregate
+>;
+
+export const purchaseMonthlyAggregate = z.object({
+  month: z.string().describe('"yyyy-MM"'),
+  ...purchaseAggregateFields,
+});
+export type PurchaseMonthlyAggregate = z.infer<typeof purchaseMonthlyAggregate>;
+
+export const purchaseCumulativePoint = z.object({
+  month: z.string().describe('"yyyy-MM"'),
+  cumulativeNet: z.number(),
+});
+export type PurchaseCumulativePoint = z.infer<typeof purchaseCumulativePoint>;
+
+export const purchaseProjectAggregate = z.object({
+  projectId,
+  projectName: z.string(),
+  ...purchaseAggregateFields,
+});
+export type PurchaseProjectAggregate = z.infer<typeof purchaseProjectAggregate>;
+
+/**
+ * `purchase.analytics`'s output — chart-ready aggregates computed server-side
+ * (SQL GROUP BYs), replacing client-side computation over the full
+ * `purchase.chartData` fetch-all. Empty categories are omitted from each
+ * array; the UI owns presentation ordering from the shared enum definitions.
+ */
+export const purchaseAnalyticsOut = z.object({
+  summary: purchaseAnalyticsSummary,
+  byCostType: z.array(purchaseCostTypeAggregate),
+  byTrade: z.array(purchaseTradeAggregate),
+  tradeCostMatrix: z.array(purchaseTradeCostAggregate),
+  monthly: z.array(purchaseMonthlyAggregate),
+  cumulative: z.array(purchaseCumulativePoint),
+  byProject: z.array(purchaseProjectAggregate),
+});
+export type PurchaseAnalyticsOut = z.infer<typeof purchaseAnalyticsOut>;
+
+// ---------------------------------------------------------------------------
 // MCP / dashboard projections
 // ---------------------------------------------------------------------------
 
@@ -625,14 +804,142 @@ export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
 export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
 export const purchaseMcpListOut = createPaginatedResponseSchema(purchaseOut);
 
-/**
- * Everything the projects dashboard needs in one query — the DB-backed
- * successor of the old `notion.dashboard` shape (projects with rollups +
- * all tasks + all purchases, names resolved).
- */
-export const projectDashboardOut = z.object({
-  projects: z.array(projectOut),
-  tasks: z.array(taskOut),
-  purchases: z.array(purchaseOut),
+// ---------------------------------------------------------------------------
+// Project dashboard: bounded Overview summary + on-demand portfolio
+// analytics (replaces the old single `project.dashboard` fetch-all — see
+// repo/project/dashboard-summary.ts / repo/project/analytics.ts)
+// ---------------------------------------------------------------------------
+
+/** Shared scope filters for both dashboard endpoints. */
+const projectDashboardFilterFields = {
+  statusScope: z.array(projectStatusSchema).optional(),
+  kinds: z.array(projectKindSchema).optional(),
+  locations: z.array(z.string()).optional(),
+  search: z.string().optional(),
+};
+export const projectDashboardFiltersSchema = z.object(
+  projectDashboardFilterFields,
+);
+export type ProjectDashboardFilters = z.infer<
+  typeof projectDashboardFiltersSchema
+>;
+
+export const projectDashboardSummaryInput = projectDashboardFiltersSchema;
+export type ProjectDashboardSummaryInput = z.infer<
+  typeof projectDashboardSummaryInput
+>;
+
+export const projectPortfolioAnalyticsInput = z.object({
+  ...projectDashboardFilterFields,
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
 });
-export type ProjectDashboardOut = z.infer<typeof projectDashboardOut>;
+export type ProjectPortfolioAnalyticsInput = z.infer<
+  typeof projectPortfolioAnalyticsInput
+>;
+
+export const projectAttentionTypeValues = [
+  "overdue_task",
+  "stalled_project",
+  "missing_budget",
+  "past_due_planned_purchase",
+  "unclassified_purchase",
+  "blocked_work",
+] as const;
+export const projectAttentionTypeSchema = z.enum(projectAttentionTypeValues);
+export type ProjectAttentionType = z.infer<typeof projectAttentionTypeSchema>;
+
+/**
+ * One Needs Attention row. `entityId`/`entityType` identify what to link to;
+ * `date`/`amount` carry whichever of the two is relevant to `type` (e.g. an
+ * overdue task's due date, or a missing-budget project's spend-to-date).
+ */
+export const projectAttentionItemSchema = z.object({
+  type: projectAttentionTypeSchema,
+  severity: z.enum(["info", "warning", "critical"]),
+  description: z.string(),
+  entityType: z.enum(["project", "task", "purchase"]),
+  entityId: z.string(),
+  date: plainDate.nullable(),
+  amount: z.number().nullable(),
+  href: z.string().describe("Direct link to the corrective view"),
+});
+export type ProjectAttentionItem = z.infer<typeof projectAttentionItemSchema>;
+
+export const projectTaskStatusBreakdown = z.object({
+  projectId,
+  notStarted: z.number().int(),
+  later: z.number().int(),
+  inProgress: z.number().int(),
+  blocked: z.number().int(),
+  done: z.number().int(),
+});
+export type ProjectTaskStatusBreakdown = z.infer<
+  typeof projectTaskStatusBreakdown
+>;
+
+export const projectFilterOptionsOut = z.object({
+  kinds: z.array(projectKindSchema),
+  locations: z.array(z.string()),
+});
+export type ProjectFilterOptionsOut = z.infer<typeof projectFilterOptionsOut>;
+
+/**
+ * `project.dashboardSummary`'s output — everything `/projects?view=overview`
+ * renders: summary counts, the active-project list (with rollups, via
+ * `projectOut`), per-project task-status breakdown, upcoming tasks, Needs
+ * Attention items, filter option sets, and the completed-project count (for
+ * the History view's link, without shipping the rows themselves).
+ */
+export const projectDashboardSummaryOut = z.object({
+  summary: z.object({
+    activeProjectCount: z.number().int(),
+    openTaskCount: z.number().int(),
+    actualSpend: z.number(),
+    committedSpend: z.number(),
+  }),
+  projects: z.array(projectOut),
+  taskStatusByProject: z.array(projectTaskStatusBreakdown),
+  nextTasks: z.array(taskOut),
+  attention: z.array(projectAttentionItemSchema),
+  filterOptions: projectFilterOptionsOut,
+  completedCount: z.number().int(),
+});
+export type ProjectDashboardSummaryOut = z.infer<
+  typeof projectDashboardSummaryOut
+>;
+
+/**
+ * `project.portfolioAnalytics`'s output — the chart aggregates that used to
+ * ride along in `project.dashboard`'s full task/purchase arrays, now computed
+ * server-side and loaded only when `view=analytics` is selected.
+ */
+export const projectPortfolioAnalyticsOut = z.object({
+  costVsEstimate: z.array(
+    z.object({
+      projectId,
+      projectName: z.string(),
+      actual: z.number(),
+      committed: z.number(),
+      estimate: z.number().nullable(),
+    }),
+  ),
+  spendingByProject: z.array(
+    z.object({ projectId, projectName: z.string(), spend: z.number() }),
+  ),
+  monthlySpend: z.array(purchaseMonthlyAggregate),
+  plannedVsActual: z.array(
+    z.object({ month: z.string(), planned: z.number(), actual: z.number() }),
+  ),
+  tradeActivity: z.array(purchaseTradeAggregate),
+  taskHeatmap: z.array(
+    z.object({
+      projectId,
+      projectName: z.string(),
+      openTaskCount: z.number().int(),
+    }),
+  ),
+});
+export type ProjectPortfolioAnalyticsOut = z.infer<
+  typeof projectPortfolioAnalyticsOut
+>;

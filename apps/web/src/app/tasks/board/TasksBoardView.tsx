@@ -1,5 +1,4 @@
-import type { TaskOut } from "@cubby/schemas/project";
-import { TRADE_LABELS } from "@cubby/schemas/project";
+import type { TaskBoardInput, TaskOut } from "@cubby/schemas/project";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -7,34 +6,24 @@ import { useEffect, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
-import { TASK_STATUS_LABELS } from "../task-options";
 import { BoardControls } from "./BoardControls";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 import { TaskBoard } from "./TaskBoard";
-import type { BoardTaskFilters } from "./use-board-mutations";
+import type { BoardCacheTarget } from "./use-board-mutations";
 
-/**
- * The board fetches every top-level task in one round trip (chart/Gantt
- * convention). Declared once at module scope so the optimistic mutation patches
- * the *identical* query key — a fresh object literal would key differently.
- */
-const BOARD_TASK_FILTERS: BoardTaskFilters = { topLevelOnly: true };
-
-/** Stable empty default — never a fresh `[]` per render (would churn memos). */
+/** Stable empty defaults — never a fresh `[]`/`{}` per render (would churn memos). */
 const NO_TASKS: TaskOut[] = [];
+const NO_BOARD: {
+  active: TaskOut[];
+  recentDone: TaskOut[];
+  doneCount: number;
+} = {
+  active: NO_TASKS,
+  recentDone: NO_TASKS,
+  doneCount: 0,
+};
 
 const route = getRouteApi("/_authenticated/tasks/");
-
-/** Case-insensitive substring match on task name, project name, trade, or status label. */
-function matchesSearch(task: TaskOut, query: string): boolean {
-  const needle = query.toLowerCase();
-  return (
-    task.name.toLowerCase().includes(needle) ||
-    (task.projectName?.toLowerCase().includes(needle) ?? false) ||
-    TRADE_LABELS[task.trade].toLowerCase().includes(needle) ||
-    TASK_STATUS_LABELS[task.status].toLowerCase().includes(needle)
-  );
-}
 
 /**
  * Placeholder columns shown while the initial fetch is in flight — distinct
@@ -67,10 +56,6 @@ export function TasksBoardView() {
   const lane: BoardLaneMode | null =
     cols === "status" ? (search.lane ?? null) : null;
 
-  const { data: tasks = NO_TASKS, isLoading } = useQuery(
-    api.task.chartData.queryOptions(BOARD_TASK_FILTERS),
-  );
-
   // Local state gives instant filtering while typing; the `q` URL param
   // (shared with the list view's deep-link seed) syncs on a debounce so
   // keystrokes don't flood router history — mirrors HeaderFilter's pattern.
@@ -87,10 +72,26 @@ export function TasksBoardView() {
     });
   }, [debouncedSearch]);
 
-  const filteredTasks = useMemo(() => {
-    const query = searchValue.trim();
-    return query ? tasks.filter((t) => matchesSearch(t, query)) : tasks;
-  }, [tasks, searchValue]);
+  // Server-filtered by name (task.board's `search`) — a narrower match than
+  // the old client-side matchesSearch (which also matched project/trade/
+  // status label text), traded for the server doing the active/done split +
+  // done cap instead of a fetch-everything chartData read.
+  const boardInput: TaskBoardInput = useMemo(
+    () => ({ search: debouncedSearch || undefined }),
+    [debouncedSearch],
+  );
+  const { data: board = NO_BOARD, isLoading } = useQuery(
+    api.task.board.queryOptions(boardInput),
+  );
+  const tasks = useMemo(() => [...board.active, ...board.recentDone], [board]);
+  // The IDENTICAL `boardInput` this surface passed to `board.queryOptions`
+  // above — `useBoardMutations` keys its optimistic patch off this so a drag
+  // here now snaps instantly against the `task.board` cache, instead of
+  // silently missing a `chartData` cache entry this page no longer populates.
+  const cacheTarget: BoardCacheTarget = useMemo(
+    () => ({ source: "board", input: boardInput }),
+    [boardInput],
+  );
 
   const setCols = (next: BoardColsMode) =>
     // Merge-navigate (preserve `q`); drop `cols` when it's the default to keep
@@ -120,11 +121,12 @@ export function TasksBoardView() {
         <BoardSkeleton />
       ) : (
         <TaskBoard
-          tasks={filteredTasks}
+          tasks={tasks}
           cols={cols}
           lane={lane}
-          filters={BOARD_TASK_FILTERS}
+          cacheTarget={cacheTarget}
           showProjectOnCards
+          doneCountOverride={board.doneCount}
         />
       )}
     </Stack>

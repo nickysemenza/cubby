@@ -15,6 +15,7 @@ import {
   deletePurchases,
   getPurchaseByID,
   movePurchases,
+  purchaseAnalytics,
   purchaseList,
   updatePurchase,
 } from "~/server/repo/purchase";
@@ -720,6 +721,277 @@ describe("purchase repository — movePurchases", () => {
       ctx.actor,
     );
     expect(moved).toEqual([]);
+  });
+});
+
+describe("purchase repository — purchaseAnalytics", () => {
+  const ctx = withTestDb();
+
+  it("aggregates match manual arithmetic, omits empty categories, and stays consistent with purchaseList under the same filter", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "analytics project a" }),
+      ctx.actor,
+    );
+    const projectB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "analytics project b" }),
+      ctx.actor,
+    );
+
+    // p1: actual spend, plumbing/materials, projectA, dated Jan.
+    const p1 = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "plumbing",
+        costType: "materials",
+        name: "analytics p1 actual",
+        projectId: projectA.id,
+        cost: 100,
+        date: "2026-01-10",
+        future: false,
+      }),
+      ctx.actor,
+    );
+    // p2: committed (future) spend, plumbing/materials, projectA, no date yet.
+    const p2 = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "plumbing",
+        costType: "materials",
+        name: "analytics p2 committed",
+        projectId: projectA.id,
+        cost: 50,
+        future: true,
+      }),
+      ctx.actor,
+    );
+    // p3: a credit/refund (negative cost), electrical/materials, no project (inbox), dated Jan.
+    const p3 = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "electrical",
+        costType: "materials",
+        name: "analytics p3 credit",
+        cost: -20,
+        date: "2026-01-15",
+        future: false,
+      }),
+      ctx.actor,
+    );
+    // p4: actual spend, electrical/services, projectB, dated Feb.
+    const p4 = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "electrical",
+        costType: "services",
+        name: "analytics p4 actual",
+        projectId: projectB.id,
+        cost: 30,
+        date: "2026-02-01",
+        future: false,
+      }),
+      ctx.actor,
+    );
+
+    const filters = { search: "analytics p" };
+    const result = await purchaseAnalytics(ctx.db, filters);
+
+    // --- summary: actual=100+30, committed=50, credits=20, net=160 ---
+    expect(result.summary).toEqual({
+      actual: 130,
+      committed: 50,
+      credits: 20,
+      net: 160,
+      count: 4,
+      actualCount: 3, // p1, p3, p4 (future: false)
+      plannedCount: 1, // p2
+    });
+
+    // --- byCostType: only materials/services appear (no other costType seeded) ---
+    expect(result.byCostType).toEqual(
+      expect.arrayContaining([
+        {
+          costType: "materials",
+          actual: 100,
+          committed: 50,
+          credits: 20,
+          net: 130,
+          count: 3,
+        },
+        {
+          costType: "services",
+          actual: 30,
+          committed: 0,
+          credits: 0,
+          net: 30,
+          count: 1,
+        },
+      ]),
+    );
+    expect(result.byCostType).toHaveLength(2);
+
+    // --- byTrade: plumbing + electrical only ---
+    expect(result.byTrade).toEqual(
+      expect.arrayContaining([
+        {
+          trade: "plumbing",
+          actual: 100,
+          committed: 50,
+          credits: 0,
+          net: 150,
+          count: 2,
+        },
+        {
+          trade: "electrical",
+          actual: 30,
+          committed: 0,
+          credits: 20,
+          net: 10,
+          count: 2,
+        },
+      ]),
+    );
+    expect(result.byTrade).toHaveLength(2);
+
+    // --- tradeCostMatrix: the 3 combos actually present, not the full cross product ---
+    expect(result.tradeCostMatrix).toHaveLength(3);
+    expect(result.tradeCostMatrix).toEqual(
+      expect.arrayContaining([
+        {
+          trade: "plumbing",
+          costType: "materials",
+          actual: 100,
+          committed: 50,
+          credits: 0,
+          net: 150,
+          count: 2,
+        },
+        {
+          trade: "electrical",
+          costType: "materials",
+          actual: 0,
+          committed: 0,
+          credits: 20,
+          net: -20,
+          count: 1,
+        },
+        {
+          trade: "electrical",
+          costType: "services",
+          actual: 30,
+          committed: 0,
+          credits: 0,
+          net: 30,
+          count: 1,
+        },
+      ]),
+    );
+
+    // --- monthly: p2 (no date) excluded; Jan (p1, p3) and Feb (p4) only ---
+    expect(result.monthly).toEqual([
+      {
+        month: "2026-01",
+        actual: 100,
+        committed: 0,
+        credits: 20,
+        net: 80,
+        count: 2,
+      },
+      {
+        month: "2026-02",
+        actual: 30,
+        committed: 0,
+        credits: 0,
+        net: 30,
+        count: 1,
+      },
+    ]);
+
+    // --- cumulative: running sum of monthly.net, ascending ---
+    expect(result.cumulative).toEqual([
+      { month: "2026-01", cumulativeNet: 80 },
+      { month: "2026-02", cumulativeNet: 110 },
+    ]);
+
+    // --- byProject: p3 (no project) excluded ---
+    expect(result.byProject).toEqual(
+      expect.arrayContaining([
+        {
+          projectId: projectA.id,
+          projectName: projectA.name,
+          actual: 100,
+          committed: 50,
+          credits: 0,
+          net: 150,
+          count: 2,
+        },
+        {
+          projectId: projectB.id,
+          projectName: projectB.name,
+          actual: 30,
+          committed: 0,
+          credits: 0,
+          net: 30,
+          count: 1,
+        },
+      ]),
+    );
+    expect(result.byProject).toHaveLength(2);
+
+    // --- core invariant: analytics totals agree with purchaseList's visible
+    // rows under the SAME filter — sum purchaseList's `cost` column and
+    // compare against summary.net (both should equal 160). ---
+    const { data: listedRows } = await purchaseList(ctx.db, filters, [], {
+      pageIndex: 0,
+      pageSize: 100,
+    });
+    expect(listedRows.map((p) => p.id).sort()).toEqual(
+      [p1.id, p2.id, p3.id, p4.id].sort(),
+    );
+    const summedCost = listedRows.reduce((sum, p) => sum + (p.cost ?? 0), 0);
+    expect(summedCost).toBe(result.summary.net);
+  });
+
+  it("applies the same filters as purchaseList (e.g. trade) so a scoped analytics call only sees the matching rows", async () => {
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "plumbing",
+        costType: "materials",
+        name: "analytics filter match",
+        cost: 10,
+        future: false,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "electrical",
+        costType: "materials",
+        name: "analytics filter non-match",
+        cost: 999,
+        future: false,
+      }),
+      ctx.actor,
+    );
+
+    const result = await purchaseAnalytics(ctx.db, {
+      search: "analytics filter",
+      trade: "plumbing",
+    });
+    expect(result.summary).toMatchObject({ net: 10, count: 1 });
+    expect(result.byTrade).toEqual([
+      {
+        trade: "plumbing",
+        actual: 10,
+        committed: 0,
+        credits: 0,
+        net: 10,
+        count: 1,
+      },
+    ]);
   });
 });
 

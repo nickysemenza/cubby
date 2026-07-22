@@ -2,7 +2,6 @@ import type { PurchaseOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import {
   buildCumulativeSpendPoints,
-  buildProjectMonthlySeries,
   buildPurchaseCalendar,
   buildStackedCumulativeSpend,
 } from "./project-chart-data";
@@ -102,28 +101,7 @@ describe("monthly purchase series", () => {
     ]);
   });
 
-  it("builds period project totals and an Unassigned group", () => {
-    expect(buildProjectMonthlySeries(purchases)).toEqual([
-      {
-        id: "Kitchen",
-        data: [
-          { x: "Jan 26", y: 10 },
-          { x: "Feb 26", y: 4 },
-        ],
-      },
-      {
-        id: "Unassigned",
-        data: [
-          { x: "Jan 26", y: 0 },
-          { x: "Feb 26", y: 7 },
-        ],
-      },
-    ]);
-  });
-
-  it("returns no trend for empty data or a single month", () => {
-    expect(buildProjectMonthlySeries([])).toEqual([]);
-    expect(buildProjectMonthlySeries(purchases.slice(0, 1))).toEqual([]);
+  it("returns a single-group trend for a single month", () => {
     expect(
       buildStackedCumulativeSpend(
         purchases.slice(0, 1),

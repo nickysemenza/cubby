@@ -19,7 +19,7 @@ import { buildColumns, buildLanes, cellTasks } from "./board-model";
 import type { TaskCreatePreset } from "./board-types";
 import { useBoardDnd } from "./use-board-dnd";
 import {
-  type BoardTaskFilters,
+  type BoardCacheTarget,
   useBoardMutations,
 } from "./use-board-mutations";
 
@@ -42,10 +42,11 @@ interface TaskBoardProps {
   /** Swimlane axis (only meaningful when `cols === "status"`); null = no lanes. */
   lane: BoardLaneMode | null;
   /**
-   * The EXACT filters this surface passed to `chartData.queryOptions` — the
-   * optimistic patch targets this same query key (share the constant/helper).
+   * Which cache the optimistic patch targets, with the EXACT input this
+   * surface passed to its own `chartData`/`board` `queryOptions` call (share
+   * the constant/helper) — see `BoardCacheTarget`.
    */
-  filters: BoardTaskFilters;
+  cacheTarget: BoardCacheTarget;
   /** Whether cards may show the project link (off when a single project owns the board). */
   showProjectOnCards: boolean;
   /**
@@ -54,6 +55,13 @@ interface TaskBoardProps {
    * Optional; defaults to a bound sized for the standalone board page.
    */
   maxHeightClassName?: string;
+  /**
+   * The server's true done-task count, for a caller whose `tasks` only
+   * carries a capped slice of done work (see `TasksBoardView` / `task.board`'s
+   * `doneCount`). Omitted by callers passing the complete task set (e.g. the
+   * project detail embed), which keeps today's exact locally-computed count.
+   */
+  doneCountOverride?: number;
 }
 
 /**
@@ -65,14 +73,15 @@ export function TaskBoard({
   tasks,
   cols,
   lane,
-  filters,
+  cacheTarget,
   showProjectOnCards,
   maxHeightClassName = DEFAULT_MAX_HEIGHT,
+  doneCountOverride,
 }: TaskBoardProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
-  const { moveTask, reorderTasks } = useBoardMutations(filters);
+  const { moveTask, reorderTasks } = useBoardMutations(cacheTarget);
   useBoardDnd({ tasks, moveTask, reorderTasks });
 
   // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
@@ -108,14 +117,23 @@ export function TaskBoard({
   );
 
   // Column header counts span every lane; project/trade columns count only
-  // their visible (active) work, the Done column keeps its true total.
+  // their visible (active) work, the Done column keeps its true total —
+  // overridden by `doneCountOverride` when `tasks` only carries a capped
+  // slice of done work (see `TaskBoardProps.doneCountOverride`).
   const columnCounts = useMemo(
     () =>
       columns.map((c) => {
         const { totalCount, hiddenDoneCount } = cellTasks(tasks, c, null);
+        if (
+          c.kind === "status" &&
+          c.status === "done" &&
+          doneCountOverride !== undefined
+        ) {
+          return doneCountOverride;
+        }
         return totalCount - hiddenDoneCount;
       }),
-    [columns, tasks],
+    [columns, tasks, doneCountOverride],
   );
 
   // Sticky header cells: opaque paper background so cards scroll under them
@@ -191,6 +209,7 @@ export function TaskBoard({
               column={column}
               cardProps={cardProps}
               onQuickAdd={setPendingPreset}
+              doneCountOverride={doneCountOverride}
             />
           ))}
         </Row>

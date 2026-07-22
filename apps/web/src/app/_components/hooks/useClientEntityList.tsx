@@ -64,6 +64,13 @@ interface UseClientEntityListOptions<TData extends BaseListRow>
   filters?: FilterInput[];
   /** Opt-in expandable tree (TanStack getSubRows/getExpandedRowModel). */
   tree?: ClientTreeConfig<TData>;
+  /**
+   * Bulk actions configuration — combined with the delete bulk action (if
+   * `deletable` is set), mirroring `useEntityList`'s `bulkActions`. Must be
+   * referentially stable (wrap in `useMemo`) or the columns/table config churn
+   * every render.
+   */
+  bulkActions?: BulkActionsConfig<TData>;
 }
 
 /** Subset of `useEntityList`'s return relevant to the client-data variant. */
@@ -93,6 +100,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   nameSuffix,
   tableStateOptions,
   tree,
+  bulkActions,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
   // Create columnHelper once — CRITICAL to prevent infinite re-renders.
   const columnHelper = useMemo(
@@ -108,13 +116,20 @@ export function useClientEntityList<TData extends BaseListRow>({
     requestDelete,
   } = useOptimisticDelete<TData>({ deletable });
 
-  // The only bulk action is delete (this variant has no user bulk actions).
+  // Combine the caller's bulk actions with the delete bulk action (if any) —
+  // mirrors `useEntityList`'s equivalent merge.
   const effectiveBulkActions = useMemo(():
     | BulkActionsConfig<TData>
     | undefined => {
-    if (!deleteBulkAction) return undefined;
-    return { actions: [deleteBulkAction] };
-  }, [deleteBulkAction]);
+    if (!deleteBulkAction && !bulkActions) return undefined;
+
+    const userActions = bulkActions?.actions ?? [];
+    const combinedActions = deleteBulkAction
+      ? [...userActions, deleteBulkAction]
+      : userActions;
+
+    return { ...bulkActions, actions: combinedActions };
+  }, [deleteBulkAction, bulkActions]);
 
   // Always call useBulkActions unconditionally (Rules of Hooks).
   const EMPTY_BULK_CONFIG = useMemo(

@@ -1,50 +1,67 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+import { ChartEmpty } from "./chart-empty";
 import { CurrencyTrend } from "./currency-trend";
-import { buildProjectMonthlySeries } from "./project-chart-data";
 
-const PROJECT_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "var(--chart-6)",
-  "var(--chart-7)",
-  "var(--chart-8)",
-];
+const SERIES_COLORS: Record<string, string> = {
+  Actual: "var(--chart-1)",
+  Committed: "var(--chart-7)", // light ink — reads as "not yet real"
+};
 
-export function MonthlyTrend({ purchases }: { purchases: PurchaseOut[] }) {
-  const data = useMemo(() => buildProjectMonthlySeries(purchases), [purchases]);
+/**
+ * `data` is `portfolioAnalytics`'s `monthlySpend` — actual vs committed spend
+ * per month, across every project matching the dashboard's filter scope (see
+ * repo/project/portfolio-analytics.ts). This replaces the old per-project
+ * stacked series (`buildProjectMonthlySeries` over raw purchases) — the
+ * server aggregate has no per-project breakdown, only actual/committed
+ * totals, so the chart now reads as "when did money move" rather than "which
+ * project was spending".
+ */
+export function MonthlyTrend({
+  data: rows,
+}: {
+  data: ProjectPortfolioAnalyticsOut["monthlySpend"];
+}) {
+  const data = useMemo(
+    () => [
+      {
+        id: "Actual",
+        data: rows.map((r) => ({ x: r.month, y: r.actual })),
+      },
+      {
+        id: "Committed",
+        data: rows.map((r) => ({ x: r.month, y: r.committed })),
+      },
+    ],
+    [rows],
+  );
 
-  if (data.length === 0) {
+  if (rows.length < 2) {
     return (
-      <p className="text-muted-foreground text-sm">
-        Not enough data for a trend (need 2+ months).
-      </p>
+      <ChartEmpty
+        icon={CalendarClock}
+        title="Not enough data for a trend (need 2+ months)."
+      />
     );
   }
 
   return (
     <CurrencyTrend
       data={data}
-      margin={{ top: 20, right: 130, bottom: 50, left: 70 }}
+      margin={{ top: 20, right: 110, bottom: 50, left: 70 }}
       xScale={{ type: "point" }}
-      yScale={{ type: "linear", min: 0, stacked: true }}
+      yScale={{ type: "linear", min: 0, stacked: false }}
       axisBottom={{ tickRotation: -45 }}
-      areaOpacity={0.3}
-      colors={(datum) => {
-        const index = data.findIndex((series) => series.id === datum.id);
-        return PROJECT_COLORS[index % PROJECT_COLORS.length]!;
-      }}
+      areaOpacity={0.15}
+      colors={(datum) => SERIES_COLORS[String(datum.id)] ?? "var(--chart-1)"}
       filterZeroValues
-      seriesLabelClassName="max-w-[150px] truncate"
       legends={[
         {
           anchor: "bottom-right",
           direction: "column",
-          translateX: 120,
-          itemWidth: 110,
+          translateX: 100,
+          itemWidth: 90,
           itemHeight: 18,
           symbolSize: 10,
           symbolShape: "circle",

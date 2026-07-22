@@ -5,8 +5,9 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { ActionableTasks } from "~/app/tasks/actionable-tasks";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
+import { TaskInbox } from "~/app/tasks/inbox";
+import { NextTasks } from "~/app/tasks/next-tasks";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
 import { TasksTimelineView } from "~/app/tasks/TasksTimelineView";
 import { TaskActions } from "~/app/tasks/task-actions";
@@ -18,14 +19,23 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 
-const viewOptions = ["all", "actionable", "board", "timeline"] as const;
+const viewOptions = [
+  "next",
+  "inbox",
+  "board",
+  "timeline",
+  "all",
+  "history",
+] as const;
 type ViewOption = (typeof viewOptions)[number];
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
-  { value: "all", label: "All" },
-  { value: "actionable", label: "Actionable" },
+  { value: "next", label: "Next" },
+  { value: "inbox", label: "Inbox" },
   { value: "board", label: "Board" },
   { value: "timeline", label: "Timeline" },
+  { value: "all", label: "All" },
+  { value: "history", label: "History" },
 ];
 
 const searchSchema = z.object({
@@ -55,21 +65,21 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
 function TasksPage() {
   const search = Route.useSearch();
   const { q } = search;
-  // Default to the actionable "what can I do next" view rather than the full
-  // list, which is dominated by completed tasks. A search deep-link (`q`) still
-  // lands on the All list so its seeded search isn't silently ignored.
-  const view = search.view ?? (q ? "all" : "actionable");
+  // Default to the "what can I do next" view rather than the full list, which
+  // is dominated by completed tasks. A search deep-link (`q`) still lands on
+  // the All list so its seeded search isn't silently ignored.
+  const view = search.view ?? (q ? "all" : "next");
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
     // The board's natural width is its fixed column tracks, not the full
-    // viewport — only the list view needs the wide, unconstrained container.
+    // viewport — only the list views need the wide, unconstrained container.
     <Page
       variant="list"
       title="Tasks"
       fullWidth={view !== "board"}
-      // Header-level "New task" so it's reachable from every view (the default
-      // Actionable view has no list toolbar to hang it off).
+      // Header-level "New task" so it's reachable from every view (Next/Board
+      // have no list toolbar of their own to hang it off).
       actions={<TaskActions />}
     >
       <Stack gap="md">
@@ -86,13 +96,17 @@ function TasksPage() {
           }
         />
 
-        {view === "all" && <TaskList initialSearch={q} />}
+        {view === "next" && <NextTasks />}
 
-        {view === "actionable" && <ActionableTasks />}
+        {view === "inbox" && <TaskInbox />}
 
         {view === "board" && <TasksBoardView />}
 
         {view === "timeline" && <TasksTimelineView />}
+
+        {view === "all" && <TaskList initialSearch={q} />}
+
+        {view === "history" && <TaskList completion="done" />}
       </Stack>
     </Page>
   );

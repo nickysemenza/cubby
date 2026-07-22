@@ -5,6 +5,8 @@
 
 import { type PurchaseId, purchaseId } from "@cubby/schemas/identifiers";
 import {
+  purchaseAnalyticsInput,
+  purchaseAnalyticsOut,
   purchaseBulkCostTypeInput,
   purchaseBulkMoveInput,
   purchaseBulkTradeInput,
@@ -21,6 +23,7 @@ import {
   deletePurchases,
   getPurchaseByID,
   movePurchases,
+  purchaseAnalytics,
   purchaseList,
   setPurchasesCostType,
   setPurchasesTrade,
@@ -80,6 +83,17 @@ const chartData = protectedProcedure
     );
     return data;
   });
+
+/**
+ * Server-side chart aggregates — grouped SQL sums/counts over the SAME
+ * filter shape as `list`/`chartData`, replacing the client-side grouping
+ * that ran over `chartData`'s fetch-all. See repo/purchase/analytics.ts for
+ * the SQL; `chartData` stays in place for whatever else still fetches raw rows.
+ */
+const analytics = protectedProcedure
+  .input(purchaseAnalyticsInput)
+  .output(purchaseAnalyticsOut)
+  .query(({ ctx, input }) => purchaseAnalytics(ctx.db, input));
 
 // Bulk "move to project" — projectId: null moves every listed purchase to the
 // inbox. Mirrors inventory.bulkMove/task.bulkMove's shape: one repo call
@@ -143,6 +157,7 @@ export const purchaseRouter = createTRPCRouter({
   update,
   delete: deleteItem,
   chartData,
+  analytics,
   bulkMove,
   bulkSetTrade,
   bulkSetCostType,

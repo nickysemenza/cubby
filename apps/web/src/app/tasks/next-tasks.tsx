@@ -4,7 +4,6 @@ import type {
   BlockedTaskOut,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import { partition } from "es-toolkit";
 import { ListTodo } from "lucide-react";
 import { match } from "ts-pattern";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -31,24 +30,7 @@ import {
 } from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { cn } from "~/lib/utils";
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
-
-/** dueDate ascending, nulls last — mirrors the dashboard TaskList's sort. */
-function byDueDateAsc(a: ActionableTaskOut, b: ActionableTaskOut) {
-  if (!a.dueDate && !b.dueDate) return 0;
-  if (!a.dueDate) return 1;
-  if (!b.dueDate) return -1;
-  return a.dueDate.localeCompare(b.dueDate);
-}
-
-/** Non-later rows (sorted by due date) first, later rows (also sorted) last. */
-function sortActionableRows(
-  actionable: ActionableTaskOut[],
-): ActionableTaskOut[] {
-  const [later, dueSoon] = partition(actionable, (t) => t.isLater);
-  return [...dueSoon.sort(byDueDateAsc), ...later.sort(byDueDateAsc)];
-}
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({
@@ -95,7 +77,67 @@ function BlockedReasonChips({
   );
 }
 
-export function ActionableTasks() {
+/**
+ * Read-only, non-paginated, non-selectable rows — a static `<Table>` fits
+ * this better than `<RTable>` (see CLAUDE.md's Tables guidance: `<RTable>`
+ * would be overkill for a "here's your list" view). `next`/`later` arrive
+ * pre-sorted server-side (`task.listActionable`), so this renders them as-is
+ * — no client sort.
+ */
+function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Task</TableHead>
+          <TableHead className="w-32">Status</TableHead>
+          <TableHead className="w-40">Project</TableHead>
+          <TableHead className="w-28">Due</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((t) => (
+          <TableRow key={t.id}>
+            <TableCell>
+              <Row align="center" gap="xs">
+                <EntityInlineLink
+                  entity="task"
+                  data={{ id: t.id, name: t.name }}
+                  truncate
+                />
+                {t.subtaskCount > 0 && (
+                  <Badge variant="outline">
+                    {t.doneSubtaskCount}/{t.subtaskCount}
+                  </Badge>
+                )}
+              </Row>
+            </TableCell>
+            <TableCell>
+              <Badge variant={taskStatusBadgeVariant[t.status]}>
+                {TASK_STATUS_LABELS[t.status]}
+              </Badge>
+            </TableCell>
+            <TableCell>
+              {t.projectId && t.projectName ? (
+                <EntityInlineLink
+                  entity="project"
+                  data={{ id: t.projectId, name: t.projectName }}
+                  truncate
+                />
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
+            </TableCell>
+            <TableCell>{formatDateRange(t.dueDate, t.dueEndDate)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/** The `/tasks?view=next` surface: Next / Someday / Blocked, from `task.listActionable`. */
+export function NextTasks() {
   const api = useTRPC();
   const { data, isLoading, isError, error, refetch } = useQuery(
     api.task.listActionable.queryOptions(),
@@ -106,7 +148,7 @@ export function ActionableTasks() {
       <Empty>
         <EmptyHeader>
           <EmptyIcon icon={ListTodo} />
-          <EmptyTitle>Couldn't load actionable tasks</EmptyTitle>
+          <EmptyTitle>Couldn't load tasks</EmptyTitle>
           <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
         </EmptyHeader>
         <EmptyActions>
@@ -119,80 +161,35 @@ export function ActionableTasks() {
   }
 
   if (isLoading || !data) {
-    return <SimpleLoading text="Loading actionable tasks..." />;
+    return <SimpleLoading text="Loading tasks..." />;
   }
 
-  return <ActionableTasksBody data={data} />;
+  return <NextTasksBody data={data} />;
 }
 
-function ActionableTasksBody({ data }: { data: ActionableTasksOut }) {
-  const rows = sortActionableRows(data.actionable);
-
+function NextTasksBody({ data }: { data: ActionableTasksOut }) {
   return (
     <Stack gap="lg">
-      <Section
-        title="Actionable"
-        description="Unblocked tasks you can act on now."
-      >
-        {rows.length === 0 ? (
+      <Section title="Next" description="Unblocked tasks you can act on now.">
+        {data.next.length === 0 ? (
           <p className="text-muted-foreground text-sm">
-            Nothing actionable right now — everything open is blocked.
+            Nothing next right now — everything open is blocked or set aside.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Task</TableHead>
-                <TableHead className="w-32">Status</TableHead>
-                <TableHead className="w-40">Project</TableHead>
-                <TableHead className="w-28">Due</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((t) => (
-                <TableRow
-                  key={t.id}
-                  className={cn(t.isLater && "text-muted-foreground")}
-                >
-                  <TableCell>
-                    <Row align="center" gap="xs">
-                      <EntityInlineLink
-                        entity="task"
-                        data={{ id: t.id, name: t.name }}
-                        truncate
-                      />
-                      {t.subtaskCount > 0 && (
-                        <Badge variant="outline">
-                          {t.doneSubtaskCount}/{t.subtaskCount}
-                        </Badge>
-                      )}
-                    </Row>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={taskStatusBadgeVariant[t.status]}>
-                      {TASK_STATUS_LABELS[t.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {t.projectId && t.projectName ? (
-                      <EntityInlineLink
-                        entity="project"
-                        data={{ id: t.projectId, name: t.projectName }}
-                        truncate
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {formatDateRange(t.dueDate, t.dueEndDate)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <TaskRows rows={data.next} />
         )}
       </Section>
+
+      {data.later.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer items-center gap-2 font-medium text-muted-foreground text-sm hover:text-foreground">
+            Someday ({data.later.length})
+          </summary>
+          <div className="mt-2">
+            <TaskRows rows={data.later} />
+          </div>
+        </details>
+      )}
 
       <Section
         title="Blocked"

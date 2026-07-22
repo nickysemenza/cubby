@@ -128,6 +128,7 @@ export function BoardCell({
   cardProps,
   onQuickAdd,
   className,
+  doneCountOverride,
 }: {
   tasks: TaskOut[];
   column: BoardColumnKey;
@@ -138,15 +139,37 @@ export function BoardCell({
    * renders no quick-add affordance in the empty state. */
   onQuickAdd?: (preset: TaskCreatePreset) => void;
   className?: string;
+  /**
+   * The server's true done-task count (`task.board`'s `doneCount`), for
+   * surfaces whose `tasks` array only carries a capped slice of done work
+   * (the standalone board's `task.board` query caps `recentDone` at 20 —
+   * see `TasksBoardView`). Overrides the locally-computed Done-column total
+   * so the "Showing N of M" footer reports the true total instead of
+   * undercounting to the loaded slice. Only applied when `lane` is null (a
+   * single household-wide count can't be split per-lane); omitted entirely
+   * by callers whose `tasks` is already the complete set (e.g. the project
+   * detail embed), which keeps today's exact behavior.
+   */
+  doneCountOverride?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const isOver = useBoardDropTarget({ ref, column, lane });
   // Reveals the cell's hidden done work — see cellTasks' `expanded` doc.
   const [expanded, setExpanded] = useState(false);
-  const { cards, totalCount, hiddenDoneCount } = useMemo(
+  const {
+    cards,
+    totalCount: computedTotalCount,
+    hiddenDoneCount,
+  } = useMemo(
     () => cellTasks(tasks, column, lane, expanded),
     [tasks, column, lane, expanded],
   );
+  const isDoneStatusColumn =
+    column.kind === "status" && column.status === "done";
+  const totalCount =
+    isDoneStatusColumn && lane == null && doneCountOverride !== undefined
+      ? doneCountOverride
+      : computedTotalCount;
   const quickAddEligible = onQuickAdd != null && isQuickAddEligible(column);
   const isCappedDoneColumn =
     column.kind === "status" &&
@@ -229,18 +252,26 @@ export function BoardColumn({
   column,
   cardProps,
   onQuickAdd,
+  doneCountOverride,
 }: {
   tasks: TaskOut[];
   column: BoardColumnKey;
   cardProps: CardRenderProps;
   onQuickAdd?: (preset: TaskCreatePreset) => void;
+  /** See `BoardCell`'s doc comment. */
+  doneCountOverride?: number;
 }) {
+  const isDoneStatusColumn =
+    column.kind === "status" && column.status === "done";
   const count = useMemo(() => {
     // Header count = what the column represents: full history for the Done
     // column, active (visible) work for project/trade columns.
     const { totalCount, hiddenDoneCount } = cellTasks(tasks, column, null);
+    if (isDoneStatusColumn && doneCountOverride !== undefined) {
+      return doneCountOverride;
+    }
     return totalCount - hiddenDoneCount;
-  }, [tasks, column]);
+  }, [tasks, column, isDoneStatusColumn, doneCountOverride]);
   return (
     // Raw flex-col (not Stack): the cell must flex-1 so the whole column
     // height — tallest column sets it — stays a valid drop target, not just
@@ -256,6 +287,7 @@ export function BoardColumn({
         cardProps={cardProps}
         onQuickAdd={onQuickAdd}
         className="flex-1 overflow-y-auto"
+        doneCountOverride={doneCountOverride}
       />
     </div>
   );

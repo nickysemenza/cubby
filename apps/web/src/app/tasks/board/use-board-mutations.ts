@@ -1,5 +1,11 @@
 import { type TaskId, unsafeProjectId } from "@cubby/schemas/identifiers";
-import type { TaskBulkReorderInput, TaskOut } from "@cubby/schemas/project";
+import type {
+  TaskBoardInput,
+  TaskBoardOut,
+  TaskBulkReorderInput,
+  TaskOut,
+} from "@cubby/schemas/project";
+import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { type RouterInputs, useTRPC } from "~/integrations/trpc/react";
@@ -18,24 +24,69 @@ import type { TaskBoardPatch } from "./board-types";
  */
 export type BoardTaskFilters = RouterInputs["task"]["chartData"];
 
-type OptimisticContext = { prev: TaskOut[] | undefined };
+/**
+ * Which query cache `useBoardMutations` optimistically patches — the project
+ * detail embed still reads the full subtree via `task.chartData` (a flat
+ * `TaskOut[]`), while the standalone `/tasks?view=board` page reads the
+ * capped `task.board` (`{active, recentDone, doneCount}`). Both need the
+ * SAME identity object the surface passed to its own `queryOptions` call — a
+ * different shape produces a different query key and the patch silently
+ * misses.
+ */
+export type BoardCacheTarget =
+  | { source: "chartData"; filters: BoardTaskFilters }
+  | { source: "board"; input: TaskBoardInput };
+
+type OptimisticContext<TData> = { prev: TData | undefined };
+
+/** Read the flat task list out of whichever cache shape `target` points at. */
+function readFlatList(
+  data: TaskOut[] | TaskBoardOut | undefined,
+  source: BoardCacheTarget["source"],
+): TaskOut[] | undefined {
+  if (!data) return undefined;
+  return source === "chartData"
+    ? (data as TaskOut[])
+    : [...(data as TaskBoardOut).active, ...(data as TaskBoardOut).recentDone];
+}
 
 /**
- * The one board mutation: patch a task's status/project/trade from a drop (or
- * the card's status quick-action). This is the sanctioned raw-`useMutation`
- * carve-out (like `use-arrange-mutations`) because the optimistic write is
- * surgical — it patches the *exact* `task.chartData` cache for this surface's
- * filters so the derived sort re-places the card instantly, then reconciles via
- * an `onSettled` invalidation.
- *
- * The `filters` MUST be the identical object the surface passed to
- * `chartData.queryOptions` (share a constant) — a different shape produces a
- * different query key and the optimistic patch silently misses.
+ * Rebuild the cache value from a patched flat list. For `task.board`, one
+ * task's status may have flipped in/out of "done" as part of this patch —
+ * `recentDone`'s length shift (always ±1 or 0 for the single-task/
+ * single-move patches this hook makes) is applied to `doneCount` too, so the
+ * server-true total stays consistent with the locally-visible slice until
+ * `onSettled`'s refetch corrects both precisely.
  */
-export function useBoardMutations(filters: BoardTaskFilters) {
+function writeFlatList(
+  prevData: TaskOut[] | TaskBoardOut,
+  nextList: TaskOut[],
+  source: BoardCacheTarget["source"],
+): TaskOut[] | TaskBoardOut {
+  if (source === "chartData") return nextList;
+  const prevBoard = prevData as TaskBoardOut;
+  const active = nextList.filter((t) => t.status !== "done");
+  const recentDone = nextList.filter((t) => t.status === "done");
+  const doneCount =
+    prevBoard.doneCount + (recentDone.length - prevBoard.recentDone.length);
+  return { active, recentDone, doneCount };
+}
+
+/**
+ * The board's two mutations: a single task move (drop or status quick-action)
+ * and the "materialize" bulk reorder. This is the sanctioned raw-`useMutation`
+ * carve-out (like `use-arrange-mutations`) because the optimistic write is
+ * surgical — it patches the exact cache `target` points at so the derived
+ * sort/column re-places the card instantly, then reconciles via an
+ * `onSettled` invalidation.
+ */
+export function useBoardMutations(target: BoardCacheTarget) {
   const api = useTRPC();
   const queryClient = useQueryClient();
-  const chartKey = api.task.chartData.queryKey(filters);
+  const queryKey: QueryKey =
+    target.source === "chartData"
+      ? api.task.chartData.queryKey(target.filters)
+      : api.task.board.queryKey(target.input);
 
   const patchTaskFields = (
     task: TaskOut,
@@ -80,21 +131,25 @@ export function useBoardMutations(filters: BoardTaskFilters) {
   const update = useMutation({
     mutationKey: base.mutationKey,
     mutationFn: base.mutationFn,
-    onMutate: async (vars): Promise<OptimisticContext> => {
-      await cancelTRPCQueries(queryClient, [chartKey]);
-      const prev = queryClient.getQueryData<TaskOut[]>(chartKey);
-      if (prev) {
-        queryClient.setQueryData<TaskOut[]>(
-          chartKey,
-          prev.map((t) =>
-            t.id === vars.id ? patchTaskFields(t, vars.data, prev) : t,
-          ),
+    onMutate: async (
+      vars,
+    ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
+      await cancelTRPCQueries(queryClient, [queryKey]);
+      const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
+      const flat = readFlatList(prev, target.source);
+      if (prev && flat) {
+        const nextList = flat.map((t) =>
+          t.id === vars.id ? patchTaskFields(t, vars.data, flat) : t,
+        );
+        queryClient.setQueryData(
+          queryKey,
+          writeFlatList(prev, nextList, target.source),
         );
       }
       return { prev };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(chartKey, ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
     onSettled: () =>
@@ -103,34 +158,38 @@ export function useBoardMutations(filters: BoardTaskFilters) {
 
   // The board's "materialize" reorder — a run of sortOrder writes plus an
   // optional axis move on the dragged card. Optimistically patches every
-  // affected id in the same chartData cache so the manual prefix re-orders
-  // instantly, then reconciles via onSettled.
+  // affected id in the same cache so the manual prefix re-orders instantly,
+  // then reconciles via onSettled.
   const reorderBase = api.task.bulkReorder.mutationOptions();
   const reorder = useMutation({
     mutationKey: reorderBase.mutationKey,
     mutationFn: reorderBase.mutationFn,
-    onMutate: async (vars): Promise<OptimisticContext> => {
-      await cancelTRPCQueries(queryClient, [chartKey]);
-      const prev = queryClient.getQueryData<TaskOut[]>(chartKey);
-      if (prev) {
+    onMutate: async (
+      vars,
+    ): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
+      await cancelTRPCQueries(queryClient, [queryKey]);
+      const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
+      const flat = readFlatList(prev, target.source);
+      if (prev && flat) {
         const rankById = new Map(vars.ranks.map((r) => [r.id, r.sortOrder]));
         const move = vars.move;
-        queryClient.setQueryData<TaskOut[]>(
-          chartKey,
-          prev.map((t) => {
-            const sortOrder = rankById.get(t.id);
-            let next = sortOrder !== undefined ? { ...t, sortOrder } : t;
-            if (move && t.id === move.id) {
-              next = patchTaskFields(next, move.patch, prev);
-            }
-            return next;
-          }),
+        const nextList = flat.map((t) => {
+          const sortOrder = rankById.get(t.id);
+          let next = sortOrder !== undefined ? { ...t, sortOrder } : t;
+          if (move && t.id === move.id) {
+            next = patchTaskFields(next, move.patch, flat);
+          }
+          return next;
+        });
+        queryClient.setQueryData(
+          queryKey,
+          writeFlatList(prev, nextList, target.source),
         );
       }
       return { prev };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(chartKey, ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast.error(getErrorMessage(err));
     },
     onSettled: () =>

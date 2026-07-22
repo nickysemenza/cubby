@@ -10,9 +10,11 @@ import { describe, expect, it } from "vitest";
 import { image, projectDependency, projectImage } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "./database-helpers";
 import {
+  computeAttentionItems,
   createProject,
   deleteProjects,
   getProjectByID,
+  projectDashboardSummary,
   projectList,
   updateProject,
 } from "./project";
@@ -816,5 +818,173 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(new Set(subtree.data.map((p) => p.name))).toEqual(
       new Set(["parent purchase", "child purchase", "grandchild purchase"]),
     );
+  });
+});
+
+describe("project dashboard — attention detector + summary", () => {
+  const ctx = withTestDb();
+
+  it("flags missing_budget only for a project with spend and no estimate", async () => {
+    const noEstimate = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "attention no estimate" }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "spend with no estimate",
+        projectId: noEstimate.id,
+        cost: 75,
+        future: false,
+      }),
+      ctx.actor,
+    );
+
+    const withEstimate = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention with estimate",
+        costEstimate: 500,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "spend with estimate",
+        projectId: withEstimate.id,
+        cost: 75,
+        future: false,
+      }),
+      ctx.actor,
+    );
+
+    const items = await computeAttentionItems(ctx.db);
+    const missingBudgetIds = items
+      .filter((i) => i.type === "missing_budget")
+      .map((i) => i.entityId);
+    expect(missingBudgetIds).toContain(noEstimate.id);
+    expect(missingBudgetIds).not.toContain(withEstimate.id);
+  });
+
+  it("flags blocked_work for an in_progress project whose only task is blocked (no next task)", async () => {
+    const blockedProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention blocked project",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const blockedTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "attention blocked task",
+        projectId: blockedProject.id,
+      }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, blockedTask.id, { status: "blocked" }, ctx.actor);
+
+    // Control: an in_progress project with an open (unblocked) task must NOT
+    // be flagged — it has a `next` task available.
+    const unblockedProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention unblocked project",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "attention open task",
+        projectId: unblockedProject.id,
+      }),
+      ctx.actor,
+    );
+
+    const items = await computeAttentionItems(ctx.db);
+    const blockedWorkIds = items
+      .filter((i) => i.type === "blocked_work")
+      .map((i) => i.entityId);
+    expect(blockedWorkIds).toContain(blockedProject.id);
+    expect(blockedWorkIds).not.toContain(unblockedProject.id);
+  });
+
+  it("dashboardSummary's actualSpend/committedSpend match hand-computed subtree totals", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "summary spend a",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const projectB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "summary spend b", status: "planning" }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "summary a actual",
+        projectId: projectA.id,
+        cost: 120,
+        future: false,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "summary a committed",
+        projectId: projectA.id,
+        cost: 30,
+        future: true,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "summary b actual",
+        projectId: projectB.id,
+        cost: 40,
+        future: false,
+      }),
+      ctx.actor,
+    );
+
+    const [aAfter, bAfter] = await Promise.all([
+      getProjectByID(ctx.db, projectA.id),
+      getProjectByID(ctx.db, projectB.id),
+    ]);
+    const expectedActual =
+      aAfter.rollup.subtree.actualSpent + bAfter.rollup.subtree.actualSpent;
+    const expectedCommitted =
+      aAfter.rollup.subtree.committedSpent +
+      bAfter.rollup.subtree.committedSpent;
+
+    // Default statusScope excludes `done` — both projects (in_progress,
+    // planning) are included.
+    const summary = await projectDashboardSummary(ctx.db, {});
+    expect(summary.summary.actualSpend).toBe(expectedActual);
+    expect(summary.summary.committedSpend).toBe(expectedCommitted);
   });
 });

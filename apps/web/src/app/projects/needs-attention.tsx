@@ -1,123 +1,133 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
-import type { ProjectOut, PurchaseOut, TaskOut } from "@cubby/schemas/project";
-import { format } from "date-fns";
-import { AlertTriangle, CalendarClock, DollarSign } from "lucide-react";
-import { useMemo } from "react";
+import type {
+  ProjectAttentionItem,
+  ProjectAttentionType,
+} from "@cubby/schemas/project";
+import { Link } from "@tanstack/react-router";
+import {
+  AlertTriangle,
+  Ban,
+  CalendarClock,
+  Clock,
+  DollarSign,
+  type LucideIcon,
+  Tag,
+} from "lucide-react";
 import { Row, Stack } from "~/components/layout";
-import { StatusText } from "~/components/ui/status-text";
-import { ProjectPill } from "./project-pill";
+import { formatCurrency } from "~/lib/utils";
 import { formatDate } from "./shared";
 
-export function NeedsAttention({
-  projects,
-  tasks,
-  purchases,
-}: {
-  projects: ProjectOut[];
-  tasks: TaskOut[];
-  purchases: PurchaseOut[];
-}) {
-  // Keyed by id — project names aren't unique, so a name-keyed lookup here
-  // would attribute overdue tasks/stalled status to the wrong same-named
-  // project.
-  const projectMap = useMemo(
-    () => new Map(projects.map((p) => [p.id, p])),
-    [projects],
-  );
+/**
+ * Server-side rule metadata per {@link ProjectAttentionType} — icon, group
+ * title, and a static (Tailwind-scannable, never templated) icon className.
+ * Rendered in this fixed order (most-actionable first), not insertion order,
+ * so the section reads the same regardless of what the server happened to
+ * push first.
+ */
+const ATTENTION_GROUPS: Array<{
+  type: ProjectAttentionType;
+  icon: LucideIcon;
+  iconClassName: string;
+  title: (count: number) => string;
+}> = [
+  {
+    type: "overdue_task",
+    icon: CalendarClock,
+    iconClassName: "h-3.5 w-3.5 text-destructive",
+    title: (n) => `${n} overdue task${n !== 1 ? "s" : ""}`,
+  },
+  {
+    type: "blocked_work",
+    icon: Ban,
+    iconClassName: "h-3.5 w-3.5 text-warning",
+    title: (n) =>
+      `${n} project${n !== 1 ? "s" : ""} blocked with no next action`,
+  },
+  {
+    type: "stalled_project",
+    icon: AlertTriangle,
+    iconClassName: "h-3.5 w-3.5 text-warning",
+    title: (n) =>
+      `${n} stalled project${n !== 1 ? "s" : ""} (no purchases in 30 days)`,
+  },
+  {
+    type: "past_due_planned_purchase",
+    icon: Clock,
+    iconClassName: "h-3.5 w-3.5 text-warning",
+    title: (n) => `${n} planned purchase${n !== 1 ? "s" : ""} past due`,
+  },
+  {
+    type: "missing_budget",
+    icon: DollarSign,
+    iconClassName: "h-3.5 w-3.5 text-warning",
+    title: (n) => `${n} project${n !== 1 ? "s" : ""} missing a cost estimate`,
+  },
+  {
+    type: "unclassified_purchase",
+    icon: Tag,
+    iconClassName: "h-3.5 w-3.5 text-muted-foreground",
+    title: (n) => `${n} unclassified purchase${n !== 1 ? "s" : ""}`,
+  },
+];
 
-  const { overdueTasks, stalledProjects, missingEstimates } = useMemo(() => {
-    // The LOCAL calendar day, not `toISOString().slice(0, 10)` (a UTC day —
-    // reads a same-day task as overdue after ~5pm PT).
-    const today = format(new Date(), "yyyy-MM-dd");
-    const overdueTasks = tasks.filter(
-      (t) => t.dueDate && t.dueDate < today && t.status !== "done",
-    );
+/**
+ * Server-driven Needs Attention — every item is precomputed by
+ * `computeAttentionItems` (repo/project/attention.ts), including the
+ * household-local "today" used for overdue/stalled detection. This component
+ * only groups by `type` and renders; no date math or entity lookups happen
+ * here anymore (the old client-side UTC-day workaround is gone along with
+ * the raw projects/tasks/purchases props it needed).
+ */
+export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
+  if (items.length === 0) return null;
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = format(thirtyDaysAgo, "yyyy-MM-dd");
-
-    const recentPurchaseProjects = new Set<ProjectId>();
-    for (const p of purchases) {
-      if (p.projectId && p.date && p.date >= cutoff) {
-        recentPurchaseProjects.add(p.projectId);
-      }
-    }
-
-    const activeProjects = projects.filter(
-      (p) => p.status !== "done" && p.status !== "not_started",
-    );
-
-    const stalledProjects = activeProjects.filter(
-      (p) => !recentPurchaseProjects.has(p.id),
-    );
-
-    const missingEstimates = activeProjects.filter(
-      (p) => !p.costEstimate || p.costEstimate <= 0,
-    );
-
-    return { overdueTasks, stalledProjects, missingEstimates };
-  }, [projects, tasks, purchases]);
-
-  const totalIssues =
-    overdueTasks.length + stalledProjects.length + missingEstimates.length;
-
-  if (totalIssues === 0) return null;
+  const byType = new Map<ProjectAttentionType, ProjectAttentionItem[]>();
+  for (const item of items) {
+    const group = byType.get(item.type);
+    if (group) group.push(item);
+    else byType.set(item.type, [item]);
+  }
 
   return (
     <Stack className="rounded-lg border border-warning/40 bg-warning/10 p-4">
       <Row align="center" gap="sm" className="font-medium text-sm text-warning">
         <AlertTriangle className="h-4 w-4" />
-        Needs Attention ({totalIssues})
+        Needs Attention ({items.length})
       </Row>
 
-      {overdueTasks.length > 0 && (
-        <AttentionGroup
-          icon={<CalendarClock className="h-3.5 w-3.5 text-destructive" />}
-          title={`${overdueTasks.length} overdue task${overdueTasks.length !== 1 ? "s" : ""}`}
-        >
-          {overdueTasks.map((t) => {
-            const proj = t.projectId ? projectMap.get(t.projectId) : null;
-            return (
-              <Row key={t.id} align="center" gap="sm" className="text-xs">
-                <span className="truncate">{t.name}</span>
-                {proj && <ProjectPill project={proj} />}
-                {t.dueDate && (
-                  <StatusText tone="destructive" className="shrink-0">
-                    due {formatDate(t.dueDate)}
-                  </StatusText>
+      {ATTENTION_GROUPS.map(({ type, icon: Icon, iconClassName, title }) => {
+        const group = byType.get(type);
+        if (!group || group.length === 0) return null;
+        return (
+          <AttentionGroup
+            key={type}
+            icon={<Icon className={iconClassName} />}
+            title={title(group.length)}
+          >
+            {group.map((item) => (
+              <Row
+                key={`${item.entityType}-${item.entityId}`}
+                align="center"
+                gap="sm"
+                className="text-xs"
+              >
+                <Link to={item.href} className="truncate hover:underline">
+                  {item.description}
+                </Link>
+                {item.date && (
+                  <span className="shrink-0 text-muted-foreground">
+                    {formatDate(item.date)}
+                  </span>
+                )}
+                {item.amount != null && (
+                  <span className="shrink-0 text-muted-foreground">
+                    {formatCurrency(item.amount, 0)}
+                  </span>
                 )}
               </Row>
-            );
-          })}
-        </AttentionGroup>
-      )}
-
-      {stalledProjects.length > 0 && (
-        <AttentionGroup
-          icon={<AlertTriangle className="h-3.5 w-3.5 text-warning" />}
-          title={`${stalledProjects.length} stalled project${stalledProjects.length !== 1 ? "s" : ""} (no purchases in 30 days)`}
-        >
-          <Row wrap gap="sm">
-            {stalledProjects.map((p) => (
-              <ProjectPill key={p.id} project={p} />
             ))}
-          </Row>
-        </AttentionGroup>
-      )}
-
-      {missingEstimates.length > 0 && (
-        <AttentionGroup
-          icon={<DollarSign className="h-3.5 w-3.5 text-warning" />}
-          title={`${missingEstimates.length} active project${missingEstimates.length !== 1 ? "s" : ""} missing cost estimates`}
-        >
-          <Row wrap gap="sm">
-            {missingEstimates.map((p) => (
-              <ProjectPill key={p.id} project={p} />
-            ))}
-          </Row>
-        </AttentionGroup>
-      )}
+          </AttentionGroup>
+        );
+      })}
     </Stack>
   );
 }
