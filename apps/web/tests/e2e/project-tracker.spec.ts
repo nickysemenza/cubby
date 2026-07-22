@@ -44,9 +44,15 @@ test.describe("Project tracker", () => {
     ).toBeVisible({ timeout: 15000 });
 
     // Empty-state summary cards render zeroed counts rather than crashing.
-    await expect(page.getByText("Active Projects")).toBeVisible();
-    await expect(page.getByText("Active Tasks")).toBeVisible();
-    await expect(page.getByText("Total Spend")).toBeVisible();
+    // Exact match: the "Needs Attention" banner's "N active projects missing…"
+    // text also substring-matches "Active Projects" case-insensitively. The
+    // spend card is "Actual Spend" (the honest-spend split renamed it from the
+    // old "Total Spend").
+    await expect(
+      page.getByText("Active Projects", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Active Tasks", { exact: true })).toBeVisible();
+    await expect(page.getByText("Actual Spend", { exact: true })).toBeVisible();
 
     // No React error boundary / router error page.
     await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
