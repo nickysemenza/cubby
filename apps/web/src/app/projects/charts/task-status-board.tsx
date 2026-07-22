@@ -41,22 +41,30 @@ export function TaskStatusBoard({
       row.set(status, (row.get(status) ?? 0) + 1);
     }
 
-    // Sort projects by date (most recent first), then by name
+    // Active projects only, most remaining (non-done) work first. A done
+    // project's row is all checked boxes — low signal next to projects with
+    // real open work, and previously it could crowd out active projects
+    // whenever there weren't 15 of them to fill the board. Tasks with no
+    // project ("Unassigned") are always in-scope.
     const projectRows = Array.from(projectKeys)
       .map((key) => {
         const proj = projectMap.get(key);
+        const statusCounts = counts.get(key);
+        const total = sum(Array.from(statusCounts?.values() ?? []));
+        const doneCount = statusCounts?.get("done") ?? 0;
         return {
           key,
           name: namesByKey.get(key) ?? "Unassigned",
           date: proj?.startDate ?? "",
-          isDone: proj?.status === "done",
-          total: sum(Array.from(counts.get(key)?.values() ?? [])),
+          total,
+          remaining: total - doneCount,
         };
       })
+      .filter((row) => projectMap.get(row.key)?.status !== "done")
       .sort((a, b) => {
-        // Active first, then done
-        if (a.isDone !== b.isDone) return a.isDone ? 1 : -1;
-        // Then by date descending
+        // Most open work first...
+        if (a.remaining !== b.remaining) return b.remaining - a.remaining;
+        // ...then most recently started.
         if (a.date && b.date) return b.date.localeCompare(a.date);
         if (a.date) return -1;
         if (b.date) return 1;
@@ -70,7 +78,16 @@ export function TaskStatusBoard({
   }, [tasks, projects]);
 
   if (projectRows.length === 0) {
-    return <ChartEmpty icon={ListChecks} title="No task data." />;
+    return (
+      <ChartEmpty
+        icon={ListChecks}
+        title={
+          tasks.length === 0
+            ? "No task data."
+            : "No active projects with open tasks."
+        }
+      />
+    );
   }
 
   const maxCount = Math.max(
@@ -101,9 +118,7 @@ export function TaskStatusBoard({
         <tbody>
           {projectRows.map((row) => (
             <tr key={row.key} className="border-border/50 border-t">
-              <td
-                className={`max-w-[150px] truncate py-2 pr-2 font-medium ${row.isDone ? "text-muted-foreground line-through" : ""}`}
-              >
+              <td className="max-w-[150px] truncate py-2 pr-2 font-medium">
                 {row.name}
               </td>
               {statuses.map((status) => {

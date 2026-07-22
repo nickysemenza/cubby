@@ -2,7 +2,7 @@ import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ListChecks } from "lucide-react";
+import { ArrowRightLeft, ListChecks, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
@@ -30,8 +30,14 @@ import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import { SetTaskStatusDialog } from "../_components/tracker/set-task-status-dialog";
-import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
+import {
+  dueRangeOptions,
+  resolveDueRange,
+  taskStatusBadgeVariant,
+  taskStatusOptions,
+} from "./task-options";
 
 /**
  * `N/M` checklist chip after a parent task's name. Module-level because
@@ -62,6 +68,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const { options: projectOptions } = useProjectOptions();
   const [bulkMoveItems, setBulkMoveItems] = useState<TaskOut[]>([]);
   const [bulkStatusItems, setBulkStatusItems] = useState<TaskOut[]>([]);
+  const [bulkTradeItems, setBulkTradeItems] = useState<TaskOut[]>([]);
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -97,6 +104,16 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkStatusItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-trade",
+          label: "Set trade...",
+          icon: <Wrench className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<TaskOut>[]) => {
+            setBulkTradeItems(rows.map((r) => r.original));
             return { success: true };
           },
         },
@@ -208,6 +225,12 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         options: tradeOptions,
       },
       {
+        id: "due",
+        placeholder: "Filter by due date...",
+        filterType: "select" as const,
+        options: dueRangeOptions,
+      },
+      {
         id: "project",
         placeholder: "Filter by project...",
         filterType: "select" as const,
@@ -239,6 +262,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         status: ts.getColumnFilter("status") as TaskStatus | undefined,
         trade: ts.getColumnFilter("trade") as Trade | undefined,
         projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+        ...resolveDueRange(ts.getColumnFilter("due")),
         // Checklist subtasks are managed from their parent's detail page, not
         // surfaced as independent rows here.
         topLevelOnly: true,
@@ -278,6 +302,20 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       ),
     onSuccess: () => {
       setBulkStatusItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkTradeMutation = useActionMutation({
+    mutationFn: api.task.bulkSetTrade.mutationOptions,
+    invalidateKeys: taskMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkTradeItems([]);
       table.resetRowSelection();
     },
   });
@@ -329,6 +367,25 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
             await bulkStatusMutation.mutateAsync({
               ids: bulkStatusItems.map((t) => t.id),
               status,
+            });
+          }}
+        />
+      )}
+      {bulkTradeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkTradeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkTradeItems([]);
+          }}
+          items={bulkTradeItems}
+          isPending={bulkTradeMutation.isPending}
+          options={tradeOptions}
+          fieldLabel="Trade"
+          itemNoun="Task"
+          onConfirm={async (trade) => {
+            await bulkTradeMutation.mutateAsync({
+              ids: bulkTradeItems.map((t) => t.id),
+              trade: trade as Trade,
             });
           }}
         />

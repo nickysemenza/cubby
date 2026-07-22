@@ -131,22 +131,30 @@ function matchesLane(task: TaskOut, lane: BoardLaneKey): boolean {
  * project/trade columns hide done tasks entirely (`hiddenDoneCount` reports
  * how many) — those modes are active-work triage boards, and a 200-card pile
  * of finished work would swamp them.
+ *
+ * `expanded` lifts both caps — the Done column returns its full
+ * recency-sorted list, and project/trade cells append their done tasks
+ * (recency-sorted) after the active ones. It's the "reveal hidden work"
+ * toggle behind the cell's "+ N done" / "Showing N of M" affordances; the
+ * underlying task list is already loaded client-side, so this is free.
  */
 export function cellTasks(
   tasks: TaskOut[],
   column: BoardColumnKey,
   lane: BoardLaneKey | null,
+  expanded = false,
 ): { cards: TaskOut[]; totalCount: number; hiddenDoneCount: number } {
   const cell = tasks.filter(
     (t) => matchesColumn(t, column) && (lane == null || matchesLane(t, lane)),
   );
   const totalCount = cell.length;
+  const byRecency = (a: TaskOut, b: TaskOut) =>
+    b.updatedAt.getTime() - a.updatedAt.getTime();
 
   if (column.kind === "status") {
     if (column.status === "done") {
-      const recent = [...cell]
-        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-        .slice(0, DONE_COLUMN_CAP);
+      const sorted = [...cell].sort(byRecency);
+      const recent = expanded ? sorted : sorted.slice(0, DONE_COLUMN_CAP);
       return { cards: recent, totalCount, hiddenDoneCount: 0 };
     }
     return {
@@ -157,8 +165,12 @@ export function cellTasks(
   }
 
   const active = cell.filter((t) => t.status !== "done");
+  const done = cell.filter((t) => t.status === "done");
+  const cards = expanded
+    ? [...active].sort(compareCards).concat([...done].sort(byRecency))
+    : [...active].sort(compareCards);
   return {
-    cards: active.sort(compareCards),
+    cards,
     totalCount,
     hiddenDoneCount: totalCount - active.length,
   };

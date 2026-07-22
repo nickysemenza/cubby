@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
-import { eq, inArray, isNull } from "drizzle-orm";
+import { eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
@@ -58,6 +58,8 @@ export const taskList = async (
       filters.parentTaskId
         ? eq(task.parentTaskId, filters.parentTaskId)
         : undefined,
+      filters.dueFrom ? gte(task.dueDate, filters.dueFrom) : undefined,
+      filters.dueTo ? lte(task.dueDate, filters.dueTo) : undefined,
     ],
   );
 

@@ -38,11 +38,17 @@ describe("project repository", () => {
     expect(created.locations).toEqual(["Cabin"]);
     expect(created.rollup).toEqual({
       spent: 0,
+      actualSpent: 0,
+      committedSpent: 0,
+      contributions: 0,
       purchaseCount: 0,
       taskCount: 0,
       doneTaskCount: 0,
       subtree: {
         spent: 0,
+        actualSpent: 0,
+        committedSpent: 0,
+        contributions: 0,
         purchaseCount: 0,
         taskCount: 0,
         doneTaskCount: 0,
@@ -152,11 +158,17 @@ describe("project repository", () => {
     // subtree equals own here — this project is a leaf (no sub-projects).
     expect(result.rollup).toEqual({
       spent: 150,
+      actualSpent: 100,
+      committedSpent: 50,
+      contributions: 0,
       purchaseCount: 2,
       taskCount: 3,
       doneTaskCount: 1,
       subtree: {
         spent: 150,
+        actualSpent: 100,
+        committedSpent: 50,
+        contributions: 0,
         purchaseCount: 2,
         taskCount: 3,
         doneTaskCount: 1,
@@ -621,6 +633,9 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     const leafAfter = await getProjectByID(ctx.db, leaf.id);
     expect(leafAfter.rollup.subtree).toEqual({
       spent: leafAfter.rollup.spent,
+      actualSpent: leafAfter.rollup.actualSpent,
+      committedSpent: leafAfter.rollup.committedSpent,
+      contributions: leafAfter.rollup.contributions,
       purchaseCount: leafAfter.rollup.purchaseCount,
       taskCount: leafAfter.rollup.taskCount,
       doneTaskCount: leafAfter.rollup.doneTaskCount,
@@ -632,6 +647,9 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     const parentAfter = await getProjectByID(ctx.db, parent.id);
     expect(parentAfter.rollup.subtree).toEqual({
       spent: 60, // 20 (own) + 40 (leaf)
+      actualSpent: 60, // all non-future, positive
+      committedSpent: 0,
+      contributions: 0,
       purchaseCount: 2,
       taskCount: 3, // 1 own + 2 leaf
       doneTaskCount: 1,
@@ -642,6 +660,9 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     const grandparentAfter = await getProjectByID(ctx.db, grandparent.id);
     expect(grandparentAfter.rollup.subtree).toEqual({
       spent: 70, // 10 (own) + 20 (parent) + 40 (leaf)
+      actualSpent: 70,
+      committedSpent: 0,
+      contributions: 0,
       purchaseCount: 3,
       taskCount: 3,
       doneTaskCount: 1,

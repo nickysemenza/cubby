@@ -122,71 +122,80 @@ export function TaskBoard({
   // cleanly, pinned to the top of the shared vertical scroll region below.
   const stickyHeaderClassName = "sticky top-0 z-10 bg-background";
 
-  const board = lanes ? (
-    <div ref={scrollRef} className="overflow-x-auto">
-      <div
-        className={cn(
-          "grid min-w-max gap-2 overflow-y-auto",
-          maxHeightClassName,
-        )}
-        style={{
-          gridTemplateColumns: `${LANE_LABEL_WIDTH} repeat(${columns.length}, ${COLUMN_WIDTH})`,
-        }}
-      >
-        <div className={stickyHeaderClassName} />
-        {columns.map((column, i) => (
-          <ColumnHeader
-            key={axisKey(column)}
-            column={column}
-            count={columnCounts[i] ?? 0}
-            onQuickAdd={setPendingPreset}
-            className={stickyHeaderClassName}
-          />
-        ))}
-        {lanes.map((laneKey) => (
-          <Fragment key={axisKey(laneKey)}>
-            <Row align="center" gap="tight" className="min-w-0 pt-1">
-              {axisColorChip(laneKey)}
-              <span className="truncate font-medium text-muted-foreground text-sm">
-                {axisLabel(laneKey)}
-              </span>
-            </Row>
-            {columns.map((column) => (
-              <BoardCell
-                key={axisKey(column)}
-                tasks={tasks}
-                column={column}
-                lane={laneKey}
-                cardProps={cardProps}
-                onQuickAdd={setPendingPreset}
-                // Each cell scrolls independently so one busy lane×column
-                // intersection doesn't stretch the whole shared grid row.
-                className="max-h-64 overflow-y-auto"
-              />
-            ))}
-          </Fragment>
-        ))}
+  // Trade/project columns only exist for axis values with active work — a
+  // filtered-to-nothing search (or a trade-columns board with no active
+  // tasks at all) can leave zero columns, which would otherwise render a
+  // blank board with no explanation.
+  const board =
+    columns.length === 0 ? (
+      <p className="flex min-h-32 items-center justify-center border border-muted-foreground/20 border-dashed p-4 text-muted-foreground text-sm">
+        No tasks to show
+      </p>
+    ) : lanes ? (
+      <div ref={scrollRef} className="overflow-x-auto">
+        <div
+          className={cn(
+            "grid min-w-max gap-2 overflow-y-auto",
+            maxHeightClassName,
+          )}
+          style={{
+            gridTemplateColumns: `${LANE_LABEL_WIDTH} repeat(${columns.length}, ${COLUMN_WIDTH})`,
+          }}
+        >
+          <div className={stickyHeaderClassName} />
+          {columns.map((column, i) => (
+            <ColumnHeader
+              key={axisKey(column)}
+              column={column}
+              count={columnCounts[i] ?? 0}
+              onQuickAdd={setPendingPreset}
+              className={stickyHeaderClassName}
+            />
+          ))}
+          {lanes.map((laneKey) => (
+            <Fragment key={axisKey(laneKey)}>
+              <Row align="center" gap="tight" className="min-w-0 pt-1">
+                {axisColorChip(laneKey)}
+                <span className="truncate font-medium text-muted-foreground text-sm">
+                  {axisLabel(laneKey)}
+                </span>
+              </Row>
+              {columns.map((column) => (
+                <BoardCell
+                  key={axisKey(column)}
+                  tasks={tasks}
+                  column={column}
+                  lane={laneKey}
+                  cardProps={cardProps}
+                  onQuickAdd={setPendingPreset}
+                  // Each cell scrolls independently so one busy lane×column
+                  // intersection doesn't stretch the whole shared grid row.
+                  className="max-h-64 overflow-y-auto"
+                />
+              ))}
+            </Fragment>
+          ))}
+        </div>
       </div>
-    </div>
-  ) : (
-    <div ref={scrollRef} className="overflow-x-auto">
-      <Row
-        align="stretch"
-        gap="sm"
-        className={cn("min-w-max overflow-y-hidden pb-2", maxHeightClassName)}
-      >
-        {columns.map((column) => (
-          <BoardColumn
-            key={axisKey(column)}
-            tasks={tasks}
-            column={column}
-            cardProps={cardProps}
-            onQuickAdd={setPendingPreset}
-          />
-        ))}
-      </Row>
-    </div>
-  );
+    ) : (
+      <div ref={scrollRef} className="overflow-x-auto">
+        <Row
+          align="stretch"
+          gap="sm"
+          className={cn("min-w-max overflow-y-hidden pb-2", maxHeightClassName)}
+        >
+          {columns.map((column) => (
+            <BoardColumn
+              key={axisKey(column)}
+              tasks={tasks}
+              column={column}
+              cardProps={cardProps}
+              onQuickAdd={setPendingPreset}
+            />
+          ))}
+        </Row>
+      </div>
+    );
 
   return (
     <>

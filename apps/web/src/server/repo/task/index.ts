@@ -24,6 +24,7 @@ export {
   moveTasks,
   reorderTasks,
   setTasksStatus,
+  setTasksTrade,
   updateTask,
 } from "./crud";
 export { taskList } from "./lookup";

@@ -8,7 +8,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import type {
+  PurchaseBulkCostTypeInput,
   PurchaseBulkMoveInput,
+  PurchaseBulkTradeInput,
   PurchaseCreateInput,
   PurchaseOut,
   PurchaseUpdateInput,
@@ -160,6 +162,92 @@ export const movePurchases = async (
     for (const row of before) {
       const changes = computeChanges(row, { id: row.id, projectId }, [
         "projectId",
+      ]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "purchase",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getPurchasesByIDs(db, updatedIds);
+};
+
+/**
+ * Bulk trade write — a plain audited `trade` column write over `ids`,
+ * mirroring `movePurchases` minus the project-live assert (trade is a free
+ * enum, no FK). One wave-wide side-effect dispatch happens in the router.
+ */
+export const setPurchasesTrade = async (
+  db: Database,
+  input: PurchaseBulkTradeInput,
+  actor: ActorContext,
+): Promise<PurchaseOut[]> => {
+  const { ids, trade } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    const before = await tx.query.purchase.findMany({
+      where: and(inArray(purchase.id, ids), notDeleted(purchase)),
+      columns: { id: true, trade: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(purchase)
+      .set({ trade })
+      .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, trade }, ["trade"]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "purchase",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getPurchasesByIDs(db, updatedIds);
+};
+
+/** Bulk cost-type write — same shape as {@link setPurchasesTrade}. */
+export const setPurchasesCostType = async (
+  db: Database,
+  input: PurchaseBulkCostTypeInput,
+  actor: ActorContext,
+): Promise<PurchaseOut[]> => {
+  const { ids, costType } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    const before = await tx.query.purchase.findMany({
+      where: and(inArray(purchase.id, ids), notDeleted(purchase)),
+      columns: { id: true, costType: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(purchase)
+      .set({ costType })
+      .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, costType }, [
+        "costType",
       ]);
       if (changes) {
         auditEntries.push({

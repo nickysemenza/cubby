@@ -7,6 +7,7 @@ import { Ban, EllipsisVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
+import { formatDateRange } from "~/app/projects/project-formatting";
 import { TradeBadge } from "~/app/projects/shared";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -105,10 +106,13 @@ export function TaskCard({
 
   const open = () => navigate({ to: "/tasks/$id", params: { id: task.id } });
 
+  // A ranged task (dueDate + dueEndDate) is overdue only once its *end* passes
+  // — a dueDate in the past with a dueEndDate still ahead means it's currently
+  // in-window, not late.
   const overdue =
     task.dueDate != null &&
     task.status !== "done" &&
-    task.dueDate < todayPlain();
+    (task.dueEndDate ?? task.dueDate) < todayPlain();
 
   // Blocker names resolve best-effort from the board's loaded dataset — a
   // blocker that's a subtask or outside the current scope stays unnamed, so
@@ -208,7 +212,9 @@ export function TaskCard({
                 overdue && "text-destructive",
               )}
             >
-              {formatDue(task.dueDate)}
+              {task.dueEndDate
+                ? formatDateRange(task.dueDate, task.dueEndDate)
+                : formatDue(task.dueDate)}
             </span>
           )}
           {showStatus && (
@@ -219,10 +225,14 @@ export function TaskCard({
           {showTrade && <TradeBadge trade={task.trade} />}
           {showProject && task.projectId && (
             // biome-ignore lint/a11y/noStaticElementInteractions: bare stopPropagation guard so a card click doesn't fire when the inner link is used
-            <span onClick={(e) => e.stopPropagation()}>
+            <span
+              onClick={(e) => e.stopPropagation()}
+              className="min-w-0 max-w-40"
+              title={task.projectName ?? undefined}
+            >
               <EntityInlineLink
                 entity="project"
-                compact
+                truncate
                 data={{ id: task.projectId, name: task.projectName ?? "" }}
               />
             </span>

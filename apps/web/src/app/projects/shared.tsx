@@ -223,7 +223,18 @@ const taskHelper = createColumnHelper<TaskOut>();
  * than forcing a shared abstraction. Keep both in sync if the editable field
  * set changes; see the reciprocal comment there.
  */
-export function TaskList({ tasks }: { tasks: TaskOut[] }) {
+export function TaskList({
+  tasks,
+  showProjectColumn = true,
+}: {
+  tasks: TaskOut[];
+  /**
+   * The Project column is the inline move-to-sub-project affordance — useful
+   * when rows span a subtree, but pure noise on a leaf project's detail page
+   * where every row is the same project. Callers pass `false` there.
+   */
+  showProjectColumn?: boolean;
+}) {
   const api = useTRPC();
 
   const updateTaskMutation = useUpdateMutation({
@@ -259,19 +270,23 @@ export function TaskList({ tasks }: { tasks: TaskOut[] }) {
         cell: ({ row }) => row.original.name,
         enableSorting: true,
       }),
-      // Always shown (no leaf-project opt-out) — this is now the inline
-      // move-to-sub-project affordance, not just a display link.
-      createProjectLinkColumn(taskHelper, {
-        className: "w-40",
-        editable: {
-          onSave: async (newProjectId, task) => {
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { projectId: newProjectId },
-            });
-          },
-        },
-      }),
+      // The inline move-to-sub-project affordance — omitted on leaf projects
+      // where every row shares the one project (see `showProjectColumn`).
+      ...(showProjectColumn
+        ? [
+            createProjectLinkColumn(taskHelper, {
+              className: "w-40",
+              editable: {
+                onSave: async (newProjectId, task) => {
+                  await updateTaskMutation.mutateAsync({
+                    id: task.id,
+                    data: { projectId: newProjectId },
+                  });
+                },
+              },
+            }),
+          ]
+        : []),
       createFilterableSelectColumn(taskHelper, "trade", {
         header: "Trade",
         className: "w-32",
@@ -303,7 +318,7 @@ export function TaskList({ tasks }: { tasks: TaskOut[] }) {
         },
       }),
     ],
-    [],
+    [showProjectColumn],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -372,11 +387,18 @@ export function PurchaseList({
   purchases,
   tradeFilter,
   costTypeFilter,
+  showProjectColumn = true,
 }: {
   purchases: PurchaseOut[];
   /** Controlled column filters, driven by the Trade × Cost Type pivot click. */
   tradeFilter?: Trade | null;
   costTypeFilter?: CostType | null;
+  /**
+   * The Project column is the inline move-to-sub-project affordance — noise on
+   * a leaf project's detail page where every row is the same project. Callers
+   * pass `false` there.
+   */
+  showProjectColumn?: boolean;
 }) {
   const api = useTRPC();
 
@@ -408,19 +430,23 @@ export function PurchaseList({
         },
         enableSorting: true,
       }),
-      // Always shown (no leaf-project opt-out) — this is now the inline
-      // move-to-sub-project affordance, not just a display link.
-      createProjectLinkColumn(purchaseHelper, {
-        className: "w-40",
-        editable: {
-          onSave: async (newProjectId, purchase) => {
-            await updatePurchaseMutation.mutateAsync({
-              id: purchase.id,
-              data: { projectId: newProjectId },
-            });
-          },
-        },
-      }),
+      // The inline move-to-sub-project affordance — omitted on leaf projects
+      // where every row shares the one project (see `showProjectColumn`).
+      ...(showProjectColumn
+        ? [
+            createProjectLinkColumn(purchaseHelper, {
+              className: "w-40",
+              editable: {
+                onSave: async (newProjectId, purchase) => {
+                  await updatePurchaseMutation.mutateAsync({
+                    id: purchase.id,
+                    data: { projectId: newProjectId },
+                  });
+                },
+              },
+            }),
+          ]
+        : []),
       createFilterableSelectColumn(purchaseHelper, "costType", {
         header: "Cost Type",
         className: "w-28",
@@ -540,7 +566,7 @@ export function PurchaseList({
         },
       }),
     ],
-    [],
+    [showProjectColumn],
   );
   const table = useReactTable({
     data: purchases,
@@ -722,8 +748,8 @@ export function ProjectTable({
       columnHelper.accessor(
         (row) =>
           row.rollup.subtree.projectCount > 0
-            ? row.rollup.subtree.spent
-            : row.rollup.spent,
+            ? row.rollup.subtree.actualSpent
+            : row.rollup.actualSpent,
         {
           id: "actual",
           header: "Actual",
@@ -732,12 +758,16 @@ export function ProjectTable({
           cell: ({ row }) => {
             const { rollup, costEstimate } = row.original;
             const hasSubtree = rollup.subtree.projectCount > 0;
-            // subtree.spent/costEstimate are DB aggregates over LIVE
-            // descendants — not the currently chip-filtered `projects` view
-            // (same source, same caveat, as spending-by-project.tsx). A
-            // filtered-out child's spend still rolls up into its visible
-            // parent's "Actual" here.
-            const actual = hasSubtree ? rollup.subtree.spent : rollup.spent;
+            // `actualSpent` = money already out (excludes planned/future +
+            // negative contributions), matching the detail hero's "Actual" so
+            // this column never means something the hero doesn't. subtree
+            // aggregates are over LIVE descendants — not the currently
+            // chip-filtered `projects` view (same caveat as
+            // spending-by-project.tsx): a filtered-out child's spend still
+            // rolls up into its visible parent's "Actual" here.
+            const actual = hasSubtree
+              ? rollup.subtree.actualSpent
+              : rollup.actualSpent;
             if (actual === 0) return <NoneValue />;
             const est = hasSubtree
               ? (rollup.subtree.costEstimate ?? costEstimate)

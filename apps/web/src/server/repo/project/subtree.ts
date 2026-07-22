@@ -129,6 +129,9 @@ export function aggregateSubtreeRollups(
 
     const own = ownRollups.get(id) ?? EMPTY_PROJECT_OWN_ROLLUP;
     let spent = own.spent;
+    let actualSpent = own.actualSpent;
+    let committedSpent = own.committedSpent;
+    let contributions = own.contributions;
     let purchaseCount = own.purchaseCount;
     let taskCount = own.taskCount;
     let doneTaskCount = own.doneTaskCount;
@@ -143,6 +146,9 @@ export function aggregateSubtreeRollups(
       for (const childId of childrenByParent.get(id) ?? []) {
         const child = computeFor(childId, depth + 1);
         spent += child.spent;
+        actualSpent += child.actualSpent;
+        committedSpent += child.committedSpent;
+        contributions += child.contributions;
         purchaseCount += child.purchaseCount;
         taskCount += child.taskCount;
         doneTaskCount += child.doneTaskCount;
@@ -156,6 +162,9 @@ export function aggregateSubtreeRollups(
 
     const result: ProjectSubtreeRollup = {
       spent,
+      actualSpent,
+      committedSpent,
+      contributions,
       purchaseCount,
       taskCount,
       doneTaskCount,

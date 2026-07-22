@@ -5,7 +5,9 @@
 
 import { type PurchaseId, purchaseId } from "@cubby/schemas/identifiers";
 import {
+  purchaseBulkCostTypeInput,
   purchaseBulkMoveInput,
+  purchaseBulkTradeInput,
   purchaseCreateInput,
   purchaseFiltersSchema,
   purchaseListAndSideEffectsOut,
@@ -20,6 +22,8 @@ import {
   getPurchaseByID,
   movePurchases,
   purchaseList,
+  setPurchasesCostType,
+  setPurchasesTrade,
   updatePurchase,
 } from "~/server/repo/purchase";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
@@ -98,6 +102,40 @@ const bulkMove = protectedProcedure
     return { items, sideEffects: { backgroundBatches } };
   });
 
+// Bulk trade write, same wave-wide side-effect shape as bulkMove above.
+const bulkSetTrade = protectedProcedure
+  .input(purchaseBulkTradeInput)
+  .output(purchaseListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setPurchasesTrade(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "purchase" as const, entityId: item.id },
+        source: "purchase.bulkSetTrade",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
+// Bulk cost-type write, same shape as bulkSetTrade.
+const bulkSetCostType = protectedProcedure
+  .input(purchaseBulkCostTypeInput)
+  .output(purchaseListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setPurchasesCostType(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "purchase" as const, entityId: item.id },
+        source: "purchase.bulkSetCostType",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 export const purchaseRouter = createTRPCRouter({
   getByID,
   list,
@@ -106,4 +144,6 @@ export const purchaseRouter = createTRPCRouter({
   delete: deleteItem,
   chartData,
   bulkMove,
+  bulkSetTrade,
+  bulkSetCostType,
 });

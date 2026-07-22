@@ -25,6 +25,9 @@ export type ProjectSubtreeRollup = ProjectRollup["subtree"];
 /** Own-rollup zeros — the per-project aggregate for a project with no purchases/tasks yet. */
 export const EMPTY_PROJECT_OWN_ROLLUP: ProjectOwnRollup = {
   spent: 0,
+  actualSpent: 0,
+  committedSpent: 0,
+  contributions: 0,
   purchaseCount: 0,
   taskCount: 0,
   doneTaskCount: 0,
@@ -33,6 +36,9 @@ export const EMPTY_PROJECT_OWN_ROLLUP: ProjectOwnRollup = {
 /** Subtree-rollup zeros — a project with no live descendants. */
 export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
   spent: 0,
+  actualSpent: 0,
+  committedSpent: 0,
+  contributions: 0,
   purchaseCount: 0,
   taskCount: 0,
   doneTaskCount: 0,

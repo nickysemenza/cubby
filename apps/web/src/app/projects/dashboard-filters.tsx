@@ -53,15 +53,25 @@ export function dateRangeBounds(
 
 function ToggleBadge({
   label,
+  groupLabel,
   active,
   onClick,
 }: {
   label: string;
+  /** The filter group this toggle belongs to (e.g. "Status", "Date") — folded
+   * into the accessible name so screen readers hear "Status: Planning,
+   * toggle button" rather than just "Planning". */
+  groupLabel: string;
   active: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" onClick={onClick}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${groupLabel}: ${label}${active ? " (active)" : ""}`}
+    >
       <Badge
         variant={active ? "default" : "outline"}
         className="cursor-pointer"
@@ -97,6 +107,7 @@ function FilterGroup({
         <ToggleBadge
           key={option}
           label={formatLabel(option)}
+          groupLabel={label}
           active={selected.has(option)}
           onClick={() => onToggle(option)}
         />
@@ -173,6 +184,7 @@ export function DashboardFilters({
             <ToggleBadge
               key={key}
               label={label}
+              groupLabel="Date"
               active={filters.dateRange === key}
               onClick={() =>
                 onFiltersChange({

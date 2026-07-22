@@ -3,45 +3,62 @@ import { ResponsiveBar } from "@nivo/bar";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
+import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type Datum = {
   project: string;
+  percent: number;
   actual: number;
   estimate: number;
 };
 
 /**
- * Actual spend comes off `project.rollup.spent` (a SQL aggregate over live
- * purchases, including `future` ones). A project with sub-projects uses its
- * `subtree.spent` instead (own + every
- * descendant), so a parent's bar reads as the whole envelope, not just what
- * was logged directly against it.
+ * Budget health as % of estimate, not raw dollars — Wedding's $175K estimate
+ * dwarfs every other project's bar on an absolute scale, so a single outsized
+ * project made the rest unreadable slivers. Normalizing to actual/estimate
+ * puts every project on the same 0–100%(+) axis regardless of size, with a
+ * 100% reference line marking the budget itself.
+ *
+ * Both actual and estimate come off `project.rollup.subtree` (own + every
+ * live descendant) — for a leaf project with no sub-projects, `subtree`
+ * degenerates to that project's own numbers (see subtree.ts), so this is
+ * safe to use uniformly instead of branching on `subtree.projectCount`.
  */
 export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
     return (
       projects
-        // Top-level only: a parent's bar already includes descendant spend via
-        // subtree.spent, so letting sub-projects render their own bars would
-        // double-count them (same filter as ProjectCards).
+        // Top-level only: a parent's bar already includes descendant spend/
+        // estimate via subtree.*, so letting sub-projects render their own
+        // bars would double-count them (same filter as ProjectCards).
         .filter((p) => !p.parentProjectId)
         .map((p) => ({
           project: p.name,
-          actual:
-            p.rollup.subtree.projectCount > 0
-              ? p.rollup.subtree.spent
-              : p.rollup.spent,
-          estimate: p.costEstimate ?? 0,
+          actual: p.rollup.subtree.spent,
+          estimate: p.rollup.subtree.costEstimate,
         }))
-        .filter((d) => d.actual > 0 && d.estimate > 0)
-        .sort(
-          (a, b) =>
-            Math.max(b.actual, b.estimate) - Math.max(a.actual, a.estimate),
+        // No estimate (null or 0) means "% of estimate" is undefined — leave
+        // those projects off the chart rather than showing a misleading N/A
+        // bar of 0 or infinite height.
+        .filter(
+          (d): d is { project: string; actual: number; estimate: number } =>
+            d.estimate != null && d.estimate > 0,
         )
-        .slice(0, 12) as Datum[]
+        .map(
+          (d): Datum => ({
+            project: d.project,
+            actual: d.actual,
+            estimate: d.estimate,
+            // Negative `actual` (net contributions exceeding spend) is real —
+            // it just yields a negative percent, which reads fine on an axis
+            // that already spans through 0.
+            percent: (d.actual / d.estimate) * 100,
+          }),
+        )
+        .sort((a, b) => b.percent - a.percent)
+        .slice(0, 15)
     );
   }, [projects]);
 
@@ -49,55 +66,59 @@ export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
     return <ChartEmpty icon={DollarSign} title="No cost data." />;
   }
 
-  const chartHeight = Math.max(250, data.length * 50 + 60);
+  const chartHeight = Math.max(250, data.length * 40 + 60);
 
   return (
     <div style={{ height: chartHeight }}>
       <ResponsiveBar
         data={data}
-        keys={["actual", "estimate"]}
+        keys={["percent"]}
         indexBy="project"
         layout="horizontal"
-        groupMode="grouped"
-        margin={{ top: 10, right: 80, bottom: 40, left: 160 }}
-        padding={0.2}
-        innerPadding={2}
-        colors={({ id, data: d }) => {
-          if (id === "estimate") return "var(--chart-neutral)";
-          return d.actual > d.estimate && d.estimate > 0
-            ? "var(--chart-negative)"
-            : "var(--chart-1)";
-        }}
+        margin={{ top: 10, right: 30, bottom: 40, left: 160 }}
+        padding={0.3}
+        colors={({ data: d }) =>
+          d.percent > 100 ? "var(--chart-negative)" : "var(--chart-positive)"
+        }
         {...nivoBarChrome}
-        axisBottom={nivoCurrencyAxis}
+        axisBottom={{
+          tickSize: 0,
+          tickPadding: 8,
+          tickValues: 5,
+          format: (v: number) => `${Math.round(v)}%`,
+        }}
         axisLeft={{
           tickSize: 0,
           tickPadding: 8,
         }}
-        label={(d) =>
-          d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
-        }
-        labelSkipWidth={50}
+        label={(d) => `${Math.round(d.value ?? 0)}%`}
+        labelSkipWidth={28}
         labelTextColor="var(--background)"
         enableGridX
         enableGridY={false}
-        tooltip={({ id, value, indexValue }) => (
-          <ChartTooltip>
-            <strong>{indexValue}</strong> — {id}: {formatCurrency(value, 0)}
-          </ChartTooltip>
-        )}
-        legends={[
+        markers={[
           {
-            dataFrom: "keys",
-            anchor: "bottom",
-            direction: "row",
-            translateY: 40,
-            itemWidth: 80,
-            itemHeight: 20,
-            symbolSize: 12,
-            symbolShape: "circle",
+            axis: "x",
+            value: 100,
+            lineStyle: {
+              stroke: "var(--foreground)",
+              strokeWidth: 1,
+              strokeDasharray: "4 4",
+            },
+            legend: "100% of estimate",
+            legendPosition: "top",
+            textStyle: { fill: "var(--muted-foreground)", fontSize: 10 },
           },
         ]}
+        tooltip={({ data: d }) => (
+          <ChartTooltip>
+            <strong>{d.project}</strong> — {Math.round(d.percent)}% of estimate
+            <div className="mt-1 text-muted-foreground text-xs">
+              {formatCurrency(d.actual, 0)} actual /{" "}
+              {formatCurrency(d.estimate, 0)} estimate
+            </div>
+          </ChartTooltip>
+        )}
         theme={nivoChartTheme}
       />
     </div>

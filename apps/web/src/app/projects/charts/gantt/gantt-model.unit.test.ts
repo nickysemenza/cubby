@@ -46,11 +46,17 @@ function project(params: {
     updatedAt: new Date(),
     rollup: {
       spent: 0,
+      actualSpent: 0,
+      committedSpent: 0,
+      contributions: 0,
       purchaseCount: 0,
       taskCount,
       doneTaskCount,
       subtree: {
         spent: 0,
+        actualSpent: 0,
+        committedSpent: 0,
+        contributions: 0,
         purchaseCount: 0,
         taskCount: params.subtreeTaskCount ?? taskCount,
         doneTaskCount: params.subtreeDoneTaskCount ?? doneTaskCount,

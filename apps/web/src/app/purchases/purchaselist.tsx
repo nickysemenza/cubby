@@ -7,7 +7,7 @@ import type {
 } from "@cubby/schemas/project";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, ExternalLink } from "lucide-react";
+import { ArrowRightLeft, ExternalLink, Tag, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { TradeCostCell } from "~/app/projects/charts/trade-cost-matrix";
@@ -24,6 +24,7 @@ import {
   createPlainDateColumn,
   createProjectLinkColumn,
 } from "../_components/data-table/columnHelpers";
+import { EditableCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -34,6 +35,7 @@ import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import { PurchaseChartStrip } from "./purchase-charts";
 import {
   costTypeLabels,
@@ -66,6 +68,16 @@ function buildPurchaseFilters(
   };
 }
 
+/**
+ * Editable-select options for the Status column — the "made vs planned" pair
+ * ("Actual"/"Planned"), distinct from `futureFilterOptions` which carries an
+ * extra "All" sentinel for the filter dropdown.
+ */
+const futureEditOptions = [
+  { value: "false", label: "Actual" },
+  { value: "true", label: "Planned" },
+];
+
 interface PurchaseListProps {
   /** Actions to display in the table toolbar (e.g., the "New Purchase" button). */
   actions?: ReactNode;
@@ -82,6 +94,8 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
   const [bulkMoveItems, setBulkMoveItems] = useState<PurchaseOut[]>([]);
+  const [bulkTradeItems, setBulkTradeItems] = useState<PurchaseOut[]>([]);
+  const [bulkCostTypeItems, setBulkCostTypeItems] = useState<PurchaseOut[]>([]);
 
   const updatePurchaseMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -109,6 +123,26 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           minSelection: 1,
           onExecute: async (rows: Row<PurchaseOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-trade",
+          label: "Set trade...",
+          icon: <Wrench className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<PurchaseOut>[]) => {
+            setBulkTradeItems(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
+        {
+          id: "set-cost-type",
+          label: "Set cost type...",
+          icon: <Tag className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<PurchaseOut>[]) => {
+            setBulkCostTypeItems(rows.map((r) => r.original));
             return { success: true };
           },
         },
@@ -216,7 +250,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           },
         },
       }),
-      columnHelper.accessor((row) => row.future, {
+      columnHelper.accessor((row) => (row.future ? "true" : "false"), {
         id: "future",
         header: "Status",
         enableSorting: false,
@@ -229,12 +263,28 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
             options: futureFilterOptions,
           },
         },
-        cell: (info) =>
-          info.getValue() ? (
-            <Badge variant="warning">Planned</Badge>
-          ) : (
-            <NoneValue />
-          ),
+        cell: (info) => {
+          const purchase = info.row.original;
+          return (
+            <EditableCell
+              value={info.getValue()}
+              onSave={async (newVal) => {
+                await updatePurchaseMutation.mutateAsync({
+                  id: purchase.id,
+                  data: { future: newVal === "true" },
+                });
+              }}
+              config={{ type: "select", options: futureEditOptions }}
+              renderValue={(v) =>
+                v === "true" ? (
+                  <Badge variant="warning">Planned</Badge>
+                ) : (
+                  <NoneValue />
+                )
+              }
+            />
+          );
+        },
       }),
       columnHelper.accessor((row) => row.url, {
         id: "url",
@@ -338,6 +388,34 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     },
   });
 
+  const bulkTradeMutation = useActionMutation({
+    mutationFn: api.purchase.bulkSetTrade.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkTradeItems([]);
+      table.resetRowSelection();
+    },
+  });
+
+  const bulkCostTypeMutation = useActionMutation({
+    mutationFn: api.purchase.bulkSetCostType.mutationOptions,
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    success: (data) =>
+      savedWithBackgroundWork(
+        data.sideEffects,
+        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
+      ),
+    onSuccess: () => {
+      setBulkCostTypeItems([]);
+      table.resetRowSelection();
+    },
+  });
+
   // Mirror the table's active filters for the chart strip. Reading
   // `table.getState()` is reactive — the table re-renders this component on
   // every filter change.
@@ -405,6 +483,44 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
             await bulkMoveMutation.mutateAsync({
               ids: bulkMoveItems.map((p) => p.id),
               projectId,
+            });
+          }}
+        />
+      )}
+      {bulkTradeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkTradeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkTradeItems([]);
+          }}
+          items={bulkTradeItems}
+          isPending={bulkTradeMutation.isPending}
+          options={tradeOptions}
+          fieldLabel="Trade"
+          itemNoun="Purchase"
+          onConfirm={async (trade) => {
+            await bulkTradeMutation.mutateAsync({
+              ids: bulkTradeItems.map((p) => p.id),
+              trade: trade as Trade,
+            });
+          }}
+        />
+      )}
+      {bulkCostTypeItems.length > 0 && (
+        <SetFieldDialog
+          open={bulkCostTypeItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkCostTypeItems([]);
+          }}
+          items={bulkCostTypeItems}
+          isPending={bulkCostTypeMutation.isPending}
+          options={costTypeOptions}
+          fieldLabel="Cost Type"
+          itemNoun="Purchase"
+          onConfirm={async (costType) => {
+            await bulkCostTypeMutation.mutateAsync({
+              ids: bulkCostTypeItems.map((p) => p.id),
+              costType: costType as CostType,
             });
           }}
         />

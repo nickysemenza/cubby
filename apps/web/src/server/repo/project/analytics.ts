@@ -42,6 +42,12 @@ export async function projectRollups(
       .select({
         projectId: purchase.projectId,
         spent: sql<number>`coalesce(sum(${purchase.cost}), 0)::float`,
+        // Split the blended `spent` into its three economically distinct parts
+        // (see spend.ts / BudgetStrip). actualSpent + committedSpent −
+        // contributions === spent.
+        actualSpent: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = false), 0)::float`,
+        committedSpent: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = true), 0)::float`,
+        contributions: sql<number>`coalesce(-sum(${purchase.cost}) filter (where ${purchase.cost} < 0), 0)::float`,
         purchaseCount: sql<number>`count(*)::int`,
       })
       .from(purchase)
@@ -64,6 +70,9 @@ export async function projectRollups(
     out.set(row.projectId, {
       ...existing,
       spent: row.spent,
+      actualSpent: row.actualSpent,
+      committedSpent: row.committedSpent,
+      contributions: row.contributions,
       purchaseCount: row.purchaseCount,
     });
   }

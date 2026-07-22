@@ -19,6 +19,8 @@ export {
   deletePurchases,
   getPurchaseByID,
   movePurchases,
+  setPurchasesCostType,
+  setPurchasesTrade,
   updatePurchase,
 } from "./crud";
 export { purchaseList } from "./lookup";
