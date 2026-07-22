@@ -1,3 +1,12 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "advisory": "GHSA-v2hh-gcrm-f6hx",
+      "module": "fast-uri",
+      "reachability": "low",
+      "rationale": "fast-uri is a transitive dependency of ajv, reaching prod only through @cloudflare/tanstack-ai's LLM tool/response JSON-schema validation (and the shadcn build-time CLI, which is dev-only). The advisory (host confusion via a literal backslash authority delimiter) only matters when an untrusted URL is parsed with fast-uri to make a security/routing decision about its host — cubby never does that; ajv's uri-format check validates schema-shaped strings, not attacker-controlled hosts. Patched in >=3.1.4, but forcing that via a pnpm override triggers a full lockfile re-resolve that pulls in NEW critical advisories (seroval, effect), so the real fix is deferred to a dedicated dependency-bump PR where that churn can be reviewed in isolation.",
+      "reviewedAt": "2026-07-22",
+      "expires": "2026-10-15"
+    }
+  ]
 }
