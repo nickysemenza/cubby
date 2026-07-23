@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { TableStateReturn } from "../data-table/useTableState";
@@ -103,6 +103,10 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     refetch,
   } = useInfiniteQuery({
     enabled,
+    // Filter/sort changes swap the queryKey; without this the accumulated
+    // pages vanish for the refetch window, blanking rows AND the header
+    // count (useEntityList withholds totalCount while isLoading).
+    placeholderData: keepPreviousData,
     queryKey: infiniteQueryKey,
     queryFn: async ({ pageParam }: { pageParam: number }) => {
       const options = pageOptions(pageParam);
