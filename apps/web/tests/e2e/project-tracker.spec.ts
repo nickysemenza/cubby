@@ -204,12 +204,12 @@ test.describe("Project tracker", () => {
     // tasks/purchases. `ProjectPill` (Needs Attention) renders a Link, not a
     // button, so this is unambiguous even before the edit.
     //
-    // Click the PENCIL, not the button center: the name text inside the
-    // trigger is a detail-page link (text click = navigate, pencil/padding =
-    // edit), so a center click would leave the page instead of opening the
-    // editor.
+    // Sheets-style select-then-edit: inside the cell-selection grid a single
+    // click only SELECTS the cell; the editor opens on double-click (or Enter).
+    // Double-click the pencil (an svg inside the trigger), not the name text —
+    // the name is a detail-page link, so a center click would navigate away.
     const editedName = `${name} (edited)`;
-    await page.getByRole("button", { name }).locator("svg").click();
+    await page.getByRole("button", { name }).locator("svg").dblclick();
     const nameInput = page.locator("input:focus");
     await expect(nameInput).toBeVisible({ timeout: 5000 });
     await nameInput.fill(editedName);

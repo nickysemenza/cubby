@@ -13,6 +13,11 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import {
+  numberCellData,
+  specFromCellData,
+  tagsCellData,
+} from "../_components/data-table/cell-data";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
@@ -20,6 +25,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { EditableTagsCell } from "../_components/recipe/editable-tags-cell";
 import {
   RecipeSourceLink,
   sourceLabel,
@@ -161,8 +167,52 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   // useMutation returns a new object every render, but the closure captures
   // it correctly — see productlist.tsx for the same pattern.
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
-  const columns = useMemo(
-    () => [
+  const columns = useMemo(() => {
+    // Inline-editable, copy/pastable tags column. The cellData drives both the
+    // range copy/paste engine (meta.cellData) and the focused-cell clipboard
+    // (specFromCellData, per row) — one source of truth for tag save semantics.
+    const saveTags = async (row: RecipeListItem, nextTags: string[] | null) => {
+      await updateRecipeMutation.mutateAsync({
+        id: row.id,
+        data: { tags: nextTags },
+      });
+    };
+    const tagsCellDataDef = tagsCellData<RecipeListItem>(
+      (row) => row.tags ?? null,
+      saveTags,
+    );
+    // Yield column falls back to inline-editable `servings` only when the recipe
+    // has no structured yield ("2 loaves", owned by the detail page's editor).
+    // The cellData mirrors that: copy is null on structured-yield rows (nothing
+    // to offer), and paste is rejected there — so copy/paste is available on
+    // exactly the rows where the inline editor is.
+    const saveServings = async (row: RecipeListItem, value: number | null) => {
+      if (row.yield) {
+        throw new Error(
+          "This recipe has a structured yield — edit servings on its detail page.",
+        );
+      }
+      await updateRecipeMutation.mutateAsync({
+        id: row.id,
+        data: { servings: value === null ? null : Math.round(value) },
+      });
+    };
+    const servingsCellDataDef = numberCellData<RecipeListItem>(
+      "number",
+      (row) => (row.yield ? null : (row.servings ?? null)),
+      saveServings,
+    );
+    const renderTags = (tags: string[] | null) => {
+      if (!tags?.length) return <NoneValue />;
+      return (
+        <TruncatedList
+          items={tags}
+          maxItems={2}
+          renderItem={(tag) => <RecipeTag key={tag} tag={tag} size="sm" />}
+        />
+      );
+    };
+    return [
       // Tags column
       columnHelper.accessor("tags", {
         id: "tags",
@@ -176,15 +226,16 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
             options: [{ value: "", label: "All tags" }, ...tagOptions],
           },
           mobile: { slot: "subtitle", priority: 10 },
+          cellData: tagsCellDataDef,
         },
         cell: (info) => {
-          const tags = info.getValue();
-          if (!tags?.length) return <NoneValue />;
+          const recipe = info.row.original;
           return (
-            <TruncatedList
-              items={tags}
-              maxItems={2}
-              renderItem={(tag) => <RecipeTag key={tag} tag={tag} size="sm" />}
+            <EditableTagsCell
+              value={recipe.tags ?? null}
+              renderValue={renderTags}
+              clipboard={specFromCellData(tagsCellDataDef, recipe)}
+              onSave={(nextTags) => saveTags(recipe, nextTags)}
             />
           );
         },
@@ -200,7 +251,8 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           className: "w-24",
           // Mobile: yield/servings is the most useful at-a-glance datum, and
           // recipe rows have no image — surface it as the row subtitle.
-          mobile: { slot: "subtitle", priority: 5 },
+          mobile: { slot: "subtitle", priority: 5, interactive: true },
+          cellData: servingsCellDataDef,
         },
         cell: (info) => {
           const recipe = info.row.original;
@@ -213,17 +265,11 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
             <EditableCell<number>
               value={recipe.servings ?? null}
               config={{ type: "number" }}
+              clipboard={specFromCellData(servingsCellDataDef, recipe)}
               renderValue={(servings) =>
                 servings ? `${servings} servings` : <NoneValue />
               }
-              onSave={async (newValue) => {
-                await updateRecipeMutation.mutateAsync({
-                  id: recipe.id,
-                  data: {
-                    servings: newValue === null ? null : Math.round(newValue),
-                  },
-                });
-              }}
+              onSave={(newValue) => saveServings(recipe, newValue)}
             />
           );
         },
@@ -359,9 +405,8 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           );
         },
       }),
-    ],
-    [columnHelper, tagOptions],
-  );
+    ];
+  }, [columnHelper, tagOptions]);
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,

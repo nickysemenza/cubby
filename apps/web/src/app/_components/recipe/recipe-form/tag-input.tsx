@@ -15,6 +15,12 @@ interface TagInputProps {
   value: string[] | null;
   onChange: (tags: string[]) => void;
   className?: string;
+  /** Focus the input on mount (inline cell editor opens ready to type). */
+  autoFocus?: boolean;
+  /** Seed the input with an initial value (type-to-edit). */
+  initialInputValue?: string;
+  /** Enter with an empty input (the inline cell editor commits on it). */
+  onEmptyEnter?: () => void;
 }
 
 /**
@@ -25,7 +31,14 @@ interface TagInputProps {
  * like "cuisine:thai" or plain tags like "quick" — same behavior/visuals as
  * before the `ChipsInput` extraction.
  */
-export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
+export const TagInput: FC<TagInputProps> = ({
+  value,
+  onChange,
+  className,
+  autoFocus,
+  initialInputValue,
+  onEmptyEnter,
+}) => {
   const tags = value ?? [];
   const api = useTRPC();
   const { data: existingTags } = useQuery(api.recipe.getAllTags.queryOptions());
@@ -61,6 +74,9 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
       value={value}
       onChange={onChange}
       className={className}
+      autoFocus={autoFocus}
+      initialInputValue={initialInputValue}
+      onEmptyEnter={onEmptyEnter}
       placeholder="Add tag (e.g., cuisine:thai, quick)"
       normalize={(raw) => raw.trim().toLowerCase()}
       getSuggestions={getSuggestions}

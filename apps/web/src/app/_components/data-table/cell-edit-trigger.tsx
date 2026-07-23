@@ -7,12 +7,21 @@ import {
   type CellClipboardSpec,
   registerCellClipboard,
 } from "./cell-clipboard";
+import {
+  CELL_EDIT_EVENT,
+  type CellEditEventDetail,
+  CellSelectionContext,
+} from "./cell-selection-context";
 
 interface CellEditTriggerProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** React 19 ref-as-prop (forwardRef is deprecated). */
   ref?: React.Ref<HTMLButtonElement>;
-  onStartEdit: () => void;
+  /**
+   * Open the editor. `seedText` (type-to-edit) is threaded from
+   * {@link CELL_EDIT_EVENT}'s detail; click/double-click open with no seed.
+   */
+  onStartEdit: (seedText?: string) => void;
   /** Register for cmd-C / cmd-V while this trigger is focused. */
   clipboard?: CellClipboardSpec;
   /** Hide the trailing hover pencil (e.g. icon-only pencil triggers). */
@@ -43,15 +52,42 @@ export function CellEditTrigger({
     else if (forwardedRef) forwardedRef.current = node;
   };
 
+  // Inside an RTable with spreadsheet-style cell selection, a single click
+  // SELECTS the cell (the container drives selection off mousedown); editing
+  // opens on double-click or Enter (dispatched as CELL_EDIT_EVENT). Outside
+  // that context (detail pages, dialogs) the original click-to-edit stands.
+  const cellSelectionMode = React.useContext(CellSelectionContext);
+
   // Keep the latest spec in a ref so registration survives re-renders without
   // listener churn; the registry reads through the stable wrapper below.
   const clipboardRef = React.useRef(clipboard);
   clipboardRef.current = clipboard;
   const hasClipboard = clipboard !== undefined;
 
+  // Ref-latched onStartEdit so the CELL_EDIT_EVENT listener (registered once)
+  // always calls the current handler without re-subscribing each render.
+  const onStartEditRef = React.useRef(onStartEdit);
+  onStartEditRef.current = onStartEdit;
   React.useEffect(() => {
     const el = localRef.current;
-    if (!el || !hasClipboard) return;
+    if (!el) return;
+    const handler = (e: Event) => {
+      const seedText = (e as CustomEvent<CellEditEventDetail>).detail?.seedText;
+      onStartEditRef.current(seedText);
+    };
+    el.addEventListener(CELL_EDIT_EVENT, handler);
+    return () => el.removeEventListener(CELL_EDIT_EVENT, handler);
+  }, []);
+
+  // In cell-selection mode the range engine (useCellSelection) owns ALL
+  // copy/paste — clicking a cell focuses this trigger, and the legacy document
+  // paste listener registers before the range one, so registering here would
+  // let a real Cmd+V paste the raw TSV blob into the anchor cell (numeric
+  // columns digit-strip it: "10\t20\n30\t40" → 10203040) before the range
+  // paste runs. Registry stays for out-of-table cells (detail pages, dialogs).
+  React.useEffect(() => {
+    const el = localRef.current;
+    if (!el || !hasClipboard || cellSelectionMode) return;
     return registerCellClipboard(el, {
       get kindKey() {
         return clipboardRef.current?.kindKey ?? "";
@@ -61,12 +97,13 @@ export function CellEditTrigger({
         clipboardRef.current?.onPasteValue?.(payload) ?? Promise.resolve(),
       isEditing: () => clipboardRef.current?.isEditing?.() ?? false,
     });
-  }, [hasClipboard]);
+  }, [hasClipboard, cellSelectionMode]);
 
   return (
     <button
       type="button"
       ref={setRef}
+      data-cell-edit-trigger=""
       className={cn(
         "group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -74,10 +111,16 @@ export function CellEditTrigger({
         className,
       )}
       onClick={(e) => {
+        // stopPropagation kept so a trigger click never bubbles to the row's
+        // onClick (navigate/open). Selection is driven by mousedown, which is
+        // NOT stopped, so clicking the cell still selects it.
         e.stopPropagation();
         e.currentTarget.focus();
-        onStartEdit();
+        // Cell-selection mode: click only focuses/selects; edit opens on
+        // double-click or Enter. Otherwise keep the original click-to-edit.
+        if (!cellSelectionMode) onStartEdit();
       }}
+      onDoubleClick={cellSelectionMode ? () => onStartEdit() : undefined}
       {...rest}
     >
       {children}

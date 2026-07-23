@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, Pencil, X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
@@ -49,8 +50,9 @@ export interface EditableEntityCellProps<TId extends string> {
 /**
  * Editable cell for a single related entity, backed by an async entity search.
  * Sibling of `EditableCell` (which only supports static option lists) — same
- * trigger / overlay / Check/X / optimistic-display semantics, but the editor
- * is a `DialogCompatibleCombobox` fed by a `With*Search` render-prop provider.
+ * trigger / overlay / commit-on-pick / optimistic-display semantics, but the
+ * editor is a `DialogCompatibleCombobox` fed by a `With*Search` render-prop
+ * provider.
  */
 export function EditableEntityCell<TId extends string>({
   value,
@@ -98,7 +100,7 @@ export function EditableEntityCell<TId extends string>({
         <span className="min-w-0 truncate">{renderValue(displayValue)}</span>
         <CellEditTrigger
           ref={edit.triggerRef}
-          onStartEdit={() => edit.setIsEditing(true)}
+          onStartEdit={edit.open}
           clipboard={edit.clipboard}
           hidePencilIcon
           aria-label={`Edit ${label}`}
@@ -115,7 +117,7 @@ export function EditableEntityCell<TId extends string>({
     <>
       <CellEditTrigger
         ref={edit.triggerRef}
-        onStartEdit={() => edit.setIsEditing(true)}
+        onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
@@ -125,6 +127,16 @@ export function EditableEntityCell<TId extends string>({
   );
 }
 
+/**
+ * Commit-on-pick (matches `EditableCell`'s select/date editors): selecting an
+ * item in the combobox — including toggling the current item off to clear when
+ * `clearable` — saves + closes immediately, no separate ✓ confirm step.
+ * Picking the SAME item, or clearing a non-clearable relation, closes without a
+ * write; a save rejection toasts and keeps the editor open with the attempted
+ * selection intact. The ✗ button stays as the explicit mouse cancel affordance
+ * (Escape via the overlay also works). `DialogCompatibleCombobox` closes its
+ * own dropdown on select, so the whole editor folds away in one gesture.
+ */
 function EditableEntityEditor<TId extends string>({
   value,
   onSave,
@@ -146,49 +158,77 @@ function EditableEntityEditor<TId extends string>({
 }) {
   const [selected, setSelected] = useState<ComboboxItem<TId> | null>(value);
   const [isPending, setIsPending] = useState(false);
+  // Re-entrancy guard for commit-on-pick: DialogCompatibleCombobox closes its
+  // dropdown synchronously on click (before the awaited save resolves), so a
+  // fast second pick would otherwise fire a concurrent onSave whose
+  // last-to-resolve wins regardless of click order. The pointer-events gate on
+  // the wrapper below is the visual affordance; this ref is the hard guard
+  // (CSS pointer-events isn't enforced by keyboard interaction or jsdom).
+  const pendingRef = useRef(false);
 
-  const handleSave = useCallback(async () => {
-    // Unchanged, or cleared on a non-clearable relation → plain cancel.
-    if (selected?.id === value?.id || (selected === null && !clearable)) {
-      onCancel();
-      return;
-    }
+  const commit = useCallback(
+    async (next: ComboboxItem<TId> | null) => {
+      if (pendingRef.current) return;
+      setSelected(next);
 
-    setIsPending(true);
-    try {
-      await onSave(selected?.id ?? null);
-      onCommit(selected);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setIsPending(false);
-    }
-  }, [selected, value, clearable, onSave, onCancel, onCommit]);
+      // Unchanged, or cleared on a non-clearable relation → plain cancel.
+      if (next?.id === value?.id || (next === null && !clearable)) {
+        onCancel();
+        return;
+      }
+
+      pendingRef.current = true;
+      setIsPending(true);
+      try {
+        await onSave(next?.id ?? null);
+        onCommit(next);
+      } catch (err) {
+        // Stay open with the attempted selection intact so the user can retry
+        // or cancel.
+        toast.error(getErrorMessage(err));
+      } finally {
+        pendingRef.current = false;
+        setIsPending(false);
+      }
+    },
+    [value, clearable, onSave, onCancel, onCommit],
+  );
 
   return (
     <div className="inline-flex w-full items-center gap-1">
-      <SearchProvider>
-        {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
-          <DialogCompatibleCombobox
-            label={label}
-            items={filterItems ? items.filter(filterItems) : items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            value={selected}
-            setValue={setSelected}
-            onCreateNew={onCreateNew}
-            onOpenChange={onOpenChange}
-          />
+      {/* Mid-save pick gate — mirrors EditableDateEditor's isPending wrapper
+          (DialogCompatibleCombobox has no disabled prop to thread instead). */}
+      <div
+        className={cn(
+          "min-w-0 flex-1",
+          isPending && "pointer-events-none opacity-50",
         )}
-      </SearchProvider>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => void handleSave()}
-        disabled={isPending}
       >
-        <Check className="size-3.5" />
-      </Button>
+        <SearchProvider>
+          {({
+            items,
+            onSearchChange,
+            isLoading,
+            onCreateNew,
+            onOpenChange,
+          }) => (
+            <DialogCompatibleCombobox
+              label={label}
+              items={filterItems ? items.filter(filterItems) : items}
+              onSearchChange={onSearchChange}
+              isLoading={isLoading}
+              value={selected}
+              setValue={(next) => void commit(next)}
+              onCreateNew={onCreateNew}
+              onOpenChange={onOpenChange}
+              // Open + focus the search input on mount. Focus-only: the entity
+              // search input is internal state, so a type-to-edit seed char isn't
+              // threaded here.
+              autoFocus
+            />
+          )}
+        </SearchProvider>
+      </div>
       <Button
         size="icon"
         variant="ghost"

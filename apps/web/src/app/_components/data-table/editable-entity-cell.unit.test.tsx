@@ -51,14 +51,9 @@ const renderValue = (v: ComboboxItem<string> | null) => (
   <span data-testid="display">{v?.name ?? "None"}</span>
 );
 
-/** The Check/X action buttons are icon-only; find them by their lucide svg
- * class, matching the pattern used in editable-cell.unit.test.tsx. Only call
- * these once the combobox dropdown is closed — its rows also render a
- * (opacity-0) Check icon for the selected-state indicator. */
-const getCheckButton = () =>
-  screen
-    .getAllByRole("button")
-    .find((btn) => btn.querySelector("svg.lucide-check"));
+/** The ✗ cancel action is icon-only; find it by its lucide svg class, matching
+ * the pattern used in editable-cell.unit.test.tsx. (Commit-on-pick removed the
+ * ✓ confirm button — picking a row saves immediately.) */
 const getCancelButton = () =>
   screen
     .getAllByRole("button")
@@ -69,7 +64,11 @@ const enterEditMode = () => {
 };
 
 const openCombobox = () => {
-  fireEvent.click(screen.getByRole("combobox"));
+  // The editor auto-opens the dropdown on mount (autoFocus). Only click to open
+  // when it isn't already open — a click while open would toggle it shut.
+  if (!document.querySelector("[data-combobox-popup]")) {
+    fireEvent.click(screen.getByRole("combobox"));
+  }
 };
 
 /** Click a row inside the portaled dropdown. Scoped to the popup because the
@@ -106,7 +105,7 @@ describe("EditableEntityCell", () => {
     expect(parentClick).not.toHaveBeenCalled();
   });
 
-  it("saves the newly selected item and shows it optimistically", async () => {
+  it("saves on pick (no ✓ confirm) and shows the new item optimistically", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EditableEntityCell
@@ -121,11 +120,8 @@ describe("EditableEntityCell", () => {
     enterEditMode();
     openCombobox();
 
-    fireEvent.click(screen.getByRole("button", { name: "Fridge" }));
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
+    // Picking a row commits immediately — no separate Check button click.
+    clickDropdownItem("Fridge");
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1);
@@ -138,7 +134,7 @@ describe("EditableEntityCell", () => {
     expect(screen.getByTestId("display")).toHaveTextContent("Fridge");
   });
 
-  it("does not save when the selection is unchanged, and exits edit mode", async () => {
+  it("cancels via the ✗ button without calling onSave", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EditableEntityCell
@@ -151,33 +147,6 @@ describe("EditableEntityCell", () => {
     );
 
     enterEditMode();
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
-
-    await waitFor(() => {
-      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    });
-    expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
-  });
-
-  it("cancels via the X button without calling onSave", async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    render(
-      <EditableEntityCell
-        value={PANTRY}
-        onSave={onSave}
-        SearchProvider={StubSearchProvider}
-        label="location"
-        renderValue={renderValue}
-      />,
-    );
-
-    enterEditMode();
-    openCombobox();
-    fireEvent.click(screen.getByRole("button", { name: "Fridge" }));
 
     const cancelButton = getCancelButton();
     expect(cancelButton).toBeDefined();
@@ -187,11 +156,10 @@ describe("EditableEntityCell", () => {
       expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     });
     expect(onSave).not.toHaveBeenCalled();
-    // Cancel discards the pending selection — still shows the original value.
     expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
   });
 
-  it("clearable: toggling the selected item off and saving clears the value", async () => {
+  it("clearable: toggling the selected item off saves null immediately", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EditableEntityCell
@@ -206,12 +174,8 @@ describe("EditableEntityCell", () => {
 
     enterEditMode();
     openCombobox();
-    // Clicking the already-selected item toggles selection to null.
+    // Clicking the already-selected item toggles selection to null → clears.
     clickDropdownItem("Pantry");
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1);
@@ -223,7 +187,7 @@ describe("EditableEntityCell", () => {
     });
   });
 
-  it("not clearable: toggling the selected item off and saving is a no-op cancel", async () => {
+  it("not clearable: toggling the selected item off is a no-op cancel", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EditableEntityCell
@@ -238,10 +202,6 @@ describe("EditableEntityCell", () => {
     enterEditMode();
     openCombobox();
     clickDropdownItem("Pantry");
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
 
     await waitFor(() => {
       expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
@@ -265,16 +225,53 @@ describe("EditableEntityCell", () => {
 
     enterEditMode();
     openCombobox();
-    fireEvent.click(screen.getByRole("button", { name: "Fridge" }));
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
+    clickDropdownItem("Fridge");
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Failed to save");
     });
     expect(screen.getByRole("combobox")).toBeInTheDocument();
+  });
+
+  it("guards against a second pick while a save is in flight (commit-on-pick race)", async () => {
+    // The dropdown closes synchronously on pick, before the awaited save
+    // resolves — without the re-entrancy guard, reopening and picking again
+    // would fire a concurrent onSave whose last-to-resolve wins.
+    let resolveSave: (() => void) | undefined;
+    const onSave = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    render(
+      <EditableEntityCell
+        value={PANTRY}
+        onSave={onSave}
+        SearchProvider={StubSearchProvider}
+        label="location"
+        renderValue={renderValue}
+      />,
+    );
+
+    enterEditMode();
+    openCombobox();
+    clickDropdownItem("Fridge");
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    // Second pick while the first save is pending: jsdom doesn't enforce the
+    // pointer-events gate, so this exercises the hard ref guard in commit().
+    openCombobox();
+    const popup = document.querySelector("[data-combobox-popup]");
+    if (popup instanceof HTMLElement) {
+      fireEvent.click(within(popup).getByRole("button", { name: "Garage" }));
+    }
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    resolveSave?.();
+    await waitFor(() => {
+      expect(screen.getByTestId("display")).toHaveTextContent("Fridge");
+    });
   });
 
   it("filterItems hides excluded items from the dropdown", () => {

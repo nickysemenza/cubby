@@ -60,6 +60,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   onOpenChange,
   renderItem,
   wide,
+  autoFocus,
 }: {
   label: string;
   items: ComboboxItem<TId>[];
@@ -83,6 +84,13 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   /** Widen the panel and give the list more height (for rich `renderItem` rows). */
   wide?: boolean;
+  /**
+   * Open the dropdown on mount (which focuses the search input via the existing
+   * open→focus effect). Used by inline cell editors that should open ready to
+   * type. Routed through `changeOpen` so `onOpenChange` still fires — a
+   * deferred-search host needs it to activate its query.
+   */
+  autoFocus?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
@@ -162,6 +170,16 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   React.useEffect(() => {
     setPortalRoot(document.body);
   }, []);
+
+  // Auto-open once on mount when requested (inline cell editors). Goes through
+  // changeOpen so onOpenChange fires and a deferred-search host activates.
+  const didAutoOpen = React.useRef(false);
+  React.useEffect(() => {
+    if (autoFocus && !didAutoOpen.current) {
+      didAutoOpen.current = true;
+      changeOpen(true);
+    }
+  }, [autoFocus, changeOpen]);
 
   React.useEffect(() => {
     if (!open) return;

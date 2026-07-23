@@ -48,6 +48,7 @@ export type VariablesOf<TFn extends MutationOptionsFn> =
 export function useActionMutation<TFn extends MutationOptionsFn>({
   mutationFn,
   success,
+  successToastId,
   invalidateKeys = [],
   onSuccess,
   error,
@@ -59,6 +60,13 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
    * invalidation, background-batch re-invalidation, and `onSuccess` still run.
    */
   success?: ReactNode | ((data: DataOf<TFn>) => ReactNode);
+  /**
+   * Stable sonner toast id — repeated successes replace the same toast instead
+   * of stacking. Load-bearing for range cell-paste, where every applied cell
+   * fires this mutation's toast: N pastes collapse into one refreshing toast
+   * next to the paste-summary toast.
+   */
+  successToastId?: string;
   /** Entity lists to invalidate. Each is wrapped to match tRPC's nested key structure. */
   invalidateKeys?: readonly QueryKey[];
   /** Side effect after the toast + invalidations (close dialog, resolve, navigate). */
@@ -72,7 +80,10 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   const mutationOptions = mutationFn({
     onSuccess: (data: DataOf<TFn>) => {
       if (success !== undefined) {
-        toast.success(typeof success === "function" ? success(data) : success);
+        toast.success(
+          typeof success === "function" ? success(data) : success,
+          successToastId === undefined ? undefined : { id: successToastId },
+        );
       }
       invalidateTRPCQueries(queryClient, invalidateKeys);
       // Re-invalidate once any queued background work the action enqueued drains.

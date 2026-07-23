@@ -99,7 +99,11 @@ const openEditor = () => {
 };
 
 const openCombobox = () => {
-  fireEvent.click(screen.getByRole("combobox"));
+  // The editor auto-opens the dropdown on mount (autoFocus). Only click to open
+  // when it isn't already open — a click while open would toggle it shut.
+  if (!document.querySelector("[data-combobox-popup]")) {
+    fireEvent.click(screen.getByRole("combobox"));
+  }
 };
 
 /** Click a row inside the portaled dropdown, scoped to the popup because the
@@ -110,11 +114,6 @@ const clickDropdownItem = (name: string) => {
   if (!(popup instanceof HTMLElement)) throw new Error("dropdown not open");
   fireEvent.click(within(popup).getByRole("button", { name }));
 };
-
-const getCheckButton = () =>
-  screen
-    .getAllByRole("button")
-    .find((btn) => btn.querySelector("svg.lucide-check"));
 
 describe("InventoryEntriesCell", () => {
   it("0 entries: shows NoneValue, and picking a location creates an entry", async () => {
@@ -141,11 +140,8 @@ describe("InventoryEntriesCell", () => {
 
     openEditor();
     openCombobox();
+    // Commit-on-pick: choosing a location saves immediately, no ✓ confirm.
     clickDropdownItem("Fridge (shelf)");
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
 
     await waitFor(() => {
       expect(onCreateEntry).toHaveBeenCalledTimes(1);
@@ -187,11 +183,8 @@ describe("InventoryEntriesCell", () => {
 
     openEditor();
     openCombobox();
+    // Commit-on-pick: choosing a location saves immediately, no ✓ confirm.
     clickDropdownItem("Fridge (shelf)");
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
 
     await waitFor(() => {
       expect(onMoveEntry).toHaveBeenCalledTimes(1);

@@ -2,6 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { CellClipboardSpec } from "./cell-clipboard";
+import { entityCellData, specFromCellData } from "./cell-data";
 
 export interface InventoryEntryBase {
   id: string;
@@ -20,26 +21,25 @@ export type InventoryRelatedEntity =
       data: { id: string; name: string; manufacturer: string };
     };
 
+/**
+ * Per-cell entity clipboard spec, for cells that build their own spec inline
+ * (e.g. `inventory-entries-cell`) rather than declaring column `meta.cellData`.
+ * Thin adapter over the canonical `entityCellData` builder — one source of
+ * truth for entity copy/paste.
+ */
 export function entityCellClipboard(
   entity: string,
   item: ComboboxItem | null,
   save: (id: never) => Promise<void>,
 ): CellClipboardSpec {
-  return {
-    kindKey: `entity:${entity}`,
-    getCopyPayload: () =>
-      item ? { text: item.name, json: { id: item.id, name: item.name } } : null,
-    onPasteValue: async ({ json }) => {
-      const pasted = json as { id?: unknown; name?: unknown } | undefined;
-      if (
-        !pasted ||
-        typeof pasted.id !== "string" ||
-        typeof pasted.name !== "string"
-      ) {
-        throw new Error(`Paste a ${entity} cell here`);
-      }
-      await save(pasted.id as never);
-      return { id: pasted.id, name: pasted.name };
-    },
-  };
+  return specFromCellData(
+    entityCellData<null>(
+      entity,
+      () => item,
+      async (_row, id) => {
+        await save(id as never);
+      },
+    ),
+    null,
+  );
 }
