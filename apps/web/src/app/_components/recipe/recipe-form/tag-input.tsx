@@ -19,6 +19,8 @@ interface TagInputProps {
   autoFocus?: boolean;
   /** Seed the input with an initial value (type-to-edit). */
   initialInputValue?: string;
+  /** Enter with an empty input (the inline cell editor commits on it). */
+  onEmptyEnter?: () => void;
 }
 
 /**
@@ -35,6 +37,7 @@ export const TagInput: FC<TagInputProps> = ({
   className,
   autoFocus,
   initialInputValue,
+  onEmptyEnter,
 }) => {
   const tags = value ?? [];
   const api = useTRPC();
@@ -73,6 +76,7 @@ export const TagInput: FC<TagInputProps> = ({
       className={className}
       autoFocus={autoFocus}
       initialInputValue={initialInputValue}
+      onEmptyEnter={onEmptyEnter}
       placeholder="Add tag (e.g., cuisine:thai, quick)"
       normalize={(raw) => raw.trim().toLowerCase()}
       getSuggestions={getSuggestions}
