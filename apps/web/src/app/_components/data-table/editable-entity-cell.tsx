@@ -2,11 +2,12 @@
 
 import { Pencil, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
@@ -157,9 +158,17 @@ function EditableEntityEditor<TId extends string>({
 }) {
   const [selected, setSelected] = useState<ComboboxItem<TId> | null>(value);
   const [isPending, setIsPending] = useState(false);
+  // Re-entrancy guard for commit-on-pick: DialogCompatibleCombobox closes its
+  // dropdown synchronously on click (before the awaited save resolves), so a
+  // fast second pick would otherwise fire a concurrent onSave whose
+  // last-to-resolve wins regardless of click order. The pointer-events gate on
+  // the wrapper below is the visual affordance; this ref is the hard guard
+  // (CSS pointer-events isn't enforced by keyboard interaction or jsdom).
+  const pendingRef = useRef(false);
 
   const commit = useCallback(
     async (next: ComboboxItem<TId> | null) => {
+      if (pendingRef.current) return;
       setSelected(next);
 
       // Unchanged, or cleared on a non-clearable relation → plain cancel.
@@ -168,6 +177,7 @@ function EditableEntityEditor<TId extends string>({
         return;
       }
 
+      pendingRef.current = true;
       setIsPending(true);
       try {
         await onSave(next?.id ?? null);
@@ -177,6 +187,7 @@ function EditableEntityEditor<TId extends string>({
         // or cancel.
         toast.error(getErrorMessage(err));
       } finally {
+        pendingRef.current = false;
         setIsPending(false);
       }
     },
@@ -185,24 +196,39 @@ function EditableEntityEditor<TId extends string>({
 
   return (
     <div className="inline-flex w-full items-center gap-1">
-      <SearchProvider>
-        {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
-          <DialogCompatibleCombobox
-            label={label}
-            items={filterItems ? items.filter(filterItems) : items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            value={selected}
-            setValue={(next) => void commit(next)}
-            onCreateNew={onCreateNew}
-            onOpenChange={onOpenChange}
-            // Open + focus the search input on mount. Focus-only: the entity
-            // search input is internal state, so a type-to-edit seed char isn't
-            // threaded here.
-            autoFocus
-          />
+      {/* Mid-save pick gate — mirrors EditableDateEditor's isPending wrapper
+          (DialogCompatibleCombobox has no disabled prop to thread instead). */}
+      <div
+        className={cn(
+          "min-w-0 flex-1",
+          isPending && "pointer-events-none opacity-50",
         )}
-      </SearchProvider>
+      >
+        <SearchProvider>
+          {({
+            items,
+            onSearchChange,
+            isLoading,
+            onCreateNew,
+            onOpenChange,
+          }) => (
+            <DialogCompatibleCombobox
+              label={label}
+              items={filterItems ? items.filter(filterItems) : items}
+              onSearchChange={onSearchChange}
+              isLoading={isLoading}
+              value={selected}
+              setValue={(next) => void commit(next)}
+              onCreateNew={onCreateNew}
+              onOpenChange={onOpenChange}
+              // Open + focus the search input on mount. Focus-only: the entity
+              // search input is internal state, so a type-to-edit seed char isn't
+              // threaded here.
+              autoFocus
+            />
+          )}
+        </SearchProvider>
+      </div>
       <Button
         size="icon"
         variant="ghost"

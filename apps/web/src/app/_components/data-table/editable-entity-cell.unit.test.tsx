@@ -233,6 +233,47 @@ describe("EditableEntityCell", () => {
     expect(screen.getByRole("combobox")).toBeInTheDocument();
   });
 
+  it("guards against a second pick while a save is in flight (commit-on-pick race)", async () => {
+    // The dropdown closes synchronously on pick, before the awaited save
+    // resolves — without the re-entrancy guard, reopening and picking again
+    // would fire a concurrent onSave whose last-to-resolve wins.
+    let resolveSave: (() => void) | undefined;
+    const onSave = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    render(
+      <EditableEntityCell
+        value={PANTRY}
+        onSave={onSave}
+        SearchProvider={StubSearchProvider}
+        label="location"
+        renderValue={renderValue}
+      />,
+    );
+
+    enterEditMode();
+    openCombobox();
+    clickDropdownItem("Fridge");
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    // Second pick while the first save is pending: jsdom doesn't enforce the
+    // pointer-events gate, so this exercises the hard ref guard in commit().
+    openCombobox();
+    const popup = document.querySelector("[data-combobox-popup]");
+    if (popup instanceof HTMLElement) {
+      fireEvent.click(within(popup).getByRole("button", { name: "Garage" }));
+    }
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    resolveSave?.();
+    await waitFor(() => {
+      expect(screen.getByTestId("display")).toHaveTextContent("Fridge");
+    });
+  });
+
   it("filterItems hides excluded items from the dropdown", () => {
     render(
       <EditableEntityCell
