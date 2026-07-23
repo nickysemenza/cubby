@@ -13,6 +13,10 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import {
+  specFromCellData,
+  tagsCellData,
+} from "../_components/data-table/cell-data";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
@@ -20,6 +24,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { EditableTagsCell } from "../_components/recipe/editable-tags-cell";
 import {
   RecipeSourceLink,
   sourceLabel,
@@ -161,8 +166,30 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   // useMutation returns a new object every render, but the closure captures
   // it correctly — see productlist.tsx for the same pattern.
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
-  const columns = useMemo(
-    () => [
+  const columns = useMemo(() => {
+    // Inline-editable, copy/pastable tags column. The cellData drives both the
+    // range copy/paste engine (meta.cellData) and the focused-cell clipboard
+    // (specFromCellData, per row) — one source of truth for tag save semantics.
+    const tagsCellDataDef = tagsCellData<RecipeListItem>(
+      (row) => row.tags ?? null,
+      async (row, nextTags) => {
+        await updateRecipeMutation.mutateAsync({
+          id: row.id,
+          data: { tags: nextTags },
+        });
+      },
+    );
+    const renderTags = (tags: string[] | null) => {
+      if (!tags?.length) return <NoneValue />;
+      return (
+        <TruncatedList
+          items={tags}
+          maxItems={2}
+          renderItem={(tag) => <RecipeTag key={tag} tag={tag} size="sm" />}
+        />
+      );
+    };
+    return [
       // Tags column
       columnHelper.accessor("tags", {
         id: "tags",
@@ -176,15 +203,21 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
             options: [{ value: "", label: "All tags" }, ...tagOptions],
           },
           mobile: { slot: "subtitle", priority: 10 },
+          cellData: tagsCellDataDef,
         },
         cell: (info) => {
-          const tags = info.getValue();
-          if (!tags?.length) return <NoneValue />;
+          const recipe = info.row.original;
           return (
-            <TruncatedList
-              items={tags}
-              maxItems={2}
-              renderItem={(tag) => <RecipeTag key={tag} tag={tag} size="sm" />}
+            <EditableTagsCell
+              value={recipe.tags ?? null}
+              renderValue={renderTags}
+              clipboard={specFromCellData(tagsCellDataDef, recipe)}
+              onSave={async (nextTags) => {
+                await updateRecipeMutation.mutateAsync({
+                  id: recipe.id,
+                  data: { tags: nextTags },
+                });
+              }}
             />
           );
         },
@@ -359,9 +392,8 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           );
         },
       }),
-    ],
-    [columnHelper, tagOptions],
-  );
+    ];
+  }, [columnHelper, tagOptions]);
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,

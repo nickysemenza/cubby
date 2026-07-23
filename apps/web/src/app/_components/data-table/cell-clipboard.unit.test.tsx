@@ -12,7 +12,7 @@ import {
   type CellClipboardSpec,
   registerCellClipboard,
 } from "./cell-clipboard";
-import { selectCellData, specFromCellData } from "./cell-data";
+import { selectCellData, specFromCellData, tagsCellData } from "./cell-data";
 
 /** jsdom's `ClipboardEvent` has no `clipboardData`; attach a mock directly on
  * a plain (cancelable) `Event` — the module only reads `event.clipboardData`
@@ -276,6 +276,67 @@ describe("specFromCellData select validation", () => {
       '"nope" is not a valid option here',
     );
     expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("tagsCellData", () => {
+  interface TagRow {
+    id: string;
+    tags: string[] | null;
+  }
+
+  it("copies a comma-joined text with the raw array as the typed payload", () => {
+    const cellData = tagsCellData<TagRow>((row) => row.tags);
+    const payload = cellData.getCopyPayload({
+      id: "r1",
+      tags: ["quick", "cuisine:thai"],
+    });
+    expect(payload).toEqual({
+      text: "quick, cuisine:thai",
+      json: ["quick", "cuisine:thai"],
+    });
+  });
+
+  it("copies null when the row has no tags (null or empty)", () => {
+    const cellData = tagsCellData<TagRow>((row) => row.tags);
+    expect(cellData.getCopyPayload({ id: "r1", tags: null })).toBeNull();
+    expect(cellData.getCopyPayload({ id: "r2", tags: [] })).toBeNull();
+  });
+
+  it("pastes a typed json array verbatim", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const cellData = tagsCellData<TagRow>((row) => row.tags, save);
+    const row: TagRow = { id: "r1", tags: null };
+    const saved = await cellData.applyPaste!(row, {
+      json: ["quick", "cuisine:thai"],
+    });
+    expect(save).toHaveBeenCalledWith(row, ["quick", "cuisine:thai"]);
+    expect(saved).toEqual(["quick", "cuisine:thai"]);
+  });
+
+  it("splits, trims, and lowercases a text paste, dropping empties", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const cellData = tagsCellData<TagRow>((row) => row.tags, save);
+    const row: TagRow = { id: "r1", tags: null };
+    const saved = await cellData.applyPaste!(row, {
+      text: "Quick, , Cuisine:Thai ,",
+    });
+    expect(save).toHaveBeenCalledWith(row, ["quick", "cuisine:thai"]);
+    expect(saved).toEqual(["quick", "cuisine:thai"]);
+  });
+
+  it("clears the column (saves null) when a text paste is empty/blank", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const cellData = tagsCellData<TagRow>((row) => row.tags, save);
+    const row: TagRow = { id: "r1", tags: ["quick"] };
+    const saved = await cellData.applyPaste!(row, { text: " , " });
+    expect(save).toHaveBeenCalledWith(row, null);
+    expect(saved).toBeNull();
+  });
+
+  it("is read-only for paste when no save is provided", () => {
+    const cellData = tagsCellData<TagRow>((row) => row.tags);
+    expect(cellData.applyPaste).toBeUndefined();
   });
 });
 

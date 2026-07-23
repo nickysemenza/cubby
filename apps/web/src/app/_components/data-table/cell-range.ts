@@ -14,6 +14,7 @@ export type CellKind =
   | "date"
   | "select"
   | "amount"
+  | "tags"
   | `entity:${string}`;
 
 export interface CellCoord {

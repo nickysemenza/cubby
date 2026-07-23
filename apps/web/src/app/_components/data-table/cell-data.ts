@@ -225,6 +225,46 @@ export function amountCellData<TData>(
 }
 
 /**
+ * Tags cell data (recipe tags, a `string[] | null` column). Copy joins the tags
+ * as a comma-separated string for the system clipboard and carries the raw
+ * array as the typed payload. Paste prefers the typed array; a text paste
+ * splits on commas, trims, lowercases (matching `TagInput`'s normalization),
+ * and drops empties. An empty result clears the column (saves `null`). Resolves
+ * with the saved value (`string[] | null`) for the cell's optimistic display.
+ */
+export function tagsCellData<TData>(
+  getTags: (row: TData) => string[] | null,
+  save?: (row: TData, tags: string[] | null) => Promise<void>,
+): ColumnCellData<TData> {
+  return {
+    kind: "tags",
+    getCopyPayload: (row) => {
+      const tags = getTags(row);
+      return tags == null || tags.length === 0
+        ? null
+        : { text: tags.join(", "), json: [...tags] };
+    },
+    applyPaste: save
+      ? async (row, { json, text }) => {
+          const fromJson =
+            Array.isArray(json) && json.every((t) => typeof t === "string")
+              ? (json as string[])
+              : undefined;
+          const next =
+            fromJson ??
+            (text ?? "")
+              .split(",")
+              .map((t) => t.trim().toLowerCase())
+              .filter((t) => t !== "");
+          const value = next.length === 0 ? null : next;
+          await save(row, value);
+          return value;
+        }
+      : undefined,
+  };
+}
+
+/**
  * Copy-only cell data for timestamp columns: the display is relative
  * ("5 months ago") but the copy payload is the ISO date-time so it pastes
  * cleanly into a spreadsheet. No `applyPaste` — timestamps aren't user-editable.
