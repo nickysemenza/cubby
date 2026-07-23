@@ -29,6 +29,9 @@ interface FilterableComboboxProps {
   onSearchChange?: (query: string) => void;
   onOpenChange?: (open: boolean) => void;
   isLoading?: boolean;
+  /** Focus the filter input on mount (e.g. an inline cell editor that opens
+   * ready to type). Mirrors `<Input autoFocus />`. */
+  autoFocus?: boolean;
 }
 
 export function FilterableCombobox({
@@ -41,6 +44,7 @@ export function FilterableCombobox({
   onSearchChange,
   onOpenChange,
   isLoading,
+  autoFocus,
 }: FilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -98,6 +102,7 @@ export function FilterableCombobox({
       >
         {/* Input for filtering when open, display value when closed */}
         <ComboboxPrimitive.Input
+          autoFocus={autoFocus}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
           placeholder={placeholder}
           value={open ? inputValue : selectedLabel}

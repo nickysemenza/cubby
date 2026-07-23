@@ -69,7 +69,11 @@ const enterEditMode = () => {
 };
 
 const openCombobox = () => {
-  fireEvent.click(screen.getByRole("combobox"));
+  // The editor auto-opens the dropdown on mount (autoFocus). Only click to open
+  // when it isn't already open — a click while open would toggle it shut.
+  if (!document.querySelector("[data-combobox-popup]")) {
+    fireEvent.click(screen.getByRole("combobox"));
+  }
 };
 
 /** Click a row inside the portaled dropdown. Scoped to the popup because the

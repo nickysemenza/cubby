@@ -9,6 +9,7 @@ import {
 } from "./cell-clipboard";
 import {
   CELL_EDIT_EVENT,
+  type CellEditEventDetail,
   CellSelectionContext,
 } from "./cell-selection-context";
 
@@ -16,7 +17,11 @@ interface CellEditTriggerProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** React 19 ref-as-prop (forwardRef is deprecated). */
   ref?: React.Ref<HTMLButtonElement>;
-  onStartEdit: () => void;
+  /**
+   * Open the editor. `seedText` (type-to-edit) is threaded from
+   * {@link CELL_EDIT_EVENT}'s detail; click/double-click open with no seed.
+   */
+  onStartEdit: (seedText?: string) => void;
   /** Register for cmd-C / cmd-V while this trigger is focused. */
   clipboard?: CellClipboardSpec;
   /** Hide the trailing hover pencil (e.g. icon-only pencil triggers). */
@@ -66,7 +71,10 @@ export function CellEditTrigger({
   React.useEffect(() => {
     const el = localRef.current;
     if (!el) return;
-    const handler = () => onStartEditRef.current();
+    const handler = (e: Event) => {
+      const seedText = (e as CustomEvent<CellEditEventDetail>).detail?.seedText;
+      onStartEditRef.current(seedText);
+    };
     el.addEventListener(CELL_EDIT_EVENT, handler);
     return () => el.removeEventListener(CELL_EDIT_EVENT, handler);
   }, []);

@@ -18,6 +18,10 @@ vi.mock("~/lib/wasm", () => ({
   },
 }));
 
+import {
+  CELL_EDIT_EVENT,
+  CellSelectionContext,
+} from "./cell-selection-context";
 import { EditableCell, useEditableCell } from "./editable-cell";
 
 // Mock sonner toast
@@ -574,5 +578,56 @@ describe("overlay behavior", () => {
       expect(onSave).toHaveBeenCalledWith("New Value");
     });
     expect(wrapperKeyDown).not.toHaveBeenCalled();
+  });
+});
+
+describe("EditableCell type-to-edit seeding", () => {
+  // In cell-selection mode a CELL_EDIT_EVENT carrying `seedText` opens the
+  // editor — see useCellSelection's printable-key branch, which dispatches it.
+  function openWithEvent(trigger: HTMLElement, seedText?: string) {
+    act(() => {
+      trigger.dispatchEvent(
+        new CustomEvent(CELL_EDIT_EVENT, {
+          detail: seedText === undefined ? {} : { seedText },
+        }),
+      );
+    });
+  }
+
+  it("seeds the text editor with the typed character, replacing the current value", async () => {
+    render(
+      <CellSelectionContext.Provider value={true}>
+        <EditableCell
+          value="hello"
+          onSave={vi.fn()}
+          config={{ type: "text" }}
+          renderValue={(v) => <span>{v}</span>}
+        />
+      </CellSelectionContext.Provider>,
+    );
+
+    openWithEvent(screen.getByRole("button"), "z");
+
+    const input = await screen.findByRole("textbox");
+    // The seed REPLACES the current value (Google Sheets), not appends.
+    expect(input).toHaveValue("z");
+  });
+
+  it("opens with the current value when there is no seed (Enter / double-click)", async () => {
+    render(
+      <CellSelectionContext.Provider value={true}>
+        <EditableCell
+          value="hello"
+          onSave={vi.fn()}
+          config={{ type: "text" }}
+          renderValue={(v) => <span>{v}</span>}
+        />
+      </CellSelectionContext.Provider>,
+    );
+
+    openWithEvent(screen.getByRole("button"));
+
+    const input = await screen.findByRole("textbox");
+    expect(input).toHaveValue("hello");
   });
 });

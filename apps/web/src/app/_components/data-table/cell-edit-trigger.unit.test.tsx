@@ -96,4 +96,23 @@ describe("CellEditTrigger click model", () => {
     expect(onStartEdit).toHaveBeenCalledTimes(2);
     unmount();
   });
+
+  it("threads CELL_EDIT_EVENT detail.seedText into onStartEdit (type-to-edit)", () => {
+    const onStartEdit = vi.fn();
+    const { getByRole, unmount } = render(
+      <CellSelectionContext.Provider value={true}>
+        <CellEditTrigger onStartEdit={onStartEdit}>cell</CellEditTrigger>
+      </CellSelectionContext.Provider>,
+    );
+
+    getByRole("button").dispatchEvent(
+      new CustomEvent(CELL_EDIT_EVENT, { detail: { seedText: "k" } }),
+    );
+    expect(onStartEdit).toHaveBeenCalledWith("k");
+
+    // A seedless event (Enter / double-click) opens with no seed.
+    getByRole("button").dispatchEvent(new CustomEvent(CELL_EDIT_EVENT));
+    expect(onStartEdit).toHaveBeenLastCalledWith(undefined);
+    unmount();
+  });
 });

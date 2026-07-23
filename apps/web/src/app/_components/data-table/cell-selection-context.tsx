@@ -17,6 +17,16 @@ export const NON_SELECTABLE_COLUMN_IDS = new Set(["select", "actions"]);
 export const CELL_EDIT_EVENT = "cubby:cell-edit";
 
 /**
+ * `detail` payload of {@link CELL_EDIT_EVENT}. `seedText` is set only for
+ * type-to-edit (a printable character pressed with a cell selected): the editor
+ * opens seeded with that character, replacing the current scalar value (Google
+ * Sheets behavior). Enter / double-click dispatch with no seed.
+ */
+export interface CellEditEventDetail {
+  seedText?: string;
+}
+
+/**
  * True inside an RTable that has spreadsheet-style cell selection enabled
  * (desktop list tables). False on detail pages, dialogs, and mobile — where
  * editable cells keep the original click-to-edit behavior. Read by

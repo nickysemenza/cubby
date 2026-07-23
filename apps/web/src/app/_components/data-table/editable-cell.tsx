@@ -236,12 +236,24 @@ export function useCellEditState(
   onPasted?: (value: unknown) => void,
 ) {
   const [isEditing, setIsEditing] = useState(false);
+  // Type-to-edit seed (a printable char that opened the editor), captured at
+  // open and cleared on cancel/commit. Held here — the ONE place — so every
+  // editor reads it the same way instead of re-plumbing the CustomEvent.
+  const [seedText, setSeedText] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const isEditingRef = useRef(false);
   isEditingRef.current = isEditing;
 
+  // Open the editor. Doubles as the `CellEditTrigger.onStartEdit` handler:
+  // click/double-click pass no arg (no seed), CELL_EDIT_EVENT threads the seed.
+  const open = useCallback((seed?: string) => {
+    setSeedText(seed ?? null);
+    setIsEditing(true);
+  }, []);
+
   const cancel = useCallback(() => {
     setIsEditing(false);
+    setSeedText(null);
     triggerRef.current?.focus();
   }, []);
 
@@ -262,7 +274,8 @@ export function useCellEditState(
 
   return {
     isEditing,
-    setIsEditing,
+    seedText,
+    open,
     triggerRef,
     cancel,
     clipboard: clipboardWithGuard,
@@ -320,7 +333,7 @@ function EditableInputCellInternal<T>({
     <>
       <CellEditTrigger
         ref={edit.triggerRef}
-        onStartEdit={() => edit.setIsEditing(true)}
+        onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
@@ -334,6 +347,7 @@ function EditableInputCellInternal<T>({
             value={value}
             onSave={onSave}
             config={config}
+            seedText={edit.seedText}
             onCancel={edit.cancel}
             onCommit={(nextValue) => {
               setOptimisticValue(nextValue);
@@ -350,12 +364,16 @@ function EditableInputEditor<T>({
   value,
   onSave,
   config,
+  seedText,
   onCancel,
   onCommit,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
   config: EditableInputConfig | EditableCurrencyConfig;
+  /** Type-to-edit: the character that opened the editor, seeded as the initial
+   * input value (replacing the current value). `null` = normal open. */
+  seedText: string | null;
   onCancel: () => void;
   onCommit: (value: T | null) => void;
 }) {
@@ -391,16 +409,23 @@ function EditableInputEditor<T>({
     return String(v);
   }, []);
 
-  const [inputValue, setInputValue] = useState("");
+  // Seeded (type-to-edit): the initial value IS the seed char (replaces the
+  // current value); autoFocus leaves the caret at the end of the single char.
+  const [inputValue, setInputValue] = useState(() =>
+    seedText != null ? seedText : value !== null ? format(value) : "",
+  );
   const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
+    // A seeded editor is initialized once at mount and must not be clobbered by
+    // this value-sync effect; only a normal open tracks the incoming value.
+    if (seedText != null) return;
     if (format && value !== null) {
       setInputValue(format(value));
     } else {
       setInputValue(value !== null ? String(value) : "");
     }
-  }, [value, format]);
+  }, [value, format, seedText]);
 
   const handleSave = useCallback(async () => {
     const trimmed = inputValue.trim();
@@ -523,7 +548,7 @@ function EditableSelectCellInternal({
     <>
       <CellEditTrigger
         ref={edit.triggerRef}
-        onStartEdit={() => edit.setIsEditing(true)}
+        onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
@@ -605,6 +630,9 @@ function EditableSelectEditor({
         placeholder={placeholder}
         disabled={isPending}
         className="w-48"
+        // Focus-only seeding: the combobox filters its own internal input, so a
+        // type-to-edit seed char isn't threaded here (documented focus-only).
+        autoFocus
       />
       <Button
         size="icon"
@@ -648,7 +676,7 @@ function EditableDateCellInternal({
     <>
       <CellEditTrigger
         ref={edit.triggerRef}
-        onStartEdit={() => edit.setIsEditing(true)}
+        onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
@@ -776,12 +804,14 @@ export function EditableAmountCell({
 
   const displayAmount = optimisticAmount ?? amount;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: edit.setIsEditing is a stable setState
+  // biome-ignore lint/correctness/useExhaustiveDependencies: edit.open is a stable callback
   const startEditing = useCallback(() => {
     const current = optimisticAmount ?? amount;
     setEditingValue(current.value);
     setEditingUnit(current.unit);
-    edit.setIsEditing(true);
+    // Amount is a compound (value + unit) editor; a type-to-edit seed isn't
+    // meaningful here, so open without one (the value input still autofocuses).
+    edit.open();
   }, [amount, optimisticAmount]);
 
   const save = useCallback(async () => {

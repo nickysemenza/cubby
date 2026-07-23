@@ -98,7 +98,7 @@ export function EditableEntityCell<TId extends string>({
         <span className="min-w-0 truncate">{renderValue(displayValue)}</span>
         <CellEditTrigger
           ref={edit.triggerRef}
-          onStartEdit={() => edit.setIsEditing(true)}
+          onStartEdit={edit.open}
           clipboard={edit.clipboard}
           hidePencilIcon
           aria-label={`Edit ${label}`}
@@ -115,7 +115,7 @@ export function EditableEntityCell<TId extends string>({
     <>
       <CellEditTrigger
         ref={edit.triggerRef}
-        onStartEdit={() => edit.setIsEditing(true)}
+        onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
@@ -178,6 +178,10 @@ function EditableEntityEditor<TId extends string>({
             setValue={setSelected}
             onCreateNew={onCreateNew}
             onOpenChange={onOpenChange}
+            // Open + focus the search input on mount. Focus-only: the entity
+            // search input is internal state, so a type-to-edit seed char isn't
+            // threaded here.
+            autoFocus
           />
         )}
       </SearchProvider>

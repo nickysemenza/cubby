@@ -29,6 +29,7 @@ import {
 } from "./cell-range";
 import {
   CELL_EDIT_EVENT,
+  type CellEditEventDetail,
   NON_SELECTABLE_COLUMN_IDS,
 } from "./cell-selection-context";
 
@@ -336,13 +337,17 @@ export function useCellSelection<TItem>({
   const onMouseUp = React.useCallback(() => endDrag(), [endDrag]);
 
   const openEditorAt = React.useCallback(
-    (container: HTMLElement, row: number, col: number) => {
+    (container: HTMLElement, row: number, col: number, seedText?: string) => {
       const colId = selectableColumnIdsRef.current[col];
       if (colId == null) return;
       const selector = `tr[data-cell-row="${row}"] td[data-cell-col="${colId}"] [data-cell-edit-trigger]`;
       const dispatch = (el: HTMLElement) => {
         el.focus();
-        el.dispatchEvent(new CustomEvent(CELL_EDIT_EVENT));
+        el.dispatchEvent(
+          new CustomEvent<CellEditEventDetail>(CELL_EDIT_EVENT, {
+            detail: { seedText },
+          }),
+        );
       };
       const found = container.querySelector(selector);
       if (found instanceof HTMLElement) {
@@ -624,6 +629,19 @@ export function useCellSelection<TItem>({
           e.preventDefault();
           setSelection(null);
         }
+        return;
+      }
+
+      // Type-to-edit: a printable character with a cell selected opens the
+      // anchor cell's editor seeded with that character (Google Sheets). Placed
+      // last so every shortcut above (mod+C/V, arrows, Enter, Escape) wins.
+      // `key.length === 1` matches a single printable char (letters, digits,
+      // punctuation, space) and excludes named keys (Tab, Backspace, F-keys).
+      // Shift/Alt are allowed — they produce printable characters.
+      const sel = selectionRef.current;
+      if (sel && e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        openEditorAt(e.currentTarget, sel.anchor.row, sel.anchor.col, e.key);
         return;
       }
     },

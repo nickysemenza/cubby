@@ -19,6 +19,12 @@ export interface ChipsInputProps {
   onChange: (values: string[]) => void;
   className?: string;
   placeholder?: string;
+  /** Focus the text input on mount. Opt-in — used by the inline cell editor so
+   * it opens ready to type; the recipe form leaves it off. */
+  autoFocus?: boolean;
+  /** Seed the text input with an initial value (type-to-edit: the character
+   * that opened the editor starts a NEW chip; existing chips are kept). */
+  initialInputValue?: string;
   /** Transform raw typed/pasted text before adding. Default: trim only — pass
    * e.g. `(s) => s.trim().toLowerCase()` for a case-normalized vocabulary
    * (recipe tags). Return "" to reject the input (no-op). */
@@ -68,6 +74,8 @@ export const ChipsInput: FC<ChipsInputProps> = ({
   onChange,
   className,
   placeholder = "Add value...",
+  autoFocus,
+  initialInputValue,
   normalize = defaultNormalize,
   renderChip,
   chipClassName,
@@ -77,7 +85,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
   onSuggestionClick,
 }) => {
   const tags = value ?? [];
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState(initialInputValue ?? "");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLElement>(null);
@@ -156,6 +164,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
         <Row gap="sm">
           <Input
             ref={inputRef}
+            autoFocus={autoFocus}
             value={inputValue}
             onChange={(e) => {
               setInputValue(e.target.value);
