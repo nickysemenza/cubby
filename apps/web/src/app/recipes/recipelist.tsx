@@ -14,6 +14,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import {
+  numberCellData,
   specFromCellData,
   tagsCellData,
 } from "../_components/data-table/cell-data";
@@ -180,6 +181,27 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
       (row) => row.tags ?? null,
       saveTags,
     );
+    // Yield column falls back to inline-editable `servings` only when the recipe
+    // has no structured yield ("2 loaves", owned by the detail page's editor).
+    // The cellData mirrors that: copy is null on structured-yield rows (nothing
+    // to offer), and paste is rejected there — so copy/paste is available on
+    // exactly the rows where the inline editor is.
+    const saveServings = async (row: RecipeListItem, value: number | null) => {
+      if (row.yield) {
+        throw new Error(
+          "This recipe has a structured yield — edit servings on its detail page.",
+        );
+      }
+      await updateRecipeMutation.mutateAsync({
+        id: row.id,
+        data: { servings: value === null ? null : Math.round(value) },
+      });
+    };
+    const servingsCellDataDef = numberCellData<RecipeListItem>(
+      "number",
+      (row) => (row.yield ? null : (row.servings ?? null)),
+      saveServings,
+    );
     const renderTags = (tags: string[] | null) => {
       if (!tags?.length) return <NoneValue />;
       return (
@@ -229,7 +251,8 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           className: "w-24",
           // Mobile: yield/servings is the most useful at-a-glance datum, and
           // recipe rows have no image — surface it as the row subtitle.
-          mobile: { slot: "subtitle", priority: 5 },
+          mobile: { slot: "subtitle", priority: 5, interactive: true },
+          cellData: servingsCellDataDef,
         },
         cell: (info) => {
           const recipe = info.row.original;
@@ -242,17 +265,11 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
             <EditableCell<number>
               value={recipe.servings ?? null}
               config={{ type: "number" }}
+              clipboard={specFromCellData(servingsCellDataDef, recipe)}
               renderValue={(servings) =>
                 servings ? `${servings} servings` : <NoneValue />
               }
-              onSave={async (newValue) => {
-                await updateRecipeMutation.mutateAsync({
-                  id: recipe.id,
-                  data: {
-                    servings: newValue === null ? null : Math.round(newValue),
-                  },
-                });
-              }}
+              onSave={(newValue) => saveServings(recipe, newValue)}
             />
           );
         },
