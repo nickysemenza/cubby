@@ -1,0 +1,14 @@
+# CI produces 12 coverage uploads per commit: recipebridge (rust) + web unit +
+# 2 web integration shards + 8 aux packages (test-unit-aux matrix). Without
+# after_n_builds, codecov recomputes `codecov/project` after EVERY partial
+# upload, so early shards briefly read as a project-coverage drop and flap the
+# status red mid-CI (observed on PR #412 pushes). Compute status/comment once,
+# after all uploads arrive. Keep this count in sync with ci.yaml's
+# codecov-action steps (shard/matrix changes included).
+codecov:
+  notify:
+    after_n_builds: 12
+    wait_for_ci: true
+
+comment:
+  after_n_builds: 12
