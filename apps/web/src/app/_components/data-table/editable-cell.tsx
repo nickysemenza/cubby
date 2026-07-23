@@ -575,6 +575,13 @@ function EditableSelectCellInternal({
   );
 }
 
+/**
+ * Commit-on-pick (matches the date editor): choosing an option saves + closes
+ * immediately — no separate ✓ confirm step. Picking the SAME value closes
+ * without a write (handleSave's old unchanged path); a save rejection toasts
+ * and keeps the editor open with the current value intact. The ✗ button stays
+ * as the explicit mouse cancel affordance (Escape via the overlay also works).
+ */
 function EditableSelectEditor({
   value,
   onSave,
@@ -590,32 +597,29 @@ function EditableSelectEditor({
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
-  const [selectedValue, setSelectedValue] = useState<string | null>(value);
   const [isPending, setIsPending] = useState(false);
 
-  // Sync state from prop during render (React recommended pattern)
-  const [prevValue, setPrevValue] = useState<string | null>(value);
-  if (value !== prevValue) {
-    setPrevValue(value);
-    setSelectedValue(value);
-  }
+  const handlePick = useCallback(
+    async (next: string | null) => {
+      // Unchanged → close without a write.
+      if (next === value) {
+        onCancel();
+        return;
+      }
 
-  const handleSave = useCallback(async () => {
-    if (selectedValue === value) {
-      onCancel();
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      await onSave(selectedValue);
-      onCommit(selectedValue);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setIsPending(false);
-    }
-  }, [selectedValue, value, onSave, onCancel, onCommit]);
+      setIsPending(true);
+      try {
+        await onSave(next);
+        onCommit(next);
+      } catch (err) {
+        // Stay open with state intact so the user can retry or cancel.
+        toast.error(getErrorMessage(err));
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [value, onSave, onCancel, onCommit],
+  );
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
@@ -625,8 +629,8 @@ function EditableSelectEditor({
     >
       <FilterableCombobox
         items={options}
-        value={selectedValue}
-        onValueChange={setSelectedValue}
+        value={value}
+        onValueChange={(next) => void handlePick(next)}
         placeholder={placeholder}
         disabled={isPending}
         className="w-48"
@@ -634,14 +638,6 @@ function EditableSelectEditor({
         // type-to-edit seed char isn't threaded here (documented focus-only).
         autoFocus
       />
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => void handleSave()}
-        disabled={isPending}
-      >
-        <Check className="size-3.5" />
-      </Button>
       <Button
         size="icon"
         variant="ghost"

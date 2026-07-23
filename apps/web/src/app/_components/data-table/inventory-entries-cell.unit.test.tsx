@@ -115,11 +115,6 @@ const clickDropdownItem = (name: string) => {
   fireEvent.click(within(popup).getByRole("button", { name }));
 };
 
-const getCheckButton = () =>
-  screen
-    .getAllByRole("button")
-    .find((btn) => btn.querySelector("svg.lucide-check"));
-
 describe("InventoryEntriesCell", () => {
   it("0 entries: shows NoneValue, and picking a location creates an entry", async () => {
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
@@ -145,11 +140,8 @@ describe("InventoryEntriesCell", () => {
 
     openEditor();
     openCombobox();
+    // Commit-on-pick: choosing a location saves immediately, no ✓ confirm.
     clickDropdownItem("Fridge (shelf)");
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
 
     await waitFor(() => {
       expect(onCreateEntry).toHaveBeenCalledTimes(1);
@@ -191,11 +183,8 @@ describe("InventoryEntriesCell", () => {
 
     openEditor();
     openCombobox();
+    // Commit-on-pick: choosing a location saves immediately, no ✓ confirm.
     clickDropdownItem("Fridge (shelf)");
-
-    const checkButton = getCheckButton();
-    expect(checkButton).toBeDefined();
-    fireEvent.click(checkButton as HTMLElement);
 
     await waitFor(() => {
       expect(onMoveEntry).toHaveBeenCalledTimes(1);

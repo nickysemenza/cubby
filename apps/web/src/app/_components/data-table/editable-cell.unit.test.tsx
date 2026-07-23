@@ -457,6 +457,88 @@ describe("EditableCell component", () => {
   });
 });
 
+describe("EditableCell select editor (commit-on-pick)", () => {
+  const OPTIONS = [
+    { value: "a", label: "Apple" },
+    { value: "b", label: "Banana" },
+  ];
+
+  const renderSelect = (value: string | null, onSave: () => Promise<void>) =>
+    render(
+      <EditableCell
+        value={value}
+        onSave={onSave}
+        config={{ type: "select", options: OPTIONS }}
+        renderValue={(v) => <span data-testid="display">{String(v)}</span>}
+      />,
+    );
+
+  /** Enter edit mode, then open the combobox dropdown via its chevron trigger
+   * (autoFocus only focuses the filter input; it doesn't auto-open). */
+  const openDropdown = async () => {
+    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(await screen.findByRole("button", { name: /open/i }));
+  };
+
+  it("saves on pick and closes — no ✓ confirm step", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    renderSelect("a", onSave);
+
+    await openDropdown();
+    fireEvent.click(await screen.findByRole("option", { name: "Banana" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith("b");
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("display")).toHaveTextContent("b");
+  });
+
+  it("picking the current value closes without saving", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    renderSelect("a", onSave);
+
+    await openDropdown();
+    fireEvent.click(await screen.findByRole("option", { name: "Apple" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("does NOT render a ✓ confirm button, but keeps the ✗ cancel button", async () => {
+    renderSelect("a", vi.fn().mockResolvedValue(undefined));
+
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("combobox");
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.some((b) => b.querySelector("svg.lucide-check"))).toBe(
+      false,
+    );
+    expect(buttons.some((b) => b.querySelector("svg.lucide-x"))).toBe(true);
+  });
+
+  it("shows a toast and stays open when onSave rejects", async () => {
+    const { toast } = await import("sonner");
+    const onSave = vi.fn().mockRejectedValue(new Error("Save failed"));
+    renderSelect("a", onSave);
+
+    await openDropdown();
+    fireEvent.click(await screen.findByRole("option", { name: "Banana" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Save failed");
+    });
+    // Editor stays open (combobox still mounted) with the current value intact.
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    expect(screen.getByTestId("display")).toHaveTextContent("a");
+  });
+});
+
 describe("overlay behavior", () => {
   it("renders the editor into document.body via portal while keeping the display trigger mounted in place", async () => {
     const { container } = render(
