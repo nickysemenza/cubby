@@ -1,12 +1,13 @@
 import { useLocation } from "@tanstack/react-router";
-import type { Table as ITable } from "@tanstack/react-table";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { Table as ITable, Row } from "@tanstack/react-table";
+import { useCallback, useEffect, useRef } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
+import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
 import { densityConfig, useTableDensity } from "./useTableDensity";
@@ -19,12 +20,15 @@ export function useDataTableController<TItem>({
   groupConfig,
   grouped,
   verticalAlign,
+  onRowClick,
 }: {
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
   groupConfig?: GroupConfig<TItem>;
   grouped: boolean;
   verticalAlign: "top" | "middle";
+  /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
+  onRowClick?: (row: Row<TItem>) => void;
 }) {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
@@ -38,8 +42,6 @@ export function useDataTableController<TItem>({
   const { density } = useTableDensity();
   const dConfig = densityConfig[density];
 
-  // Keyboard navigation: focused row index (desktop only)
-  const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const desktopInfiniteObserverRef = useRef<IntersectionObserver | null>(null);
 
   const fetchNextPage = infiniteScroll?.fetchNextPage;
@@ -103,6 +105,34 @@ export function useDataTableController<TItem>({
     isMobile,
     trailingSentinel: hasDesktopInfiniteSentinel,
   });
+
+  // Spreadsheet-style cell selection (desktop only). Maps a flat row index into
+  // the virtualizer's index space before scrolling — grouped tables interleave
+  // section headers, so the flat index isn't the virtual index.
+  const scrollToFlatRow = useCallback(
+    (rowIndex: number) => {
+      const virtualIndex = flatRowToVirtualIndex(rowIndex);
+      if (virtualIndex >= 0) scrollToIndex(virtualIndex, { align: "auto" });
+    },
+    [flatRowToVirtualIndex, scrollToIndex],
+  );
+
+  const {
+    selection,
+    clearSelection,
+    getRowCellSelection,
+    containerProps: cellSelectionContainerProps,
+  } = useCellSelection({
+    enabled: !isMobile,
+    rows,
+    table,
+    scrollToFlatRow,
+    onOpenRow: onRowClick,
+  });
+
+  // Focused-row ring follows the selection's focus cell (flat row index). No
+  // separate state — cell selection is the single source of truth.
+  const focusedRowIndex = selection?.focus.row ?? null;
 
   // Save scroll position on unmount for navigate-back restoration. The page is
   // the scroller now, so we track window.scrollY rather than a container.
@@ -170,11 +200,14 @@ export function useDataTableController<TItem>({
     table.getVisibleLeafColumns().length + 1 + (isDebugEnabled ? 1 : 0);
 
   return {
+    cellSelectionContainerProps,
+    clearSelection,
     colSpan,
     columnsKey,
     dConfig,
     flatRowToVirtualIndex,
     focusedRowIndex,
+    getRowCellSelection,
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,
@@ -184,7 +217,6 @@ export function useDataTableController<TItem>({
     scrollMargin,
     scrollToIndex,
     setDesktopInfiniteSentinel,
-    setFocusedRowIndex,
     styles,
     tableContainerRef,
     toolbarHeight,

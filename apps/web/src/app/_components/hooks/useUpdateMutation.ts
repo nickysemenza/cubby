@@ -28,6 +28,9 @@ export function useUpdateMutation<TFn extends MutationOptionsFn>({
   return useActionMutation({
     mutationFn,
     invalidateKeys,
+    // Collapse repeated "{Entity} updated" toasts (rapid inline edits, range
+    // cell-paste fan-out) into one refreshing toast instead of a stack.
+    successToastId: `entity-updated:${entity}`,
     success: (data) =>
       savedWithBackgroundWork(
         (data as { sideEffects?: MutationSideEffects }).sideEffects ??

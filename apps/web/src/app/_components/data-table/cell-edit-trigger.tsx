@@ -7,6 +7,10 @@ import {
   type CellClipboardSpec,
   registerCellClipboard,
 } from "./cell-clipboard";
+import {
+  CELL_EDIT_EVENT,
+  CellSelectionContext,
+} from "./cell-selection-context";
 
 interface CellEditTriggerProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -43,11 +47,29 @@ export function CellEditTrigger({
     else if (forwardedRef) forwardedRef.current = node;
   };
 
+  // Inside an RTable with spreadsheet-style cell selection, a single click
+  // SELECTS the cell (the container drives selection off mousedown); editing
+  // opens on double-click or Enter (dispatched as CELL_EDIT_EVENT). Outside
+  // that context (detail pages, dialogs) the original click-to-edit stands.
+  const cellSelectionMode = React.useContext(CellSelectionContext);
+
   // Keep the latest spec in a ref so registration survives re-renders without
   // listener churn; the registry reads through the stable wrapper below.
   const clipboardRef = React.useRef(clipboard);
   clipboardRef.current = clipboard;
   const hasClipboard = clipboard !== undefined;
+
+  // Ref-latched onStartEdit so the CELL_EDIT_EVENT listener (registered once)
+  // always calls the current handler without re-subscribing each render.
+  const onStartEditRef = React.useRef(onStartEdit);
+  onStartEditRef.current = onStartEdit;
+  React.useEffect(() => {
+    const el = localRef.current;
+    if (!el) return;
+    const handler = () => onStartEditRef.current();
+    el.addEventListener(CELL_EDIT_EVENT, handler);
+    return () => el.removeEventListener(CELL_EDIT_EVENT, handler);
+  }, []);
 
   React.useEffect(() => {
     const el = localRef.current;
@@ -67,6 +89,7 @@ export function CellEditTrigger({
     <button
       type="button"
       ref={setRef}
+      data-cell-edit-trigger=""
       className={cn(
         "group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -74,10 +97,16 @@ export function CellEditTrigger({
         className,
       )}
       onClick={(e) => {
+        // stopPropagation kept so a trigger click never bubbles to the row's
+        // onClick (navigate/open). Selection is driven by mousedown, which is
+        // NOT stopped, so clicking the cell still selects it.
         e.stopPropagation();
         e.currentTarget.focus();
-        onStartEdit();
+        // Cell-selection mode: click only focuses/selects; edit opens on
+        // double-click or Enter. Otherwise keep the original click-to-edit.
+        if (!cellSelectionMode) onStartEdit();
       }}
+      onDoubleClick={cellSelectionMode ? () => onStartEdit() : undefined}
       {...rest}
     >
       {children}

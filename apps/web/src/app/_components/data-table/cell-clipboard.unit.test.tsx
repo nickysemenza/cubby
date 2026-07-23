@@ -12,6 +12,7 @@ import {
   type CellClipboardSpec,
   registerCellClipboard,
 } from "./cell-clipboard";
+import { selectCellData, specFromCellData } from "./cell-data";
 
 /** jsdom's `ClipboardEvent` has no `clipboardData`; attach a mock directly on
  * a plain (cancelable) `Event` — the module only reads `event.clipboardData`
@@ -108,7 +109,7 @@ describe("copy", () => {
   it("writes text/plain and the typed JSON payload for a focused registered element, preventDefaults, and flashes 'copied'", () => {
     vi.useFakeTimers();
     const { el, unregister } = registerFocusedButton({
-      kindKey: "amount:text",
+      kindKey: "amount",
       getCopyPayload: () => ({
         text: "3 cups",
         json: { value: 3, unit: "cups" },
@@ -124,7 +125,7 @@ describe("copy", () => {
     expect(clipboardData.setData).toHaveBeenCalledWith(
       CELL_CLIPBOARD_MIME,
       JSON.stringify({
-        kind: "amount:text",
+        kind: "amount",
         value: { value: 3, unit: "cups" },
       }),
     );
@@ -180,7 +181,7 @@ describe("paste", () => {
   it("falls back to text/plain when the typed payload's kind doesn't match this cell", async () => {
     const onPasteValue = vi.fn().mockResolvedValue("saved");
     const { unregister } = registerFocusedButton({
-      kindKey: "amount:number",
+      kindKey: "number",
       onPasteValue,
     });
     cleanups.push(unregister);
@@ -232,6 +233,49 @@ describe("paste", () => {
 
     expect(toast.error).toHaveBeenCalledWith("bad paste");
     expect(el.getAttribute("data-clipboard-flash")).toBeNull();
+  });
+});
+
+describe("specFromCellData select validation", () => {
+  const options = [
+    { value: "todo", label: "To Do" },
+    { value: "done", label: "Done" },
+  ];
+  const row = { id: "r1" };
+
+  it("saves the matching option value on an exact value match", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const spec = specFromCellData(
+      selectCellData<typeof row>(() => "todo", options, save),
+      row,
+    );
+    const saved = await spec.onPasteValue!({ json: "done" });
+    expect(save).toHaveBeenCalledWith(row, "done");
+    expect(saved).toBe("done");
+  });
+
+  it("resolves a case-insensitive label to its option value", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const spec = specFromCellData(
+      selectCellData<typeof row>(() => null, options, save),
+      row,
+    );
+    // "TO DO" matches no value but matches the "To Do" label case-insensitively.
+    const saved = await spec.onPasteValue!({ text: "TO DO" });
+    expect(save).toHaveBeenCalledWith(row, "todo");
+    expect(saved).toBe("todo");
+  });
+
+  it("rejects a value matching no option, without saving", async () => {
+    const save = vi.fn();
+    const spec = specFromCellData(
+      selectCellData<typeof row>(() => null, options, save),
+      row,
+    );
+    await expect(spec.onPasteValue!({ text: "nope" })).rejects.toThrow(
+      '"nope" is not a valid option here',
+    );
+    expect(save).not.toHaveBeenCalled();
   });
 });
 

@@ -55,17 +55,25 @@ import { HoverableTimestamp } from "../HoverableTimestamp";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import type { CellClipboardSpec } from "./cell-clipboard";
+import {
+  amountCellData,
+  type ColumnCellData,
+  entityCellData,
+  numberCellData,
+  selectCellData,
+  specFromCellData,
+  textCellData,
+  timestampCellData,
+} from "./cell-data";
 import {
   EditableAmountCell,
   EditableCell,
   type FilterableComboboxItem,
 } from "./editable-cell";
 import { EditableEntityCell } from "./editable-entity-cell";
-import {
-  entityCellClipboard,
-  type InventoryEntryBase,
-  type InventoryRelatedEntity,
+import type {
+  InventoryEntryBase,
+  InventoryRelatedEntity,
 } from "./inventory-column-helpers";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
 
@@ -91,83 +99,6 @@ export function presenceFilterOptions(label: string): FilterableComboboxItem[] {
     { value: "has", label: `Has ${label}` },
     { value: "none", label: "(none)" },
   ];
-}
-
-// --- Cell clipboard spec builders ------------------------------------------
-// Kinds: primitives are "<columnId>:<type>" (paste stays within the column);
-// entity cells are "entity:<name>" (a copied location pastes into any
-// location-picker cell across tables). Builders throw on invalid pastes —
-// cell-clipboard surfaces the message as a toast — and resolve with the saved
-// value for the cell's optimistic display.
-
-function textCellClipboard(
-  kindKey: string,
-  value: string | null,
-  save: (v: string | null) => Promise<void>,
-): CellClipboardSpec {
-  return {
-    kindKey,
-    getCopyPayload: () =>
-      value == null || value === "" ? null : { text: value, json: value },
-    onPasteValue: async ({ json, text }) => {
-      const raw = typeof json === "string" ? json : (text ?? "");
-      const next = raw.trim() === "" ? null : raw.trim();
-      await save(next);
-      return next;
-    },
-  };
-}
-
-function numberCellClipboard(
-  kindKey: string,
-  value: number | null,
-  save: (v: number | null) => Promise<void>,
-): CellClipboardSpec {
-  return {
-    kindKey,
-    getCopyPayload: () =>
-      value == null ? null : { text: String(value), json: value },
-    onPasteValue: async ({ json, text }) => {
-      const num =
-        typeof json === "number"
-          ? json
-          : Number.parseFloat((text ?? "").replace(/[^0-9.-]/g, ""));
-      if (Number.isNaN(num)) {
-        throw new Error("Pasted value is not a number");
-      }
-      await save(num);
-      return num;
-    },
-  };
-}
-
-function selectCellClipboard(
-  kindKey: string,
-  value: string | null,
-  selectOptions: FilterableComboboxItem[],
-  save: (v: string) => Promise<void>,
-): CellClipboardSpec {
-  return {
-    kindKey,
-    getCopyPayload: () => {
-      if (value == null || value === "") return null;
-      const opt = selectOptions.find((o) => o.value === value);
-      return { text: opt?.label ?? value, json: value };
-    },
-    onPasteValue: async ({ json, text }) => {
-      const candidate = typeof json === "string" ? json : (text ?? "").trim();
-      const opt =
-        selectOptions.find((o) => o.value === candidate) ??
-        selectOptions.find(
-          (o) => o.label.toLowerCase() === candidate.toLowerCase(),
-        );
-      if (!opt || opt.value === "") {
-        throw new Error(`"${candidate}" is not a valid option here`);
-      }
-      await save(opt.value);
-      return opt.value;
-    },
-  };
 }
 
 export type MobileSlot =
@@ -208,6 +139,12 @@ declare module "@tanstack/react-table" {
     mono?: boolean;
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
+    /**
+     * Column-level copy/paste descriptor. Set by the column factories; read by
+     * the range copy/paste engine (and adapted per-row into a single-cell
+     * `CellClipboardSpec` via `specFromCellData`).
+     */
+    cellData?: ColumnCellData<TData>;
   }
 }
 
@@ -276,6 +213,16 @@ export function createNameColumn<T extends BaseRow>(
   },
 ) {
   const entityConfig = entities[entity];
+  const cellData = textCellData<T>(
+    "text",
+    (row) => {
+      const raw = row[fieldName];
+      return raw == null ? null : String(raw);
+    },
+    options?.editable
+      ? (row, v) => options.editable!.onSave(v ?? "", row)
+      : undefined,
+  );
   const config = {
     id: String(fieldName),
     enableSorting: true,
@@ -283,6 +230,7 @@ export function createNameColumn<T extends BaseRow>(
       className: options?.className ?? "w-64",
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
+      cellData,
     },
     footer: (info: {
       table: {
@@ -365,11 +313,7 @@ export function createNameColumn<T extends BaseRow>(
             onSave={(newVal) =>
               options.editable!.onSave(newVal ?? "", info.row.original)
             }
-            clipboard={textCellClipboard(
-              `${String(fieldName)}:text`,
-              value,
-              (v) => options.editable!.onSave(v ?? "", info.row.original),
-            )}
+            clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text" }}
             renderValue={(v) =>
               wrapWithSuffix(
@@ -463,6 +407,9 @@ export function createCreatedAtColumn<T extends BaseRow>(
       className: "w-32",
       mono: true,
       mobile: { slot: "hidden" },
+      // Copy-only: the display is relative ("5 months ago") but the copy
+      // payload is the ISO date-time, which pastes usefully into a spreadsheet.
+      cellData: timestampCellData<T>((row) => row.createdAt),
     },
     cell: (info) => {
       const value = info.getValue();
@@ -827,6 +774,14 @@ export function createTextColumn<
   const renderValue =
     options?.renderValue ?? ((v: string | null) => (v ? v : <NoneValue />));
 
+  const cellData = textCellData<T>(
+    "text",
+    (row) => row[accessor] as string | null,
+    options?.editable
+      ? (row, v) => options.editable!.onSave(v, row)
+      : undefined,
+  );
+
   return columnHelper.accessor((row) => row[accessor] as string | null, {
     id: String(accessor),
     header: options?.header,
@@ -834,6 +789,7 @@ export function createTextColumn<
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
+      cellData,
     },
     cell: (info) => {
       const value = info.getValue();
@@ -845,11 +801,7 @@ export function createTextColumn<
             onSave={(newVal) =>
               options.editable!.onSave(newVal, info.row.original)
             }
-            clipboard={textCellClipboard(
-              `${String(accessor)}:text`,
-              value,
-              (v) => options.editable!.onSave(v, info.row.original),
-            )}
+            clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text", placeholder: options?.placeholder }}
             renderValue={renderValue}
           />
@@ -905,6 +857,13 @@ export function createCurrencyColumn<
   // green only the credits, so a refund never reads as spend.
   const toneClass = (v: number) =>
     signedTone ? (v < 0 ? "text-positive" : "font-medium") : "text-positive";
+  const cellData = numberCellData<T>(
+    "currency",
+    (row) => row[accessor] as number | null,
+    options?.editable
+      ? (row, v) => options.editable!.onSave(v, row)
+      : undefined,
+  );
   return columnHelper.accessor((row) => row[accessor] as number | null, {
     id: String(accessor),
     header: options?.header,
@@ -912,6 +871,7 @@ export function createCurrencyColumn<
       numeric: true,
       className: options?.className ?? "w-20",
       mobile: options?.mobile,
+      cellData,
     },
     footer: (info) => {
       // Prefer the server's full-filtered-set aggregate — the client only
@@ -944,11 +904,7 @@ export function createCurrencyColumn<
             onSave={(newVal) =>
               options.editable!.onSave(newVal, info.row.original)
             }
-            clipboard={numberCellClipboard(
-              `${String(accessor)}:currency`,
-              val,
-              (v) => options.editable!.onSave(v, info.row.original),
-            )}
+            clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "currency" }}
             renderValue={(v) =>
               isEmpty(v) ? (
@@ -1061,6 +1017,30 @@ export function createSingleEntityInlineLinkColumn<
 ) {
   const compact = options?.compact ?? true;
 
+  const editableConfig = options?.editable as
+    | SingleEntityEditableConfig<T, string>
+    | undefined;
+  // usda-food has no generic picker, so it's never copy/pasteable here.
+  const cellData: ColumnCellData<T> | undefined =
+    entity === "usda-food"
+      ? undefined
+      : entityCellData<T>(
+          entity,
+          (row) => {
+            const item = row[accessor] as Extract<
+              SingleEntityColumnData,
+              { entity: TEntity }
+            >["data"];
+            if (!item) return null;
+            const buildItem = entityPickers[entity as keyof SingleEntityIdMap]
+              .buildItem as (data: NonNullable<typeof item>) => ComboboxItem;
+            return buildItem(item);
+          },
+          editableConfig
+            ? (row, id) => editableConfig.onSave(id, row)
+            : undefined,
+        );
+
   return columnHelper.accessor(
     (row) =>
       row[accessor] as Extract<
@@ -1075,6 +1055,7 @@ export function createSingleEntityInlineLinkColumn<
         className: options?.className,
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
+        cellData,
       },
       cell: (info) => {
         const item = info.getValue();
@@ -1100,9 +1081,7 @@ export function createSingleEntityInlineLinkColumn<
                   : undefined
               }
               onSave={(newId) => editable.onSave(newId, row)}
-              clipboard={entityCellClipboard(entity, current, (id) =>
-                editable.onSave(id, row),
-              )}
+              clipboard={cellData ? specFromCellData(cellData, row) : undefined}
               SearchProvider={picker.SearchProvider}
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
@@ -1162,6 +1141,13 @@ export function createFilterableSelectColumn<
     };
   },
 ) {
+  const cellData = selectCellData<T>(
+    (row) => (row[accessor] as string | null) ?? null,
+    options.selectOptions,
+    options.editable
+      ? (row, v) => options.editable!.onSave(v as T[K], row)
+      : undefined,
+  );
   return columnHelper.accessor((row) => row[accessor], {
     id: String(accessor),
     header: options.header,
@@ -1173,6 +1159,7 @@ export function createFilterableSelectColumn<
         filterType: "select",
         options: options.selectOptions,
       },
+      cellData,
     },
     cell: (info) => {
       const value = info.getValue() as T[K];
@@ -1184,12 +1171,7 @@ export function createFilterableSelectColumn<
             onSave={(newVal) =>
               options.editable!.onSave(newVal as T[K], info.row.original)
             }
-            clipboard={selectCellClipboard(
-              `${String(accessor)}:select`,
-              (value as string | null) ?? null,
-              options.selectOptions,
-              (v) => options.editable!.onSave(v as T[K], info.row.original),
-            )}
+            clipboard={specFromCellData(cellData, info.row.original)}
             config={{
               type: "select",
               options: options.selectOptions,
@@ -1234,6 +1216,17 @@ export function createExternalLinkColumn<
   const paramName = options?.paramName ?? "code";
   const variant = options?.variant ?? "mono";
 
+  const cellData = textCellData<T>(
+    "text",
+    (row) => {
+      const v = row[accessor] as string | number | null;
+      return v !== null && v !== undefined ? String(v) : null;
+    },
+    options?.editable
+      ? (row, v) => options.editable!.onSave(v, row)
+      : undefined,
+  );
+
   return columnHelper.accessor(
     (row) => row[accessor] as string | number | null,
     {
@@ -1244,6 +1237,7 @@ export function createExternalLinkColumn<
         mono: variant === "mono",
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
+        cellData,
       },
       cell: (info) => {
         const value = info.getValue();
@@ -1257,11 +1251,7 @@ export function createExternalLinkColumn<
               onSave={(newVal) =>
                 options.editable!.onSave(newVal, info.row.original)
               }
-              clipboard={textCellClipboard(
-                `${String(accessor)}:text`,
-                value !== null && value !== undefined ? String(value) : null,
-                (v) => options.editable!.onSave(v, info.row.original),
-              )}
+              clipboard={specFromCellData(cellData, info.row.original)}
               config={{ type: "text" }}
               renderValue={(v) => {
                 if (v === null || v === undefined || v === "") {
@@ -1322,6 +1312,10 @@ export function createTimestampColumn<
       className: options?.className,
       mono: true,
       mobile: options?.mobile,
+      // Copy-only ISO date-time (see createCreatedAtColumn).
+      cellData: timestampCellData<T>(
+        (row) => row[accessor] as string | Date | null,
+      ),
     },
     cell: (info) => {
       const value = info.getValue();
@@ -1349,6 +1343,10 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     renderDisplay?: (content: ReactNode, row: T) => ReactNode;
   },
 ) {
+  const cellData = amountCellData<T>(
+    (row) => row[accessor] as Amount,
+    (row, amount) => options.onSave(amount, row),
+  );
   return columnHelper.accessor((row) => row[accessor] as Amount, {
     id: String(accessor),
     header: options.header ?? "Amount",
@@ -1356,54 +1354,19 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
       numeric: true,
       className: cn("w-40", options.className),
       mobile: options.mobile,
+      cellData,
     },
     cell: (info) => {
       const amount = info.getValue();
       const row = info.row.original;
       const unitMappings = options.getUnitMappings?.(row);
 
-      const saveAmount = async (next: Amount) => {
-        await options.onSave(next, row);
-        return next;
-      };
-
       return (
         <EditableAmountCell
           amount={amount}
           unitMappings={unitMappings}
           onSave={(newAmount) => options.onSave(newAmount, row)}
-          clipboard={{
-            kindKey: `${String(accessor)}:amount`,
-            getCopyPayload: () => ({
-              text: `${amount.value} ${amount.unit}`.trim(),
-              json: { value: amount.value, unit: amount.unit },
-            }),
-            onPasteValue: async ({ json, text }) => {
-              const typed = json as
-                | { value?: unknown; unit?: unknown }
-                | undefined;
-              if (typed && typeof typed.value === "number") {
-                return saveAmount({
-                  value: typed.value,
-                  unit: typeof typed.unit === "string" ? typed.unit : "",
-                });
-              }
-              // Text like "5 each" / "2.5 lb" / bare "3".
-              const match = (text ?? "")
-                .trim()
-                .match(/^(-?\d+(?:\.\d+)?)\s*(.*)$/);
-              const parsedValue = match?.[1]
-                ? Number.parseFloat(match[1])
-                : Number.NaN;
-              if (!match || Number.isNaN(parsedValue)) {
-                throw new Error("Pasted value is not an amount");
-              }
-              return saveAmount({
-                value: parsedValue,
-                unit: (match[2] ?? "").trim(),
-              });
-            },
-          }}
+          clipboard={specFromCellData(cellData, row)}
           renderDisplay={
             options.renderDisplay
               ? (content) => options.renderDisplay!(content, row)
@@ -1442,6 +1405,15 @@ export function createPlainDateColumn<
   const renderValue = (value: string | null) =>
     value ? format(parsePlainDate(value), "MMM d, yyyy") : <NoneValue />;
 
+  // Copy the raw "YYYY-MM-DD" string; paste only when editable (kind "date").
+  const cellData = textCellData<T>(
+    "date",
+    (row) => row[accessor] as string | null,
+    options?.editable
+      ? (row, v) => options.editable!.onSave(v, row)
+      : undefined,
+  );
+
   return columnHelper.accessor((row) => row[accessor] as string | null, {
     id: String(accessor),
     header: options?.header,
@@ -1450,6 +1422,7 @@ export function createPlainDateColumn<
       mono: true,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
+      cellData,
     },
     cell: (info) => {
       const value = info.getValue();
@@ -1461,11 +1434,7 @@ export function createPlainDateColumn<
             onSave={(newVal) =>
               options.editable!.onSave(newVal, info.row.original)
             }
-            clipboard={textCellClipboard(
-              `${String(accessor)}:date`,
-              value,
-              (v) => options.editable!.onSave(v, info.row.original),
-            )}
+            clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "date" }}
             renderValue={renderValue}
           />
@@ -1509,6 +1478,16 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     };
   },
 ) {
+  const cellData = entityCellData<T>(
+    "project",
+    (row) =>
+      row.projectId && row.projectName
+        ? { id: row.projectId, name: row.projectName }
+        : null,
+    options?.editable
+      ? (row, id) => options.editable!.onSave(unsafeProjectId(id), row)
+      : undefined,
+  );
   return columnHelper.accessor(
     (row) => ({ id: row.projectId, name: row.projectName }),
     {
@@ -1519,6 +1498,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         className: options?.className,
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
+        cellData,
       },
       cell: (info) => {
         const { id, name } = info.getValue();
@@ -1534,9 +1514,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
               clearable
               trigger="pencil"
               onSave={(newId) => options.editable!.onSave(newId, row)}
-              clipboard={entityCellClipboard("project", current, (pid) =>
-                options.editable!.onSave(pid, row),
-              )}
+              clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProjectSearch}
               renderValue={(v) => {
                 if (!v) return <NoneValue />;

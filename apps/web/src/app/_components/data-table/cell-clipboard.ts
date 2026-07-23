@@ -1,10 +1,19 @@
 /**
- * Notion-style cell copy/paste for editable table cells.
+ * Notion-style single-cell copy/paste for individual focused cells.
  *
- * Registered cells (the focused CellEditTrigger button) intercept the
- * document's `copy`/`paste` events: copy writes `text/plain` (usable outside
- * the app) plus a typed JSON payload; paste prefers the typed payload when
- * the kind matches and saves immediately through the cell's own onSave path.
+ * This is the per-ELEMENT registry: a focused CellEditTrigger button (an
+ * in-table editable cell, or an out-of-table cell such as a detail page)
+ * registers a spec and intercepts the document's `copy`/`paste` events. Copy
+ * writes `text/plain` (usable outside the app) plus a typed JSON payload;
+ * paste prefers the typed payload when the kind matches and saves immediately
+ * through the cell's own onSave path. In-table cells build their spec from the
+ * column's `meta.cellData` via `specFromCellData` (columnHelpers.tsx).
+ *
+ * Range selection (spreadsheet-style drag/shift-select of many cells) is a
+ * SEPARATE system: `useCellSelection.ts` owns in-table range copy/paste by
+ * reading `meta.cellData` off the TanStack row model directly (so it reaches
+ * virtualized off-screen rows). This element registry stays for cells outside
+ * that grid — one focused cell at a time.
  *
  * Uses ClipboardEvent.clipboardData (synchronous, no permissions) rather than
  * navigator.clipboard. Known limitation: Firefox doesn't dispatch copy/paste
@@ -12,9 +21,10 @@
  * a keydown + navigator.clipboard fallback is a contained follow-up if ever
  * needed.
  *
- * Kind scoping: primitive cells use `"<columnId>:<configType>"` (paste stays
- * within the same column); entity-picker cells use `"entity:<name>"` so a
- * copied location pastes into any location cell across tables.
+ * Kind scoping: kinds are BASE types ("text" | "number" | "currency" | "date"
+ * | "select" | "amount" | "entity:<name>"). Paste is allowed between any two
+ * cells sharing a base kind — e.g. one text column into another, or a location
+ * copied on the Locations page into any location cell across tables.
  */
 
 import { toast } from "sonner";
@@ -73,6 +83,9 @@ function flash(el: HTMLElement, kind: "copied" | "pasted") {
 }
 
 function handleCopy(event: ClipboardEvent) {
+  // Range copy/paste (useCellSelection) preventDefaults first when it owns the
+  // event; bail so a focused trigger doesn't also handle it (coexistence guard).
+  if (event.defaultPrevented) return;
   const active = specForActiveElement();
   const payload = active?.spec.getCopyPayload?.();
   if (!active || !payload || !event.clipboardData) return; // native copy
@@ -105,6 +118,8 @@ function safeParsePayload(
 }
 
 function handlePaste(event: ClipboardEvent) {
+  // See handleCopy: the range engine preventDefaults when it handles the paste.
+  if (event.defaultPrevented) return;
   const active = specForActiveElement();
   const onPasteValue = active?.spec.onPasteValue;
   if (!active || !onPasteValue || active.spec.isEditing?.()) return;
