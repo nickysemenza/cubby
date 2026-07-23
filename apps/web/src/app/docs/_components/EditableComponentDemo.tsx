@@ -79,7 +79,7 @@ export function EditableComponentDemo<T>({
               onClick={handleReset}
               className="h-7 gap-1 px-2 text-xs"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="size-3" />
               Reset
             </Button>
           )}
@@ -89,7 +89,7 @@ export function EditableComponentDemo<T>({
             onClick={() => setIsEditing(!isEditing)}
             className="h-7 gap-1 px-2 text-xs"
           >
-            <Code className="h-3 w-3" />
+            <Code className="size-3" />
             {isEditing ? "Hide JSON" : "Edit JSON"}
           </Button>
         </Row>

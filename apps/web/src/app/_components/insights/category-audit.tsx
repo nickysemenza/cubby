@@ -46,7 +46,7 @@ export function CategoryAudit() {
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 h-4 w-4" />
+                <Sparkles className="mr-2 size-4" />
                 Run Audit
               </>
             )}
@@ -91,7 +91,12 @@ function SuggestionCard({
       {suggestion.productNames.length > 0 && (
         <Row wrap gap="sm" className="pt-1">
           {suggestion.productNames.map((name) => (
-            <Badge key={name} variant="outline" className="text-xs">
+            <Badge
+              key={name}
+              variant="outline"
+              // Free-form product names — opt out of the mono-uppercase stamp.
+              className="font-sans text-xs normal-case tracking-normal"
+            >
               {name}
             </Badge>
           ))}

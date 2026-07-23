@@ -408,7 +408,7 @@ export function DesignGallery() {
               {DESIGN_PALETTE.map(({ token, name, role }) => (
                 <div key={name} className="flex items-center gap-2">
                   <span
-                    className="h-7 w-7 shrink-0 border border-border"
+                    className="size-7 shrink-0 border border-border"
                     style={{ backgroundColor: `var(${token})` }}
                   />
                   <span className="min-w-0">

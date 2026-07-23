@@ -32,39 +32,39 @@ const ATTENTION_GROUPS: Array<{
   {
     type: "overdue_task",
     icon: CalendarClock,
-    iconClassName: "h-3.5 w-3.5 text-destructive",
+    iconClassName: "size-3.5 text-destructive",
     title: (n) => `${n} overdue task${n !== 1 ? "s" : ""}`,
   },
   {
     type: "blocked_work",
     icon: Ban,
-    iconClassName: "h-3.5 w-3.5 text-warning",
+    iconClassName: "size-3.5 text-warning",
     title: (n) =>
       `${n} project${n !== 1 ? "s" : ""} blocked with no next action`,
   },
   {
     type: "stalled_project",
     icon: AlertTriangle,
-    iconClassName: "h-3.5 w-3.5 text-warning",
+    iconClassName: "size-3.5 text-warning",
     title: (n) =>
       `${n} stalled project${n !== 1 ? "s" : ""} (no activity in 30 days)`,
   },
   {
     type: "past_due_planned_purchase",
     icon: Clock,
-    iconClassName: "h-3.5 w-3.5 text-warning",
+    iconClassName: "size-3.5 text-warning",
     title: (n) => `${n} planned purchase${n !== 1 ? "s" : ""} past due`,
   },
   {
     type: "missing_budget",
     icon: DollarSign,
-    iconClassName: "h-3.5 w-3.5 text-warning",
+    iconClassName: "size-3.5 text-warning",
     title: (n) => `${n} project${n !== 1 ? "s" : ""} missing a cost estimate`,
   },
   {
     type: "unclassified_purchase",
     icon: Tag,
-    iconClassName: "h-3.5 w-3.5 text-muted-foreground",
+    iconClassName: "size-3.5 text-muted-foreground",
     title: (n) => `${n} unclassified purchase${n !== 1 ? "s" : ""}`,
   },
 ];
@@ -90,7 +90,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
   return (
     <Stack className="rounded-lg border border-warning/40 bg-warning/10 p-4">
       <Row align="center" gap="sm" className="font-medium text-sm text-warning">
-        <AlertTriangle className="h-4 w-4" />
+        <AlertTriangle className="size-4" />
         Needs Attention ({items.length})
       </Row>
 

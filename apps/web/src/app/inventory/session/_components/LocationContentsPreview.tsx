@@ -36,11 +36,11 @@ export function LocationContentsPreview({ items }: { items: InventoryItem[] }) {
             src={item.product.images.find((img) => !isDocumentFile(img))?.url}
             alt={productDisplayName(item.product.name)}
             displayWidth={64}
-            className="h-8 w-8 shrink-0 border border-[var(--border)] object-cover"
+            className="size-8 shrink-0 border border-[var(--border)] object-cover"
           />
         ))}
         {overflow > 0 && (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-[var(--border)] bg-muted font-mono text-2xs text-muted-foreground">
+          <span className="flex size-8 shrink-0 items-center justify-center border border-[var(--border)] bg-muted font-mono text-2xs text-muted-foreground">
             +{overflow}
           </span>
         )}

@@ -3,6 +3,7 @@ import type { CostType, PurchaseFilters, Trade } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
+import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
 
@@ -11,6 +12,20 @@ export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
   materials: "Materials",
   tools: "Tools",
   services: "Services",
+};
+
+/**
+ * Badge tone per cost-type — the chip twin of `COST_TYPE_COLORS`
+ * (~/lib/status-colors), which encodes the same three buckets as chart fills.
+ * The chart ramp is a monochrome ink ladder + ultramarine accent, so materials
+ * (chart-1, ultramarine) → the ultramarine `default` chip, while tools
+ * (chart-5, ink 40%) and services (chart-2, ink) → the two neutral chips
+ * `slate` and `secondary` — lighter and darker to echo the ink ladder.
+ */
+export const costTypeBadgeVariant: Record<CostType, BadgeVariant> = {
+  materials: "default",
+  tools: "slate",
+  services: "secondary",
 };
 
 /** `{value,label}` options for the cost-type filter/inline-edit select. */

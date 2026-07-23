@@ -104,9 +104,9 @@ export function BookGroupCard({
           aria-label={book.expanded ? "Collapse" : "Expand"}
         >
           {book.expanded ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="size-4" />
           ) : (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="size-4" />
           )}
         </button>
         <Input
@@ -127,7 +127,7 @@ export function BookGroupCard({
                 importing || book.selected.size === 0 || name.length === 0
               }
             >
-              <Import className="mr-1 h-4 w-4" />
+              <Import className="mr-1 size-4" />
               Import {book.selected.size}
             </Button>
           )}
@@ -137,7 +137,7 @@ export function BookGroupCard({
             className="text-muted-foreground hover:text-foreground"
             aria-label="Remove book"
           >
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </button>
         </Row>
       </CardHeader>
@@ -297,7 +297,7 @@ function ExtractStatus({ book }: { book: Book }) {
         gap="xs"
         className="text-muted-foreground text-xs"
       >
-        <Spinner className="h-3 w-3" /> Extracting {e.done}/{e.total}
+        <Spinner className="size-3" /> Extracting {e.done}/{e.total}
       </Row>
     );
   }
@@ -309,7 +309,7 @@ function ExtractStatus({ book }: { book: Book }) {
         gap="xs"
         className="text-destructive text-xs"
       >
-        <AlertCircle className="h-3 w-3" /> {e.message}
+        <AlertCircle className="size-3" /> {e.message}
       </Row>
     );
   }
@@ -346,12 +346,12 @@ function FailedChunksPanel({
     <div className="border border-warning/40 bg-warning/5 p-2">
       <Row align="center" justify="between" gap="sm">
         <Row as="span" align="center" gap="xs" className="text-warning text-xs">
-          <AlertCircle className="h-3 w-3" />
+          <AlertCircle className="size-3" />
           {failed.length} chunk{failed.length === 1 ? "" : "s"} failed to
           extract — recipes in {failed.length === 1 ? "it" : "them"} were lost
         </Row>
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          <RotateCcw className="mr-1 h-3 w-3" />
+          <RotateCcw className="mr-1 size-3" />
           Retry extraction
         </Button>
       </Row>

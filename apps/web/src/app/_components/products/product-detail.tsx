@@ -119,7 +119,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           to="/inventory/session"
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
-          <Package className="mr-2 h-4 w-4" />
+          <Package className="mr-2 size-4" />
           Add to Inventory
         </Link>
       ),

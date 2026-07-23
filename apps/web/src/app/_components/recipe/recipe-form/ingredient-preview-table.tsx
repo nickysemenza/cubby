@@ -164,11 +164,7 @@ export function IngredientPreviewTable({
           className="gap-1 text-2xs text-muted-foreground"
           onClick={() => setShowRaw((v) => !v)}
         >
-          {showRaw ? (
-            <EyeOff className="h-3 w-3" />
-          ) : (
-            <Eye className="h-3 w-3" />
-          )}
+          {showRaw ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
           {showRaw ? "Hide raw" : "Show raw"}
         </Button>
       </Row>
@@ -247,16 +243,16 @@ function IngredientRow({
             />
           ) : (
             <>
-              <AlertCircle className="h-4 w-4 text-warning" />
+              <AlertCircle className="size-4 text-warning" />
               <span className="text-warning">{item.parsed.name}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-warning hover:bg-warning/15 hover:text-warning"
+                className="size-6 p-0 text-warning hover:bg-warning/15 hover:text-warning"
                 onClick={onCreateClick}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
               </Button>
             </>
           )}
@@ -277,7 +273,7 @@ function IngredientRow({
                 <span className="inline-flex cursor-help items-center gap-1 text-warning" />
               }
             >
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <AlertTriangle className="size-3.5" />
               <span className="text-xs">No amount read</span>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
@@ -300,10 +296,7 @@ function IngredientRow({
             fixed-layout column; underlines clone across wraps (box-decoration). */}
       {showRaw && (
         <TableCell className="whitespace-normal break-words text-xs leading-loose">
-          <DecompositionView
-            rawLine={item.raw}
-            className="text-foreground/70"
-          />
+          <DecompositionView rawLine={item.raw} className="text-foreground" />
         </TableCell>
       )}
     </TableRow>

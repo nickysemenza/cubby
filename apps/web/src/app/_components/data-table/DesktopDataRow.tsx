@@ -72,7 +72,7 @@ function DesktopDataRowInner<TItem>({
             title={`Debug Data - Row ${row.id}`}
             trigger={
               <Button variant="ghost" size="icon-sm">
-                <Bug className="h-4 w-4" />
+                <Bug className="size-4" />
                 <span className="sr-only">Debug row data</span>
               </Button>
             }

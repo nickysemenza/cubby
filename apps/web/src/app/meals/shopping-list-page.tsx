@@ -190,7 +190,8 @@ export function ShoppingListPage({
                   key={m.id}
                   variant={isOut ? "outline" : "secondary"}
                   className={cn(
-                    "h-auto cursor-pointer px-2 py-1 text-xs",
+                    // Free-form meal names — opt out of the mono-uppercase stamp.
+                    "h-auto cursor-pointer px-2 py-1 font-sans text-xs normal-case tracking-normal",
                     isOut && "border-dashed text-muted-foreground line-through",
                   )}
                   render={

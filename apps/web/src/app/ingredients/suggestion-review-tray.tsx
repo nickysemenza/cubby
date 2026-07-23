@@ -77,7 +77,7 @@ export function SuggestionReviewTray({
                 aria-label={`Reject suggestion for ${row.name}`}
                 className="text-muted-foreground hover:text-destructive"
               >
-                <X className="h-4 w-4" />
+                <X className="size-4" />
               </button>
               <span className="font-medium">{row.name}</span>
               <span className="truncate text-muted-foreground">

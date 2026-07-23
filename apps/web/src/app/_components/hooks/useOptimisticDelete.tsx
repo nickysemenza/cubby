@@ -230,7 +230,7 @@ export function useOptimisticDelete<
     return {
       id: "delete" as const,
       label: "Delete",
-      icon: <Trash className="h-4 w-4" />,
+      icon: <Trash className="size-4" />,
       requiresConfirmation: true,
       onExecute: async (selectedRows: { original: TData }[]) => {
         await deleteMutation.mutateAsync({
@@ -258,7 +258,7 @@ export function useOptimisticDelete<
                 setDeleteTarget(row);
               }}
             >
-              <Trash className="mr-2 h-4 w-4" />
+              <Trash className="mr-2 size-4" />
               Delete
             </DropdownMenuItem>
           </>

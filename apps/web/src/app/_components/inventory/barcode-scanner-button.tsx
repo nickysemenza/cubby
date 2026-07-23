@@ -57,7 +57,7 @@ export function BarcodeScannerButton({
         className={className}
         title="Scan barcode"
       >
-        <Camera className="h-4 w-4" />
+        <Camera className="size-4" />
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -70,7 +70,7 @@ export function BarcodeScannerButton({
                 size="icon"
                 onClick={() => setIsOpen(false)}
               >
-                <X className="h-4 w-4" />
+                <X className="size-4" />
               </Button>
             </DialogTitle>
           </DialogHeader>

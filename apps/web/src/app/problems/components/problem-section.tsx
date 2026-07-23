@@ -96,11 +96,11 @@ export function ProblemSection<T>({
 
   // Render icon based on whether we have an entity or a LucideIcon
   const IconElement = entity ? (
-    <EntityIcon entity={entity} className={`h-4 w-4 ${iconColor}`} />
+    <EntityIcon entity={entity} className={`size-4 ${iconColor}`} />
   ) : (
     (() => {
       const Icon = icon;
-      return <Icon className={`h-5 w-5 ${iconColor}`} />;
+      return <Icon className={`size-5 ${iconColor}`} />;
     })()
   );
 
@@ -260,9 +260,9 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
                 }
               >
                 {open ? (
-                  <X className="mr-1 h-3 w-3" />
+                  <X className="mr-1 size-3" />
                 ) : (
-                  <Wrench className="mr-1 h-3 w-3" />
+                  <Wrench className="mr-1 size-3" />
                 )}
                 {open ? "Cancel" : inlineFix.label}
               </TooltipTrigger>
@@ -280,7 +280,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
                 />
               }
             >
-              <ExternalLink className="mr-1 h-3 w-3" />
+              <ExternalLink className="mr-1 size-3" />
               {editLabel}
             </TooltipTrigger>
             <TooltipContent>

@@ -82,7 +82,7 @@ export function AuditLogEntryComponent({
               <EntityIcon
                 entity={entry.entityType}
                 colored
-                className="h-4 w-4 flex-shrink-0"
+                className="size-4 flex-shrink-0"
               />
               <span className="truncate font-medium text-sm">
                 {entityConfig.label}
@@ -119,9 +119,9 @@ export function AuditLogEntryComponent({
         gap="sm"
         className="group/entry relative py-2 pl-6 last:border-b-0"
       >
-        <div className="absolute top-4 left-0 h-3 w-3 rounded-full bg-primary ring-4 ring-background" />
+        <div className="absolute top-4 left-0 size-3 rounded-full bg-primary ring-4 ring-background" />
         <div className="absolute top-7 bottom-0 left-[5px] w-0.5 bg-gradient-to-b from-border to-transparent group-last/entry:hidden" />
-        <Avatar className="h-6 w-6 flex-shrink-0">
+        <Avatar className="size-6 flex-shrink-0">
           {entry.user?.image ? (
             <AvatarImage src={entry.user.image} alt={entry.user.name ?? ""} />
           ) : null}
@@ -131,7 +131,7 @@ export function AuditLogEntryComponent({
               !entry.user && "bg-muted text-muted-foreground",
             )}
           >
-            {entry.user ? userInitials : <Bot className="h-4 w-4" />}
+            {entry.user ? userInitials : <Bot className="size-4" />}
           </AvatarFallback>
         </Avatar>
 
@@ -150,7 +150,7 @@ export function AuditLogEntryComponent({
                 <EntityIcon
                   entity={entry.entityType}
                   colored
-                  className="h-4 w-4 flex-shrink-0"
+                  className="size-4 flex-shrink-0"
                 />
                 <span className="font-medium text-sm">
                   {entityConfig.label}
@@ -184,9 +184,9 @@ export function AuditLogEntryComponent({
           {hasChanges && (
             <CollapsibleTrigger className="mt-2 flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
               {isOpen ? (
-                <ChevronDown className="h-3 w-3" />
+                <ChevronDown className="size-3" />
               ) : (
-                <ChevronRight className="h-3 w-3" />
+                <ChevronRight className="size-3" />
               )}
               {Object.keys(entry.changes!).length} field
               {Object.keys(entry.changes!).length > 1 ? "s" : ""} changed

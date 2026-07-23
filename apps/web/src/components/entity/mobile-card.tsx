@@ -174,7 +174,7 @@ export function MobileCard({
         {imageSlot && (
           <div
             className={cn(
-              "h-11 w-11 self-center overflow-hidden rounded",
+              "size-11 self-center overflow-hidden rounded",
               hasSecondLine && "row-span-2",
             )}
           >
@@ -186,7 +186,7 @@ export function MobileCard({
         <Row align="baseline" gap="sm" className="min-w-0">
           {TitleIcon && (
             <TitleIcon
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" /* tight */
+              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" /* tight */
             />
           )}
           <span
@@ -290,7 +290,7 @@ export function MobileCard({
                 >
                   {TitleIcon && (
                     <TitleIcon
-                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /* tight */
+                      className="mt-0.5 size-4 shrink-0 text-muted-foreground" /* tight */
                     />
                   )}
                   <span className="line-clamp-2" title={title}>
@@ -307,10 +307,10 @@ export function MobileCard({
                 {detailsHref && (
                   <Link
                     to={detailsHref}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     aria-label="View details"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="size-4" />
                   </Link>
                 )}
                 {actions}

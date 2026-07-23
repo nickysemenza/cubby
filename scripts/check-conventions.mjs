@@ -39,6 +39,9 @@
  *     render whenever the value is undefined (loading / disabled queries),
  *     destabilizing downstream memo/effect deps (infinite-render-loop hazard;
  *     froze the labels page). Use a module-level constant instead.
+ * 14. Adjacent equal `h-N w-N` / `w-N h-N` Tailwind pairs in apps/web tsx — use
+ *     the `size-N` shorthand. Keeps icon sizing single-token and greppable (the
+ *     density pass normalized ~540 of these). No exemptions.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -137,6 +140,13 @@ const GRADIENT_EXCLUDE_BASENAMES = new Set(["audit-log-entry.tsx"]);
 // Arbitrary text-[Npx] font sizes bypass the closed type scale. The sub-xs
 // steps have tokens: text-[8px]→text-3xs, text-[9/10/11px]→text-2xs.
 const TEXT_PX_RE = /\btext-\[[0-9]+px\]/;
+
+// Adjacent equal height/width Tailwind pairs (`h-4 w-4`, `w-3.5 h-3.5`) — the
+// `size-4` shorthand is the single-token form. The backreference enforces the
+// numbers are EQUAL and the two branches enforce one h + one w, so unequal
+// pairs (`h-4 w-full`) and same-axis noise (`h-4 h-4`) don't match.
+const HW_PAIR_RE =
+  /\bh-(\d+(?:\.\d+)?)\s+w-\1\b|\bw-(\d+(?:\.\d+)?)\s+h-\2\b/;
 
 // The old deleted TS costing engine. Test fixtures/helpers legitimately wrap
 // the WASM engine under this name, so exempt test + fixture files.
@@ -547,6 +557,17 @@ function scan(files) {
           rule: "getdb-outside-repo",
         });
       }
+
+      // Rule 14: adjacent equal h-N/w-N pairs (tsx only). Use `size-N`. No
+      // exemptions — the density pass normalized components/ui too.
+      if (isTsx && !isCommentLine(line) && HW_PAIR_RE.test(line)) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "hw-pair-shorthand",
+        });
+      }
     }
   }
 
@@ -598,6 +619,8 @@ const byRule = {
     "Untested service — add a sibling *.test.ts for this server/services/*.service.ts (or add it to the shrink-only SERVICE_TEST_EXEMPTIONS list in check-conventions.mjs with a reason).",
   "getdb-outside-repo":
     "getDb() used outside server/repo/ — the opaque Database type may only be unwrapped in the repo layer (CLAUDE.md Opaque Database Type); move the query behind a repo helper.",
+  "hw-pair-shorthand":
+    "Adjacent equal h-N/w-N pair — use the `size-N` shorthand (e.g. `h-4 w-4` → `size-4`) so icon sizing stays single-token (CLAUDE.md Colors / Design Tokens).",
   "script-target-exists":
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":

@@ -79,7 +79,7 @@ export function LocationInventoryTable({
         {
           id: "move",
           label: "Move",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<InventoryItem>[]) => {
             setDialogState({
@@ -92,7 +92,7 @@ export function LocationInventoryTable({
         {
           id: "delete",
           label: "Delete",
-          icon: <Trash className="h-4 w-4" />,
+          icon: <Trash className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<InventoryItem>[]) => {
             setDialogState({
@@ -117,7 +117,7 @@ export function LocationInventoryTable({
     () => [
       columnHelper.accessor((row) => row.product.id, {
         id: "image",
-        header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
+        header: () => <ImageIcon className="size-3 text-muted-foreground" />,
         enableSorting: false,
         meta: {
           className: "h-px w-10 overflow-hidden px-0 py-0",
@@ -163,7 +163,7 @@ export function LocationInventoryTable({
           size="sm"
           onClick={() => setDialogState({ type: "move", items: [item] })}
         >
-          <ArrowRightLeft className="mr-2 h-4 w-4" />
+          <ArrowRightLeft className="mr-2 size-4" />
           Move to...
         </Button>
         <Button
@@ -172,7 +172,7 @@ export function LocationInventoryTable({
           className="text-destructive"
           onClick={() => setDialogState({ type: "delete", items: [item] })}
         >
-          <Trash className="mr-2 h-4 w-4" />
+          <Trash className="mr-2 size-4" />
           Delete
         </Button>
       </>

@@ -144,7 +144,7 @@ export function RecipeScaleControl({
         <PopoverTrigger
           render={
             <Button variant="outline" size="sm">
-              <Scaling className="mr-1 h-3 w-3" />
+              <Scaling className="mr-1 size-3" />
               {scaled ? `${Number(factor.toFixed(2))}×` : "Custom"}
             </Button>
           }
@@ -286,7 +286,7 @@ export function RecipeScaleControl({
           aria-label="Reset scale to 1×"
           onClick={() => onFactorChange(1)}
         >
-          <X className="h-3 w-3" />
+          <X className="size-3" />
         </Button>
       )}
     </Row>

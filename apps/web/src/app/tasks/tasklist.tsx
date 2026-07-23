@@ -16,6 +16,7 @@ import {
   taskTradeColumn,
   tradeOptions,
 } from "~/app/projects/shared";
+import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
@@ -100,7 +101,7 @@ export function TaskList({
         {
           id: "move",
           label: "Move to project...",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
@@ -110,7 +111,7 @@ export function TaskList({
         {
           id: "set-status",
           label: "Set status...",
-          icon: <ListChecks className="h-4 w-4" />,
+          icon: <ListChecks className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkStatusItems(rows.map((r) => r.original));
@@ -120,7 +121,7 @@ export function TaskList({
         {
           id: "set-trade",
           label: "Set trade...",
-          icon: <Wrench className="h-4 w-4" />,
+          icon: <Wrench className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkTradeItems(rows.map((r) => r.original));
@@ -239,6 +240,7 @@ export function TaskList({
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    totalCount,
   } = useEntityList({
     entity: "task",
     queryOptions: api.task.list.queryOptions,
@@ -265,6 +267,7 @@ export function TaskList({
     infinite: true,
     tableStateOptions,
   });
+  usePageCount(totalCount);
 
   const bulkMoveMutation = useActionMutation({
     mutationFn: api.task.bulkMove.mutationOptions,

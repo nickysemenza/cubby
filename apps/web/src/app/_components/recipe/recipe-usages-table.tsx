@@ -117,7 +117,7 @@ export function RecipeUsagesTable({
                       <span className="inline-flex items-center gap-1 text-warning" />
                     }
                   >
-                    <AlertCircle className="h-3 w-3 shrink-0 text-warning" />—
+                    <AlertCircle className="size-3 shrink-0 text-warning" />—
                   </TooltipTrigger>
                   <TooltipContent>No parsed amount</TooltipContent>
                 </Tooltip>
@@ -138,9 +138,7 @@ export function RecipeUsagesTable({
             <TableCell className="whitespace-normal align-top">
               {row.rawLine ? (
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="text-muted-foreground/70">
-                    {row.rawLine}
-                  </span>
+                  <span className="text-muted-foreground">{row.rawLine}</span>
                   {row.drift.name !== null && (
                     <DriftIndicator
                       axis="name"
@@ -151,7 +149,7 @@ export function RecipeUsagesTable({
                 </span>
               ) : (
                 <span
-                  className="text-muted-foreground/50 italic"
+                  className="text-muted-foreground italic"
                   title="No source line captured for this usage"
                 >
                   (no source line)

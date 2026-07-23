@@ -45,7 +45,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
         <Card>
           <CardContent className="px-4 py-4">
             <Row align="center" gap="sm" className="mb-2">
-              <PackagePlus className="h-4 w-4 text-muted-foreground" />
+              <PackagePlus className="size-4 text-muted-foreground" />
               <h2 className="my-0 font-heading font-semibold text-sm">
                 Add item here
               </h2>
@@ -67,7 +67,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
               "h-12 flex-1 text-sm",
             )}
           >
-            <ScanBarcode className="mr-2 h-4 w-4" />
+            <ScanBarcode className="mr-2 size-4" />
             Recount
           </Link>
           <Link
@@ -79,7 +79,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
             )}
           >
             Full details
-            <ArrowRight className="ml-2 h-4 w-4" />
+            <ArrowRight className="ml-2 size-4" />
           </Link>
         </Row>
 

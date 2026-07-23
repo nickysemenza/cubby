@@ -75,7 +75,7 @@ export function EquivalencesReport() {
           onClick={() => refetch()}
           disabled={isFetching}
         >
-          <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+          <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
           {isFetching ? "Scanning…" : "Rescan"}
         </Button>
         {data &&
@@ -151,7 +151,7 @@ export function EquivalencesReport() {
                               <span className="inline-flex text-warning" />
                             }
                           >
-                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <AlertTriangle className="size-3.5" />
                           </TooltipTrigger>
                           <TooltipContent>
                             Existing mapping converts 1 {c.unitA} ≈{" "}
@@ -173,7 +173,7 @@ export function EquivalencesReport() {
                       {c.examples.map((ex) => (
                         <li
                           key={`${ex.recipeId}-${ex.rawLine ?? ex.recipeName}`}
-                          className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground/70"
+                          className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground"
                         >
                           <EntityInlineLink
                             entity="recipe"

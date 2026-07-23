@@ -22,15 +22,15 @@ export function SectionHeader({ title, count, color }: SectionHeaderProps) {
       }}
     >
       <span
-        className="h-2 w-2 rounded-full"
+        className="size-2 rounded-full"
         style={{ backgroundColor: color }}
       />
-      <span className="font-mono font-semibold text-2xs text-foreground/80 uppercase tracking-wider">
+      <span className="font-mono font-semibold text-2xs text-foreground uppercase tracking-wider">
         {title}
       </span>
       <Badge
         variant="secondary"
-        className="h-auto px-1.5 py-0.5 font-mono text-foreground/50 tabular-nums leading-none" /* tight */
+        className="h-auto px-1.5 py-0.5 font-mono text-muted-foreground tabular-nums leading-none" /* tight */
       >
         {count}
       </Badge>

@@ -727,7 +727,7 @@ export function CookbookImport({
           gap="xs"
           className="border border-warning/40 bg-warning/5 p-2 text-warning text-xs"
         >
-          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <AlertTriangle className="size-4 shrink-0" />
           Keep this page open — extraction and import run here, not in the
           background. Leaving now loses in-progress work.
         </Row>

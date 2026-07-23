@@ -126,7 +126,7 @@ export function IngredientReparse({
   return (
     <div className="mt-1 flex flex-col gap-y-1 pl-6">
       <span
-        className="truncate text-muted-foreground/70 text-xs italic"
+        className="truncate text-muted-foreground text-xs italic"
         title={rawLine}
       >
         from: {rawLine}
@@ -164,7 +164,7 @@ export function IngredientReparse({
             onClick={apply}
             title="Re-parse this line with the current parser and apply"
           >
-            <RefreshCw className="h-3 w-3" />
+            <RefreshCw className="size-3" />
             Re-parse
           </Button>
         </div>

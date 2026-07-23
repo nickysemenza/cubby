@@ -112,7 +112,7 @@ export function BulkActionBar<TData>({
             disabled={isExecuting || selectAllMatching.isSelectingAll}
           >
             {selectAllMatching.isSelectingAll && (
-              <Spinner className="mr-1 h-3 w-3" />
+              <Spinner className="mr-1 size-3" />
             )}
             Select all {selectAllMatching.totalCount}
           </Button>
@@ -128,7 +128,7 @@ export function BulkActionBar<TData>({
               disabled={isExecuting}
             >
               {isExecuting && currentAction?.id === action.id ? (
-                <Spinner className="mr-1 h-3 w-3" />
+                <Spinner className="mr-1 size-3" />
               ) : action.icon ? (
                 <span className="mr-1">{action.icon}</span>
               ) : null}
@@ -144,7 +144,7 @@ export function BulkActionBar<TData>({
           disabled={isExecuting}
           className="ml-auto"
         >
-          <X className="h-3 w-3" />
+          <X className="size-3" />
           <span className="sr-only">Clear selection</span>
         </Button>
       </LayoutRow>

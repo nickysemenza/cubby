@@ -264,7 +264,7 @@ export function GlobalCommandMenu({
                   }
                   className="flex items-center gap-2"
                 >
-                  <Equal className="h-4 w-4 shrink-0 text-primary" />
+                  <Equal className="size-4 shrink-0 text-primary" />
                   <span className="truncate font-mono font-semibold text-sm tabular-nums">
                     {conversion.input} {conversion.ingredientName} ={" "}
                     {conversion.result}
@@ -286,7 +286,7 @@ export function GlobalCommandMenu({
                   onSelect={() => runAsk(search)}
                   className="flex items-center gap-2"
                 >
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  <Sparkles className="size-4 text-primary" />
                   <span className="truncate">
                     Ask Cubby:{" "}
                     <span className="text-muted-foreground">"{search}"</span>
@@ -316,11 +316,11 @@ export function GlobalCommandMenu({
                   className="flex items-center gap-2"
                 >
                   {parsedShortcode.type === "location" ? (
-                    <MapPin className="h-4 w-4" />
+                    <MapPin className="size-4" />
                   ) : parsedShortcode.type === "product" ? (
-                    <Package className="h-4 w-4" />
+                    <Package className="size-4" />
                   ) : (
-                    <BookOpen className="h-4 w-4" />
+                    <BookOpen className="size-4" />
                   )}
                   <span>{shortcodeResult.name}</span>
                   <span className="ml-auto font-mono text-muted-foreground text-xs">
@@ -359,7 +359,7 @@ export function GlobalCommandMenu({
                             )}
                             {matchText && (
                               <div
-                                className="truncate text-2xs text-muted-foreground/80"
+                                className="truncate text-2xs text-muted-foreground"
                                 title={item.matchReason}
                               >
                                 {matchText}
@@ -379,7 +379,7 @@ export function GlobalCommandMenu({
                     }}
                     className="justify-center text-muted-foreground"
                   >
-                    <Search className="mr-2 h-4 w-4" />
+                    <Search className="mr-2 size-4" />
                     See all results for "{search}"
                   </CommandItem>
                 </CommandGroup>
@@ -396,7 +396,7 @@ export function GlobalCommandMenu({
                       key={action.id}
                       onSelect={() => goToPage(action.path)}
                     >
-                      <action.icon className="h-4 w-4" />
+                      <action.icon className="size-4" />
                       <span>{action.name}</span>
                     </CommandItem>
                   ))}
@@ -430,7 +430,7 @@ export function GlobalCommandMenu({
                         >
                           <EntityIcon
                             entity={entityTypeMap[recent.entityType]}
-                            className="h-3.5 w-3.5"
+                            className="size-3.5"
                           />
                         </IconTile>
                         <span className="truncate">{recent.name}</span>
@@ -444,7 +444,7 @@ export function GlobalCommandMenu({
                       key={action.id}
                       onSelect={() => goToPage(action.path)}
                     >
-                      <action.icon className="h-4 w-4" />
+                      <action.icon className="size-4" />
                       <span>{action.name}</span>
                     </CommandItem>
                   ))}
@@ -456,7 +456,7 @@ export function GlobalCommandMenu({
                       key={leaf.to as string}
                       onSelect={() => goToPage(leaf.to as string)}
                     >
-                      <leaf.icon className="h-4 w-4" />
+                      <leaf.icon className="size-4" />
                       <span>{leaf.label}</span>
                     </CommandItem>
                   ))}
@@ -469,7 +469,7 @@ export function GlobalCommandMenu({
                       setOpen(false);
                     }}
                   >
-                    <Settings className="h-4 w-4" />
+                    <Settings className="size-4" />
                     <span>Settings</span>
                   </CommandItem>
                   <CommandItem
@@ -478,7 +478,7 @@ export function GlobalCommandMenu({
                       setOpen(false);
                     }}
                   >
-                    <Activity className="h-4 w-4" />
+                    <Activity className="size-4" />
                     <span>
                       {perfOverlayOn ? "Hide" : "Show"} performance overlay
                     </span>
@@ -489,7 +489,7 @@ export function GlobalCommandMenu({
                       setOpen(false);
                     }}
                   >
-                    <Wrench className="h-4 w-4" />
+                    <Wrench className="size-4" />
                     <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
                   </CommandItem>
                 </CommandGroup>
@@ -546,7 +546,7 @@ function AnswerView({
           onSelect={onBack}
           className="flex items-center gap-2 text-muted-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="size-4" />
           <span>Back to search</span>
         </CommandItem>
       </CommandGroup>

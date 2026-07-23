@@ -93,7 +93,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-muted/30">
                 <div className="text-center">
-                  <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                  <ImageIcon className="mx-auto size-12 text-muted-foreground/50" />
                   <Description className="mt-2">
                     {image.status === "PENDING"
                       ? "Upload pending..."

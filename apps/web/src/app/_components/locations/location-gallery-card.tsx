@@ -92,7 +92,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
               previewSize={240}
             />
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center border bg-muted/40">
+            <div className="flex size-10 shrink-0 items-center justify-center border bg-muted/40">
               <LocationIcon type={location.type} colored size={18} />
             </div>
           )}
@@ -101,7 +101,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
               <LocationIcon
                 type={location.type}
                 colored
-                className="h-3.5 w-3.5 shrink-0"
+                className="size-3.5 shrink-0"
               />
               <Link
                 to="/locations/$id"
@@ -162,7 +162,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
             gap="sm"
             className="py-2 text-2xs text-muted-foreground"
           >
-            <EntityIcon entity="inventory" className="h-3 w-3 opacity-40" />
+            <EntityIcon entity="inventory" className="size-3 opacity-40" />
             <span>Empty</span>
           </Row>
         )}
@@ -192,11 +192,11 @@ function ProductPreviewImage({ product }: { product: ProductPreview }) {
     <Link
       to="/products/$id"
       params={{ id: product.id }}
-      className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
+      className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
     >
       <EntityIcon
         entity="product"
-        className="h-3 w-3 text-muted-foreground/40"
+        className="size-3 text-muted-foreground/40"
       />
     </Link>
   );

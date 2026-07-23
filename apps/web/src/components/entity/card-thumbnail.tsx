@@ -37,7 +37,7 @@ export function CardThumbnail({
         className="absolute inset-0 h-full w-full rounded-none border-0"
       />
       {images.length > 1 && (
-        <div className="absolute right-0 bottom-0 flex h-3 w-3 items-center justify-center bg-black/70 text-3xs text-white">
+        <div className="absolute right-0 bottom-0 flex size-3 items-center justify-center bg-black/70 text-3xs text-white">
           +{images.length - 1}
         </div>
       )}

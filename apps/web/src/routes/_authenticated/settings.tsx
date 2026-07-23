@@ -73,7 +73,7 @@ function SettingsPage() {
             }
           >
             <Row align="center" gap="sm">
-              <Wrench className="h-4 w-4 text-muted-foreground" />
+              <Wrench className="size-4 text-muted-foreground" />
               <Stack gap="tight">
                 <Eyebrow as="span">Developer / Maintenance</Eyebrow>
                 <Description size="xs">
@@ -82,7 +82,7 @@ function SettingsPage() {
               </Stack>
             </Row>
             <ChevronDown
-              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+              className={`size-4 shrink-0 text-muted-foreground transition-transform ${
                 devOpen ? "rotate-180" : ""
               }`}
             />

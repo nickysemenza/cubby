@@ -24,7 +24,7 @@ export function AgentSourceContent({ source }: { source: AgentSource }) {
         <EntityIcon
           entity={entityTypeMap[source.entityType]}
           colored
-          className="h-4 w-4 shrink-0"
+          className="size-4 shrink-0"
         />
       </IconTile>
       <div className="min-w-0 flex-1">

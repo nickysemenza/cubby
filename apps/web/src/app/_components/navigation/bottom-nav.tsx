@@ -67,7 +67,7 @@ function BottomNavItem({
       aria-current={active ? "page" : undefined}
       {...rest}
     >
-      {Icon && <Icon className="h-5 w-5" aria-hidden="true" />}
+      {Icon && <Icon className="size-5" aria-hidden="true" />}
       <span className="font-medium text-2xs">{label}</span>
     </Comp>
   );
@@ -146,9 +146,9 @@ export function BottomNav() {
                     )}
                   >
                     {isDebugEnabled ? (
-                      <BugOff className="mr-2 h-4 w-4" />
+                      <BugOff className="mr-2 size-3.5" />
                     ) : (
-                      <Bug className="mr-2 h-4 w-4" />
+                      <Bug className="mr-2 size-3.5" />
                     )}
                     {isDebugEnabled ? "Disable Debug" : "Enable Debug"}
                   </Button>
@@ -179,7 +179,7 @@ export function BottomNav() {
                               />
                             }
                           >
-                            <Icon className="h-5 w-5" />
+                            <Icon className="size-5" />
                             {item.label}
                           </SheetClose>
                         );

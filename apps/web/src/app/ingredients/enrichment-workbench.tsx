@@ -552,7 +552,7 @@ export function EnrichmentWorkbench({
                 onClick={handleSuggest}
                 disabled={suggestUsda.isPending}
               >
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="size-4" />
                 {suggestUsda.isPending ? "Suggesting…" : "Suggest USDA"}
               </Button>
               <Button
@@ -561,7 +561,7 @@ export function EnrichmentWorkbench({
                 onClick={handleSuggestMerges}
                 disabled={suggestMerges.isPending}
               >
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="size-4" />
                 {suggestMerges.isPending ? "Checking…" : "Suggest merges"}
               </Button>
               <Button

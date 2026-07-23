@@ -20,7 +20,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.recipe.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <entities.recipe.lucideIcon className="size-5 text-muted-foreground" />
               <CardTitle>Recipes</CardTitle>
             </Row>
             <CardDescription>
@@ -33,7 +33,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.product.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <entities.product.lucideIcon className="size-5 text-muted-foreground" />
               <CardTitle>Products</CardTitle>
             </Row>
             <CardDescription>
@@ -47,7 +47,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <entities.inventory.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <entities.inventory.lucideIcon className="size-5 text-muted-foreground" />
               <CardTitle>Inventory Management</CardTitle>
             </Row>
             <CardDescription>
@@ -60,7 +60,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <Apple className="h-5 w-5 text-muted-foreground" />
+              <Apple className="size-5 text-muted-foreground" />
               <CardTitle>USDA Integration</CardTitle>
             </Row>
             <CardDescription>
@@ -73,7 +73,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <Scale className="h-5 w-5 text-muted-foreground" />
+              <Scale className="size-5 text-muted-foreground" />
               <CardTitle>Unit Conversions</CardTitle>
             </Row>
             <CardDescription>
@@ -86,7 +86,7 @@ export function FeaturesSection() {
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
-              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+              <AlertTriangle className="size-5 text-muted-foreground" />
               <CardTitle>Problems Dashboard</CardTitle>
             </Row>
             <CardDescription>

@@ -89,7 +89,7 @@ export function ImportToolsPanel({
             className={cn(openTool === "scrape" && "bg-muted")}
             onClick={() => onToggleTool("scrape")}
           >
-            <Link2 className="mr-2 h-3.5 w-3.5" />
+            <Link2 className="mr-2 size-3.5" />
             Scrape URL
           </Button>
           <Button
@@ -100,7 +100,7 @@ export function ImportToolsPanel({
             className={cn(openTool === "text" && "bg-muted")}
             onClick={() => onToggleTool("text")}
           >
-            <ClipboardList className="mr-2 h-3.5 w-3.5" />
+            <ClipboardList className="mr-2 size-3.5" />
             Paste text
           </Button>
           <Button
@@ -111,7 +111,7 @@ export function ImportToolsPanel({
             className={cn(openTool === "html" && "bg-muted")}
             onClick={() => onToggleTool("html")}
           >
-            <Code className="mr-2 h-3.5 w-3.5" />
+            <Code className="mr-2 size-3.5" />
             Paste HTML
           </Button>
         </Row>
@@ -150,7 +150,7 @@ export function ImportToolsPanel({
               {scrapePending || isResolving ? (
                 <Spinner className="mr-1" />
               ) : (
-                <Import className="mr-1 h-4 w-4" />
+                <Import className="mr-1 size-4" />
               )}
               Scrape
             </Button>
@@ -250,7 +250,7 @@ export function ImportToolsPanel({
             {ingredientImport.isImporting ? (
               <Spinner className="mr-1" />
             ) : (
-              <Import className="mr-1 h-4 w-4" />
+              <Import className="mr-1 size-4" />
             )}
             {ingredientImport.missingCount > 0
               ? `Import All (create ${ingredientImport.missingCount})`
@@ -310,7 +310,7 @@ export function ImportToolsPanel({
             {parseHtmlPending || isResolving ? (
               <Spinner className="mr-1" />
             ) : (
-              <Import className="mr-1 h-4 w-4" />
+              <Import className="mr-1 size-4" />
             )}
             Parse HTML
           </Button>

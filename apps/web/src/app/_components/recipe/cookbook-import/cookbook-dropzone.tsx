@@ -40,7 +40,7 @@ export function CookbookDropzone({
         isDragging && "border-warning bg-warning/10 text-accent-foreground",
       )}
     >
-      <Upload className="h-6 w-6" />
+      <Upload className="size-6" />
       <p className="text-sm">Drag .epub cookbooks here, or choose files.</p>
       <Row align="center" justify="center" wrap gap="sm">
         <Label

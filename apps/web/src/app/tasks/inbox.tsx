@@ -101,7 +101,7 @@ export function TaskInbox() {
         {
           id: "move",
           label: "Move to project...",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
@@ -111,7 +111,7 @@ export function TaskInbox() {
         {
           id: "set-status",
           label: "Set status...",
-          icon: <ListChecks className="h-4 w-4" />,
+          icon: <ListChecks className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkStatusItems(rows.map((r) => r.original));
@@ -121,7 +121,7 @@ export function TaskInbox() {
         {
           id: "set-trade",
           label: "Set trade...",
-          icon: <Wrench className="h-4 w-4" />,
+          icon: <Wrench className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkTradeItems(rows.map((r) => r.original));
@@ -131,7 +131,7 @@ export function TaskInbox() {
         {
           id: "set-due-date",
           label: "Set due date...",
-          icon: <CalendarClock className="h-4 w-4" />,
+          icon: <CalendarClock className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setBulkDueDateItems(rows.map((r) => r.original));
@@ -141,7 +141,7 @@ export function TaskInbox() {
         {
           id: "create-project",
           label: "Create project from selected...",
-          icon: <Sparkles className="h-4 w-4" />,
+          icon: <Sparkles className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<TaskOut>[]) => {
             setCreateProjectTaskIds(rows.map((r) => r.original.id));

@@ -34,7 +34,7 @@ export function ConfidenceReasoningCard({
   return (
     <div className="rounded-md bg-muted/50 p-2 text-sm">
       <Row align="center" gap="sm">
-        <Sparkles className="h-3 w-3 text-muted-foreground" />
+        <Sparkles className="size-3 text-muted-foreground" />
         <span className="font-medium">{label}:</span>
         <span className={confidenceColor[confidence]}>
           {confidence} confidence
@@ -106,7 +106,7 @@ export function FieldWithAISuggest<
               />
             }
           >
-            {isLoading ? <Spinner /> : <Sparkles className="h-4 w-4" />}
+            {isLoading ? <Spinner /> : <Sparkles className="size-4" />}
             <span className="ml-1 hidden sm:inline">Suggest</span>
           </TooltipTrigger>
           <TooltipContent>

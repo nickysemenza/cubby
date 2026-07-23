@@ -130,7 +130,7 @@ export default function NutritionBars({
               className="inline-flex items-center gap-2 font-mono text-2xs text-muted-foreground"
             >
               <span
-                className="h-2 w-2 rounded-full border border-[var(--border)]"
+                className="size-2 rounded-full border border-[var(--border)]"
                 style={{
                   backgroundColor: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
                 }}

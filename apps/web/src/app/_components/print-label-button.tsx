@@ -19,7 +19,7 @@ export function PrintLabelButton({
       render={<Link to="/labels" search={{ codes: shortcode }} />}
       nativeButton={false}
     >
-      <Printer className="mr-2 h-4 w-4" />
+      <Printer className="mr-2 size-4" />
       Print Label
     </Button>
   );

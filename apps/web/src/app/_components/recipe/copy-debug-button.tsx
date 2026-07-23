@@ -29,7 +29,7 @@ export function CopyDebugButton({
       type="button"
       variant="ghost"
       size="xs"
-      className="px-1 text-muted-foreground/60 text-xs hover:text-foreground"
+      className="px-1 text-muted-foreground text-xs hover:text-foreground"
       title={title}
       onClick={async (e) => {
         e.stopPropagation();
@@ -44,9 +44,9 @@ export function CopyDebugButton({
       }}
     >
       {copied ? (
-        <Check className="h-3 w-3" />
+        <Check className="size-3" />
       ) : (
-        <ClipboardCopy className="h-3 w-3" />
+        <ClipboardCopy className="size-3" />
       )}
       {label}
     </Button>

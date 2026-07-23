@@ -5,6 +5,7 @@ import { ArrowRightLeft, ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
 import { Row as FlexRow, Stack } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
@@ -75,7 +76,7 @@ export function InventoryItemList() {
           setMoveTarget(row);
         }}
       >
-        <ArrowRightLeft className="mr-2 h-4 w-4" />
+        <ArrowRightLeft className="mr-2 size-4" />
         Move to...
       </DropdownMenuItem>
     ),
@@ -95,7 +96,7 @@ export function InventoryItemList() {
         {
           id: "move",
           label: "Move to...",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (
             rows: import("@tanstack/react-table").Row<InventoryListItem>[],
@@ -119,7 +120,7 @@ export function InventoryItemList() {
     () => [
       columnHelper.accessor((row) => row.product.id, {
         id: "image",
-        header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
+        header: () => <ImageIcon className="size-3 text-muted-foreground" />,
         enableSorting: false,
         meta: {
           className: "h-px w-10 overflow-hidden px-0 py-0",
@@ -212,6 +213,7 @@ export function InventoryItemList() {
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    totalCount,
   } = useEntityList({
     entity: "inventory",
     queryOptions: api.inventory.list.queryOptions,
@@ -232,6 +234,7 @@ export function InventoryItemList() {
       createdAt: false,
     },
   });
+  usePageCount(totalCount);
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);

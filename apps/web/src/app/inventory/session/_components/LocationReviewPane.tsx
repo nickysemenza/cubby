@@ -169,7 +169,7 @@ export function LocationReviewPane({
           disabled={locationCompleted || donePending}
           onClick={onDone}
         >
-          {donePending ? <Spinner /> : <Check className="h-4 w-4" />}
+          {donePending ? <Spinner /> : <Check className="size-4" />}
           {locationCompleted
             ? "Saved this pass"
             : unresolvedCount > 0
@@ -347,7 +347,7 @@ function ExpectedItemReviewRow({
           src={item.product.images.find((img) => !isDocumentFile(img))?.url}
           alt=""
           displayWidth={96}
-          className="h-12 w-12 shrink-0 border border-[var(--border)] object-cover"
+          className="size-12 shrink-0 border border-[var(--border)] object-cover"
         />
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium text-sm">
@@ -368,7 +368,7 @@ function ExpectedItemReviewRow({
         </div>
         <span
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center border border-[var(--border)] text-muted-foreground",
+            "flex size-9 shrink-0 items-center justify-center border border-[var(--border)] text-muted-foreground",
             present && "border-positive/40 bg-positive/10 text-positive",
             staged === "remove" &&
               "border-destructive/40 bg-destructive/10 text-destructive",
@@ -411,7 +411,7 @@ function ExpectedItemReviewRow({
                     onClick={() => bump(-1)}
                     aria-label="Decrease quantity"
                   >
-                    <Minus className="h-4 w-4" />
+                    <Minus className="size-4" />
                   </Button>
                   <span className="w-8 text-center font-mono text-sm tabular-nums">
                     {amount.value}
@@ -423,7 +423,7 @@ function ExpectedItemReviewRow({
                     onClick={() => bump(1)}
                     aria-label="Increase quantity"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="size-4" />
                   </Button>
                 </Row>
               </Row>

@@ -163,7 +163,7 @@ export function ProjectGantt({
       {unscheduled.length > 0 && (
         <Stack gap="xs">
           <Row align="center" gap="xs" className="text-muted-foreground">
-            <CalendarOff className="h-3 w-3 shrink-0" />
+            <CalendarOff className="size-3 shrink-0" />
             <span className="font-mono text-2xs uppercase tracking-wider">
               Unscheduled · {unscheduled.length}
             </span>

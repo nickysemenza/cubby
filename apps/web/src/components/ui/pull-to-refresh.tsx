@@ -114,7 +114,7 @@ export function PullToRefresh({
           }}
         >
           <Loader2
-            className={cn("h-5 w-5 text-muted-foreground", isRefreshing && "animate-spin")}
+            className={cn("size-5 text-muted-foreground", isRefreshing && "animate-spin")}
           />
         </div>
       </div>

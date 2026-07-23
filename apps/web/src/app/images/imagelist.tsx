@@ -10,6 +10,7 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
+import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 
@@ -142,23 +143,31 @@ export default function ImageList() {
     [columnHelper],
   );
 
-  const { table, isLoading, error, timing, infiniteScroll, refreshControls } =
-    useEntityList({
-      entity: "image",
-      queryOptions: (params) => api.image.list.queryOptions(params),
-      buildFilters: (ts) => ({
-        // Map the filename column filter to the API's nameFilter
-        nameFilter: ts.getColumnFilter("filename") ?? undefined,
-      }),
-      columns,
-      filters: [
-        {
-          id: "filename",
-          placeholder: "Filter by filename...",
-        },
-      ],
-      infinite: true,
-    });
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    infiniteScroll,
+    refreshControls,
+    totalCount,
+  } = useEntityList({
+    entity: "image",
+    queryOptions: (params) => api.image.list.queryOptions(params),
+    buildFilters: (ts) => ({
+      // Map the filename column filter to the API's nameFilter
+      nameFilter: ts.getColumnFilter("filename") ?? undefined,
+    }),
+    columns,
+    filters: [
+      {
+        id: "filename",
+        placeholder: "Filter by filename...",
+      },
+    ],
+    infinite: true,
+  });
+  usePageCount(totalCount);
 
   return (
     <div>

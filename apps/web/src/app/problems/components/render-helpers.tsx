@@ -17,7 +17,7 @@ export function createdAgoDetail(createdAt: Date | string | number): ReactNode {
       gap="xs"
       className="text-muted-foreground text-sm"
     >
-      <Calendar className="h-3 w-3" />
+      <Calendar className="size-3" />
       Created {formatDistanceToNow(createdAt)} ago
     </Row>
   );

@@ -13,6 +13,7 @@ import {
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -257,6 +258,7 @@ export function IngredientList() {
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    totalCount,
   } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
@@ -275,7 +277,7 @@ export function IngredientList() {
         {
           id: "merge",
           label: "Merge",
-          icon: <Merge className="h-4 w-4" />,
+          icon: <Merge className="size-4" />,
           minSelection: 2,
           requiresConfirmation: true,
           renderConfirmation: (rows) => (
@@ -331,6 +333,7 @@ export function IngredientList() {
     deletable: deletableConfig,
     infinite: true,
   });
+  usePageCount(totalCount);
 
   const productIds = useMemo(
     () => data.flatMap((ingredient) => ingredient.product.map((p) => p.id)),
@@ -373,7 +376,7 @@ export function IngredientList() {
               render={<Link to="/ingredients/equivalences" />}
               nativeButton={false}
             >
-              <Scale className="h-4 w-4" />
+              <Scale className="size-4" />
               Equivalences
             </Button>
             {stubCount > 0 && (
@@ -382,7 +385,7 @@ export function IngredientList() {
                 render={<Link to="/ingredients/workbench" />}
                 nativeButton={false}
               >
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="size-4" />
                 Enrich {stubCount} stub{stubCount === 1 ? "" : "s"}
               </Button>
             )}

@@ -105,7 +105,7 @@ export function HeaderFilter<TData>({
           }}
           className="absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:text-foreground"
         >
-          <X className="h-2.5 w-2.5" />
+          <X className="size-2.5" />
         </button>
       )}
     </div>

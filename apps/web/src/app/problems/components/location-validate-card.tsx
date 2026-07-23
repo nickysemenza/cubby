@@ -315,9 +315,9 @@ export function LocationValidateForm({
                   }`}
                 >
                   {isScanned ? (
-                    <Check className="h-4 w-4 shrink-0 text-positive" />
+                    <Check className="size-4 shrink-0 text-positive" />
                   ) : (
-                    <Circle className="h-4 w-4 shrink-0 opacity-40" />
+                    <Circle className="size-4 shrink-0 opacity-40" />
                   )}
                   <LocationIcon type={child.type} size={14} />
                   <span>{child.name}</span>
@@ -340,7 +340,7 @@ export function LocationValidateForm({
                   key={item.shortcode}
                   className="flex items-center gap-2 text-primary text-sm"
                 >
-                  <CircleHelp className="h-4 w-4 shrink-0" />
+                  <CircleHelp className="size-4 shrink-0" />
                   <LocationIcon type={item.location.type} size={14} />
                   <span>{item.location.name}</span>
                   <span className="text-xs opacity-60">{item.shortcode}</span>
@@ -379,7 +379,7 @@ export function LocationValidateForm({
         <Card className="border-positive/20">
           <CardHeader className="pb-2">
             <CardTitle>
-              <Check className="h-4 w-4 text-positive" />
+              <Check className="size-4 text-positive" />
               Confirmed ({confirmed.length})
             </CardTitle>
           </CardHeader>
@@ -404,7 +404,7 @@ export function LocationValidateForm({
         <Card className="border-warning/40">
           <CardHeader className="pb-2">
             <CardTitle>
-              <CircleAlert className="h-4 w-4 text-warning" />
+              <CircleAlert className="size-4 text-warning" />
               Missing ({missing.length})
             </CardTitle>
           </CardHeader>
@@ -428,7 +428,7 @@ export function LocationValidateForm({
         <Card className="border-primary/20">
           <CardHeader className="pb-2">
             <CardTitle>
-              <CircleHelp className="h-4 w-4 text-primary" />
+              <CircleHelp className="size-4 text-primary" />
               Unexpected ({unexpected.length})
             </CardTitle>
           </CardHeader>
@@ -457,7 +457,7 @@ export function LocationValidateForm({
                     onClick={() => handleConfirmHere(item.location.id)}
                     disabled={updateMutation.isPending}
                   >
-                    <MapPin className="mr-1 h-3 w-3" />
+                    <MapPin className="mr-1 size-3" />
                     Confirm Here
                   </Button>
                 </div>

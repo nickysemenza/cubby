@@ -51,7 +51,7 @@ export function EmptyLocationsList({
                 gap="xs"
                 className="text-muted-foreground text-sm"
               >
-                <Calendar className="h-3 w-3" />
+                <Calendar className="size-3" />
                 Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
                 ago
               </Row>,

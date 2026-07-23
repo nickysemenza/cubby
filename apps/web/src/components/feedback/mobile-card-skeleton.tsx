@@ -5,7 +5,7 @@ function MobileCardSkeleton() {
   return (
     <div className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-x-2 border-border/30 border-b px-2 py-2">
       {/* Image placeholder */}
-      <Skeleton className="h-11 w-11 rounded" />
+      <Skeleton className="size-11 rounded" />
 
       {/* Title + subtitle */}
       <div className="min-w-0 space-y-2">
@@ -14,7 +14,7 @@ function MobileCardSkeleton() {
       </div>
 
       {/* Action placeholder */}
-      <Skeleton className="h-8 w-8 rounded" />
+      <Skeleton className="size-8 rounded" />
     </div>
   );
 }

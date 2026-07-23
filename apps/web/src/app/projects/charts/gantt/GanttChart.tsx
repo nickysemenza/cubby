@@ -499,7 +499,7 @@ export function GanttChart({
           onClick={handleReset}
           className="absolute top-1 right-2 z-10 flex items-center gap-1 rounded-md bg-background/80 px-2 py-1 text-muted-foreground text-xs ring-1 ring-border hover:bg-background hover:text-foreground"
         >
-          <RotateCcw className="h-3 w-3" />
+          <RotateCcw className="size-3" />
           Reset
         </button>
       )}
@@ -1041,13 +1041,13 @@ function NameCell({
           }
         >
           {row.kind === "project" && row.expanded ? (
-            <ChevronDown className="h-3 w-3" />
+            <ChevronDown className="size-3" />
           ) : (
-            <ChevronRight className="h-3 w-3" />
+            <ChevronRight className="size-3" />
           )}
         </button>
       ) : (
-        <span className="h-3 w-3 shrink-0" />
+        <span className="size-3 shrink-0" />
       )}
       {row.kind === "task" && (
         // Muted trade glyph — the 20-way distinction the six phase hues can't
@@ -1072,7 +1072,7 @@ function NameCell({
           gap="tight"
           className="shrink-0 rounded-sm bg-muted px-1 font-mono text-3xs text-slate"
         >
-          <Link2 className="h-2 w-2" />
+          <Link2 className="size-2" />
           {depCount}
         </Row>
       )}

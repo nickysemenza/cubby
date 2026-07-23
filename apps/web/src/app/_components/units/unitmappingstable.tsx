@@ -46,7 +46,7 @@ const KindAccent: React.FC<{
     return (
       <span
         aria-hidden
-        className="inline-block h-1 w-1 shrink-0 rounded-full bg-muted-foreground/30"
+        className="inline-block size-1 shrink-0 rounded-full bg-muted-foreground/30"
       />
     );
   }

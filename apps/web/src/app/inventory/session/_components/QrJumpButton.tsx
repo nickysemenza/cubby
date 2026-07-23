@@ -128,7 +128,7 @@ export function LocationScanButton({
         className="min-h-12 px-4"
         onClick={() => setOpen(true)}
       >
-        <QrCode className="h-4 w-4" />
+        <QrCode className="size-4" />
         {buttonLabel}
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>

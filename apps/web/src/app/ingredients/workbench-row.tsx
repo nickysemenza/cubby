@@ -54,7 +54,7 @@ function MergeHint({
           onMerge();
         }}
       >
-        <GitMerge className="h-3 w-3" />
+        <GitMerge className="size-3" />
         Merge
       </Button>
     </Row>
@@ -117,9 +117,9 @@ export function WorkbenchRow({
         </TableCell>
         <TableCell className="text-muted-foreground">
           {open ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="size-4" />
           ) : (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="size-4" />
           )}
         </TableCell>
         <TableCell className="whitespace-normal">
@@ -243,7 +243,7 @@ function WorkbenchEditor({
                 gap="xs"
                 className="text-positive text-xs"
               >
-                <Check className="h-3 w-3" />
+                <Check className="size-3" />
                 {food.foodInfo.description}
               </Row>
             )}

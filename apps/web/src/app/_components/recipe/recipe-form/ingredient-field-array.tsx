@@ -270,7 +270,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                         />
                       }
                     >
-                      <MoreVertical className="h-3.5 w-3.5" />
+                      <MoreVertical className="size-3.5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
@@ -336,7 +336,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             )
                           }
                         >
-                          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                          <ExternalLink className="mr-2 size-3.5" />
                           Open{" "}
                           {row.type === "ingredient" ? "ingredient" : "recipe"}
                         </DropdownMenuItem>
@@ -346,7 +346,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                         variant="destructive"
                         onClick={() => remove(ingredientIndex)}
                       >
-                        <Trash className="mr-2 h-3.5 w-3.5" />
+                        <Trash className="mr-2 size-3.5" />
                         Delete row
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -386,7 +386,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                           );
                         }}
                       >
-                        <Trash className="h-3.5 w-3.5" />
+                        <Trash className="size-3.5" />
                       </Button>
                     </div>
                   );
@@ -406,7 +406,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
       <Row gap="sm" className="mt-2">
         <Button type="button" variant="outline" size="sm" onClick={appendRow}>
-          <Plus className="mr-2 h-3.5 w-3.5" />
+          <Plus className="mr-2 size-3.5" />
           Ingredient
         </Button>
         <Button
@@ -415,7 +415,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           size="sm"
           onClick={() => append(newRow("recipe"))}
         >
-          <Plus className="mr-2 h-3.5 w-3.5" />
+          <Plus className="mr-2 size-3.5" />
           Sub-recipe
         </Button>
       </Row>

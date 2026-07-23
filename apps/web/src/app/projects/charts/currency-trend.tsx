@@ -55,7 +55,7 @@ export function CurrencyTrend({
               .map((point) => (
                 <div key={point.id} className="flex items-center gap-2">
                   <div
-                    className="h-2.5 w-2.5 rounded-full"
+                    className="size-2.5 rounded-full"
                     style={{ backgroundColor: point.seriesColor }}
                   />
                   <span className={seriesLabelClassName}>{point.seriesId}</span>

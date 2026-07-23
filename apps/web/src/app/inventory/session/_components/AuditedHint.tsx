@@ -19,7 +19,7 @@ export function AuditedHint({
 }) {
   if (!at) {
     return (
-      <span className={cn("text-muted-foreground/70", className)}>
+      <span className={cn("text-muted-foreground", className)}>
         never {label}
       </span>
     );
@@ -29,7 +29,7 @@ export function AuditedHint({
     <span
       title={`Last ${label} ${format(at, "yyyy-MM-dd HH:mm")}`}
       className={cn(
-        stale ? "text-warning" : "text-muted-foreground/70",
+        stale ? "text-warning" : "text-muted-foreground",
         className,
       )}
     >

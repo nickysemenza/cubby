@@ -101,7 +101,7 @@ function QueueUsdaPicker({
           gap="sm"
           className="text-muted-foreground text-sm"
         >
-          <Spinner className="h-3 w-3" /> Finding a USDA match…
+          <Spinner className="size-3" /> Finding a USDA match…
         </Row>
       )}
 
@@ -126,7 +126,7 @@ function QueueUsdaPicker({
               gap="sm"
               className="text-muted-foreground text-xs"
             >
-              <Spinner className="h-3 w-3" /> Searching…
+              <Spinner className="size-3" /> Searching…
             </Row>
           ) : (
             <div className="divide-y rounded-md border border-[var(--border)]">
@@ -162,7 +162,7 @@ function QueueUsdaPicker({
           className="h-6 px-2 text-xs"
           onClick={() => setShowSearch(true)}
         >
-          <Search className="h-3 w-3" />
+          <Search className="size-3" />
           Search manually <Kbd className="ml-1">u</Kbd>
         </Button>
       )}
@@ -279,7 +279,7 @@ export function ReviewCard({
                           className="ml-auto h-6 px-2 text-xs"
                           onClick={() => onMerge(opt)}
                         >
-                          <GitMerge className="h-3 w-3" /> Merge
+                          <GitMerge className="size-3" /> Merge
                           {i === 0 && <Kbd className="ml-1">m</Kbd>}
                         </Button>
                       </Row>

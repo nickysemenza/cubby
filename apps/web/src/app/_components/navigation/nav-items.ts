@@ -45,6 +45,13 @@ export type NavGroup = {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   children: NavItem[];
+  /**
+   * Optional landing route for the group itself (a section overview page).
+   * Most groups here are pure dropdown triggers with no page of their own —
+   * leave unset. Consumers that link a group label (e.g. the list-page
+   * eyebrow) treat an unset `to` as "no route" and render plain text.
+   */
+  to?: LinkProps["to"];
 };
 
 type NavNode = NavItem | NavGroup;
@@ -231,6 +238,19 @@ export const publicNavItems: NavItem[] = [
   { to: "/docs", label: "Docs", icon: FileText },
   { to: "/design", label: "Design", icon: Palette },
 ];
+
+/**
+ * The landing route for a top-level nav group label (e.g. "Cook", "Pantry"),
+ * looked up from {@link desktopNav} — the single source of truth for the IA.
+ * `undefined` when the group has no route of its own (true of every group
+ * today; they're dropdown triggers only), which callers treat as "not
+ * linkable".
+ */
+export function getGroupRoute(label: string): LinkProps["to"] | undefined {
+  return desktopNav.find(
+    (node): node is NavGroup => isNavGroup(node) && node.label === label,
+  )?.to;
+}
 
 // --- Derived active state ---------------------------------------------------
 

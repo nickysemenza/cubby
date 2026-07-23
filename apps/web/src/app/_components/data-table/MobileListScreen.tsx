@@ -58,9 +58,9 @@ export function MobileListScreen<TItem>({
         aria-label={grouped ? "Show flat list" : "Show grouped list"}
       >
         {grouped ? (
-          <List className="h-4 w-4" />
+          <List className="size-4" />
         ) : (
-          <LayoutList className="h-4 w-4" />
+          <LayoutList className="size-4" />
         )}
       </Button>
     ) : null;

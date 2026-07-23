@@ -149,7 +149,7 @@ function CookbookDetailPage() {
               }
               title="Selectively import recipes from this cookbook's source (no AI)"
             >
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 size-4" />
               Add from source ({notImported})
             </Button>
           )}
@@ -161,7 +161,7 @@ function CookbookDetailPage() {
             title="Re-derive recipes from the stored extraction (no AI)"
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${reprocess.running ? "animate-spin" : ""}`}
+              className={`mr-2 size-4 ${reprocess.running ? "animate-spin" : ""}`}
             />
             Reprocess
           </Button>
@@ -170,7 +170,7 @@ function CookbookDetailPage() {
             size="sm"
             onClick={() => setShowDelete(true)}
           >
-            <Trash className="mr-2 h-4 w-4" />
+            <Trash className="mr-2 size-4" />
             Delete all recipes
           </Button>
         </Row>

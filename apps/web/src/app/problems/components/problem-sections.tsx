@@ -142,7 +142,7 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
       onClick={() => apply.mutate({ id: product.id, upc: product.upc })}
       disabled={apply.isPending}
     >
-      <Download className="mr-1 h-3 w-3" />
+      <Download className="mr-1 size-3" />
       {apply.isPending ? "Applying…" : "Apply"}
     </Button>
   );
@@ -167,7 +167,7 @@ function OrphanedEmbeddingCleanupFix({
       onClick={() => cleanup.mutate({ ids: [id] })}
       disabled={cleanup.isPending}
     >
-      <Wrench className="mr-1 h-3 w-3" />
+      <Wrench className="mr-1 size-3" />
       {cleanup.isPending ? "Cleaning…" : "Clean up"}
     </Button>
   );
@@ -229,7 +229,7 @@ function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
       }
       nativeButton={false}
     >
-      <Wrench className="mr-1 h-3 w-3" />
+      <Wrench className="mr-1 size-3" />
       Fix in workbench
     </Button>
   );
@@ -342,9 +342,10 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         >
           <Badge
             variant="outline"
-            className="flex items-center gap-1 hover:bg-accent"
+            // Free-form location names — opt out of the mono-uppercase stamp.
+            className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
           >
-            <EntityIcon entity="location" colored className="h-3 w-3" />
+            <EntityIcon entity="location" colored className="size-3" />
             {location.name}
           </Badge>
         </Link>
@@ -437,9 +438,10 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         <Link key={prod.id} to="/products/$id" params={{ id: prod.id }}>
           <Badge
             variant="outline"
-            className="flex items-center gap-1 hover:bg-accent"
+            // Free-form product names — opt out of the mono-uppercase stamp.
+            className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
           >
-            <EntityIcon entity="product" colored className="h-3 w-3" />
+            <EntityIcon entity="product" colored className="size-3" />
             {prod.name}
           </Badge>
         </Link>

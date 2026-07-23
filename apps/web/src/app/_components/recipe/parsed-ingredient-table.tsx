@@ -54,7 +54,7 @@ export function ParsedIngredientTable({
                   ) : (
                     <Row as="span" align="center" gap="xs">
                       {isNew && (
-                        <AlertCircle className="h-3 w-3 shrink-0 text-warning" />
+                        <AlertCircle className="size-3 shrink-0 text-warning" />
                       )}
                       <span className={isNew ? "text-warning" : ""}>
                         {name}
@@ -64,11 +64,11 @@ export function ParsedIngredientTable({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-5 w-5 p-0 text-warning hover:bg-warning/15 hover:text-warning"
+                          className="size-5 p-0 text-warning hover:bg-warning/15 hover:text-warning"
                           onClick={() => onCreate(parsed.name)}
                           title="Add to your library"
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="size-3" />
                         </Button>
                       ) : (
                         isNew && (
@@ -95,7 +95,7 @@ export function ParsedIngredientTable({
               <TableRow className={tint}>
                 <TableCell
                   colSpan={2}
-                  className="whitespace-normal pt-0 pb-1 text-2xs text-muted-foreground/70 leading-tight"
+                  className="whitespace-normal pt-0 pb-1 text-2xs text-muted-foreground leading-tight"
                 >
                   {raw}
                 </TableCell>

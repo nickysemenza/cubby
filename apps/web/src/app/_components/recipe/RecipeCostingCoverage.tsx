@@ -125,7 +125,7 @@ function TotalsGapAction({
       className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
     >
       {cta}
-      <ArrowRight className="ml-1 h-3 w-3" />
+      <ArrowRight className="ml-1 size-3" />
     </Link>
   );
 }
@@ -210,7 +210,7 @@ export function RecipeTotalsCoverageButton({
           "inline-flex items-center gap-2 rounded-md border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
         )}
       >
-        <TriangleAlert className="h-3.5 w-3.5" />
+        <TriangleAlert className="size-3.5" />
         {gaps.length} block totals
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96">
@@ -235,7 +235,7 @@ export function RecipeTotalsCoverageButton({
           )}
         >
           Open all in workbench
-          <ArrowRight className="h-3.5 w-3.5" />
+          <ArrowRight className="size-3.5" />
         </Link>
       </PopoverContent>
     </Popover>
@@ -263,7 +263,7 @@ export function MissingMeasureCell({
 }) {
   if (!gap) {
     return (
-      <span className="cursor-default text-muted-foreground/60" title={reason}>
+      <span className="cursor-default text-muted-foreground" title={reason}>
         —
       </span>
     );

@@ -247,7 +247,7 @@ function ConversionDialogContent({
                       <div key={kind} className="border-b py-1">
                         <Row align="center" justify="between">
                           <Row as="span" align="center" gap="sm">
-                            <Meta.Icon className="h-4 w-4" aria-hidden />
+                            <Meta.Icon className="size-4" aria-hidden />
                             <span className="font-medium">{Meta.label}</span>
                           </Row>
                           <span>
@@ -301,7 +301,7 @@ export function ConversionDialog({
             />
           }
         >
-          <Calculator className="h-3 w-3" />
+          <Calculator className="size-3" />
           {!compact && <span>Convert</span>}
         </DialogTrigger>
         <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>

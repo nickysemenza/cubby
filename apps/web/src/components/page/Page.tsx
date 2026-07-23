@@ -1,5 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { type ReactNode, Suspense } from "react";
+import {
+  createContext,
+  type ReactNode,
+  Suspense,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { ListLoadingSkeleton } from "~/components/feedback/loading-skeletons";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import {
@@ -7,6 +14,35 @@ import {
   PageHeader,
 } from "~/components/layouts/page-hero";
 import { useRouteEntity } from "~/hooks/useRouteEntity";
+
+// Lets a list component (which owns the query) report its loaded record
+// count up to the enclosing <Page> (which owns the header) without threading
+// a prop through every route file. `null` outside a <Page> (or when nothing
+// has reported yet) — consumers no-op in that case, see usePageCount.
+const PageCountContext = createContext<
+  ((count: number | undefined) => void) | null
+>(null);
+
+/**
+ * Report a list's true filtered record count up to the enclosing `<Page>`
+ * header, rendered as "1,240 PURCHASES" at the end of the eyebrow line. Pass
+ * `useEntityList`'s `totalCount`.
+ *
+ * Effect-based and client-only by design: SSR/first paint renders with no
+ * count (avoiding a hydration mismatch), and the count appears a tick after
+ * mount once the query resolves. Cleans back up to `undefined` on unmount so
+ * switching views (e.g. table vs. gallery) or navigating away never leaves a
+ * stale count behind. A no-op outside a `<Page>` (context is `null`) — safe
+ * to call from list components that are also embedded standalone elsewhere
+ * (e.g. a detail page's nested list).
+ */
+export function usePageCount(totalCount: number | undefined) {
+  const setCount = useContext(PageCountContext);
+  useEffect(() => {
+    setCount?.(totalCount);
+    return () => setCount?.(undefined);
+  }, [setCount, totalCount]);
+}
 
 interface PageBaseProps {
   /** Page title — the big heading (list) or the spec-plate name (detail). */
@@ -70,6 +106,9 @@ export function Page(props: PageProps) {
   const detail = props.variant === "detail" ? props : undefined;
   // List-only header options, narrowed off the union.
   const list = props.variant !== "detail" ? props : undefined;
+  // Reported by a descendant list via usePageCount; undefined until a client
+  // effect fires (or on pages with no list, or non-list variants).
+  const [count, setCount] = useState<number | undefined>(undefined);
   return (
     <PageWrapper fullWidth={fullWidth}>
       <div className={variant === "detail" ? "space-y-2" : undefined}>
@@ -86,8 +125,11 @@ export function Page(props: PageProps) {
           heroNo={detail?.heroNo}
           heroImages={detail?.heroImages}
           rawData={detail?.rawData}
+          count={variant === "list" ? count : undefined}
         />
-        <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+        <PageCountContext.Provider value={setCount}>
+          <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+        </PageCountContext.Provider>
       </div>
     </PageWrapper>
   );

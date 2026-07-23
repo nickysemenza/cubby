@@ -92,7 +92,7 @@ export function IngredientModifier({
 }) {
   if (!modifier) return null;
   return (
-    <span className={cn("text-muted-foreground/80 italic", className)}>
+    <span className={cn("text-muted-foreground italic", className)}>
       , {modifier}
     </span>
   );
@@ -133,9 +133,7 @@ export function IngredientQuantities({
         : quantities.map((q, index) => (
             <span key={`${q.text}-${q.derived}-${q.estimated}`}>
               {index > 0 && " / "}
-              <span
-                className={q.derived ? "text-muted-foreground/70" : undefined}
-              >
+              <span className={q.derived ? "text-muted-foreground" : undefined}>
                 {q.text}
                 {q.estimated && <EstimateMarker />}
               </span>

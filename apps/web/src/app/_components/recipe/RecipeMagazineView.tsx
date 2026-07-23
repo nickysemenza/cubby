@@ -75,9 +75,9 @@ function VitalsPanel({
               type="button"
               onClick={onToggle}
               title="Hide nutrition & cost"
-              className="text-muted-foreground/50 hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground"
             >
-              <EyeOff className="h-3.5 w-3.5" />
+              <EyeOff className="size-3.5" />
             </button>
           </Row>
 
@@ -153,7 +153,7 @@ function VitalsPanel({
           onClick={onToggle}
           className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
         >
-          <Eye className="h-3.5 w-3.5" />
+          <Eye className="size-3.5" />
           Show nutrition &amp; cost
         </button>
       )}

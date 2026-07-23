@@ -132,11 +132,9 @@ export function LocationCardGrid({
             aria-label="Toggle grouping by type"
           >
             {isGrouped ? (
-              <LayoutGrid
-                className="mr-1.5 h-3.5 w-3.5" /* tight: icon+label */
-              />
+              <LayoutGrid className="mr-1.5 size-3.5" /* tight: icon+label */ />
             ) : (
-              <List className="mr-1.5 h-3.5 w-3.5" /* tight: icon+label */ />
+              <List className="mr-1.5 size-3.5" /* tight: icon+label */ />
             )}
             <span className="text-xs">{isGrouped ? "Grouped" : "All"}</span>
           </Button>
@@ -249,7 +247,7 @@ function LocationCard({
 
       {/* Timestamp - subtle, at bottom */}
       {location.lastBulkInventory && (
-        <div className="flex items-center gap-1 font-mono text-2xs text-muted-foreground/70">
+        <div className="flex items-center gap-1 font-mono text-2xs text-muted-foreground">
           <Calendar size={12} />
           <span>
             {formatDistanceToNow(location.lastBulkInventory, {

@@ -314,7 +314,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4 flex-shrink-0",
+                      "mr-2 size-4 flex-shrink-0",
                       renderItem &&
                         "mt-0.5" /* tight: check icon optical-align */,
                       value?.id === result.id ? "opacity-100" : "opacity-0",
@@ -360,7 +360,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         <span className={cn("truncate", !value && "text-muted-foreground")}>
           {value?.name ?? `Select ${label}…`}
         </span>
-        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
       </Button>
 
       {portalRoot && popup ? createPortal(popup, portalRoot) : popup}

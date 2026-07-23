@@ -82,7 +82,7 @@ export function IdentifyProductButton<
         onClick={handleIdentify}
         disabled={!canIdentify}
       >
-        {isLoading ? <Spinner /> : <Sparkles className="h-4 w-4" />}
+        {isLoading ? <Spinner /> : <Sparkles className="size-4" />}
         <span className="ml-1">Identify Product</span>
       </Button>
 

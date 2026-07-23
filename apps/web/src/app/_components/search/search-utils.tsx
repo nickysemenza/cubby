@@ -79,7 +79,7 @@ export function rememberSearchResult(item: SearchResultItem): void {
 /** Render the appropriate icon for a search result item */
 export function SearchResultItemIcon({
   item,
-  className = "h-4 w-4 shrink-0",
+  className = "size-4 shrink-0",
 }: {
   item: SearchResultItem;
   className?: string;
@@ -110,12 +110,12 @@ export function SearchResultItemIcon({
 const mediaVariants = {
   command: {
     tile: "size-8 rounded",
-    icon: "h-4 w-4 shrink-0",
+    icon: "size-4 shrink-0",
     displayWidth: 64,
   },
   mobile: {
     tile: "size-11 rounded",
-    icon: "h-5 w-5 shrink-0",
+    icon: "size-5 shrink-0",
     displayWidth: 88,
   },
 } as const;

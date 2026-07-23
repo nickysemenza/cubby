@@ -46,7 +46,7 @@ function DocumentRow({
       gap="sm"
       className="min-w-0 border border-[var(--border)] px-2 py-1"
     >
-      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <FileText className="size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate text-sm">
         {document.filename}
       </span>
@@ -59,10 +59,10 @@ function DocumentRow({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+        className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
         onClick={onRemove}
       >
-        <X className="h-4 w-4" />
+        <X className="size-4" />
       </Button>
     </Row>
   );

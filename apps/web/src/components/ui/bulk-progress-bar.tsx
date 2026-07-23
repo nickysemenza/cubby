@@ -20,7 +20,7 @@ export function BulkProgressBar({
   return (
     <div className={cn("space-y-1", className)}>
       <p className="flex items-center gap-1 text-muted-foreground text-xs">
-        <Spinner className="h-3 w-3" />{" "}
+        <Spinner className="size-3" />{" "}
         {progress ? `${verb} ${progress.done} of ${progress.total}` : `${verb}…`}
       </p>
       <Progress

@@ -233,7 +233,7 @@ export function UsdaFoodSearchField({
               />
             }
           >
-            {isSuggesting ? <Spinner /> : <Sparkles className="h-4 w-4" />}
+            {isSuggesting ? <Spinner /> : <Sparkles className="size-4" />}
             <span className="ml-1 hidden sm:inline">Suggest with AI</span>
           </TooltipTrigger>
           <TooltipContent>
@@ -247,7 +247,7 @@ export function UsdaFoodSearchField({
       {suggestion && (
         <div className="rounded-md bg-muted/50 p-2 text-sm">
           <Row align="center" gap="sm">
-            <Sparkles className="h-3 w-3 text-muted-foreground" />
+            <Sparkles className="size-3 text-muted-foreground" />
             <span className="font-medium">AI match:</span>
             <span className={confidenceColor[suggestion.confidence]}>
               {suggestion.confidence} confidence

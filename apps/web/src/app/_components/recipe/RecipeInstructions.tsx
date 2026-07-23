@@ -83,7 +83,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                     {/* Instruction text with highlighted ingredients and measurements */}
                     <p
                       className={cn(
-                        "flex-1 pt-1 text-foreground/90 leading-relaxed",
+                        "flex-1 pt-1 text-foreground leading-relaxed",
                         isDone && "text-muted-foreground line-through",
                       )}
                     >

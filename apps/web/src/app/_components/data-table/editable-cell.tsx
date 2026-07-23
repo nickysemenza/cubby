@@ -485,7 +485,7 @@ function EditableInputEditor<T>({
         onClick={() => void handleSave()}
         disabled={isPending}
       >
-        <Check className="h-3.5 w-3.5" />
+        <Check className="size-3.5" />
       </Button>
       <Button
         size="icon"
@@ -493,7 +493,7 @@ function EditableInputEditor<T>({
         onClick={onCancel}
         disabled={isPending}
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="size-3.5" />
       </Button>
     </div>
   );
@@ -612,7 +612,7 @@ function EditableSelectEditor({
         onClick={() => void handleSave()}
         disabled={isPending}
       >
-        <Check className="h-3.5 w-3.5" />
+        <Check className="size-3.5" />
       </Button>
       <Button
         size="icon"
@@ -620,7 +620,7 @@ function EditableSelectEditor({
         onClick={onCancel}
         disabled={isPending}
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="size-3.5" />
       </Button>
     </div>
   );
@@ -872,7 +872,7 @@ export function EditableAmountCell({
               onClick={() => void save()}
               disabled={isPending}
             >
-              <Check className="h-3.5 w-3.5" />
+              <Check className="size-3.5" />
             </Button>
             <Button
               size="icon"
@@ -880,7 +880,7 @@ export function EditableAmountCell({
               onClick={edit.cancel}
               disabled={isPending}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
             </Button>
           </div>
         </CellEditorOverlay>

@@ -110,10 +110,10 @@ export function UnitCoveragePanel({
           }
         >
           <ChevronRight
-            className={`h-4 w-4 transition-transform ${graphOpen ? "rotate-90" : ""}`}
+            className={`size-4 transition-transform ${graphOpen ? "rotate-90" : ""}`}
             aria-hidden
           />
-          <Network className="h-4 w-4" aria-hidden />
+          <Network className="size-4" aria-hidden />
           <span>Conversion graph</span>
         </CollapsibleTrigger>
         <CollapsibleContent>

@@ -82,7 +82,7 @@ export function CellEditTrigger({
     >
       {children}
       {!hidePencilIcon && (
-        <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <Pencil className="ml-1 size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       )}
     </button>
   );

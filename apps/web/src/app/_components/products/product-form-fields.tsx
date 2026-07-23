@@ -219,7 +219,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           onClick={handleUpcLookup}
           disabled={isLookingUp || !form.watch("upc" as Path<TFieldValues>)}
         >
-          {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
+          {isLookingUp ? <Spinner /> : <Search className="size-4" />}
           <span className="ml-1">Lookup</span>
         </Button>
       </Row>

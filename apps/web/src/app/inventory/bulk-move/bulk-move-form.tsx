@@ -307,7 +307,7 @@ export default function BulkMoveForm({
             searchType="location"
           />
         </div>
-        <ArrowRight className="mb-2 h-6 w-6 text-muted-foreground" />
+        <ArrowRight className="mb-2 size-6 text-muted-foreground" />
         <div className="flex-1">
           <DestinationLocationField
             form={form}
@@ -369,7 +369,7 @@ export default function BulkMoveForm({
                   <Row align="center" gap="sm" className="flex-1">
                     <EntityIcon
                       entity="inventory"
-                      className="h-4 w-4 text-muted-foreground"
+                      className="size-4 text-muted-foreground"
                     />
                     <span className="font-medium">{item.productName}</span>
                   </Row>

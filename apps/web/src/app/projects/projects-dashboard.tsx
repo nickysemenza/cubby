@@ -907,13 +907,18 @@ function ProjectCard({
               <Badge variant="secondary">{capitalize(project.kind)}</Badge>
             )}
             {project.locations.map((loc) => (
-              <Badge key={loc} variant="outline">
+              <Badge
+                key={loc}
+                variant="outline"
+                // Free-form location names — opt out of the mono-uppercase stamp.
+                className="font-sans normal-case tracking-normal"
+              >
                 {loc}
               </Badge>
             ))}
             {hasEstimate && (
               <Badge variant="outline">
-                <DollarSign className="h-3 w-3" />
+                <DollarSign className="size-3" />
                 {formatCurrency(estimate ?? 0, 0)}
               </Badge>
             )}
@@ -927,13 +932,13 @@ function ProjectCard({
                     : "outline"
                 }
               >
-                <Wallet className="h-3 w-3" />
+                <Wallet className="size-3" />
                 {formatCurrency(spent, 0)} spent
               </Badge>
             )}
             {(project.startDate || project.endDate) && (
               <Badge variant="outline">
-                <Calendar className="h-3 w-3" />
+                <Calendar className="size-3" />
                 {formatDateRange(project.startDate, project.endDate)}
               </Badge>
             )}

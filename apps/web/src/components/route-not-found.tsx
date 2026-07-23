@@ -14,7 +14,7 @@ export function RouteNotFound() {
       <Row align="center" gap="sm">
         {/* Canonical logo asset — same source the nav uses, so the mark can't
             drift (the old inline copy had stale, hardcoded fill colors). */}
-        <img src="/favicon.svg" alt="" className="h-12 w-12" />
+        <img src="/favicon.svg" alt="" className="size-12" />
         <h1 className="font-bold text-4xl">404</h1>
       </Row>
       <Stack gap="sm" className="text-center">

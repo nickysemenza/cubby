@@ -357,7 +357,7 @@ export function SessionCaptureActions({
                 className="min-h-12 md:min-h-10"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <Camera className="h-4 w-4" />
+                <Camera className="size-4" />
                 Photo
               </Button>
               <Button
@@ -366,7 +366,7 @@ export function SessionCaptureActions({
                 className="min-h-12 md:min-h-10"
                 onClick={() => setScanner("barcode")}
               >
-                <Barcode className="h-4 w-4" />
+                <Barcode className="size-4" />
                 Barcode
               </Button>
               <Button
@@ -386,7 +386,7 @@ export function SessionCaptureActions({
                 onClick={() => addPhotoInputRef.current?.click()}
                 title="Add an unlabeled item from a photo"
               >
-                <ImagePlus className="h-4 w-4" />
+                <ImagePlus className="size-4" />
                 Photo item
               </Button>
             </Row>
@@ -435,7 +435,7 @@ export function SessionCaptureActions({
                     onClick={() => addSuggestion(item, index)}
                     disabled={approveDetectedItem.isPending}
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="size-4" />
                     Approve
                   </Button>
                   <Button
@@ -444,7 +444,7 @@ export function SessionCaptureActions({
                     size="sm"
                     onClick={() => removeSuggestion(index)}
                   >
-                    <X className="h-4 w-4" />
+                    <X className="size-4" />
                     Reject
                   </Button>
                 </Row>
@@ -518,11 +518,7 @@ export function SessionCaptureActions({
               className="shrink-0"
               disabled={!photoName.trim() || photoIdentityPending}
             >
-              {photoIdentityPending ? (
-                <Spinner />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
+              {photoIdentityPending ? <Spinner /> : <Plus className="size-4" />}
               Add
             </Button>
           </form>
@@ -589,7 +585,7 @@ export function SessionCaptureActions({
                   {updateProduct.isPending ? (
                     <Spinner />
                   ) : (
-                    <Plus className="h-4 w-4" />
+                    <Plus className="size-4" />
                   )}
                   Link
                 </Button>
@@ -720,7 +716,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
         className="min-h-12 shrink-0 px-4 md:min-h-10" /* tight: mobile touch target */
         disabled={createInventory.isPending}
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="size-4" />
         <span className="hidden sm:inline">Add item</span>
         <span className="sm:hidden">Add</span>
       </Button>

@@ -140,7 +140,7 @@ function LabelsPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => router.history.back()}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 size-4" />
               Back
             </Button>
             <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
@@ -194,12 +194,12 @@ function LabelsPage() {
             </label>
             {format !== "ptouch" ? (
               <Button onClick={() => window.print()} disabled={!allQrReady}>
-                <Printer className="mr-2 h-4 w-4" />
+                <Printer className="mr-2 size-4" />
                 Print
               </Button>
             ) : (
               <Button onClick={handleDownloadCsv} disabled={items.length === 0}>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="mr-2 size-4" />
                 Download CSV
               </Button>
             )}
