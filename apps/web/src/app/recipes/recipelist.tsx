@@ -170,14 +170,15 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     // Inline-editable, copy/pastable tags column. The cellData drives both the
     // range copy/paste engine (meta.cellData) and the focused-cell clipboard
     // (specFromCellData, per row) — one source of truth for tag save semantics.
+    const saveTags = async (row: RecipeListItem, nextTags: string[] | null) => {
+      await updateRecipeMutation.mutateAsync({
+        id: row.id,
+        data: { tags: nextTags },
+      });
+    };
     const tagsCellDataDef = tagsCellData<RecipeListItem>(
       (row) => row.tags ?? null,
-      async (row, nextTags) => {
-        await updateRecipeMutation.mutateAsync({
-          id: row.id,
-          data: { tags: nextTags },
-        });
-      },
+      saveTags,
     );
     const renderTags = (tags: string[] | null) => {
       if (!tags?.length) return <NoneValue />;
@@ -212,12 +213,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
               value={recipe.tags ?? null}
               renderValue={renderTags}
               clipboard={specFromCellData(tagsCellDataDef, recipe)}
-              onSave={async (nextTags) => {
-                await updateRecipeMutation.mutateAsync({
-                  id: recipe.id,
-                  data: { tags: nextTags },
-                });
-              }}
+              onSave={(nextTags) => saveTags(recipe, nextTags)}
             />
           );
         },
