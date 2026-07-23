@@ -4,7 +4,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Check, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
@@ -23,6 +23,7 @@ import {
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
+import { CellSelectionContext } from "./cell-selection-context";
 
 /** Re-export for convenience */
 export type { FilterableComboboxItem };
@@ -62,105 +63,6 @@ type EditableConfig =
   | EditableCurrencyConfig
   | EditableSelectConfig
   | EditableDateConfig;
-
-interface UseEditableCellOptions<T> {
-  value: T | null;
-  onSave: (value: T | null) => Promise<void>;
-  /** Parse input string to value. For select type, not needed. */
-  parse?: (input: string) => T | null;
-  /** Format value for input display. Defaults to String(value). */
-  format?: (value: T) => string;
-}
-
-/**
- * Hook for managing editable cell state with optimistic updates.
- * After save succeeds, shows the new value immediately while react-query refetches.
- */
-export function useEditableCell<T>({
-  value,
-  onSave,
-  parse,
-  format,
-}: UseEditableCellOptions<T>) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const [isPending, setIsPending] = useState(false);
-  // undefined = no optimistic value, use prop; T | null = optimistic value to display
-  const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
-    undefined,
-  );
-
-  // Display value: optimistic takes precedence when set
-  const displayValue = optimisticValue !== undefined ? optimisticValue : value;
-
-  const startEditing = useCallback(() => {
-    const v = optimisticValue !== undefined ? optimisticValue : value;
-    if (format && v !== null) {
-      setInputValue(format(v));
-    } else {
-      setInputValue(v !== null ? String(v) : "");
-    }
-    setIsEditing(true);
-  }, [value, optimisticValue, format]);
-
-  const cancel = useCallback(() => {
-    setIsEditing(false);
-  }, []);
-
-  const save = useCallback(async () => {
-    const trimmed = inputValue.trim();
-    const parsed = trimmed === "" ? null : parse ? parse(trimmed) : null;
-
-    // Skip if value hasn't changed
-    if (parsed === value || (parsed === null && value === null)) {
-      setIsEditing(false);
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      await onSave(parsed);
-      setOptimisticValue(parsed); // Show immediately
-      setIsEditing(false);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setIsPending(false);
-    }
-  }, [inputValue, parse, value, onSave]);
-
-  // Clear optimistic value when real value catches up
-  useEffect(() => {
-    if (optimisticValue !== undefined && value === optimisticValue) {
-      setOptimisticValue(undefined);
-    }
-  }, [value, optimisticValue]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        void save();
-      } else if (e.key === "Escape") {
-        cancel();
-      }
-    },
-    [save, cancel],
-  );
-
-  return {
-    isEditing,
-    inputValue,
-    setInputValue,
-    displayValue,
-    isPending,
-    startEditing,
-    cancel,
-    save,
-    handleKeyDown,
-    setOptimisticValue,
-  };
-}
 
 interface EditableCellProps<T> {
   value: T | null;
@@ -257,10 +159,17 @@ export function useCellEditState(
     triggerRef.current?.focus();
   }, []);
 
-  const pasteThrough = clipboard?.onPasteValue;
-  const clipboardWithGuard = clipboard
+  // In cell-selection mode the range engine (useCellSelection) owns ALL
+  // copy/paste and CellEditTrigger skips the per-element registration, so the
+  // guard wrapper + its closures would be dead weight allocated every render.
+  // Drop the spec here so the spread/closures below never run in a table.
+  const cellSelectionMode = useContext(CellSelectionContext);
+  const effectiveClipboard = cellSelectionMode ? undefined : clipboard;
+
+  const pasteThrough = effectiveClipboard?.onPasteValue;
+  const clipboardWithGuard = effectiveClipboard
     ? {
-        ...clipboard,
+        ...effectiveClipboard,
         isEditing: () => isEditingRef.current,
         onPasteValue: pasteThrough
           ? async (payload: { json?: unknown; text?: string }) => {
@@ -309,6 +218,60 @@ export function useOptimisticDisplayValue<T>(
     displayValue: optimisticValue !== undefined ? optimisticValue : value,
     setOptimisticValue,
   };
+}
+
+/**
+ * The one commit body shared by every inline editor (input / select / date /
+ * amount / entity / tags). Owns the mid-save lifecycle: an `isPending` flag for
+ * disabling the widget, a `pendingRef` re-entrancy guard so a fast second commit
+ * can't fire a concurrent `onSave` (previously only the entity editor had this —
+ * generalizing it closes the same double-fire hazard everywhere), the
+ * unchanged→cancel short-circuit, and the toast-on-error path that leaves the
+ * editor open for a retry.
+ *
+ * Each editor keeps its own widget, draft state, and unchanged predicate — it
+ * passes the predicate result as `opts.unchanged` at the call site.
+ */
+export function useEditorCommit<T>(args: {
+  onSave: (next: T) => Promise<void>;
+  onCommit: (next: T) => void;
+  onCancel: () => void;
+}): {
+  isPending: boolean;
+  commit: (next: T, opts?: { unchanged?: boolean }) => Promise<void>;
+} {
+  const { onSave, onCommit, onCancel } = args;
+  const [isPending, setIsPending] = useState(false);
+  const pendingRef = useRef(false);
+
+  const commit = useCallback(
+    async (next: T, opts?: { unchanged?: boolean }) => {
+      // Hard re-entrancy guard: a widget that closes synchronously on commit
+      // (e.g. a combobox pick) could otherwise dispatch a second commit before
+      // the first save resolves.
+      if (pendingRef.current) return;
+      if (opts?.unchanged) {
+        onCancel();
+        return;
+      }
+
+      pendingRef.current = true;
+      setIsPending(true);
+      try {
+        await onSave(next);
+        onCommit(next);
+      } catch (err) {
+        // Stay open with state intact so the user can retry or cancel.
+        toast.error(getErrorMessage(err));
+      } finally {
+        pendingRef.current = false;
+        setIsPending(false);
+      }
+    },
+    [onSave, onCommit, onCancel],
+  );
+
+  return { isPending, commit };
 }
 
 function EditableInputCellInternal<T>({
@@ -414,7 +377,11 @@ function EditableInputEditor<T>({
   const [inputValue, setInputValue] = useState(() =>
     seedText != null ? seedText : value !== null ? format(value) : "",
   );
-  const [isPending, setIsPending] = useState(false);
+  const { isPending, commit } = useEditorCommit<T | null>({
+    onSave,
+    onCommit,
+    onCancel,
+  });
 
   useEffect(() => {
     // A seeded editor is initialized once at mount and must not be clobbered by
@@ -436,22 +403,10 @@ function EditableInputEditor<T>({
           ? parse(trimmed)
           : (trimmed as unknown as T);
 
-    // Skip if value hasn't changed
-    if (parsed === value || (parsed === null && value === null)) {
-      onCancel();
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      await onSave(parsed);
-      onCommit(parsed);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setIsPending(false);
-    }
-  }, [inputValue, parse, value, onSave, onCancel, onCommit]);
+    await commit(parsed, {
+      unchanged: parsed === value || (parsed === null && value === null),
+    });
+  }, [inputValue, parse, value, commit]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -597,28 +552,15 @@ function EditableSelectEditor({
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
-  const [isPending, setIsPending] = useState(false);
+  const { isPending, commit } = useEditorCommit<string | null>({
+    onSave,
+    onCommit,
+    onCancel,
+  });
 
   const handlePick = useCallback(
-    async (next: string | null) => {
-      // Unchanged → close without a write.
-      if (next === value) {
-        onCancel();
-        return;
-      }
-
-      setIsPending(true);
-      try {
-        await onSave(next);
-        onCommit(next);
-      } catch (err) {
-        // Stay open with state intact so the user can retry or cancel.
-        toast.error(getErrorMessage(err));
-      } finally {
-        setIsPending(false);
-      }
-    },
-    [value, onSave, onCancel, onCommit],
+    (next: string | null) => commit(next, { unchanged: next === value }),
+    [value, commit],
   );
 
   return (
@@ -716,27 +658,15 @@ function EditableDateEditor({
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
-  const [isPending, setIsPending] = useState(false);
+  const { isPending, commit } = useEditorCommit<string | null>({
+    onSave,
+    onCommit,
+    onCancel,
+  });
 
   const handleChange = useCallback(
-    async (next: string | null) => {
-      if (next === value) {
-        onCancel();
-        return;
-      }
-
-      setIsPending(true);
-      try {
-        await onSave(next);
-        onCommit(next);
-      } catch (err) {
-        toast.error(getErrorMessage(err));
-        onCancel();
-      } finally {
-        setIsPending(false);
-      }
-    },
-    [value, onSave, onCancel, onCommit],
+    (next: string | null) => commit(next, { unchanged: next === value }),
+    [value, commit],
   );
 
   return (
@@ -790,7 +720,6 @@ export function EditableAmountCell({
 }: EditableAmountCellProps) {
   const [editingValue, setEditingValue] = useState(amount.value);
   const [editingUnit, setEditingUnit] = useState(amount.unit);
-  const [isPending, setIsPending] = useState(false);
   const [optimisticAmount, setOptimisticAmount] = useState<Amount | undefined>(
     undefined,
   );
@@ -799,6 +728,19 @@ export function EditableAmountCell({
   );
 
   const displayAmount = optimisticAmount ?? amount;
+
+  const onCommit = useCallback(
+    (next: Amount) => {
+      setOptimisticAmount(next);
+      edit.cancel();
+    },
+    [edit.cancel],
+  );
+  const { isPending, commit } = useEditorCommit<Amount>({
+    onSave,
+    onCommit,
+    onCancel: edit.cancel,
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: edit.open is a stable callback
   const startEditing = useCallback(() => {
@@ -812,24 +754,11 @@ export function EditableAmountCell({
 
   const save = useCallback(async () => {
     const newAmount = { value: editingValue, unit: editingUnit.trim() };
-
-    // Skip if unchanged
-    if (newAmount.value === amount.value && newAmount.unit === amount.unit) {
-      edit.cancel();
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      await onSave(newAmount);
-      setOptimisticAmount(newAmount);
-      edit.cancel();
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setIsPending(false);
-    }
-  }, [editingValue, editingUnit, amount, onSave, edit.cancel]);
+    await commit(newAmount, {
+      unchanged:
+        newAmount.value === amount.value && newAmount.unit === amount.unit,
+    });
+  }, [editingValue, editingUnit, amount, commit]);
 
   // Clear optimistic value when real value catches up
   useEffect(() => {

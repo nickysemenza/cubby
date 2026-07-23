@@ -39,8 +39,6 @@ export interface ColumnCellData<TData> {
     row: TData,
     payload: { json?: unknown; text?: string },
   ) => Promise<unknown>;
-  /** kind "select" only: target-side validation options. */
-  selectOptions?: FilterableComboboxItem[];
 }
 
 /**
@@ -123,7 +121,6 @@ export function selectCellData<TData>(
 ): ColumnCellData<TData> {
   return {
     kind: "select",
-    selectOptions,
     getCopyPayload: (row) => {
       const value = getValue(row);
       if (value == null || value === "") return null;

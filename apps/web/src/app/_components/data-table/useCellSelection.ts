@@ -3,6 +3,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { getErrorMessage } from "~/lib/error-utils";
+import { flashElement } from "./cell-clipboard";
 import {
   bufferMatches,
   getCopyBuffer,
@@ -60,7 +61,6 @@ interface ContainerProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onMouseDown?: React.MouseEventHandler<HTMLDivElement>;
   onMouseOver?: React.MouseEventHandler<HTMLDivElement>;
-  onMouseUp?: React.MouseEventHandler<HTMLDivElement>;
   /** Present while dragging so the container can `select-none` (kills the
    * native text selection a drag would otherwise paint across cells). */
   "data-cell-dragging"?: string;
@@ -68,9 +68,7 @@ interface ContainerProps {
 
 interface UseCellSelectionResult {
   selection: CellSelection | null;
-  clearSelection: () => void;
   getRowCellSelection: (rowIndex: number) => RowCellSelection | undefined;
-  selectableColumnIds: string[];
   containerProps: ContainerProps;
 }
 
@@ -93,8 +91,6 @@ function isTypingTarget(el: Element | null): boolean {
   );
 }
 
-/** How long the copied/pasted ring pulse stays on a cell (matches cell-clipboard.ts). */
-const FLASH_MS = 600;
 /**
  * Firefox fallback delay: a keydown-armed paste waits this long for the document
  * `paste` event (Chrome/Safari) to fire and cancel it; if none comes (Firefox
@@ -105,6 +101,14 @@ const FIREFOX_PASTE_FALLBACK_MS = 150;
 /** Max cells a single paste may touch (source or target) before it's rejected. */
 const PASTE_CELL_CAP = 100;
 
+/** Arrow key → movement direction (mirrors DIRECTION_DELTA's style in cell-range.ts). */
+const ARROW_DIRECTION: Record<string, "up" | "down" | "left" | "right"> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
+
 function emitPasteToast(summary: PasteSummary): void {
   match(summary.variant)
     .with("success", () => toast.success(summary.message))
@@ -112,16 +116,6 @@ function emitPasteToast(summary: PasteSummary): void {
     .with("error", () => toast.error(summary.message))
     .with("info", () => toast.info(summary.message))
     .exhaustive();
-}
-
-/** Set a 600ms copy/pasted flash on a cell `td`, mirroring cell-clipboard.ts. */
-function flashCell(td: HTMLElement, kind: "copied" | "pasted"): void {
-  td.setAttribute("data-clipboard-flash", kind);
-  window.setTimeout(() => {
-    if (td.getAttribute("data-clipboard-flash") === kind) {
-      td.removeAttribute("data-clipboard-flash");
-    }
-  }, FLASH_MS);
 }
 
 /**
@@ -188,12 +182,19 @@ export function useCellSelection<TItem>({
   // highlight the wrong cells. Composed as a signature string; the effect fires
   // only when it actually changes.
   const state = table.getState();
-  const dataSignature = JSON.stringify({
-    sorting: state.sorting,
-    columnFilters: state.columnFilters,
-    globalFilter: state.globalFilter ?? null,
-    pagination: state.pagination,
-  });
+  // The four state slices are referentially stable between actual changes, so
+  // memoizing keeps the JSON.stringify off every render (incl. per-tick drag
+  // updates), running it only when one of them changes.
+  const dataSignature = React.useMemo(
+    () =>
+      JSON.stringify({
+        sorting: state.sorting,
+        columnFilters: state.columnFilters,
+        globalFilter: state.globalFilter ?? null,
+        pagination: state.pagination,
+      }),
+    [state.sorting, state.columnFilters, state.globalFilter, state.pagination],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataSignature is the intended trigger
   React.useEffect(() => {
     setSelection(null);
@@ -245,8 +246,6 @@ export function useCellSelection<TItem>({
       rowSelectionMap?.get(rowIndex),
     [rowSelectionMap],
   );
-
-  const clearSelection = React.useCallback(() => setSelection(null), []);
 
   const endDrag = React.useCallback(() => {
     draggingRef.current = false;
@@ -334,8 +333,6 @@ export function useCellSelection<TItem>({
     [resolveCoord],
   );
 
-  const onMouseUp = React.useCallback(() => endDrag(), [endDrag]);
-
   const openEditorAt = React.useCallback(
     (container: HTMLElement, row: number, col: number, seedText?: string) => {
       const colId = selectableColumnIdsRef.current[col];
@@ -390,7 +387,7 @@ export function useCellSelection<TItem>({
         const td = container.querySelector(
           `tr[data-cell-row="${row}"] td[data-cell-col="${colId}"]`,
         );
-        if (td instanceof HTMLElement) flashCell(td, kind);
+        if (td instanceof HTMLElement) flashElement(td, kind);
       }
     },
     [],
@@ -585,16 +582,7 @@ export function useCellSelection<TItem>({
         return;
       }
 
-      const dir =
-        e.key === "ArrowUp"
-          ? "up"
-          : e.key === "ArrowDown"
-            ? "down"
-            : e.key === "ArrowLeft"
-              ? "left"
-              : e.key === "ArrowRight"
-                ? "right"
-                : null;
+      const dir = ARROW_DIRECTION[e.key] ?? null;
 
       if (dir && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
@@ -663,16 +651,13 @@ export function useCellSelection<TItem>({
       onKeyDown,
       onMouseDown,
       onMouseOver,
-      onMouseUp,
       "data-cell-dragging": dragging ? "" : undefined,
     };
-  }, [enabled, onKeyDown, onMouseDown, onMouseOver, onMouseUp, dragging]);
+  }, [enabled, onKeyDown, onMouseDown, onMouseOver, dragging]);
 
   return {
     selection: enabled ? selection : null,
-    clearSelection,
     getRowCellSelection: enabled ? getRowCellSelection : returnUndefined,
-    selectableColumnIds,
     containerProps,
   };
 }

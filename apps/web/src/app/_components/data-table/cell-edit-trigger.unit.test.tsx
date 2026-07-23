@@ -1,24 +1,18 @@
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  dispatchClipboardEvent,
+  makeClipboardData,
+} from "./cell-clipboard-test-helpers";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import {
   CELL_EDIT_EVENT,
   CellSelectionContext,
 } from "./cell-selection-context";
 
-function makeClipboardData() {
-  return { setData: vi.fn(), getData: vi.fn(() => "") };
-}
-
 function dispatchCopy() {
-  const event = new Event("copy", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "clipboardData", {
-    value: makeClipboardData(),
-    configurable: true,
-  });
-  document.dispatchEvent(event);
-  return event;
+  return dispatchClipboardEvent("copy", makeClipboardData());
 }
 
 describe("CellEditTrigger clipboard registration", () => {

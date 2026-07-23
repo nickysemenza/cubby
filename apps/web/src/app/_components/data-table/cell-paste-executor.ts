@@ -10,6 +10,7 @@
  * the summary message. Keeping them here makes the tricky bits unit-testable.
  */
 
+import pMap from "p-map";
 import type { ColumnCellData } from "./cell-data";
 import type {
   CellKind,
@@ -106,25 +107,6 @@ export interface PasteRunResult {
   errors: string[];
 }
 
-/** Bounded-concurrency map: at most `concurrency` workers in flight. */
-async function mapBounded<T>(
-  items: readonly T[],
-  concurrency: number,
-  worker: (item: T) => Promise<void>,
-): Promise<void> {
-  let cursor = 0;
-  const lanes = Array.from(
-    { length: Math.min(Math.max(concurrency, 1), items.length) },
-    async () => {
-      while (cursor < items.length) {
-        const item = items[cursor++];
-        if (item !== undefined) await worker(item);
-      }
-    },
-  );
-  await Promise.all(lanes);
-}
-
 /**
  * Run a paste plan's ops: drop unchanged writes, then execute the rest with
  * bounded concurrency, capturing per-op errors (never rejecting the batch).
@@ -158,22 +140,27 @@ export async function runPastePlan<TRow>(params: {
     attempts.push(op);
   }
 
-  await mapBounded(attempts, concurrency, async (op) => {
-    const cellData = columnCellData[op.col] ?? null;
-    const row = rows[op.row];
-    if (!cellData?.applyPaste || row === undefined) return;
-    try {
-      await cellData.applyPaste(row, {
-        json: op.source.json,
-        text: op.source.text,
-      });
-      updated++;
-      updatedOps.push(op);
-    } catch (err) {
-      failed++;
-      errors.push(formatError(err));
-    }
-  });
+  // The worker never rejects (per-op try/catch), so pMap never short-circuits.
+  await pMap(
+    attempts,
+    async (op) => {
+      const cellData = columnCellData[op.col] ?? null;
+      const row = rows[op.row];
+      if (!cellData?.applyPaste || row === undefined) return;
+      try {
+        await cellData.applyPaste(row, {
+          json: op.source.json,
+          text: op.source.text,
+        });
+        updated++;
+        updatedOps.push(op);
+      } catch (err) {
+        failed++;
+        errors.push(formatError(err));
+      }
+    },
+    { concurrency: Math.max(concurrency, 1) },
+  );
 
   return { updatedOps, updated, unchanged, failed, errors };
 }
