@@ -166,14 +166,14 @@ function RecipeDetailPage() {
             <AddToMeal recipeId={recipe.id} />
             <CopyRecipeParseButton recipe={recipe} />
             <Button onClick={startEditing} variant="outline" size="sm">
-              <Edit className="mr-2 h-4 w-4" />
+              <Edit className="mr-2 size-4" />
               Edit Recipe
             </Button>
             <DeleteButton size="sm" />
           </>
         ) : (
           <Button onClick={stopEditing} variant="outline" size="sm">
-            <X className="mr-2 h-4 w-4" />
+            <X className="mr-2 size-4" />
             Cancel
           </Button>
         )

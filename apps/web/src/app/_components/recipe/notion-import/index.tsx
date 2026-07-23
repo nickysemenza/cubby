@@ -161,7 +161,7 @@ export function NotionImport() {
             onClick={runImport}
             disabled={importing || selected.size === 0}
           >
-            <Import className="mr-1 h-4 w-4" />
+            <Import className="mr-1 size-4" />
             Import {selected.size}
           </Button>
         )}
@@ -176,7 +176,7 @@ export function NotionImport() {
           gap="xs"
           className="text-destructive text-sm"
         >
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircle className="size-4" />
           {getErrorMessage(preview.error)}
         </Row>
       )}
@@ -188,7 +188,7 @@ export function NotionImport() {
           gap="sm"
           className="text-muted-foreground text-sm"
         >
-          <Spinner className="h-4 w-4" /> Reading the Notion Recipes database…
+          <Spinner className="size-4" /> Reading the Notion Recipes database…
         </Row>
       )}
 

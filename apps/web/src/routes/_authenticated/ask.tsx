@@ -85,7 +85,7 @@ function AskPage() {
               </>
             ) : (
               <>
-                <Search className="mr-2 h-4 w-4" />
+                <Search className="mr-2 size-4" />
                 Ask
               </>
             )}
@@ -95,7 +95,7 @@ function AskPage() {
         {!hasRun && (
           <Stack gap="sm">
             <Row align="center" gap="snug" className="eyebrow px-1">
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="size-3.5" />
               Try asking
             </Row>
             <div className="grid gap-2">
@@ -109,7 +109,7 @@ function AskPage() {
                   }}
                   className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
                 >
-                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Search className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">{prompt}</span>
                 </button>
               ))}

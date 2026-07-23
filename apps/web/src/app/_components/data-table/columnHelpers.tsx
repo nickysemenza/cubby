@@ -502,7 +502,7 @@ export function createImageColumn<T extends BaseRow>(
 
   return columnHelper.accessor((row) => getImages(row), {
     id: "image",
-    header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
+    header: () => <ImageIcon className="size-3 text-muted-foreground" />,
     enableSorting: false,
     // h-px trick: setting height:1px on td makes h-full work on children
     // overflow-hidden prevents image from expanding the row
@@ -776,7 +776,7 @@ export function createActionsColumnBase<T>(
             render={<Button variant="ghost" size="icon-sm" />}
             onClick={(e) => e.stopPropagation()}
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="size-3.5" />
             <span className="sr-only">Open menu</span>
           </DropdownMenuTrigger>
           {/* The mobile card's row is a click-through to the detail page —
@@ -789,7 +789,7 @@ export function createActionsColumnBase<T>(
               <DropdownMenuItem
                 render={<Link to={linkProps.to} params={linkProps.params} />}
               >
-                <Eye className="mr-2 h-4 w-4" />
+                <Eye className="mr-2 size-3.5" />
                 View Details
               </DropdownMenuItem>
             )}

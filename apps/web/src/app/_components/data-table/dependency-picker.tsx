@@ -87,7 +87,7 @@ export function DependencyPicker<TId extends string>({
           onClick={startEditing}
           aria-label={`Edit blocked by ${label}s`}
         >
-          <Pencil className="h-3 w-3 text-muted-foreground" />
+          <Pencil className="size-3 text-muted-foreground" />
         </Button>
       </Row>
     );
@@ -103,7 +103,8 @@ export function DependencyPicker<TId extends string>({
           <Badge
             key={item.id}
             variant="outline"
-            className="gap-1 pr-1 font-normal"
+            // Entity names — opt out of the mono-uppercase stamp.
+            className="gap-1 pr-1 font-normal font-sans normal-case tracking-normal"
           >
             <span className="truncate">{item.name}</span>
             <button
@@ -144,7 +145,7 @@ export function DependencyPicker<TId extends string>({
           onClick={() => void handleSave()}
           disabled={isPending}
         >
-          <Check className="h-3.5 w-3.5" />
+          <Check className="size-3.5" />
         </Button>
         <Button
           size="icon"
@@ -152,7 +153,7 @@ export function DependencyPicker<TId extends string>({
           onClick={() => setIsEditing(false)}
           disabled={isPending}
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="size-3.5" />
         </Button>
       </Row>
     </Stack>

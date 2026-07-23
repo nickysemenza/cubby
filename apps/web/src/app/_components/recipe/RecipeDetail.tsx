@@ -253,10 +253,10 @@ const RecipeDetailInner: React.FC<{
                 "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
                 wakeLock.enabled
                   ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground/70 hover:text-foreground",
+                  : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
-              <Coffee className="h-3.5 w-3.5" />
+              <Coffee className="size-3.5" />
               {wakeLock.enabled ? "Awake" : "Keep awake"}
             </button>
           )}
@@ -286,10 +286,10 @@ const RecipeDetailInner: React.FC<{
               format: exportFormat,
               scale: factor === 1 ? undefined : factor,
             }}
-            className="inline-flex items-center gap-1 text-muted-foreground/70 text-xs hover:text-foreground"
+            className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
             title="Open the print / export sheet"
           >
-            <Printer className="h-3 w-3" />
+            <Printer className="size-3" />
             Print / export
           </Link>
         </Row>
@@ -427,7 +427,7 @@ const RecipeDetailInner: React.FC<{
       {nutritionNutrients && (
         <details className="group rounded-lg border border-border bg-muted/30 px-4 py-2 print:hidden">
           <summary className="eyebrow cursor-pointer marker:content-none">
-            <Apple className="mr-2 inline h-3 w-3 align-[-2px]" />
+            <Apple className="mr-2 inline size-3 align-[-2px]" />
             Nutrition
           </summary>
           <div className="mt-4">

@@ -50,7 +50,7 @@ export function ViewSwitcher<T extends string>({
             value={opt.value}
             aria-label={`${opt.label} view`}
           >
-            {Icon && <Icon className="mr-2 h-4 w-4" />}
+            {Icon && <Icon className="mr-2 size-4" />}
             {opt.label}
           </ToggleGroupItem>
         );

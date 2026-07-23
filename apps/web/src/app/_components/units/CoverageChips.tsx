@@ -21,7 +21,7 @@ function chip(key: string, label: string, on: boolean) {
       variant={on ? "secondary" : "outline"}
       className={on ? undefined : "text-muted-foreground"}
     >
-      {on && <Check className="mr-1 h-3 w-3" />}
+      {on && <Check className="mr-1 size-3" />}
       {label}
     </Badge>
   );

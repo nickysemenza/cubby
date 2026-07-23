@@ -45,7 +45,7 @@ export function DataTableViewOptions<TData>({
           />
         }
       >
-        <Settings2 className="h-3.5 w-3.5" />
+        <Settings2 className="size-3.5" />
         View
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[170px]">
@@ -57,7 +57,7 @@ export function DataTableViewOptions<TData>({
           >
             {densityOptions.map((opt) => (
               <DropdownMenuRadioItem key={opt.value} value={opt.value}>
-                <opt.icon className="mr-2 h-3.5 w-3.5" />
+                <opt.icon className="mr-2 size-3.5" />
                 {opt.label}
               </DropdownMenuRadioItem>
             ))}

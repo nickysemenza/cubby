@@ -146,6 +146,15 @@ export interface UseEntityListReturn<TData> {
   onGroupedChange: (value: boolean) => void;
   /** Group config (passed through for Table.tsx) */
   groupConfig?: GroupConfig<TData>;
+  /**
+   * The true server-side filtered total — in infinite mode this is the
+   * server total, NOT the number of rows loaded/accumulated so far (`data.length`).
+   * `undefined` while the first page is loading (the underlying query hooks
+   * default totalCount to 0 pre-response, which would otherwise flash "0 …"
+   * in the eyebrow). Feed straight to `usePageCount` for the eyebrow record
+   * count.
+   */
+  totalCount: number | undefined;
 }
 
 /**
@@ -451,5 +460,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     grouped,
     onGroupedChange,
     groupConfig,
+    // Withhold until the first response lands — the underlying query hooks
+    // default totalCount to 0 pre-response, which would otherwise flash
+    // "0 …" in the eyebrow before the real count arrives.
+    totalCount: isLoading ? undefined : totalCount,
   };
 }

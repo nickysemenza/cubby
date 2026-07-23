@@ -8,6 +8,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { FolderInput, Printer, ScanBarcode } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
@@ -172,7 +173,7 @@ export function LocationList() {
         {
           id: "print-labels",
           label: "Print Labels",
-          icon: <Printer className="h-4 w-4" />,
+          icon: <Printer className="size-4" />,
           minSelection: 1,
           onExecute: async (
             rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
@@ -203,7 +204,7 @@ export function LocationList() {
         {
           id: "move-parent",
           label: "Move under...",
-          icon: <FolderInput className="h-4 w-4" />,
+          icon: <FolderInput className="size-4" />,
           minSelection: 1,
           onExecute: async (
             rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
@@ -226,14 +227,14 @@ export function LocationList() {
             <Link to="/inventory/session" search={{ parentId: row.id }} />
           }
         >
-          <ScanBarcode className="mr-2 h-4 w-4" />
+          <ScanBarcode className="mr-2 size-4" />
           Recount
         </DropdownMenuItem>
         {row.shortcode && typeSupportsQrCode(row.type) && (
           <DropdownMenuItem
             render={<Link to="/labels" search={{ codes: row.shortcode }} />}
           >
-            <Printer className="mr-2 h-4 w-4" />
+            <Printer className="mr-2 size-4" />
             Print Label
           </DropdownMenuItem>
         )}
@@ -268,6 +269,7 @@ export function LocationList() {
     refreshControls,
     grouped,
     onGroupedChange,
+    totalCount,
   } = useEntityList({
     entity: "location",
     queryOptions: api.location.list.queryOptions,
@@ -301,6 +303,7 @@ export function LocationList() {
     },
     groupConfig,
   });
+  usePageCount(totalCount);
 
   return (
     <>

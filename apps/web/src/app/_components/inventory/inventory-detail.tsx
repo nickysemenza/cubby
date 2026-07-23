@@ -76,7 +76,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         onClick={editMode.startEditing}
         disabled={isPending}
       >
-        <Pencil className="mr-2 h-4 w-4" />
+        <Pencil className="mr-2 size-4" />
         Edit
       </Button>
       <Button
@@ -85,7 +85,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         onClick={() => setShowMoveDialog(true)}
         disabled={isPending}
       >
-        <ArrowRightLeft className="mr-2 h-4 w-4" />
+        <ArrowRightLeft className="mr-2 size-4" />
         Move
       </Button>
       <DeleteButton />

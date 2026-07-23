@@ -24,9 +24,9 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
         data-status={isGroupActive ? "active" : undefined}
         title={label}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="size-3.5" />
         <span className="hidden lg:inline">{label}</span>
-        <ChevronDown className="h-3 w-3" />
+        <ChevronDown className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">
         {children.map((item) => {
@@ -37,7 +37,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
               render={<Link to={item.to} />}
               className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
-              <ItemIcon className="h-4 w-4" />
+              <ItemIcon className="size-3.5" />
               {item.label}
             </DropdownMenuItem>
           );

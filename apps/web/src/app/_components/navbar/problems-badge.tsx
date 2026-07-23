@@ -109,11 +109,11 @@ export const ProblemsBadge = () => {
       >
         {hasProblems ? (
           <span className="flex items-center gap-1 text-sm">
-            <AlertTriangle className="h-4 w-4" />
+            <AlertTriangle className="size-4" />
             {totalProblems}
           </span>
         ) : (
-          <Check className="h-4 w-4" />
+          <Check className="size-4" />
         )}
       </TooltipTrigger>
       <TooltipContent>

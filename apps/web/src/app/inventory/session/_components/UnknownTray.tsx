@@ -43,7 +43,7 @@ export function UnknownTray({
   return (
     <Stack gap="sm">
       <label className="flex min-h-12 items-center gap-2 border border-[var(--border)] px-4">
-        <Search className="h-4 w-4 text-muted-foreground" />
+        <Search className="size-4 text-muted-foreground" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -74,7 +74,7 @@ export function UnknownTray({
                   aria-label={`Move into ${currentLocationName}`}
                   onClick={() => onMoveLocationIn(location)}
                 >
-                  <ArrowDownToLine className="h-4 w-4" />
+                  <ArrowDownToLine className="size-4" />
                 </Button>
               }
             />
@@ -99,7 +99,7 @@ export function UnknownTray({
                     aria-label="Move to another location"
                     onClick={() => onMoveTo(item)}
                   >
-                    <FolderInput className="h-4 w-4" />
+                    <FolderInput className="size-4" />
                   </Button>
                   <Button
                     type="button"
@@ -110,7 +110,7 @@ export function UnknownTray({
                     aria-label={`Move into ${currentLocationName}`}
                     onClick={() => onMoveIn(item)}
                   >
-                    <ArrowDownToLine className="h-4 w-4" />
+                    <ArrowDownToLine className="size-4" />
                   </Button>
                 </Row>
               }

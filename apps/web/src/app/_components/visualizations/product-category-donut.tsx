@@ -211,7 +211,7 @@ function HoverTooltip({ slice }: { slice: CategoryData }) {
     <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <div
-          className="h-3 w-3 rounded-full"
+          className="size-3 rounded-full"
           style={{ backgroundColor: getCategoryColor(slice.category) }}
         />
         <span className="capitalize">

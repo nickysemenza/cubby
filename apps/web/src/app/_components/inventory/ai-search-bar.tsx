@@ -72,7 +72,7 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
     <Stack gap="sm">
       <Row align="center" gap="sm">
         <div className="relative flex-1">
-          <Sparkles className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Sparkles className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -84,7 +84,7 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
         </div>
         {result && (
           <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </Button>
         )}
         {isLoading && <Spinner />}

@@ -179,7 +179,12 @@ function EditableLocations({
           <NoneValue />
         ) : (
           locations.map((loc) => (
-            <Badge key={loc} variant="outline">
+            <Badge
+              key={loc}
+              variant="outline"
+              // Free-form location names — opt out of the mono-uppercase stamp.
+              className="font-sans normal-case tracking-normal"
+            >
               {loc}
             </Badge>
           ))
@@ -194,7 +199,7 @@ function EditableLocations({
           }}
           aria-label="Edit locations"
         >
-          <Pencil className="h-3 w-3 text-muted-foreground" />
+          <Pencil className="size-3 text-muted-foreground" />
         </Button>
       </Row>
     );
@@ -304,7 +309,7 @@ function SubProjectsList({
       )}
       <Row justify="end">
         <Button type="button" variant="outline" size="sm" onClick={onCreate}>
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="size-3.5" />
           New sub-project
         </Button>
       </Row>
@@ -796,7 +801,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           setIsEditingNotes(true);
         }}
       >
-        <Pencil className="h-3.5 w-3.5" />
+        <Pencil className="size-3.5" />
         Edit
       </Button>
     ),
@@ -871,7 +876,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           size="sm"
           onClick={() => setIsCreatingTask(true)}
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="size-3.5" />
           New task
         </Button>
       </Row>
@@ -900,9 +905,9 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           >
             <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
               {isTaskHistoryOpen ? (
-                <ChevronDown className="h-3 w-3" />
+                <ChevronDown className="size-3" />
               ) : (
-                <ChevronRight className="h-3 w-3" />
+                <ChevronRight className="size-3" />
               )}
               History
               {isTaskHistoryOpen &&
@@ -995,7 +1000,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           size="sm"
           onClick={() => setIsCreatingPurchase(true)}
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="size-3.5" />
           New purchase
         </Button>
       </Row>
@@ -1015,9 +1020,9 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           >
             <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
               {isPurchaseHistoryOpen ? (
-                <ChevronDown className="h-3 w-3" />
+                <ChevronDown className="size-3" />
               ) : (
-                <ChevronRight className="h-3 w-3" />
+                <ChevronRight className="size-3" />
               )}
               History
               {isPurchaseHistoryOpen &&

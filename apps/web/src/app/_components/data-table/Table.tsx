@@ -394,9 +394,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                         }
                       >
                         {grouped ? (
-                          <List className="h-4 w-4" />
+                          <List className="size-4" />
                         ) : (
-                          <LayoutList className="h-4 w-4" />
+                          <LayoutList className="size-4" />
                         )}
                       </Button>
                     )}

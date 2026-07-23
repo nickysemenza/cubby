@@ -49,9 +49,9 @@ function ShoppingList({
   return (
     <details className="rounded-lg border border-[var(--border)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
       <summary className="eyebrow cursor-pointer marker:content-none">
-        <ShoppingCart className="mr-2 inline h-3 w-3 align-[-2px]" />
+        <ShoppingCart className="mr-2 inline size-3 align-[-2px]" />
         Shopping list
-        <span className="ml-1 text-muted-foreground/60">· full batch</span>
+        <span className="ml-1 text-muted-foreground">· full batch</span>
         {totalCost != null && (
           <span className="ml-1 text-foreground">
             · {formatCurrency(totalCost)}
@@ -323,7 +323,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           className="rounded-lg border border-[var(--border)] bg-muted/30 px-4 py-2 print:hidden"
         >
           <summary className="eyebrow cursor-pointer marker:content-none">
-            <Grid3x3 className="mr-2 inline h-3 w-3 align-[-2px]" />
+            <Grid3x3 className="mr-2 inline size-3 align-[-2px]" />
             Ingredient × component grid
           </summary>
           <div className="mt-2">

@@ -132,7 +132,11 @@ export const ChipsInput: FC<ChipsInputProps> = ({
             <Badge
               key={tag}
               variant="outline"
-              className={cn("gap-1 pr-1 font-normal", chipClassName?.(tag))}
+              className={cn(
+                // Free-form user-entered chips — opt out of the mono-uppercase stamp.
+                "gap-1 pr-1 font-normal font-sans normal-case tracking-normal",
+                chipClassName?.(tag),
+              )}
               style={chipStyle?.(tag)}
             >
               {renderChip ? renderChip(tag) : <span>{tag}</span>}
@@ -169,7 +173,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
             onClick={() => inputValue.trim() && addTag(inputValue)}
             disabled={!inputValue.trim()}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="size-4" />
           </Button>
         </Row>
 

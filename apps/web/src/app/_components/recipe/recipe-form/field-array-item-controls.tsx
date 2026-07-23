@@ -25,7 +25,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       onClick={() => move(index, Math.max(0, index - 1))}
       disabled={index === 0}
     >
-      <ChevronUp className="h-4 w-4" />
+      <ChevronUp className="size-4" />
     </Button>
     <Button
       type="button"
@@ -34,7 +34,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       onClick={() => move(index, Math.min(fieldsLength - 1, index + 1))}
       disabled={index === fieldsLength - 1}
     >
-      <ChevronDown className="h-4 w-4" />
+      <ChevronDown className="size-4" />
     </Button>
     <Button
       type="button"
@@ -42,7 +42,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       size="icon"
       onClick={() => remove(index)}
     >
-      <Trash className="h-4 w-4" />
+      <Trash className="size-4" />
     </Button>
   </div>
 );

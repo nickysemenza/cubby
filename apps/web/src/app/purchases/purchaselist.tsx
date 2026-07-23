@@ -25,6 +25,7 @@ import {
   tradeOptions,
 } from "~/app/projects/shared";
 import { Grid } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -123,7 +124,7 @@ export function PurchaseList({
               setSettleTarget(row);
             }}
           >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
+            <CheckCircle2 className="mr-2 size-4" />
             Mark purchased
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -132,7 +133,7 @@ export function PurchaseList({
               setMoveTarget(row);
             }}
           >
-            <ArrowRightLeft className="mr-2 h-4 w-4" />
+            <ArrowRightLeft className="mr-2 size-4" />
             Move to project...
           </DropdownMenuItem>
         </>
@@ -146,7 +147,7 @@ export function PurchaseList({
         {
           id: "move",
           label: "Move to project...",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<PurchaseOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
@@ -156,7 +157,7 @@ export function PurchaseList({
         {
           id: "set-trade",
           label: "Set trade...",
-          icon: <Wrench className="h-4 w-4" />,
+          icon: <Wrench className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<PurchaseOut>[]) => {
             setBulkTradeItems(rows.map((r) => r.original));
@@ -166,7 +167,7 @@ export function PurchaseList({
         {
           id: "set-cost-type",
           label: "Set cost type...",
-          icon: <Tag className="h-4 w-4" />,
+          icon: <Tag className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: Row<PurchaseOut>[]) => {
             setBulkCostTypeItems(rows.map((r) => r.original));
@@ -290,7 +291,7 @@ export function PurchaseList({
               onClick={(e) => e.stopPropagation()}
               className="text-muted-foreground transition-colors hover:text-primary"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="size-3.5" />
               <span className="sr-only">Open link</span>
             </a>
           );
@@ -395,6 +396,7 @@ export function PurchaseList({
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    totalCount,
   } = useEntityList({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
@@ -411,6 +413,7 @@ export function PurchaseList({
     infinite: true,
     tableStateOptions,
   });
+  usePageCount(totalCount);
 
   // Planned view defaults to expected-date ascending (undated last, via
   // Postgres's NULLS LAST default — see `database-helpers/query.ts`) instead

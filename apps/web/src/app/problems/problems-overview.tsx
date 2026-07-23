@@ -110,7 +110,7 @@ export function ProblemsOverview() {
           <Card>
             <CardHeader>
               <CardTitle>
-                <CheckCircle className="h-5 w-5 text-secondary-foreground" />
+                <CheckCircle className="size-5 text-secondary-foreground" />
                 All Good!
               </CardTitle>
               <CardDescription>

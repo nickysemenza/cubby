@@ -465,7 +465,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           <Card>
             <CardContent className="space-y-2 px-4 py-4">
               <h3 className="eyebrow my-0 flex items-center gap-2 font-medium">
-                <ImageIcon className="h-3.5 w-3.5" />
+                <ImageIcon className="size-3.5" />
                 Photos
               </h3>
               <PendingImageUpload
@@ -507,7 +507,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       }
                       disabled={sectionIndex === 0}
                     >
-                      <ChevronUp className="h-4 w-4" />
+                      <ChevronUp className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -521,7 +521,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       }
                       disabled={sectionIndex === sectionFields.length - 1}
                     >
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -530,7 +530,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       onClick={() => removeSection(sectionIndex)}
                       disabled={sectionFields.length === 1}
                     >
-                      <Trash className="h-4 w-4" />
+                      <Trash className="size-4" />
                     </Button>
                   </Row>
                 </Row>
@@ -578,7 +578,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   })
                 }
               >
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-2 size-4" />
                 Add Section
               </Button>
             </Row>

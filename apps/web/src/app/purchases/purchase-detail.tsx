@@ -22,6 +22,7 @@ import { entityCellClipboard } from "../_components/data-table/inventory-column-
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
+  costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
   futureFilterOptions,
@@ -116,7 +117,13 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
             });
           }}
           renderValue={(ct) =>
-            ct ? costTypeLabels[ct as CostType] : <NoneValue />
+            ct ? (
+              <Badge variant={costTypeBadgeVariant[ct as CostType]}>
+                {costTypeLabels[ct as CostType]}
+              </Badge>
+            ) : (
+              <NoneValue />
+            )
           }
         />
       ),
@@ -185,7 +192,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
                 className="flex items-center gap-1 hover:underline"
               >
                 {v}
-                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
               </a>
             ) : (
               <NoneValue />
@@ -273,7 +280,13 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     { label: "Date", value: purchase.date ?? "—" },
     {
       label: "Cost Type",
-      value: purchase.costType ? costTypeLabels[purchase.costType] : "—",
+      value: purchase.costType ? (
+        <Badge variant={costTypeBadgeVariant[purchase.costType]}>
+          {costTypeLabels[purchase.costType]}
+        </Badge>
+      ) : (
+        "—"
+      ),
     },
   ];
 

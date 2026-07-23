@@ -31,7 +31,7 @@ export function QuickActionsCard() {
                   <EntityIcon
                     entity={action.entity}
                     colored
-                    className="h-4 w-4 shrink-0"
+                    className="size-4 shrink-0"
                   />
                   <span className="truncate">
                     New {entities[action.entity].label}
@@ -39,7 +39,7 @@ export function QuickActionsCard() {
                 </>
               ) : (
                 <>
-                  <action.icon className="h-4 w-4 shrink-0" />
+                  <action.icon className="size-4 shrink-0" />
                   <span className="truncate">{action.name}</span>
                 </>
               )}
@@ -52,7 +52,7 @@ export function QuickActionsCard() {
             size="sm"
             className="w-full justify-start gap-2 transition-colors"
           >
-            <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+            <AlertCircle className="size-4 shrink-0 text-destructive" />
             <span className="truncate">Problems</span>
           </Button>
         </Link>

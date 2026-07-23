@@ -269,7 +269,7 @@ export function QuickInventoryAdd({
                 onClick={() => handleCreateNew("")}
                 className="mb-1"
               >
-                <Plus className="mr-1 h-3 w-3" />
+                <Plus className="mr-1 size-3" />
                 New
               </Button>
             </Row>
@@ -285,7 +285,7 @@ export function QuickInventoryAdd({
                 disabled={addMutation.isPending}
                 className="mb-1"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
               </Button>
             </Row>
           </div>
@@ -314,7 +314,7 @@ export function QuickInventoryAdd({
             size="default"
             onClick={switchToSelectMode}
           >
-            <X className="mr-1 h-3 w-3" />
+            <X className="mr-1 size-3" />
             Cancel
           </Button>
         </Row>
@@ -340,7 +340,7 @@ export function QuickInventoryAdd({
           >
             <ChevronDown
               className={cn(
-                "h-3 w-3 transition-transform",
+                "size-3 transition-transform",
                 fieldsExpanded && "rotate-180",
               )}
             />
@@ -391,7 +391,7 @@ export function QuickInventoryAdd({
             {isCreating ? (
               <Spinner size="sm" />
             ) : (
-              <Plus className="mr-1 h-3 w-3" />
+              <Plus className="mr-1 size-3" />
             )}
             Create & Add
           </Button>

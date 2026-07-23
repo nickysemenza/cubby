@@ -314,7 +314,7 @@ export default function BulkInventoryForm({
               Inventory for {selectedLocation.name}
             </h3>
             <Button type="button" onClick={addInventoryItem} size="sm">
-              <Plus className="mr-1 h-4 w-4" />
+              <Plus className="mr-1 size-4" />
               Add Item
             </Button>
           </Row>
@@ -357,7 +357,7 @@ export default function BulkInventoryForm({
                     onClick={() => remove(index)}
                     className="shrink-0"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="size-4" />
                   </Button>
                 </Row>
               ))

@@ -42,7 +42,7 @@ export function ShelfTableToggle({
           onClick={() => onChange(view)}
           aria-pressed={value === view}
         >
-          <Icon className="h-3.5 w-3.5" />
+          <Icon className="size-3.5" />
           {label}
         </Button>
       ))}
@@ -83,7 +83,7 @@ export function ShelfCard({
           alt={title}
           displayWidth={400}
           className="absolute inset-0 h-full w-full object-cover"
-          fallback={<EntityIcon entity={entity} colored className="h-6 w-6" />}
+          fallback={<EntityIcon entity={entity} colored className="size-6" />}
         />
         {badgeSlot != null && (
           <div className="absolute top-1 left-1 rounded bg-black/60 p-1 text-white">
@@ -123,7 +123,7 @@ export function ShelfEmpty({
 }) {
   return (
     <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
-      <EntityIcon entity={entity} className="h-4 w-4 opacity-40" />
+      <EntityIcon entity={entity} className="size-4 opacity-40" />
       {label}
     </div>
   );

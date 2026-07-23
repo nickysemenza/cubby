@@ -36,7 +36,7 @@ export function LocationReviewCard({
   return (
     <div className={cn("border border-[var(--border)] p-2", className)}>
       <Row align="start" gap="sm" className="min-w-0">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+        <div className="flex size-12 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
           {location.images[0]?.url ? (
             <Image
               src={location.images[0].url}
@@ -99,7 +99,7 @@ export function ItemReviewCard({
             src={product.images.find((img) => !isDocumentFile(img))?.url}
             alt={product.name}
             displayWidth={96}
-            className="h-12 w-12 shrink-0 border border-[var(--border)] object-cover"
+            className="size-12 shrink-0 border border-[var(--border)] object-cover"
           />
           <div className="min-w-0 flex-1">
             <Row align="baseline" gap="xs" wrap className="min-w-0">

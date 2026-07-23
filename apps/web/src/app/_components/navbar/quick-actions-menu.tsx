@@ -37,7 +37,7 @@ export const QuickActionsMenu = () => {
             />
           }
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="size-4" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Quick actions</p>
@@ -55,14 +55,14 @@ export const QuickActionsMenu = () => {
                 <>
                   <EntityIcon
                     entity={action.entity}
-                    className="h-4 w-4"
+                    className="size-4"
                     colored
                   />
                   <span>New {entities[action.entity].label}</span>
                 </>
               ) : (
                 <>
-                  <action.icon className="h-4 w-4" />
+                  <action.icon className="size-4" />
                   <span>{action.name}</span>
                 </>
               )}

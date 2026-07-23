@@ -339,16 +339,16 @@ export const RecipeCompareGrid: React.FC<{
                       />
                     ) : (
                       <div className="flex h-10 w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <ChefHat className="h-4 w-4" />
+                        <ChefHat className="size-4" />
                       </div>
                     )}
                     <button
                       type="button"
                       onClick={() => onRemove(c.recipe.id)}
-                      className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-background/70 text-muted-foreground hover:text-destructive"
+                      className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-background/70 text-muted-foreground hover:text-destructive"
                       title="Remove from comparison"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="size-3.5" />
                     </button>
                   </div>
                   <Link
@@ -368,7 +368,7 @@ export const RecipeCompareGrid: React.FC<{
             })}
             <th className="min-w-[110px] border-primary/40 border-l-2 px-2 pt-2 pb-2 text-left align-top font-normal">
               <div className="mb-2 flex h-10 w-full items-center justify-center rounded-md bg-primary/10 text-primary">
-                <Equal className="h-4 w-4" />
+                <Equal className="size-4" />
               </div>
               <div className="min-h-[2.5em] font-medium text-primary leading-tight">
                 Average

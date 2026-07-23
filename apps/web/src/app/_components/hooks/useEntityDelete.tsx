@@ -98,7 +98,7 @@ export function useEntityDelete({
 
   const DeleteButton: FC<{ size?: "sm" | "default" }> = ({ size = "sm" }) => (
     <Button variant="destructive" size={size} onClick={openDeleteDialog}>
-      <Trash className="mr-2 h-4 w-4" />
+      <Trash className="mr-2 size-4" />
       Delete
     </Button>
   );

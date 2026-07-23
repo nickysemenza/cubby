@@ -21,7 +21,7 @@ export const NavLink = ({ item }: { item: NavItem }) => {
       data-status={active ? "active" : undefined}
       title={item.label}
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="size-3.5" />
       <span className="hidden lg:inline">{item.label}</span>
     </Link>
   );

@@ -104,7 +104,7 @@ export function EditableEntityCell<TId extends string>({
           aria-label={`Edit ${label}`}
           className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/pencil:opacity-100"
         >
-          <Pencil className="h-3 w-3 text-muted-foreground" />
+          <Pencil className="size-3 text-muted-foreground" />
         </CellEditTrigger>
         {editor}
       </Row>
@@ -187,7 +187,7 @@ function EditableEntityEditor<TId extends string>({
         onClick={() => void handleSave()}
         disabled={isPending}
       >
-        <Check className="h-3.5 w-3.5" />
+        <Check className="size-3.5" />
       </Button>
       <Button
         size="icon"
@@ -195,7 +195,7 @@ function EditableEntityEditor<TId extends string>({
         onClick={onCancel}
         disabled={isPending}
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="size-3.5" />
       </Button>
     </div>
   );

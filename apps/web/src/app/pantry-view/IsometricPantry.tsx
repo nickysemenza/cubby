@@ -20,7 +20,7 @@ function CategoryLegend() {
         {productCategoryValues.map((cat) => (
           <div key={cat} className="flex items-center gap-2">
             <div
-              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+              className="size-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: getCategoryColor(cat) }}
             />
             <span className="text-2xs text-muted-foreground leading-none">
@@ -30,7 +30,7 @@ function CategoryLegend() {
         ))}
         <div className="flex items-center gap-2">
           <div
-            className="h-2.5 w-2.5 shrink-0 rounded-sm"
+            className="size-2.5 shrink-0 rounded-sm"
             style={{ backgroundColor: getCategoryColor(null) }}
           />
           <span className="text-2xs text-muted-foreground leading-none">
@@ -59,7 +59,7 @@ export function IsometricPantry() {
     return (
       <div className="flex h-full items-center justify-center bg-background">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <Loader2 className="size-5 animate-spin" />
           <span>Loading pantry...</span>
         </div>
       </div>
@@ -96,7 +96,7 @@ export function IsometricPantry() {
           size="sm"
           className="text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="mr-1 h-4 w-4" />
+          <ArrowLeft className="mr-1 size-4" />
           Back
         </Button>
       </Link>
@@ -106,7 +106,7 @@ export function IsometricPantry() {
         className="absolute top-4 right-48 text-muted-foreground hover:text-foreground"
         onClick={resetView}
       >
-        <Maximize2 className="mr-1 h-4 w-4" />
+        <Maximize2 className="mr-1 size-4" />
         Reset View
       </Button>
       <CategoryLegend />

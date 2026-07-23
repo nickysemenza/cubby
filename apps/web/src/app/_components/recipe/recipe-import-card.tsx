@@ -187,7 +187,7 @@ function RecipeImportCardImpl({
               className="text-muted-foreground hover:text-foreground"
               title="Open source"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="size-3.5" />
             </a>
           )}
           <CopyImportRecipeParseButton recipe={recipe} />
@@ -312,7 +312,7 @@ function RecipeImportCardImpl({
 
 function ImportStatus({ result }: { result: ImportResult | undefined }) {
   if (!result) return null;
-  if (result.status === "importing") return <Spinner className="h-4 w-4" />;
+  if (result.status === "importing") return <Spinner className="size-4" />;
   if (result.status === "done") {
     return (
       <Link
@@ -320,13 +320,13 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
         params={{ id: result.id }}
         className="flex items-center gap-1 text-positive text-sm"
       >
-        <Check className="h-4 w-4" /> Imported
+        <Check className="size-4" /> Imported
       </Link>
     );
   }
   return (
     <Row as="span" align="center" gap="xs" className="text-destructive text-sm">
-      <AlertCircle className="h-4 w-4" /> {result.message}
+      <AlertCircle className="size-4" /> {result.message}
     </Row>
   );
 }

@@ -89,7 +89,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       zone: "main" as const,
       headerAction: (
         <Button variant="outline" size="sm" onClick={startEnriching}>
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="size-4" />
           Enrich
         </Button>
       ),

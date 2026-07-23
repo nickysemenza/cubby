@@ -1,8 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { Link } from "@tanstack/react-router";
+import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
+import { getGroupRoute } from "~/app/_components/navigation/nav-items";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent } from "~/components/ui/card";
 import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
@@ -11,12 +12,18 @@ import { entities } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { cn } from "~/lib/utils";
 
+/** `Intl.NumberFormat` is expensive to construct — one shared instance for
+ * every list-page eyebrow's record count ("1,240"). */
+const RECORD_COUNT_FORMATTER = new Intl.NumberFormat("en-US");
+
 const heroVariants = cva(
-  "flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
+  "flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
   {
     variants: {
       variant: {
-        list: "mb-4",
+        // List identity is the eyebrow/count/accent bar, not whitespace — the
+        // hero sits tight so the table starts higher (McMaster-Carr density).
+        list: "mb-2",
         compact: "mb-2",
       },
     },
@@ -27,7 +34,9 @@ const heroVariants = cva(
 const titleVariants = cva("break-words font-heading tracking-tight", {
   variants: {
     variant: {
-      list: "font-semibold text-3xl",
+      // Both steps use the compact text-2xl heading; the list variant keeps its
+      // identity from the accent bar under the title, not a larger type size.
+      list: "font-bold text-2xl",
       compact: "font-bold text-2xl",
     },
   },
@@ -58,20 +67,76 @@ const ENTITY_NAV_GROUP: Partial<Record<Entity, string>> = {
   ingredient: "Dev",
   "usda-food": "Dev",
   image: "Dev",
+  project: "House",
+  task: "House",
+  purchase: "House",
 };
+
+/** One eyebrow path segment. `to` is set only for the leading nav-group
+ * segment, and only when {@link getGroupRoute} resolves an actual landing
+ * route for it — most groups are dropdown-only and stay plain text. */
+interface EyebrowSegment {
+  label: string;
+  to?: LinkProps["to"];
+}
 
 /**
  * Derive an eyebrow path from the entity when none is given explicitly.
  * Detail pages get the full path ("Cook / Recipes"); list pages drop the
  * segment that would just repeat the title (so the Recipes list shows "Cook",
- * and a non-grouped entity's list shows nothing).
+ * and a non-grouped entity's list shows nothing). The leading group segment
+ * carries a route when the group has a landing page of its own.
  */
-function deriveEyebrow(entity: Entity, title: ReactNode): string | null {
+function deriveEyebrowSegments(
+  entity: Entity,
+  title: ReactNode,
+): EyebrowSegment[] {
   const def = entities[entity];
   const group = ENTITY_NAV_GROUP[entity];
-  const segments = group ? [group, def.pluralLabel] : [def.pluralLabel];
-  const filtered = segments.filter((s) => s !== title);
-  return filtered.length > 0 ? filtered.join(" / ") : null;
+  const raw = group ? [group, def.pluralLabel] : [def.pluralLabel];
+  return raw
+    .filter((label) => label !== title)
+    .map((label) => ({
+      label,
+      to: label === group ? getGroupRoute(group) : undefined,
+    }));
+}
+
+/** Hairline `/` separator shared by the list eyebrow and detail breadcrumb. */
+function EyebrowSeparator() {
+  return (
+    <span aria-hidden className="text-border">
+      /
+    </span>
+  );
+}
+
+/**
+ * Render a derived eyebrow path's segments, hairline-separated. A segment
+ * with a resolved `to` renders as a real `<Link>` (same hover treatment as
+ * {@link DetailBreadcrumb}'s linked segment); the rest are plain text — they
+ * name the current page, not a navigable ancestor.
+ */
+function EyebrowPath({ segments }: { segments: EyebrowSegment[] }) {
+  return (
+    <>
+      {segments.map((segment, i) => (
+        <span key={segment.label} className="inline-flex items-center gap-x-2">
+          {i > 0 && <EyebrowSeparator />}
+          {segment.to ? (
+            <Link
+              to={segment.to}
+              className="transition-colors hover:text-foreground"
+            >
+              {segment.label}
+            </Link>
+          ) : (
+            segment.label
+          )}
+        </span>
+      ))}
+    </>
+  );
 }
 
 /** Pull a created-at date out of the raw entity for the hero's ledger meta. */
@@ -107,12 +172,6 @@ function DetailBreadcrumb({
   const def = entities[entity];
   const group = ENTITY_NAV_GROUP[entity];
 
-  const separator = (
-    <span aria-hidden className="text-border">
-      /
-    </span>
-  );
-
   return (
     <nav
       aria-label="Breadcrumb"
@@ -124,7 +183,7 @@ function DetailBreadcrumb({
       {group && (
         <>
           <span className="text-muted-foreground">{group}</span>
-          {separator}
+          <EyebrowSeparator />
         </>
       )}
       <Link
@@ -140,7 +199,7 @@ function DetailBreadcrumb({
       </Link>
       {heroNo && (
         <>
-          {separator}
+          <EyebrowSeparator />
           <span className="text-foreground">No. {heroNo}</span>
         </>
       )}
@@ -161,6 +220,13 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
   /** Decoration under title. "accent" applies the ultramarine page-header-accent rule. */
   decoration?: "accent" | "none";
   className?: string;
+  /**
+   * True filtered record count, reported by a list via `usePageCount`.
+   * Rendered at the tail of the eyebrow line as e.g. "1,240 PURCHASES" (the
+   * string `title` uppercased by the eyebrow's own CSS). `undefined` renders
+   * nothing — avoids a flash of "0" before the client-side report lands.
+   */
+  count?: number;
 }
 
 /**
@@ -177,10 +243,22 @@ export function PageHero({
   variant = "list",
   decoration = "accent",
   className,
+  count,
 }: PageHeroProps) {
   const showAccent = decoration === "accent" && variant !== "compact";
-  const effectiveEyebrow =
-    eyebrow ?? (entity ? deriveEyebrow(entity, title) : null);
+  // A caller-supplied `eyebrow` overrides the derived path outright (no
+  // group-linking — it's not necessarily entity-shaped). Otherwise derive
+  // segments from the entity so the leading group can link out.
+  const segments =
+    eyebrow === undefined && entity ? deriveEyebrowSegments(entity, title) : [];
+  const hasPath = eyebrow !== undefined || segments.length > 0;
+  const hasCount = count !== undefined;
+  // Only a plain-string title reads sensibly appended after the number
+  // ("1,240 Purchases"); non-string titles (rare utility pages) just show
+  // the bare count.
+  const countLabel =
+    hasCount &&
+    `${RECORD_COUNT_FORMATTER.format(count)}${typeof title === "string" ? ` ${title}` : ""}`;
   // Entity-inked accent rule (falls back to ultramarine via the CSS defaults).
   const accent = entity ? ENTITY_ACCENTS[entity] : null;
   const accentStyle = accent
@@ -193,9 +271,19 @@ export function PageHero({
       style={accentStyle}
     >
       <div className="min-w-0 flex-1">
-        {effectiveEyebrow && (
-          <Eyebrow className="mb-1 font-medium tracking-[0.18em]">
-            {effectiveEyebrow}
+        {(hasPath || hasCount) && (
+          <Eyebrow className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-medium tracking-[0.18em]">
+            {eyebrow ?? <EyebrowPath segments={segments} />}
+            {countLabel && (
+              <span className="inline-flex items-center gap-x-2">
+                {hasPath && (
+                  <span aria-hidden className="text-border">
+                    ·
+                  </span>
+                )}
+                {countLabel}
+              </span>
+            )}
           </Eyebrow>
         )}
         <div
@@ -214,7 +302,7 @@ export function PageHero({
                 key={i}
                 className="inline-flex items-center gap-1.5" /* tight */
               >
-                {item.icon && <item.icon className="h-3 w-3 shrink-0" />}
+                {item.icon && <item.icon className="size-3 shrink-0" />}
                 <span>{item.label}</span>
               </span>
             ))}
@@ -350,6 +438,8 @@ interface PageHeaderProps {
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   heroStats?: DetailHeroStat[];
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  /** List-only: true filtered record count (see {@link PageHeroProps.count}). */
+  count?: number;
 }
 
 /**
@@ -372,6 +462,7 @@ export function PageHeader({
   heroStamp,
   heroStats,
   heroImages,
+  count,
 }: PageHeaderProps) {
   if (variant === "detail") {
     if (!entity) {
@@ -400,6 +491,7 @@ export function PageHeader({
       actions={actions}
       decoration={decoration}
       className={className}
+      count={count}
     />
   );
 }

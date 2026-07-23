@@ -27,11 +27,11 @@ export const QueryTimingIndicator: FC<QueryTimingIndicatorProps> = ({
   return (
     <span
       className={cn(
-        "flex items-center gap-1 text-muted-foreground/70 text-xs",
+        "flex items-center gap-1 text-muted-foreground text-xs",
         className,
       )}
     >
-      <Clock className="h-3 w-3" aria-hidden="true" />
+      <Clock className="size-3" aria-hidden="true" />
       {displayText}
     </span>
   );

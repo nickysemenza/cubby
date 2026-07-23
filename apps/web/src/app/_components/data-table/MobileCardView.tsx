@@ -172,7 +172,7 @@ export function MobileCardView<TItem>({
           title={`Debug Data - Row ${row.id}`}
           trigger={
             <Button variant="ghost" size="icon-sm">
-              <Bug className="h-3 w-3" />
+              <Bug className="size-3" />
               <span className="sr-only">Debug row data</span>
             </Button>
           }
@@ -191,8 +191,8 @@ export function MobileCardView<TItem>({
           // Recipes have no per-item image; a generic chef-hat on every row
           // is noise. Let the grid collapse and reclaim the 44px gutter.
           (entity && entity !== "recipe" && (
-            <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
-              <EntityIcon entity={entity} colored className="h-5 w-5" />
+            <div className="flex size-11 items-center justify-center rounded bg-muted/50">
+              <EntityIcon entity={entity} colored className="size-5" />
             </div>
           ))
         }

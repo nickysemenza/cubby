@@ -37,7 +37,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
     >
       <CardHeader className="pb-4">
         <Row align="center" gap="sm">
-          <ImageIcon className="h-3.5 w-3.5 text-slate" />
+          <ImageIcon className="size-3.5 text-slate" />
           <CardTitle>Images</CardTitle>
         </Row>
       </CardHeader>
@@ -73,7 +73,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
                   type="button"
                   onClick={() => setActiveIndex(index)}
                   className={cn(
-                    "relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md transition-all",
+                    "relative size-12 flex-shrink-0 overflow-hidden rounded-md transition-all",
                     index === activeIndex
                       ? "ring-2 ring-primary ring-offset-2"
                       : "opacity-60 hover:opacity-100",

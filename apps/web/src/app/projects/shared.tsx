@@ -79,6 +79,7 @@ import { MoveToProjectDialog } from "~/app/_components/tracker/move-to-project-d
 import { SetFieldDialog } from "~/app/_components/tracker/set-field-dialog";
 import { SetTaskStatusDialog } from "~/app/_components/tracker/set-task-status-dialog";
 import {
+  costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
 } from "~/app/purchases/purchase-options";
@@ -229,7 +230,7 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const textClass =
     className.split(" ").find((c) => c.startsWith("text-")) ??
     "text-muted-foreground";
-  return Icon ? <Icon className={cn("h-4 w-4 shrink-0", textClass)} /> : null;
+  return Icon ? <Icon className={cn("size-4 shrink-0", textClass)} /> : null;
 }
 
 // -- Task Table --
@@ -353,7 +354,7 @@ export function TaskList({
         {
           id: "move",
           label: "Move to project...",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: TableRow<TaskOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
@@ -363,7 +364,7 @@ export function TaskList({
         {
           id: "set-status",
           label: "Set status...",
-          icon: <ListChecks className="h-4 w-4" />,
+          icon: <ListChecks className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: TableRow<TaskOut>[]) => {
             setBulkStatusItems(rows.map((r) => r.original));
@@ -373,7 +374,7 @@ export function TaskList({
         {
           id: "set-trade",
           label: "Set trade...",
-          icon: <Wrench className="h-4 w-4" />,
+          icon: <Wrench className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: TableRow<TaskOut>[]) => {
             setBulkTradeItems(rows.map((r) => r.original));
@@ -619,7 +620,13 @@ export function purchaseCostTypeColumn(
     placeholder: "Filter by cost type...",
     selectOptions: costTypeOptions,
     renderCell: (costType: CostType | null) =>
-      costType ? costTypeLabels[costType] : <NoneValue />,
+      costType ? (
+        <Badge variant={costTypeBadgeVariant[costType]}>
+          {costTypeLabels[costType]}
+        </Badge>
+      ) : (
+        <NoneValue />
+      ),
     mobile: opts?.mobile,
     editable: {
       onSave: async (newCostType, purchase) => {
@@ -800,7 +807,7 @@ export function PurchaseList({
         {
           id: "move",
           label: "Move to project...",
-          icon: <ArrowRightLeft className="h-4 w-4" />,
+          icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: TableRow<PurchaseOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
@@ -810,7 +817,7 @@ export function PurchaseList({
         {
           id: "set-trade",
           label: "Set trade...",
-          icon: <Wrench className="h-4 w-4" />,
+          icon: <Wrench className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: TableRow<PurchaseOut>[]) => {
             setBulkTradeItems(rows.map((r) => r.original));
@@ -820,7 +827,7 @@ export function PurchaseList({
         {
           id: "set-cost-type",
           label: "Set cost type...",
-          icon: <Tag className="h-4 w-4" />,
+          icon: <Tag className="size-4" />,
           minSelection: 1,
           onExecute: async (rows: TableRow<PurchaseOut>[]) => {
             setBulkCostTypeItems(rows.map((r) => r.original));
@@ -851,7 +858,7 @@ export function PurchaseList({
               className="flex items-center gap-1 hover:underline"
             >
               {row.original.name}
-              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
             </a>
           );
         },

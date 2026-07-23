@@ -85,13 +85,13 @@ export function UsdaFoodResultRow({
         {legacyFoodInfo && <MetaChip>NDB {legacyFoodInfo.ndb_number}</MetaChip>}
         {linkedCount > 0 && (
           <MetaChip>
-            <Link2 className="h-3 w-3" />
+            <Link2 className="size-3" />
             {linkedCount} linked
           </MetaChip>
         )}
         {duplicateCount > 0 && (
           <MetaChip>
-            <Copy className="h-3 w-3" />+{duplicateCount} record
+            <Copy className="size-3" />+{duplicateCount} record
             {duplicateCount === 1 ? "" : "s"}
           </MetaChip>
         )}

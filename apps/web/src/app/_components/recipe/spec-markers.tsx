@@ -57,7 +57,7 @@ export const NoWeightPill = ({ className }: { className?: string }) => (
 export const SeeAbovePointer = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 align-middle font-mono text-2xs text-muted-foreground/60 lowercase",
+      "ml-2 align-middle font-mono text-2xs text-muted-foreground lowercase",
       className,
     )}
   >

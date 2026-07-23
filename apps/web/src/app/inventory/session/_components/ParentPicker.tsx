@@ -116,7 +116,7 @@ export function ParentPicker({
           </Stack>
           {showAreas && (
             <div className="relative pt-2">
-              <Search className="absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -165,7 +165,7 @@ export function ParentPicker({
                           toggleExpanded(location.id);
                         }}
                         className={cn(
-                          "flex h-5 w-5 items-center justify-center transition-transform",
+                          "flex size-5 items-center justify-center transition-transform",
                           !hasCandidateChildren && "invisible",
                           expanded && "rotate-90",
                         )}
@@ -176,7 +176,7 @@ export function ParentPicker({
                         }
                         disabled={!hasCandidateChildren || searching}
                       >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="size-4" />
                       </button>
                     }
                     trailing={

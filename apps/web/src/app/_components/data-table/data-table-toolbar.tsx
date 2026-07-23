@@ -58,7 +58,7 @@ export function DataTableToolbar<TData>({
             }}
             className="text-muted-foreground hover:text-foreground"
           >
-            <X className="h-3 w-3" />
+            <X className="size-3" />
             Reset
           </Button>
         )}

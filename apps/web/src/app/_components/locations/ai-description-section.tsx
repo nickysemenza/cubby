@@ -40,7 +40,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
         {describeMutation.isPending ? (
           <Spinner className="mr-2" />
         ) : (
-          <Sparkles className="mr-2 h-4 w-4" />
+          <Sparkles className="mr-2 size-4" />
         )}
         {currentDescription ? "Re-analyze" : "Analyze Contents"}
       </Button>
@@ -54,7 +54,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
       {currentDescription && (
         <div className="rounded-md bg-muted/50 p-4 text-sm">
           <Row align="center" gap="sm" className="mb-1 text-muted-foreground">
-            <Eye className="h-3 w-3" />
+            <Eye className="size-3" />
             <span className="font-medium">AI Description</span>
           </Row>
           <p>{currentDescription}</p>

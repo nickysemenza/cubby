@@ -367,7 +367,7 @@ export function PendingImageUpload({
             onClick={() => cameraInputRef.current?.click()}
             disabled={uploading}
           >
-            <Camera className="mr-2 h-4 w-4" />
+            <Camera className="mr-2 size-4" />
             Camera
           </Button>
         </div>
@@ -391,7 +391,7 @@ export function PendingImageUpload({
             onClick={handleImportFromUrl}
             disabled={importing || uploading || !imageUrl.trim()}
           >
-            <Link className="mr-2 h-4 w-4" />
+            <Link className="mr-2 size-4" />
             Import
           </Button>
         </div>
@@ -433,10 +433,10 @@ export function PendingImageUpload({
                   type="button"
                   variant="destructive"
                   size="icon"
-                  className="absolute top-1 right-1 h-6 w-6 rounded-full p-1"
+                  className="absolute top-1 right-1 size-6 rounded-full p-1"
                   onClick={() => removeImage(image.id)}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </Button>
               </div>
             ))}
@@ -463,10 +463,10 @@ export function PendingImageUpload({
                   type="button"
                   variant="destructive"
                   size="icon"
-                  className="absolute top-1 right-1 h-6 w-6 rounded-full p-1"
+                  className="absolute top-1 right-1 size-6 rounded-full p-1"
                   onClick={() => removeExistingImage(image.id)}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </Button>
                 {onExistingImagesReorder && index === 0 && (
                   <span className="absolute bottom-1 left-1 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
@@ -479,32 +479,32 @@ export function PendingImageUpload({
                       type="button"
                       variant="secondary"
                       size="icon"
-                      className="h-6 w-6 rounded-full p-1"
+                      className="size-6 rounded-full p-1"
                       title="Make cover"
                       onClick={() => moveExistingImage(image.id, "front")}
                     >
-                      <Star className="h-4 w-4" />
+                      <Star className="size-4" />
                     </Button>
                     <Button
                       type="button"
                       variant="secondary"
                       size="icon"
-                      className="h-6 w-6 rounded-full p-1"
+                      className="size-6 rounded-full p-1"
                       title="Move earlier"
                       onClick={() => moveExistingImage(image.id, "left")}
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <ChevronLeft className="size-4" />
                     </Button>
                     {index < currentExistingImages.length - 1 && (
                       <Button
                         type="button"
                         variant="secondary"
                         size="icon"
-                        className="h-6 w-6 rounded-full p-1"
+                        className="size-6 rounded-full p-1"
                         title="Move later"
                         onClick={() => moveExistingImage(image.id, "right")}
                       >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="size-4" />
                       </Button>
                     )}
                   </div>

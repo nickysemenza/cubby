@@ -68,7 +68,7 @@ export function AppFooter() {
             className="text-muted-foreground transition-colors hover:text-foreground"
             aria-label="GitHub repository"
           >
-            <GitGraph className="h-3.5 w-3.5" />
+            <GitGraph className="size-3.5" />
           </a>
         </Row>
       </Row>

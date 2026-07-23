@@ -26,7 +26,7 @@ export const UserAvatarDropdown = () => {
   if (!hydrated || !user) {
     return (
       <div
-        className="h-7 w-7 animate-pulse rounded-full bg-muted/60"
+        className="size-7 animate-pulse rounded-full bg-muted/60"
         aria-hidden
       />
     );
@@ -69,11 +69,11 @@ export const UserAvatarDropdown = () => {
               />
             }
           >
-            <User className="h-4 w-4" />
+            <User className="size-4" />
             <span>Account</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/settings" />}>
-            <Settings className="h-4 w-4" />
+            <Settings className="size-4" />
             <span>Settings</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -82,7 +82,7 @@ export const UserAvatarDropdown = () => {
           onClick={() => authClient.signOut()}
           variant="destructive"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="size-4" />
           <span>Sign out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

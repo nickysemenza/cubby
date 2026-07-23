@@ -597,7 +597,7 @@ function MobileGalleryDrillDown({
       {path.length > 0 && (
         <Row align="center" gap="xs" className="text-sm">
           <Button variant="ghost" onClick={handleBack}>
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="size-4" />
             Back
           </Button>
           <Row align="center" gap="xs" className="text-muted-foreground">
@@ -652,7 +652,7 @@ function MobileGalleryDrillDown({
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
-          <LocationIcon type="room" className="mb-2 h-8 w-8 opacity-40" />
+          <LocationIcon type="room" className="mb-2 size-8 opacity-40" />
           <span>No locations here</span>
         </div>
       )}

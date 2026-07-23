@@ -96,7 +96,7 @@ export function IconPattern({ className }: IconPatternProps) {
             <Icon
               // biome-ignore lint/suspicious/noArrayIndexKey: static decorative pattern, order never changes
               key={i}
-              className="h-5 w-5 text-foreground"
+              className="size-5 text-foreground"
               style={{
                 transform: `rotate(${rotation}deg) scale(${scale})`,
               }}

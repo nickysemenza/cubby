@@ -118,7 +118,7 @@ function RecipeComparePage() {
             </p>
             <Link to="/recipes" className="mt-4 inline-block">
               <Button>
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="mr-2 size-4" />
                 Back to Recipes
               </Button>
             </Link>
@@ -136,7 +136,7 @@ function RecipeComparePage() {
       actions={
         <Link to="/recipes">
           <Button variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ArrowLeft className="mr-2 size-4" />
             Back to Recipes
           </Button>
         </Link>
@@ -155,7 +155,7 @@ function RecipeComparePage() {
           <div className="text-center">
             <Link to="/recipes">
               <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-2 size-4" />
                 Add Another Recipe
               </Button>
             </Link>

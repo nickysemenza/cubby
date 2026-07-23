@@ -70,11 +70,11 @@ const categorizeError = (
 const getIcon = (category: ErrorCategory) => {
   switch (category) {
     case "network":
-      return <WifiOff className="h-12 w-12 text-muted-foreground" />;
+      return <WifiOff className="size-12 text-muted-foreground" />;
     case "notFound":
-      return <AlertCircle className="h-12 w-12 text-muted-foreground" />;
+      return <AlertCircle className="size-12 text-muted-foreground" />;
     default:
-      return <AlertCircle className="h-12 w-12 text-destructive" />;
+      return <AlertCircle className="size-12 text-destructive" />;
   }
 };
 
@@ -122,7 +122,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           }
           nativeButton={false}
         >
-          <LogIn className="mr-2 h-4 w-4" />
+          <LogIn className="mr-2 size-4" />
           Sign in
         </Button>
       )}
@@ -137,7 +137,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
               router.invalidate();
             }}
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className="mr-2 size-4" />
             Try Again
           </Button>
           <Button variant="ghost" render={<Link to="/" />} nativeButton={false}>
@@ -159,7 +159,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         >
           Technical Details
           <ChevronDown
-            className={`ml-1 h-3 w-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
+            className={`ml-1 size-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
           />
         </CollapsibleTrigger>
         <CollapsibleContent>

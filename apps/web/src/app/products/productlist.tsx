@@ -12,6 +12,7 @@ import {
   useProductFoodSummaries,
 } from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -351,18 +352,18 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     (row: ProductListItem) => (
       <>
         <DropdownMenuItem onClick={() => setQuickEditProductId(row.id)}>
-          <Pencil className="mr-2 h-4 w-4" />
+          <Pencil className="mr-2 size-4" />
           Edit locations
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/inventory/session" />}>
-          <Package className="mr-2 h-4 w-4" />
+          <Package className="mr-2 size-4" />
           Add to Inventory
         </DropdownMenuItem>
         {row.shortcode && (
           <DropdownMenuItem
             render={<Link to="/labels" search={{ codes: row.shortcode }} />}
           >
-            <Printer className="mr-2 h-4 w-4" />
+            <Printer className="mr-2 size-4" />
             Print Label
           </DropdownMenuItem>
         )}
@@ -410,6 +411,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     refreshControls,
     grouped,
     onGroupedChange,
+    totalCount,
   } = useEntityList({
     entity: "product",
     queryOptions,
@@ -431,6 +433,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     },
     groupConfig,
   });
+  usePageCount(totalCount);
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);

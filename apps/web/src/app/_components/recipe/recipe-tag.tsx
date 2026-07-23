@@ -37,7 +37,8 @@ export const RecipeTag: FC<RecipeTagProps> = ({
     <Badge
       variant="outline"
       className={cn(
-        "gap-1 font-normal",
+        // User-entered tag text — opt out of the badge's mono-uppercase stamp.
+        "gap-1 font-normal font-sans normal-case tracking-normal",
         size === "sm" && "px-2 py-0 text-xs",
         onRemove && "pr-1",
         className,

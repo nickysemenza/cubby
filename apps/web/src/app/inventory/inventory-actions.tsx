@@ -26,7 +26,7 @@ export function InventoryActions() {
     <>
       <Link to={recount.path}>
         <Button variant="default" size="default" className="gap-1 text-xs">
-          <recount.icon className="h-3.5 w-3.5" />
+          <recount.icon className="size-3.5" />
           {recount.name}
         </Button>
       </Link>
@@ -38,7 +38,7 @@ export function InventoryActions() {
               size="icon"
               aria-label="More inventory actions"
             >
-              <EllipsisVertical className="h-3.5 w-3.5" />
+              <EllipsisVertical className="size-3.5" />
             </Button>
           }
         />
@@ -47,7 +47,7 @@ export function InventoryActions() {
             {bulkEdit.name}
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to={singleItem.path} />}>
-            <Plus className="h-4 w-4" />
+            <Plus className="size-4" />
             {singleItem.name}
           </DropdownMenuItem>
         </DropdownMenuContent>

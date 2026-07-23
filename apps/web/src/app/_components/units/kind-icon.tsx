@@ -32,7 +32,7 @@ export function KindIcon({
       >
         <span className="sr-only">{`${label}: ${state}`}</span>
         <Icon
-          className={`h-3.5 w-3.5 ${lit ? "text-foreground" : "text-muted-foreground/40"}`}
+          className={`size-3.5 ${lit ? "text-foreground" : "text-muted-foreground/40"}`}
           aria-hidden
         />
       </TooltipTrigger>

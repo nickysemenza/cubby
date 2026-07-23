@@ -8,19 +8,19 @@ export function LocationActions() {
     <Row align="center" gap="sm">
       <Link to="/locations/arrange">
         <Button variant="outline" className="gap-1">
-          <LayoutDashboard className="h-4 w-4" />
+          <LayoutDashboard className="size-4" />
           Arrange
         </Button>
       </Link>
       <Link to="/labels">
         <Button variant="outline" className="gap-1">
-          <Tags className="h-4 w-4" />
+          <Tags className="size-4" />
           Print labels
         </Button>
       </Link>
       <Link to="/locations/new">
         <Button className="gap-1">
-          <Plus className="h-4 w-4" />
+          <Plus className="size-4" />
           New
         </Button>
       </Link>

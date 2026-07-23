@@ -78,7 +78,7 @@ export function EntityPreviewPanel({
             size="sm"
             render={<Link to={entityDef.routes.detail} params={{ id }} />}
           >
-            <ExternalLink className="mr-1 h-3 w-3" />
+            <ExternalLink className="mr-1 size-3" />
             View Full Details
           </Button>
         </Row>

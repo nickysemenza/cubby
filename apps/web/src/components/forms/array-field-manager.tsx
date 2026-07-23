@@ -86,7 +86,7 @@ export const ArrayFieldManager = <
           onClick={handleAdd}
           disabled={!canAdd}
         >
-          <Plus className="mr-2 h-3.5 w-3.5" />
+          <Plus className="mr-2 size-3.5" />
           {addButtonText}
         </Button>
       </div>
@@ -114,7 +114,7 @@ export const ArrayFieldManager = <
                 aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
                 onClick={() => handleRemove(index)}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="size-3.5" />
               </Button>
             )}
           </div>

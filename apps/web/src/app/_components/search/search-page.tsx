@@ -126,7 +126,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     <Stack gap="md" className="container mx-auto p-1">
       {/* Search input */}
       <div className="relative">
-        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="text"
           aria-label="Search Cubby"
@@ -163,7 +163,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           }}
           className="w-full rounded-lg border border-[var(--border)] bg-card px-4 py-4 text-left transition-colors hover:bg-muted/50"
         >
-          <Equal className="h-4 w-4 shrink-0 text-primary" />
+          <Equal className="size-4 shrink-0 text-primary" />
           <span className="truncate font-mono font-semibold text-sm tabular-nums">
             {conversion.input} {conversion.ingredientName} = {conversion.result}
           </span>
@@ -220,12 +220,12 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                   >
                     <span
                       className={cn(
-                        "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                        "flex size-6 shrink-0 items-center justify-center rounded",
                         entities[entity]?.color.bg ?? "bg-muted/50",
                         entities[entity]?.color.text,
                       )}
                     >
-                      <EntityIcon entity={entity} className="h-3.5 w-3.5" />
+                      <EntityIcon entity={entity} className="size-3.5" />
                     </span>
                     <span className="truncate">{jump.name}</span>
                   </Row>
@@ -255,7 +255,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                   onClick={() => handleSearchChange(term)}
                   className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
                 >
-                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Search className="size-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">{term}</span>
                 </Row>
               ))}
@@ -264,7 +264,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
         </Stack>
       ) : (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
-          <Search className="h-8 w-8 opacity-40" />
+          <Search className="size-8 opacity-40" />
           <span className="text-sm">Start typing to search across Cubby</span>
         </div>
       )}
@@ -338,7 +338,7 @@ function MobileSearchResults({
                 <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                   {group.label}
                 </span>
-                <span className="text-muted-foreground/60 text-xs">
+                <span className="text-muted-foreground text-xs">
                   ({group.items.length})
                 </span>
               </Row>

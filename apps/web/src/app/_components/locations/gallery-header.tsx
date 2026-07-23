@@ -99,7 +99,7 @@ export function GalleryHeader({
       >
         {/* Search Input */}
         <div className="relative min-w-[180px] flex-1 md:max-w-xs">
-          <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search..."
             value={searchTerm}
@@ -112,7 +112,7 @@ export function GalleryHeader({
               onClick={() => onSearchChange("")}
               className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground" /* tight: icon-button hit area */
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
             </button>
           )}
         </div>
@@ -187,7 +187,7 @@ export function GalleryHeader({
               onCheckedChange={(checked) =>
                 onHideNonMatchingChange(checked === true)
               }
-              className="h-4 w-4"
+              className="size-4"
             />
             <Label
               htmlFor={hideNonMatchingId}
@@ -224,7 +224,7 @@ export function GalleryHeader({
           render={<Link to="/locations/new" />}
           nativeButton={false}
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="size-3.5" />
           New Location
         </Button>
       </Row>

@@ -6,6 +6,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { RotateCcw, Scale } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -377,6 +378,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    totalCount,
   } = useEntityList({
     entity: "recipe",
     queryOptions: api.recipe.list.queryOptions,
@@ -406,7 +408,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         {
           id: "compare",
           label: "Compare",
-          icon: <Scale className="h-4 w-4" />,
+          icon: <Scale className="size-4" />,
           minSelection: 2,
           onExecute: (rows) => {
             const ids = rows.map((r) => r.original.id).join(",");
@@ -421,6 +423,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     nameEditable,
     infinite: true,
   });
+  usePageCount(totalCount);
 
   return (
     <div>

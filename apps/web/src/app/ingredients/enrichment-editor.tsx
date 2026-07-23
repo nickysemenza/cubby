@@ -152,7 +152,7 @@ function ConversionRowsField({
               className="text-muted-foreground hover:text-destructive"
               aria-label="Remove conversion"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
             </button>
           )}
         </Row>
@@ -165,7 +165,7 @@ function ConversionRowsField({
         onClick={onAdd}
         className="text-muted-foreground text-xs hover:text-foreground"
       >
-        <Plus className="h-3 w-3" /> Add another
+        <Plus className="size-3" /> Add another
       </Row>
     </Stack>
   );
@@ -199,7 +199,7 @@ function NaKindsField({
               off ? "text-foreground" : "text-muted-foreground",
             )}
           >
-            <Checkbox checked={off} className="pointer-events-none h-3 w-3" />
+            <Checkbox checked={off} className="pointer-events-none size-3" />
             {kind === "money" ? "price" : kind}
           </button>
         );
@@ -236,7 +236,7 @@ function LivePanels({
         >
           {linkedFoods.length > 0 && (
             <Row as="p" align="center" gap="xs">
-              <Check className="h-3 w-3 text-positive" />
+              <Check className="size-3 text-positive" />
               <span className="text-muted-foreground">Linked USDA:</span>{" "}
               {linkedFoods.map((f) => f.foodInfo.description).join(", ")}
             </Row>

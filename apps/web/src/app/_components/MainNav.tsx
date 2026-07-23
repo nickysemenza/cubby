@@ -32,7 +32,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
     <div className="flex w-full items-center justify-between">
       <Link to="/">
         <Row align="center" gap="sm">
-          <img src={LOGO_SRC} alt="" className="h-6 w-6 sm:h-7 sm:w-7" />
+          <img src={LOGO_SRC} alt="" className="size-6 sm:h-7 sm:w-7" />
           <span className="self-center whitespace-nowrap font-bold font-heading text-foreground text-lg tracking-tight sm:text-xl">
             cubby
           </span>
@@ -66,7 +66,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             className="hidden h-8 px-2 md:flex"
             title="Search"
           >
-            <Search className="h-4 w-4" />
+            <Search className="size-3.5" />
             <span className="sr-only">Search</span>
           </Button>
         )}
@@ -89,9 +89,9 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           title={isDebugEnabled ? "Disable debug mode" : "Enable debug mode"}
         >
           {isDebugEnabled ? (
-            <BugOff className="h-4 w-4" />
+            <BugOff className="size-3.5" />
           ) : (
-            <Bug className="h-4 w-4" />
+            <Bug className="size-3.5" />
           )}
           <span className="sr-only">Toggle debug mode</span>
         </Button>

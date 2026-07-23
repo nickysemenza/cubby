@@ -626,7 +626,7 @@ function SessionComplete({
     <Card className="mx-auto w-full max-w-2xl">
       <CardHeader>
         <Row align="center" gap="sm">
-          <CheckCircle2 className="h-6 w-6 text-positive" />
+          <CheckCircle2 className="size-6 text-positive" />
           <div>
             <h2>
               <CardTitle>{parent.name} recount complete</CardTitle>

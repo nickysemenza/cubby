@@ -4,5 +4,5 @@
  * the two surfaces stay visually consistent.
  */
 export const EstimateMarker = () => (
-  <span className="ml-1 text-2xs text-muted-foreground/70">est.</span>
+  <span className="ml-1 text-2xs text-muted-foreground">est.</span>
 );

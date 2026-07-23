@@ -46,7 +46,7 @@ export function CategoryAudit() {
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 h-4 w-4" />
+                <Sparkles className="mr-2 size-4" />
                 Run Audit
               </>
             )}
@@ -60,14 +60,14 @@ export function CategoryAudit() {
             <Description>{result.summary}</Description>
 
             {result.suggestions.length > 0 && (
-              <Stack>
+              <div className="divide-y divide-border/60">
                 {result.suggestions.map((suggestion) => (
-                  <SuggestionCard
+                  <SuggestionRow
                     key={suggestion.categoryName}
                     suggestion={suggestion}
                   />
                 ))}
-              </Stack>
+              </div>
             )}
           </Stack>
         </CardContent>
@@ -76,22 +76,25 @@ export function CategoryAudit() {
   );
 }
 
-function SuggestionCard({
+function SuggestionRow({
   suggestion,
 }: {
   suggestion: CategoryAuditResult["suggestions"][number];
 }) {
   return (
-    <Stack gap="sm" className="rounded-lg border border-[var(--border)] p-4">
-      <Row align="center" gap="sm">
-        <Badge variant="secondary">{suggestion.categoryName}</Badge>
-      </Row>
+    <Stack gap="sm" className="py-4">
+      <Badge variant="secondary">{suggestion.categoryName}</Badge>
       <p className="text-sm">{suggestion.description}</p>
       <Description size="xs">{suggestion.reasoning}</Description>
       {suggestion.productNames.length > 0 && (
         <Row wrap gap="sm" className="pt-1">
           {suggestion.productNames.map((name) => (
-            <Badge key={name} variant="outline" className="text-xs">
+            <Badge
+              key={name}
+              variant="outline"
+              // Free-form product names — opt out of the mono-uppercase stamp.
+              className="font-sans text-xs normal-case tracking-normal"
+            >
               {name}
             </Badge>
           ))}

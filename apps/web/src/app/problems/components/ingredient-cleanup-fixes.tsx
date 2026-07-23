@@ -110,7 +110,7 @@ function ConfirmHeaderButton({
         onClick={() => setOpen(true)}
         disabled={isPending}
       >
-        <Trash2 className="mr-1 h-3 w-3" />
+        <Trash2 className="mr-1 size-3" />
         {label}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>

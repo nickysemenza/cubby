@@ -94,7 +94,7 @@ function LocationShelfCard({ location }: { location: InfLocation }) {
       title={location.name}
       subtitle={caption}
       entity="location"
-      badgeSlot={<TypeIcon className="h-3 w-3" aria-label={location.type} />}
+      badgeSlot={<TypeIcon className="size-3" aria-label={location.type} />}
     />
   );
 }
@@ -121,7 +121,7 @@ export function LocationContentsValuation({
         )}
       >
         {formatCurrency(total)}
-        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        <ChevronDown className="size-3 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64">
         <Stack gap="xs">
@@ -254,11 +254,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
           size="sm"
           onClick={toggleAdd}
         >
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="mr-2 size-4" />
           Add item
         </Button>
         <Button variant="outline" size="sm" onClick={openCreateChild}>
-          <FolderPlus className="mr-2 h-4 w-4" />
+          <FolderPlus className="mr-2 size-4" />
           Add child
         </Button>
         <Link
@@ -266,7 +266,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
           search={{ parentId: location.id }}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
-          <ScanBarcode className="mr-2 h-4 w-4" />
+          <ScanBarcode className="mr-2 size-4" />
           Recount
         </Link>
         <Link
@@ -274,7 +274,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
           search={{ locationId: location.id }}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
-          <SquarePen className="mr-2 h-4 w-4" />
+          <SquarePen className="mr-2 size-4" />
           Bulk edit
         </Link>
         {hasChildren && (
@@ -284,11 +284,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
               search={{ validateParent: location.id }}
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
-              <ClipboardCheck className="mr-2 h-4 w-4" />
+              <ClipboardCheck className="mr-2 size-4" />
               Validate
             </Link>
             <Button variant="outline" size="sm" onClick={handlePrintLabels}>
-              <Printer className="mr-2 h-4 w-4" />
+              <Printer className="mr-2 size-4" />
               Print labels
             </Button>
           </>

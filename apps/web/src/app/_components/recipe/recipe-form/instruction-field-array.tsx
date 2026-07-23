@@ -58,7 +58,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           size="sm"
           onClick={() => append({ instruction: "" })}
         >
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="mr-2 size-4" />
           Add Instruction
         </Button>
       </Row>

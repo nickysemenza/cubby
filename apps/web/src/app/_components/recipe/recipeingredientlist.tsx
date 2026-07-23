@@ -183,7 +183,7 @@ export const RecipeIngredientList: React.FC<{
             </div>
             {rawLine && rawLine !== name && (
               <div
-                className="truncate text-muted-foreground/70 text-xs italic"
+                className="truncate text-muted-foreground text-xs italic"
                 title={rawLine}
               >
                 {rawLine}
@@ -356,7 +356,7 @@ export const RecipeIngredientList: React.FC<{
           header: () => (
             <div className="flex flex-col leading-tight">
               <span>{n.label}</span>
-              <span className="font-normal text-2xs text-muted-foreground/70 lowercase">
+              <span className="font-normal text-2xs text-muted-foreground lowercase">
                 {n.unit}
               </span>
             </div>

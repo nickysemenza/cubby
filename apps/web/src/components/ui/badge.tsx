@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils";
 // quiet tint fill, square corners, no saturated pills. Tint comes from
 // color-mixing the tone ~12% into paper so it sits on the ledger, not over it.
 const badgeVariants = cva(
-  "h-5 gap-1 rounded-none border px-1.5 py-0.5 text-2xs font-medium transition-all has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&>svg]:size-2.5! inline-flex items-center justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive transition-colors overflow-hidden group/badge",
+  "h-5 gap-1 rounded-none border px-1.5 py-0.5 text-2xs font-mono font-medium uppercase tracking-wider transition-all has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&>svg]:size-2.5! inline-flex items-center justify-center w-fit whitespace-nowrap shrink-0 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive transition-colors overflow-hidden group/badge",
   {
     variants: {
       variant: {
@@ -22,6 +22,9 @@ const badgeVariants = cva(
           "border-positive/30 bg-positive/10 [a]:hover:bg-positive/20 text-positive",
         warning:
           "border-warning/30 bg-warning/10 [a]:hover:bg-warning/20 text-warning",
+        plum: "border-plum/30 bg-plum/10 [a]:hover:bg-plum/20 text-plum",
+        slate:
+          "border-slate/40 bg-slate/10 [a]:hover:bg-slate/20 text-slate",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground bg-input/20",
       },
@@ -53,5 +56,10 @@ function Badge({
     },
   });
 }
+
+/** The tone names accepted by `<Badge variant>` — reuse for per-enum tone maps. */
+export type BadgeVariant = NonNullable<
+  VariantProps<typeof badgeVariants>["variant"]
+>;
 
 export { Badge, badgeVariants };

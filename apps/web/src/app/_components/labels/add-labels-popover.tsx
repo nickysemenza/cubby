@@ -111,14 +111,14 @@ export function AddLabelsPopover({
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm">
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 size-4" />
             Add
           </Button>
         }
       />
       <PopoverContent align="start" className="w-80 p-0">
         <div className="flex items-center gap-2 border-b px-2 py-2">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
@@ -145,7 +145,7 @@ export function AddLabelsPopover({
               >
                 <LocationIcon
                   type={loc.type}
-                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  className="size-4 shrink-0 text-muted-foreground"
                 />
                 <span className="min-w-0 flex-1 truncate">{loc.name}</span>
                 <div className="flex shrink-0 gap-1">
@@ -163,7 +163,7 @@ export function AddLabelsPopover({
                     className="flex items-center gap-1 rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted" /* tight */
                     onClick={() => void handleAddChildren(loc)}
                   >
-                    <Users className="h-3 w-3" />
+                    <Users className="size-3" />
                     Children
                   </button>
                 </div>

@@ -22,7 +22,7 @@ export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
         <Link to="/activity">
           <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs">
             View all
-            <ArrowRight className="h-3 w-3" />
+            <ArrowRight className="size-3" />
           </Button>
         </Link>
       }

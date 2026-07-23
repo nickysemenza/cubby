@@ -26,7 +26,7 @@ export const renderValueOrMissing = <T, E = string>(
   }
   return (
     <span
-      className="cursor-default text-muted-foreground/60"
+      className="cursor-default text-muted-foreground"
       title={`${result.error}`}
     >
       —

@@ -101,7 +101,7 @@ function ScalingCell({
       <span
         className={cn(
           "text-right font-mono text-xs tabular-nums",
-          noWeight ? "text-warning/80" : "text-muted-foreground/60",
+          noWeight ? "text-warning/80" : "text-muted-foreground",
         )}
       >
         —
@@ -113,7 +113,7 @@ function ScalingCell({
       <span
         className={cn(
           "text-right font-mono text-xs tabular-nums",
-          isBase ? "font-medium text-primary" : "text-foreground/80",
+          isBase ? "font-medium text-primary" : "text-foreground",
         )}
       >
         {formatScalingPct(pct)}
@@ -128,7 +128,7 @@ function ScalingCell({
       title="Set as 100% base"
       className={cn(
         "cursor-pointer text-right font-mono text-xs tabular-nums hover:text-primary",
-        isBase ? "font-medium text-primary" : "text-foreground/80",
+        isBase ? "font-medium text-primary" : "text-foreground",
       )}
     >
       {formatScalingPct(pct)}
@@ -333,7 +333,7 @@ function SpecNode({
               {section.steps.map((step) => (
                 <Row as="li" gap="sm" key={step.n}>
                   <StepNumberBadge>{step.n}</StepNumberBadge>
-                  <span className="text-foreground/80 text-xs leading-snug">
+                  <span className="text-foreground text-xs leading-snug">
                     <MarkdownText className="[&_p]:my-0">
                       {step.text}
                     </MarkdownText>
@@ -417,7 +417,7 @@ export const RecipeSpecView = memo(function RecipeSpecView({
       )}
 
       {variant === "detail" && missingWeight.length > 0 && (
-        <p className="mt-2 font-mono text-2xs text-muted-foreground/70">
+        <p className="mt-2 font-mono text-2xs text-muted-foreground">
           Scaling omits{" "}
           <span className="text-warning">{uniq(missingWeight).join(", ")}</span>{" "}
           — no weight.

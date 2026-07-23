@@ -127,7 +127,7 @@ export function PersistentScanner({
           {isQrMode ? (
             /* Square guide for QR codes */
             <div
-              className={`h-48 w-48 rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150 ${
+              className={`size-48 rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150 ${
                 scanFlash
                   ? "border-positive shadow-[var(--shadow-scan-flash)]"
                   : "border-white/60"
@@ -151,16 +151,16 @@ export function PersistentScanner({
         <Button
           variant={torchEnabled ? "default" : "secondary"}
           size="icon"
-          className="absolute top-3 right-3 h-10 w-10 rounded-full ring-1 ring-border"
+          className="absolute top-3 right-3 size-10 rounded-full ring-1 ring-border"
           onClick={toggleTorch}
           aria-label={
             torchEnabled ? "Turn off flashlight" : "Turn on flashlight"
           }
         >
           {torchEnabled ? (
-            <Flashlight className="h-5 w-5" />
+            <Flashlight className="size-5" />
           ) : (
-            <FlashlightOff className="h-5 w-5" />
+            <FlashlightOff className="size-5" />
           )}
         </Button>
       )}

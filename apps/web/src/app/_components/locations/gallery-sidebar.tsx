@@ -146,7 +146,7 @@ export function GallerySidebar({
           className="m-2 transition-colors hover:bg-primary/10"
           title="Expand sidebar"
         >
-          <PanelLeft className="h-4 w-4" />
+          <PanelLeft className="size-4" />
         </Button>
       </div>
     );
@@ -162,7 +162,7 @@ export function GallerySidebar({
       {/* Header */}
       <Row align="center" justify="between" className="border-b px-2 py-2">
         <Row align="center" gap="sm">
-          <ImageIcon className="h-3.5 w-3.5 text-slate" />
+          <ImageIcon className="size-3.5 text-slate" />
           <span className="font-semibold text-foreground text-sm tracking-tight">
             Locations
           </span>
@@ -174,7 +174,7 @@ export function GallerySidebar({
           className="transition-colors hover:bg-primary/10"
           title="Collapse sidebar"
         >
-          <PanelLeftClose className="h-4 w-4" />
+          <PanelLeftClose className="size-4" />
         </Button>
       </Row>
 
@@ -274,7 +274,7 @@ function SidebarTreeNode({
             type="button"
             onClick={handleExpandClick}
             className={cn(
-              "flex h-5 w-5 items-center justify-center rounded transition-transform duration-150 hover:bg-muted-foreground/20",
+              "flex size-5 items-center justify-center rounded transition-transform duration-150 hover:bg-muted-foreground/20",
               !hasChildren && "invisible",
               isExpanded && "rotate-0",
             )}
@@ -282,7 +282,7 @@ function SidebarTreeNode({
             {hasChildren && (
               <ChevronRight
                 className={cn(
-                  "h-3.5 w-3.5 transition-transform duration-150",
+                  "size-3.5 transition-transform duration-150",
                   isExpanded && "rotate-90",
                 )}
               />

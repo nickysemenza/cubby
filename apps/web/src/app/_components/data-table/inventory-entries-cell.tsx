@@ -125,14 +125,14 @@ export function InventoryEntriesCell<
     <Button
       size="icon"
       variant="ghost"
-      className="h-5 w-5 shrink-0 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/quickedit:opacity-100"
+      className="size-5 shrink-0 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/quickedit:opacity-100"
       aria-label="Quick edit"
       onClick={(e) => {
         e.stopPropagation();
         onQuickEdit(row);
       }}
     >
-      <Pencil className="h-3 w-3 text-muted-foreground" />
+      <Pencil className="size-3 text-muted-foreground" />
     </Button>
   ) : null;
 
