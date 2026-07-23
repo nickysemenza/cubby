@@ -71,9 +71,15 @@ export function CellEditTrigger({
     return () => el.removeEventListener(CELL_EDIT_EVENT, handler);
   }, []);
 
+  // In cell-selection mode the range engine (useCellSelection) owns ALL
+  // copy/paste — clicking a cell focuses this trigger, and the legacy document
+  // paste listener registers before the range one, so registering here would
+  // let a real Cmd+V paste the raw TSV blob into the anchor cell (numeric
+  // columns digit-strip it: "10\t20\n30\t40" → 10203040) before the range
+  // paste runs. Registry stays for out-of-table cells (detail pages, dialogs).
   React.useEffect(() => {
     const el = localRef.current;
-    if (!el || !hasClipboard) return;
+    if (!el || !hasClipboard || cellSelectionMode) return;
     return registerCellClipboard(el, {
       get kindKey() {
         return clipboardRef.current?.kindKey ?? "";
@@ -83,7 +89,7 @@ export function CellEditTrigger({
         clipboardRef.current?.onPasteValue?.(payload) ?? Promise.resolve(),
       isEditing: () => clipboardRef.current?.isEditing?.() ?? false,
     });
-  }, [hasClipboard]);
+  }, [hasClipboard, cellSelectionMode]);
 
   return (
     <button
