@@ -288,7 +288,6 @@ describe("buildPastePlan", () => {
     });
 
     expect(plan.cellTotal).toBe(4);
-    expect(plan.skippedColumnCount).toBe(0);
     expect(plan.ops).toHaveLength(4);
     for (const op of plan.ops) {
       expect(op.source.text).toBe("x");
@@ -310,7 +309,6 @@ describe("buildPastePlan", () => {
     });
 
     expect(plan.cellTotal).toBe(4);
-    expect(plan.skippedColumnCount).toBe(0);
     const byCoord = new Map(
       plan.ops.map((o) => [`${o.row},${o.col}`, o.source.text]),
     );
@@ -361,7 +359,6 @@ describe("buildPastePlan", () => {
     });
 
     expect(plan.cellTotal).toBe(2);
-    expect(plan.skippedColumnCount).toBe(1);
     expect(plan.ops).toHaveLength(1);
     expect(plan.ops[0]?.col).toBe(0);
   });
@@ -379,7 +376,6 @@ describe("buildPastePlan", () => {
     });
 
     expect(plan.cellTotal).toBe(4);
-    expect(plan.skippedColumnCount).toBe(1);
     expect(plan.ops).toHaveLength(2);
     for (const op of plan.ops) {
       expect(op.col).toBe(0);
@@ -396,11 +392,10 @@ describe("buildPastePlan", () => {
     });
 
     expect(plan.cellTotal).toBe(1); // target region clamped to columns.length - 1 = 0
-    expect(plan.skippedColumnCount).toBe(0);
     expect(plan.ops).toHaveLength(1);
   });
 
-  it("counts multiple distinct skipped columns separately", () => {
+  it("emits ops only for the matching column when others are skipped", () => {
     const grid: CopiedGrid = [[cell("1", "number"), cell("2", "number")]];
     const plan = buildPastePlan({
       grid,
@@ -409,7 +404,6 @@ describe("buildPastePlan", () => {
       rowCount: 5,
     });
 
-    expect(plan.skippedColumnCount).toBe(1);
     expect(plan.ops).toHaveLength(1);
     expect(plan.ops[0]?.col).toBe(1);
   });

@@ -59,6 +59,22 @@ export const CELL_CLIPBOARD_MIME = "application/x-cubby-cell";
 /** How long the copied/pasted ring pulse stays on the trigger. */
 const FLASH_MS = 600;
 
+/**
+ * Set a `data-clipboard-flash` pulse on an element for {@link FLASH_MS}, then
+ * clear it — but only if it's still our own flash (a re-flash within the window
+ * wins). Shared by the single-cell clipboard (below) and the range-selection
+ * engine (`useCellSelection.ts`) so the pulse behaves identically on a focused
+ * trigger and a selected `<td>`.
+ */
+export function flashElement(el: HTMLElement, kind: "copied" | "pasted") {
+  el.setAttribute("data-clipboard-flash", kind);
+  window.setTimeout(() => {
+    if (el.getAttribute("data-clipboard-flash") === kind) {
+      el.removeAttribute("data-clipboard-flash");
+    }
+  }, FLASH_MS);
+}
+
 const registry = new Map<HTMLElement, CellClipboardSpec>();
 let listenersInstalled = false;
 
@@ -70,16 +86,6 @@ function specForActiveElement(): {
   if (!(el instanceof HTMLElement)) return null;
   const spec = registry.get(el);
   return spec ? { el, spec } : null;
-}
-
-function flash(el: HTMLElement, kind: "copied" | "pasted") {
-  el.setAttribute("data-clipboard-flash", kind);
-  window.setTimeout(() => {
-    // Only clear our own flash (a re-flash within the window wins).
-    if (el.getAttribute("data-clipboard-flash") === kind) {
-      el.removeAttribute("data-clipboard-flash");
-    }
-  }, FLASH_MS);
 }
 
 function handleCopy(event: ClipboardEvent) {
@@ -95,7 +101,7 @@ function handleCopy(event: ClipboardEvent) {
     CELL_CLIPBOARD_MIME,
     JSON.stringify({ kind: active.spec.kindKey, value: payload.json }),
   );
-  flash(active.el, "copied");
+  flashElement(active.el, "copied");
 }
 
 function safeParsePayload(
@@ -127,7 +133,7 @@ function handlePaste(event: ClipboardEvent) {
 
   const runPaste = (payload: { json?: unknown; text?: string }) => {
     onPasteValue(payload).then(
-      () => flash(el, "pasted"),
+      () => flashElement(el, "pasted"),
       (err: unknown) => toast.error(getErrorMessage(err)),
     );
   };

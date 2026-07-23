@@ -173,8 +173,6 @@ export interface PasteOp {
 
 export interface PastePlan {
   ops: PasteOp[];
-  /** distinct target columns skipped due to kind mismatch or canPaste=false */
-  skippedColumnCount: number;
   /** total target cells the plan would touch before skipping (for the cap check) */
   cellTotal: number;
 }
@@ -202,10 +200,9 @@ export function buildPastePlan(args: {
 
   const ops: PasteOp[] = [];
   let cellTotal = 0;
-  let skippedColumnCount = 0;
 
   if (targetBottom < targetTop || targetRight < targetLeft) {
-    return { ops, skippedColumnCount, cellTotal };
+    return { ops, cellTotal };
   }
 
   for (let col = targetLeft; col <= targetRight; col++) {
@@ -225,7 +222,6 @@ export function buildPastePlan(args: {
       target.kind === sampleSource.kind;
 
     if (!columnCanPaste) {
-      skippedColumnCount += 1;
       continue;
     }
 
@@ -238,5 +234,5 @@ export function buildPastePlan(args: {
     }
   }
 
-  return { ops, skippedColumnCount, cellTotal };
+  return { ops, cellTotal };
 }

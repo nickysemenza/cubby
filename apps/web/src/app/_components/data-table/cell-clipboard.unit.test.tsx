@@ -12,36 +12,11 @@ import {
   type CellClipboardSpec,
   registerCellClipboard,
 } from "./cell-clipboard";
+import {
+  dispatchClipboardEvent,
+  makeClipboardData,
+} from "./cell-clipboard-test-helpers";
 import { selectCellData, specFromCellData, tagsCellData } from "./cell-data";
-
-/** jsdom's `ClipboardEvent` has no `clipboardData`; attach a mock directly on
- * a plain (cancelable) `Event` — the module only reads `event.clipboardData`
- * and calls `event.preventDefault()`, both of which work on a bare Event. */
-function makeClipboardData(
-  overrides?: Partial<{
-    setData: ReturnType<typeof vi.fn>;
-    getData: ReturnType<typeof vi.fn>;
-  }>,
-) {
-  return {
-    setData: vi.fn(),
-    getData: vi.fn(() => ""),
-    ...overrides,
-  };
-}
-
-function dispatchClipboardEvent(
-  type: "copy" | "paste",
-  clipboardData: ReturnType<typeof makeClipboardData>,
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "clipboardData", {
-    value: clipboardData,
-    configurable: true,
-  });
-  document.dispatchEvent(event);
-  return event;
-}
 
 /** Flush the microtask queue (onPasteValue's `.then()` chain) without fake
  * timers — a 0ms macrotask runs strictly after all pending microtasks. */

@@ -2,11 +2,9 @@
 
 import { Pencil, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useState } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -14,7 +12,11 @@ import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
-import { useCellEditState, useOptimisticDisplayValue } from "./editable-cell";
+import {
+  useCellEditState,
+  useEditorCommit,
+  useOptimisticDisplayValue,
+} from "./editable-cell";
 
 const itemIdEquals = <TId extends string>(
   a: ComboboxItem<TId> | null,
@@ -157,41 +159,33 @@ function EditableEntityEditor<TId extends string>({
   onCommit: (value: ComboboxItem<TId> | null) => void;
 }) {
   const [selected, setSelected] = useState<ComboboxItem<TId> | null>(value);
-  const [isPending, setIsPending] = useState(false);
-  // Re-entrancy guard for commit-on-pick: DialogCompatibleCombobox closes its
-  // dropdown synchronously on click (before the awaited save resolves), so a
-  // fast second pick would otherwise fire a concurrent onSave whose
-  // last-to-resolve wins regardless of click order. The pointer-events gate on
-  // the wrapper below is the visual affordance; this ref is the hard guard
-  // (CSS pointer-events isn't enforced by keyboard interaction or jsdom).
-  const pendingRef = useRef(false);
+  // DialogCompatibleCombobox closes its dropdown synchronously on click (before
+  // the awaited save resolves), so a fast second pick would otherwise fire a
+  // concurrent onSave whose last-to-resolve wins regardless of click order. The
+  // pointer-events gate on the wrapper below is the visual affordance;
+  // useEditorCommit's pendingRef is the hard guard (CSS pointer-events isn't
+  // enforced by keyboard interaction or jsdom).
+  const saveId = useCallback(
+    (next: ComboboxItem<TId> | null) => onSave(next?.id ?? null),
+    [onSave],
+  );
+  const { isPending, commit } = useEditorCommit<ComboboxItem<TId> | null>({
+    onSave: saveId,
+    onCommit,
+    onCancel,
+  });
 
-  const commit = useCallback(
-    async (next: ComboboxItem<TId> | null) => {
-      if (pendingRef.current) return;
+  const handlePick = useCallback(
+    (next: ComboboxItem<TId> | null) => {
+      // Reflect the attempted selection in the combobox immediately (kept even
+      // on the unchanged / rejected paths so the widget shows what was clicked).
       setSelected(next);
-
       // Unchanged, or cleared on a non-clearable relation → plain cancel.
-      if (next?.id === value?.id || (next === null && !clearable)) {
-        onCancel();
-        return;
-      }
-
-      pendingRef.current = true;
-      setIsPending(true);
-      try {
-        await onSave(next?.id ?? null);
-        onCommit(next);
-      } catch (err) {
-        // Stay open with the attempted selection intact so the user can retry
-        // or cancel.
-        toast.error(getErrorMessage(err));
-      } finally {
-        pendingRef.current = false;
-        setIsPending(false);
-      }
+      void commit(next, {
+        unchanged: next?.id === value?.id || (next === null && !clearable),
+      });
     },
-    [value, clearable, onSave, onCancel, onCommit],
+    [value, clearable, commit],
   );
 
   return (
@@ -218,7 +212,7 @@ function EditableEntityEditor<TId extends string>({
               onSearchChange={onSearchChange}
               isLoading={isLoading}
               value={selected}
-              setValue={(next) => void commit(next)}
+              setValue={handlePick}
               onCreateNew={onCreateNew}
               onOpenChange={onOpenChange}
               // Open + focus the search input on mount. Focus-only: the entity

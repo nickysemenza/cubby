@@ -59,6 +59,10 @@ import {
 } from "react";
 import { BulkActionBar } from "~/app/_components/data-table/BulkActionBar";
 import {
+  selectCellData,
+  specFromCellData,
+} from "~/app/_components/data-table/cell-data";
+import {
   createCurrencyColumn,
   createFilterableSelectColumn,
   createPlainDateColumn,
@@ -735,6 +739,14 @@ export function purchaseFutureColumn(
     filterConfig?: FilterConfig;
   },
 ) {
+  // Shared copy/paste descriptor: the boolean `future` field as a select of
+  // "true"/"false". Wiring `meta.cellData` (like the column factories do) makes
+  // this the last inline-editable purchase column visible to range copy/paste.
+  const cellData = selectCellData<PurchaseOut>(
+    (row) => (row.future ? "true" : "false"),
+    futureEditOptions,
+    (row, value) => save(value === "true", row),
+  );
   return helper.accessor((row) => (row.future ? "true" : "false"), {
     id: "future",
     header: "Status",
@@ -743,6 +755,7 @@ export function purchaseFutureColumn(
       className: opts?.className ?? "w-24",
       mobile: opts?.mobile,
       filterConfig: opts?.filterConfig,
+      cellData,
     },
     cell: (info) => {
       const purchase = info.row.original;
@@ -752,6 +765,7 @@ export function purchaseFutureColumn(
           onSave={async (newVal) => {
             await save(newVal === "true", purchase);
           }}
+          clipboard={specFromCellData(cellData, purchase)}
           config={{ type: "select", options: futureEditOptions }}
           renderValue={(v) =>
             v === "true" ? (

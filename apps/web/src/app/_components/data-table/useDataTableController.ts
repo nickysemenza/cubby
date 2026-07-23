@@ -119,7 +119,6 @@ export function useDataTableController<TItem>({
 
   const {
     selection,
-    clearSelection,
     getRowCellSelection,
     containerProps: cellSelectionContainerProps,
   } = useCellSelection({
@@ -201,11 +200,9 @@ export function useDataTableController<TItem>({
 
   return {
     cellSelectionContainerProps,
-    clearSelection,
     colSpan,
     columnsKey,
     dConfig,
-    flatRowToVirtualIndex,
     focusedRowIndex,
     getRowCellSelection,
     hydrated,
@@ -215,7 +212,6 @@ export function useDataTableController<TItem>({
     resolveIndex,
     rows,
     scrollMargin,
-    scrollToIndex,
     setDesktopInfiniteSentinel,
     styles,
     tableContainerRef,
