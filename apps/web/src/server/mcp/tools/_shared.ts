@@ -37,7 +37,6 @@ import type {
   ToolCallback,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
-import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import type {
   CallToolResult,
   ToolAnnotations,
@@ -197,16 +196,45 @@ export function structuredError(text: string) {
   };
 }
 
+/**
+ * Convert a tool schema to the JSON Schema advertised over the wire.
+ *
+ * Uses `z.toJSONSchema` directly rather than the SDK's `toJsonSchemaCompat`,
+ * which hardcodes its options and so can't express the two settings this
+ * boundary needs (every cubby schema is Zod 4, so the SDK's v3 branch is dead
+ * weight here — `strictUnions` is a v3-only option it already ignores):
+ *
+ * - `override` maps `z.date()` to `{type: "string", format: "date-time"}`.
+ *   `timestampedFields` (createdAt/updatedAt) plus the per-entity date columns
+ *   (`totalsComputedAt`, `lastBulkInventory`, external-id timestamps, …) reach
+ *   most read shapes, and Zod refuses to represent a Date in JSON Schema. That
+ *   used to throw and drop the whole tool to an opaque
+ *   `{type: "object", additionalProperties: true}`. A date-time string is what
+ *   clients actually receive: `structuredContent` carries real `Date`s and the
+ *   JSON-RPC transport serializes them via `JSON.stringify` → ISO 8601.
+ * - `unrepresentable: "any"` keeps any *other* unrepresentable leaf (bigint,
+ *   symbol, …) local to its own property instead of failing the whole schema.
+ *
+ * The catch is a last-resort net only — server.unit.test.ts's "advertises real
+ * JSON Schema properties for every tool" asserts no tool falls back to it.
+ */
 function safeToJsonSchema(
   obj: ReturnType<typeof normalizeObjectSchema>,
-  pipeStrategy: "input" | "output",
+  io: "input" | "output",
 ) {
   if (!obj) return EMPTY_OBJECT_JSON_SCHEMA;
   try {
     return stripMockFromJsonSchema(
-      toJsonSchemaCompat(obj, {
-        strictUnions: true,
-        pipeStrategy,
+      z.toJSONSchema(obj as z.ZodType, {
+        target: "draft-7",
+        io,
+        unrepresentable: "any",
+        override: (ctx) => {
+          if (ctx.zodSchema._zod.def.type === "date") {
+            ctx.jsonSchema.type = "string";
+            ctx.jsonSchema.format = "date-time";
+          }
+        },
       }) as Record<string, unknown>,
     );
   } catch {

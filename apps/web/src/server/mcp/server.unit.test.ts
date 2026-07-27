@@ -430,28 +430,63 @@ describe("listMcpToolCatalog", () => {
     }
   });
 
-  it("advertises real JSON Schemas for the tracker synthesis/bulk tools", async () => {
-    // A schema that fails toJsonSchema conversion silently degrades to
-    // `{type: "object", additionalProperties: true}` (see safeToJsonSchema) —
-    // assert the derived pick/omit/extend shapes actually converted.
+  it("advertises real JSON Schema properties for every tool", async () => {
+    // Regression: `safeToJsonSchema` used to catch conversion failures and fall
+    // back to an opaque `{type: "object", additionalProperties: true}`. Any
+    // schema reaching a `z.date()` (timestampedFields, totalsComputedAt,
+    // lastBulkInventory, …) tripped it, degrading 22 tools silently. A tool
+    // whose advertised schema has no `properties` means the fallback fired.
+    //
+    // Supersedes an earlier per-tool spot-check of the tracker synthesis/bulk
+    // tools (get_house_status, bulk_move_tasks, …) — those derived
+    // pick/omit/extend shapes are covered here along with everything else.
     const { tools } = await listMcpToolCatalog();
-    const byName = new Map(tools.map((tool) => [tool.name, tool]));
-    for (const name of [
-      "get_house_status",
-      "get_task_summary",
-      "get_purchase_analytics",
-      "get_project_budget",
-      "bulk_set_task_status",
-      "bulk_move_tasks",
-      "bulk_set_task_due_date",
-    ]) {
-      const tool = byName.get(name);
-      expect(tool, name).toBeDefined();
-      expect(
-        (tool?.outputSchema as { properties?: unknown })?.properties,
-        name,
-      ).toBeDefined();
-    }
+    const degraded = tools.filter((tool) =>
+      [tool.inputSchema, tool.outputSchema].some(
+        (schema) =>
+          schema !== undefined &&
+          (schema as Record<string, unknown>).properties === undefined,
+      ),
+    );
+    expect(degraded.map((tool) => tool.name)).toEqual([]);
+  });
+
+  it("advertises dates as date-time strings and emits them on the wire", async () => {
+    const catalog = await listMcpToolCatalog();
+    const getProject = catalog.tools.find(
+      (tool) => tool.name === "get_project",
+    );
+    const advertised = getProject?.outputSchema as {
+      properties?: Record<string, unknown>;
+    };
+    expect(advertised?.properties?.createdAt).toEqual({
+      type: "string",
+      format: "date-time",
+    });
+
+    // …and the value a client actually receives matches that advertisement:
+    // structuredContent carries a real Date, which JSON-RPC serializes to ISO.
+    const createdAt = new Date("2026-07-27T12:34:56.000Z");
+    const project = mock(projectOut, { seed: 1, overrides: { createdAt } });
+    const result = await callTool(
+      createMcpServer(),
+      "get_project",
+      { id: project.id },
+      { project: { getByID: async () => project } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    // InMemoryTransport hands the object over unserialized, so assert on the
+    // JSON a real transport would produce rather than on the in-process value.
+    expect(JSON.parse(JSON.stringify(result.structuredContent)).createdAt).toBe(
+      "2026-07-27T12:34:56.000Z",
+    );
+    expect(
+      JSON.parse(
+        ((result.content as CallToolResult["content"])[0] as { text: string })
+          .text,
+      ).createdAt,
+    ).toBe("2026-07-27T12:34:56.000Z");
   });
 
   it("returns structuredContent validated against outputSchema for list_locations", async () => {

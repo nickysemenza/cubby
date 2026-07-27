@@ -129,13 +129,10 @@ const projectBudgetOut = z.object({
 });
 
 /** Bulk task writes return the updated rows plus the background batches they
- * enqueued (embedding refresh); MCP clients only need the rows and a count.
- * Timestamps are dropped: a `z.date()` anywhere in an output schema fails
- * JSON-Schema conversion, so the advertised schema would degrade to an opaque
- * `additionalProperties: true` object (see `safeToJsonSchema` in _shared). */
+ * enqueued (embedding refresh); MCP clients only need the rows and a count. */
 const taskBulkMcpOut = z.object({
   updated: z.number().int(),
-  items: z.array(taskOut.omit({ createdAt: true, updatedAt: true })),
+  items: z.array(taskOut),
 });
 
 async function bulkTaskWrite<T>(run: Promise<{ items: T[] }>) {
