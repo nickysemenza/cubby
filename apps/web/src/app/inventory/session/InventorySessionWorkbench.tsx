@@ -5,7 +5,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, RotateCcw } from "lucide-react";
+import { CheckCircle2, ListChecks, RotateCcw } from "lucide-react";
 import pluralize from "pluralize";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -84,11 +84,14 @@ export function InventorySessionWorkbench({
     itemResolutions,
     setItemResolutions,
     completedLocationIds,
+    skippedLocationIds,
     summary,
     resumeCandidate,
     resumePass,
     startNewPass,
     recordLocationComplete,
+    toggleLocationSkipped,
+    clearSkippedLocations,
   } = useSessionProgress(rootId, sessionLocations);
 
   const currentLocation = sessionLocations[currentIndex] ?? null;
@@ -139,6 +142,11 @@ export function InventorySessionWorkbench({
   const unknownItems = unknownLocation
     ? (inventoryByLocation.get(unknownLocation.id) ?? [])
     : [];
+  // Recounting Unknown itself is the drain (relocate each row to where it
+  // belongs). Its expected rows and its "From Unknown" tray would be the same
+  // list, so the review pane collapses the Unknown-specific affordances.
+  const atUnknownLocation =
+    !!unknownLocation && currentLocation?.id === unknownLocation.id;
 
   const { sessionInvalidateKeys, invalidate } = useSessionMutations();
 
@@ -157,6 +165,21 @@ export function InventorySessionWorkbench({
     mutationFn: api.location.update.mutationOptions,
     invalidateKeys: sessionInvalidateKeys,
   });
+  // Advance to the next location that still needs attention. "Settled" is saved
+  // *or* skipped, so a deferred bin isn't handed straight back.
+  const advanceToOutstanding = (settled: ReadonlySet<string>) => {
+    setCurrentIndex((idx) => {
+      const after = sessionLocations.findIndex(
+        (location, index) => index > idx && !settled.has(location.id),
+      );
+      if (after >= 0) return after;
+      const wrapped = sessionLocations.findIndex(
+        (location) => !settled.has(location.id),
+      );
+      return wrapped >= 0 ? wrapped : idx;
+    });
+  };
+
   // "Done" commits the staged diff for the current bin. On success the committed
   // resolutions leave the staged map (read from `variables`, so it's never the
   // stale closure) and we advance to the next bin.
@@ -171,18 +194,13 @@ export function InventorySessionWorkbench({
           return next;
         });
         recordLocationComplete(variables.locationId, variables.resolutions);
-        const completed = new Set(completedLocationIds);
-        completed.add(variables.locationId);
-        setCurrentIndex((idx) => {
-          const after = sessionLocations.findIndex(
-            (location, index) => index > idx && !completed.has(location.id),
-          );
-          if (after >= 0) return after;
-          const wrapped = sessionLocations.findIndex(
-            (location) => !completed.has(location.id),
-          );
-          return wrapped >= 0 ? wrapped : idx;
-        });
+        advanceToOutstanding(
+          new Set([
+            ...completedLocationIds,
+            ...skippedLocationIds,
+            variables.locationId,
+          ]),
+        );
         toast.success("Bin recount saved.");
       },
       onError: (error) => {
@@ -391,6 +409,34 @@ export function InventorySessionWorkbench({
     });
   };
 
+  // Skipping is purely local: it settles the location for this pass's progress
+  // without any server write (no verifiedAt, no lastBulkInventory), and it can
+  // be undone by coming back and saving — or unskipping — the location.
+  const handleToggleSkip = () => {
+    if (!currentLocation) return;
+    const wasSkipped = skippedLocationIds.has(currentLocation.id);
+    toggleLocationSkipped(currentLocation.id);
+    if (wasSkipped) return;
+    advanceToOutstanding(
+      new Set([
+        ...completedLocationIds,
+        ...skippedLocationIds,
+        currentLocation.id,
+      ]),
+    );
+    toast.success(
+      `Skipped ${currentLocation.name} — come back to it any time.`,
+    );
+  };
+
+  const revisitSkipped = () => {
+    clearSkippedLocations();
+    const next = sessionLocations.findIndex(
+      (location) => !completedLocationIds.has(location.id),
+    );
+    if (next >= 0) setCurrentIndex(next);
+  };
+
   const selectParent = (locationId: LocationId) => {
     void navigate({
       to: "/inventory/session",
@@ -447,6 +493,7 @@ export function InventorySessionWorkbench({
         parentName={parent.name}
         startedAt={resumeCandidate.startedAt}
         completedCount={resumeCandidate.completedCount}
+        skippedCount={resumeCandidate.skippedCount}
         totalCount={sessionLocations.length}
         onResume={resumePass}
         onStartNew={startNewPass}
@@ -462,17 +509,26 @@ export function InventorySessionWorkbench({
     );
   }
 
-  const completedInCurrentTree = sessionLocations.filter((location) =>
-    completedLocationIds.has(location.id),
+  // A skipped location settles the pass too — otherwise one unreachable bin
+  // keeps the summary out of reach forever.
+  const skippedInCurrentTree = sessionLocations.filter((location) =>
+    skippedLocationIds.has(location.id),
   ).length;
-  const passComplete = completedInCurrentTree >= sessionLocations.length;
+  const settledInCurrentTree = sessionLocations.filter(
+    (location) =>
+      completedLocationIds.has(location.id) ||
+      skippedLocationIds.has(location.id),
+  ).length;
+  const passComplete = settledInCurrentTree >= sessionLocations.length;
   if (passComplete) {
     return (
       <SessionComplete
         parent={parent}
         startedAt={startedAt}
         summary={summary}
+        skippedCount={skippedInCurrentTree}
         onStartNew={startNewPass}
+        onRevisitSkipped={revisitSkipped}
         onSelectLocation={selectParent}
       />
     );
@@ -491,6 +547,7 @@ export function InventorySessionWorkbench({
         inventoryByLocation={inventoryByLocation}
         itemResolutions={itemResolutions}
         completedLocationIds={completedLocationIds}
+        skippedLocationIds={skippedLocationIds}
         onSelect={(id) => jumpToLocation(id)}
         onScanJump={(id) => {
           if (!jumpToLocation(id)) {
@@ -508,6 +565,7 @@ export function InventorySessionWorkbench({
           inventoryByLocation={inventoryByLocation}
           itemResolutions={itemResolutions}
           completedLocationIds={completedLocationIds}
+          skippedLocationIds={skippedLocationIds}
           onSelect={(id) => jumpToLocation(id)}
           onScanJump={(id) => {
             if (!jumpToLocation(id)) {
@@ -531,15 +589,19 @@ export function InventorySessionWorkbench({
             onRemove={stageRemove}
             onRelocate={stageMoveToUnknown}
             onMoveTo={(item) => openMoveTo(item, currentLocation.id, "done")}
+            onClearStaged={(item) => setItemResolution(item.id, null)}
             onPullUnknown={pullFromUnknown}
             onMoveUnknownTo={(item) => {
               if (unknownLocation) openMoveTo(item, unknownLocation.id, "now");
             }}
             onPullUnknownLocation={pullLocationFromUnknown}
             onDone={handleDone}
+            onToggleSkip={handleToggleSkip}
             unresolvedCount={unresolvedCount}
             donePending={reconcile.isPending}
             locationCompleted={completedLocationIds.has(currentLocation.id)}
+            locationSkipped={skippedLocationIds.has(currentLocation.id)}
+            isUnknownLocation={atUnknownLocation}
             unknownReady={!!unknownLocation}
           />
         )}
@@ -565,6 +627,7 @@ function ResumeSessionPrompt({
   parentName,
   startedAt,
   completedCount,
+  skippedCount,
   totalCount,
   onResume,
   onStartNew,
@@ -572,6 +635,7 @@ function ResumeSessionPrompt({
   parentName: string;
   startedAt: number;
   completedCount: number;
+  skippedCount: number;
   totalCount: number;
   onResume: () => void;
   onStartNew: () => void;
@@ -585,8 +649,9 @@ function ResumeSessionPrompt({
         <Stack gap="md">
           <Description>
             Started {formatDistanceToNow(startedAt, { addSuffix: true })}. You
-            completed {completedCount} of {totalCount} locations; staged choices
-            are still waiting on this device.
+            completed {completedCount} of {totalCount} locations
+            {skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}; staged
+            choices are still waiting on this device.
           </Description>
           <Row gap="sm" wrap>
             <Button type="button" className="min-h-12" onClick={onResume}>
@@ -612,13 +677,17 @@ function SessionComplete({
   parent,
   startedAt,
   summary,
+  skippedCount,
   onStartNew,
+  onRevisitSkipped,
   onSelectLocation,
 }: {
   parent: InfLocation;
   startedAt: number;
   summary: ReturnType<typeof useSessionProgress>["summary"];
+  skippedCount: number;
   onStartNew: () => void;
+  onRevisitSkipped: () => void;
   onSelectLocation: (locationId: LocationId) => void;
 }) {
   const changes = summary.adjusted + summary.relocated + summary.removed;
@@ -648,8 +717,22 @@ function SessionComplete({
             {pluralize("item", summary.verified, true)} confirmed ·{" "}
             {pluralize("change", changes, true)} ({summary.adjusted} adjusted,{" "}
             {summary.relocated} relocated, {summary.removed} removed)
+            {skippedCount > 0
+              ? ` · ${pluralize("location", skippedCount, true)} skipped`
+              : ""}
           </p>
           <Row gap="sm" wrap>
+            {skippedCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12"
+                onClick={onRevisitSkipped}
+              >
+                <ListChecks />
+                Revisit {pluralize("skipped location", skippedCount, true)}
+              </Button>
+            )}
             <LocationScanButton
               buttonLabel="Scan another location"
               sheetDescription="Start a new spot-check at the scanned location."

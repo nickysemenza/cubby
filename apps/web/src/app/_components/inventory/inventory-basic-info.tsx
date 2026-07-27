@@ -1,6 +1,7 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import type { FC } from "react";
 import type { z } from "zod";
+import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -35,6 +36,12 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
     {
       label: "Product",
       value: <EntityInlineLink entity="product" data={inventoryitem.product} />,
+    },
+    {
+      // Last deliberate recount, not `updatedAt` — inventory truth is only
+      // restored by a recount, and the hint tints warning once it goes stale.
+      label: "Verified",
+      value: <AuditedHint at={inventoryitem.verifiedAt} label="verified" />,
     },
   ];
 

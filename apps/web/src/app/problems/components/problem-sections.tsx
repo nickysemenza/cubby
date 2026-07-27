@@ -17,12 +17,14 @@ import {
   ImageOff,
   type LucideIcon,
   Network,
+  ScanBarcode,
   Sparkles,
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { formatDate } from "~/app/projects/project-formatting";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -299,6 +301,26 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
     route: trackerRoute(item),
     editLabel: `Open ${item.entityType}`,
   };
+}
+
+/**
+ * "Recount" action for the recount-staleness sections — the only thing that
+ * actually restores inventory truth (tenet 1), so link straight into the audit
+ * session scoped to the offending location rather than to a form.
+ */
+function RecountLink({ locationId }: { locationId: string }) {
+  return (
+    <Button
+      size="sm"
+      render={
+        <Link to="/inventory/session" search={{ parentId: locationId }} />
+      }
+      nativeButton={false}
+    >
+      <ScanBarcode className="mr-1 size-3" />
+      Recount
+    </Button>
+  );
 }
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
@@ -588,6 +610,88 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     label: "Locations",
     select: (p) => p.emptyLocations,
     render: (items) => <EmptyLocationsList locations={items} />,
+  }),
+  section({
+    id: "stale-recounts",
+    label: "Stale recounts",
+    select: (p) => p.staleLocations,
+    entity: "location",
+    title: "Locations overdue for a recount",
+    description:
+      "Stocked locations that have never been recounted, or not in over 60 days. Inventory never auto-decrements — a deliberate recount is the only thing that makes these numbers true again.",
+    emptyMessage: "Every stocked location has been recounted recently.",
+    renderItem: (loc) => ({
+      title: loc.name,
+      badges: [
+        <Badge key="type" variant="outline" className="capitalize">
+          {loc.type}
+        </Badge>,
+        <Badge key="items" variant="secondary">
+          {loc.itemCount} {loc.itemCount === 1 ? "item" : "items"}
+        </Badge>,
+      ],
+      details: [
+        <AuditedHint
+          key="recount"
+          at={loc.lastBulkInventory}
+          label="recounted"
+          className="text-sm"
+        />,
+      ],
+      route: { to: "/locations/$id", params: { id: loc.id } },
+      editLabel: "Open location",
+      customActions: <RecountLink locationId={loc.id} />,
+    }),
+  }),
+  section({
+    id: "never-verified",
+    label: "Never verified",
+    select: (p) => p.neverVerifiedInventory,
+    entity: "inventory",
+    title: "Inventory never confirmed by a recount",
+    description:
+      "Entries whose count has never been checked against the shelf (oldest first — a sample, not the full backlog). Recount the location they live in to clear them.",
+    emptyMessage: "Every inventory entry has been verified at least once.",
+    renderItem: (item) => ({
+      title: item.product.name,
+      subtitle: `${item.amount.value} ${item.amount.unit}`,
+      badges: [
+        <Link key="loc" to="/locations/$id" params={{ id: item.location.id }}>
+          <Badge
+            variant="outline"
+            // Free-form location names — opt out of the mono-uppercase stamp.
+            className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
+          >
+            <EntityIcon entity="location" colored className="size-3" />
+            {item.location.name}
+          </Badge>
+        </Link>,
+      ],
+      details: [createdAgoDetail(item.createdAt)],
+      route: { to: "/inventory/$id", params: { id: item.id } },
+      editLabel: "Open inventory entry",
+      customActions: <RecountLink locationId={item.location.id} />,
+    }),
+  }),
+  section({
+    id: "unknown-parked",
+    label: "Parked in Unknown",
+    select: (p) => p.unknownParkedItems,
+    entity: "inventory",
+    title: "Items parked in Unknown",
+    description:
+      "Stock a capture or import dropped into the global Unknown location because it had no home yet. Move each to a real location.",
+    emptyMessage: "Nothing is parked in Unknown.",
+    renderItem: (item) => ({
+      title: item.product.name,
+      subtitle: `${item.amount.value} ${item.amount.unit}`,
+      details: [createdAgoDetail(item.createdAt)],
+      route: { to: "/inventory/$id", params: { id: item.id } },
+      editLabel: "Open inventory entry",
+      // Draining Unknown is a recount rooted there — same deep link the other
+      // recount detectors offer.
+      customActions: <RecountLink locationId={item.location.id} />,
+    }),
   }),
   section({
     id: "images",

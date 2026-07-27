@@ -66,6 +66,9 @@ export function useProblemsData(opts?: {
           fast.data?.locationsWithoutAiDescription ?? [],
         orphanedEntityEmbeddings: fast.data?.orphanedEntityEmbeddings ?? [],
         staleParentRecipes: fast.data?.staleParentRecipes ?? [],
+        staleLocations: fast.data?.staleLocations ?? [],
+        neverVerifiedInventory: fast.data?.neverVerifiedInventory ?? [],
+        unknownParkedItems: fast.data?.unknownParkedItems ?? [],
         ingredientsWithPartialCoverage:
           coverage.data?.ingredientsWithPartialCoverage ?? [],
         productsWithIslandedMappings:

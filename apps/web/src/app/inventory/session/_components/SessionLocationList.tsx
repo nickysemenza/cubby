@@ -27,6 +27,8 @@ type SessionLocationListProps = {
   inventoryByLocation: Map<string, InventoryItem[]>;
   itemResolutions: Map<string, ItemResolution>;
   completedLocationIds: Set<string>;
+  /** Deferred this pass — settled for progress, but nothing was written. */
+  skippedLocationIds: Set<string>;
   onSelect: (locationId: LocationId) => void;
   onScanJump: (locationId: string) => void;
   parentLocation: InfLocation;
@@ -45,16 +47,22 @@ function SessionLocationList({
   inventoryByLocation,
   itemResolutions,
   completedLocationIds,
+  skippedLocationIds,
   onSelect,
   onScanJump,
   parentLocation,
 }: SessionLocationListProps) {
   const [showCompleted, setShowCompleted] = useState(false);
+  // Skipped locations stay in the outstanding list on purpose — the whole point
+  // is that they're easy to come back to.
   const visible = showCompleted
     ? locations
     : locations.filter((location) => !completedLocationIds.has(location.id));
   const completed = locations.filter((location) =>
     completedLocationIds.has(location.id),
+  ).length;
+  const skipped = locations.filter((location) =>
+    skippedLocationIds.has(location.id),
   ).length;
 
   return (
@@ -65,6 +73,7 @@ function SessionLocationList({
             <CardTitle>{parent.name}</CardTitle>
             <Description>
               {completed} complete / {locations.length} locations
+              {skipped > 0 ? ` · ${skipped} skipped` : ""}
             </Description>
           </div>
           <QrJumpButton parent={parentLocation} onJump={onScanJump} />
@@ -85,6 +94,8 @@ function SessionLocationList({
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const completedThisPass = completedLocationIds.has(location.id);
+          const skippedThisPass =
+            !completedThisPass && skippedLocationIds.has(location.id);
           const confirmed = items.filter((item) =>
             itemResolutions.has(item.id),
           ).length;
@@ -105,11 +116,17 @@ function SessionLocationList({
                 primaryMeta={locationTypeNoun(location.type)}
                 secondaryMeta={pluralize("tracked item", items.length, true)}
                 trailing={
-                  <Badge variant={completedThisPass ? "secondary" : "outline"}>
-                    {completedThisPass
-                      ? `${items.length}/${items.length}`
-                      : `${confirmed}/${items.length}`}
-                  </Badge>
+                  skippedThisPass ? (
+                    <Badge variant="slate">skipped</Badge>
+                  ) : (
+                    <Badge
+                      variant={completedThisPass ? "secondary" : "outline"}
+                    >
+                      {completedThisPass
+                        ? `${items.length}/${items.length}`
+                        : `${confirmed}/${items.length}`}
+                    </Badge>
+                  )
                 }
               />
             </button>
@@ -139,10 +156,19 @@ export function MobileLocationSwitcher({
   ...listProps
 }: SessionLocationListProps & { currentIndex: number }) {
   const [open, setOpen] = useState(false);
-  const { parent, locations, onSelect, onScanJump, completedLocationIds } =
-    listProps;
+  const {
+    parent,
+    locations,
+    onSelect,
+    onScanJump,
+    completedLocationIds,
+    skippedLocationIds,
+  } = listProps;
   const completed = locations.filter((location) =>
     completedLocationIds.has(location.id),
+  ).length;
+  const skipped = locations.filter((location) =>
+    skippedLocationIds.has(location.id),
   ).length;
 
   return (
@@ -158,6 +184,7 @@ export function MobileLocationSwitcher({
           </span>
           <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
             {currentIndex + 1} / {locations.length} · {completed} done
+            {skipped > 0 ? ` · ${skipped} skipped` : ""}
           </span>
         </button>
         <SheetContent side="bottom" className="flex max-h-[80dvh] flex-col p-0">

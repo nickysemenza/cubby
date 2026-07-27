@@ -32,12 +32,14 @@ function isGlobalUnknownLocation(location: InfLocation): boolean {
   return location.name === "Unknown" && !location.parent;
 }
 
-function hasSessionContent(location: InfLocation): boolean {
+function hasSessionItems(location: InfLocation): boolean {
   return (
-    (location.children?.length ?? 0) > 0 ||
-    (location.directItemCount ?? 0) > 0 ||
-    (location.totalItemCount ?? 0) > 0
+    (location.directItemCount ?? 0) > 0 || (location.totalItemCount ?? 0) > 0
   );
+}
+
+function hasSessionContent(location: InfLocation): boolean {
+  return (location.children?.length ?? 0) > 0 || hasSessionItems(location);
 }
 
 export function getSessionRootCandidates(
@@ -45,7 +47,10 @@ export function getSessionRootCandidates(
 ): InfLocation[] {
   return locations
     .filter((location) => {
-      if (isGlobalUnknownLocation(location)) return false;
+      // Unknown is a legitimate root: recounting it *is* how you drain it
+      // (relocate each row to where it belongs). It only earns a slot while it
+      // actually holds items — an empty Unknown is noise, not a sweep.
+      if (isGlobalUnknownLocation(location)) return hasSessionItems(location);
       return hasSessionContent(location);
     })
     .sort((a, b) => {

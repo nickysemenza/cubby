@@ -20,6 +20,30 @@ interface PersistedSessionProgress {
   completedLocationIds: string[];
   currentIndex: number;
   summary: SessionSummary;
+  // Added after v3 shipped, so all three stay optional: an entry written by an
+  // older build still loads (the reader falls back), and a v3 reader ignores
+  // fields it doesn't know. No version bump — bumping would silently discard
+  // every in-flight pass on this device.
+  /** Last write time; the picker's "In progress" list sorts/labels by it. */
+  updatedAt?: number;
+  /** Session-location count at write time, so the picker can show X of Y. */
+  totalCount?: number;
+  /** Locations deferred in this pass. Client-only — never a server write. */
+  skippedLocationIds?: string[];
+}
+
+/**
+ * One unfinished pass discovered in localStorage, for the session picker's
+ * resume list. `totalCount` is null for entries written before it was
+ * persisted — resolve the total from the location tree in that case.
+ */
+export interface StoredSessionPass {
+  rootId: string;
+  startedAt: number;
+  updatedAt: number;
+  completedCount: number;
+  skippedCount: number;
+  totalCount: number | null;
 }
 
 const emptySummary = (): SessionSummary => ({
@@ -30,12 +54,8 @@ const emptySummary = (): SessionSummary => ({
   verified: 0,
 });
 
-function loadSessionProgress(rootId: string): PersistedSessionProgress | null {
+function parseSessionProgress(raw: string): PersistedSessionProgress | null {
   try {
-    const raw = localStorage.getItem(
-      `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
-    );
-    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersistedSessionProgress>;
     if (
       parsed.version !== SESSION_PROGRESS_VERSION ||
@@ -50,6 +70,55 @@ function loadSessionProgress(rootId: string): PersistedSessionProgress | null {
     return parsed as PersistedSessionProgress;
   } catch {
     return null;
+  }
+}
+
+function loadSessionProgress(rootId: string): PersistedSessionProgress | null {
+  try {
+    const raw = localStorage.getItem(
+      `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
+    );
+    return raw ? parseSessionProgress(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every pass this device has stored, newest write first. Client-only: returns
+ * an empty array during SSR so callers can render it straight into markup.
+ */
+export function listStoredSessionPasses(): StoredSessionPass[] {
+  if (typeof window === "undefined") return [];
+  const passes: StoredSessionPass[] = [];
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(AUDIT_SESSION_STORAGE_PREFIX)) continue;
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? parseSessionProgress(raw) : null;
+      if (!parsed) continue;
+      passes.push({
+        rootId: key.slice(AUDIT_SESSION_STORAGE_PREFIX.length),
+        startedAt: parsed.startedAt,
+        updatedAt: parsed.updatedAt ?? parsed.startedAt,
+        completedCount: parsed.completedLocationIds.length,
+        skippedCount: parsed.skippedLocationIds?.length ?? 0,
+        totalCount: parsed.totalCount ?? null,
+      });
+    }
+  } catch {
+    // Private mode / disabled storage: no resume list, not an error.
+    return [];
+  }
+  return passes.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export function clearStoredSessionPass(rootId: string) {
+  try {
+    localStorage.removeItem(`${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`);
+  } catch {
+    // Best effort.
   }
 }
 
@@ -76,6 +145,12 @@ export function useSessionProgress(
   const [completedLocationIds, setCompletedLocationIds] = useState<Set<string>>(
     () => new Set(),
   );
+  // Locations explicitly deferred ("Skip for now"). They count toward pass
+  // completion so one unreachable bin can't strand the summary, but nothing is
+  // written server-side — no verifiedAt, no lastBulkInventory.
+  const [skippedLocationIds, setSkippedLocationIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [summary, setSummary] = useState<SessionSummary>(emptySummary);
   const [resumeCandidate, setResumeCandidate] =
     useState<PersistedSessionProgress | null>(null);
@@ -86,6 +161,7 @@ export function useSessionProgress(
       setStartedAt(progress.startedAt);
       setItemResolutions(new Map(progress.itemResolutions));
       setCompletedLocationIds(new Set(progress.completedLocationIds));
+      setSkippedLocationIds(new Set(progress.skippedLocationIds ?? []));
       setSummary(progress.summary);
       setCurrentIndex(
         Math.min(
@@ -103,6 +179,7 @@ export function useSessionProgress(
     setCurrentIndex(0);
     setItemResolutions(new Map());
     setCompletedLocationIds(new Set());
+    setSkippedLocationIds(new Set());
     setSummary(emptySummary());
   }, []);
 
@@ -121,33 +198,35 @@ export function useSessionProgress(
     lastRootId.current = rootId;
     setResumeCandidate(null);
 
-    if (!rootId || sessionLocations.length === 0) {
-      setStartedAt(null);
+    const reset = (nextStartedAt: number | null) => {
+      setStartedAt(nextStartedAt);
       setCurrentIndex(0);
       setItemResolutions(new Map());
       setCompletedLocationIds(new Set());
+      setSkippedLocationIds(new Set());
       setSummary(emptySummary());
+    };
+
+    if (!rootId || sessionLocations.length === 0) {
+      reset(null);
       return;
     }
 
     const restored = loadSessionProgress(rootId);
     if (!restored) {
-      setStartedAt(Date.now());
-      setCurrentIndex(0);
-      setItemResolutions(new Map());
-      setCompletedLocationIds(new Set());
-      setSummary(emptySummary());
+      reset(Date.now());
       return;
     }
 
-    if (restored.completedLocationIds.length >= sessionLocations.length) {
+    // Skipped locations settle a pass just like completed ones, so a pass that
+    // ended with skips still reopens on its summary instead of re-prompting.
+    const settled =
+      restored.completedLocationIds.length +
+      (restored.skippedLocationIds?.length ?? 0);
+    if (settled >= sessionLocations.length) {
       applyProgress(restored);
     } else {
-      setStartedAt(null);
-      setCurrentIndex(0);
-      setItemResolutions(new Map());
-      setCompletedLocationIds(new Set());
-      setSummary(emptySummary());
+      reset(null);
       setResumeCandidate(restored);
     }
   }, [applyProgress, rootId, sessionLocations]);
@@ -157,8 +236,11 @@ export function useSessionProgress(
     saveSessionProgress(rootId, {
       version: SESSION_PROGRESS_VERSION,
       startedAt,
+      updatedAt: Date.now(),
+      totalCount: sessionLocations.length,
       itemResolutions: [...itemResolutions],
       completedLocationIds: [...completedLocationIds],
+      skippedLocationIds: [...skippedLocationIds],
       currentIndex,
       summary,
     });
@@ -166,8 +248,10 @@ export function useSessionProgress(
     rootId,
     startedAt,
     resumeCandidate,
+    sessionLocations.length,
     itemResolutions,
     completedLocationIds,
+    skippedLocationIds,
     currentIndex,
     summary,
   ]);
@@ -185,6 +269,14 @@ export function useSessionProgress(
         next.add(locationId);
         return next;
       });
+      // Saving a skipped location un-skips it: completed and skipped stay
+      // disjoint, so the two counts always add up to the settled total.
+      setSkippedLocationIds((previous) => {
+        if (!previous.has(locationId)) return previous;
+        const next = new Set(previous);
+        next.delete(locationId);
+        return next;
+      });
       setSummary((previous) => {
         const next = { ...previous, locations: previous.locations + 1 };
         for (const resolution of resolutions) {
@@ -199,6 +291,21 @@ export function useSessionProgress(
     [],
   );
 
+  const toggleLocationSkipped = useCallback((locationId: string) => {
+    setSkippedLocationIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(locationId)) next.delete(locationId);
+      else next.add(locationId);
+      return next;
+    });
+  }, []);
+
+  const clearSkippedLocations = useCallback(() => {
+    setSkippedLocationIds((previous) =>
+      previous.size === 0 ? previous : new Set(),
+    );
+  }, []);
+
   return {
     startedAt,
     currentIndex,
@@ -206,15 +313,19 @@ export function useSessionProgress(
     itemResolutions,
     setItemResolutions,
     completedLocationIds,
+    skippedLocationIds,
     summary,
     resumeCandidate: resumeCandidate
       ? {
           startedAt: resumeCandidate.startedAt,
           completedCount: resumeCandidate.completedLocationIds.length,
+          skippedCount: resumeCandidate.skippedLocationIds?.length ?? 0,
         }
       : null,
     resumePass,
     startNewPass,
     recordLocationComplete,
+    toggleLocationSkipped,
+    clearSkippedLocations,
   };
 }

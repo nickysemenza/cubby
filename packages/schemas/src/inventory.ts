@@ -47,6 +47,9 @@ export const inventorySortableFields = [
   "location",
   "amount",
   "valuation",
+  // Last deliberate recount (null = never). Sortable so "what haven't I counted
+  // in ages?" is one click — NULLS LAST in both directions per the house rule.
+  "verifiedAt",
 ] as const;
 
 export type InventorySortField = (typeof inventorySortableFields)[number];

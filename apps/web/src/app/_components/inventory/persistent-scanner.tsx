@@ -5,16 +5,18 @@
  * - Camera starts immediately on mount via getUserMedia
  * - Full-width viewfinder with horizontal barcode guide overlay
  * - Animated scan line for visual feedback
- * - Green flash on successful scan
+ * - Green flash + confirmation beep on successful scan
+ * - Running tally and recently-scanned chips for a continuous multi-add sweep
  * - Torch (flashlight) toggle button
  * - Camera permission recovery with helpful instructions
  *
- * Uses barcode-detector (ZXing-C++ WASM) for fast detection.
+ * Uses barcode-detector (ZXing-C++ WASM) for fast detection, cropped to the
+ * guide box below (the hook measures it — see useBarcodeScanner/scan-roi).
  */
 
 import { Flashlight, FlashlightOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Row } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -24,9 +26,21 @@ import {
   type BarcodeFormat,
   QR_CODE_FORMATS,
   useBarcodeScanner,
+  useScanBeep,
 } from "./useBarcodeScanner";
 
 export { BARCODE_FORMATS, QR_CODE_FORMATS };
+
+/** One recently-scanned item, shown as a chip under the viewfinder. */
+export interface ScanFeedbackEntry {
+  /** Stable per scan — the same code can legitimately be added twice. */
+  key: string;
+  /** Product name once resolved, else the raw code. */
+  label: string;
+  status: "pending" | "added" | "failed";
+}
+
+const NO_RECENT_SCANS: readonly ScanFeedbackEntry[] = [];
 
 interface PersistentScannerProps {
   onScan: (barcode: string) => void;
@@ -34,6 +48,15 @@ interface PersistentScannerProps {
   enabled?: boolean;
   formatsToSupport: BarcodeFormat[];
   scanHintText: string;
+  /**
+   * Same-code debounce (ms). This is the accept gate — flash, beep and the
+   * consumer's `onScan` all fire once per accepted read.
+   */
+  debounceMs?: number;
+  /** Running session tally shown in the viewfinder HUD. */
+  addedCount?: number;
+  /** Newest-first recently-scanned chips (the caller caps the length). */
+  recentScans?: readonly ScanFeedbackEntry[];
 }
 
 export function PersistentScanner({
@@ -42,20 +65,27 @@ export function PersistentScanner({
   enabled = true,
   formatsToSupport,
   scanHintText,
+  debounceMs,
+  addedCount = 0,
+  recentScans = NO_RECENT_SCANS,
 }: PersistentScannerProps) {
   const [scanFlash, setScanFlash] = useState(false);
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reticleRef = useRef<HTMLDivElement | null>(null);
+  const beep = useScanBeep(enabled);
 
   const handleScan = useCallback(
     (barcode: string) => {
-      // Trigger visual flash
+      // Accepted read (the hook already debounced the repeated decodes of a
+      // barcode held in frame) — flash and blip once, then hand it up.
       setScanFlash(true);
       if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
       flashTimeoutRef.current = setTimeout(() => setScanFlash(false), 300);
+      beep();
 
       onScan(barcode);
     },
-    [onScan],
+    [onScan, beep],
   );
 
   // Clean up flash timeout on unmount
@@ -78,6 +108,8 @@ export function PersistentScanner({
     onError,
     enabled,
     formats: formatsToSupport,
+    debounceMs,
+    reticleRef,
   });
 
   if (!enabled) {
@@ -87,101 +119,129 @@ export function PersistentScanner({
   const isQrMode = formatsToSupport.includes("qr_code");
 
   return (
-    <div className="relative w-full overflow-hidden rounded-lg bg-black">
-      {/* Video element — camera feed */}
-      <video
-        ref={videoRef}
-        className="aspect-[4/3] w-full object-cover"
-        playsInline
-        muted
-      />
-
-      {/* Loading overlay */}
-      {status === "loading" && (
-        <ScannerStatusOverlay status="loading" message="Starting camera..." />
-      )}
-
-      {/* Error state */}
-      {status === "error" && (
-        <ScannerStatusOverlay
-          status="error"
-          errorMessage={errorMessage}
-          onRetry={retry}
-          retryLabel="Try Again"
+    <Stack gap="sm">
+      <div className="relative w-full overflow-hidden rounded-lg bg-black">
+        {/* Video element — camera feed */}
+        <video
+          ref={videoRef}
+          className="aspect-[4/3] w-full object-cover"
+          playsInline
+          muted
         />
-      )}
 
-      {/* Permission denied state */}
-      {status === "permission_denied" && (
-        <ScannerStatusOverlay status="permission-denied" onRetry={retry} />
-      )}
+        {/* Loading overlay */}
+        {status === "loading" && (
+          <ScannerStatusOverlay status="loading" message="Starting camera..." />
+        )}
 
-      {/* Viewfinder overlay — only when scanning */}
-      {status === "scanning" && (
-        <Row
-          align="center"
-          justify="center"
-          className="pointer-events-none absolute inset-0"
-        >
-          {/* Darkened edges around the guide */}
-          {isQrMode ? (
-            /* Square guide for QR codes */
+        {/* Error state */}
+        {status === "error" && (
+          <ScannerStatusOverlay
+            status="error"
+            errorMessage={errorMessage}
+            onRetry={retry}
+            retryLabel="Try Again"
+          />
+        )}
+
+        {/* Permission denied state */}
+        {status === "permission_denied" && (
+          <ScannerStatusOverlay status="permission-denied" onRetry={retry} />
+        )}
+
+        {/*
+          Viewfinder overlay — only when scanning. The guide element is also the
+          detection ROI: `reticleRef` is what the hook measures, so the crop and
+          the box the user aims with can never drift apart.
+        */}
+        {status === "scanning" && (
+          <Row
+            align="center"
+            justify="center"
+            className="pointer-events-none absolute inset-0"
+          >
+            {/* Darkened edges around the guide */}
             <div
-              className={`size-48 rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150 ${
+              ref={reticleRef}
+              className={cn(
+                "rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150",
+                // Square guide for QR codes, wide horizontal guide for barcodes
+                isQrMode ? "size-48" : "h-28 w-[85%]",
                 scanFlash
                   ? "border-positive shadow-[var(--shadow-scan-flash)]"
-                  : "border-white/60"
-              }`}
+                  : "border-white/60",
+              )}
             />
-          ) : (
-            /* Wide horizontal guide for barcodes */
-            <div
-              className={`h-28 w-[85%] rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150 ${
+          </Row>
+        )}
+
+        {/* Session tally — eyes-free confirmation that the sweep is landing */}
+        {status === "scanning" && addedCount > 0 && (
+          <Badge className="absolute top-3 left-3 h-auto border-transparent bg-black/60 px-2 py-1 text-sm text-white">
+            {addedCount} added
+          </Badge>
+        )}
+
+        {/* Torch button */}
+        {torchAvailable && status === "scanning" && (
+          <Button
+            variant={torchEnabled ? "default" : "secondary"}
+            size="icon"
+            className="absolute top-3 right-3 size-10 rounded-full ring-1 ring-border"
+            onClick={toggleTorch}
+            aria-label={
+              torchEnabled ? "Turn off flashlight" : "Turn on flashlight"
+            }
+          >
+            {torchEnabled ? (
+              <Flashlight className="size-5" />
+            ) : (
+              <FlashlightOff className="size-5" />
+            )}
+          </Button>
+        )}
+
+        {/* Scan hint */}
+        {status === "scanning" && (
+          <div className="absolute inset-x-0 bottom-3 text-center">
+            <Badge
+              className={cn(
+                "h-auto border-transparent px-2 py-1 text-sm transition-colors duration-150",
+                // HUD overlay over the live camera feed — deliberate high-contrast
+                // fills, not ledger paper tints.
                 scanFlash
-                  ? "border-positive shadow-[var(--shadow-scan-flash)]"
-                  : "border-white/60"
-              }`}
-            />
-          )}
+                  ? "bg-positive text-primary-foreground"
+                  : "bg-black/60 text-white",
+              )}
+            >
+              {scanFlash ? "Scanned!" : scanHintText}
+            </Badge>
+          </div>
+        )}
+      </div>
+
+      {/* Recently scanned — newest first, so a haul can be ripped through
+          without watching the form below the sheet. */}
+      {recentScans.length > 0 && (
+        <Row gap="xs" wrap align="center" className="min-w-0">
+          {recentScans.map((entry) => (
+            <Badge
+              key={entry.key}
+              variant={
+                entry.status === "failed"
+                  ? "destructive"
+                  : entry.status === "added"
+                    ? "positive"
+                    : "outline"
+              }
+              className="max-w-44 font-sans normal-case tracking-normal"
+              title={entry.label}
+            >
+              <span className="min-w-0 truncate">{entry.label}</span>
+            </Badge>
+          ))}
         </Row>
       )}
-
-      {/* Torch button */}
-      {torchAvailable && status === "scanning" && (
-        <Button
-          variant={torchEnabled ? "default" : "secondary"}
-          size="icon"
-          className="absolute top-3 right-3 size-10 rounded-full ring-1 ring-border"
-          onClick={toggleTorch}
-          aria-label={
-            torchEnabled ? "Turn off flashlight" : "Turn on flashlight"
-          }
-        >
-          {torchEnabled ? (
-            <Flashlight className="size-5" />
-          ) : (
-            <FlashlightOff className="size-5" />
-          )}
-        </Button>
-      )}
-
-      {/* Scan hint */}
-      {status === "scanning" && (
-        <div className="absolute inset-x-0 bottom-3 text-center">
-          <Badge
-            className={cn(
-              "h-auto border-transparent px-2 py-1 text-sm transition-colors duration-150",
-              // HUD overlay over the live camera feed — deliberate high-contrast
-              // fills, not ledger paper tints.
-              scanFlash
-                ? "bg-positive text-primary-foreground"
-                : "bg-black/60 text-white",
-            )}
-          >
-            {scanFlash ? "Scanned!" : scanHintText}
-          </Badge>
-        </div>
-      )}
-    </div>
+    </Stack>
   );
 }

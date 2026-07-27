@@ -1,4 +1,4 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import {
   projectCreateInput,
   purchaseCreateInput,
@@ -13,14 +13,23 @@ import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
-import { image, product, productImage } from "~/server/db/schema";
+import {
+  image,
+  inventoryEntry,
+  location as locationTable,
+  product,
+  productImage,
+} from "~/server/db/schema";
 import {
   findAllProblems,
+  findFastProblems,
   findTrackerProblems,
   reparseStaleIngredientParses,
 } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { createIngredient, getIngredientByName } from "./ingredient";
+import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
+import { createLocation, ensureGlobalUnknownLocation } from "./location";
 import { findStaleIngredientParses } from "./problems";
 import { createProduct } from "./product";
 import { createProject, deleteProjects } from "./project";
@@ -28,6 +37,7 @@ import { createPurchase, deletePurchases } from "./purchase";
 import { createRecipe } from "./recipe";
 import {
   ingredientRef,
+  makeLocationInput,
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
@@ -598,5 +608,130 @@ describe("problems service — tracker slice", () => {
     expect(everyEntityId).not.toContain(task.id);
     expect(everyEntityId).not.toContain(planned.id);
     expect(everyEntityId).not.toContain(project.id);
+  });
+});
+
+// The recount-staleness detectors (tenet 1: only a deliberate recount restores
+// inventory truth). All three are cheap SQL in the `fast` group, so drive them
+// through findFastProblems rather than the full findAllProblems scan.
+describe("problems service — recount staleness", () => {
+  const ctx = withTestDb();
+  const amount = { value: 2, unit: "each" };
+  const daysAgo = (days: number) =>
+    new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // A stocked location: one live entry of a fresh product, never verified.
+  const seedStocked = async (name: string) => {
+    const loc = await createLocation(
+      ctx.db,
+      makeLocationInput({ name }),
+      ctx.actor,
+    );
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: `Widget for ${name}` }),
+      ctx.actor,
+    );
+    const entry = await createInventoryEntry(
+      ctx.db,
+      { productId: prod.id, locationId: loc.id, amount },
+      ctx.actor,
+    );
+    return { loc, product: prod, entry };
+  };
+
+  const setLastRecount = (locationId: LocationId, at: Date) =>
+    getDb(ctx.db)
+      .update(locationTable)
+      .set({ lastBulkInventory: at })
+      .where(eq(locationTable.id, locationId));
+
+  it("flags stocked locations never recounted or recounted long ago, not fresh ones", async () => {
+    const never = await seedStocked("Never-recounted shelf");
+    const long = await seedStocked("Long-ago shelf");
+    const fresh = await seedStocked("Freshly-recounted shelf");
+    await setLastRecount(long.loc.id, daysAgo(90));
+    await setLastRecount(fresh.loc.id, daysAgo(3));
+
+    const { staleLocations } = await findFastProblems(ctx.db);
+    const ids = staleLocations.map((l) => l.id);
+    expect(ids).toContain(never.loc.id);
+    expect(ids).toContain(long.loc.id);
+    expect(ids).not.toContain(fresh.loc.id);
+
+    const row = staleLocations.find((l) => l.id === never.loc.id);
+    expect(row?.itemCount).toBe(1);
+    expect(row?.lastBulkInventory).toBeNull();
+  });
+
+  it("ignores locations with no live stock (empty, or emptied by a soft delete)", async () => {
+    const empty = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Empty bin" }),
+      ctx.actor,
+    );
+    const emptied = await seedStocked("Emptied bin");
+    await deleteInventoryEntries(ctx.db, [emptied.entry.id], ctx.actor);
+
+    const { staleLocations } = await findFastProblems(ctx.db);
+    const ids = staleLocations.map((l) => l.id);
+    // Nothing to recount — findEmptyLocations already owns these.
+    expect(ids).not.toContain(empty.id);
+    expect(ids).not.toContain(emptied.loc.id);
+  });
+
+  it("lists never-verified entries, and drops them once verified or deleted", async () => {
+    const unverified = await seedStocked("Unverified bin");
+    const verified = await seedStocked("Verified bin");
+    const removed = await seedStocked("Removed bin");
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ verifiedAt: new Date() })
+      .where(eq(inventoryEntry.id, verified.entry.id));
+    await deleteInventoryEntries(ctx.db, [removed.entry.id], ctx.actor);
+
+    const { neverVerifiedInventory } = await findFastProblems(ctx.db);
+    const ids = neverVerifiedInventory.map((i) => i.id);
+    expect(ids).toContain(unverified.entry.id);
+    expect(ids).not.toContain(verified.entry.id);
+    expect(ids).not.toContain(removed.entry.id);
+
+    // Rows carry both refs so the card can link product AND location.
+    expect(
+      neverVerifiedInventory.find((i) => i.id === unverified.entry.id),
+    ).toMatchObject({
+      product: { id: unverified.product.id },
+      location: { id: unverified.loc.id, name: "Unverified bin" },
+    });
+  });
+
+  it("flags only items parked in the global Unknown location", async () => {
+    const unknown = await ensureGlobalUnknownLocation(ctx.db, ctx.actor);
+    const parkedProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Parked widget" }),
+      ctx.actor,
+    );
+    const parked = await createInventoryEntry(
+      ctx.db,
+      { productId: parkedProduct.id, locationId: unknown.id, amount },
+      ctx.actor,
+    );
+    const filed = await seedStocked("Properly filed shelf");
+
+    const { unknownParkedItems } = await findFastProblems(ctx.db);
+    expect(unknownParkedItems.map((i) => i.id)).toContain(parked.id);
+    expect(unknownParkedItems.map((i) => i.id)).not.toContain(filed.entry.id);
+    // The location ref is what lets the Problems card offer a recount rooted at
+    // Unknown — the only thing that actually drains it.
+    expect(unknownParkedItems.find((i) => i.id === parked.id)).toMatchObject({
+      product: { id: parkedProduct.id, name: "Parked widget" },
+      location: { name: "Unknown" },
+    });
+
+    // Filing it away (here: soft-deleting the parked row) clears the problem.
+    await deleteInventoryEntries(ctx.db, [parked.id], ctx.actor);
+    const after = await findFastProblems(ctx.db);
+    expect(after.unknownParkedItems.map((i) => i.id)).not.toContain(parked.id);
   });
 });

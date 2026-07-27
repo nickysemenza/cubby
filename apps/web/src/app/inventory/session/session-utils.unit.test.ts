@@ -112,7 +112,7 @@ describe("inventory session utils", () => {
     expect(isDescendantLocation(garage, pantry.id)).toBe(false);
   });
 
-  it("selects useful session roots and excludes global Unknown", () => {
+  it("selects useful session roots and excludes an empty global Unknown", () => {
     const unknown = loc(
       "00000000-0000-4000-8000-000000000030",
       "Unknown",
@@ -138,6 +138,28 @@ describe("inventory session utils", () => {
         (item) => item.name,
       ),
     ).toEqual(["Garage", "Tote"]);
+  });
+
+  it("offers global Unknown as a root once it holds items", () => {
+    // Recounting Unknown is the drain: each row gets relocated to where it
+    // belongs. An Unknown holding only empty child locations stays hidden.
+    const emptyUnknown = {
+      ...loc("00000000-0000-4000-8000-000000000060", "Unknown", "area", [
+        loc("00000000-0000-4000-8000-000000000061", "Parked bin", "tote-27gal"),
+      ]),
+    };
+    const stockedUnknown = {
+      ...loc("00000000-0000-4000-8000-000000000062", "Unknown", "area"),
+      directItemCount: 3,
+      totalItemCount: 3,
+    };
+
+    expect(getSessionRootCandidates([emptyUnknown]).map((i) => i.name)).toEqual(
+      [],
+    );
+    expect(
+      getSessionRootCandidates([stockedUnknown]).map((i) => i.name),
+    ).toEqual(["Unknown"]);
   });
 
   it("flattens picker roots with expansion and search", () => {
