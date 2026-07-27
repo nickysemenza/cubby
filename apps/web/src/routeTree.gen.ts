@@ -34,6 +34,7 @@ import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSectionRouteImport } from './routes/docs.$section'
 import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
+import { Route as AuthenticatedAccountConnectedAppsRouteImport } from './routes/_authenticated/account.connected-apps'
 import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
 import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
@@ -212,6 +213,12 @@ const AuthenticatedAccountAccountViewRoute =
   AuthenticatedAccountAccountViewRouteImport.update({
     id: '/account/$accountView',
     path: '/account/$accountView',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAccountConnectedAppsRoute =
+  AuthenticatedAccountConnectedAppsRouteImport.update({
+    id: '/account/connected-apps',
+    path: '/account/connected-apps',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedCookbooksIndexRoute =
@@ -520,6 +527,7 @@ export interface FileRoutesByFullPath {
   '/oauth/consent': typeof OauthConsentRoute
   '/docs/': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
@@ -594,6 +602,7 @@ export interface FileRoutesByTo {
   '/oauth/consent': typeof OauthConsentRoute
   '/docs': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
@@ -671,6 +680,7 @@ export interface FileRoutesById {
   '/oauth/consent': typeof OauthConsentRoute
   '/docs/': typeof DocsIndexRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/_authenticated/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
   '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
   '/_authenticated/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
@@ -748,6 +758,7 @@ export interface FileRouteTypes {
     | '/oauth/consent'
     | '/docs/'
     | '/account/$accountView'
+    | '/account/connected-apps'
     | '/cookbooks/$cookbookId'
     | '/images/$id'
     | '/ingredients/$id'
@@ -822,6 +833,7 @@ export interface FileRouteTypes {
     | '/oauth/consent'
     | '/docs'
     | '/account/$accountView'
+    | '/account/connected-apps'
     | '/cookbooks/$cookbookId'
     | '/images/$id'
     | '/ingredients/$id'
@@ -898,6 +910,7 @@ export interface FileRouteTypes {
     | '/oauth/consent'
     | '/docs/'
     | '/_authenticated/account/$accountView'
+    | '/_authenticated/account/connected-apps'
     | '/_authenticated/cookbooks/$cookbookId'
     | '/_authenticated/images/$id'
     | '/_authenticated/ingredients/$id'
@@ -1140,6 +1153,13 @@ declare module '@tanstack/react-router' {
       path: '/account/$accountView'
       fullPath: '/account/$accountView'
       preLoaderRoute: typeof AuthenticatedAccountAccountViewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/account/connected-apps': {
+      id: '/_authenticated/account/connected-apps'
+      path: '/account/connected-apps'
+      fullPath: '/account/connected-apps'
+      preLoaderRoute: typeof AuthenticatedAccountConnectedAppsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/cookbooks/': {
@@ -1502,6 +1522,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
+  AuthenticatedAccountConnectedAppsRoute: typeof AuthenticatedAccountConnectedAppsRoute
   AuthenticatedCookbooksCookbookIdRoute: typeof AuthenticatedCookbooksCookbookIdRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
@@ -1562,6 +1583,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
+  AuthenticatedAccountConnectedAppsRoute:
+    AuthenticatedAccountConnectedAppsRoute,
   AuthenticatedCookbooksCookbookIdRoute: AuthenticatedCookbooksCookbookIdRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,

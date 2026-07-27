@@ -58,6 +58,10 @@ export const queryKeys = {
   dashboard: {
     counts: procedureKey("dashboard", "counts"),
   },
+  oauth: {
+    connectedApps: procedureKey("oauth", "listConnectedApps"),
+    orphaned: procedureKey("oauth", "countOrphanedClients"),
+  },
   debug: {
     timing: procedureKey("debug", "timing"),
   },
