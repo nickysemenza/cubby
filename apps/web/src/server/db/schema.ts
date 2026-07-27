@@ -927,6 +927,17 @@ export const purchase = pgTable(
     projectId: uuid("projectId")
       .$type<ProjectId>()
       .references(() => project.id),
+    // Optional link to the thing this purchase bought. Sparse by design: most
+    // material runs stay unlinked, and only inventoried goods (tools, mainly)
+    // get a product. A *negative* purchase carrying the same productId is how
+    // an exit is recorded — sale at sale price, return at full price, and a
+    // broken/gifted item as cost 0 (never null: `cost IS NULL` is already the
+    // Unclassified predicate). Net cost, ownership window and owned/sold status
+    // are derived from these rows plus inventory; nothing is stored.
+    productId: uuid("productId")
+      .$type<ProductId>()
+      .references(() => product.id),
+    vendor: text("vendor"),
     notionPageId: text("notionPageId"),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -936,6 +947,7 @@ export const purchase = pgTable(
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Purchase_projectId_idx").on(table.projectId),
+    index("Purchase_productId_idx").on(table.productId),
     index("Purchase_date_idx").on(table.date),
     index("Purchase_costType_idx").on(table.costType),
     index("Purchase_name_gin_idx").using(
@@ -1051,6 +1063,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   externalIds: many(productExternalId),
   inventoryEntry: many(inventoryEntry),
   images: many(productImage),
+  purchases: many(purchase),
 }));
 
 export const productExternalIdRelations = relations(
@@ -1170,6 +1183,10 @@ export const purchaseRelations = relations(purchase, ({ one }) => ({
   project: one(project, {
     fields: [purchase.projectId],
     references: [project.id],
+  }),
+  product: one(product, {
+    fields: [purchase.productId],
+    references: [product.id],
   }),
 }));
 

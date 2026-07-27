@@ -101,3 +101,58 @@ describe("budgetRemaining", () => {
     expect(budgetRemaining(150, over)).toBe(-50);
   });
 });
+
+// A product's net cost basis (ProductPurchaseHistory) reuses this split rather
+// than summing costs directly: a bare sum would blend planned rows into money
+// actually spent, and NaN out on the null costs the ledger genuinely carries.
+describe("net cost basis over a product's linked purchases", () => {
+  const netCost = (purchases: Parameters<typeof splitPurchaseSpend>[0]) => {
+    const split = splitPurchaseSpend(purchases);
+    return split.actual - split.contributions;
+  };
+
+  it("nets an acquisition against a later sale", () => {
+    expect(
+      netCost([
+        { cost: 180, future: false },
+        { cost: -150, future: false },
+      ]),
+    ).toBe(30);
+  });
+
+  it("is zero for a full return", () => {
+    expect(
+      netCost([
+        { cost: 180, future: false },
+        { cost: -180, future: false },
+      ]),
+    ).toBe(0);
+  });
+
+  it("treats a 0-cost disposal as leaving the basis untouched", () => {
+    expect(
+      netCost([
+        { cost: 180, future: false },
+        { cost: 0, future: false },
+      ]),
+    ).toBe(180);
+  });
+
+  it("contributes nothing (not NaN) for a null cost", () => {
+    expect(
+      netCost([
+        { cost: 180, future: false },
+        { cost: null, future: false },
+      ]),
+    ).toBe(180);
+  });
+
+  it("excludes planned rows — they are not money out the door", () => {
+    expect(
+      netCost([
+        { cost: 180, future: false },
+        { cost: 500, future: true },
+      ]),
+    ).toBe(180);
+  });
+});

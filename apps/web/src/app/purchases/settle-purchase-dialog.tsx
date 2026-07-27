@@ -21,6 +21,7 @@ import {
   NullableTextareaField,
   PlainDateField,
   SelectField,
+  UnifiedTextField,
 } from "../_components/form-utils";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { costTypeOptions } from "./purchase-options";
@@ -43,6 +44,7 @@ const settlePurchaseSchema = z.object({
   costType: costTypeSchema,
   trade: tradeSchema,
   notes: z.string().nullable(),
+  vendor: z.string(),
 });
 type SettlePurchaseValues = z.infer<typeof settlePurchaseSchema>;
 
@@ -75,6 +77,7 @@ export function SettlePurchaseDialog({
       costType: purchase.costType,
       trade: purchase.trade,
       notes: purchase.notes,
+      vendor: purchase.vendor ?? "",
     }),
     [purchase],
   );
@@ -105,6 +108,7 @@ export function SettlePurchaseDialog({
           costType: values.costType,
           trade: values.trade,
           notes: values.notes,
+          vendor: values.vendor.trim() || null,
           future: false,
         },
       },
@@ -162,6 +166,12 @@ export function SettlePurchaseDialog({
           label="Project"
           options={projectOptions}
           nullable
+        />
+        <UnifiedTextField
+          form={form}
+          name="vendor"
+          label="Vendor"
+          placeholder="Where from?"
         />
         <NullableTextareaField
           form={form}

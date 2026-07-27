@@ -1,13 +1,17 @@
 import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
-import { ExternalLink, Info } from "lucide-react";
-import type { FC } from "react";
-import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { ExternalLink, Info, PackagePlus } from "lucide-react";
+import { type FC, useState } from "react";
+import {
+  WithProductSearch,
+  WithProjectSearch,
+} from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
@@ -27,6 +31,7 @@ import {
   costTypeOptions,
   futureFilterOptions,
 } from "./purchase-options";
+import { ReceivePurchaseDialog } from "./receive-purchase-dialog";
 
 interface PurchaseDetailProps {
   purchase: PurchaseOut;
@@ -34,6 +39,7 @@ interface PurchaseDetailProps {
 
 export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
   const api = useTRPC();
+  const [receiveOpen, setReceiveOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -218,6 +224,22 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       ),
     },
     {
+      label: "Vendor",
+      value: (
+        <EditableCell
+          value={purchase.vendor}
+          config={{ type: "text", placeholder: "Where from?" }}
+          onSave={async (vendor) => {
+            await updateMutation.mutateAsync({
+              id: purchase.id,
+              data: { vendor },
+            });
+          }}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      ),
+    },
+    {
       label: "Project",
       value: (
         <EditableEntityCell
@@ -261,6 +283,50 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
         />
       ),
     },
+    {
+      label: "Product",
+      value: (
+        <EditableEntityCell
+          value={
+            purchase.productId && purchase.productName
+              ? { id: purchase.productId, name: purchase.productName }
+              : null
+          }
+          label="product"
+          clearable
+          trigger="pencil"
+          onSave={async (newProductId) => {
+            await updateMutation.mutateAsync({
+              id: purchase.id,
+              data: { productId: newProductId },
+            });
+          }}
+          clipboard={entityCellClipboard(
+            "product",
+            purchase.productId && purchase.productName
+              ? { id: purchase.productId, name: purchase.productName }
+              : null,
+            async (newProductId) => {
+              await updateMutation.mutateAsync({
+                id: purchase.id,
+                data: { productId: newProductId },
+              });
+            },
+          )}
+          SearchProvider={WithProductSearch}
+          renderValue={(v) =>
+            v ? (
+              <EntityInlineLink
+                entity="product"
+                data={{ id: v.id, name: v.name }}
+              />
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+    },
   ];
 
   const sections: DetailSection[] = [
@@ -268,6 +334,18 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       title: "Overview",
       icon: Info,
       content: <BasicInfo fields={fields} />,
+      // Receiving is deliberately a separate, explicit act — linking a product
+      // records what was bought, it never moves inventory on its own.
+      headerAction: purchase.productId ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setReceiveOpen(true)}
+        >
+          <PackagePlus />
+          Receive into inventory
+        </Button>
+      ) : undefined,
     },
     ...commonSections,
   ];
@@ -303,6 +381,14 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       heroStats={heroStats}
     >
       <DetailSections sections={sections} rawData={purchase} />
+      {purchase.productId ? (
+        <ReceivePurchaseDialog
+          open={receiveOpen}
+          onOpenChange={setReceiveOpen}
+          productId={purchase.productId}
+          purchaseName={purchase.name}
+        />
+      ) : null}
     </Page>
   );
 };

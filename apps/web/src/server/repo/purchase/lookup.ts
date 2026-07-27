@@ -13,6 +13,7 @@ import {
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   relations,
 } from "~/server/repo/database-helpers";
@@ -51,6 +52,11 @@ export const buildPurchaseWhereClause = async (
     ]);
   }
 
+  // `search` stays a single-column term: buildSearchConditions ANDs its
+  // searchFilters entries, so adding `{ column: vendor, term: filters.search }`
+  // here would mean `name ILIKE q AND vendor ILIKE q` — and vendor is null on
+  // nearly every row, which would silently zero out purchase search. Vendor
+  // matching is its own filter, applied below.
   return buildSearchConditions(
     purchase,
     [{ column: purchase.name, term: filters.search }],
@@ -58,6 +64,8 @@ export const buildPurchaseWhereClause = async (
       filters.costType ? eq(purchase.costType, filters.costType) : undefined,
       filters.trade ? eq(purchase.trade, filters.trade) : undefined,
       projectCondition,
+      filters.productId ? eq(purchase.productId, filters.productId) : undefined,
+      formatSearchTerm(purchase.vendor, filters.vendor),
       filters.future !== undefined
         ? eq(purchase.future, filters.future)
         : undefined,

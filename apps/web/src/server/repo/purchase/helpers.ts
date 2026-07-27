@@ -1,7 +1,10 @@
 import type { PurchaseOut } from "@cubby/schemas/project";
 import { resolveLiveJoinName } from "~/server/repo/database-helpers";
 
-/** Shape of a `purchase` row loaded with its (nullable) parent `project` name. */
+/**
+ * Shape of a `purchase` row loaded with its (nullable) parent `project` and
+ * linked `product` names.
+ */
 type PurchaseRow = {
   id: PurchaseOut["id"];
   name: string;
@@ -13,9 +16,12 @@ type PurchaseRow = {
   notes: string | null;
   future: boolean;
   projectId: PurchaseOut["projectId"];
+  productId: PurchaseOut["productId"];
+  vendor: string | null;
   createdAt: Date;
   updatedAt: Date;
   project: { name: string; deletedAt: Date | null } | null;
+  product: { name: string; deletedAt: Date | null } | null;
 };
 
 export const dbPurchaseToAPI = (row: PurchaseRow): PurchaseOut => ({
@@ -30,6 +36,9 @@ export const dbPurchaseToAPI = (row: PurchaseRow): PurchaseOut => ({
   future: row.future,
   projectId: row.projectId,
   projectName: resolveLiveJoinName(row.project),
+  productId: row.productId,
+  productName: resolveLiveJoinName(row.product),
+  vendor: row.vendor,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
