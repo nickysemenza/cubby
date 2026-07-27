@@ -5,7 +5,15 @@ import {
 } from "@cubby/schemas/pagination";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import { eq, gte, inArray, isNull, lte, type SQL } from "drizzle-orm";
+import {
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  type SQL,
+} from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
 import {
@@ -65,6 +73,15 @@ export const buildPurchaseWhereClause = async (
       filters.trade ? eq(purchase.trade, filters.trade) : undefined,
       projectCondition,
       filters.productId ? eq(purchase.productId, filters.productId) : undefined,
+      // "linked" means productId IS NOT NULL — this deliberately includes
+      // purchases whose product was later soft-deleted (those read back with
+      // productId still set and productName null; see dbPurchaseToAPI).
+      filters.productPresenceFilter === "has"
+        ? isNotNull(purchase.productId)
+        : undefined,
+      filters.productPresenceFilter === "none"
+        ? isNull(purchase.productId)
+        : undefined,
       formatSearchTerm(purchase.vendor, filters.vendor),
       filters.future !== undefined
         ? eq(purchase.future, filters.future)

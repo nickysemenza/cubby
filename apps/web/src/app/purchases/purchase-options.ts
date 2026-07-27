@@ -1,8 +1,9 @@
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { CostType, PurchaseFilters, Trade } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
+import { presenceFilterOptions } from "~/app/_components/data-table/columnHelpers";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
@@ -39,6 +40,14 @@ export const futureFilterOptions: FilterableComboboxItem[] = [
   { value: "true", label: "Planned" },
   { value: "false", label: "Already made" },
 ];
+
+/**
+ * `{value,label}` options for the product-link presence filter ("has"/"none")
+ * — a full product picklist isn't practical here (unlike `projectOptions`,
+ * the product universe is unbounded), so the header filter only distinguishes
+ * linked vs. unlinked rather than matching a specific product.
+ */
+export const productLinkedOptions = presenceFilterOptions("product");
 
 /** Fixed preset values for the purchase-date-range filter. */
 const dateRangeValues = ["30d", "90d", "ytd", "1y"] as const;
@@ -91,11 +100,18 @@ export function buildPurchaseFilters(
 ): PurchaseFilters {
   const projectFilter = get("project");
   const futureFilter = get("future");
+  const productIdFilter = get("productId");
+  const productPresenceFilter = get("product");
   return {
     search: get("name"),
     costType: (get("costType") as CostType | undefined) || undefined,
     trade: (get("trade") as Trade | undefined) || undefined,
     projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+    productId: productIdFilter ? unsafeProductId(productIdFilter) : undefined,
+    productPresenceFilter:
+      productPresenceFilter === "has" || productPresenceFilter === "none"
+        ? productPresenceFilter
+        : undefined,
     future:
       futureFilter === undefined || futureFilter === ""
         ? undefined
@@ -118,6 +134,8 @@ export interface PurchaseSearchFilters {
   project?: string;
   future?: string;
   date?: string;
+  productId?: string;
+  product?: string;
 }
 
 /**
@@ -136,6 +154,8 @@ export function purchaseFiltersFromSearch(
     project: search.project,
     future: search.future,
     date: search.date,
+    productId: search.productId,
+    product: search.product,
   };
   return buildPurchaseFilters((id) => map[id]);
 }

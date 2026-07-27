@@ -1,6 +1,7 @@
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import type { PurchaseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import type { FC } from "react";
 import { splitPurchaseSpend } from "~/app/projects/spend";
@@ -111,6 +112,13 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
           </>
         )}
       </p>
+      <Link
+        to="/purchases"
+        search={{ productId: product.id }}
+        className="text-primary text-xs hover:underline"
+      >
+        See all in ledger →
+      </Link>
     </Stack>
   );
 };

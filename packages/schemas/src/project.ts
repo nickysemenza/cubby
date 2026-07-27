@@ -2,7 +2,7 @@ import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { productId, projectId, purchaseId, taskId } from "./identifiers";
-import { createPaginatedResponseSchema } from "./pagination";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 
 /**
  * Home-project tracker schemas: `project` (a household undertaking), `task`
@@ -675,6 +675,7 @@ export const purchaseFilterFields = {
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
   productId: productId.optional(),
+  productPresenceFilter: presenceFilter,
   // Its own filter, deliberately NOT folded into `search`: buildSearchConditions
   // ANDs its entries, so a second column sharing the `search` term would mean
   // `name ILIKE q AND vendor ILIKE q` — and vendor is null on almost every row,
