@@ -10,12 +10,30 @@ import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
+import { useTRPC } from "~/integrations/trpc/react";
+import { queryKeys } from "~/lib/query-keys";
+import { useEntityDelete } from "../hooks/useEntityDelete";
+
+/** Module-level so the delete hook's key list keeps a stable identity. */
+const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
 
 interface ImageDetailProps {
   image: ImageWithEntity;
 }
 
 export function ImageDetail({ image }: ImageDetailProps) {
+  const api = useTRPC();
+  // Hard delete — images have no `deletedAt`, so this removes the row and its
+  // R2 object; any owning entity just loses the picture.
+  const { DeleteButton, DeleteDialog } = useEntityDelete({
+    id: image.id,
+    name: image.filename,
+    entityLabel: "Image",
+    mutationOptions: (callbacks) => api.image.delete.mutationOptions(callbacks),
+    invalidateKeys: IMAGE_INVALIDATE_KEYS,
+    redirectTo: "/images",
+  });
+
   const renderEntityLink = () => {
     // Destructure to locals so the guard's narrowing survives into the match
     // closures below (property narrowing on `image` would be lost in callbacks).
@@ -136,8 +154,13 @@ export function ImageDetail({ image }: ImageDetailProps) {
             <span className="text-muted-foreground">Created:</span>{" "}
             <HoverableTimestamp timestamp={image.createdAt} />
           </div>
+          <Row justify="end">
+            <DeleteButton />
+          </Row>
         </CardContent>
       </Card>
+
+      <DeleteDialog />
     </Stack>
   );
 }

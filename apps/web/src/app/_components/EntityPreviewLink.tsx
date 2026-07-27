@@ -7,7 +7,7 @@ import {
   PreviewCardTrigger,
 } from "~/components/ui/preview-card";
 import { Spinner } from "~/components/ui/spinner";
-import { entities } from "~/entities/entities";
+import { entities, entityDetailParams } from "~/entities/entities";
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 
 const EntityPreviewContent = lazy(() =>
@@ -58,7 +58,7 @@ export function EntityPreviewLink({
         render={
           <Link
             to={entities[entity].routes.detail}
-            params={{ id }}
+            params={entityDetailParams(entity, id)}
             target={openInNewTab ? "_blank" : undefined}
             rel={openInNewTab ? "noopener noreferrer" : undefined}
             className={className}

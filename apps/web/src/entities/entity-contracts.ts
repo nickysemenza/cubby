@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
-import { skipToken } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
 import type { useTRPC } from "~/integrations/trpc/react";
 import {
@@ -54,17 +53,12 @@ interface EntityContract {
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);
 
-const skippedDetailQuery = {
-  queryKey: ["entity-skip"] as const,
-  queryFn: skipToken,
-};
-
 const listParams = (params: ListParams) => params as never;
 
 // The 9 core entities share a mechanically-identical contract whose only axes are
 // the router key (== entity key), the invalidation-key list, and (product only) a
 // picker-search query. image / usda-food / cookbook genuinely diverge (different
-// router keys, fdc_id coercion, no detail query) and stay spelled out below.
+// router keys, fdc_id coercion, list-backed detail) and stay spelled out below.
 export const standardEntities = [
   "product",
   "ingredient",
@@ -168,11 +162,15 @@ const entityContracts = {
     route: entities.cookbook.routes,
     defaultSort: "title",
     sortableFields: [],
-    canPreview: false,
+    // Cookbooks are searchable, so a search-result row must open a preview
+    // rather than a dead click. There is no cookbook getByID — the browse index
+    // carries every field the preview needs, so `detail` warms that same query
+    // and the panel's cookbook arm reads it (like the meal arm).
+    canPreview: true,
     invalidationKeys: [queryKeys.cookbook.all],
     query: {
       list: (api) => api.recipe.listCookbooks.queryOptions(),
-      detail: () => skippedDetailQuery,
+      detail: (api) => api.recipe.listCookbooks.queryOptions(),
     },
     mutation: {
       invalidationKeys: [queryKeys.cookbook.all],

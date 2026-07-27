@@ -672,6 +672,7 @@ export const updateProduct = async (
     // Build update data (price flows in via ...productData)
     const updateData: {
       name?: string;
+      aliases?: string[];
       manufacturer?: string;
       category?: ProductCategory | null;
       upc?: string | null;
@@ -738,6 +739,7 @@ export const updateProduct = async (
     // Log audit entry with changes
     const changes = computeChanges(beforeProduct, updated, [
       "name",
+      "aliases",
       "manufacturer",
       "category",
       "upc",

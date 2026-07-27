@@ -1,4 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { CookbookId } from "@cubby/schemas/identifiers";
+import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
@@ -322,6 +324,21 @@ export type EntityNewRoute = {
 
 export const entities = entityDefinitions as typeof entityDefinitions &
   Record<Entity, EntityDefinition>;
+
+/**
+ * Path params for an entity's detail route. Every detail route is keyed `$id`
+ * except cookbook, whose route is `/cookbooks/$cookbookId` — so any generic
+ * "link to this entity by id" surface (search results, hovercards, the manifest
+ * card) must route through here instead of hard-coding `{ id }`.
+ */
+export const entityDetailParams = (
+  entity: Entity,
+  id: string,
+): { id: string } | { cookbookId: CookbookId } =>
+  entity === "cookbook" ? { cookbookId: unsafeCookbookId(id) } : { id };
+
+/** Path-params shape accepted by any entity detail `<Link>`. */
+export type EntityDetailParams = ReturnType<typeof entityDetailParams>;
 
 /**
  * Get the list of server-sortable fields for an entity.

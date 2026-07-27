@@ -15,15 +15,19 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
+  type CookbookPreview,
   type IngredientPreview,
   type LocationPreview,
+  type MealPreview,
   type ProductPreview,
   type ProjectPreview,
   type PurchasePreview,
   type RecipePreview,
   type TaskPreview,
+  toCookbookCard,
   toIngredientCard,
   toLocationCard,
+  toMealCard,
   toProductCard,
   toProjectCard,
   toPurchaseCard,
@@ -1460,6 +1464,23 @@ const LOCATION_SAMPLE: LocationPreview = {
   itemCount: 12,
   subCount: 3,
 };
+const COOKBOOK_SAMPLE: CookbookPreview = {
+  id: "sample-cookbook",
+  name: "Salt Fat Acid Heat",
+  authors: ["Samin Nosrat"],
+  subjects: ["Cooking", "Technique"],
+  recipeCount: 41,
+  sourceRecipeCount: 86,
+};
+const MEAL_SAMPLE: MealPreview = {
+  id: "sample-meal",
+  name: "Sunday Supper",
+  date: "2026-08-09",
+  recipeNames: ["Buttermilk-Brined Chicken", "Kale Caesar"],
+  cost: 18.4,
+  calories: 2140,
+  pending: false,
+};
 const PROJECT_SAMPLE: ProjectPreview = {
   id: "sample-project",
   name: "Backyard Deck Rebuild",
@@ -1504,9 +1525,14 @@ const PREVIEW_DEMOS = [
   { key: "product", node: <ManifestCard {...toProductCard(PRODUCT_SAMPLE)} /> },
   { key: "usda-food", node: <ManifestCard {...toUsdaCard(USDA_SAMPLE)} /> },
   {
+    key: "cookbook",
+    node: <ManifestCard {...toCookbookCard(COOKBOOK_SAMPLE)} />,
+  },
+  {
     key: "location",
     node: <ManifestCard {...toLocationCard(LOCATION_SAMPLE)} />,
   },
+  { key: "meal", node: <ManifestCard {...toMealCard(MEAL_SAMPLE)} /> },
   { key: "project", node: <ManifestCard {...toProjectCard(PROJECT_SAMPLE)} /> },
   { key: "task", node: <ManifestCard {...toTaskCard(TASK_SAMPLE)} /> },
   {

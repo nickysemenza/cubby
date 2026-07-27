@@ -10,11 +10,13 @@ import { z } from "zod";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
+import { RecipeAvailabilityPanel } from "~/app/_components/recipe/RecipeAvailabilityPanel";
 import RecipeDetail, {
   type RecipeViewMode,
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
 import { AddToMeal } from "~/app/meals/add-to-meal";
+import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
@@ -182,13 +184,20 @@ function RecipeDetailPage() {
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
       ) : (
-        <RecipeDetail
-          recipe={recipe}
-          view={recipeView}
-          onViewChange={setRecipeView}
-          scale={scale}
-          onScaleChange={setScale}
-        />
+        <Stack gap="lg">
+          {/* Inventory cross-check — its own query/skeleton, so the recipe
+              never waits on the availability engine. Lives here rather than in
+              RecipeDetail so the search hover-preview (which embeds
+              RecipeDetail) doesn't fire it. */}
+          <RecipeAvailabilityPanel recipeId={recipe.id} />
+          <RecipeDetail
+            recipe={recipe}
+            view={recipeView}
+            onViewChange={setRecipeView}
+            scale={scale}
+            onScaleChange={setScale}
+          />
+        </Stack>
       )}
 
       <DeleteDialog />

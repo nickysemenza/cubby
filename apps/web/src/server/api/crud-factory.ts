@@ -272,8 +272,9 @@ export function createEntityCrudWithoutListProcedures<
   };
 }
 
-// Generic CRUD procedures factory for entities
-export function createEntityCrudProcedures<
+// Generic CRUD procedures factory for entities. Every current entity router
+// goes through the searchable wrapper below; this base stays internal.
+function createEntityCrudProcedures<
   SCreate extends ZodSchema,
   SUpdate extends ZodSchema,
   TDetailOutput,

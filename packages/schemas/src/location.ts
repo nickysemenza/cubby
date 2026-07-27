@@ -73,6 +73,10 @@ export const locationOutFields = {
   id: locationId,
   shortcode: locationShortcode,
   name: z.string().describe("name of location"),
+  aliases: z
+    .array(z.string())
+    .default([])
+    .describe("Alternate names for this location (searched + embedded)"),
   type: locationType,
   lastBulkInventory: z.date().nullable(),
   aiDescription: z.string().nullable(),
@@ -204,6 +208,12 @@ const locationCreateShape = {
   // Override the output/read `name` (which stays lax for reads) with a non-empty
   // constraint on the create/update boundary.
   name: requiredName("Location name").describe("name of location"),
+  aliases: z
+    .array(z.string())
+    .default([])
+    .describe(
+      "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
+    ),
   type: locationType,
   parentId: optionalLocationId.describe(
     "Parent location id — nest this location under another (omit/null for a top-level location).",

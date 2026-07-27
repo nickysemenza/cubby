@@ -86,6 +86,22 @@ const ingredientResult = z.object({
   recipeCount: z.number().nullable(),
 });
 
+const cookbookResult = z.object({
+  ...searchResultBaseFields,
+  entityType: z.literal("cookbook"),
+  /** Recipes actually imported from the book (live rows). */
+  recipeCount: z.number().nullable(),
+  authors: z.array(z.string()),
+});
+
+const mealResult = z.object({
+  ...searchResultBaseFields,
+  entityType: z.literal("meal"),
+  /** Calendar day, "YYYY-MM-DD" (the Meal.date column is day-granular). */
+  date: z.string().nullable(),
+  recipeCount: z.number().nullable(),
+});
+
 const projectResult = z.object({
   ...searchResultBaseFields,
   entityType: z.literal("project"),
@@ -113,6 +129,8 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   inventoryResult,
   recipeResult,
   ingredientResult,
+  cookbookResult,
+  mealResult,
   projectResult,
   taskResult,
   purchaseResult,
@@ -146,6 +164,8 @@ export type LocationSearchResult = z.infer<typeof locationResult>;
 export type InventorySearchResult = z.infer<typeof inventoryResult>;
 export type RecipeSearchResult = z.infer<typeof recipeResult>;
 export type IngredientSearchResult = z.infer<typeof ingredientResult>;
+export type CookbookSearchResult = z.infer<typeof cookbookResult>;
+export type MealSearchResult = z.infer<typeof mealResult>;
 export type ProjectSearchResult = z.infer<typeof projectResult>;
 export type TaskSearchResult = z.infer<typeof taskResult>;
 export type PurchaseSearchResult = z.infer<typeof purchaseResult>;

@@ -42,6 +42,7 @@ export const dbLocationToAPI = (
     lastBulkInventory: locationData.lastBulkInventory,
     aiDescription: locationData.aiDescription ?? null,
     name: locationData.name,
+    aliases: locationData.aliases ?? [],
     type: parseWithContext(locationType, locationData.type, {
       entityType: "Location",
       identifier: { id: locationData.id, name: locationData.name },
@@ -114,6 +115,7 @@ export const buildLocationWithChildren = (
 
   return {
     name: x.name,
+    aliases: x.aliases ?? [],
     id: x.id,
     shortcode: unsafeLocationShortcode(x.shortcode),
     lastBulkInventory: x.lastBulkInventory,

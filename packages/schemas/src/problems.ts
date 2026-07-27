@@ -363,6 +363,9 @@ export const maintenanceCountsSchema = z.object({
   // recompute queue normally drains these in seconds; a lingering count means a
   // wave was lost (DLQ) — recompute-all clears it.
   staleRecipeTotals: z.number().int(),
+  // Unassociated PENDING image rows older than the cull threshold (24h) — the
+  // abandoned-upload backlog the "Cull pending images" tool clears.
+  cullablePendingImages: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
 

@@ -16,7 +16,10 @@ import {
 } from "@cubby/schemas/image";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createEntityListProcedure } from "~/server/api/crud-factory";
+import {
+  createDeleteProcedure,
+  createEntityListProcedure,
+} from "~/server/api/crud-factory";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -27,6 +30,7 @@ import {
 import {
   attachFileToEntity,
   cullPendingImageStorage,
+  deleteImagesWithStorage,
   importImageFromUrl,
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
@@ -60,8 +64,23 @@ const { list } = createEntityListProcedure({
   entityName: "image",
 });
 
+/**
+ * Hard-delete images (rows + associations + R2 objects).
+ *
+ * Images have no `deletedAt` column — they're the one gallery entity outside the
+ * soft-delete convention (see the entity manifest), so this really removes them.
+ * Shaped by `createDeleteProcedure` like every other entity delete, so the list
+ * page's `deletable` config and bulk selection work unchanged; there are no
+ * mutation side-effects to run (images carry no embedding / derived data).
+ */
+const deleteItem = createDeleteProcedure(async (services, ids) => {
+  await deleteImagesWithStorage(services.db, ids);
+  return undefined;
+});
+
 export const imageRouter = createTRPCRouter({
   list,
+  delete: deleteItem,
 
   /**
    * Initiate an image upload

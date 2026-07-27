@@ -114,6 +114,43 @@ export function buildRecipeEmbeddingText(recipe: RecipeSearchTextInput) {
   ]);
 }
 
+const cookbookSearchTextInputSchema = z.object({
+  name: z.string(),
+  author: nullableTextList,
+  subjects: nullableTextList,
+  sourceLabel: nullableText,
+});
+type CookbookSearchTextInput = z.infer<typeof cookbookSearchTextInputSchema>;
+
+// Deliberately the book's OWN metadata only — no recipe titles. Folding the
+// contents in would make every recipe rename/delete a cookbook-embedding
+// fan-out, for a book whose identity is already its title + author + subjects.
+export function buildCookbookEmbeddingText(cookbook: CookbookSearchTextInput) {
+  const parsed = cookbookSearchTextInputSchema.parse(cookbook);
+  return joinFields([
+    field("cookbook", parsed.name),
+    listField("authors", parsed.author),
+    listField("subjects", parsed.subjects),
+    field("source", parsed.sourceLabel),
+  ]);
+}
+
+const mealSearchTextInputSchema = z.object({
+  name: nullableText,
+  date: nullableText,
+  recipeNames: nullableTextList,
+});
+type MealSearchTextInput = z.infer<typeof mealSearchTextInputSchema>;
+
+export function buildMealEmbeddingText(meal: MealSearchTextInput) {
+  const parsed = mealSearchTextInputSchema.parse(meal);
+  return joinFields([
+    field("meal", parsed.name),
+    field("date", parsed.date),
+    listField("recipes", parsed.recipeNames),
+  ]);
+}
+
 const inventorySearchTextInputSchema = z.object({
   productText: z.string(),
   locationPath: nullableText,

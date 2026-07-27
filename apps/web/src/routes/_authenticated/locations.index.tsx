@@ -10,6 +10,7 @@ import LocationTreeGraph from "~/app/_components/inventory/location-tree-graph";
 import LocationTreeView from "~/app/_components/inventory/location-tree-view";
 import LocationTreemap from "~/app/_components/inventory/location-treemap";
 import { LocationGallery } from "~/app/_components/locations/location-gallery";
+import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import { LocationActions } from "~/app/locations/location-actions";
 import { LocationList } from "~/app/locations/locationlist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -77,19 +78,36 @@ function LocationsPage() {
 
         {view === "visualizations" && (
           <Stack gap="md">
-            {/* Treemap - full width */}
-            <div>
-              <h3 className="mb-2 font-semibold text-lg">
-                Inventory Distribution
-              </h3>
-              <Description className="mb-4">
-                Size represents total inventory items at each location and its
-                children
-              </Description>
-              <Suspense fallback={<SimpleLoading text="Loading treemap..." />}>
-                <LocationTreemap />
-              </Suspense>
-            </div>
+            {/* Treemap + sunburst: the two whole-tree distribution views, paired
+                so the same hierarchy reads both as area and as rings. */}
+            <Grid cols="pair">
+              <div>
+                <h3 className="mb-2 font-semibold text-lg">
+                  Inventory Distribution
+                </h3>
+                <Description className="mb-4">
+                  Size represents total inventory items at each location and its
+                  children
+                </Description>
+                <Suspense
+                  fallback={<SimpleLoading text="Loading treemap..." />}
+                >
+                  <LocationTreemap />
+                </Suspense>
+              </div>
+              <div>
+                <h3 className="mb-2 font-semibold text-lg">Sunburst</h3>
+                <Description className="mb-4">
+                  The same hierarchy as rings — the center is the whole house,
+                  each ring a level deeper
+                </Description>
+                <Suspense
+                  fallback={<SimpleLoading text="Loading sunburst..." />}
+                >
+                  <LocationSunburst />
+                </Suspense>
+              </div>
+            </Grid>
 
             {/* Tree views side by side */}
             <Grid cols="pair">
