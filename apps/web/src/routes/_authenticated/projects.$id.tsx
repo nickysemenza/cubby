@@ -1,11 +1,15 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { ProjectDetailPage } from "~/app/projects/project-detail-page";
+// Loader-only imports MUST come from this dependency-free module, never from
+// `project-detail-page` — the loader stays in the eager route chunk, so pulling
+// a value out of the page module pins its whole graph (charts, tables) to the
+// critical path of every page load.
 import {
-  ProjectDetailPage,
   projectGanttSubtreeQueryParams,
   projectSubtreePurchasesFilters,
   projectSubtreeTasksFilters,
-} from "~/app/projects/project-detail-page";
+} from "~/app/projects/project-query-params";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
@@ -23,8 +27,9 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
 
     // Non-blocking warm of the sections rendered below the spec plate — the
     // notFound decision above only needs `getByID`, so these don't gate it.
-    // Same params as the component's own queries (see project-detail-page.tsx)
-    // so they land in the same cache entry instead of double-fetching.
+    // Same params as the component's own queries (both sides call the helpers
+    // in project-query-params.ts) so they land in the same cache entry instead
+    // of double-fetching.
     void context.queryClient.prefetchQuery(
       context.trpc.task.chartData.queryOptions(
         projectSubtreeTasksFilters(params.id),

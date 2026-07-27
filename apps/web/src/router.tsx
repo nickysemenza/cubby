@@ -48,11 +48,16 @@ export const getRouter = () => {
   });
 
   // Initialize Sentry on client only. Dev keeps error reporting but drops
-  // tracing, Replay, and console-breadcrumb capture — each turns a busy moment
-  // into a multi-second main-thread freeze in dev: Replay serializes the DOM on
-  // every console call, and browser tracing builds an O(n²) span tree from React
-  // 19's dev per-render `performance.measure` entries (see below). Prod keeps all
-  // three (its React build emits no such measures; Replay is sampled).
+  // tracing and console-breadcrumb capture — each turns a busy moment into a
+  // multi-second main-thread freeze in dev, because browser tracing builds an
+  // O(n²) span tree from React 19's dev per-render `performance.measure`
+  // entries (see below). Prod keeps both; its React build emits no such
+  // measures.
+  //
+  // Session Replay is deliberately NOT enabled. `replayIntegration()` bundles
+  // the full rrweb recorder into the eager entry chunk (~60 KiB gzip on every
+  // first paint, sign-in page included) — too steep for a single-user app.
+  // Errors and tracing don't depend on it.
   if (!router.isServer) {
     const isProd = import.meta.env.PROD;
     Sentry.init({
@@ -71,20 +76,15 @@ export const getRouter = () => {
       // so full tracing there is safe.
       // Sample 10% of prod pageloads for tracing — full 100% added meaningful
       // per-navigation instrumentation overhead with little extra signal for a
-      // single-user app. Errors + replay sampling are unaffected.
+      // single-user app. Error capture is unaffected.
       tracesSampleRate: isProd ? 0.1 : 0,
-      replaysSessionSampleRate: isProd ? 0.1 : 0,
-      replaysOnErrorSampleRate: isProd ? 1.0 : 0,
       // No browser-tracing integration in dev: its pageload transaction collects
       // React 19's per-render `performance.measure` entries and builds the span
       // tree in O(n²) (`addSpanChildren`) — an ~8s load freeze on the
       // component-heavy recipe views (confirmed via JS self-profiling). Error
-      // reporting still works without it. Prod keeps full tracing + replay.
+      // reporting still works without it. Prod keeps full tracing.
       integrations: isProd
-        ? [
-            Sentry.tanstackRouterBrowserTracingIntegration(router),
-            Sentry.replayIntegration(),
-          ]
+        ? [Sentry.tanstackRouterBrowserTracingIntegration(router)]
         : [],
       // Don't record console output as breadcrumbs in dev — capturing hundreds
       // of warnings per second is the work that balloons into the freeze.

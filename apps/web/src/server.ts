@@ -10,12 +10,13 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 // initialized by instrument.server.mjs. In prod, errors still reach Sentry via
 // withSentry + the explicit captures in cf-server.ts / trpc.ts.
 //
-// Safety here is the RUNTIME guard, not tree-shaking: at runtime in prod
-// `isCfBuild` is true, so wrapFetchWithSentry is never *called* — its
-// node-tracing path can't execute on workerd regardless of whether the import
-// is eliminated. The import itself is harmless: trpc.ts already pulls
-// @sentry/tanstackstart-react into the Workers bundle for captureException, and
-// it loads on workerd without side effects (the CF build/deploy is green).
+// Two independent guards, and both matter. At RUNTIME `isCfBuild` is true in
+// prod, so wrapFetchWithSentry is never *called*. At BUILD time `cfSentryShim`
+// (vite.config.ts) resolves this import to src/lib/sentry-cf-shim.ts for the
+// SSR environment, where wrapFetchWithSentry is the identity function — so
+// @sentry/node never enters the worker bundle at all. That second guard is
+// what keeps ~600 KiB of Node-only OpenTelemetry code out of the eager chunk;
+// the runtime guard alone left it shipped-but-unused.
 declare const __CF_WORKERS__: boolean | undefined;
 const isCfBuild =
   typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;

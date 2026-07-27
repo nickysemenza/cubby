@@ -4,18 +4,27 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseActions } from "~/app/purchases/purchase-actions";
-import { PurchaseAnalyticsView } from "~/app/purchases/purchase-analytics-view";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+
+// The analytics view is entirely Nivo charts and its tab is unmounted until
+// selected — lazy so the chart stack stays out of the default Ledger view.
+const PurchaseAnalyticsView = lazy(() =>
+  import("~/app/purchases/purchase-analytics-view").then((m) => ({
+    default: m.PurchaseAnalyticsView,
+  })),
+);
 
 const viewOptions = ["ledger", "planned", "analytics", "unclassified"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -105,7 +114,11 @@ function PurchasesPage() {
           <PurchaseList mode="planned" initialSearch={q} />
         )}
 
-        {view === "analytics" && <PurchaseAnalyticsView />}
+        {view === "analytics" && (
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            <PurchaseAnalyticsView />
+          </Suspense>
+        )}
 
         {view === "unclassified" && (
           <PurchaseList mode="unclassified" initialSearch={q} />
