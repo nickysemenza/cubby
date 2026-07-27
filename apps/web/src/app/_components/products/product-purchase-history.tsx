@@ -1,9 +1,11 @@
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import type { FC } from "react";
 import { splitPurchaseSpend } from "~/app/projects/spend";
 import { Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import {
   Table,
@@ -19,16 +21,18 @@ import { formatCurrency } from "~/lib/utils";
 import { ShelfEmpty } from "../data-table/shelf";
 import { EntityInlineLink } from "../EntityInlineLink";
 
-const PAGE_SIZE = 25;
+// Module-level so the fallback keeps a stable reference across renders.
+const EMPTY_PURCHASES: PurchaseOut[] = [];
 
 /**
  * Purchase history for a product — every purchase linked to it (arrivals
  * *and* dispositions, since a disposition is just a negative-cost purchase on
  * the same product), newest first, plus the derived net cost.
  *
- * `purchase.list`'s `sort` field is omitted deliberately — its default
- * (`date desc`) is exactly what's wanted here, same convention as
- * `project-detail-page.tsx`'s recent-purchases query.
+ * Reads `chartData`, not `list`: this renders a *money* total, and a paginated
+ * read would silently drop rows from the sum past the page cap — the same trap
+ * `chartData` was introduced for (see its doc comment in routers/purchase.ts).
+ * It returns date-ascending, so display reverses it.
  *
  * Net cost is `actual - contributions`, not `split.net` — `net` folds in
  * `committed` (future/planned rows), which is not money that has actually
@@ -38,13 +42,17 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
   const api = useTRPC();
-  const { data: purchasesPage } = useQuery(
-    api.purchase.list.queryOptions({
-      filters: { productId: product.id },
-      pagination: { pageIndex: 0, pageSize: PAGE_SIZE },
-    }),
+  const { data, isPending } = useQuery(
+    api.purchase.chartData.queryOptions({ productId: product.id }),
   );
-  const purchases = purchasesPage?.items ?? [];
+  const purchases = data ?? EMPTY_PURCHASES;
+
+  // `isPending` gates the empty state: without it the "nothing linked" copy
+  // flashes on every load, which reads as a wrong answer rather than a pending
+  // one for a product that does have history.
+  if (isPending) {
+    return <Description>Loading purchases…</Description>;
+  }
 
   if (purchases.length === 0) {
     return (
@@ -57,6 +65,7 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
 
   const split = splitPurchaseSpend(purchases);
   const netCost = split.actual - split.contributions;
+  const newestFirst = [...purchases].reverse();
 
   return (
     <Stack gap="sm">
@@ -70,7 +79,7 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {purchases.map((purchase) => (
+          {newestFirst.map((purchase) => (
             <TableRow key={purchase.id}>
               <TableCell className="font-mono tabular-nums">
                 {purchase.date ? (
