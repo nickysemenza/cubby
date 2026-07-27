@@ -13,6 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as DesignRouteImport } from './routes/design'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
+import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known.oauth-protected-resource'
+import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.]well-known.openid-configuration'
 import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
@@ -29,6 +32,7 @@ import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DocsSectionRouteImport } from './routes/docs.$section'
+import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
 import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
@@ -74,6 +78,8 @@ import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
+import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
+import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
 import { Route as AuthenticatedRecipesIdExportRouteImport } from './routes/_authenticated/recipes.$id_.export'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
@@ -97,6 +103,24 @@ const DocsRoute = DocsRouteImport.update({
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownOauthAuthorizationServerRoute =
+  DotwellKnownOauthAuthorizationServerRouteImport.update({
+    id: '/.well-known/oauth-authorization-server',
+    path: '/.well-known/oauth-authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOauthProtectedResourceRoute =
+  DotwellKnownOauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOpenidConfigurationRoute =
+  DotwellKnownOpenidConfigurationRouteImport.update({
+    id: '/.well-known/openid-configuration',
+    path: '/.well-known/openid-configuration',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedShortcodeRoute = AuthenticatedShortcodeRouteImport.update({
   id: '/$shortcode',
   path: '/$shortcode',
@@ -178,6 +202,11 @@ const DocsSectionRoute = DocsSectionRouteImport.update({
   id: '/$section',
   path: '/$section',
   getParentRoute: () => DocsRoute,
+} as any)
+const OauthConsentRoute = OauthConsentRouteImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAccountAccountViewRoute =
   AuthenticatedAccountAccountViewRouteImport.update({
@@ -435,6 +464,18 @@ const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownOauthAuthorizationServerApiAuthRoute =
+  DotwellKnownOauthAuthorizationServerApiAuthRouteImport.update({
+    id: '/api/auth',
+    path: '/api/auth',
+    getParentRoute: () => DotwellKnownOauthAuthorizationServerRoute,
+  } as any)
+const DotwellKnownOauthProtectedResourceApiMcpRoute =
+  DotwellKnownOauthProtectedResourceApiMcpRouteImport.update({
+    id: '/api/mcp',
+    path: '/api/mcp',
+    getParentRoute: () => DotwellKnownOauthProtectedResourceRoute,
+  } as any)
 const AuthenticatedRecipesIdExportRoute =
   AuthenticatedRecipesIdExportRouteImport.update({
     id: '/recipes/$id_/export',
@@ -458,6 +499,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
   '/docs': typeof DocsRouteWithChildren
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
@@ -473,6 +517,7 @@ export interface FileRoutesByFullPath {
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/docs/$section': typeof DocsSectionRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/docs/': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
@@ -519,6 +564,8 @@ export interface FileRoutesByFullPath {
   '/search/': typeof AuthenticatedSearchIndexRoute
   '/tasks/': typeof AuthenticatedTasksIndexRoute
   '/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/recipes/$id/export': typeof AuthenticatedRecipesIdExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
@@ -526,6 +573,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
@@ -541,6 +591,7 @@ export interface FileRoutesByTo {
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/docs/$section': typeof DocsSectionRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/docs': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
@@ -587,6 +638,8 @@ export interface FileRoutesByTo {
   '/search': typeof AuthenticatedSearchIndexRoute
   '/tasks': typeof AuthenticatedTasksIndexRoute
   '/usda': typeof AuthenticatedUsdaIndexRoute
+  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/recipes/$id/export': typeof AuthenticatedRecipesIdExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
@@ -597,6 +650,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/design': typeof DesignRoute
   '/docs': typeof DocsRouteWithChildren
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
@@ -612,6 +668,7 @@ export interface FileRoutesById {
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/docs/$section': typeof DocsSectionRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/docs/': typeof DocsIndexRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
@@ -658,6 +715,8 @@ export interface FileRoutesById {
   '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
   '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute
   '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/_authenticated/recipes/$id_/export': typeof AuthenticatedRecipesIdExportRoute
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
@@ -668,6 +727,9 @@ export interface FileRouteTypes {
     | '/'
     | '/design'
     | '/docs'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
+    | '/.well-known/openid-configuration'
     | '/$shortcode'
     | '/activity'
     | '/ai-smoke-test'
@@ -683,6 +745,7 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/auth/$authView'
     | '/docs/$section'
+    | '/oauth/consent'
     | '/docs/'
     | '/account/$accountView'
     | '/cookbooks/$cookbookId'
@@ -729,6 +792,8 @@ export interface FileRouteTypes {
     | '/search/'
     | '/tasks/'
     | '/usda/'
+    | '/.well-known/oauth-authorization-server/api/auth'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/recipes/$id/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -736,6 +801,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/design'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
+    | '/.well-known/openid-configuration'
     | '/$shortcode'
     | '/activity'
     | '/ai-smoke-test'
@@ -751,6 +819,7 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/auth/$authView'
     | '/docs/$section'
+    | '/oauth/consent'
     | '/docs'
     | '/account/$accountView'
     | '/cookbooks/$cookbookId'
@@ -797,6 +866,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/tasks'
     | '/usda'
+    | '/.well-known/oauth-authorization-server/api/auth'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/recipes/$id/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -806,6 +877,9 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/design'
     | '/docs'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
+    | '/.well-known/openid-configuration'
     | '/_authenticated/$shortcode'
     | '/_authenticated/activity'
     | '/_authenticated/ai-smoke-test'
@@ -821,6 +895,7 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/auth/$authView'
     | '/docs/$section'
+    | '/oauth/consent'
     | '/docs/'
     | '/_authenticated/account/$accountView'
     | '/_authenticated/cookbooks/$cookbookId'
@@ -867,6 +942,8 @@ export interface FileRouteTypes {
     | '/_authenticated/search/'
     | '/_authenticated/tasks/'
     | '/_authenticated/usda/'
+    | '/.well-known/oauth-authorization-server/api/auth'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/_authenticated/recipes/$id_/export'
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
@@ -877,8 +954,12 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   DesignRoute: typeof DesignRoute
   DocsRoute: typeof DocsRouteWithChildren
+  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRouteWithChildren
+  DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
+  DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
   ApiMcpRoute: typeof ApiMcpRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
+  OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
@@ -912,6 +993,27 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-authorization-server': {
+      id: '/.well-known/oauth-authorization-server'
+      path: '/.well-known/oauth-authorization-server'
+      fullPath: '/.well-known/oauth-authorization-server'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/openid-configuration': {
+      id: '/.well-known/openid-configuration'
+      path: '/.well-known/openid-configuration'
+      fullPath: '/.well-known/openid-configuration'
+      preLoaderRoute: typeof DotwellKnownOpenidConfigurationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/$shortcode': {
@@ -1025,6 +1127,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/docs/$section'
       preLoaderRoute: typeof DocsSectionRouteImport
       parentRoute: typeof DocsRoute
+    }
+    '/oauth/consent': {
+      id: '/oauth/consent'
+      path: '/oauth/consent'
+      fullPath: '/oauth/consent'
+      preLoaderRoute: typeof OauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/account/$accountView': {
       id: '/_authenticated/account/$accountView'
@@ -1341,6 +1450,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTrpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-authorization-server/api/auth': {
+      id: '/.well-known/oauth-authorization-server/api/auth'
+      path: '/api/auth'
+      fullPath: '/.well-known/oauth-authorization-server/api/auth'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRouteImport
+      parentRoute: typeof DotwellKnownOauthAuthorizationServerRoute
+    }
+    '/.well-known/oauth-protected-resource/api/mcp': {
+      id: '/.well-known/oauth-protected-resource/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/.well-known/oauth-protected-resource/api/mcp'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRouteImport
+      parentRoute: typeof DotwellKnownOauthProtectedResourceRoute
+    }
     '/_authenticated/recipes/$id_/export': {
       id: '/_authenticated/recipes/$id_/export'
       path: '/recipes/$id/export'
@@ -1503,13 +1626,49 @@ const DocsRouteChildren: DocsRouteChildren = {
 
 const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
 
+interface DotwellKnownOauthAuthorizationServerRouteChildren {
+  DotwellKnownOauthAuthorizationServerApiAuthRoute: typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
+}
+
+const DotwellKnownOauthAuthorizationServerRouteChildren: DotwellKnownOauthAuthorizationServerRouteChildren =
+  {
+    DotwellKnownOauthAuthorizationServerApiAuthRoute:
+      DotwellKnownOauthAuthorizationServerApiAuthRoute,
+  }
+
+const DotwellKnownOauthAuthorizationServerRouteWithChildren =
+  DotwellKnownOauthAuthorizationServerRoute._addFileChildren(
+    DotwellKnownOauthAuthorizationServerRouteChildren,
+  )
+
+interface DotwellKnownOauthProtectedResourceRouteChildren {
+  DotwellKnownOauthProtectedResourceApiMcpRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRoute
+}
+
+const DotwellKnownOauthProtectedResourceRouteChildren: DotwellKnownOauthProtectedResourceRouteChildren =
+  {
+    DotwellKnownOauthProtectedResourceApiMcpRoute:
+      DotwellKnownOauthProtectedResourceApiMcpRoute,
+  }
+
+const DotwellKnownOauthProtectedResourceRouteWithChildren =
+  DotwellKnownOauthProtectedResourceRoute._addFileChildren(
+    DotwellKnownOauthProtectedResourceRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   DesignRoute: DesignRoute,
   DocsRoute: DocsRouteWithChildren,
+  DotwellKnownOauthAuthorizationServerRoute:
+    DotwellKnownOauthAuthorizationServerRouteWithChildren,
+  DotwellKnownOauthProtectedResourceRoute:
+    DotwellKnownOauthProtectedResourceRouteWithChildren,
+  DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   ApiMcpRoute: ApiMcpRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
+  OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,

@@ -1,13 +1,35 @@
-import { apiKey } from "@better-auth/api-key";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { jwt, openAPI } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { env } from "~/env";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+// The OAuth server needs a concrete origin at config time (unlike the rest of
+// better-auth, which infers baseURL per request): `validAudiences` gates which
+// `resource` an MCP client may request a token for. Same isDev switch the
+// passkey rpID below uses, for the same reason — one known host per env, no new
+// env var. Preview deploys get unique `<prefix>-cubby.nicky.workers.dev` hosts
+// that can't be enumerated here, so OAuth-MCP is prod + local dev only (previews
+// keep the rest of auth; only /api/mcp is unreachable there).
+const appUrl = isDev
+  ? "http://localhost:3000"
+  : "https://cubby.nickysemenza.com";
+
+/** The `aud` an MCP access token must carry. Also the RFC 9728 `resource`. */
+export const MCP_RESOURCE = `${appUrl}/api/mcp`;
+/** Issuer / `iss` of MCP access tokens, and the RFC 8414 authorization server. */
+export const OAUTH_ISSUER = `${appUrl}/api/auth`;
+
+// Scopes advertised by the OAuth server. `offline_access` is load-bearing: it's
+// what mints the refresh token that lets a non-interactive Claude Code run
+// (`claude -p`, Agent SDK) keep working after the one interactive login.
+export const OAUTH_SCOPES = ["openid", "profile", "email", "offline_access"];
 
 // Preview deploys (`wrangler versions upload`) each get a unique host
 // `<prefix>-cubby.nicky.workers.dev`, so a host-only session cookie forces a
@@ -43,19 +65,11 @@ export const auth = betterAuth({
       maxAge: 5 * 60, // 5 minutes
     },
   },
+  // The jwt plugin registers `GET /token` (mints a JWT for the current cookie
+  // session). The OAuth token endpoint is `/oauth2/token`; nothing needs the
+  // session-JWT one, so don't expose it.
+  disabledPaths: ["/token"],
   plugins: [
-    apiKey({
-      enableSessionForAPIKeys: true,
-      // Rate limiting is deliberately OFF. better-auth's default when enabled is
-      // a punishing 10 requests / 24h per key (@better-auth/api-key index.mjs:
-      // timeWindow 1e3*60*60*24, maxRequests 10) — a single Claude MCP
-      // conversation fires far more tool calls than that, so the default would
-      // lock the (single) owner out almost immediately. There's no abuse vector
-      // worth throttling on a single-user instance; if a custom limit is ever
-      // wanted, set { enabled: true, maxRequests, timeWindow } here AND verify
-      // headroom for a full MCP session before deploying (lockout risk).
-      rateLimit: { enabled: false },
-    }),
     passkey({
       rpID: isDev ? "localhost" : "cubby.nickysemenza.com",
       rpName: "Cubby",
@@ -63,6 +77,36 @@ export const auth = betterAuth({
         ? "http://localhost:3000"
         : "https://cubby.nickysemenza.com",
     }),
+    // Signs OAuth access tokens (and publishes JWKS at /api/auth/jwks) so
+    // /api/mcp can verify them locally without a round trip to the DB.
+    //
+    // `issuer` must be set explicitly: oauthProvider derives its issuer path at
+    // plugin-init time, before any request exists, and this repo leaves the
+    // top-level `baseURL` unset (it's inferred per request). Without this the
+    // provider does `new URL("")` during init and every auth request 500s.
+    // Pinning it here also makes the `iss` claim deterministic — which is what
+    // server/mcp/auth.ts verifies against.
+    jwt({ jwt: { issuer: OAUTH_ISSUER } }),
+    // OAuth 2.1 authorization server. This is how Claude connects to the MCP
+    // endpoint — claude.ai custom connectors and Claude Code both do RFC 7591
+    // dynamic client registration + PKCE against it. Unauthenticated
+    // registration is required because neither can be given a client_id ahead
+    // of time; registering is harmless on its own, since a token still requires
+    // an interactive login + consent from the (single) account owner.
+    oauthProvider({
+      loginPage: "/auth/sign-in",
+      consentPage: "/oauth/consent",
+      allowDynamicClientRegistration: true,
+      allowUnauthenticatedClientRegistration: true,
+      scopes: OAUTH_SCOPES,
+      validAudiences: [MCP_RESOURCE],
+      // The discovery documents live in routes/.well-known/ — TanStack Start's
+      // /api/auth/$ catch-all can't serve the root-level RFC 8414 aliases.
+      silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
+    }),
+    // Scalar reference for the auth surface. Dev-only UI: the JSON schema
+    // endpoint (/api/auth/open-api/generate-schema) stays available in both.
+    openAPI(isDev ? {} : { disableDefaultReference: true }),
     tanstackStartCookies(), // Must be last
   ],
   advanced: {

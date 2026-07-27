@@ -350,8 +350,32 @@ Better-Auth via `better-auth/tanstack-start`. Routed UI by `@daveyplate/better-a
 | [apps/web/src/routes/api/auth/$.ts](apps/web/src/routes/api/auth/$.ts) | API catch-all route |
 | [apps/web/src/routes/auth.$authView.tsx](apps/web/src/routes/auth.$authView.tsx) | Auth UI (sign-in/up) |
 | [apps/web/src/routes/_authenticated/account.$accountView.tsx](apps/web/src/routes/_authenticated/account.$accountView.tsx) | Account UI |
+| [apps/web/src/routes/oauth.consent.tsx](apps/web/src/routes/oauth.consent.tsx) | OAuth consent screen |
+| [apps/web/src/routes/.well-known/](apps/web/src/routes/.well-known/) | OAuth/OIDC discovery documents |
 
-Visit <http://localhost:3000/api/auth/session> while running the app to inspect the current session.
+Visit <http://localhost:3000/api/auth/session> while running the app to inspect the current session, and <http://localhost:3000/api/auth/reference> (dev only) for the Scalar reference of every auth endpoint.
+
+### Connecting to the MCP server
+
+`/api/mcp` is an **OAuth 2.1 resource server** — cubby is its own authorization
+server (better-auth's `oauthProvider` + `jwt` plugins), and clients enrol
+themselves through dynamic client registration. There is no API key and no
+`?key=` query param; access tokens are short-lived JWTs verified locally against
+`/api/auth/jwks`.
+
+- **claude.ai** — add a custom connector pointing at
+  `https://cubby.nickysemenza.com/api/mcp`. No query string, no headers. It
+  registers itself, sends you through sign-in and the `/oauth/consent` screen,
+  and stores the resulting token.
+- **Claude Code** — the `cubby` entry in `.mcp.json` is just `{"type": "http",
+  "url": "..."}`. Authorize once with `claude mcp login cubby` (or `/mcp` →
+  authenticate); the refresh token keeps non-interactive runs (`claude -p`, the
+  Agent SDK) working afterwards. **Do not add an `Authorization` header** — a
+  static header suppresses the OAuth flow, and the connection just fails.
+
+Preview deploys are not supported: each gets a unique
+`<prefix>-cubby.nicky.workers.dev` host, and the accepted token audience is
+pinned to one origin per environment in [auth.ts](apps/web/src/lib/auth.ts).
 
 ## 🥫 Product Types
 

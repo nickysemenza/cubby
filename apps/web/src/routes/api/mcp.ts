@@ -5,48 +5,27 @@ import { createFileRoute } from "@tanstack/react-router";
 async function handler({ request }: { request: Request }) {
   try {
     const { handleMcpRequest } = await import("~/server/mcp/server");
-    const { buildActorContext } = await import("@cubby/schemas/context");
+    const { unauthorizedResponse, verifyMcpToken } = await import(
+      "~/server/mcp/auth"
+    );
     const { domainRouter } = await import("~/server/api/domain");
     const { createCallerFactory, createTRPCContext } = await import(
       "~/server/api/trpc"
     );
     const createCaller = createCallerFactory(domainRouter);
 
-    // Map Authorization: Bearer → x-api-key for better-auth compatibility
-    const headers = new Headers(request.headers);
-    const authHeader = headers.get("authorization");
-    if (authHeader?.startsWith("Bearer ") && !headers.has("x-api-key")) {
-      headers.set("x-api-key", authHeader.slice(7));
-      headers.delete("authorization");
-    }
+    // OAuth 2.1 only. Clients (claude.ai connectors, Claude Code) discover the
+    // flow from the WWW-Authenticate header on this 401, register dynamically,
+    // and come back with a JWT access token.
+    const actor = await verifyMcpToken(request);
+    if (!actor) return unauthorizedResponse();
 
-    // Fallback: accept the API key as a `?key=` query param. The claude.ai
-    // custom-connector dialog only takes a URL (no header field), so a
-    // single-user instance pastes `…/api/mcp?key=<apiKey>` instead of standing
-    // up an OAuth flow. Header still wins if both are present. Accepted
-    // tradeoff: the key rides in a URL (access logs / history); the Sentry
-    // exposure specifically is neutralized by scrubSentryEvent (beforeSend
-    // redacts `key`-family query params on both the browser and Workers SDKs).
-    if (!headers.has("x-api-key")) {
-      const key = new URL(request.url).searchParams.get("key");
-      if (key) headers.set("x-api-key", key);
-    }
+    const ctx = await createTRPCContext({
+      headers: request.headers,
+      actor: { ...actor, source: "api" },
+    });
 
-    const ctx = await createTRPCContext({ headers });
-
-    if (!ctx.auth.userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const apiCtx = {
-      ...ctx,
-      actorContext: buildActorContext(ctx.auth.userId, "api"),
-    };
-
-    const caller = createCaller(apiCtx);
+    const caller = createCaller(ctx);
 
     return await handleMcpRequest(request, {
       token: "",
