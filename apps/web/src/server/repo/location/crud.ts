@@ -104,6 +104,7 @@ export const createLocation = async (
 
   const newLocation = await insertAndReturn(db, location, {
     name: data.name,
+    aliases: data.aliases,
     type: data.type,
     shortcode,
     ...(parentIdValue !== undefined && { parentId: parentIdValue }),
@@ -155,6 +156,7 @@ export const ensureGlobalUnknownLocation = async (
       db,
       {
         name: "Unknown",
+        aliases: [],
         type: "area",
         parentId: null,
       },
@@ -199,6 +201,7 @@ export const updateLocation = async (
     // Build update values using helper to filter undefined
     const updateValues = buildPartialUpdateValues({
       name: data.name,
+      aliases: data.aliases,
       type: data.type,
       parentId: data.parentId,
     });
@@ -252,6 +255,7 @@ export const updateLocation = async (
     if (before) {
       const changes = computeChanges(before, updated, [
         "name",
+        "aliases",
         "type",
         "parentId",
       ]);

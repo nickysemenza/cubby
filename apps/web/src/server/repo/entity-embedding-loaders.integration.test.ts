@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { entityEmbedding } from "~/server/db/schema";
+import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import {
   findOrphanedEntityEmbeddings,
@@ -20,6 +21,7 @@ import {
 import { createIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
+import { createMeal } from "./meal";
 import { createProduct } from "./product";
 import { createProject } from "./project";
 import { createPurchase } from "./purchase";
@@ -86,12 +88,34 @@ describe("searchable entity loader maps", () => {
       }),
       ctx.actor,
     );
+    const cookbook = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Loader cookbook",
+        rawJson: [],
+        author: ["Loader author"],
+        subjects: ["Loader subject"],
+        sourceLabel: "loader.epub",
+      },
+      ctx.actor,
+    );
+    const meal = await createMeal(
+      ctx.db,
+      {
+        date: "2026-01-15",
+        name: "Loader meal",
+        recipes: [{ recipeId: recipe.id, scale: 1 }],
+      },
+      ctx.actor,
+    );
     const ids = {
       product: product.id,
       recipe: recipe.id,
       ingredient: ingredient.id,
+      cookbook: cookbook.id,
       location: location.id,
       inventory: inventory.id,
+      meal: meal.id,
       project: project.id,
       task: task.id,
       purchase: purchase.id,

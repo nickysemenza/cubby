@@ -6,9 +6,13 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
+import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
+import { createMeal, deleteMeals } from "~/server/repo/meal";
 import { createProject } from "~/server/repo/project";
 import { createPurchase } from "~/server/repo/purchase";
+import { createRecipe } from "~/server/repo/recipe";
 import { createTask } from "~/server/repo/task";
+import { makeRecipeInput } from "./repo.fixtures";
 import { globalSearch, hydrateSearchResultsByRefs } from "./search";
 
 // Lexical-search + ref-hydration coverage for the tracker entities (project,
@@ -213,6 +217,128 @@ describe("globalSearch: tracker entities", () => {
         (r) => r.entityType === "purchase" && r.id === byNotes.id,
       ),
     ).toBe(true);
+  });
+});
+
+// Cookbook + meal became searchable alongside the tracker entities; the same
+// lexical branch/ref-hydration contract applies to them.
+describe("globalSearch: cookbook and meal", () => {
+  const ctx = withTestDb();
+
+  it("finds a cookbook by title, author, and subject", async () => {
+    const cookbook = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Manifest Book Of Braises",
+        rawJson: [],
+        author: ["Manifesta Braisewright"],
+        subjects: ["manifest-subject-stews"],
+        sourceLabel: "manifest-braises.epub",
+      },
+      ctx.actor,
+    );
+
+    const byTitle = await globalSearch(ctx.db, "Manifest Book Of Braises");
+    const hit = byTitle.find(
+      (r) => r.entityType === "cookbook" && r.id === cookbook.id,
+    );
+    expect(hit).toBeDefined();
+    if (hit?.entityType === "cookbook") {
+      expect(hit.name).toBe("Manifest Book Of Braises");
+      expect(hit.subtitle).toBe("Manifesta Braisewright");
+      expect(hit.authors).toEqual(["Manifesta Braisewright"]);
+      expect(hit.recipeCount).toBe(0);
+    }
+
+    for (const term of ["Manifesta Braisewright", "manifest-subject-stews"]) {
+      const results = await globalSearch(ctx.db, term);
+      expect(
+        results.some(
+          (r) => r.entityType === "cookbook" && r.id === cookbook.id,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("excludes a soft-deleted cookbook", async () => {
+    const cookbook = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Manifest Deleted Cookbook",
+        rawJson: [],
+        sourceLabel: "manifest-deleted.epub",
+      },
+      ctx.actor,
+    );
+    await deleteCookbook(ctx.db, cookbook.id, ctx.actor);
+
+    const results = await globalSearch(ctx.db, "Manifest Deleted Cookbook");
+    expect(
+      results.some((r) => r.entityType === "cookbook" && r.id === cookbook.id),
+    ).toBe(false);
+  });
+
+  it("finds a meal by name, by date, and by a planned recipe's name", async () => {
+    const recipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({ name: "Manifest Cassoulet" }),
+      ctx.actor,
+    );
+    const meal = await createMeal(
+      ctx.db,
+      {
+        date: "2026-03-14",
+        name: "Manifest Sunday Supper",
+        recipes: [{ recipeId: recipe.id, scale: 1 }],
+      },
+      ctx.actor,
+    );
+
+    const byName = await globalSearch(ctx.db, "Manifest Sunday Supper");
+    const hit = byName.find((r) => r.entityType === "meal" && r.id === meal.id);
+    expect(hit).toBeDefined();
+    if (hit?.entityType === "meal") {
+      expect(hit.name).toBe("Manifest Sunday Supper");
+      expect(hit.date).toBe("2026-03-14");
+      expect(hit.subtitle).toBe("2026-03-14");
+      expect(hit.recipeCount).toBe(1);
+    }
+
+    // The date string and the planned recipe's name are both match surfaces.
+    for (const term of ["2026-03-14", "Manifest Cassoulet"]) {
+      const results = await globalSearch(ctx.db, term);
+      expect(
+        results.some((r) => r.entityType === "meal" && r.id === meal.id),
+      ).toBe(true);
+    }
+  });
+
+  it("falls back to the date as the display name for an unnamed meal", async () => {
+    const meal = await createMeal(
+      ctx.db,
+      { date: "2026-04-02", name: null },
+      ctx.actor,
+    );
+
+    const results = await globalSearch(ctx.db, "2026-04-02");
+    const hit = results.find(
+      (r) => r.entityType === "meal" && r.id === meal.id,
+    );
+    expect(hit?.name).toBe("2026-04-02");
+  });
+
+  it("excludes a soft-deleted meal", async () => {
+    const meal = await createMeal(
+      ctx.db,
+      { date: "2026-05-05", name: "Manifest Deleted Meal" },
+      ctx.actor,
+    );
+    await deleteMeals(ctx.db, [meal.id], ctx.actor);
+
+    const results = await globalSearch(ctx.db, "Manifest Deleted Meal");
+    expect(
+      results.some((r) => r.entityType === "meal" && r.id === meal.id),
+    ).toBe(false);
   });
 });
 

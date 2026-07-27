@@ -89,12 +89,12 @@ describe("locationList parentPresenceFilter", () => {
   it("filters to root locations with 'none' and to children with 'has'", async () => {
     const root = await createLocation(
       ctx.db,
-      { name: "Kitchen", type: "room", parentId: null },
+      { name: "Kitchen", aliases: [], type: "room", parentId: null },
       ctx.actor,
     );
     const child = await createLocation(
       ctx.db,
-      { name: "Pantry Shelf", type: "shelf", parentId: root.id },
+      { name: "Pantry Shelf", aliases: [], type: "shelf", parentId: root.id },
       ctx.actor,
     );
 

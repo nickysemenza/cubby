@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
   TRACKER_PROBLEM_KEY_BY_TYPE,
@@ -200,8 +201,16 @@ function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
       to: "/recipes/$id" as const,
       params: { id: e.entityId },
     }))
+    .with({ entityType: "cookbook" }, (e) => ({
+      to: "/cookbooks/$cookbookId" as const,
+      params: { cookbookId: unsafeCookbookId(e.entityId) },
+    }))
     .with({ entityType: "inventory" }, (e) => ({
       to: "/inventory/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "meal" }, (e) => ({
+      to: "/meals/$id" as const,
       params: { id: e.entityId },
     }))
     .with({ entityType: "project" }, (e) => ({

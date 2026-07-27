@@ -7,7 +7,11 @@ import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Spinner } from "~/components/ui/spinner";
-import { type EntityDetailRoute, entities } from "~/entities/entities";
+import {
+  type EntityDetailRoute,
+  entities,
+  entityDetailParams,
+} from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { NutrientsSummary } from "../units/NutrientsSummary";
@@ -85,7 +89,7 @@ export function ManifestCard({
             <Row align="center" gap="sm" className="mt-px shrink-0">
               <Link
                 to={entities[entity].routes.detail}
-                params={{ id: routeParam }}
+                params={entityDetailParams(entity, routeParam)}
                 aria-label="Open"
                 className={openIcon}
               >

@@ -47,6 +47,7 @@ export const dbInventoryEntryToAPI: (
       images: mapImages(location.images),
       valuation: location.valuation,
       name: location.name,
+      aliases: location.aliases ?? [],
       type: parseWithContext(locationType, location.type, {
         entityType: "Location",
         identifier: { id: location.id, name: location.name },

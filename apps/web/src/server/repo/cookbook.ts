@@ -25,6 +25,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
@@ -221,6 +222,11 @@ export const deleteCookbook = async (
       .update(cookbook)
       .set({ deletedAt: new Date() })
       .where(and(eq(cookbook.id, id), notDeleted(cookbook)));
+
+    // Removal-path invariant: a cookbook is a searchable/embedded entity, so its
+    // own EntityEmbedding row must die in the same transaction (the recipe
+    // cascade above only covers the recipes').
+    await softDeleteEntityEmbeddingsTx(tx, "cookbook", [id]);
 
     await logAuditEntry(tx, actor, {
       entityType: "cookbook",

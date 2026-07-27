@@ -30,6 +30,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { dbMealToAPI } from "./helpers";
 
 const fetchMealById = async (db: Database, id: MealId) => {
@@ -184,6 +185,10 @@ export const deleteMeals = async (
       .update(meal)
       .set({ deletedAt: now })
       .where(and(inArray(meal.id, ids), notDeleted(meal)));
+    // Removal-path invariant: meals are searchable/embedded, and the meal
+    // manifest has onDelete: [], so this transaction is the only place their
+    // EntityEmbedding rows get cleaned up.
+    await softDeleteEntityEmbeddingsTx(tx, "meal", ids);
     await logAuditEntries(
       tx,
       actor,

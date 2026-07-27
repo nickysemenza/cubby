@@ -1,7 +1,9 @@
 import {
+  unsafeCookbookId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
+  unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -13,10 +15,13 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
+  cookbook,
   entityEmbedding,
   ingredient,
   inventoryEntry,
   location,
+  meal,
+  mealRecipe,
   product,
   project,
   purchase,
@@ -34,9 +39,11 @@ import {
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
 import {
+  buildCookbookEmbeddingText,
   buildIngredientEmbeddingText,
   buildInventoryEmbeddingText,
   buildLocationEmbeddingText,
+  buildMealEmbeddingText,
   buildProductEmbeddingText,
   buildProjectEmbeddingText,
   buildPurchaseEmbeddingText,
@@ -242,6 +249,79 @@ async function getRecipeEmbeddingTexts(
   }));
 }
 
+async function getCookbookEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const rows = await getDb(db).query.cookbook.findMany({
+    where: and(
+      notDeleted(cookbook),
+      options.ids?.length
+        ? inArray(cookbook.id, options.ids.map(unsafeCookbookId))
+        : undefined,
+    ),
+    columns: {
+      id: true,
+      name: true,
+      author: true,
+      subjects: true,
+      sourceLabel: true,
+    },
+    ...(options.limit == null ? {} : { limit: options.limit }),
+  });
+  return rows.map((row) => ({
+    entityType: "cookbook",
+    entityId: row.id,
+    embeddingText: buildCookbookEmbeddingText(row),
+  }));
+}
+
+// A meal is usually unnamed, so the planned recipes' names carry most of its
+// searchable identity — aggregated here the same way recipes fold in their
+// ingredient names.
+async function getMealEmbeddingTexts(
+  db: Database,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const query = getDb(db)
+    .select({
+      id: meal.id,
+      name: meal.name,
+      date: meal.date,
+      recipeNames: sql<
+        string[]
+      >`array_remove(array_agg(DISTINCT ${recipe.name}), NULL)`.as(
+        "recipeNames",
+      ),
+    })
+    .from(meal)
+    .leftJoin(
+      mealRecipe,
+      and(eq(mealRecipe.mealId, meal.id), notDeleted(mealRecipe)),
+    )
+    .leftJoin(
+      recipe,
+      and(eq(recipe.id, mealRecipe.recipeId), notDeleted(recipe)),
+    )
+    .where(
+      and(
+        notDeleted(meal),
+        options.ids?.length
+          ? inArray(meal.id, options.ids.map(unsafeMealId))
+          : undefined,
+      ),
+    )
+    .groupBy(meal.id);
+  const rows =
+    options.limit == null ? await query : await query.limit(options.limit);
+
+  return rows.map((row) => ({
+    entityType: "meal",
+    entityId: row.id,
+    embeddingText: buildMealEmbeddingText(row),
+  }));
+}
+
 async function getInventoryEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
@@ -389,8 +469,10 @@ const embeddingTextLoaders = {
   product: getProductEmbeddingTexts,
   recipe: getRecipeEmbeddingTexts,
   ingredient: getIngredientEmbeddingTexts,
+  cookbook: getCookbookEmbeddingTexts,
   location: getLocationEmbeddingTexts,
   inventory: getInventoryEmbeddingTexts,
+  meal: getMealEmbeddingTexts,
   project: getProjectEmbeddingTexts,
   task: getTaskEmbeddingTexts,
   purchase: getPurchaseEmbeddingTexts,

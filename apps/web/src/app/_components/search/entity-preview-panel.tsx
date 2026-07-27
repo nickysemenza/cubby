@@ -12,9 +12,10 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
-import { entities } from "~/entities/entities";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { entityQueryOptions, fdcIdFromParam } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
+import { CookbookPreviewContent } from "../EntityPreviewContent";
 import { ImageDetail } from "../images/image-detail";
 import { IngredientDetail } from "../ingredients/ingredient-detail";
 import { InventoryDetail } from "../inventory/inventory-detail";
@@ -76,7 +77,12 @@ export function EntityPreviewPanel({
           <Button
             variant="outline"
             size="sm"
-            render={<Link to={entityDef.routes.detail} params={{ id }} />}
+            render={
+              <Link
+                to={entityDef.routes.detail}
+                params={entityDetailParams(entityType, id)}
+              />
+            }
           >
             <ExternalLink className="mr-1 size-3" />
             View Full Details
@@ -121,10 +127,9 @@ export function EntityPreviewPanel({
           .with("project", () =>
             data ? <ProjectDetailPage project={data as never} /> : null,
           )
-          // Cookbooks are canPreview:false (entity-contracts.ts) — this sheet
-          // never opens for them; kept only so .exhaustive() below still
-          // catches a future entity addition that forgets a preview arm here.
-          .with("cookbook", () => null)
+          // Like meal, the cookbook card fetches its own data (there is no
+          // cookbook getByID — it reads the cached browse index).
+          .with("cookbook", () => <CookbookPreviewContent cookbookId={id} />)
           .exhaustive()}
       </div>
     </div>

@@ -3,6 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ListChecks, MapPin, PieChart, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { HouseCard } from "~/app/_components/home/HouseCard";
+import { MealsCard } from "~/app/_components/home/MealsCard";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
@@ -103,6 +104,7 @@ function Home() {
       <Grid cols="pair" gap="md">
         <Stack className="lg:order-2">
           <QuickActionsCard />
+          <MealsCard />
           <HouseCard />
           <PantryValueCard />
         </Stack>

@@ -15,6 +15,7 @@ import {
   getOptionalLocationId,
   optionalLocationField,
 } from "~/app/_components/form-fields";
+import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Card, CardContent } from "~/components/ui/card";
 import { useImageState } from "~/hooks/useImageState";
 import {
@@ -34,6 +35,7 @@ import { TypeFieldWithAI } from "./type-field-with-ai";
 // Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  aliases: z.array(z.string()),
   type: locationType,
   parent: optionalLocationField,
 });
@@ -79,6 +81,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: location ? location.name : (initialName ?? ""),
+      aliases: location ? location.aliases : [],
       type: location ? location.type : "room",
       parent: location?.parent
         ? buildLocationComboboxItem(location.parent)
@@ -92,10 +95,13 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
   const nameValue = form.watch("name");
 
   const handleSubmit = async (values: LocationFormValues) => {
+    const aliases = filterAliases(values.aliases);
+
     if (mode === "create") {
       // For creation, pass all fields including pending image IDs
       const createData: LocationCreateInput = {
         name: values.name,
+        aliases,
         type: values.type,
         parentId: getOptionalLocationId(values.parent) ?? null,
         ...getImageData(true), // Apply pending images for creation
@@ -106,8 +112,8 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       // Build update object for simple fields
       const updates: LocationUpdateInput["data"] = buildUpdateObject(
         location,
-        values,
-        ["name", "type"],
+        { ...values, aliases },
+        ["name", "aliases", "type"],
       );
 
       // Check if parent has changed (combobox requires special handling)
@@ -175,6 +181,13 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           />
         </CardContent>
       </Card>
+
+      {/* Alternate names — searched and embedded alongside the location name
+          (e.g. "Deep freezer" for the garage chest freezer). */}
+      <AliasesField<LocationFormValues>
+        form={form}
+        placeholder="e.g. Deep freezer"
+      />
 
       {/* Show image upload in both create and edit modes */}
       <PendingImageUpload

@@ -18,7 +18,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import type { EntityDetailRoute } from "~/entities/entities";
+import type {
+  EntityDetailParams,
+  EntityDetailRoute,
+} from "~/entities/entities";
 import { EntityIcon } from "~/entities/entities";
 import { useRecipeUsage } from "./recipe-usage-context";
 
@@ -28,7 +31,12 @@ import { useRecipeUsage } from "./recipe-usage-context";
 const INITIAL_VISIBLE = 12;
 
 // Type-safe route patterns for entity detail pages
-type RoutePattern = { to: EntityDetailRoute; params: { id: string } };
+type RoutePattern = { to: EntityDetailRoute; params: EntityDetailParams };
+
+// Detail-route params are `$id` everywhere except cookbook (`$cookbookId`), so
+// pulling the entity id back out of a RoutePattern needs both shapes.
+const routeEntityId = (route: RoutePattern): string =>
+  "id" in route.params ? route.params.id : route.params.cookbookId;
 
 // Noun for the "open the full ___" tooltip, keyed by the card's detail route.
 const ROUTE_NOUN: Record<string, string> = {
@@ -195,7 +203,8 @@ function SectionGroup<T>({
           return (
             <ProblemCard
               key={
-                rendered.key ?? `${rendered.title}-${rendered.route.params.id}`
+                rendered.key ??
+                `${rendered.title}-${routeEntityId(rendered.route)}`
               }
               rendered={rendered}
             />
@@ -238,7 +247,9 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
   // fixing this matter" signal. Only set for ingredient-linked products.
   const recipeUsage = useRecipeUsage();
   const recipeCount =
-    route.to === "/products/$id" ? recipeUsage[route.params.id] : undefined;
+    route.to === "/products/$id"
+      ? recipeUsage[routeEntityId(route)]
+      : undefined;
 
   return (
     <MobileCard
