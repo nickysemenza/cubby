@@ -44,6 +44,18 @@ done; bare "salt" stays aliased to Diamond Crystal.
 Parked: pan-size scaling, a global density reference table/seed, interactive
 parse-clarification, and the baker's-% compare "X-ray".
 
+- [ ] **Close the equivalences-report loop** (2026-07 audit):
+  `/ingredients/equivalences` harvests candidates and flags contradictions with
+  existing mappings, then offers zero actions — no apply, no open-in-workbench,
+  no dismiss, not even a link to the conflicting product. Give it the same
+  `gapFixLinkProps` → workbench treatment the coverage popover has; that *is*
+  the "fix density data organically" mechanism this section prescribes.
+- [ ] **Ingredient detail editing parity** (2026-07 audit): the detail page
+  can't do what the workbench can — no `naKinds` toggles, no inline USDA link,
+  no price entry; "Appears In Recipes" shows parse drift with no per-line
+  re-parse (that button exists only inside the recipe form). Ingredient list
+  has no coverage-quality column or "used in N recipes, no product" filter.
+
 ### Amount-range aggregate materiality threshold
 
 Amount ranges ("2–3 cups") now propagate everywhere (line + totals + list +
@@ -60,6 +72,35 @@ decision value.
   next to `format-range.ts` that the headline/list/compare call sites consult.
   Decision deferred — live with always-on first and see if it's actually noisy.
 
+### Recipe & cookbook UX (2026-07 audit)
+
+- [ ] **Persist recipe times on import**: scraper + EPUB already extract
+  `importRecipeTimes {active,total,prep,cook}` plus `equipment` and `page`
+  (`import-recipe.ts`), but persisted `recipeMeta` is `{ url }` only — the data
+  is extracted then dropped. Persist, render on detail, sort/filter the list by
+  total time (the #1 weeknight decision axis; gives meal planning an effort
+  axis). `meta.page` is the natural cross-reference for a physical cookbook.
+- [ ] **Recipe clone/duplicate** — still no `duplicate` in recipe crud.
+- [ ] **Recipe QR labels**: shortcodes are minted on every create and
+  `$shortcode.tsx` resolves `R-XXXX`, but the detail page never shows the code
+  and `use-shortcode-lookups.ts` only knows location/product, so `/labels`
+  can't print recipe QRs. Completes an already-shipped mechanic.
+- [ ] **Cookbook lifecycle**: no rename/metadata edit (a mangled OPF title is
+  permanent); identity is keyed on `name` (same-title books collide, a re-titled
+  EPUB forks a duplicate — needs merge/re-point); `subjects` is stored + on the
+  wire but rendered nowhere (free browse facet); list has no search/sort/filter
+  (incl. a "partially imported" filter from `sourceRecipeCount - recipeCount`).
+- [ ] **Kitchen-mode persistence**: step check-off is `useState` in
+  `RecipeInstructions` — lost on nav or scale change; no ingredient check-off in
+  Read view; no timers derived from step text.
+- [ ] **Export "Read" format**: the print/export sheet offers prep/nested/matrix
+  (all spec-flavored) but no plain recipe-as-a-page format
+  (`RecipeMagazineView` would drop in); no multi-recipe/cookbook export.
+- [ ] **Compare page picker**: "Add Another Recipe" navigates to `/recipes` and
+  loses the selection; add an on-page picker.
+- [ ] **Notion importer hygiene**: `staleTime: 0` full-DB refetch on every
+  visit, every row runs WASM parses, no status filter/search/virtualization.
+
 ---
 
 ## Nutrition & cost intelligence (WASM conversion)
@@ -70,7 +111,16 @@ follow-ups:
 
 - [ ] **Replace `NutritionInfoTable` with `NutritionLabel`** on the USDA food pages —
   the FDA-style label (with %DV) now coexists with the raw nutrient table on
-  product detail; decide whether the raw table still earns its place.
+  product detail; decide whether the raw table still earns its place. (2026-07
+  audit: ingredient detail is a *third* raw-table instance.)
+- [ ] **USDA food detail is a read-only dead end** (2026-07 audit): no page
+  actions at all — add "create product from this food" / "link to an
+  ingredient", since the food page is where the `ingredient → product → fdc_id`
+  hop naturally closes.
+- [ ] **Nutrient-density intel beyond recipes**: `nutrition-intel.ts`
+  (`costPerNutrient`, `proteinPer100Kcal`) renders only in magazine view +
+  compare; product/ingredient/USDA pages — where "cost per g protein" drives
+  the buying decision — don't show it.
 - [ ] **`parse_scraped_recipe` could return parsed lines**: today it returns raw
   ingredient strings and the import path batch-parses them separately; folding the
   parse into the scrape export would save one boundary crossing on import.
@@ -119,11 +169,34 @@ runtime CDN) are all shipped. Target is iOS Safari only. Remaining:
   watching the form (the per-add success pulse already exists there).
 - [ ] **C3 — residual N+1 audit**: sweep products/recipes/inventory-detail for per-row
   query fans and batch them the way `getByLocationIds` did. Network panel should show a
-  constant query count regardless of row count. Timeboxed.
+  constant query count regardless of row count. Timeboxed. Flagship instance
+  (2026-07 audit): `location-gallery.tsx` calls `useAllInventoryItems()`, which
+  auto-paginates the **entire inventory table** to the client on the default
+  Locations view — `location.makeTree` counts + `location.valuation` +
+  `inventory.getCountsByLocations` already provide the data server-side.
 - [ ] **Sentry lazy-init (optional)**: init in `router.tsx` is already client-only with
   dev tracing/replay disabled and replay prod-only; if ever picked up, run a temporary
   `rollup-plugin-visualizer` treemap first to confirm it's still the biggest
   critical-path item.
+
+---
+
+## Inventory & recount (2026-07 audit residue)
+
+- [ ] **Empty locations stall a sweep**: `flattenAuditableLocations` includes
+  every descendant regardless of content, so a room of 15 empty bins is 15
+  zero-row "Save recount" stops. Bulk "mark remaining empty bins verified" or
+  auto-advance.
+- [ ] **Problems detectors for meals + cookbooks**: partially-imported cookbooks
+  (`sourceRecipeCount > recipeCount` — visible only if you open that book),
+  empty meals, meals whose recipes have no totals, recipes with zero
+  instructions.
+- [ ] **Products list bulk print-labels**: locations table has the bulk action,
+  products has per-row only, and the `/labels` empty state promises both.
+- [ ] **AiSearchBar on inventory is thinner than the plain filters**: it can
+  only set `productName`/`locationName` — the two substring filters already on
+  screen. Either teach it quantity/category/valuation/verified-before/subtree
+  filters or drop it from that surface.
 
 ---
 
@@ -135,6 +208,26 @@ it never writes it. Deferred:
 
 - [ ] Meal labels, recurring meals, meal templates, nutrition goals (each its own
   future slice).
+- [ ] **Shopping list v1.5** (2026-07 audit — all display-layer, tenet-safe):
+  manual/ad-hoc items ("milk, paper towels" — without them it can't be *the*
+  list you take to the store); estimated trip cost (the costing engine's most
+  glaring absence — `shoppingListItem` carries need/have/shortfall but no
+  price); shopper-friendly units + pack rounding (raw `basisUnit` prints
+  "1360 g flour"); durable check-off state (today localStorage keyed by exact
+  date range — nudging the range wipes mid-shop progress, and it doesn't follow
+  desktop→phone); excluded-meal toggles into the URL; copy-as-text/print.
+- [ ] **"Add to meal" should join an existing meal**: `add-to-meal.tsx` always
+  `meal.create`s, so adding two recipes to Tuesday dinner makes two meals. Offer
+  the day's existing meals (and a slot/name) before creating. Related unused
+  affordances: `Meal.sortOrder`/`MealRecipe.sortOrder` are written and ordered
+  by but no UI reorders; no meal-type concept beyond free-text `name`.
+- [ ] **Calendar ergonomics**: move a meal to another day / duplicate / copy
+  last week without a detail-page round-trip; a phone agenda view (the week grid
+  degrades to seven stacked `min-h-32` cards); "+ Meal" shouldn't navigate away
+  from the calendar mid-layout.
+- [ ] **Suggestions page follow-ups**: make cards actionable (link missing
+  ingredients to their fix surface, "add the missing 2 to the shopping list");
+  reachable from home/inventory, not just the nav dropdown.
 
 ### Rejected
 
@@ -170,15 +263,30 @@ Roughly priority order.
   first; promoting into `product.price` is a later explicit step. New delete/convert
   paths honor the removal-path invariant (embedding cleanup in-transaction).
   Foundation for the BOM below.
-- [ ] **Maintenance + budgeting** (semi-independent, in value order): recurring
-  maintenance tasks (simple every-N-weeks/months interval on a template — not RRULE;
-  next instance generated on completion; surfaces in needs-attention); an inbox view
-  for project-less tasks + quick capture + "promote to project"; tracker Problems
-  detectors (overdue tasks, subtree spend over a (sub-)project's `costEstimate`,
-  stale `in_progress` projects with no recent activity, past-date un-settled
-  `future` purchases); planned-vs-actual budget view (per sub-project:
-  `costEstimate` envelope vs. committed vs. actual via the subtree rollup,
-  monthly cash-flow projection from `future` dates).
+- [ ] **Recurring maintenance tasks**: simple every-N-weeks/months interval on a
+  template — not RRULE; next instance generated on completion; surfaces in
+  needs-attention. (The rest of the old maintenance+budgeting bundle shipped
+  2026-07: inbox view + promote-to-project, the attention detectors in
+  `repo/project/attention.ts`, and the planned-vs-actual budget views.)
+- [ ] **Surface the tracker to the rest of the app** (2026-07 audit): register
+  the 6 attention detectors as a Problems group (the navbar badge, `/problems`,
+  homepage banner, and `list_problems` MCP are tracker-blind today); quick-capture
+  Add Task/Project/Purchase in the navbar-create + palette registry (House is the
+  only domain with no quick-add path); a House tile on the home dashboard over
+  the currently-unused `task.summary`; MCP synthesis tools (`get_house_status`
+  over `project.dashboardSummary`, task/purchase analytics + bulk tools — the
+  tracker has CRUD-only MCP while the food domain has nine specialized tools).
+- [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
+  "year in the house" + de-noises the stalled-project detector — `updatedAt`
+  resets on any edit); purchase `vendor` text column + receipt image attachment
+  (spend-by-vendor is the one missing purchase analytic; a column and an image
+  link, distinct from the rejected receipt importers); portfolio-level estimate
+  total + a forward committed-spend (next 30/60/90d) figure (per-project
+  `BudgetStrip` exists, the portfolio equivalent doesn't; the `credits` value
+  portfolio-analytics computes in SQL is dropped at the schema boundary); mobile
+  fallback for TaskBoard/Gantt (desktop column tracks render on phones today);
+  project-detail History section (manifest declares it, the hand-rolled page
+  drops it); activity-page `entityType` filter (API accepts it, no control).
 - [ ] **`projectMaterial` BOM**: on top of the bridge — quantity + free-text unit,
   optional product resolution, durable-vs-consumable flag → **have / need / buy**
   per project via the availability engine, shopping list from shortfalls. No

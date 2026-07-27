@@ -22,7 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -94,16 +94,14 @@ export default function BulkMoveForm({
   const sourceLocation = form.watch("sourceLocation");
   const targetLocation = form.watch("targetLocation");
 
-  // Fetch locations for the selectors
-  const { data: locationsResp } = useQuery(
-    api.location.list.queryOptions({
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: { orderBy: "name", direction: "asc" },
-      filters: {},
-    }),
-  );
-
-  const locations = useMemo(() => locationsResp?.items || [], [locationsResp]);
+  // Resolve the deep-linked `?sourceLocationId=` directly. Both pickers run
+  // their own search, so this fetch exists only to seed the source field —
+  // looking the id up in a first page of locations silently failed for
+  // anything further down.
+  const { data: initialSourceLocation } = useQuery({
+    ...api.location.getByID.queryOptions({ id: initialSourceLocationId! }),
+    enabled: !!initialSourceLocationId,
+  });
 
   // Update URL when source location changes
   useEffect(() => {
@@ -119,30 +117,35 @@ export default function BulkMoveForm({
   // Set initial source location from URL
   useEffect(() => {
     if (
-      initialSourceLocationId &&
-      locations.length > 0 &&
+      initialSourceLocation &&
+      initialSourceLocation.id === initialSourceLocationId &&
       sourceLocation?.id !== initialSourceLocationId
     ) {
-      const location = locations.find(
-        (loc) => loc.id === initialSourceLocationId,
+      form.setValue(
+        "sourceLocation",
+        buildLocationComboboxItem(initialSourceLocation),
       );
-      if (location) {
-        form.setValue("sourceLocation", buildLocationComboboxItem(location));
-      }
     }
-  }, [initialSourceLocationId, locations, form, sourceLocation]);
+  }, [initialSourceLocation, initialSourceLocationId, form, sourceLocation]);
 
-  // Fetch inventory items from source location
+  // Fetch inventory items from source location. pageSize caps how many entries
+  // the move list can show — past that the user can't select what they can't
+  // see, so the truncated count is surfaced rather than silently dropped.
+  const BULK_MOVE_PAGE_SIZE = 100;
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
     {
       ...api.inventory.list.queryOptions({
         sort: { orderBy: "createdAt", direction: "desc" },
-        pagination: { pageIndex: 0, pageSize: 100 },
+        pagination: { pageIndex: 0, pageSize: BULK_MOVE_PAGE_SIZE },
         filters: { locationIdFilter: sourceLocation?.id ?? "" },
       }),
       enabled: !!sourceLocation,
     },
   );
+
+  const loadedCount = inventoryItemsData?.items.length ?? 0;
+  const totalCount = inventoryItemsData?.meta.totalCount ?? 0;
+  const isTruncated = !!sourceLocation && totalCount > loadedCount;
 
   // Seed moveItems once per sourceLocation.id rather than on every
   // inventoryItemsData identity change — a background refetch would
@@ -316,6 +319,14 @@ export default function BulkMoveForm({
           />
         </div>
       </Row>
+
+      {sourceLocation && isTruncated && (
+        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning text-xs">
+          Showing {loadedCount} of {totalCount} entries. The{" "}
+          {totalCount - loadedCount} not listed can't be selected or moved. Move
+          these first, then reload to see the rest.
+        </div>
+      )}
 
       {/* Items list */}
       {sourceLocation && (

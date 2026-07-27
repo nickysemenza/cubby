@@ -39,6 +39,8 @@ export const statusLabel = (status: IngredientAvailabilityStatus): string => {
       return "Need to buy";
     case "unconvertible":
       return "Can't compare units";
+    case "subrecipe":
+      return "Sub-recipe";
     default:
       return status;
   }

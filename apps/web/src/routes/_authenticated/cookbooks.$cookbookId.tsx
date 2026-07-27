@@ -102,14 +102,14 @@ function CookbookDetailPage() {
     );
 
   const deleteMutation = useActionMutation({
-    mutationFn: api.recipe.deleteByCookbook.mutationOptions,
-    success: ({ deleted }) =>
-      `Deleted ${deleted} recipe${deleted === 1 ? "" : "s"} from ${name}`,
+    mutationFn: api.recipe.deleteCookbook.mutationOptions,
+    success: ({ deletedRecipes }) =>
+      `Deleted ${name} and ${deletedRecipes} recipe${deletedRecipes === 1 ? "" : "s"}`,
     invalidateKeys: recipeCookbookMutationInvalidateKeys,
     onSuccess: () => {
       void navigate({ to: "/cookbooks" });
     },
-    error: (err) => getErrorMessage(err) || "Failed to delete cookbook recipes",
+    error: (err) => getErrorMessage(err) || "Failed to delete cookbook",
   });
 
   // Author + recipe count read as the spec-plate ledger stats; the cover plate
@@ -171,7 +171,7 @@ function CookbookDetailPage() {
             onClick={() => setShowDelete(true)}
           >
             <Trash className="mr-2 size-4" />
-            Delete all recipes
+            Delete cookbook
           </Button>
         </Row>
       }
@@ -215,14 +215,16 @@ function CookbookDetailPage() {
         action="Delete"
         variant="destructive"
         pendingLabel="Deleting..."
-        description={`This will permanently remove cookbook from your workspace. This action cannot be undone.`}
+        description="This removes the cookbook and every recipe imported from it. Its stored extraction is deleted too, so re-importing means re-uploading the EPUB. This action cannot be undone."
         onSubmit={async () => {
           await deleteMutation.mutateAsync({ cookbookId });
           setShowDelete(false);
         }}
         isPending={deleteMutation.isPending}
         renderItem={() =>
-          `Every recipe from "${name}" will be permanently deleted.`
+          recipeCount === undefined
+            ? `"${name}" and its imported recipes`
+            : `"${name}" and its ${recipeCount} imported recipe${recipeCount === 1 ? "" : "s"}`
         }
       />
     </Page>

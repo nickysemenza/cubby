@@ -1,8 +1,10 @@
+import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -14,8 +16,21 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
+import { problemsMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
 import { BACKFILL } from "./backfill-registry";
+import { ProblemActionButton } from "./problem-action-button";
 import { BackfillButton } from "./problem-backfill-action";
+
+// Module-level so the arrays keep a stable identity across renders (the counts
+// query + useActionMutation both key off them).
+const CULL_INVALIDATE_KEYS = [
+  queryKeys.image.list,
+  ...problemsMutationInvalidateKeys,
+] as const;
+const VALUATION_INVALIDATE_KEYS = [
+  queryKeys.location.all,
+  ...problemsMutationInvalidateKeys,
+] as const;
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
 function MaintenanceRow({
@@ -242,6 +257,53 @@ function PruneAliasesAction() {
   );
 }
 
+// Delete abandoned uploads: PENDING image rows with no entity association that
+// are older than the cull threshold, plus their R2 objects. Plain (non-streamed)
+// mutation, so it uses useActionMutation rather than the BackfillButton stream.
+function CullPendingImagesAction() {
+  const api = useTRPC();
+  const cull = useActionMutation({
+    mutationFn: api.image.cullPendingImages.mutationOptions,
+    success: (data) =>
+      data.count > 0
+        ? `Deleted ${pluralize("pending image", data.count, true)}.`
+        : "No pending images to cull.",
+    invalidateKeys: CULL_INVALIDATE_KEYS,
+  });
+
+  return (
+    <ProblemActionButton
+      onClick={() =>
+        cull.mutate({ olderThanHours: CULL_PENDING_IMAGES_DEFAULT_HOURS })
+      }
+      isPending={cull.isPending}
+      idleLabel="Cull now"
+      pendingLabel="Culling…"
+    />
+  );
+}
+
+// Rebuild every location's persisted valuation rollup. Idempotent; the safety
+// net for writes that bypass the router (raw SQL / postgres MCP).
+function RecomputeValuationsAction() {
+  const api = useTRPC();
+  const recompute = useActionMutation({
+    mutationFn: api.location.recomputeValuations.mutationOptions,
+    success: (data) =>
+      `Recomputed ${pluralize("location", data.updated, true)}.`,
+    invalidateKeys: VALUATION_INVALIDATE_KEYS,
+  });
+
+  return (
+    <ProblemActionButton
+      onClick={() => recompute.mutate(undefined)}
+      isPending={recompute.isPending}
+      idleLabel="Recompute all"
+      pendingLabel="Recomputing…"
+    />
+  );
+}
+
 // Batch operations that also surface on the Problems page when something needs
 // attention — here they run on demand regardless of state, via the same
 // BackfillButton plumbing (toast + invalidate). Declared as data (each row's
@@ -293,6 +355,18 @@ const MAINTENANCE_TOOLS: {
     // An AI generation can fail, so not every candidate ends up described.
     approximate: true,
     action: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
+  },
+  {
+    label: "Cull pending images",
+    description: `Delete abandoned uploads — PENDING images with no entity, older than ${CULL_PENDING_IMAGES_DEFAULT_HOURS}h — from the database and R2.`,
+    count: (c) => c.cullablePendingImages,
+    action: <CullPendingImagesAction />,
+  },
+  {
+    label: "Recompute location valuations",
+    description:
+      "Rebuild every location's stored inventory-value rollup (direct + descendants). Idempotent; catches writes that bypassed the app.",
+    action: <RecomputeValuationsAction />,
   },
 ];
 

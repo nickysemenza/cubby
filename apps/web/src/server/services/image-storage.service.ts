@@ -24,6 +24,7 @@ import {
   createPendingImageRecord,
   createUploadedImageRecord,
   cullPendingImages,
+  deleteImages,
   getImageByKey,
 } from "~/server/repo/image";
 import {
@@ -300,19 +301,38 @@ export const attachFileToEntity = async (
   };
 };
 
-export const cullPendingImageStorage = async (
-  db: Database,
-  olderThanHours: number,
-) => {
-  const result = await cullPendingImages(db, olderThanHours);
-
-  for (const key of result.deletedKeys) {
+/** Best-effort R2 cleanup for rows already removed from the DB. A failed object
+ * delete only strands bytes in the bucket — never fail the mutation over it. */
+const deleteStoredObjects = async (keys: string[]): Promise<void> => {
+  for (const key of keys) {
     try {
       await deleteS3Object(key);
     } catch (error) {
       console.error("Error deleting image from R2:", error);
     }
   }
+};
 
+export const cullPendingImageStorage = async (
+  db: Database,
+  olderThanHours: number,
+) => {
+  const result = await cullPendingImages(db, olderThanHours);
+  await deleteStoredObjects(result.deletedKeys);
+  return result;
+};
+
+/**
+ * Delete images outright: the DB rows (plus their entity associations) in one
+ * transaction, then their R2 objects. The DB is the source of truth — an object
+ * that fails to delete is logged and left behind rather than blocking the row
+ * removal (same contract as the pending cull).
+ */
+export const deleteImagesWithStorage = async (
+  db: Database,
+  imageIds: string[],
+) => {
+  const result = await deleteImages(db, imageIds);
+  await deleteStoredObjects(result.deletedKeys);
   return result;
 };

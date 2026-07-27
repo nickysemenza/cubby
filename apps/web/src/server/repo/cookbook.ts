@@ -25,11 +25,13 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
 } from "~/server/repo/import-recipe-convert";
 import {
+  deleteRecipesByCookbookTx,
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
 } from "~/server/repo/recipe";
@@ -193,6 +195,47 @@ export const getCookbookSource = async (
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
   }
   return { id, name: cb.name, recipes: cb.rawJson };
+};
+
+/**
+ * Delete a cookbook and everything imported from it, in one transaction: the
+ * recipe cascade (sections / ingredients / images / embeddings / audit) runs via
+ * {@link deleteRecipesByCookbookTx}, then the `Cookbook` row is soft-deleted so
+ * the book leaves the browse index instead of lingering as an empty shell.
+ * Returns the deleted recipe ids so the caller can run mutation side-effects and
+ * recompute the surviving parent recipes.
+ */
+export const deleteCookbook = async (
+  db: Database,
+  id: CookbookId,
+  actor: ActorContext,
+): Promise<{ deletedRecipeIds: RecipeId[] }> => {
+  const cb = await getCookbookById(db, id);
+  if (!cb) {
+    throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
+  }
+
+  return withTransaction(db, async (tx) => {
+    const deletedRecipeIds = await deleteRecipesByCookbookTx(tx, id, actor);
+
+    await tx
+      .update(cookbook)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(cookbook.id, id), notDeleted(cookbook)));
+
+    // Removal-path invariant: a cookbook is a searchable/embedded entity, so its
+    // own EntityEmbedding row must die in the same transaction (the recipe
+    // cascade above only covers the recipes').
+    await softDeleteEntityEmbeddingsTx(tx, "cookbook", [id]);
+
+    await logAuditEntry(tx, actor, {
+      entityType: "cookbook",
+      entityId: id,
+      action: "delete",
+    });
+
+    return { deletedRecipeIds };
+  });
 };
 
 /** Final summary of a reprocess pass (the generator's `return` value). */

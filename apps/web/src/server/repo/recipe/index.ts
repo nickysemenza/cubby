@@ -21,7 +21,7 @@ export {
   type CookbookRef,
   createRecipe,
   deleteRecipes,
-  deleteRecipesByCookbook,
+  deleteRecipesByCookbookTx,
   getCookbookRecipeIdsByTitle,
   getCookbookRecipesForDiff,
   getCookbookRecipeTitles,

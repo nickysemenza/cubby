@@ -21,6 +21,7 @@ import {
   optionalIngredientField,
 } from "~/app/_components/form-fields";
 import { InfoRow } from "~/components/common/info-row";
+import { filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { useImageState } from "~/hooks/useImageState";
@@ -44,6 +45,7 @@ import { ProductFormFields } from "./product-form-fields";
 const productFormSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
+    aliases: z.array(z.string()),
     manufacturer: z.string().min(1, "Manufacturer is required"),
     model: z.string().nullable(),
     notes: z.string().nullable(),
@@ -210,6 +212,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: product ? product.name : (initialName ?? ""),
+      aliases: product?.aliases ?? [],
       manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
       model: product ? product.model : null,
       notes: product ? product.notes : null,
@@ -227,10 +230,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   });
 
   const handleSubmit = (values: ProductFormValues) => {
+    const aliases = filterAliases(values.aliases);
+
     if (mode === "create") {
       // For creation, pass all fields
       const createData: ProductCreateInput = {
         name: values.name,
+        aliases,
         manufacturer: values.manufacturer,
         model: values.model,
         notes: values.notes,
@@ -252,9 +258,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         {
           ...product,
         },
-        values,
+        { ...values, aliases },
         [
           "name",
+          "aliases",
           "manufacturer",
           "model",
           "notes",

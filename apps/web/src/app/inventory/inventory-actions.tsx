@@ -17,8 +17,8 @@ const byId = (id: string) => {
   return action;
 };
 
-const recount = byId("add-inventory");
-const bulkEdit = byId("inventory-audit");
+const recount = byId("recount");
+const bulkEdit = byId("bulk-edit");
 const singleItem = byId("single-item");
 
 export function InventoryActions() {

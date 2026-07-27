@@ -1,6 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { projectOut } from "@cubby/schemas/project";
+import {
+  projectDashboardSummaryOut,
+  projectOut,
+  taskOut,
+} from "@cubby/schemas/project";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -432,6 +436,10 @@ describe("listMcpToolCatalog", () => {
     // schema reaching a `z.date()` (timestampedFields, totalsComputedAt,
     // lastBulkInventory, …) tripped it, degrading 22 tools silently. A tool
     // whose advertised schema has no `properties` means the fallback fired.
+    //
+    // Supersedes an earlier per-tool spot-check of the tracker synthesis/bulk
+    // tools (get_house_status, bulk_move_tasks, …) — those derived
+    // pick/omit/extend shapes are covered here along with everything else.
     const { tools } = await listMcpToolCatalog();
     const degraded = tools.filter((tool) =>
       [tool.inputSchema, tool.outputSchema].some(
@@ -630,6 +638,205 @@ describe("merge_ingredients partial-success aggregation", () => {
       total: 1,
       results: [{ target: TARGET_A, ok: true, summary: mergeSummary }],
     });
+  });
+});
+
+describe("household tracker synthesis + bulk tools", () => {
+  const PROJECT_A = "44444444-4444-4444-8444-444444444441";
+  const PROJECT_B = "44444444-4444-4444-8444-444444444442";
+  const PROJECT_C = "44444444-4444-4444-8444-444444444443";
+  const TASK_A = "55555555-5555-4555-8555-555555555551";
+
+  it("get_house_status passes filters through and trims UI-only + heavy fields", async () => {
+    const project = mock(projectOut, {
+      seed: 1,
+      overrides: {
+        id: PROJECT_A,
+        name: "Kitchen",
+        status: "in_progress",
+        notes: "# a long markdown page body",
+        icon: "🔨",
+      },
+    });
+    const task = mock(taskOut, {
+      seed: 2,
+      overrides: {
+        id: TASK_A,
+        name: "Order countertop",
+        status: "not_started",
+      },
+    });
+    const summary = mock(projectDashboardSummaryOut, {
+      seed: 3,
+      overrides: {
+        projects: [project],
+        nextTasks: [task],
+        attention: [
+          {
+            type: "overdue_task",
+            severity: "critical",
+            description: "Order countertop is 4 days overdue",
+            entityType: "task",
+            entityId: TASK_A,
+            date: "2026-07-22",
+            amount: null,
+            href: "/tasks",
+          },
+        ],
+      },
+    });
+    const dashboardSummary = vi.fn().mockResolvedValue(summary);
+
+    const result = await callTool(
+      createMcpServer(),
+      "get_house_status",
+      { statusScope: ["in_progress"] },
+      { project: { dashboardSummary } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(dashboardSummary).toHaveBeenCalledWith({
+      statusScope: ["in_progress"],
+    });
+    const structured = result.structuredContent as {
+      projects: Array<Record<string, unknown>>;
+      nextTasks: Array<Record<string, unknown>>;
+      attention: Array<{ type: string }>;
+      filterOptions?: unknown;
+    };
+    // UI-only select options are dropped; the attention feed is the payload.
+    expect(structured.filterOptions).toBeUndefined();
+    expect(structured.attention[0]?.type).toBe("overdue_task");
+    // Heavy per-row fields are trimmed, the rollup (budget/progress) is kept.
+    expect(structured.projects[0]).toMatchObject({
+      id: PROJECT_A,
+      name: "Kitchen",
+    });
+    expect(structured.projects[0]).not.toHaveProperty("notes");
+    expect(structured.projects[0]).not.toHaveProperty("blockedByIds");
+    expect(structured.projects[0]).not.toHaveProperty("createdAt");
+    expect(structured.projects[0]?.rollup).toBeDefined();
+    expect(Object.keys(structured.nextTasks[0] ?? {}).sort()).toEqual([
+      "dueDate",
+      "dueEndDate",
+      "id",
+      "name",
+      "projectId",
+      "projectName",
+      "status",
+      "trade",
+    ]);
+  });
+
+  it("get_project_budget derives overrun fields, sorts worst-first, and totals", async () => {
+    const portfolioAnalytics = vi.fn().mockResolvedValue({
+      costVsEstimate: [
+        {
+          projectId: PROJECT_B,
+          projectName: "Garden",
+          actual: 100,
+          committed: 0,
+          estimate: 500,
+        },
+        {
+          projectId: PROJECT_C,
+          projectName: "Garage",
+          actual: 50,
+          committed: 0,
+          estimate: null,
+        },
+        {
+          projectId: PROJECT_A,
+          projectName: "Kitchen",
+          actual: 1000,
+          committed: 200,
+          estimate: 1000,
+        },
+      ],
+      spendingByProject: [],
+      monthlySpend: [],
+      plannedVsActual: [{ month: "2026-01", planned: 10, actual: 5 }],
+      tradeActivity: [],
+      taskHeatmap: [],
+    });
+
+    const result = await callTool(
+      createMcpServer(),
+      "get_project_budget",
+      {},
+      { project: { portfolioAnalytics } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as {
+      projects: Array<Record<string, unknown>>;
+      totals: Record<string, number>;
+      plannedVsActualByMonth: unknown;
+    };
+    // Worst overrun first; the unbudgeted project sinks to the bottom.
+    expect(structured.projects.map((p) => p.projectName)).toEqual([
+      "Kitchen",
+      "Garden",
+      "Garage",
+    ]);
+    expect(structured.projects[0]).toMatchObject({
+      projected: 1200,
+      remaining: -200,
+      percentUsed: 120,
+      overBudget: true,
+    });
+    expect(structured.projects[1]).toMatchObject({
+      remaining: 400,
+      percentUsed: 20,
+      overBudget: false,
+    });
+    expect(structured.projects[2]).toMatchObject({
+      remaining: null,
+      percentUsed: null,
+      overBudget: false,
+    });
+    expect(structured.totals).toEqual({
+      estimate: 1500,
+      actual: 1150,
+      committed: 200,
+      projected: 1350,
+      overBudgetCount: 1,
+      missingEstimateCount: 1,
+    });
+    expect(structured.plannedVsActualByMonth).toEqual([
+      { month: "2026-01", planned: 10, actual: 5 },
+    ]);
+  });
+
+  it("bulk task writes drop sideEffects and report an updated count", async () => {
+    const updated = mock(taskOut, {
+      seed: 4,
+      overrides: { id: TASK_A, status: "done" },
+    });
+    const bulkSetStatus = vi.fn().mockResolvedValue({
+      items: [updated],
+      sideEffects: { backgroundBatches: ["batch-1"] },
+    });
+
+    const result = await callTool(
+      createMcpServer(),
+      "bulk_set_task_status",
+      { ids: [TASK_A], status: "done" },
+      { task: { bulkSetStatus } },
+    );
+
+    expect(bulkSetStatus).toHaveBeenCalledWith({
+      ids: [TASK_A],
+      status: "done",
+    });
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as {
+      updated: number;
+      items: Array<Record<string, unknown>>;
+    };
+    expect(structured.updated).toBe(1);
+    expect(structured.items[0]?.id).toBe(TASK_A);
+    expect(result.structuredContent).not.toHaveProperty("sideEffects");
   });
 });
 

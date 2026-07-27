@@ -1,8 +1,10 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
+  type CookbookSearchResult,
   type IngredientSearchResult,
   type InventorySearchResult,
   type LocationSearchResult,
+  type MealSearchResult,
   type ProductSearchResult,
   type ProjectSearchResult,
   type PurchaseSearchResult,
@@ -23,9 +25,11 @@ import {
 } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
+  cookbook,
   ingredient,
   inventoryEntry,
   location,
+  meal,
   product,
   project,
   purchase,
@@ -151,6 +155,48 @@ const searchQueries = {
         )
         .limit(limit) as Promise<IngredientSearchResult[]>,
   },
+  cookbook: {
+    // Author/subjects are text[] (OPF metadata), so they match through the same
+    // unnest-ILIKE the alias arrays use.
+    lexicalCondition: (query) =>
+      or(
+        formatSearchTerm(cookbook.name, query),
+        formatArraySearchTerm(cookbook.author, query),
+        formatArraySearchTerm(cookbook.subjects, query),
+      ),
+    idCondition: (ids) => idIn(cookbook.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          id: cookbook.id,
+          name: cookbook.name,
+          // Authors read as the byline; empty array ⇒ no subtitle.
+          subtitle: sql<
+            string | null
+          >`NULLIF(array_to_string(${cookbook.author}, ', '), '')`.as(
+            "subtitle",
+          ),
+          entityType: sql<"cookbook">`'cookbook'`.as("entityType"),
+          typeHint: sql<string | null>`null`.as("typeHint"),
+          // The cover is a direct FK (coverImageId), not a join table, so this
+          // can't reuse the imageUrl() join-table helper.
+          imageUrl: sql<string | null>`(
+            SELECT i."url" FROM "Image" i
+            WHERE i."id" = "Cookbook"."coverImageId"
+            AND i."deletedAt" IS NULL
+            AND i."contentType" <> ${PDF_CONTENT_TYPE}
+          )`.as("imageUrl"),
+          createdAt: cookbook.createdAt,
+          recipeCount: sql<number>`(
+            SELECT COUNT(*)::int FROM "Recipe" r
+            WHERE r."cookbookId" = "Cookbook"."id" AND r."deletedAt" IS NULL
+          )`.as("recipeCount"),
+          authors: cookbook.author,
+        })
+        .from(cookbook)
+        .where(and(notDeleted(cookbook), condition))
+        .limit(limit) as Promise<CookbookSearchResult[]>,
+  },
   location: {
     lexicalCondition: (query) =>
       or(
@@ -214,6 +260,49 @@ const searchQueries = {
           ),
         )
         .limit(limit) as Promise<InventorySearchResult[]>,
+  },
+  meal: {
+    // A meal is often unnamed, so the date string and the planned recipes'
+    // names are first-class match surfaces alongside the optional name.
+    lexicalCondition: (query) =>
+      or(
+        formatSearchTerm(meal.name, query),
+        sql`${meal.date}::text ILIKE ${`%${query}%`}`,
+        sql`EXISTS (
+          SELECT 1 FROM "MealRecipe" mr
+          JOIN "Recipe" r ON r."id" = mr."recipeId" AND r."deletedAt" IS NULL
+          WHERE mr."mealId" = "Meal"."id" AND mr."deletedAt" IS NULL
+          AND r."name" ILIKE ${`%${query}%`}
+        )`,
+      ),
+    idCondition: (ids) => idIn(meal.id, ids),
+    load: (client, condition, limit) =>
+      client
+        .select({
+          // Meal.name is nullable; the date is the fallback display name (it is
+          // how the calendar labels an unnamed meal).
+          id: meal.id,
+          name: sql<string>`COALESCE(NULLIF(${meal.name}, ''), ${meal.date}::text)`.as(
+            "name",
+          ),
+          subtitle: sql<string | null>`${meal.date}::text`.as("subtitle"),
+          entityType: sql<"meal">`'meal'`.as("entityType"),
+          typeHint: sql<string | null>`null`.as("typeHint"),
+          imageUrl: sql<string | null>`null`.as("imageUrl"),
+          createdAt: meal.createdAt,
+          date: sql<string | null>`${meal.date}::text`.as("date"),
+          // Joins Recipe: deleting a recipe soft-deletes the recipe but leaves
+          // its MealRecipe rows, so counting the join alone would report
+          // recipes the meal no longer shows (or embeds).
+          recipeCount: sql<number>`(
+            SELECT COUNT(*)::int FROM "MealRecipe" mr
+            JOIN "Recipe" r ON r."id" = mr."recipeId" AND r."deletedAt" IS NULL
+            WHERE mr."mealId" = "Meal"."id" AND mr."deletedAt" IS NULL
+          )`.as("recipeCount"),
+        })
+        .from(meal)
+        .where(and(notDeleted(meal), condition))
+        .limit(limit) as Promise<MealSearchResult[]>,
   },
   project: {
     lexicalCondition: (query) =>

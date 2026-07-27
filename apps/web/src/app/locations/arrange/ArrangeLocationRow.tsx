@@ -4,6 +4,8 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { ArrowDownToLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
+import { Row } from "~/components/layout";
+import { ArrangeMoveTo } from "./ArrangeMoveTo";
 import { parentIdOf } from "./arrange-tree-utils";
 import type { LocationDragData } from "./arrange-types";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
@@ -108,16 +110,26 @@ export function ArrangeLocationRow({
           : undefined
       }
       trailing={
-        hasChildren ? (
-          <button
-            type="button"
-            aria-label={`Drill into ${node.name}`}
-            onClick={() => onDrill(node.id)}
-            className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
-          >
-            <ArrowDownToLine className="size-3.5" />
-          </button>
-        ) : undefined
+        <Row align="center" gap="tight" className="shrink-0">
+          {hasChildren && (
+            <button
+              type="button"
+              aria-label={`Drill into ${node.name}`}
+              onClick={() => onDrill(node.id)}
+              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowDownToLine className="size-3.5" />
+            </button>
+          )}
+          <ArrangeMoveTo
+            target={{
+              kind: "location",
+              locationId: node.id,
+              name: node.name,
+              roots,
+            }}
+          />
+        </Row>
       }
       className="cursor-grab select-none rounded py-1 active:cursor-grabbing"
     />

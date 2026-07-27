@@ -5,8 +5,7 @@ import type {
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
 import { getNutrientUnitString } from "@cubby/usda-schemas";
-import { Link } from "@tanstack/react-router";
-import { uniq } from "es-toolkit";
+import { sumBy, uniq } from "es-toolkit";
 import {
   Apple,
   ChefHat,
@@ -21,19 +20,21 @@ import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
-import { buttonVariants } from "~/components/ui/button";
+import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { cn, formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { tryFormatAmount } from "../inventory/format-amount";
 import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
+import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
 import { type ManualViewTarget, ProductManuals } from "./product-manuals";
@@ -91,6 +92,8 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     setManualTarget({ documentId, page, nonce: Date.now() });
   }, []);
 
+  const [addToInventoryOpen, setAddToInventoryOpen] = useState(false);
+
   const sections: DetailSection[] = [
     editableDetailSection({
       title: "Basic Information",
@@ -115,13 +118,14 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       icon: MapPin,
       zone: "main" as const,
       headerAction: (
-        <Link
-          to="/inventory/session"
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAddToInventoryOpen(true)}
         >
           <Package className="mr-2 size-4" />
           Add to Inventory
-        </Link>
+        </Button>
       ),
       content: <ProductStockedAt product={product} />,
     },
@@ -233,10 +237,26 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const entries = product.inventoryEntry ?? [];
   const locationCount = uniq(entries.map((e) => e.location.id)).length;
+  // Entries only sum into a real on-hand quantity when they share one unit —
+  // "3 lb + 2 each" has no total, so those fall back to a labelled row count.
+  const entryUnits = uniq(entries.map((e) => e.amount.unit));
+  const onHandUnit = entryUnits.length === 1 ? entryUnits[0] : undefined;
+  const onHandStat: DetailHeroStat = onHandUnit
+    ? {
+        label: "On hand",
+        value: tryFormatAmount({
+          value: sumBy(entries, (e) => e.amount.value),
+          unit: onHandUnit,
+        }),
+      }
+    : {
+        label: entries.length === 0 ? "On hand" : "Entries",
+        value: entries.length,
+      };
   // No Price stat here — the editable price field in Basic Information is
   // the source of truth and sits right in the aside rail.
   const heroStats: DetailHeroStat[] = [
-    { label: "On hand", value: entries.length },
+    onHandStat,
     { label: "Locations", value: locationCount },
   ];
 
@@ -259,6 +279,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         sections={sections}
         rawData={product}
         heroImages={images}
+      />
+      <ProductAddToInventoryDialog
+        open={addToInventoryOpen}
+        onOpenChange={setAddToInventoryOpen}
+        product={product}
       />
     </Page>
   );

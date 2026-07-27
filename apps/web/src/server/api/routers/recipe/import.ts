@@ -18,7 +18,7 @@ import {
   cookbookIdOut,
   cookbookSourceOut,
   cookbookSummariesOut,
-  deleteCookbookRecipesOut,
+  deleteCookbookOut,
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
@@ -41,6 +41,7 @@ import {
 } from "~/lib/recipe-signature";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  deleteCookbook,
   getCookbookByName,
   getCookbookSource,
   listCookbooks,
@@ -54,7 +55,6 @@ import {
   upsertNotionRecipeFromImport,
 } from "~/server/repo/import-recipe-convert";
 import {
-  deleteRecipesByCookbook,
   getCookbookRecipeIdsByTitle,
   getCookbookRecipesForDiff,
   getNotionRecipePageIds,
@@ -120,10 +120,19 @@ const upsertCookbookEndpoint = protectedProcedure
   .input(upsertCookbookInput)
   .output(cookbookIdOut)
   .mutation(async ({ ctx, input }) => {
-    return await upsertCookbook(ctx.db, input, {
+    const result = await upsertCookbook(ctx.db, input, {
       ...ctx.actorContext,
       source: "epub_import",
     });
+    // Cookbooks are searchable, so the upsert has to enqueue the embedding
+    // refresh the way every other entity's create/update does. "updated" covers
+    // both branches (the refresh is idempotent and hash-skipped either way).
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "cookbook", entityId: result.id },
+      source: "cookbook.upsert",
+    });
+    return result;
   });
 // Hand back a cookbook's stored extraction so the importer can re-open it for
 // selective re-import (no LLM, no EPUB). See the import flow's "from stored source".
@@ -386,11 +395,12 @@ const listCookbooksEndpoint = protectedProcedure
     return await listCookbooks(ctx.db);
   });
 
-// Bulk-delete every recipe linked to one cookbook (cascades to sections,
-// ingredients, and images via the shared deleteRecipes path).
-const deleteByCookbook = protectedProcedure
+// Delete a cookbook: every recipe imported from it (cascading to sections,
+// ingredients, and images via the shared deleteRecipes path) AND the Cookbook
+// row itself, in one transaction — a book must not outlive its recipes.
+const deleteCookbookEndpoint = protectedProcedure
   .input(cookbookIdInput)
-  .output(deleteCookbookRecipesOut)
+  .output(deleteCookbookOut)
   .mutation(async ({ ctx, input }) => {
     const recipeIds = (
       await getCookbookRecipesForDiff(ctx.db, input.cookbookId)
@@ -404,25 +414,25 @@ const deleteByCookbook = protectedProcedure
     const parentIds = uniq(
       [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
     );
-    const result = await deleteRecipesByCookbook(
+    const { deletedRecipeIds } = await deleteCookbook(
       ctx.db,
       input.cookbookId,
       ctx.actorContext,
     );
     await runMutationSideEffectsForEntities(
       ctx.db,
-      recipeIds.map((id) => ({
+      deletedRecipeIds.map((id) => ({
         action: "deleted" as const,
         entity: { entityType: "recipe" as const, entityId: id },
-        source: "recipe.deleteByCookbook",
+        source: "recipe.deleteCookbook",
       })),
     );
     if (parentIds.length > 0) {
       await ctx.services.recipeCosting.dispatchRecompute(parentIds, {
-        source: "recipe.deleteByCookbook",
+        source: "recipe.deleteCookbook",
       });
     }
-    return result;
+    return { deletedRecipes: deletedRecipeIds.length };
   });
 
 // Re-derive a cookbook's recipes from its stored raw JSON (re-runs the WASM
@@ -469,7 +479,7 @@ export const recipeImportProcedures = {
   previewNotionSync,
   importNotionSyncStream,
   listCookbooks: listCookbooksEndpoint,
-  deleteByCookbook,
+  deleteCookbook: deleteCookbookEndpoint,
   reprocessCookbook: reprocessCookbookStreamEndpoint,
   extractCookbookChunk: extractCookbookChunkProc,
   scrape,

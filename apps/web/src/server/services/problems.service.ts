@@ -16,6 +16,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import {
   type AllProblems,
   assembleAllProblems,
@@ -23,9 +24,11 @@ import {
   type MaintenanceCounts,
   type ProblemsCoverage,
   type ProblemsFast,
+  type ProblemsTracker,
   type ProblemsUpc,
   type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
+  TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
@@ -46,6 +49,7 @@ import {
   findOrphanedEntityEmbeddings,
   softDeleteEntityEmbeddingRows,
 } from "~/server/repo/entity-embedding";
+import { countCullablePendingImages } from "~/server/repo/image";
 import {
   deleteIngredients,
   findOrCreateIngredient,
@@ -75,6 +79,7 @@ import {
   findProductsWithNoImages,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
+import { computeAttentionItems } from "~/server/repo/project";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
@@ -324,6 +329,8 @@ export const findMaintenanceCounts = async (
       findProductsWithNoImages(db, { excludeIngredients: true }),
     locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
     staleRecipeTotals: () => countStaleRecipeTotals(db),
+    cullablePendingImages: () =>
+      countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
   });
 
   return {
@@ -334,6 +341,7 @@ export const findMaintenanceCounts = async (
       .length,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
     staleRecipeTotals: r.staleRecipeTotals,
+    cullablePendingImages: r.cullablePendingImages,
   };
 };
 
@@ -507,6 +515,31 @@ const findProductsWithBetterUpcData = async (
   return problems;
 };
 
+// Household-tracker group — the six attention rules the /projects overview
+// already computes (overdue tasks, stalled projects, missing budgets, past-due
+// planned purchases, unclassified purchases, blocked work), promoted to
+// first-class Problems so the navbar badge / homepage banner / MCP see them.
+// The detection itself stays in the repo (computeAttentionItems); this only
+// splits the flat item list into the per-rule slices, keyed by the shared
+// TRACKER_PROBLEM_KEY_BY_TYPE map so the two can't drift.
+export const findTrackerProblems = async (
+  db: Database,
+): Promise<ProblemsTracker> => {
+  const items = await computeAttentionItems(db);
+  const tracker: ProblemsTracker = {
+    overdueTasks: [],
+    stalledProjects: [],
+    projectsMissingBudget: [],
+    pastDuePlannedPurchases: [],
+    unclassifiedPurchases: [],
+    blockedWorkProjects: [],
+  };
+  for (const item of items) {
+    tracker[TRACKER_PROBLEM_KEY_BY_TYPE[item.type]].push(item);
+  }
+  return tracker;
+};
+
 export const findUpcProblems = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
@@ -529,6 +562,7 @@ export const findAllProblems = async (
     fast: () => findFastProblems(db),
     coverage: () => findCoverageProblems(db, usdaClient),
     upc: () => findUpcProblems(db, upcLookupClient),
+    tracker: () => findTrackerProblems(db),
   });
   return assembleAllProblems(groups);
 };

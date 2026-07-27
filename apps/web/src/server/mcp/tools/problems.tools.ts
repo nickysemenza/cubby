@@ -19,7 +19,7 @@ export function registerProblemsTools(server: McpServer) {
   registerMcpTool(server, {
     name: "list_problems",
     description:
-      "List data-quality problems across products, inventory, locations, and recipes.",
+      "List data-quality problems across products, inventory, locations, and recipes, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned purchases, missing budgets, unclassified purchases).",
     inputSchema: {
       countsOnly: z
         .boolean()
@@ -43,12 +43,13 @@ export function registerProblemsTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const [fast, coverage, upc] = await Promise.all([
+      const [fast, coverage, upc, tracker] = await Promise.all([
         caller.problems.getFast(),
         caller.problems.getCoverage(),
         caller.problems.getUpc(),
+        caller.problems.getTracker(),
       ]);
-      const all = assembleAllProblems({ fast, coverage, upc });
+      const all = assembleAllProblems({ fast, coverage, upc, tracker });
       if (params.countsOnly) {
         return countProblems(all);
       }

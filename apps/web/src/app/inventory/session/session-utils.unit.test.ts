@@ -26,6 +26,7 @@ function loc(
     id: unsafeLocationId(id),
     shortcode: unsafeLocationShortcode(`L-${id.slice(0, 4).toUpperCase()}`),
     name,
+    aliases: [],
     type,
     lastBulkInventory: null,
     aiDescription: null,

@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
+  Clock,
   FileText,
   FolderTree,
   Info,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
 import {
@@ -1043,6 +1045,24 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
+  // The manifest's `history` common section, rendered inline rather than via
+  // `useEntityDetail` (task-detail/purchase-detail's route): project also
+  // declares `images`, and that common section reads `data.images` — which
+  // ProjectOut doesn't carry (images come from the separate
+  // `imagesByProjectIds` query and already ride the hero), so it would render
+  // an always-empty Images card. Same content the helper produces.
+  const historySection: DetailSection = {
+    title: "History",
+    icon: Clock,
+    content: (
+      <AuditLogList
+        entityType="project"
+        entityId={project.id}
+        showEntityLink={false}
+      />
+    ),
+  };
+
   const sections: DetailSection[] = [
     // Main column: Notes (when populated), Budget, Tasks, then — for a leaf —
     // the purchase ledger.
@@ -1057,6 +1077,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasNotesContent ? [] : [notesSection]),
     // Subtree projects show the ledger as a full-width band at the bottom.
     ...(hasSubtree ? [purchasesSection] : []),
+    // Paper trail last, same position task/purchase detail give it.
+    historySection,
   ];
 
   const heroStats: DetailHeroStat[] = [

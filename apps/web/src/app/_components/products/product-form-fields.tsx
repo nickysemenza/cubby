@@ -7,6 +7,7 @@ import { isMiscProduct } from "@cubby/shared";
 import { Search } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import { AliasesField } from "~/components/forms/aliases-field";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -291,6 +292,10 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           </SideBySideFields>
         )}
       </FormSection>
+
+      {/* Alternate names — searched (product.search) and embedded alongside the
+          product name. Full form only; the compact quick-add stays minimal. */}
+      {!compact && <AliasesField<TFieldValues> form={form} />}
 
       {!isMisc && (
         <>

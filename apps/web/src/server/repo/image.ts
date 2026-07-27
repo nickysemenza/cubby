@@ -6,6 +6,8 @@
  * - {@link imageList}                         — paginated/sorted/filtered list with entity associations
  * - {@link getImageById}                      — fetch one image with its entity association
  * - {@link cullPendingImages}                 — delete stale unassociated PENDING rows and return their keys
+ * - {@link countCullablePendingImages}        — how many rows that cull would remove
+ * - {@link deleteImages}                      — hard-delete image rows (+ their associations) and return their keys
  * - {@link associateImagesWithProduct}        — attach PENDING images to a product
  * - {@link associateImagesWithRecipe}         — attach PENDING images to a recipe
  *
@@ -28,6 +30,7 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  cookbook,
   image,
   location,
   locationImage,
@@ -354,15 +357,15 @@ export const getImageByKey = async (
 };
 
 /**
- * Cull (delete) pending images that are older than the specified threshold
- * @param db Database client
- * @param olderThanHours Delete images older than this many hours
- * @returns Object with count of deleted images and related information
+ * Unassociated PENDING image rows older than the threshold — the abandoned
+ * uploads the cull deletes. Shared by {@link cullPendingImages} and
+ * {@link countCullablePendingImages} so the Maintenance card's "N affected"
+ * figure can't drift from what the button actually removes.
  */
-export const cullPendingImages = async (
+const findCullablePendingImages = async (
   db: Database,
   olderThanHours: number,
-) => {
+): Promise<Array<{ id: string; key: string }>> => {
   const dbClient = getDb(db);
 
   // Calculate the cutoff date
@@ -412,9 +415,27 @@ export const cullPendingImages = async (
   });
 
   // Filter out images that have associations
-  const pendingImages = allPendingImages.filter(
-    (img) => !associatedImageIds.has(img.id),
-  );
+  return allPendingImages.filter((img) => !associatedImageIds.has(img.id));
+};
+
+/** How many abandoned uploads the cull would remove right now. */
+export const countCullablePendingImages = async (
+  db: Database,
+  olderThanHours: number,
+): Promise<number> =>
+  (await findCullablePendingImages(db, olderThanHours)).length;
+
+/**
+ * Cull (delete) pending images that are older than the specified threshold
+ * @param db Database client
+ * @param olderThanHours Delete images older than this many hours
+ * @returns Object with count of deleted images and related information
+ */
+export const cullPendingImages = async (
+  db: Database,
+  olderThanHours: number,
+) => {
+  const pendingImages = await findCullablePendingImages(db, olderThanHours);
 
   if (pendingImages.length === 0) {
     return { count: 0, deletedIds: [], deletedKeys: [] };
@@ -425,7 +446,7 @@ export const cullPendingImages = async (
   const imageKeys = pendingImages.map((img) => img.key);
 
   // Delete the images from the database
-  await dbClient.delete(image).where(inArray(image.id, imageIds));
+  await getDb(db).delete(image).where(inArray(image.id, imageIds));
 
   // Return the result
   return {
@@ -433,6 +454,50 @@ export const cullPendingImages = async (
     deletedIds: imageIds,
     deletedKeys: imageKeys,
   };
+};
+
+/**
+ * Hard-delete image rows and return their R2 keys so the caller can drop the
+ * objects too.
+ *
+ * Images are the one gallery entity that is NOT soft-deleted (no `deletedAt` on
+ * `Image`), so "delete" here means the row is gone — matching how the pending
+ * cull already works. The join rows are deleted first (they FK the image), which
+ * also detaches the image from whatever product/location/recipe/project owned
+ * it. Missing ids are skipped; the returned keys are only those actually removed.
+ */
+export const deleteImages = async (
+  db: Database,
+  imageIds: string[],
+): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
+  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
+
+  return await withTransaction(db, async (tx) => {
+    const rows = await tx.query.image.findMany({
+      where: inArray(image.id, imageIds),
+      columns: { id: true, key: true },
+    });
+    if (rows.length === 0) return { deletedIds: [], deletedKeys: [] };
+
+    const ids = rows.map((row) => row.id);
+
+    // Join rows reference the image — clear them before the image itself.
+    await tx.delete(productImage).where(inArray(productImage.imageId, ids));
+    await tx.delete(locationImage).where(inArray(locationImage.imageId, ids));
+    await tx.delete(recipeImage).where(inArray(recipeImage.imageId, ids));
+    await tx.delete(projectImage).where(inArray(projectImage.imageId, ids));
+
+    // Cookbook covers are a direct FK (not a join row) — drop the reference so
+    // the delete can't violate it; the cookbook simply loses its cover.
+    await tx
+      .update(cookbook)
+      .set({ coverImageId: null })
+      .where(inArray(cookbook.coverImageId, ids));
+
+    await tx.delete(image).where(inArray(image.id, ids));
+
+    return { deletedIds: ids, deletedKeys: rows.map((row) => row.key) };
+  });
 };
 
 /**

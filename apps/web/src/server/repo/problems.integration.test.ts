@@ -1,27 +1,37 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
+import {
+  projectCreateInput,
+  purchaseCreateInput,
+  taskCreateInput,
+} from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { image, product, productImage } from "~/server/db/schema";
 import {
   findAllProblems,
+  findTrackerProblems,
   reparseStaleIngredientParses,
 } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { createIngredient, getIngredientByName } from "./ingredient";
 import { findStaleIngredientParses } from "./problems";
 import { createProduct } from "./product";
+import { createProject, deleteProjects } from "./project";
+import { createPurchase, deletePurchases } from "./purchase";
 import { createRecipe } from "./recipe";
 import {
   ingredientRef,
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import { createTask, deleteTasks } from "./task";
 
 // Repo-layer tests for the WASM-driven, highest-logic problem scans. The
 // coverage/UPC find* helpers are exercised through the public findAllProblems
@@ -458,5 +468,135 @@ describe("problems repo", () => {
         false,
       );
     });
+  });
+});
+
+// The household-tracker slice of the Problems payload. Detection itself lives in
+// repo/project/attention.ts (covered there); this asserts the service-layer
+// split — that the flat attention list lands in the right per-rule slices, and
+// that a removed project's rows don't leak into the always-on badge count.
+describe("problems service — tracker slice", () => {
+  const ctx = withTestDb();
+
+  it("surfaces an overdue task and a past-due planned purchase in their slices", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "tracker slice project",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const overdue = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "tracker overdue task",
+        projectId: project.id,
+        dueDate: householdDaysAgo(3),
+      }),
+      ctx.actor,
+    );
+    // Control: a task due in the future is not overdue.
+    const upcoming = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "tracker upcoming task",
+        projectId: project.id,
+        dueDate: householdDaysFromNow(3),
+      }),
+      ctx.actor,
+    );
+    const pastDuePlanned = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "tracker past-due planned purchase",
+        projectId: project.id,
+        cost: 250,
+        future: true,
+        date: householdDaysAgo(5),
+      }),
+      ctx.actor,
+    );
+
+    const tracker = await findTrackerProblems(ctx.db);
+
+    expect(tracker.overdueTasks.map((i) => i.entityId)).toContain(overdue.id);
+    expect(tracker.overdueTasks.map((i) => i.entityId)).not.toContain(
+      upcoming.id,
+    );
+    expect(tracker.pastDuePlannedPurchases.map((i) => i.entityId)).toContain(
+      pastDuePlanned.id,
+    );
+    // Rows carry the rule type + a route the Problems card can link to.
+    expect(
+      tracker.overdueTasks.find((i) => i.entityId === overdue.id),
+    ).toMatchObject({ type: "overdue_task", entityType: "task" });
+    expect(
+      tracker.pastDuePlannedPurchases.find(
+        (i) => i.entityId === pastDuePlanned.id,
+      ),
+    ).toMatchObject({
+      type: "past_due_planned_purchase",
+      entityType: "purchase",
+    });
+  });
+
+  it("excludes rows belonging to a deleted project", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "tracker deleted project",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const task = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "tracker deleted overdue task",
+        projectId: project.id,
+        dueDate: householdDaysAgo(3),
+      }),
+      ctx.actor,
+    );
+    const planned = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "tracker deleted planned purchase",
+        projectId: project.id,
+        cost: 100,
+        future: true,
+        date: householdDaysAgo(5),
+      }),
+      ctx.actor,
+    );
+
+    // Sanity: they're flagged while live.
+    const before = await findTrackerProblems(ctx.db);
+    expect(before.overdueTasks.map((i) => i.entityId)).toContain(task.id);
+    expect(before.pastDuePlannedPurchases.map((i) => i.entityId)).toContain(
+      planned.id,
+    );
+
+    // A project can only be deleted once its tasks/purchases are (the delete
+    // guards enforce that), so removing the project removes the whole subtree.
+    await deleteTasks(ctx.db, [task.id], ctx.actor);
+    await deletePurchases(ctx.db, [planned.id], ctx.actor);
+    await deleteProjects(ctx.db, [project.id], ctx.actor);
+
+    const after = await findTrackerProblems(ctx.db);
+    const everyEntityId = Object.values(after).flatMap((items) =>
+      items.map((i) => i.entityId),
+    );
+    expect(everyEntityId).not.toContain(task.id);
+    expect(everyEntityId).not.toContain(planned.id);
+    expect(everyEntityId).not.toContain(project.id);
   });
 });

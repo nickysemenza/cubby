@@ -206,8 +206,11 @@ export function GlobalCommandMenu({
     setOpen(false);
   };
 
-  const goToPage = (path: string) => {
-    navigate({ to: path });
+  // `search` carries an action's deep-link params (e.g. the tracker quick
+  // captures' `{ create: true }`) — a query string on `path` would be treated
+  // as part of the pathname.
+  const goToPage = (path: string, searchParams?: Record<string, unknown>) => {
+    navigate({ to: path, search: searchParams });
     setOpen(false);
   };
 
@@ -394,7 +397,7 @@ export function GlobalCommandMenu({
                   {filteredActions.map((action) => (
                     <CommandItem
                       key={action.id}
-                      onSelect={() => goToPage(action.path)}
+                      onSelect={() => goToPage(action.path, action.search)}
                     >
                       <action.icon className="size-4" />
                       <span>{action.name}</span>
@@ -442,7 +445,7 @@ export function GlobalCommandMenu({
                   {filteredActions.map((action) => (
                     <CommandItem
                       key={action.id}
-                      onSelect={() => goToPage(action.path)}
+                      onSelect={() => goToPage(action.path, action.search)}
                     >
                       <action.icon className="size-4" />
                       <span>{action.name}</span>

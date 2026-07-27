@@ -35,13 +35,17 @@ import {
   updateMeal,
   updateMealRecipe,
 } from "~/server/repo/meal";
-import {
-  createDeleteProcedure,
-  createEntityCrudProcedures,
-} from "../crud-factory";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
+import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const { getByID, list, create, update } = createEntityCrudProcedures({
+const {
+  getByID,
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createSearchableEntityCrudProcedures({
   schemas: {
     createInput: mealCreateInput,
     updateInput: mealUpdateData,
@@ -64,14 +68,26 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       createMeal(services.db, data, services.actorContext),
     update: async (services, id: MealId, data) =>
       updateMeal(services.db, id, data, services.actorContext),
+    delete: async (services, ids) => {
+      await deleteMeals(services.db, ids, services.actorContext);
+      return undefined;
+    },
   },
   entityName: "meal",
 });
 
-const deleteItem = createDeleteProcedure<MealId>(async (services, ids) => {
-  await deleteMeals(services.db, ids, services.actorContext);
-  return undefined;
-}, mealId);
+// A meal's embedding text is mostly its planned recipes' names, so the child
+// mutations count as an update to the meal itself.
+const refreshMealEmbedding = (
+  db: Parameters<typeof runMutationSideEffects>[0],
+  id: MealId,
+  source: string,
+) =>
+  runMutationSideEffects(db, {
+    action: "updated",
+    entity: { entityType: "meal", entityId: id },
+    source,
+  });
 
 const getByDateRange = protectedProcedure
   .input(mealDateRange)
@@ -81,8 +97,8 @@ const getByDateRange = protectedProcedure
 const addRecipe = protectedProcedure
   .input(mealAddRecipeInput)
   .output(mealOut)
-  .mutation(({ ctx, input }) =>
-    addRecipeToMeal(
+  .mutation(async ({ ctx, input }) => {
+    const updated = await addRecipeToMeal(
       ctx.db,
       input.mealId,
       {
@@ -91,12 +107,16 @@ const addRecipe = protectedProcedure
         sortOrder: input.sortOrder,
       },
       ctx.actorContext,
-    ),
-  );
+    );
+    await refreshMealEmbedding(ctx.db, updated.id, "meal.addRecipe");
+    return updated;
+  });
 
 const updateRecipe = protectedProcedure
   .input(mealUpdateRecipeInput)
   .output(mealOut)
+  // Scale/order only — the meal's embedding text doesn't include either, so no
+  // embedding refresh here (unlike add/remove, which change the recipe set).
   .mutation(({ ctx, input }) =>
     updateMealRecipe(
       ctx.db,
@@ -109,9 +129,11 @@ const updateRecipe = protectedProcedure
 const removeRecipe = protectedProcedure
   .input(mealRecipeIdInput)
   .output(mealOut)
-  .mutation(({ ctx, input }) =>
-    removeMealRecipe(ctx.db, input.id, ctx.actorContext),
-  );
+  .mutation(async ({ ctx, input }) => {
+    const updated = await removeMealRecipe(ctx.db, input.id, ctx.actorContext);
+    await refreshMealEmbedding(ctx.db, updated.id, "meal.removeRecipe");
+    return updated;
+  });
 
 const getShoppingList = protectedProcedure
   .input(mealDateRange)

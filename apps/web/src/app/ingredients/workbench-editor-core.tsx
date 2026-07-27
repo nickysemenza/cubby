@@ -332,6 +332,7 @@ export const buildProductWrite = (
       kind: "create",
       input: {
         name: row.name,
+        aliases: [],
         manufacturer: UNSPECIFIED_MANUFACTURER,
         upc: null,
         expectedQuantity: null,
