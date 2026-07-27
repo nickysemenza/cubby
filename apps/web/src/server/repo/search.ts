@@ -291,8 +291,12 @@ const searchQueries = {
           imageUrl: sql<string | null>`null`.as("imageUrl"),
           createdAt: meal.createdAt,
           date: sql<string | null>`${meal.date}::text`.as("date"),
+          // Joins Recipe: deleting a recipe soft-deletes the recipe but leaves
+          // its MealRecipe rows, so counting the join alone would report
+          // recipes the meal no longer shows (or embeds).
           recipeCount: sql<number>`(
             SELECT COUNT(*)::int FROM "MealRecipe" mr
+            JOIN "Recipe" r ON r."id" = mr."recipeId" AND r."deletedAt" IS NULL
             WHERE mr."mealId" = "Meal"."id" AND mr."deletedAt" IS NULL
           )`.as("recipeCount"),
         })
