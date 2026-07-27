@@ -10,7 +10,7 @@ import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
 import { createMeal, deleteMeals } from "~/server/repo/meal";
 import { createProject } from "~/server/repo/project";
 import { createPurchase } from "~/server/repo/purchase";
-import { createRecipe } from "~/server/repo/recipe";
+import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
 import { createTask } from "~/server/repo/task";
 import { makeRecipeInput } from "./repo.fixtures";
 import { globalSearch, hydrateSearchResultsByRefs } from "./search";
@@ -310,6 +310,46 @@ describe("globalSearch: cookbook and meal", () => {
       expect(
         results.some((r) => r.entityType === "meal" && r.id === meal.id),
       ).toBe(true);
+    }
+  });
+
+  it("stops counting a planned recipe once that recipe is deleted", async () => {
+    const [keep, drop] = await Promise.all([
+      createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "Manifest Keeper" }),
+        ctx.actor,
+      ),
+      createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "Manifest Dropped" }),
+        ctx.actor,
+      ),
+    ]);
+    const meal = await createMeal(
+      ctx.db,
+      {
+        date: "2026-03-21",
+        name: "Manifest Shrinking Supper",
+        recipes: [
+          { recipeId: keep.id, scale: 1 },
+          { recipeId: drop.id, scale: 1 },
+        ],
+      },
+      ctx.actor,
+    );
+
+    // Deleting a recipe soft-deletes the recipe but leaves its MealRecipe rows,
+    // so recipeCount must join Recipe rather than count the join table alone.
+    await deleteRecipes(ctx.db, [drop.id], ctx.actor);
+
+    const results = await globalSearch(ctx.db, "Manifest Shrinking Supper");
+    const hit = results.find(
+      (r) => r.entityType === "meal" && r.id === meal.id,
+    );
+    expect(hit).toBeDefined();
+    if (hit?.entityType === "meal") {
+      expect(hit.recipeCount).toBe(1);
     }
   });
 
