@@ -9,6 +9,7 @@ import { inventoryRouter } from "./routers/inventory";
 import { locationRouter } from "./routers/location";
 import { mcpRouter } from "./routers/mcp";
 import { mealRouter } from "./routers/meal";
+import { oauthRouter } from "./routers/oauth";
 import { problemsRouter } from "./routers/problems";
 import { productRouter } from "./routers/product";
 import { projectRouter } from "./routers/project";
@@ -35,6 +36,7 @@ export const domainRouterRecord = {
   task: taskRouter,
   purchase: purchaseRouter,
   mcp: mcpRouter,
+  oauth: oauthRouter,
   usda: usdaRouter,
   upc: upcRouter,
   image: imageRouter,

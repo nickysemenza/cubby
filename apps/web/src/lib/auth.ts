@@ -64,6 +64,14 @@ export const auth = betterAuth({
       enabled: true,
       maxAge: 5 * 60, // 5 minutes
     },
+    // Disable the "session must be fresh" gate on sensitive endpoints
+    // (list-sessions, change-password, delete-user). better-auth defaults it to
+    // 24h and compares against the session's *createdAt*, which a refresh never
+    // moves — so with 7-day sessions the account page's session list 403s
+    // (SESSION_NOT_FRESH) six days out of seven. The protection it buys is
+    // re-authentication before those operations; on a single-user instance
+    // that's not worth a permanently broken settings page.
+    freshAge: 0,
   },
   // The jwt plugin registers `GET /token` (mints a JWT for the current cookie
   // session). The OAuth token endpoint is `/oauth2/token`; nothing needs the

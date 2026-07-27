@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, Plug, Settings, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Description } from "~/components/ui/description";
 import {
@@ -71,6 +71,10 @@ export const UserAvatarDropdown = () => {
           >
             <User className="size-4" />
             <span>Account</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link to="/account/connected-apps" />}>
+            <Plug className="size-4" />
+            <span>Connected apps</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/settings" />}>
             <Settings className="size-4" />
