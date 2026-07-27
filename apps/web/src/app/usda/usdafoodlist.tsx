@@ -237,10 +237,7 @@ export function USDAFoodList() {
       filterConfig: {
         placeholder: "Filter linked...",
         filterType: "select",
-        options: [
-          { value: "", label: "All foods" },
-          { value: "linked", label: "Linked products only" },
-        ],
+        options: [{ value: "linked", label: "Linked products only" }],
       },
     }),
   ];

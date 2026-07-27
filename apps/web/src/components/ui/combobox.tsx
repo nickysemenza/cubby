@@ -1,5 +1,5 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -32,6 +32,18 @@ interface FilterableComboboxProps {
   /** Focus the filter input on mount (e.g. an inline cell editor that opens
    * ready to type). Mirrors `<Input autoFocus />`. */
   autoFocus?: boolean;
+  /**
+   * Render an inline `X` that clears the selection back to "no filter".
+   * Opt-in: most consumers are pickers for a REQUIRED value (inline cell
+   * editors, `rows-per-page-select`) where an empty state is meaningless.
+   *
+   * Deliberately a plain button rather than Base UI's `<Combobox.Clear>`:
+   * that part writes the *store's* input value, but this component controls
+   * `<Combobox.Input>` with local React state, so the store write is a no-op
+   * on what the user sees. (Its `visible` logic also requires `Combobox.Chips`
+   * in multiple mode, which doesn't fit a dense filter row.)
+   */
+  clearable?: boolean;
 }
 
 export function FilterableCombobox({
@@ -45,6 +57,7 @@ export function FilterableCombobox({
   onOpenChange,
   isLoading,
   autoFocus,
+  clearable,
 }: FilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -111,6 +124,23 @@ export function FilterableCombobox({
             onSearchChange?.(e.target.value);
           }}
         />
+        {clearable && value != null && (
+          <button
+            type="button"
+            aria-label="Clear filter"
+            // preventDefault on mousedown so the click doesn't focus the input
+            // and pop the list open on its way out.
+            onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              setInputValue("");
+              onValueChange(null);
+            }}
+            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <XIcon className="size-3" />
+          </button>
+        )}
         <ComboboxPrimitive.Trigger
           aria-label={`Open ${placeholder ?? "options"}`}
           className="-mr-2 flex h-full min-w-7 shrink-0 items-center justify-center"

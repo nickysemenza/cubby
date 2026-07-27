@@ -223,7 +223,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           filterConfig: {
             placeholder: "Filter by tag...",
             filterType: "select" as const,
-            options: [{ value: "", label: "All tags" }, ...tagOptions],
+            options: tagOptions,
           },
           mobile: { slot: "subtitle", priority: 10 },
           cellData: tagsCellDataDef,
@@ -445,7 +445,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         id: "tags",
         placeholder: "Filter by tag...",
         filterType: "select",
-        options: [{ value: "", label: "All tags" }, ...tagOptions],
+        options: tagOptions,
       },
     ],
     bulkActions: {

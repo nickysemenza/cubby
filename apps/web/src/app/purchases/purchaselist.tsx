@@ -184,10 +184,7 @@ export function PurchaseList({
     [],
   );
 
-  const projectFilterOptions = useMemo(
-    () => [{ value: "", label: "All projects" }, ...projectOptions],
-    [projectOptions],
-  );
+  const projectFilterOptions = projectOptions;
 
   // The cost / date / costType / trade / future columns come from the shared
   // factories in `~/app/projects/shared.tsx`, also used by the embedded

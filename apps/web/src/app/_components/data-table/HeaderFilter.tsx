@@ -81,6 +81,12 @@ export function HeaderFilter<TData>({
         value={value || null}
         onValueChange={(v) => setValue(v ?? "")}
         placeholder={shortPlaceholder}
+        // Every select filter is optional by definition — "no filter" is the
+        // default state, so it must be reachable without the toolbar's Reset
+        // (which clears EVERY column at once). This replaces the per-page
+        // `{ value: "", label: "All …" }` sentinel options pages used to
+        // hand-roll one filter at a time.
+        clearable
         className={`w-full ${inputClassName}`}
       />
     );

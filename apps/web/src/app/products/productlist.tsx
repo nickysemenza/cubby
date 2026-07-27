@@ -153,10 +153,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         header: "Category",
         className: "w-32",
         placeholder: "Filter by category...",
-        selectOptions: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
+        selectOptions: productCategoryOptionsWithTheme,
         renderCell: (cat) => <CategoryLabel category={cat} />,
         // Mobile lists group by category (section headers), so the category
         // chip is redundant per-row — prefer manufacturer as the subtitle.
@@ -326,10 +323,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         id: "category",
         placeholder: "Filter by category...",
         filterType: "select" as const,
-        options: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
+        options: productCategoryOptionsWithTheme,
       },
     ],
     [],
