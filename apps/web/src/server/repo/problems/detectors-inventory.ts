@@ -82,6 +82,8 @@ export const findUnknownParkedItems = async (
       createdAt: inventoryEntry.createdAt,
       productId: product.id,
       productName: product.name,
+      locationId: location.id,
+      locationName: location.name,
     })
     .from(inventoryEntry)
     .innerJoin(
@@ -97,5 +99,6 @@ export const findUnknownParkedItems = async (
     amount: parseInventoryAmount(r.amount, r.id),
     createdAt: r.createdAt,
     product: { id: r.productId, name: r.productName },
+    location: { id: r.locationId, name: r.locationName },
   }));
 };

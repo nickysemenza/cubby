@@ -688,6 +688,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       details: [createdAgoDetail(item.createdAt)],
       route: { to: "/inventory/$id", params: { id: item.id } },
       editLabel: "Open inventory entry",
+      // Draining Unknown is a recount rooted there — same deep link the other
+      // recount detectors offer.
+      customActions: <RecountLink locationId={item.location.id} />,
     }),
   }),
   section({

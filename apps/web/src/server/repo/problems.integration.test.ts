@@ -722,8 +722,11 @@ describe("problems service — recount staleness", () => {
     const { unknownParkedItems } = await findFastProblems(ctx.db);
     expect(unknownParkedItems.map((i) => i.id)).toContain(parked.id);
     expect(unknownParkedItems.map((i) => i.id)).not.toContain(filed.entry.id);
+    // The location ref is what lets the Problems card offer a recount rooted at
+    // Unknown — the only thing that actually drains it.
     expect(unknownParkedItems.find((i) => i.id === parked.id)).toMatchObject({
       product: { id: parkedProduct.id, name: "Parked widget" },
+      location: { name: "Unknown" },
     });
 
     // Filing it away (here: soft-deleting the parked row) clears the problem.

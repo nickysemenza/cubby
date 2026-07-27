@@ -150,6 +150,10 @@ export const unknownParkedItemSchema = z.object({
   amount,
   createdAt: z.date(),
   product: z.object({ id: productId, name: z.string() }),
+  // Always the global Unknown, but carried per row so the section can offer the
+  // same recount-session deep link the other recount detectors do — draining
+  // Unknown is a recount rooted there.
+  location: z.object({ id: locationId, name: z.string() }),
 });
 
 export const productWithNoImagesSchema = z.object({
