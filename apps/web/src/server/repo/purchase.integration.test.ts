@@ -1201,3 +1201,123 @@ describe("purchase repository — product bridge", () => {
     expect(data.map((p) => p.name)).toEqual(["lumber run"]);
   });
 });
+
+describe("purchase repository — productPresenceFilter", () => {
+  const ctx = withTestDb();
+  const pagination = { pageIndex: 0, pageSize: 50 };
+
+  it('"has" returns only purchases with a linked product', async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "presence linked drill" }),
+      ctx.actor,
+    );
+    const linked = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "linked purchase",
+        productId: product.id,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "unlinked purchase",
+      }),
+      ctx.actor,
+    );
+
+    const { data } = await purchaseList(
+      ctx.db,
+      { productPresenceFilter: "has" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id)).toContain(linked.id);
+    expect(data.map((p) => p.name)).not.toContain("unlinked purchase");
+  });
+
+  it('"none" returns only purchases with no linked product', async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "presence linked sander" }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "linked sander purchase",
+        productId: product.id,
+      }),
+      ctx.actor,
+    );
+    const unlinked = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "unlinked sander purchase",
+      }),
+      ctx.actor,
+    );
+
+    const { data } = await purchaseList(
+      ctx.db,
+      { productPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id)).toContain(unlinked.id);
+    expect(data.map((p) => p.name)).not.toContain("linked sander purchase");
+  });
+
+  it('"has" still counts a purchase whose linked product was later soft-deleted', async () => {
+    // This is the documented semantic decision (buildPurchaseWhereClause,
+    // repo/purchase/lookup.ts): "linked" means productId IS NOT NULL, which
+    // deliberately includes rows whose product was soft-deleted afterward —
+    // those read back with productId set and productName null.
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "presence doomed router" }),
+      ctx.actor,
+    );
+    const purchase = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "doomed router purchase",
+        productId: product.id,
+      }),
+      ctx.actor,
+    );
+
+    await deleteProducts(ctx.db, [product.id], ctx.actor);
+
+    const hasFiltered = await purchaseList(
+      ctx.db,
+      { productPresenceFilter: "has" },
+      [],
+      pagination,
+    );
+    expect(hasFiltered.data.map((p) => p.id)).toContain(purchase.id);
+    const stillLinked = hasFiltered.data.find((p) => p.id === purchase.id);
+    expect(stillLinked?.productId).toBe(product.id);
+    expect(stillLinked?.productName).toBeNull();
+
+    const noneFiltered = await purchaseList(
+      ctx.db,
+      { productPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(noneFiltered.data.map((p) => p.id)).not.toContain(purchase.id);
+  });
+});

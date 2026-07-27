@@ -6,6 +6,7 @@ import {
   type ProductId,
   type ProjectId,
   type RecipeId,
+  unsafeProductId,
   unsafeProjectId,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
@@ -1538,6 +1539,98 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         if (!id || !name) return <NoneValue />;
         return (
           <EntityInlineLink entity="project" data={{ id, name }} truncate />
+        );
+      },
+    },
+  );
+}
+
+/** A row that carries a product reference as a flat id+name pair (not a
+ * nested `{id,name}` object) — the purchase list shape. */
+interface ProductRefRow {
+  productId: string | null;
+  productName: string | null;
+}
+
+/**
+ * Creates a column linking to a row's associated product (purchase
+ * `productId`/`productName`). Mirrors {@link createProjectLinkColumn} — see
+ * its doc comment for why this gets its own small `editable` option instead
+ * of routing through the generic single-entity helper.
+ * Pass `editable` for an inline `EditableEntityCell` product picker
+ * (`WithProductSearch`); omit for the previous display-only behavior.
+ */
+export function createProductLinkColumn<T extends ProductRefRow>(
+  columnHelper: ColumnHelper<T>,
+  options?: {
+    header?: string;
+    className?: string;
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+    /** Enable inline editing via an async product picker. `clearable` always
+     * on — a purchase's product is optional. */
+    editable?: {
+      onSave: (newProductId: ProductId | null, row: T) => Promise<void>;
+    };
+  },
+) {
+  const cellData = entityCellData<T>(
+    "product",
+    (row) =>
+      row.productId && row.productName
+        ? { id: row.productId, name: row.productName }
+        : null,
+    options?.editable
+      ? (row, id) => options.editable!.onSave(unsafeProductId(id), row)
+      : undefined,
+  );
+  return columnHelper.accessor(
+    (row) => ({ id: row.productId, name: row.productName }),
+    {
+      id: "product",
+      header: options?.header ?? "Product",
+      enableSorting: false,
+      meta: {
+        className: options?.className,
+        mobile: options?.mobile,
+        filterConfig: options?.filterConfig,
+        cellData,
+      },
+      cell: (info) => {
+        const { id, name } = info.getValue();
+
+        if (options?.editable) {
+          const current: ComboboxItem<ProductId> | null =
+            id && name ? { id: unsafeProductId(id), name } : null;
+          const row = info.row.original;
+          return (
+            <EditableEntityCell
+              value={current}
+              label="product"
+              clearable
+              trigger="pencil"
+              onSave={(newId) => options.editable!.onSave(newId, row)}
+              clipboard={specFromCellData(cellData, row)}
+              SearchProvider={WithProductSearch}
+              renderValue={(v) => {
+                if (!v) return <NoneValue />;
+                return (
+                  <TableLink
+                    to="/products/$id"
+                    params={{ id: v.id }}
+                    variant="muted"
+                  >
+                    {v.name}
+                  </TableLink>
+                );
+              }}
+            />
+          );
+        }
+
+        if (!id || !name) return <NoneValue />;
+        return (
+          <EntityInlineLink entity="product" data={{ id, name }} truncate />
         );
       },
     },

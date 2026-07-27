@@ -27,12 +27,17 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "unclassified", label: "Unclassified" },
 ];
 
-// `trade`/`costType`/`project`/`future`/`date` mirror the ledger table's own
-// column-filter ids/values 1:1 (see `purchaseFiltersFromSearch` in
-// purchase-options.ts) — the Ledger view live-syncs its filters here, and the
-// Analytics view reads them straight off the URL, so `purchase.analytics` is
-// always called with the exact filter set the Ledger table currently shows
-// (the hard invariant the two endpoints share an input schema for).
+// `trade`/`costType`/`project`/`future`/`date`/`productId`/`product` mirror
+// the ledger table's own column-filter ids/values 1:1 (see
+// `purchaseFiltersFromSearch` in purchase-options.ts) — the Ledger view
+// live-syncs its filters here, and the Analytics view reads them straight off
+// the URL, so `purchase.analytics` is always called with the exact filter set
+// the Ledger table currently shows (the hard invariant the two endpoints
+// share an input schema for). `productId` is the raw id for an exact-product
+// deep link (e.g. from a product's "See all in ledger" link); `product` is
+// the presence-column value ("has"/"none") from the header filter — they're
+// deliberately separate keys since the product column's filter widget only
+// offers presence, not a specific-product select (see `productLinkedOptions`).
 const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   view: z.enum(viewOptions).optional().catch(undefined),
@@ -41,6 +46,8 @@ const searchSchema = z.object({
   project: z.string().optional().catch(undefined),
   future: z.enum(["true", "false"]).optional().catch(undefined),
   date: z.string().optional().catch(undefined),
+  productId: z.string().optional().catch(undefined),
+  product: z.enum(["has", "none"]).optional().catch(undefined),
   // Quick-capture deep link (navbar "+" / command palette) — there is no
   // /purchases/new route, so the create dialog is opened by this param.
   create: z.boolean().optional().catch(undefined),
@@ -55,6 +62,8 @@ const searchDefaults = {
   project: undefined,
   future: undefined,
   date: undefined,
+  productId: undefined,
+  product: undefined,
   create: undefined,
 } as const;
 

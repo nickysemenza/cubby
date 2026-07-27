@@ -32,7 +32,10 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
-import { createProjectLinkColumn } from "../_components/data-table/columnHelpers";
+import {
+  createProductLinkColumn,
+  createProjectLinkColumn,
+} from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -49,6 +52,7 @@ import {
   costTypeOptions,
   dateRangeOptions,
   futureFilterOptions,
+  productLinkedOptions,
 } from "./purchase-options";
 import { SettlePurchaseDialog } from "./settle-purchase-dialog";
 
@@ -258,6 +262,23 @@ export function PurchaseList({
           },
         },
       }),
+      createProductLinkColumn(columnHelper, {
+        className: "w-40",
+        mobile: { slot: "meta", priority: 45, interactive: true },
+        filterConfig: {
+          placeholder: "Filter by product...",
+          filterType: "select",
+          options: productLinkedOptions,
+        },
+        editable: {
+          onSave: async (newProductId, purchase) => {
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { productId: newProductId },
+            });
+          },
+        },
+      }),
       purchaseFutureColumn(
         columnHelper,
         async (future, purchase) => {
@@ -337,6 +358,12 @@ export function PurchaseList({
         filterType: "select" as const,
         options: projectFilterOptions,
       },
+      {
+        id: "product",
+        placeholder: "Filter by product...",
+        filterType: "select" as const,
+        options: productLinkedOptions,
+      },
     ];
     return all.filter((f) => {
       if (mode === "planned" && f.id === "future") return false;
@@ -361,6 +388,8 @@ export function PurchaseList({
       ["project", urlSearch.project],
       ["future", urlSearch.future],
       ["date", urlSearch.date],
+      ["productId", urlSearch.productId],
+      ["product", urlSearch.product],
     ];
     return entries
       .filter((e): e is [string, string] => e[1] !== undefined)
@@ -498,6 +527,8 @@ export function PurchaseList({
       project: get("project"),
       future: get("future") as "true" | "false" | undefined,
       date: get("date"),
+      productId: get("productId"),
+      product: get("product") as "has" | "none" | undefined,
     };
     const serialized = JSON.stringify(next);
     if (lastWrittenFilters.current === serialized) return;
