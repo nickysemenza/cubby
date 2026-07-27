@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -73,16 +73,13 @@ export default function BulkInventoryForm({
   // Watch the location field to load items when changed
   const selectedLocation = form.watch("location");
 
-  // Fetch locations for the location selector
-  const { data: locationsResp } = useQuery(
-    api.location.list.queryOptions({
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: { orderBy: "name", direction: "asc" },
-      filters: {},
-    }),
-  );
-
-  const locations = useMemo(() => locationsResp?.items || [], [locationsResp]);
+  // Resolve the deep-linked `?locationId=` directly. The picker runs its own
+  // search, so this fetch exists only to seed the field — looking the id up in
+  // a first page of locations silently failed for anything further down.
+  const { data: initialLocation } = useQuery({
+    ...api.location.getByID.queryOptions({ id: initialLocationId! }),
+    enabled: !!initialLocationId,
+  });
 
   // Update URL when location changes
   useEffect(() => {
@@ -98,16 +95,13 @@ export default function BulkInventoryForm({
   // Set initial location from URL
   useEffect(() => {
     if (
-      initialLocationId &&
-      locations.length > 0 &&
+      initialLocation &&
+      initialLocation.id === initialLocationId &&
       selectedLocation?.id !== initialLocationId
     ) {
-      const location = locations.find((loc) => loc.id === initialLocationId);
-      if (location) {
-        form.setValue("location", buildLocationComboboxItem(location));
-      }
+      form.setValue("location", buildLocationComboboxItem(initialLocation));
     }
-  }, [initialLocationId, locations, form, selectedLocation]);
+  }, [initialLocation, initialLocationId, form, selectedLocation]);
 
   // Fetch existing inventory items when location is selected.
   // pageSize:100 caps how many existing entries we load into the form. Because

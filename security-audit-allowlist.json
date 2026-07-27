@@ -7,6 +7,14 @@
       "rationale": "fast-uri is a transitive dependency of ajv, reaching prod only through @cloudflare/tanstack-ai's LLM tool/response JSON-schema validation (and the shadcn build-time CLI, which is dev-only). The advisory (host confusion via a literal backslash authority delimiter) only matters when an untrusted URL is parsed with fast-uri to make a security/routing decision about its host — cubby never does that; ajv's uri-format check validates schema-shaped strings, not attacker-controlled hosts. Patched in >=3.1.4, but forcing that via a pnpm override triggers a full lockfile re-resolve that pulls in NEW critical advisories (seroval, effect), so the real fix is deferred to a dedicated dependency-bump PR where that churn can be reviewed in isolation.",
       "reviewedAt": "2026-07-22",
       "expires": "2026-10-15"
+    },
+    {
+      "advisory": "GHSA-mh99-v99m-4gvg",
+      "module": "brace-expansion",
+      "reachability": "low",
+      "rationale": "brace-expansion DoS (unbounded expansion length -> OOM) requires an attacker-controlled glob/brace pattern. It reaches prod deps only via build-time tooling: @sentry/vite-plugin's glob (runs at build, patterns are our own) and the OTel GCP resource detector's transitive rimraf/glob (OTel is dev-only in cubby; production disables it per README). No runtime path feeds untrusted patterns to brace-expansion. Patched only in >=5.0.8 while minimatch consumers pin ^2.x, so a blanket override is a cross-major bump with lockfile churn — deferred to the same dedicated dependency-bump PR as GHSA-v2hh-gcrm-f6hx.",
+      "reviewedAt": "2026-07-26",
+      "expires": "2026-10-15"
     }
   ]
 }

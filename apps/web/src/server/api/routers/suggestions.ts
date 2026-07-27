@@ -6,12 +6,10 @@
  * /meals/suggestions UI and the find_cookable_recipes MCP tool.
  */
 
-import {
-  recipeAvailabilityListOut,
-  recipeAvailabilityOut,
-} from "@cubby/schemas/availability";
+import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import {
   makeableRecipesInput,
+  makeableRecipesOut,
   recipeAvailabilityInput,
 } from "@cubby/schemas/suggestions";
 import pMap from "p-map";
@@ -30,7 +28,7 @@ const getRecipeAvailability = protectedProcedure
 
 const getMakeable = protectedProcedure
   .input(makeableRecipesInput)
-  .output(recipeAvailabilityListOut)
+  .output(makeableRecipesOut)
   .query(async ({ ctx, input }) => {
     const minCoverage = input.minCoverage ?? 0;
     const limit = input.limit ?? 24;
@@ -38,9 +36,11 @@ const getMakeable = protectedProcedure
     // Score every (capped) recipe against inventory, then rank by coverage.
     // This is O(recipes × ingredients × inventory) — fine at current scale, but a
     // known scaling cost. CANDIDATE_CAP bounds the fan-out.
-    const { data: recipes } = await recipeList(
+    // Sub-recipes are excluded: a recipe used as an ingredient is a component of
+    // a meal, not an answer to "what can I make tonight?".
+    const { data: recipes, count } = await recipeList(
       ctx.db,
-      {},
+      { excludeSubRecipes: true },
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: CANDIDATE_CAP },
     );
@@ -51,10 +51,14 @@ const getMakeable = protectedProcedure
       { concurrency: 8 },
     );
 
-    return availabilities
-      .filter((a) => a.coverage >= minCoverage)
-      .sort((a, b) => b.coverage - a.coverage)
-      .slice(0, limit);
+    return {
+      recipes: availabilities
+        .filter((a) => a.coverage >= minCoverage)
+        .sort((a, b) => b.coverage - a.coverage)
+        .slice(0, limit),
+      truncated: count > CANDIDATE_CAP,
+      candidateCap: CANDIDATE_CAP,
+    };
   });
 
 export const suggestionsRouter = createTRPCRouter({

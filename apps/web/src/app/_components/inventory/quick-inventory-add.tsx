@@ -15,7 +15,7 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { upc } from "@cubby/usda-schemas";
+import { fdcId, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, Plus, X } from "lucide-react";
@@ -56,6 +56,11 @@ import {
 interface QuickInventoryAddProps {
   locationId: LocationId;
   onSuccess: () => void;
+  /**
+   * Prefills the select-mode product picker (and restores it after each add) —
+   * used when the surface already knows the product, e.g. a product page.
+   */
+  initialProduct?: ComboboxItem<ProductId>;
 }
 
 // Schema for select mode (existing product)
@@ -74,6 +79,7 @@ const createFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(),
+    fdc_id: fdcId.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),
     ingredient: optionalIngredientField,
@@ -83,12 +89,14 @@ const createFormSchema = z
   .transform((data) => ({
     ...data,
     upc: data.upc === "" ? null : data.upc,
+    fdc_id: data.fdc_id === 0 ? null : data.fdc_id,
   }));
 type CreateFormValues = z.infer<typeof createFormSchema>;
 
 export function QuickInventoryAdd({
   locationId,
   onSuccess,
+  initialProduct,
 }: QuickInventoryAddProps) {
   const api = useTRPC();
   const invalidateProductLookup = useProductLookupInvalidation();
@@ -104,7 +112,7 @@ export function QuickInventoryAdd({
   const selectForm = useForm<SelectFormValues>({
     resolver: zodResolver(selectFormSchema),
     defaultValues: {
-      product: undefined,
+      product: initialProduct,
       amount: { value: 1, unit: "" },
     },
   });
@@ -113,7 +121,7 @@ export function QuickInventoryAdd({
     onSuccess: () => {
       toast.success("Tucked it into your cubby.");
       selectForm.reset({
-        product: undefined,
+        product: initialProduct,
         amount: { value: 1, unit: "" },
       });
       onSuccess();
@@ -139,6 +147,7 @@ export function QuickInventoryAdd({
       notes: null,
       category: null,
       upc: null,
+      fdc_id: null,
       expectedQuantity: null,
       price: null,
       ingredient: null,
@@ -162,9 +171,10 @@ export function QuickInventoryAdd({
         name: values.name,
         manufacturer: values.manufacturer,
         model: values.model,
+        notes: values.notes,
         category: values.category,
         upc: values.upc,
-        fdc_id: null,
+        fdc_id: values.fdc_id,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
         ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
@@ -220,6 +230,7 @@ export function QuickInventoryAdd({
         notes: null,
         category: null,
         upc: null,
+        fdc_id: null,
         expectedQuantity: null,
         price: null,
         ingredient: null,

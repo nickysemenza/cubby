@@ -80,7 +80,7 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: recipeAvailabilityMcpOut,
     annotations: READ_ONLY_CLOSED,
     call: async (caller, params) => {
-      const recipes = await caller.suggestions.getMakeable({
+      const { recipes } = await caller.suggestions.getMakeable({
         minCoverage: params.minCoverage,
         limit: params.limit,
       });
