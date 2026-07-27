@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { projectOut } from "@cubby/schemas/project";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -7,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { mock } from "~/lib/test/mock-schema";
 import {
   createMcpServer,
   listMcpToolCatalog,
@@ -422,6 +424,61 @@ describe("listMcpToolCatalog", () => {
         expect(schemaHasMockKey(tool.outputSchema)).toBe(false);
       }
     }
+  });
+
+  it("advertises real JSON Schema properties for every tool", async () => {
+    // Regression: `safeToJsonSchema` used to catch conversion failures and fall
+    // back to an opaque `{type: "object", additionalProperties: true}`. Any
+    // schema reaching a `z.date()` (timestampedFields, totalsComputedAt,
+    // lastBulkInventory, …) tripped it, degrading 22 tools silently. A tool
+    // whose advertised schema has no `properties` means the fallback fired.
+    const { tools } = await listMcpToolCatalog();
+    const degraded = tools.filter((tool) =>
+      [tool.inputSchema, tool.outputSchema].some(
+        (schema) =>
+          schema !== undefined &&
+          (schema as Record<string, unknown>).properties === undefined,
+      ),
+    );
+    expect(degraded.map((tool) => tool.name)).toEqual([]);
+  });
+
+  it("advertises dates as date-time strings and emits them on the wire", async () => {
+    const catalog = await listMcpToolCatalog();
+    const getProject = catalog.tools.find(
+      (tool) => tool.name === "get_project",
+    );
+    const advertised = getProject?.outputSchema as {
+      properties?: Record<string, unknown>;
+    };
+    expect(advertised?.properties?.createdAt).toEqual({
+      type: "string",
+      format: "date-time",
+    });
+
+    // …and the value a client actually receives matches that advertisement:
+    // structuredContent carries a real Date, which JSON-RPC serializes to ISO.
+    const createdAt = new Date("2026-07-27T12:34:56.000Z");
+    const project = mock(projectOut, { seed: 1, overrides: { createdAt } });
+    const result = await callTool(
+      createMcpServer(),
+      "get_project",
+      { id: project.id },
+      { project: { getByID: async () => project } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    // InMemoryTransport hands the object over unserialized, so assert on the
+    // JSON a real transport would produce rather than on the in-process value.
+    expect(JSON.parse(JSON.stringify(result.structuredContent)).createdAt).toBe(
+      "2026-07-27T12:34:56.000Z",
+    );
+    expect(
+      JSON.parse(
+        ((result.content as CallToolResult["content"])[0] as { text: string })
+          .text,
+      ).createdAt,
+    ).toBe("2026-07-27T12:34:56.000Z");
   });
 
   it("returns structuredContent validated against outputSchema for list_locations", async () => {
