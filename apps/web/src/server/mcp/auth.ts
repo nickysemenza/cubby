@@ -54,11 +54,54 @@ export async function verifyMcpToken(
     });
     // `subjectType` is left at its "public" default, so `sub` is the user id
     // verbatim rather than a pairwise pseudonym.
-    if (typeof payload.sub !== "string" || !payload.sub) return null;
+    if (typeof payload.sub !== "string" || !payload.sub) {
+      console.error("[MCP auth] token has no subject", { aud: payload.aud });
+      return null;
+    }
     return {
       userId: unsafeUserId(payload.sub),
       sessionId: typeof payload.sid === "string" ? payload.sid : null,
     };
+  } catch (error) {
+    // Every rejection reaches the client as a bare 401, so without this the
+    // difference between "expired", "wrong audience" and "opaque token, not a
+    // JWT" is invisible in production — which is exactly the hole that made a
+    // misconfigured connector impossible to diagnose from the outside.
+    console.error("[MCP auth] token rejected", {
+      reason: error instanceof Error ? error.message : String(error),
+      code:
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code: unknown }).code)
+          : undefined,
+      // Claims only — never the token itself; this goes to `wrangler tail`.
+      claims: unverifiedClaims(token),
+    });
+    return null;
+  }
+}
+
+/**
+ * Decode a JWT payload *without* verifying it, purely so a rejection can be
+ * explained in logs. Returns null for anything that isn't a JWT at all — which
+ * is itself the answer when a client was issued an opaque access token.
+ */
+function unverifiedClaims(
+  token: string,
+): { iss?: unknown; aud?: unknown; exp?: unknown } | null {
+  const segments = token.split(".");
+  if (segments.length !== 3 || !segments[1]) return null;
+  try {
+    const payload: unknown = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(
+          atob(segments[1].replace(/-/g, "+").replace(/_/g, "/")),
+          (c) => c.charCodeAt(0),
+        ),
+      ),
+    );
+    if (typeof payload !== "object" || payload === null) return null;
+    const { iss, aud, exp } = payload as Record<string, unknown>;
+    return { iss, aud, exp };
   } catch {
     return null;
   }
