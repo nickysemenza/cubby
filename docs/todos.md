@@ -314,6 +314,31 @@ which folds in `future` rows); **owned/sold comes off `inventoryEntry`, never of
 purchase signs** (two buys + one sale nets positive — the sign is ambiguous). No
 status column, no disposition enum, no `Sold` location.
 
+**Ledger surfacing shipped** (PR #421): Product column on `/purchases`, a
+linked/not-linked presence filter, and `?productId=` deep-linking from the product
+page. "Linked" means `productId IS NOT NULL` — deliberately including rows whose
+product was later soft-deleted (they read back with `productId` set and
+`productName` null). Presence is Tier A (`isNull` on a real column), so the
+RQB correlated-EXISTS trap doesn't apply here.
+
+**Backfill: 26 of 897 purchases linked; ~242 `tools` purchases stay unlinked and
+that's correct.** How it was done, since the method generalizes: embedding
+nearest-neighbour (`find_similar_entities`, PR #422) **deduped to mutual-best
+pairs** — without that dedup one generic "m18 angle grinder" purchase was the top
+candidate for six different M18 products, and a purchase can only carry one
+`productId`. Ranking alone is not enough: a wrong `M18 Hackzall` match outscored a
+correct `TS 55 Track Saw` one, so every pair was confirmed by hand. The signals that
+actually disambiguated were **`purchase.url`** (a Home Depot link literally naming
+"14-Gallon" settled which shopvac; a boschtools SDS-plus link settled the rotary
+hammer) and **`stockCount`** (the 12 gal shopvac had zero on hand). Price agreement
+helps above ~$50 and is noise below it — a $10 tarp "matched" a $10.83 trowel.
+
+**Bucket products do NOT get purchase links** (decided 2026-07). `assorted clamps`
+($5), `misc: kitchen project stuff`, `misc: plumbing, elec, small tools` and friends
+are an inventory convenience, not things with a cost basis or a lifecycle. Linking
+a $171 clamp run to a $5 bucket would make "net cost" mean two different things
+depending on the product. Those purchases stay unlinked — the designed default.
+
 Deferred phases — each purely additive on top of v1, with its promotion trigger:
 
 - [ ] **`ProjectTool`** (`projectId`, `productId`) → cost-per-use = net basis ÷ usage
@@ -335,6 +360,10 @@ Deferred phases — each purely additive on top of v1, with its promotion trigge
   from the non-null column, drop it, update read sites.
 - [ ] **Spend-by-vendor** analytics — a `byVendor` aggregate mirroring `byProject` in
   `repo/purchase/analytics.ts` + a chart. Cheap; deferred only for scope.
+- [ ] **Clear affordance for the `productId` deep link** — arriving via a product's
+  "See all in ledger" scopes the ledger with no visible chip and no way out but
+  editing the URL, because only the presence column has a header control. Raised in
+  the PR #421 review; a small active-filter chip would close it.
 
 Two traps this design already walked into once — don't re-introduce them:
 `buildSearchConditions` **ANDs** its `searchFilters`, so vendor must never share the
