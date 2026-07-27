@@ -2,14 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ~/lib/auth pulls in the DB client and env validation; the two constants below
 // are all this module actually consumes from it.
+const getJwks = vi.fn();
 vi.mock("~/lib/auth", () => ({
   MCP_RESOURCE: "http://localhost:3000/api/mcp",
   OAUTH_ISSUER: "http://localhost:3000/api/auth",
+  auth: { api: { getJwks: () => getJwks() } },
 }));
 
 const verifyAccessToken = vi.fn();
 vi.mock("better-auth/oauth2", () => ({
-  verifyAccessToken: (...args: unknown[]) => verifyAccessToken(...args),
+  verifyJwsAccessToken: (...args: unknown[]) => verifyAccessToken(...args),
 }));
 
 const { unauthorizedResponse, verifyMcpToken } = await import("./auth");
@@ -34,13 +36,35 @@ describe("verifyMcpToken", () => {
     );
 
     expect(actor).toEqual({ userId: "user_1", sessionId: "sess_1" });
-    expect(verifyAccessToken).toHaveBeenCalledWith("token.abc.def", {
-      jwksUrl: "http://localhost:3000/api/auth/jwks",
-      verifyOptions: {
-        issuer: "http://localhost:3000/api/auth",
-        audience: "http://localhost:3000/api/mcp",
-      },
-    });
+    expect(verifyAccessToken).toHaveBeenCalledWith(
+      "token.abc.def",
+      expect.objectContaining({
+        verifyOptions: {
+          issuer: "http://localhost:3000/api/auth",
+          audience: "http://localhost:3000/api/mcp",
+        },
+      }),
+    );
+  });
+
+  // Regression: `jwksUrl: "<origin>/api/auth/jwks"` made the Worker subrequest
+  // its own hostname, which Cloudflare doesn't route back — every production
+  // token failed with "Jwks failed: <none>" while local dev passed.
+  it("reads the key set in-process rather than over the network", async () => {
+    verifyAccessToken.mockResolvedValue({ sub: "user_1" });
+    getJwks.mockResolvedValue({ keys: [] });
+
+    await verifyMcpToken(request({ authorization: "Bearer t" }));
+
+    const opts = verifyAccessToken.mock.calls[0]?.[1] as {
+      jwksUrl?: string;
+      jwksFetch: () => unknown;
+      jwksCacheKey?: object;
+    };
+    expect(opts.jwksUrl).toBeUndefined();
+    expect(opts.jwksCacheKey).toBeDefined();
+    await opts.jwksFetch();
+    expect(getJwks).toHaveBeenCalled();
   });
 
   it("tolerates a token with no session claim", async () => {

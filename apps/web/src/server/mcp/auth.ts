@@ -1,6 +1,6 @@
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
-import { verifyAccessToken } from "better-auth/oauth2";
-import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
+import { verifyJwsAccessToken } from "better-auth/oauth2";
+import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
 
 /**
  * OAuth 2.1 bearer-token auth for the MCP endpoint.
@@ -12,7 +12,23 @@ import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
  * `?key=<apiKey>` scheme this replaced.
  */
 
-const JWKS_URL = `${OAUTH_ISSUER}/jwks`;
+/**
+ * Read our own JWKS in-process instead of over the network.
+ *
+ * The obvious form — `jwksUrl: "<origin>/api/auth/jwks"` — fails in production
+ * with `Jwks failed: <none>`: it makes the Worker issue a subrequest to its own
+ * custom hostname, which Cloudflare does not route back to the same Worker.
+ * Locally it works fine (a plain localhost fetch), so this only ever breaks
+ * once deployed. Reading the key set directly is also simply better: no HTTP
+ * round trip on the MCP hot path.
+ */
+const fetchJwks = () => auth.api.getJwks();
+
+/**
+ * Stable identity for better-auth's JWKS cache. Without it, a function-based
+ * key source is re-read on every single verification.
+ */
+const JWKS_CACHE_KEY = {};
 
 /**
  * The URL an unauthenticated client should fetch to learn how to authenticate.
@@ -48,8 +64,9 @@ export async function verifyMcpToken(
   if (!token) return null;
 
   try {
-    const payload = await verifyAccessToken(token, {
-      jwksUrl: JWKS_URL,
+    const payload = await verifyJwsAccessToken(token, {
+      jwksFetch: fetchJwks,
+      jwksCacheKey: JWKS_CACHE_KEY,
       verifyOptions: { issuer: OAUTH_ISSUER, audience: MCP_RESOURCE },
     });
     // `subjectType` is left at its "public" default, so `sub` is the user id
