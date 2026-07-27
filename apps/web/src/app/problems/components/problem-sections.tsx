@@ -1,9 +1,17 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { AllProblems } from "@cubby/schemas/problems";
+import {
+  type AllProblems,
+  TRACKER_PROBLEM_KEY_BY_TYPE,
+} from "@cubby/schemas/problems";
+import type {
+  ProjectAttentionItem,
+  ProjectAttentionType,
+} from "@cubby/schemas/project";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import {
+  AlertTriangle,
   Download,
   ImageOff,
   type LucideIcon,
@@ -14,6 +22,7 @@ import {
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { formatDate } from "~/app/projects/project-formatting";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
@@ -208,6 +217,79 @@ function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
       params: { id: e.entityId },
     }))
     .exhaustive();
+}
+
+/**
+ * Household-tracker rules in display order (most actionable first) with each
+ * rule's subsection title. The section merges the six per-rule slices in this
+ * order, then groups the merged list back by title — so the counts stay
+ * first-class per detector (badge tooltip, MCP `type`) while the page shows one
+ * "Tracker" card with a subsection per rule, like the unit-coverage merge.
+ */
+const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
+  { type: "overdue_task", title: "Overdue tasks" },
+  { type: "blocked_work", title: "Blocked with no next action" },
+  { type: "stalled_project", title: "Stalled projects" },
+  { type: "past_due_planned_purchase", title: "Planned purchases past due" },
+  { type: "missing_budget", title: "Missing a cost estimate" },
+  { type: "unclassified_purchase", title: "Unclassified purchases" },
+];
+
+const TRACKER_GROUP_TITLE = Object.fromEntries(
+  TRACKER_GROUPS.map((g) => [g.type, g.title]),
+) as Record<ProjectAttentionType, string>;
+
+const trackerRoute = (item: ProjectAttentionItem) =>
+  match(item.entityType)
+    .with("project", () => ({
+      to: "/projects/$id" as const,
+      params: { id: item.entityId },
+    }))
+    .with("task", () => ({
+      to: "/tasks/$id" as const,
+      params: { id: item.entityId },
+    }))
+    .with("purchase", () => ({
+      to: "/purchases/$id" as const,
+      params: { id: item.entityId },
+    }))
+    .exhaustive();
+
+const trackerSeverityVariant = (severity: ProjectAttentionItem["severity"]) =>
+  match(severity)
+    .with("critical", () => "destructive" as const)
+    .with("warning", () => "warning" as const)
+    .with("info", () => "slate" as const)
+    .exhaustive();
+
+function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
+  return {
+    key: `${item.type}-${item.entityId}`,
+    title: item.description,
+    badges: [
+      <Badge key="severity" variant={trackerSeverityVariant(item.severity)}>
+        {item.severity}
+      </Badge>,
+    ],
+    details: [
+      ...(item.date
+        ? [
+            <div key="date" className="text-muted-foreground text-sm">
+              {formatDate(item.date)}
+            </div>,
+          ]
+        : []),
+      ...(item.amount != null
+        ? [
+            <div key="amount" className="text-muted-foreground text-sm">
+              {formatCurrency(item.amount, 0)}
+            </div>,
+          ]
+        : []),
+    ],
+    route: trackerRoute(item),
+    editLabel: `Open ${item.entityType}`,
+  };
 }
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
@@ -573,6 +655,22 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       route: { to: "/recipes/$id", params: { id: recipe.id } },
       editLabel: "Open recipe",
     }),
+  }),
+  section({
+    id: "tracker",
+    label: "Tracker",
+    // Merge the six household-tracker attention rules (the same items
+    // /projects?view=overview shows) into one section with a subsection per
+    // rule; the per-rule counts stay separate in the schema/badge.
+    select: (p) =>
+      TRACKER_GROUPS.flatMap((g) => p[TRACKER_PROBLEM_KEY_BY_TYPE[g.type]]),
+    icon: AlertTriangle,
+    title: "Projects, tasks & purchases needing attention",
+    description:
+      "Household-tracker items that need a decision: overdue tasks, blocked or stalled projects, planned purchases past their date, and spend with no budget or trade recorded.",
+    emptyMessage: "Nothing in the tracker needs attention.",
+    groupBy: (items) => groupBy(items, (i) => TRACKER_GROUP_TITLE[i.type]),
+    renderItem: renderTrackerItem,
   }),
   section({
     id: "upc-updates",

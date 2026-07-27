@@ -1,6 +1,11 @@
-import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  stripSearchParams,
+  useNavigate,
+} from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
 
@@ -13,6 +18,9 @@ const searchSchema = z.object({
     .enum(["overview", "analytics", "data", "gallery", "history"])
     .optional()
     .catch(undefined),
+  // Quick-capture deep link (navbar "+" / command palette) — there is no
+  // /projects/new route, so the create dialog is opened by this param.
+  create: z.boolean().optional().catch(undefined),
   // ProjectTable's sort/page URL sync writes to this route already — a
   // strict validateSearch without these would strip them.
   ...tableSearchFields,
@@ -24,6 +32,7 @@ const searchDefaults = {
   locations: undefined,
   date: undefined,
   view: "overview",
+  create: undefined,
 } as const;
 
 export const Route = createFileRoute("/_authenticated/projects/")({
@@ -34,9 +43,25 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 });
 
 function ProjectsPage() {
+  const { create } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
   return (
     <Page variant="list" title="Projects" fullWidth>
       <ProjectsDashboard />
+
+      {/* Deep-linked quick capture: open state is read straight off the URL and
+          cleared (replace) on close, so a refresh or back-nav can't reopen it. */}
+      <CreateProjectDialog
+        open={create === true}
+        onOpenChange={(open) => {
+          if (!open)
+            navigate({
+              search: (prev) => ({ ...prev, create: undefined }),
+              replace: true,
+            });
+        }}
+      />
     </Page>
   );
 }

@@ -4,14 +4,14 @@ import { useTRPC } from "~/integrations/trpc/react";
 import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
 
 /**
- * Loads the Problems page data as three cost-grouped tRPC queries instead of one
+ * Loads the Problems page data as four cost-grouped tRPC queries instead of one
  * `getAllProblems` scan. Each group is routed through the unbatched link (see
  * root-provider.tsx), so it runs in its own Worker invocation / CPU budget —
  * the combined scan re-parsed every recipe line through WASM and intermittently
  * blew the 30s CPU limit. (The two WASM parse-sweeps it used to include now live
  * as manual Settings → Maintenance actions, off this hot path.)
  *
- * The three group results are merged back into the same `AllProblems` shape the
+ * The four group results are merged back into the same `AllProblems` shape the
  * section renderers expect (missing groups default to empty arrays while they
  * load), with `totalProblems` re-derived as the sum of section lengths. Uses
  * `useQueries` + `combine` for a referentially-stable result (per the repo's
@@ -37,14 +37,20 @@ export function useProblemsData(opts?: {
       enabled,
     },
     getUpc: { ...api.problems.getUpc.queryOptions(), staleTime, enabled },
+    getTracker: {
+      ...api.problems.getTracker.queryOptions(),
+      staleTime,
+      enabled,
+    },
   } satisfies Record<ProblemsHotPathProcedure, unknown>;
   return useQueries({
     queries: [
       problemGroupQueries.getFast,
       problemGroupQueries.getCoverage,
       problemGroupQueries.getUpc,
+      problemGroupQueries.getTracker,
     ],
-    combine: ([fast, coverage, upc]) => {
+    combine: ([fast, coverage, upc, tracker]) => {
       const sections = {
         duplicateUniqueProducts: fast.data?.duplicateUniqueProducts ?? [],
         orphanedProducts: fast.data?.orphanedProducts ?? [],
@@ -65,8 +71,14 @@ export function useProblemsData(opts?: {
         productsWithIslandedMappings:
           coverage.data?.productsWithIslandedMappings ?? [],
         productsWithBetterUpcData: upc.data?.productsWithBetterUpcData ?? [],
+        overdueTasks: tracker.data?.overdueTasks ?? [],
+        stalledProjects: tracker.data?.stalledProjects ?? [],
+        projectsMissingBudget: tracker.data?.projectsMissingBudget ?? [],
+        pastDuePlannedPurchases: tracker.data?.pastDuePlannedPurchases ?? [],
+        unclassifiedPurchases: tracker.data?.unclassifiedPurchases ?? [],
+        blockedWorkProjects: tracker.data?.blockedWorkProjects ?? [],
       };
-      const results = [fast, coverage, upc];
+      const results = [fast, coverage, upc, tracker];
       return {
         problems: {
           ...sections,

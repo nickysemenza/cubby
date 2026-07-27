@@ -49,7 +49,7 @@ export const QuickActionsMenu = () => {
           {createActions.map((action) => (
             <DropdownMenuItem
               key={action.id}
-              render={<Link to={action.path} />}
+              render={<Link to={action.path} search={action.search} />}
             >
               {action.entity ? (
                 <>

@@ -9,6 +9,7 @@ import {
   maintenanceCountsSchema,
   problemsCoverageSchema,
   problemsFastSchema,
+  problemsTrackerSchema,
   problemsUpcSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
@@ -24,20 +25,21 @@ import {
   findCoverageProblems,
   findFastProblems,
   findMaintenanceCounts,
+  findTrackerProblems,
   findUpcProblems,
   pruneAllUnusedAliases,
   reparseStaleIngredientParses,
 } from "~/server/services/problems.service";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// The Problems surfaces (page, navbar badge, homepage card) all load these three
+// The Problems surfaces (page, navbar badge, homepage card) all load these four
 // cost-grouped procedures and assemble the combined result client-side — each
 // over an UNBATCHED link so it gets its own Worker invocation / CPU budget. The
 // old monolithic getAllProblems ran every detector in ONE invocation and exceeded
 // the 30s CPU limit; it was removed. The two WASM parse-sweeps that re-parse every
 // recipe line (stale parses, unused aliases) used to be two more groups here but
 // blew the CPU/memory budget on the request path — they're now manual dry-run /
-// fix-all actions in Settings → Maintenance (see below). MCP composes these three
+// fix-all actions in Settings → Maintenance (see below). MCP composes these four
 // the same way (assembleAllProblems).
 
 // Group: DB-only detectors (cheap).
@@ -56,6 +58,13 @@ const getCoverage = protectedProcedure
 const getUpc = protectedProcedure
   .output(problemsUpcSchema)
   .query(async ({ ctx }) => findUpcProblems(ctx.db, ctx.upcLookupClient));
+
+// Group: household-tracker attention rules (projects/tasks/purchases). Cheap
+// aggregate SQL, but its own group so it runs concurrently with — rather than
+// serialized behind — the fast group's pinned single connection.
+const getTracker = protectedProcedure
+  .output(problemsTrackerSchema)
+  .query(async ({ ctx }) => findTrackerProblems(ctx.db));
 
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
 // of detectors (no USDA/UPC network); badge/count consumers instead derive
@@ -167,6 +176,7 @@ export const problemsRouter = createTRPCRouter({
   getFast,
   getCoverage,
   getUpc,
+  getTracker,
   getMaintenanceCounts,
   reparseStale,
   reparseStaleSync,

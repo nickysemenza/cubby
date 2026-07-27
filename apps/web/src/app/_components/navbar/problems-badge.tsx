@@ -38,6 +38,12 @@ const PROBLEM_LABELS: Record<
   orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),
   staleParentRecipes: (n) => pl(n, "deleted sub-recipe reference"),
   productsWithBetterUpcData: (n) => pl(n, "UPC update"),
+  overdueTasks: (n) => pl(n, "overdue task"),
+  blockedWorkProjects: (n) => `${n} blocked with no next action`,
+  stalledProjects: (n) => pl(n, "stalled project"),
+  pastDuePlannedPurchases: (n) => `${n} planned purchase past due`,
+  projectsMissingBudget: (n) => `${n} missing a cost estimate`,
+  unclassifiedPurchases: (n) => pl(n, "unclassified purchase"),
 };
 
 export const ProblemsBadge = () => {

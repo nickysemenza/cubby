@@ -5,6 +5,7 @@ const PROBLEMS_HOT_PATH_PROCEDURES = [
   "getFast",
   "getCoverage",
   "getUpc",
+  "getTracker",
 ] as const;
 
 export type ProblemsHotPathProcedure =

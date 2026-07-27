@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseActions } from "~/app/purchases/purchase-actions";
 import { PurchaseAnalyticsView } from "~/app/purchases/purchase-analytics-view";
 import { PurchaseList } from "~/app/purchases/purchaselist";
@@ -40,6 +41,9 @@ const searchSchema = z.object({
   project: z.string().optional().catch(undefined),
   future: z.enum(["true", "false"]).optional().catch(undefined),
   date: z.string().optional().catch(undefined),
+  // Quick-capture deep link (navbar "+" / command palette) — there is no
+  // /purchases/new route, so the create dialog is opened by this param.
+  create: z.boolean().optional().catch(undefined),
   ...tableSearchFields,
 });
 
@@ -51,6 +55,7 @@ const searchDefaults = {
   project: undefined,
   future: undefined,
   date: undefined,
+  create: undefined,
 } as const;
 
 export const Route = createFileRoute("/_authenticated/purchases/")({
@@ -97,6 +102,19 @@ function PurchasesPage() {
           <PurchaseList mode="unclassified" initialSearch={q} />
         )}
       </Stack>
+
+      {/* Deep-linked quick capture: open state is read straight off the URL and
+          cleared (replace) on close, so a refresh or back-nav can't reopen it. */}
+      <CreatePurchaseDialog
+        open={search.create === true}
+        onOpenChange={(open) => {
+          if (!open)
+            navigate({
+              search: (prev) => ({ ...prev, create: undefined }),
+              replace: true,
+            });
+        }}
+      />
     </Page>
   );
 }
