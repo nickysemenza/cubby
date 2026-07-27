@@ -69,6 +69,12 @@ const productCreateShape = {
   name: requiredName("Product name")
     .describe("Product name")
     .meta({ mock: "commerce.productName" }),
+  aliases: z
+    .array(z.string())
+    .default([])
+    .describe(
+      "Alternate names for this product — searched alongside the name. Replaces the existing list when provided.",
+    ),
   upc: upc.nullable(),
   fdc_id: fdcId
     .nullable()
@@ -220,6 +226,10 @@ const productTopLevelFields = {
     .string()
     .describe("Product name")
     .meta({ mock: "commerce.productName" }),
+  aliases: z
+    .array(z.string())
+    .default([])
+    .describe("Alternate names for this product (searched + embedded)"),
   upc: upc.nullable(),
   fdc_id: fdcId
     .nullable()
@@ -462,6 +472,12 @@ export const mcpProductUpdateInput = z.object({
     .describe("Product name")
     .meta({ mock: "commerce.productName" })
     .optional(),
+  // Not inherited from productCreateShape (this MCP shape is hand-written), so
+  // aliases has to be listed explicitly to be editable by the agent.
+  aliases: z
+    .array(z.string())
+    .optional()
+    .describe("Alternate names (replaces the existing list)"),
   upc: upc.nullable().optional(),
   fdc_id: fdcId.nullable().optional(),
   manufacturer: z

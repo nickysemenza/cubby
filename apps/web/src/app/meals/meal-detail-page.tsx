@@ -3,8 +3,9 @@ import type { MealRecipeOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { Clock, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
@@ -13,6 +14,7 @@ import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
@@ -207,6 +209,22 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
             )}
           </WithRecipeSearch>
         </div>
+
+        {/* The manifest's `history` common section. Rendered inline (not via
+            `useEntityDetail`) because this page composes its own body rather
+            than a `DetailSections` grid — same content the helper produces. */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle icon={Clock}>History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AuditLogList
+              entityType="meal"
+              entityId={mealId}
+              showEntityLink={false}
+            />
+          </CardContent>
+        </Card>
       </Stack>
     </Page>
   );

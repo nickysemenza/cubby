@@ -16,6 +16,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import {
   type AllProblems,
   assembleAllProblems,
@@ -48,6 +49,7 @@ import {
   findOrphanedEntityEmbeddings,
   softDeleteEntityEmbeddingRows,
 } from "~/server/repo/entity-embedding";
+import { countCullablePendingImages } from "~/server/repo/image";
 import {
   deleteIngredients,
   findOrCreateIngredient,
@@ -327,6 +329,8 @@ export const findMaintenanceCounts = async (
       findProductsWithNoImages(db, { excludeIngredients: true }),
     locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
     staleRecipeTotals: () => countStaleRecipeTotals(db),
+    cullablePendingImages: () =>
+      countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
   });
 
   return {
@@ -337,6 +341,7 @@ export const findMaintenanceCounts = async (
       .length,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
     staleRecipeTotals: r.staleRecipeTotals,
+    cullablePendingImages: r.cullablePendingImages,
   };
 };
 

@@ -152,6 +152,7 @@ describe("inventory mappers", () => {
       location: {
         id: LOCATION_ID,
         shortcode: unsafeLocationShortcode("L-TEST"),
+        aliases: [],
         lastBulkInventory: null,
         aiDescription: null,
         images: [],

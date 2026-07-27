@@ -106,6 +106,7 @@ export const dbProductToTopLevelShape = (
   id: productData.id,
   shortcode: unsafeProductShortcode(productData.shortcode),
   name: productData.name,
+  aliases: productData.aliases ?? [],
   upc: productData.upc,
   fdc_id: productData.fdc_id,
   manufacturer: productData.manufacturer,
@@ -264,6 +265,7 @@ export const dbProductToAPI = (
     id: productData.id,
     shortcode: unsafeProductShortcode(productData.shortcode),
     name: productData.name,
+    aliases: productData.aliases ?? [],
     upc: productData.upc,
     fdc_id: productData.fdc_id,
     manufacturer: productData.manufacturer,
@@ -290,6 +292,7 @@ export const dbProductToAPI = (
           id: entry.location.id,
           shortcode: unsafeLocationShortcode(entry.location.shortcode),
           name: entry.location.name,
+          aliases: entry.location.aliases,
           type: parseWithContext(locationType, entry.location.type, {
             entityType: "Location",
             identifier: {

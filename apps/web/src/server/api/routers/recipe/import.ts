@@ -120,10 +120,19 @@ const upsertCookbookEndpoint = protectedProcedure
   .input(upsertCookbookInput)
   .output(cookbookIdOut)
   .mutation(async ({ ctx, input }) => {
-    return await upsertCookbook(ctx.db, input, {
+    const result = await upsertCookbook(ctx.db, input, {
       ...ctx.actorContext,
       source: "epub_import",
     });
+    // Cookbooks are searchable, so the upsert has to enqueue the embedding
+    // refresh the way every other entity's create/update does. "updated" covers
+    // both branches (the refresh is idempotent and hash-skipped either way).
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "cookbook", entityId: result.id },
+      source: "cookbook.upsert",
+    });
+    return result;
   });
 // Hand back a cookbook's stored extraction so the importer can re-open it for
 // selective re-import (no LLM, no EPUB). See the import flow's "from stored source".

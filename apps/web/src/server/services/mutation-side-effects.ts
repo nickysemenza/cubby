@@ -1,8 +1,10 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
+  cookbookId,
   ingredientId,
   inventoryId,
   locationId,
+  mealId,
   productId,
   projectId,
   purchaseId,
@@ -23,6 +25,7 @@ import type { Database } from "~/server/db";
 import {
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
+  findMealEmbeddingRefsForRecipes,
   findRecipeEmbeddingRefsForIngredients,
   findTrackerEmbeddingRefsForProjects,
 } from "~/server/repo/entity-embedding";
@@ -32,7 +35,9 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   z.object({ entityType: z.literal("location"), entityId: locationId }),
   z.object({ entityType: z.literal("ingredient"), entityId: ingredientId }),
   z.object({ entityType: z.literal("recipe"), entityId: recipeId }),
+  z.object({ entityType: z.literal("cookbook"), entityId: cookbookId }),
   z.object({ entityType: z.literal("inventory"), entityId: inventoryId }),
+  z.object({ entityType: z.literal("meal"), entityId: mealId }),
   z.object({ entityType: z.literal("project"), entityId: projectId }),
   z.object({ entityType: z.literal("task"), entityId: taskId }),
   z.object({ entityType: z.literal("purchase"), entityId: purchaseId }),
@@ -152,6 +157,15 @@ const collectRecipeEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectMealEmbeddingRefsForRecipe: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "recipe") return [];
+  return await findMealEmbeddingRefsForRecipes(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
 const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
   ctx,
 ) => {
@@ -196,6 +210,14 @@ async function refreshRecipeEmbeddingsForIngredient(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
+// Meals embed their planned recipes' names, so a recipe update fans out.
+async function refreshMealEmbeddingsForRecipe(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectMealEmbeddingRefsForRecipe(ctx);
+  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
 // Tasks/purchases embed their project's name, so a project update fans out.
 async function refreshTrackerEmbeddingsForProject(
   ctx: HandlerContext,
@@ -224,6 +246,7 @@ const embeddingRefCollectorByHandler = new Map<
     refreshRecipeEmbeddingsForIngredient,
     collectRecipeEmbeddingRefsForIngredient,
   ],
+  [refreshMealEmbeddingsForRecipe, collectMealEmbeddingRefsForRecipe],
   [refreshTrackerEmbeddingsForProject, collectTrackerEmbeddingRefsForProject],
 ]);
 
@@ -296,10 +319,21 @@ export const mutationSideEffectManifest = {
   },
   recipe: {
     onCreate: [refreshOwnEmbedding],
+    // Rename fan-out: meal embeddings include their planned recipes' names.
+    onUpdate: [refreshOwnEmbedding, refreshMealEmbeddingsForRecipe],
+    onDelete: [],
+  },
+  cookbook: {
+    onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],
   },
   inventory: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
+  meal: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],

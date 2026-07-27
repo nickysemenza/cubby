@@ -1,4 +1,5 @@
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
+import { searchableEntities } from "@cubby/schemas/search";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -10,6 +11,7 @@ import {
   createImageColumn,
 } from "../data-table/columnHelpers";
 import {
+  entityTypeMap,
   getEnrichmentText,
   getSearchMatchText,
   getSearchResultEntity,
@@ -19,17 +21,19 @@ import {
 
 const columnHelper = createColumnHelper<SearchResultItem>();
 
-/** Options for entity type filter dropdown */
+/**
+ * Options for the entity type filter dropdown, derived from the searchable
+ * roster so a newly-searchable entity can't silently go missing from the filter.
+ */
 const entityTypeOptions: Array<{
   value: SearchableEntity | "";
   label: string;
 }> = [
   { value: "", label: "All types" },
-  { value: "product", label: "Product" },
-  { value: "recipe", label: "Recipe" },
-  { value: "ingredient", label: "Ingredient" },
-  { value: "location", label: "Location" },
-  { value: "inventory", label: "Inventory" },
+  ...searchableEntities.map((entityType) => ({
+    value: entityType,
+    label: entities[entityTypeMap[entityType]].label,
+  })),
 ];
 
 export const searchColumns = [

@@ -5,7 +5,7 @@ import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { match } from "ts-pattern";
 import { IconTile } from "~/components/ui/icon-tile";
 import { Image } from "~/components/ui/image";
-import { EntityIcon, entities } from "~/entities/entities";
+import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { cn, formatCurrency } from "~/lib/utils";
 import { pushRecent } from "../command-menu/recents";
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -20,8 +20,10 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   product: "product",
   recipe: "recipe",
   ingredient: "ingredient",
+  cookbook: "cookbook",
   location: "location",
   inventory: "inventory",
+  meal: "meal",
   project: "project",
   task: "task",
   purchase: "purchase",
@@ -62,9 +64,10 @@ export function getSearchResultEntity(item: SearchResultItem): Entity {
 }
 
 export function getSearchResultRoute(item: SearchResultItem) {
+  const entity = getSearchResultEntity(item);
   return {
-    to: entities[getSearchResultEntity(item)].routes.detail,
-    params: { id: item.id },
+    to: entities[entity].routes.detail,
+    params: entityDetailParams(entity, item.id),
   };
 }
 
@@ -184,6 +187,16 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
     .with({ entityType: "ingredient" }, (item) =>
       item.recipeCount != null && item.recipeCount > 0
         ? `in ${item.recipeCount} recipes`
+        : null,
+    )
+    .with({ entityType: "cookbook" }, (item) =>
+      item.recipeCount != null && item.recipeCount > 0
+        ? `${item.recipeCount} recipes`
+        : null,
+    )
+    .with({ entityType: "meal" }, (item) =>
+      item.recipeCount != null && item.recipeCount > 0
+        ? `${item.recipeCount} recipes`
         : null,
     )
     .with({ entityType: "project" }, (item) =>
