@@ -19,6 +19,9 @@ import {
   projectPortfolioAnalyticsOut,
   projectUpdateData,
   purchaseAnalyticsOut,
+  purchaseBulkCostTypeInput,
+  purchaseBulkMoveInput,
+  purchaseBulkTradeInput,
   purchaseCreateInput,
   purchaseFilterFields,
   purchaseMcpListOut,
@@ -135,7 +138,15 @@ const taskBulkMcpOut = z.object({
   items: z.array(taskOut),
 });
 
-async function bulkTaskWrite<T>(run: Promise<{ items: T[] }>) {
+/** Same shape for the purchase bulk writes (bulkMove/bulkSetTrade/bulkSetCostType). */
+const purchaseBulkMcpOut = z.object({
+  updated: z.number().int(),
+  items: z.array(purchaseOut),
+});
+
+/** Drop `sideEffects` and add the count — entity-agnostic, shared by the task
+ * and purchase bulk tools. */
+async function bulkEntityWrite<T>(run: Promise<{ items: T[] }>) {
   const { items } = await run;
   return { updated: items.length, items };
 }
@@ -270,7 +281,8 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: taskBulkStatusInput.shape,
     outputSchema: taskBulkMcpOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => bulkTaskWrite(caller.task.bulkSetStatus(params)),
+    call: (caller, params) =>
+      bulkEntityWrite(caller.task.bulkSetStatus(params)),
   });
 
   registerRouterTool(server, {
@@ -280,7 +292,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: taskBulkMoveInput.shape,
     outputSchema: taskBulkMcpOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => bulkTaskWrite(caller.task.bulkMove(params)),
+    call: (caller, params) => bulkEntityWrite(caller.task.bulkMove(params)),
   });
 
   registerRouterTool(server, {
@@ -290,7 +302,8 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: taskBulkDueDateInput.shape,
     outputSchema: taskBulkMcpOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => bulkTaskWrite(caller.task.bulkSetDueDate(params)),
+    call: (caller, params) =>
+      bulkEntityWrite(caller.task.bulkSetDueDate(params)),
   });
 
   registerEntityCrudToolset(server, {
@@ -321,5 +334,37 @@ export function registerProjectTools(server: McpServer) {
     outputSchema: purchaseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.purchase.analytics(params),
+  });
+
+  registerRouterTool(server, {
+    name: "bulk_move_purchases",
+    description:
+      "Move many purchases onto one project at once; pass projectId: null to move them back to the Inbox (no project). Use after list_purchases to file loose or mis-attributed spend. Returns the updated rows and a count.",
+    inputSchema: purchaseBulkMoveInput.shape,
+    outputSchema: purchaseBulkMcpOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => bulkEntityWrite(caller.purchase.bulkMove(params)),
+  });
+
+  registerRouterTool(server, {
+    name: "bulk_set_purchase_trade",
+    description:
+      "Set the same trade on many purchases at once (the 19-slug trade taxonomy shared with tasks and sub-projects — electrical|plumbing|countertop|…|other). Trade is required, not nullable: pass `other` rather than clearing it. Use after list_purchases (filter trade to find unclassified spend). Returns the updated rows and a count.",
+    inputSchema: purchaseBulkTradeInput.shape,
+    outputSchema: purchaseBulkMcpOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) =>
+      bulkEntityWrite(caller.purchase.bulkSetTrade(params)),
+  });
+
+  registerRouterTool(server, {
+    name: "bulk_set_purchase_cost_type",
+    description:
+      "Set the same costType on many purchases at once (materials|tools|services). Required, not nullable. Use after list_purchases to reclassify a batch of ledger lines so get_purchase_analytics' byCostType split is right. Returns the updated rows and a count.",
+    inputSchema: purchaseBulkCostTypeInput.shape,
+    outputSchema: purchaseBulkMcpOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) =>
+      bulkEntityWrite(caller.purchase.bulkSetCostType(params)),
   });
 }

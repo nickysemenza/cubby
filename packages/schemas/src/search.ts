@@ -31,6 +31,43 @@ export const globalSearchInputSchema = z.object({
   mode: z.enum(["lexical", "hybrid"]).default("hybrid"),
 });
 
+/**
+ * Allowlisted entity-to-entity similarity directions.
+ *
+ * Deliberately a fixed set rather than an arbitrary source→target product:
+ * every embedding lives in one shared space, so any pair is *technically*
+ * queryable, but only these have a meaning worth surfacing (map a purchase to
+ * the product it bought, find duplicate products/ingredients, find related
+ * recipes). Callers pick a key; they can't compose their own combination.
+ */
+export const similarEntityPairKeys = [
+  "purchase_to_product",
+  "product_to_product",
+  "ingredient_to_ingredient",
+  "recipe_to_recipe",
+] as const;
+export const similarEntityPairSchema = z.enum(similarEntityPairKeys);
+export type SimilarEntityPair = z.infer<typeof similarEntityPairSchema>;
+
+export const similarEntityPairs = {
+  purchase_to_product: { source: "purchase", target: "product" },
+  product_to_product: { source: "product", target: "product" },
+  ingredient_to_ingredient: { source: "ingredient", target: "ingredient" },
+  recipe_to_recipe: { source: "recipe", target: "recipe" },
+} as const satisfies Record<
+  SimilarEntityPair,
+  { source: SearchableEntity; target: SearchableEntity }
+>;
+
+export const similarEntitiesInputSchema = z.object({
+  pair: similarEntityPairSchema.describe(
+    "Which direction to search: <sourceType>_to_<targetType>",
+  ),
+  sourceId: z.uuid().describe("ID of the seed entity (the pair's source type)"),
+  limit: z.number().min(1).max(25).default(5),
+});
+export type SimilarEntitiesInput = z.infer<typeof similarEntitiesInputSchema>;
+
 export const searchMatchKindSchema = z.enum([
   "exact",
   "substring",
@@ -138,6 +175,24 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
 
 export const globalSearchOut = z.array(searchResultItemSchema);
+
+/**
+ * One neighbour of the seed entity. `similarity` is cosine similarity in
+ * [-1, 1] (higher = closer) — it *ranks* candidates, it does not verify them;
+ * see the find_similar_entities tool description.
+ */
+export const similarEntityResultSchema = z.object({
+  similarity: z.number(),
+  entity: searchResultItemSchema,
+});
+export type SimilarEntityResult = z.infer<typeof similarEntityResultSchema>;
+
+export const similarEntitiesOut = z.object({
+  /** Echoes the resolved seed so the caller can confirm what was matched against. */
+  source: searchableEntityRefSchema,
+  results: z.array(similarEntityResultSchema),
+});
+export type SimilarEntitiesOut = z.infer<typeof similarEntitiesOut>;
 
 export const semanticBackfillInputSchema = z.object({
   entityTypes: z.array(searchableEntitySchema).optional(),

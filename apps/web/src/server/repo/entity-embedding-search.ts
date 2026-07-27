@@ -1,7 +1,11 @@
-import type { SearchableEntity } from "@cubby/schemas/search";
-import { sql } from "drizzle-orm";
+import type {
+  SearchableEntity,
+  SearchableEntityRef,
+} from "@cubby/schemas/search";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import { entityEmbedding } from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 
 export interface EntityEmbeddingCandidate {
@@ -122,4 +126,58 @@ export async function findSemanticEntityCandidates(
         ? row.similarity
         : Number.parseFloat(row.similarity),
   }));
+}
+
+/**
+ * Entity-to-entity nearest neighbours: read the seed entity's own stored
+ * embedding back out, then reuse it as the query vector.
+ *
+ * Two queries on purpose. The seed lookup rides the
+ * `EntityEmbedding_entity_model_key` unique index, and the neighbour search
+ * goes through {@link findSemanticEntityCandidates} **verbatim** so the
+ * `embedding::vector(N)` cast and the literal `dimensions = N` predicate stay
+ * syntactically identical to `EntityEmbedding_embedding_hnsw_idx`. A
+ * hand-written self-join here would silently lose the index and seq-scan every
+ * embedding in the table.
+ *
+ * Returns `[]` when the seed has no embedding row yet (never embedded, or
+ * embedded under a different model config).
+ */
+export async function findSimilarEntities(
+  db: Database,
+  seed: SearchableEntityRef,
+  config: SemanticEmbeddingConfig,
+  opts: { targetType: SearchableEntity; limit: number },
+): Promise<EntityEmbeddingCandidate[]> {
+  const seedRow = await getDb(db).query.entityEmbedding.findFirst({
+    where: and(
+      eq(entityEmbedding.entityType, seed.entityType),
+      eq(entityEmbedding.entityId, seed.entityId),
+      eq(entityEmbedding.provider, config.provider),
+      eq(entityEmbedding.model, config.model),
+      eq(entityEmbedding.dimensions, config.dimensions),
+      notDeleted(entityEmbedding),
+    ),
+    columns: { embedding: true },
+  });
+  if (!seedRow) return [];
+
+  // +1 so the seed itself (always its own nearest neighbour when source and
+  // target types match) can be dropped without shrinking the result set.
+  const candidates = await findSemanticEntityCandidates(
+    db,
+    seedRow.embedding,
+    config,
+    { entityTypes: [opts.targetType], limit: opts.limit + 1 },
+  );
+
+  return candidates
+    .filter(
+      (candidate) =>
+        !(
+          candidate.entityType === seed.entityType &&
+          candidate.entityId === seed.entityId
+        ),
+    )
+    .slice(0, opts.limit);
 }

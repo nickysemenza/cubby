@@ -72,7 +72,12 @@ import {
   recipesUsingIngredientOut,
   type RecipeMcpOut,
 } from "./recipe";
-import { globalSearchInputSchema, globalSearchOut } from "./search";
+import {
+  globalSearchInputSchema,
+  globalSearchOut,
+  similarEntitiesInputSchema,
+  similarEntitiesOut,
+} from "./search";
 import { type McpUnitMappingInput, mcpUnitMappingInput } from "./unitmapping";
 import { importRecipeSchema } from "./import-recipe";
 
@@ -170,7 +175,11 @@ export {
 
 export const globalSearchMcpOut = z.object({ results: globalSearchOut });
 
-export { globalSearchInputSchema };
+/** find_similar_entities — already a `{ source, results }` object, so the MCP
+ * shape is the router output verbatim (each result carries its similarity). */
+export const similarEntitiesMcpOut = similarEntitiesOut;
+
+export { globalSearchInputSchema, similarEntitiesInputSchema };
 
 export const recipeAvailabilityMcpOut = z.object({
   recipes: recipeAvailabilityListOut,
