@@ -255,8 +255,9 @@ the rest of cubby. Schema affordances already in place for it: `task.projectId` 
 nullable (inbox tasks) and `purchase.future` marks planned-not-yet-actual spend.
 Roughly priority order.
 
-- [ ] **Purchases ↔ inventory bridge + tool lifecycle** — design settled 2026-07,
-  see the subsection below. Foundation for the BOM.
+- [x] **Purchases ↔ inventory bridge** — v1 shipped 2026-07 (`purchase.productId` +
+  `purchase.vendor`, zero new tables); deferred phases + triggers in the subsection
+  below. Foundation for the BOM.
 - [ ] **Recurring maintenance tasks**: simple every-N-weeks/months interval on a
   template — not RRULE; next instance generated on completion; surfaces in
   needs-attention. (The rest of the old maintenance+budgeting bundle shipped
@@ -272,9 +273,9 @@ Roughly priority order.
   tracker has CRUD-only MCP while the food domain has nine specialized tools).
 - [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
   "year in the house" + de-noises the stalled-project detector — `updatedAt`
-  resets on any edit); ~~purchase `vendor` + receipt image~~ → absorbed by the
-  `Receipt` entity in the bridge design below (vendor + photo live there;
-  spend-by-vendor reads via the receipt join); portfolio-level estimate
+  resets on any edit); ~~purchase `vendor`~~ shipped as a column in bridge v1
+  (spend-by-vendor analytics still open, see below) and the receipt **image** waits
+  on the `Receipt` phase; portfolio-level estimate
   total + a forward committed-spend (next 30/60/90d) figure (per-project
   `BudgetStrip` exists, the portfolio equivalent doesn't; the `credits` value
   portfolio-analytics computes in SQL is dropped at the schema boundary); mobile
@@ -287,65 +288,67 @@ Roughly priority order.
   reservations, no auto-decrement — audits are the backstop, "mark consumed" is an
   optional explicit action.
 
-### Purchases ↔ inventory bridge + tool lifecycle (design settled 2026-07)
+### Purchases ↔ inventory bridge (staged; v1 SHIPPED 2026-07)
 
-Ground truth that shaped this: tools **already are** products in the live system
-(74 `tools` products, 68 inventoried, 79/94 tool-ish products priced — garage
-valuation works today), so the physical layer needs nothing new. The design adds
-a financial layer on top and derives the tool lifecycle from it. Four schema
-deltas, **no new top-level entities**:
+Ground truth that shaped the staging: tools **already are** products (74 `tools`
+products, 68 inventoried, 79/94 tool-ish products priced — the garage valuation
+rollup works today), and coarse multi-trade runs are **already split by hand** —
+201 of 369 dated days carry more than one purchase row, 151 span more than one
+trade. Only 33 of 268 `tools` purchases fuzzy-match an existing product name, so a
+product link is sparse and stays opt-in. Hence v1 is two nullable columns and zero
+new tables; everything below it is additive, behind an explicit trigger.
 
-- **`Receipt`** (`vendor`, `date`, `imageId?`, `statedTotal?`, `notes?`) +
-  nullable `purchase.receiptId` FK. **Splitting a coarse multi-trade run =
-  sibling purchases sharing a `receiptId`** — each split is a first-class
-  Purchase, so every rollup/filter works untouched; split at whatever
-  granularity the moment demands (two trade lumps + one peeled-off tool row —
-  never forced to full receipt line items). Purchases typically don't span
-  projects, so splits share one `projectId` by default but aren't constrained
-  to. Entering a vendor on a receipt-less purchase auto-creates a thin Receipt
-  behind the scenes — one home for vendor, no dual columns.
-- **`ReceiptLine`** (`receiptId`, `name`, `sku?`, `quantity?`, `unitPrice?`,
-  `purchaseId?` soft-link) — **optional pure-annotation itemization** (store
-  SKUs on a materials run, etc.). Lines are provenance, purchases are the money:
-  **rollups only ever read `Purchase`**; no product required (materials stay out
-  of the catalog); a soft display-level check flags lines-don't-sum-to-purchases,
-  nothing enforces it.
-- **`PurchaseProduct`** (`purchaseId`, `productId`, `quantity` default 1) — the
-  bridge. Opt-in; in practice ~only tools and other inventoried goods get
-  linked. Join table (not a single FK) because "3 clamps" and combo kits exist;
-  per-product price splits into sibling purchases instead of a price column.
-  Linked purchases double as **price observations** — read-only purchase history
-  on the product page first; promoting into `product.price` stays a later
-  explicit step. From a linked purchase: explicit **receive-into-inventory**
-  (pick location → `InventoryEntry` via existing capture path) — never
-  automatic. New link/convert/delete paths honor the removal-path invariant.
-- **`ProjectTool`** (`projectId`, `productId`, unique pair) — project-level
-  usage tagging. **Cost-per-use = net basis ÷ usage count**, informational
-  only — amortized tool cost NEVER enters project actuals (the purchase already
-  sits in its buying project's ledger; double-count guard).
+**v1 (shipped)** — `purchase.productId` + `purchase.vendor`. Link a purchase to a
+product (opt-in; services/materials stay unlinked), explicit
+**receive-into-inventory** from a linked purchase (never automatic — the mirror of
+the no-auto-decrement tenet), purchase history + derived net cost on the product
+page, vendor on the ledger. Linked purchases double as price observations —
+read-only history first; promoting into `product.price` stays a later explicit step.
 
-**Tool lifecycle is derived, uniformly**: every exit is a *terminal negative
-purchase linked to the product* + explicit inventory decrement — sale at sale
-price, return at full price, **disposal/broken/gifted as a $0 sale** with notes.
-Status derives cleanly: inventory qty > 0 → owned; qty 0 + terminal negative
-purchase → sold/disposed; ownership window = first→last linked purchase dates.
-Net cost = Σ linked purchases (recouped money flows through trade/project
-rollups for free). No status column, no `Sold` location.
+**The lifecycle convention is the load-bearing part and costs zero schema**: every
+exit is a *terminal negative purchase carrying the same productId* — sale at sale
+price, return at full price, broken/gifted as a **$0 purchase** (never null: `cost
+IS NULL` is the Unclassified predicate) — plus an explicit inventory decrement.
+Money is derived as `splitPurchaseSpend(rows).actual - .contributions` (NOT `.net`,
+which folds in `future` rows); **owned/sold comes off `inventoryEntry`, never off
+purchase signs** (two buys + one sale nets positive — the sign is ambiguous). No
+status column, no disposition enum, no `Sold` location.
 
-**v1 surfaces**: split action on a purchase (dollar-or-percent, last line
-absorbs rounding); link-product + receive actions; "tools used" on project
-detail; a **Tools report page** (derived ledger: net cost, status, window,
-uses, cost/use); an "unlinked `costType=tools` purchases" view feeding an
-LLM/MCP-assisted **backfill pass** against the existing tool products.
+Deferred phases — each purely additive on top of v1, with its promotion trigger:
 
-Rejected within this design: **`Asset` entity** (fixed-asset register — would
-duplicate the live inventory layer for location/valuation/audits and guarantee
-sync drift; consciously accept pooled cost basis on identical tools; revisit
-only if per-instance/serial identity actually bites — it layers on later
-without unwinding this design); **`Sold` virtual location** (pollutes valuation
-+ audits; "former tools" is a query, not a place); **line items as financial
-truth** (`PurchaseLine` header/lines split — 95% of purchases are single-trade;
-sibling-splits keep rollups untouched); **disposition status enum** (the $0-sale
+- [ ] **`ProjectTool`** (`projectId`, `productId`) → cost-per-use = net basis ÷ usage
+  count. **Trigger**: wanting a real cost-per-use number. Amortized tool cost is
+  informational ONLY and must never enter project actuals — the purchase already sits
+  in its buying project's ledger (double-count guard). Depends on nothing else.
+- [ ] **`Receipt`** (`vendor`, `date`, `imageId?`, `statedTotal?`) + nullable
+  `purchase.receiptId`, turning today's hand-split rows into a labelled group.
+  **Trigger**: a receipt photo with nowhere to live, or reconciling one card charge
+  against N rows. Additive — old purchases keep `receiptId` null and `vendor` migrates
+  off the v1 column onto the receipt.
+- [ ] **`ReceiptLine`** (`receiptId`, `name`, `sku?`, `quantity?`, `unitPrice?`,
+  `purchaseId?` soft-link) — optional SKU-level itemization, **pure annotation**:
+  rollups only ever read `Purchase`, lines need no product, and a sum mismatch is a
+  soft display-level flag, never enforced. **Trigger**: actually wanting store SKUs.
+- [ ] **`PurchaseProduct`** join + `quantity`, replacing `purchase.productId`.
+  **Trigger**: a purchase genuinely needing 2+ products (combo kit), or a correct
+  unit-price observation on a multi-quantity buy. Mechanical migration: insert-select
+  from the non-null column, drop it, update read sites.
+- [ ] **Spend-by-vendor** analytics — a `byVendor` aggregate mirroring `byProject` in
+  `repo/purchase/analytics.ts` + a chart. Cheap; deferred only for scope.
+
+Two traps this design already walked into once — don't re-introduce them:
+`buildSearchConditions` **ANDs** its `searchFilters`, so vendor must never share the
+`search` term (it would mean `name ILIKE q AND vendor ILIKE q`, and vendor is null on
+nearly every row → search silently returns nothing). And `InventoryEntry` has a
+partial unique index on `(productId, locationId)`, so the receive flow **must** branch
+(create / top-up existing / move a unique item) rather than blind-inserting.
+
+Rejected within this design: **`Asset` entity** (a fixed-asset register would duplicate
+the live inventory layer for location/valuation/audits and guarantee sync drift; pooled
+cost basis on identical tools is consciously accepted; it layers on later without
+unwinding v1); **`Sold` virtual location** (pollutes valuation and audits — "former
+tools" is a query, not a place); **line items as financial truth** (a header/lines split
+when 95% of purchases are single-trade); **disposition status enum** (the $0-exit
 convention makes it derivable).
 
 ### Longer-term (synthesis out, capture in)

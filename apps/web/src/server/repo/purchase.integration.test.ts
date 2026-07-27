@@ -9,6 +9,7 @@ import { purchaseRouter } from "~/server/api/routers/purchase";
 import { createTestCaller } from "~/server/api/trpc";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
+import { createProduct, deleteProducts } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
 import {
   createPurchase,
@@ -19,6 +20,7 @@ import {
   purchaseList,
   updatePurchase,
 } from "~/server/repo/purchase";
+import { makeProductInput } from "~/server/repo/repo.fixtures";
 
 // NB: project rollup contribution (spend/purchaseCount/subtree) and
 // project-delete-blocking-on-live-purchases are already covered in
@@ -1017,5 +1019,185 @@ describe("purchase repository — embedding cascade invariant", () => {
     await deletePurchases(ctx.db, [purchaseRow.id], ctx.actor);
 
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+});
+
+// The product bridge: a purchase optionally points at the product it bought,
+// and a *negative* purchase on the same product records the exit (sale, return,
+// or a 0-cost disposal). Money and ownership have deliberately separate
+// authorities — these cases pin the read side of that.
+describe("purchase repository — product bridge", () => {
+  const ctx = withTestDb();
+  const pagination = { pageIndex: 0, pageSize: 50 };
+
+  it("round-trips productId/vendor and resolves productName", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "bridge miter saw" }),
+      ctx.actor,
+    );
+
+    const created = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "millwork",
+        costType: "tools",
+        name: "miter saw",
+        productId: product.id,
+        vendor: "Home Depot",
+        cost: 180,
+      }),
+      ctx.actor,
+    );
+
+    const read = await getPurchaseByID(ctx.db, created.id);
+    expect(read).toMatchObject({
+      productId: product.id,
+      productName: "bridge miter saw",
+      vendor: "Home Depot",
+    });
+
+    const cleared = await updatePurchase(
+      ctx.db,
+      created.id,
+      { productId: null, vendor: null },
+      ctx.actor,
+    );
+    expect(cleared.productId).toBeNull();
+    expect(cleared.productName).toBeNull();
+    expect(cleared.vendor).toBeNull();
+  });
+
+  it("filters by productId — acquisition and disposal rows, nothing else", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "bridge tile saw" }),
+      ctx.actor,
+    );
+
+    const bought = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "flooring",
+        costType: "tools",
+        name: "tile saw",
+        productId: product.id,
+        cost: 180,
+      }),
+      ctx.actor,
+    );
+    const sold = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "flooring",
+        costType: "tools",
+        name: "sold tile saw",
+        productId: product.id,
+        cost: -150,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "flooring",
+        costType: "materials",
+        name: "unrelated thinset",
+      }),
+      ctx.actor,
+    );
+
+    const { data, count } = await purchaseList(
+      ctx.db,
+      { productId: product.id },
+      [],
+      pagination,
+    );
+    expect(count).toBe(2);
+    expect(data.map((p) => p.id).sort()).toEqual([bought.id, sold.id].sort());
+    // Net basis is the sum of the linked rows — the derivation the product page
+    // renders, with nothing stored.
+    expect(data.reduce((sum, p) => sum + (p.cost ?? 0), 0)).toBe(30);
+  });
+
+  it("keeps productId but nulls productName once the product is soft-deleted", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "bridge doomed drill" }),
+      ctx.actor,
+    );
+    const created = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "doomed drill",
+        productId: product.id,
+      }),
+      ctx.actor,
+    );
+
+    // Deliberately asymmetric with project deletion, which a live purchase
+    // blocks: a product referenced only by purchases deletes fine, and the
+    // dangling link degrades to a null display name via resolveLiveJoinName.
+    await deleteProducts(ctx.db, [product.id], ctx.actor);
+
+    const read = await getPurchaseByID(ctx.db, created.id);
+    expect(read.productId).toBe(product.id);
+    expect(read.productName).toBeNull();
+  });
+
+  it("still matches name search when vendor is null", async () => {
+    // Regression gate: vendor must never join the `search` term, because
+    // buildSearchConditions ANDs its searchFilters — `name ILIKE q AND vendor
+    // ILIKE q` would return nothing for the (overwhelming) null-vendor rows.
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "vendorless grommets",
+      }),
+      ctx.actor,
+    );
+
+    const { data } = await purchaseList(
+      ctx.db,
+      { search: "grommets" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.name)).toContain("vendorless grommets");
+  });
+
+  it("filters by vendor independently of search", async () => {
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "lumber run",
+        vendor: "Ganahl Lumber",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "screws",
+        vendor: "Home Depot",
+      }),
+      ctx.actor,
+    );
+
+    const { data } = await purchaseList(
+      ctx.db,
+      { vendor: "ganahl" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.name)).toEqual(["lumber run"]);
   });
 });

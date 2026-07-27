@@ -10,12 +10,15 @@ import {
   Apple,
   ChefHat,
   FileText,
+  HandCoins,
   Info,
   MapPin,
   Package,
+  Receipt,
   Scale,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
+import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -38,6 +41,7 @@ import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
 import { type ManualViewTarget, ProductManuals } from "./product-manuals";
+import { ProductPurchaseHistory } from "./product-purchase-history";
 import { ProductStockedAt } from "./product-stocked-at";
 
 interface ProductDetailProps {
@@ -93,6 +97,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   }, []);
 
   const [addToInventoryOpen, setAddToInventoryOpen] = useState(false);
+  const [recordSaleOpen, setRecordSaleOpen] = useState(false);
 
   const sections: DetailSection[] = [
     editableDetailSection({
@@ -128,6 +133,25 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         </Button>
       ),
       content: <ProductStockedAt product={product} />,
+    },
+    // Custom section: Purchase History — every purchase linked to this
+    // product (arrivals and dispositions), the primary way cost basis gets
+    // tracked over time.
+    {
+      title: "Purchase History",
+      icon: Receipt,
+      zone: "main" as const,
+      headerAction: (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setRecordSaleOpen(true)}
+        >
+          <HandCoins />
+          Record sale
+        </Button>
+      ),
+      content: <ProductPurchaseHistory product={product} />,
     },
     // Custom section: Manuals — attached PDF instruction manuals (only if any)
     ...(documents.length > 0
@@ -284,6 +308,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         open={addToInventoryOpen}
         onOpenChange={setAddToInventoryOpen}
         product={product}
+      />
+      <CreatePurchaseDialog
+        open={recordSaleOpen}
+        onOpenChange={setRecordSaleOpen}
+        presetProductId={product.id}
+        intent="disposition"
       />
     </Page>
   );

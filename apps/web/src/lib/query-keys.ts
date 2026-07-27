@@ -211,6 +211,9 @@ export const purchaseMutationInvalidateKeys = [
   queryKeys.purchase.all,
   queryKeys.project.all,
   queryKeys.dashboard.counts,
+  // A purchase can link to a product (cost basis / disposition) — recording
+  // one from the product page should refresh that product's hero/stamp too.
+  queryKeys.product.all,
 ] as const satisfies readonly QueryKey[];
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {

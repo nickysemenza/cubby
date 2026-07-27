@@ -1,4 +1,4 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
@@ -36,6 +36,7 @@ const quickAddPurchaseSchema = z.object({
   costType: costTypeSchema,
   trade: tradeSchema,
   future: z.boolean(),
+  vendor: z.string(),
 });
 type QuickAddPurchaseValues = z.infer<typeof quickAddPurchaseSchema>;
 
@@ -48,30 +49,50 @@ interface CreatePurchaseDialogProps {
    * instance per click (see `CreateTaskDialog`'s `presetProjectId`).
    */
   presetProjectId?: ProjectId | null;
+  /**
+   * Link the new purchase to a product. Not a form field — there's no product
+   * picker in quick-add; linking an existing purchase happens via the Product
+   * field on the purchase detail page.
+   */
+  presetProductId?: ProductId | null;
+  /**
+   * `"disposition"` records a product leaving the collection rather than
+   * arriving: a sale (negative cost), a return (negative full price), or a
+   * broken/gifted item (cost 0). Only changes copy and defaults — the row is an
+   * ordinary purchase, which is the whole point of the convention.
+   */
+  intent?: "purchase" | "disposition";
 }
 
 export function CreatePurchaseDialog({
   open,
   onOpenChange,
   presetProjectId,
+  presetProductId,
+  intent = "purchase",
 }: CreatePurchaseDialogProps) {
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
+  const isDisposition = intent === "disposition";
 
   const defaultValues = useMemo<QuickAddPurchaseValues>(
     () => ({
       name: "",
       cost: null,
       date: today(),
-      projectId: presetProjectId ?? null,
+      // A disposition deliberately defaults to no project: a negative cost
+      // attached to a project reduces its spend and inflates budgetRemaining,
+      // so attaching one has to be a deliberate act.
+      projectId: isDisposition ? null : (presetProjectId ?? null),
       // "other"/"materials" are the least-wrong defaults for a fresh quick
       // capture — most household purchases are an untriaged materials buy;
       // both are one click to correct via the row's inline-editable columns.
-      costType: "materials",
+      costType: isDisposition ? "tools" : "materials",
       trade: "other",
       future: false,
+      vendor: "",
     }),
-    [presetProjectId],
+    [presetProjectId, isDisposition],
   );
 
   return (
@@ -80,8 +101,12 @@ export function CreatePurchaseDialog({
       onOpenChange={onOpenChange}
       schema={quickAddPurchaseSchema}
       defaultValues={defaultValues}
-      title="New Purchase"
-      description="Log what you bought (or plan to) — the fastest way to keep a project's cost honest."
+      title={isDisposition ? "Record Sale or Disposal" : "New Purchase"}
+      description={
+        isDisposition
+          ? "Enter a negative cost for a sale or return, or 0 if it broke or was given away. Ownership itself comes off inventory — remember to clear the entry too."
+          : "Log what you bought (or plan to) — the fastest way to keep a project's cost honest."
+      }
       mutationFn={api.purchase.create.mutationOptions}
       successMessage={(purchase) => `Logged "${purchase.name}"`}
       invalidateKeys={purchaseMutationInvalidateKeys}
@@ -90,6 +115,8 @@ export function CreatePurchaseDialog({
         cost: values.cost,
         date: values.date,
         projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
+        productId: presetProductId ?? null,
+        vendor: values.vendor.trim() || null,
         costType: values.costType,
         trade: values.trade,
         url: null,
@@ -173,6 +200,12 @@ export function CreatePurchaseDialog({
             name="trade"
             label="Trade"
             options={tradeOptions}
+          />
+          <UnifiedTextField
+            form={form}
+            name="vendor"
+            label="Vendor"
+            placeholder={isDisposition ? "Sold to / given to" : "Where from?"}
           />
           <SelectField
             form={form}

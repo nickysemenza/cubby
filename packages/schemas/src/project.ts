@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
-import { projectId, purchaseId, taskId } from "./identifiers";
+import { productId, projectId, purchaseId, taskId } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 
 /**
@@ -607,6 +607,12 @@ const purchaseFields = {
   notes: z.string().nullable(),
   future: z.boolean().describe("Planned/not-yet-made purchase"),
   projectId: projectId.nullable(),
+  productId: productId
+    .nullable()
+    .describe(
+      "Optional link to the product this purchase bought. A negative-cost purchase on the same product records an exit (sale, return, or a 0-cost disposal).",
+    ),
+  vendor: z.string().nullable().describe("Where it was bought"),
 };
 
 const purchaseCreateShape = {
@@ -617,6 +623,8 @@ const purchaseCreateShape = {
   notes: z.string().nullable().default(null),
   future: z.boolean().default(false),
   projectId: projectId.nullable().default(null),
+  productId: productId.nullable().default(null),
+  vendor: z.string().nullable().default(null),
 };
 
 export const purchaseCreateInput = z.object(purchaseCreateShape);
@@ -666,6 +674,12 @@ export const purchaseFilterFields = {
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
+  productId: productId.optional(),
+  // Its own filter, deliberately NOT folded into `search`: buildSearchConditions
+  // ANDs its entries, so a second column sharing the `search` term would mean
+  // `name ILIKE q AND vendor ILIKE q` — and vendor is null on almost every row,
+  // which would silently zero out purchase search.
+  vendor: z.string().optional(),
   future: z.boolean().optional(),
   search: z.string().optional(),
   dateFrom: plainDate
@@ -698,6 +712,10 @@ export const purchaseOut = z.object({
   id: purchaseId,
   ...purchaseFields,
   projectName: z.string().nullable(),
+  // Null when unlinked *or* when the linked product has been soft-deleted —
+  // product deletion deliberately does not block on referencing purchases
+  // (unlike project deletion), so this null branch is routinely reachable.
+  productName: z.string().nullable(),
   ...timestampedFields,
 });
 export type PurchaseOut = z.infer<typeof purchaseOut>;

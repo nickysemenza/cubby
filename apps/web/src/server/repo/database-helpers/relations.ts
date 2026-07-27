@@ -31,22 +31,10 @@ import {
 import { notDeleted } from "./query";
 
 /**
- * The `{ name, deletedAt }` projection of a task/purchase's parent `project`
- * join — just enough for `resolveLiveJoinName` (transform.ts) to derive
- * `projectName`, without pulling the rest of the project row.
- */
-const withProjectNameOnly = {
-  with: {
-    project: {
-      columns: { name: true, deletedAt: true },
-    },
-  },
-} as const;
-
-/**
- * Same as {@link withProjectNameOnly}, plus a task's own parent task's
- * `{name, deletedAt}` — resolves `parentTaskName` for the subtask breadcrumb.
- * Task-only (purchase has no self-relation).
+ * A task's parent `project` plus its own parent task, each as the
+ * `{ name, deletedAt }` projection `resolveLiveJoinName` (transform.ts) needs
+ * to derive `projectName` / `parentTaskName` — without pulling the rest of
+ * either row. Task-only (purchase has no self-relation).
  */
 const withProjectAndParentTaskNameOnly = {
   with: {
@@ -54,6 +42,22 @@ const withProjectAndParentTaskNameOnly = {
       columns: { name: true, deletedAt: true },
     },
     parentTask: {
+      columns: { name: true, deletedAt: true },
+    },
+  },
+} as const;
+
+/**
+ * A purchase's parent `project` plus its optionally-linked `product`, same
+ * `{ name, deletedAt }` projection — resolves `projectName` / `productName`.
+ * Purchase-only.
+ */
+const withProjectAndProductNameOnly = {
+  with: {
+    project: {
+      columns: { name: true, deletedAt: true },
+    },
+    product: {
       columns: { name: true, deletedAt: true },
     },
   },
@@ -340,8 +344,11 @@ export const relations = {
     withProject: withProjectAndParentTaskNameOnly,
   },
   purchase: {
-    /** Purchase row + its parent project's `{name, deletedAt}` — see `withProjectNameOnly`. */
-    withProject: withProjectNameOnly,
+    /**
+     * Purchase row + its parent project's and linked product's
+     * `{name, deletedAt}` — see `withProjectAndProductNameOnly`.
+     */
+    withProject: withProjectAndProductNameOnly,
   },
   meal: {
     // A meal with its planned recipes (each joined to its recipe summary, incl.

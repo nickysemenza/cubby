@@ -179,7 +179,7 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    references: ["project"],
+    references: ["project", "product"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
