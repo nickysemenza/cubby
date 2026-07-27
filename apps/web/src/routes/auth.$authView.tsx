@@ -3,6 +3,14 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { IconPattern } from "~/components/common/icon-pattern";
 
+// Deliberately NOT loose. The OAuth server appends a signed authorize query
+// here (`sig` + repeated `ba_param` names, whose signature covers the exact
+// multiset), but nothing reads it through the router: the oauthProviderClient
+// fetch hook pulls it straight off `window.location.search` when the sign-in
+// form submits. Widening this schema would only put those params into the
+// router's search union — where re-serialization could reorder or collapse the
+// repeated keys and invalidate the signature — and it degrades `search` typing
+// on every other route.
 const searchSchema = z.object({
   redirect: z.string().optional().catch(undefined),
 });

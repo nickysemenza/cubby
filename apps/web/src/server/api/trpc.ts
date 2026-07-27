@@ -7,7 +7,7 @@
  * need to use are documented accordingly near the end.
  */
 
-import { buildActorContext } from "@cubby/schemas/context";
+import { type AuditSource, buildActorContext } from "@cubby/schemas/context";
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC, type TRPCRouterRecord } from "@trpc/server";
@@ -97,7 +97,16 @@ export const buildCrudServices = (
  * @see https://trpc.io/docs/server/context
  */
 
-export const createTRPCContext = async (opts: { headers: Headers }) => {
+export const createTRPCContext = async (opts: {
+  headers: Headers;
+  /**
+   * Pre-resolved actor, for callers that authenticated by some means other than
+   * a better-auth session cookie — currently only /api/mcp, which verifies an
+   * OAuth bearer token. Supplying this skips the `getSession` lookup entirely
+   * (there is no session to find) and sets the audit source directly.
+   */
+  actor?: { userId: UserId; sessionId: string | null; source: AuditSource };
+}) => {
   // Extract trace context from headers and set it as active context (dev only —
   // in the CF Worker the platform manages context, so this just runs the body).
   const headersObj: Record<string, string> = {};
@@ -107,6 +116,17 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 
   return await extractTraceContext(headersObj, async () => {
     const crudServices = buildCrudServices(db);
+
+    if (opts.actor) {
+      const { userId, sessionId, source } = opts.actor;
+      return {
+        ...crudServices,
+        auth: { userId, sessionId },
+        actorContext: buildActorContext(userId, source),
+        ...opts,
+      };
+    }
+
     const betterSession = await betterAuth.api.getSession({
       headers: opts.headers,
     });

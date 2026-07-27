@@ -61,6 +61,11 @@ import {
 import {
   account,
   apikey,
+  jwks,
+  oauthAccessToken,
+  oauthClient,
+  oauthConsent,
+  oauthRefreshToken,
   passkey,
   session,
   user,
@@ -91,7 +96,19 @@ const pgVector = customType<{
 });
 
 // Re-export Better-Auth tables for use throughout the app
-export { account, apikey, passkey, session, user, verification };
+export {
+  account,
+  apikey,
+  jwks,
+  oauthAccessToken,
+  oauthClient,
+  oauthConsent,
+  oauthRefreshToken,
+  passkey,
+  session,
+  user,
+  verification,
+};
 
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);

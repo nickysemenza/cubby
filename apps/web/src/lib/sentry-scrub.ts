@@ -3,8 +3,9 @@
 //
 // Both inits set `sendDefaultPii: true`, which makes the SDK attach the full
 // request URL — including any query string — to captured events. The MCP
-// endpoint previously accepted the API key as a `?key=` query param (removed in
-// routes/api/mcp.ts); this scrubber is defense-in-depth so that even if a `key`
+// endpoint used to accept an API key as a `?key=` query param; it is now
+// OAuth-bearer-only (routes/api/mcp.ts), and this scrubber is what keeps stale
+// URLs harmless — so that even if a `key`
 // query param reaches Sentry from any surface (a stale client URL, a Referer,
 // a manually-constructed request), the credential is redacted before the event
 // leaves the process.
