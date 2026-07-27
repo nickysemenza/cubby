@@ -63,11 +63,14 @@ import {
   findIngredientsWithUnusedAliases,
   findLinkedProductIds,
   findLocationsWithoutAiDescription,
+  findNeverVerifiedInventory,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findStaleIngredientParses,
+  findStaleLocations,
+  findUnknownParkedItems,
   findUnusedIngredients,
   loadProductsForCoverage,
   pruneUnusedAliases,
@@ -406,7 +409,7 @@ export async function* pruneAllUnusedAliases(
 // DB-only detectors — cheap (no WASM, no network). traceAll keeps a named span
 // per detector for observability.
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
-  // All 10 detectors are read-only single SELECTs (~0ms each); the cost is
+  // All of these detectors are read-only single SELECTs (~0ms each); the cost is
   // connection acquisition. Pin them to ONE shared connection so the fan-out
   // pays a single `db.acquire` instead of 10 contending for the max:5 pool.
   // traceAllSeq runs them sequentially (each still its own span) — a pg client
@@ -426,6 +429,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
         findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
+      staleLocations: () => findStaleLocations(scoped),
+      neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
+      unknownParkedItems: () => findUnknownParkedItems(scoped),
     }),
   );
   return {
@@ -440,6 +446,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
+    staleLocations: r.staleLocations,
+    neverVerifiedInventory: r.neverVerifiedInventory,
+    unknownParkedItems: r.unknownParkedItems,
   };
 };
 

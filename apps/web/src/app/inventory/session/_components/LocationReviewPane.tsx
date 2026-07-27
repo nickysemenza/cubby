@@ -9,10 +9,13 @@ import {
   Minus,
   PackagePlus,
   Plus,
+  SkipForward,
   SlidersHorizontal,
+  Undo2,
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { match } from "ts-pattern";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { Row, Stack } from "~/components/layout";
@@ -20,6 +23,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
+import { Input } from "~/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -52,14 +56,18 @@ export function LocationReviewPane({
   onRemove,
   onRelocate,
   onMoveTo,
+  onClearStaged,
   onPullUnknown,
   onMoveUnknownTo,
   onPullUnknownLocation,
   onDone,
+  onToggleSkip,
   unresolvedCount,
   donePending,
   unknownReady,
   locationCompleted,
+  locationSkipped,
+  isUnknownLocation,
 }: {
   parent: InfLocation;
   location: SessionLocation;
@@ -78,19 +86,30 @@ export function LocationReviewPane({
   onRemove: (item: InventoryItem) => void;
   onRelocate: (item: InventoryItem) => void;
   onMoveTo: (item: InventoryItem) => void;
+  /** Drop a staged change and return the row to assumed-present. */
+  onClearStaged: (item: InventoryItem) => void;
   onPullUnknown: (item: InventoryItem) => void;
   onMoveUnknownTo: (item: InventoryItem) => void;
   onPullUnknownLocation: (location: InfLocation) => void;
   onDone: () => void;
+  onToggleSkip: () => void;
   unresolvedCount: number;
   donePending: boolean;
   unknownReady: boolean;
   locationCompleted: boolean;
+  locationSkipped: boolean;
+  /** True when the bin being recounted *is* the global Unknown (the drain). */
+  isUnknownLocation: boolean;
 }) {
   const locationNoun = locationTypeNoun(location.type);
   const breadcrumbSegments = sessionBreadcrumbSegments(parent, location.id);
   const [addOpen, setAddOpen] = useState(false);
-  const unknownCount = unknownItems.length + unknownLocations.length;
+  // Recounting Unknown itself: its tray would just mirror the expected rows and
+  // "Move to Unknown" would be a no-op, so both drop out. "Move somewhere else"
+  // stays — that's how a row leaves Unknown.
+  const unknownCount = isUnknownLocation
+    ? 0
+    : unknownItems.length + unknownLocations.length;
 
   return (
     <Stack gap="sm" className="min-w-0">
@@ -105,6 +124,11 @@ export function LocationReviewPane({
               {location.name}
             </Link>
           </h2>
+          {locationSkipped && (
+            <Badge variant="slate" className="shrink-0">
+              skipped
+            </Badge>
+          )}
         </Row>
         {breadcrumbSegments.length > 0 && (
           <LocationBreadcrumb
@@ -123,7 +147,7 @@ export function LocationReviewPane({
       <Button
         type="button"
         variant="outline"
-        className="min-h-12 justify-start px-4"
+        className="min-h-12 w-full justify-start px-4"
         onClick={() => setAddOpen(true)}
       >
         <PackagePlus />
@@ -154,8 +178,10 @@ export function LocationReviewPane({
                 onRemove={() => onRemove(item)}
                 onRelocate={() => onRelocate(item)}
                 onMoveTo={() => onMoveTo(item)}
+                onClearStaged={() => onClearStaged(item)}
                 completed={locationCompleted}
                 unknownReady={unknownReady}
+                isUnknownLocation={isUnknownLocation}
               />
             ))}
           </Stack>
@@ -163,19 +189,35 @@ export function LocationReviewPane({
       </section>
 
       <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 md:bottom-4">
-        <Button
-          type="button"
-          className="min-h-12 w-full"
-          disabled={locationCompleted || donePending}
-          onClick={onDone}
-        >
-          {donePending ? <Spinner /> : <Check className="size-4" />}
-          {locationCompleted
-            ? "Saved this pass"
-            : unresolvedCount > 0
-              ? `Finish — rest are present (${unresolvedCount})`
-              : "Save recount"}
-        </Button>
+        <Row gap="sm" align="center">
+          <Button
+            type="button"
+            className="min-h-12 flex-1"
+            disabled={locationCompleted || donePending}
+            onClick={onDone}
+          >
+            {donePending ? <Spinner /> : <Check className="size-4" />}
+            {locationCompleted
+              ? "Saved this pass"
+              : unresolvedCount > 0
+                ? `Finish — rest are present (${unresolvedCount})`
+                : "Save recount"}
+          </Button>
+          {/* An unreachable bin must not strand the pass: skipping settles it
+              locally (no verifiedAt, no lastBulkInventory) and it stays in the
+              list to come back to. */}
+          {!locationCompleted && (
+            <Button
+              type="button"
+              variant={locationSkipped ? "secondary" : "outline"}
+              className="min-h-12 shrink-0"
+              onClick={onToggleSkip}
+            >
+              {locationSkipped ? <Undo2 /> : <SkipForward />}
+              {locationSkipped ? "Unskip" : "Skip"}
+            </Button>
+          )}
+        </Row>
       </div>
 
       <Sheet open={addOpen} onOpenChange={setAddOpen}>
@@ -183,28 +225,32 @@ export function LocationReviewPane({
           <SheetHeader className="border-b p-4">
             <SheetTitle>Add something here</SheetTitle>
             <SheetDescription>
-              Add a new item or pull something out of Unknown.
+              {isUnknownLocation
+                ? "Add a new item to Unknown."
+                : "Add a new item or pull something out of Unknown."}
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 overflow-auto p-4">
             <Stack gap="lg">
               <SessionCaptureActions location={location} />
-              <section className="border-[var(--border)] border-t pt-4">
-                <Row align="center" justify="between" className="mb-4">
-                  <h3 className="font-medium text-sm">From Unknown</h3>
-                  <Badge variant="outline">{unknownCount}</Badge>
-                </Row>
-                <UnknownTray
-                  items={unknownItems}
-                  locations={unknownLocations}
-                  inventoryByLocation={inventoryByLocation}
-                  currentLocationName={location.name}
-                  onMoveIn={onPullUnknown}
-                  onMoveTo={onMoveUnknownTo}
-                  onMoveLocationIn={onPullUnknownLocation}
-                  disabled={!unknownReady}
-                />
-              </section>
+              {!isUnknownLocation && (
+                <section className="border-[var(--border)] border-t pt-4">
+                  <Row align="center" justify="between" className="mb-4">
+                    <h3 className="font-medium text-sm">From Unknown</h3>
+                    <Badge variant="outline">{unknownCount}</Badge>
+                  </Row>
+                  <UnknownTray
+                    items={unknownItems}
+                    locations={unknownLocations}
+                    inventoryByLocation={inventoryByLocation}
+                    currentLocationName={location.name}
+                    onMoveIn={onPullUnknown}
+                    onMoveTo={onMoveUnknownTo}
+                    onMoveLocationIn={onPullUnknownLocation}
+                    disabled={!unknownReady}
+                  />
+                </section>
+              )}
             </Stack>
           </div>
         </SheetContent>
@@ -290,9 +336,11 @@ function ExpectedItemReviewRow({
   onRemove,
   onRelocate,
   onMoveTo,
+  onClearStaged,
   isDuplicate,
   completed,
   unknownReady,
+  isUnknownLocation,
 }: {
   item: InventoryItem;
   resolution: ItemResolution | undefined;
@@ -301,22 +349,36 @@ function ExpectedItemReviewRow({
   onRemove: () => void;
   onRelocate: () => void;
   onMoveTo: () => void;
+  onClearStaged: () => void;
   completed: boolean;
   unknownReady: boolean;
+  isUnknownLocation: boolean;
 }) {
   const [actionsOpen, setActionsOpen] = useState(false);
+  // While the field is focused it owns the text (so "1" → "" → "12" works);
+  // null hands display back to the staged/expected amount.
+  const [quantityDraft, setQuantityDraft] = useState<string | null>(null);
   const staged = resolution?.kind;
   const amount =
     resolution?.kind === "adjust" ? resolution.amount : item.amount;
   // Step by ±1 without rounding, so weight/length amounts keep their precision
   // (2.5 → 3.5, not 4). Floor at 1 — recounting to zero means the item is gone,
   // which is the "Remove" action (soft-delete), not a phantom 0-qty adjust.
-  const bump = (delta: number) => {
-    const next = Math.max(1, amount.value + delta);
+  const setQuantity = (next: number) => {
+    const clamped = Math.max(1, next);
     // No-op at the floor: don't turn a verified item into an identical "adjust"
     // (which would drop its confirmed state and force a needless recompute).
-    if (next === amount.value) return;
-    onAdjust({ ...amount, value: next });
+    if (clamped === amount.value) return;
+    onAdjust({ ...amount, value: clamped });
+  };
+  const bump = (delta: number) => setQuantity(amount.value + delta);
+  // Typed entry commits on blur/Enter. Same floor as the stepper; anything
+  // unparseable (empty, letters, 0, negative) snaps back to the current count.
+  const commitQuantityDraft = () => {
+    if (quantityDraft === null) return;
+    const parsed = Number(quantityDraft.trim());
+    if (Number.isFinite(parsed) && parsed >= 1) setQuantity(parsed);
+    setQuantityDraft(null);
   };
 
   const present = completed || staged === "verify" || staged === "adjust";
@@ -402,7 +464,10 @@ function ExpectedItemReviewRow({
           <Stack gap="sm">
             <div className="border border-[var(--border)] p-4">
               <Row align="center" justify="between" gap="sm">
-                <Description>Quantity</Description>
+                <Stack gap="tight" className="min-w-0">
+                  <Description>Quantity</Description>
+                  <Description size="2xs">{amount.unit}</Description>
+                </Stack>
                 <Row align="center" gap="xs" className="shrink-0">
                   <Button
                     type="button"
@@ -413,9 +478,21 @@ function ExpectedItemReviewRow({
                   >
                     <Minus className="size-4" />
                   </Button>
-                  <span className="w-8 text-center font-mono text-sm tabular-nums">
-                    {amount.value}
-                  </span>
+                  <Input
+                    inputMode="numeric"
+                    value={quantityDraft ?? String(amount.value)}
+                    onChange={(event) => setQuantityDraft(event.target.value)}
+                    onFocus={(event) => event.target.select()}
+                    onBlur={commitQuantityDraft}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    className="h-11 w-16 shrink-0 text-center font-mono tabular-nums"
+                    aria-label="Quantity"
+                  />
                   <Button
                     type="button"
                     variant="outline"
@@ -428,23 +505,45 @@ function ExpectedItemReviewRow({
                 </Row>
               </Row>
             </div>
+            {resolution && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 w-full justify-start px-4"
+                onClick={() => {
+                  onClearStaged();
+                  setQuantityDraft(null);
+                  setActionsOpen(false);
+                }}
+              >
+                <Undo2 />
+                {match(resolution)
+                  .with({ kind: "adjust" }, () => "Undo count change")
+                  .with({ kind: "remove" }, () => "Keep as present")
+                  .with({ kind: "relocate" }, () => "Keep here as present")
+                  .with({ kind: "verify" }, () => "Clear present mark")
+                  .exhaustive()}
+              </Button>
+            )}
+            {!isUnknownLocation && (
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 w-full justify-start px-4"
+                disabled={!unknownReady}
+                onClick={() => {
+                  onRelocate();
+                  setActionsOpen(false);
+                }}
+              >
+                <ArrowRightLeft />
+                Move to Unknown
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
-              className="min-h-12 justify-start px-4"
-              disabled={!unknownReady}
-              onClick={() => {
-                onRelocate();
-                setActionsOpen(false);
-              }}
-            >
-              <ArrowRightLeft />
-              Move to Unknown
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12 justify-start px-4"
+              className="min-h-12 w-full justify-start px-4"
               onClick={() => {
                 onMoveTo();
                 setActionsOpen(false);
@@ -456,7 +555,7 @@ function ExpectedItemReviewRow({
             <Button
               type="button"
               variant="destructive"
-              className="min-h-12 justify-start px-4"
+              className="min-h-12 w-full justify-start px-4"
               onClick={() => {
                 onRemove();
                 setActionsOpen(false);

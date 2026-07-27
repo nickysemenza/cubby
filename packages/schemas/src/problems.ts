@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import { ingredientId, recipeId } from "./identifiers";
+import {
+  ingredientId,
+  inventoryId,
+  locationId,
+  productId,
+  recipeId,
+} from "./identifiers";
 import {
   type ProjectAttentionType,
   projectAttentionItemSchema,
@@ -104,6 +110,48 @@ export const emptyLocationSchema = z.object({
   firstImageId: z.string().nullable(),
 });
 
+// --- Recount staleness (tenet 1: inventory truth is restored only by a
+// deliberate recount, so an uncounted bin is unverified, not accurate). ---
+
+/**
+ * A location holding stock whose last recount is missing or older than
+ * STALE_RECOUNT_DAYS. `itemCount` is the live entry count (the section shows
+ * how much stock is riding on the stale number); `lastBulkInventory` is null
+ * for never-recounted bins.
+ */
+export const staleLocationSchema = z.object({
+  id: locationId,
+  name: z.string(),
+  type: z.string(),
+  itemCount: z.number(),
+  lastBulkInventory: z.date().nullable(),
+});
+
+/**
+ * A live inventory entry that has never been through a recount
+ * (`verifiedAt IS NULL`). Sampled, not exhaustive — see
+ * NEVER_VERIFIED_SAMPLE_LIMIT in the detector.
+ */
+export const neverVerifiedInventorySchema = z.object({
+  id: inventoryId,
+  amount,
+  createdAt: z.date(),
+  product: z.object({ id: productId, name: z.string() }),
+  location: z.object({ id: locationId, name: z.string() }),
+});
+
+/**
+ * A live inventory entry parked in the global "Unknown" location — the bucket
+ * a scan/import drops something into when it has no home yet. Every one of
+ * these is an unmade filing decision.
+ */
+export const unknownParkedItemSchema = z.object({
+  id: inventoryId,
+  amount,
+  createdAt: z.date(),
+  product: z.object({ id: productId, name: z.string() }),
+});
+
 export const productWithNoImagesSchema = z.object({
   ...productProblemFields,
   upc: z.string().nullable(),
@@ -196,6 +244,9 @@ const problemsFastShape = {
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
+  staleLocations: z.array(staleLocationSchema),
+  neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
+  unknownParkedItems: z.array(unknownParkedItemSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -339,6 +390,11 @@ export type IngredientWithUnusedAliases = z.infer<
 >;
 export type UnusedIngredient = z.infer<typeof unusedIngredientSchema>;
 export type EmptyLocation = z.infer<typeof emptyLocationSchema>;
+export type StaleLocation = z.infer<typeof staleLocationSchema>;
+export type NeverVerifiedInventory = z.infer<
+  typeof neverVerifiedInventorySchema
+>;
+export type UnknownParkedItem = z.infer<typeof unknownParkedItemSchema>;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
 >;

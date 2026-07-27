@@ -1,5 +1,6 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import type { FC } from "react";
+import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -53,6 +54,12 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
       value: location.parent ? (
         <EntityInlineLink entity="location" data={location.parent} />
       ) : undefined,
+    },
+    {
+      // Tenet 1: inventory truth here is only as good as the last deliberate
+      // recount. The hint tints warning once that's gone stale (>30d).
+      label: "Last recount",
+      value: <AuditedHint at={location.lastBulkInventory} label="recounted" />,
     },
   ];
 

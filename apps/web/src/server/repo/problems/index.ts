@@ -12,7 +12,10 @@
  *                                            counts, linked-product ids)
  *   INGREDIENT  → `detectors-ingredient.ts` (no-product, unused aliases,
  *                                            unused ingredients, alias pruning)
- *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description)
+ *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description,
+ *                                            stocked bins overdue for a recount)
+ *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
+ *                                            in the global "Unknown" location)
  *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
  *                                            sub-recipe while marked fresh —
  *                                            derived-data-on-removal guardrail)
@@ -32,11 +35,17 @@ export {
   findUnusedIngredients,
   pruneUnusedAliases,
 } from "./detectors-ingredient";
+// Inventory-centric detectors (recount staleness)
+export {
+  findNeverVerifiedInventory,
+  findUnknownParkedItems,
+} from "./detectors-inventory";
 // Location-centric detectors (+ EmptyLocation type re-export)
 export {
   type EmptyLocation,
   findEmptyLocations,
   findLocationsWithoutAiDescription,
+  findStaleLocations,
 } from "./detectors-location";
 // Product-centric detectors (+ ProductWithBetterUpcData type re-export)
 export {

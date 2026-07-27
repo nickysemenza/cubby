@@ -35,12 +35,22 @@ Location detail pages link directly to the same route with `parentId`. A scan
 from inside a recount jumps within the current subtree; an out-of-root scan
 offers to switch to a new recount rooted at the scanned location.
 
+Unknown is itself a valid root once it holds items — recounting it *is* how you
+drain it, by relocating each row to where it belongs. At that stop the pane
+drops its own "From Unknown" tray and the "Move to Unknown" action, since both
+would point at the bin you are standing in.
+
 Progress is scoped to a specific pass, not to whether a location has ever been
-audited. The local per-root record contains a version, `startedAt`, current
-position, staged item resolutions, completed location ids, and the running
-summary. Reopening an incomplete pass explicitly
-asks whether to resume it or start over. A finished pass reopens on its summary
-screen and offers "Recount again."
+audited. The local per-root record contains a version, `startedAt`/`updatedAt`,
+current position, staged item resolutions, completed location ids, skipped
+location ids, the session-location count, and the running summary. Reopening an
+incomplete pass explicitly asks whether to resume it or start over. A finished
+pass reopens on its summary screen and offers "Recount again."
+
+The picker leads with an **In progress** block listing every unfinished pass
+found in local storage — root name, X of Y settled, started/updated times, a
+Resume button, and a dismiss ✕ that clears that pass. A stored root that no
+longer resolves against the location tree is dropped on sight.
 
 `lastBulkInventory` remains the durable historical audit timestamp. It is useful
 as recency context, but it no longer defines the current pass's completed count
@@ -53,6 +63,9 @@ The review pane is ordered around the dominant task:
 1. Confirm the location identity from its name, breadcrumb, and optional photo.
 2. Review the expected inventory rows; untouched rows are presumed present.
 3. Open **Change** for quantity, Move to Unknown, Move elsewhere, or Remove.
+   Quantity takes either the ±1 stepper or a typed count (commits on blur or
+   Enter, same floor of 1 — zero is the Remove action). A row that already has a
+   staged change also offers a one-tap way back to assumed-present.
 4. Open **Add something here** for manual/photo/barcode capture or to pull an
    item or nested location from Unknown.
 5. Tap **Finish — rest are present (N)** once. If every row was already changed,
@@ -60,6 +73,16 @@ The review pane is ordered around the dominant task:
 
 Unavailable Previous/Next controls are omitted, so a one-bin spot-check gives
 the completion actions the full phone width.
+
+### Skipping a location
+
+Next to the save action, **Skip** defers a location that can't be reached right
+now. Skipping is client-only — it never stamps `verifiedAt` or
+`lastBulkInventory` — but it settles the location for pass progress, so one
+unreachable bin can no longer strand the summary. Skipped stops keep their place
+in the navigator with a muted `skipped` badge; opening one and saving it (or
+tapping **Unskip**) puts it back in the pass, and the summary offers **Revisit
+skipped locations** when any remain.
 
 ### Expected versus unexpected writes
 
@@ -105,18 +128,22 @@ After the final location saves, the workbench shows a pass summary with:
 - locations saved;
 - items confirmed;
 - quantities adjusted;
-- items relocated; and
-- items removed.
+- items relocated;
+- items removed; and
+- locations skipped.
 
-The next actions are Scan another location, Recount this root again, or return to
-Inventory. The finished state persists across reloads on the same device.
+The next actions are Revisit skipped locations (when any were skipped), Scan
+another location, Recount this root again, or return to Inventory. The finished
+state persists across reloads on the same device.
 
 ## 6. Implementation map and deferred work
 
 Primary files:
 
 - `InventorySessionWorkbench.tsx` — orchestration, staged diff, progress, summary
-- `useSessionProgress.ts` — versioned per-root pass state and resume/start-over
+- `useSessionProgress.ts` — versioned per-root pass state, skips,
+  resume/start-over, and the stored-pass enumeration the picker resumes from
+- `ParentPicker.tsx` — root choice plus the In-progress resume list
 - `LocationReviewPane.tsx` — phone review interaction and completion bar
 - `SessionCaptureActions.tsx` — unexpected-item capture inside the Add sheet
 - `SessionLocationList.tsx` — outstanding-first current-pass navigation
@@ -129,4 +156,8 @@ Still deliberately deferred:
   writes and `verifiedAt` are server-side);
 - a true offline mutation queue;
 - inventory-entry-without-product photo identity (photo capture currently reuses
-  the `misc:` product convention).
+  the `misc:` product convention);
+- per-row inline ± steppers on the expected-contents rows — deliberately not
+  shipped: the phone row already carries a thumbnail, name, state, status glyph,
+  and Change, and two more targets crush the name column. Quantity editing lives
+  in the Change sheet, where the stepper and typed entry both fit.

@@ -18,6 +18,10 @@ import { EntityInlineLink } from "../EntityInlineLink";
  * on-hand amount, its valuation, and freshness. The primary content of a
  * product page alongside recipe usages; supersedes the old "Inventory
  * Locations" links row in Basic Information.
+ *
+ * Freshness is `verifiedAt` (last deliberate recount), never `updatedAt`: a
+ * price change recomputes valuation and bumps `updatedAt`, which would make a
+ * year-old count read as fresh. `—` = never verified.
  */
 export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   product,
@@ -35,7 +39,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           <TableHead>Location</TableHead>
           <TableHead>Amount</TableHead>
           <TableHead className="text-right">Value</TableHead>
-          <TableHead className="text-right">Updated</TableHead>
+          <TableHead className="text-right">Verified</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -51,7 +55,9 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
               {entry.valuation != null ? formatCurrency(entry.valuation) : "—"}
             </TableCell>
             <TableCell className="text-right text-muted-foreground">
-              {formatDistanceToNow(entry.updatedAt, { addSuffix: true })}
+              {entry.verifiedAt
+                ? formatDistanceToNow(entry.verifiedAt, { addSuffix: true })
+                : "—"}
             </TableCell>
           </TableRow>
         ))}

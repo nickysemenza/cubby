@@ -26,6 +26,7 @@ export {
   findLocationsNeedingAiDescription,
   getChildCountsByLocationIds,
   getLocationById,
+  isGlobalUnknownLocation,
   locationList,
   updateLocation,
   updateLocationAiDescription,

@@ -131,17 +131,26 @@ export const createLocation = async (
   return getLocationById(db, newLocation.id);
 };
 
+/**
+ * Identifying predicate for the single global "Unknown" parking location — the
+ * root-level bin a scan/import drops an item into when it has no home yet.
+ * Exported so every consumer (ensure-or-create below, the Problems
+ * "parked in Unknown" detector) agrees on what "Unknown" means.
+ */
+export const isGlobalUnknownLocation = () =>
+  and(
+    eq(location.name, "Unknown"),
+    isNull(location.parentId),
+    notDeleted(location),
+  );
+
 export const ensureGlobalUnknownLocation = async (
   db: Database,
   actor: ActorContext,
 ) => {
   const findUnknown = () =>
     getDb(db).query.location.findFirst({
-      where: and(
-        eq(location.name, "Unknown"),
-        isNull(location.parentId),
-        notDeleted(location),
-      ),
+      where: isGlobalUnknownLocation(),
       columns: { id: true },
     });
 

@@ -14,6 +14,7 @@ import {
   createCurrencyColumn,
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
+  createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
 import {
   ShelfTableToggle,
@@ -197,6 +198,14 @@ export function InventoryItemList() {
             });
           },
         },
+      }),
+      // Last deliberate recount — the only honest freshness signal for a count
+      // (`updatedAt` moves on a price-driven valuation recompute). Dash = never
+      // verified; sortable so the oldest bins surface first.
+      createTimestampColumn(columnHelper, "verifiedAt", {
+        header: "Verified",
+        className: "w-32",
+        mobile: { slot: "meta", priority: 60 },
       }),
       createCreatedAtColumn(columnHelper),
     ],

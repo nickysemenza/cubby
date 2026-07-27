@@ -1,6 +1,7 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
-import { ChevronRight, Search } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ChevronRight, Search, X } from "lucide-react";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
@@ -19,7 +20,14 @@ import {
   getSessionRootCandidates,
   locationTypeNoun,
 } from "../session-utils";
+import {
+  clearStoredSessionPass,
+  listStoredSessionPasses,
+  type StoredSessionPass,
+} from "../useSessionProgress";
 import { LocationScanButton } from "./QrJumpButton";
+
+const NO_STORED_PASSES: StoredSessionPass[] = [];
 
 export function ParentPicker({
   locations,
@@ -53,10 +61,60 @@ export function ParentPicker({
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [showAreas, setShowAreas] = useState(false);
+  // Read after mount only: localStorage is client-only, and starting empty keeps
+  // the SSR markup and the first client render identical.
+  const [storedPasses, setStoredPasses] =
+    useState<StoredSessionPass[]>(NO_STORED_PASSES);
 
   useEffect(() => {
     setExpandedIds(defaultExpandedIds);
   }, [defaultExpandedIds]);
+
+  // Keyed by plain string: stored root ids come from localStorage, not a
+  // branded source, and only ever get read back out as a resolved location.
+  const locationsById = useMemo(
+    () =>
+      new Map<string, InfLocation>(
+        flattenAllLocations(locations).map((loc) => [loc.id, loc]),
+      ),
+    [locations],
+  );
+
+  useEffect(() => {
+    if (locationsById.size === 0) return;
+    // A stored root that no longer exists (deleted or renamed away) can never be
+    // resumed, so drop its key rather than showing a dead card.
+    setStoredPasses(
+      listStoredSessionPasses().filter((pass) => {
+        if (locationsById.has(pass.rootId)) return true;
+        clearStoredSessionPass(pass.rootId);
+        return false;
+      }),
+    );
+  }, [locationsById]);
+
+  const inProgressPasses = useMemo(
+    () =>
+      storedPasses.flatMap((pass) => {
+        const location = locationsById.get(pass.rootId);
+        if (!location) return [];
+        // The live tree is authoritative for the total; the persisted count is
+        // only a fallback for entries written before it was stored.
+        const total =
+          flattenAuditableLocations(location).length || (pass.totalCount ?? 0);
+        const settled = pass.completedCount + pass.skippedCount;
+        if (total === 0 || settled >= total) return [];
+        return [{ ...pass, location, settled, total }];
+      }),
+    [locationsById, storedPasses],
+  );
+
+  const dismissPass = (rootId: string) => {
+    clearStoredSessionPass(rootId);
+    setStoredPasses((previous) =>
+      previous.filter((pass) => pass.rootId !== rootId),
+    );
+  };
 
   const candidates = flattenPickerTree(locations, candidateIds, {
     expandedIds,
@@ -85,6 +143,60 @@ export function ParentPicker({
               That parent location could not be found. Choose a location to
               start a session.
             </Description>
+          </CardContent>
+        </Card>
+      )}
+      {inProgressPasses.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b p-4">
+            <CardTitle>In progress</CardTitle>
+            <Description>Unfinished recounts saved on this device.</Description>
+          </CardHeader>
+          <CardContent className="p-0">
+            {inProgressPasses.map((pass) => (
+              <Row
+                key={pass.rootId}
+                align="center"
+                gap="sm"
+                className="border-[var(--border)] border-b p-4 last:border-b-0"
+              >
+                <Stack gap="xs" className="min-w-0 flex-1">
+                  <Row align="center" gap="sm" className="min-w-0">
+                    <span className="min-w-0 truncate font-medium text-sm">
+                      {pass.location.name}
+                    </span>
+                    <Badge variant="outline">
+                      {pass.settled}/{pass.total}
+                    </Badge>
+                    {pass.skippedCount > 0 && (
+                      <Badge variant="slate">{pass.skippedCount} skipped</Badge>
+                    )}
+                  </Row>
+                  <Description size="xs">
+                    Started{" "}
+                    {formatDistanceToNow(pass.startedAt, { addSuffix: true })} ·
+                    updated{" "}
+                    {formatDistanceToNow(pass.updatedAt, { addSuffix: true })}
+                  </Description>
+                </Stack>
+                <Button
+                  type="button"
+                  className="min-h-12 shrink-0"
+                  onClick={() => onSelect(pass.location.id)}
+                >
+                  Resume
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="min-h-12 shrink-0 px-2"
+                  aria-label={`Dismiss saved ${pass.location.name} recount`}
+                  onClick={() => dismissPass(pass.rootId)}
+                >
+                  <X />
+                </Button>
+              </Row>
+            ))}
           </CardContent>
         </Card>
       )}

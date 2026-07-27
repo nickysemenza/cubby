@@ -293,6 +293,10 @@ const productInventoryFields = {
   id: inventoryId,
   amount,
   valuation: z.number().nullable(),
+  // Last deliberate recount (null = never). `updatedAt` moves on any write —
+  // including a price-driven valuation recompute — so it can't stand in for
+  // "when was this count last confirmed".
+  verifiedAt: z.date().nullable(),
   ...timestampedFields,
 };
 

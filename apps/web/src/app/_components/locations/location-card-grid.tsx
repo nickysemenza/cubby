@@ -1,8 +1,8 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import { Calendar, LayoutGrid, List } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
@@ -245,17 +245,13 @@ function LocationCard({
         />
       </div>
 
-      {/* Timestamp - subtle, at bottom */}
-      {location.lastBulkInventory && (
-        <div className="flex items-center gap-1 font-mono text-2xs text-muted-foreground">
-          <Calendar size={12} />
-          <span>
-            {formatDistanceToNow(location.lastBulkInventory, {
-              addSuffix: true,
-            })}
-          </span>
-        </div>
-      )}
+      {/* Last recount - subtle, at bottom. AuditedHint (not a raw relative
+          timestamp) so every recount-recency surface reads the same and tints
+          warning once the bin goes stale. */}
+      <div className="flex items-center gap-1 font-mono text-2xs">
+        <Calendar size={12} className="text-muted-foreground" />
+        <AuditedHint at={location.lastBulkInventory} label="recounted" />
+      </div>
     </MobileCard>
   );
 }

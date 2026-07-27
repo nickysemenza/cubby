@@ -1,14 +1,16 @@
 /**
  * Location-centric Problems detectors.
- * Empty leaf locations (no inventory, no children) and image-bearing locations
- * that still lack an AI description.
+ * Empty leaf locations (no inventory, no children), image-bearing locations
+ * that still lack an AI description, and stocked locations overdue for a
+ * recount.
  */
 
 import type {
   EmptyLocation,
   LocationWithoutAiDescription,
+  StaleLocation,
 } from "@cubby/schemas/problems";
-import { and, eq, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, locationImage } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -84,6 +86,63 @@ export const findEmptyLocations = async (
     );
 
   return emptyLocations;
+};
+
+/**
+ * How long a stocked bin may go without a deliberate recount before its counts
+ * are treated as unverified. Deliberately looser than AuditedHint's 30-day
+ * visual tint: the hint nudges, this raises a Problems row. (Tenet 1 — nothing
+ * else restores inventory truth, so an uncounted bin just drifts.)
+ */
+const STALE_RECOUNT_DAYS = 60;
+
+/**
+ * Locations holding stock whose last recount is missing or older than
+ * STALE_RECOUNT_DAYS. Empty locations are out of scope — they have no counts to
+ * be wrong, and `findEmptyLocations` already covers them.
+ */
+export const findStaleLocations = async (
+  db: Database,
+): Promise<StaleLocation[]> => {
+  const dbClient = getDb(db);
+  const cutoff = new Date(Date.now() - STALE_RECOUNT_DAYS * 86_400_000);
+
+  const rows = await dbClient
+    .select({
+      id: location.id,
+      name: location.name,
+      type: location.type,
+      lastBulkInventory: location.lastBulkInventory,
+      itemCount: sql<number>`count(${inventoryEntry.id})::int`,
+    })
+    .from(location)
+    // INNER join = "non-empty" (locations with no live entry drop out).
+    .innerJoin(
+      inventoryEntry,
+      and(
+        eq(inventoryEntry.locationId, location.id),
+        notDeleted(inventoryEntry),
+      ),
+    )
+    .where(
+      and(
+        notDeleted(location),
+        or(
+          isNull(location.lastBulkInventory),
+          lt(location.lastBulkInventory, cutoff),
+        ),
+      ),
+    )
+    .groupBy(
+      location.id,
+      location.name,
+      location.type,
+      location.lastBulkInventory,
+    )
+    // Never-recounted first, then oldest — the worst offenders lead the card.
+    .orderBy(sql`${location.lastBulkInventory} asc nulls first`);
+
+  return rows.map((r) => ({ ...r, itemCount: Number(r.itemCount) }));
 };
 
 // Find locations that have images but no AI description
