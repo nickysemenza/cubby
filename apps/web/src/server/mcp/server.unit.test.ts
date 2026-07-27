@@ -3,6 +3,7 @@ import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import {
   projectDashboardSummaryOut,
   projectOut,
+  purchaseOut,
   taskOut,
 } from "@cubby/schemas/project";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
@@ -464,6 +465,24 @@ describe("listMcpToolCatalog", () => {
       format: "date-time",
     });
 
+    // Same for a date nested inside an array item (get_recent_activity's
+    // auditLogEntryOut.createdAt) — the override walks the whole schema, not
+    // just top-level properties.
+    const recentActivity = catalog.tools.find(
+      (tool) => tool.name === "get_recent_activity",
+    );
+    const entries = (
+      recentActivity?.outputSchema as {
+        properties?: {
+          entries?: { items?: { properties?: Record<string, unknown> } };
+        };
+      }
+    )?.properties?.entries;
+    expect(entries?.items?.properties?.createdAt).toEqual({
+      type: "string",
+      format: "date-time",
+    });
+
     // …and the value a client actually receives matches that advertisement:
     // structuredContent carries a real Date, which JSON-RPC serializes to ISO.
     const createdAt = new Date("2026-07-27T12:34:56.000Z");
@@ -534,6 +553,45 @@ describe("listMcpToolCatalog", () => {
     } finally {
       await Promise.allSettled([client.close(), server.close()]);
     }
+  });
+});
+
+describe("find_similar_entities pair allowlist", () => {
+  const PURCHASE_A = "77777777-7777-4777-8777-777777777771";
+
+  it("passes an allowlisted pair through to search.similar", async () => {
+    const similar = vi.fn().mockResolvedValue({
+      source: { entityType: "purchase", entityId: PURCHASE_A },
+      results: [],
+    });
+
+    const result = await callTool(
+      createMcpServer(),
+      "find_similar_entities",
+      { pair: "purchase_to_product", sourceId: PURCHASE_A, limit: 3 },
+      { search: { similar } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(similar).toHaveBeenCalledWith({
+      pair: "purchase_to_product",
+      sourceId: PURCHASE_A,
+      limit: 3,
+    });
+  });
+
+  it("rejects a combination outside the allowlist before reaching the router", async () => {
+    const similar = vi.fn();
+
+    const result = await callTool(
+      createMcpServer(),
+      "find_similar_entities",
+      { pair: "purchase_to_recipe", sourceId: PURCHASE_A },
+      { search: { similar } },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(similar).not.toHaveBeenCalled();
   });
 });
 
@@ -646,6 +704,7 @@ describe("household tracker synthesis + bulk tools", () => {
   const PROJECT_B = "44444444-4444-4444-8444-444444444442";
   const PROJECT_C = "44444444-4444-4444-8444-444444444443";
   const TASK_A = "55555555-5555-4555-8555-555555555551";
+  const PURCHASE_A = "66666666-6666-4666-8666-666666666661";
 
   it("get_house_status passes filters through and trims UI-only + heavy fields", async () => {
     const project = mock(projectOut, {
@@ -836,6 +895,37 @@ describe("household tracker synthesis + bulk tools", () => {
     };
     expect(structured.updated).toBe(1);
     expect(structured.items[0]?.id).toBe(TASK_A);
+    expect(result.structuredContent).not.toHaveProperty("sideEffects");
+  });
+
+  it("bulk purchase writes drop sideEffects and report an updated count", async () => {
+    const updated = mock(purchaseOut, {
+      seed: 5,
+      overrides: { id: PURCHASE_A, projectId: PROJECT_A },
+    });
+    const bulkMove = vi.fn().mockResolvedValue({
+      items: [updated],
+      sideEffects: { backgroundBatches: ["batch-2"] },
+    });
+
+    const result = await callTool(
+      createMcpServer(),
+      "bulk_move_purchases",
+      { ids: [PURCHASE_A], projectId: PROJECT_A },
+      { purchase: { bulkMove } },
+    );
+
+    expect(bulkMove).toHaveBeenCalledWith({
+      ids: [PURCHASE_A],
+      projectId: PROJECT_A,
+    });
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as {
+      updated: number;
+      items: Array<Record<string, unknown>>;
+    };
+    expect(structured.updated).toBe(1);
+    expect(structured.items[0]?.id).toBe(PURCHASE_A);
     expect(result.structuredContent).not.toHaveProperty("sideEffects");
   });
 });

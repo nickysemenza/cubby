@@ -4,6 +4,7 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { installMockStrippedListToolsHandler } from "./tools/_shared";
+import { registerAuditTools } from "./tools/audit.tools";
 import { registerImageTools } from "./tools/image.tools";
 import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
@@ -52,6 +53,7 @@ function registerTools(server: McpServer) {
   registerMealTools(server);
   registerUsdaTools(server);
   registerImageTools(server);
+  registerAuditTools(server);
 }
 
 export function createMcpServer() {

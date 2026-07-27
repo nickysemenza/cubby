@@ -3,13 +3,16 @@ import type {
   SearchableEntity,
   SearchDebugOut,
   SearchResultItem,
+  SimilarEntitiesInput,
+  SimilarEntitiesOut,
 } from "@cubby/schemas/search";
-import { searchableEntities } from "@cubby/schemas/search";
+import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
 import {
   findSemanticEntityCandidates,
+  findSimilarEntities,
   getEmbeddingTextsForEntityTypes,
   getStaleEmbeddingTextsForEntityTypes,
   upsertEntityEmbedding,
@@ -241,6 +244,57 @@ export async function enqueueEntityEmbeddingBackfill(
     })),
   });
   return { batchId: dispatched.batchId, totalJobs: dispatched.jobIds.length };
+}
+
+/**
+ * Entity-to-entity semantic similarity over the stored embeddings.
+ *
+ * Cross-cutting on three counts, which is what earns it a service rather than
+ * a direct repo call from the router: it resolves the embedding-model config,
+ * hops two repos (embedding nearest-neighbour → search hydration), and degrades
+ * to an empty result when embeddings aren't configured at all.
+ *
+ * Unlike {@link semanticSearchCandidates} this does NOT swallow query errors —
+ * there's no lexical half to fall back on, so a failed vector read must surface
+ * rather than masquerade as "no similar entities".
+ */
+export async function findSimilarEntitiesForPair(
+  db: Database,
+  input: SimilarEntitiesInput,
+): Promise<SimilarEntitiesOut> {
+  const { source, target } = similarEntityPairs[input.pair];
+  const sourceRef = { entityType: source, entityId: input.sourceId };
+  const empty: SimilarEntitiesOut = { source: sourceRef, results: [] };
+
+  if (!semanticEmbeddingsConfigured()) return empty;
+
+  const config = getSemanticEmbeddingConfig();
+  const candidates = await findSimilarEntities(db, sourceRef, config, {
+    targetType: target,
+    limit: input.limit,
+  });
+  if (candidates.length === 0) return empty;
+
+  const items = await hydrateSearchResultsByRefs(
+    db,
+    candidates.map((candidate) => ({
+      entityType: candidate.entityType,
+      entityId: candidate.entityId,
+    })),
+  );
+  const itemByKey = new Map(
+    items.map((item) => [`${item.entityType}:${item.id}`, item] as const),
+  );
+
+  return {
+    source: sourceRef,
+    results: candidates.flatMap((candidate) => {
+      const item = itemByKey.get(
+        `${candidate.entityType}:${candidate.entityId}`,
+      );
+      return item ? [{ similarity: candidate.similarity, entity: item }] : [];
+    }),
+  };
 }
 
 export async function semanticProductCandidates(
