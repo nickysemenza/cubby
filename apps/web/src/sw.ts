@@ -62,8 +62,11 @@ sw.addEventListener("install", (event) => {
       const optional = PRECACHE_URLS.filter(
         (url) => !isCriticalPrecacheUrl(url),
       );
-      // A Worker without its offline page, styles, or WASM is not a viable
-      // offline shell. Fail installation so the previous complete SW remains.
+      // A Worker without its offline page or styles is not a viable offline
+      // shell. Fail installation so the previous complete SW remains. The WASM
+      // is deliberately NOT in this set (see `isCriticalPrecacheUrl`) — it's
+      // ~80% of the payload, and the fetch handler falls back to the network
+      // for anything the optional pass didn't manage to cache.
       await cache.addAll(
         critical.map((url) => new Request(url, { cache: "reload" })),
       );

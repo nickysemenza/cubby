@@ -69,6 +69,31 @@ function cfWasmPlugin(): Plugin {
   };
 }
 
+/**
+ * Redirect @sentry/tanstackstart-react to a @sentry/cloudflare-backed shim in
+ * the SSR environment. Its server half re-exports @sentry/node, which pulls
+ * @sentry/node-core, @sentry/opentelemetry, seven @opentelemetry/* packages and
+ * require/import-in-the-middle into the worker — ~600 KiB of Node-only code
+ * that cannot run on workerd, welded into the eager root chunk because
+ * router.tsx and components/route-error.tsx are isomorphic.
+ *
+ * SSR-only: the client build keeps the real package (browser tracing needs it).
+ * See src/lib/sentry-cf-shim.ts for the exports it has to cover.
+ */
+function cfSentryShim(): Plugin {
+  const shim = path.resolve(__dirname, "src/lib/sentry-cf-shim.ts");
+  return {
+    name: "cf-sentry-shim",
+    enforce: "pre",
+    applyToEnvironment(env) {
+      return env.name === "ssr";
+    },
+    resolveId(source) {
+      if (source === "@sentry/tanstackstart-react") return shim;
+    },
+  };
+}
+
 export default defineConfig(async () => {
   // CF Workers build: use @cloudflare/vite-plugin (Vite Environment API).
   // Dev server runs without a deploy plugin (plain Node.js via vite dev).
@@ -168,7 +193,9 @@ export default defineConfig(async () => {
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
-      ...(isCloudflare ? [cfPgNativeStub(), cfWasmPlugin()] : []),
+      ...(isCloudflare
+        ? [cfPgNativeStub(), cfWasmPlugin(), cfSentryShim()]
+        : []),
       wasm(),
       devtools({
         injectSource: { enabled: false },

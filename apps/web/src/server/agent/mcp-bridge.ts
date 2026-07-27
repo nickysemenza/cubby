@@ -1,10 +1,7 @@
 import type { AgentToolCall } from "@cubby/schemas/agent";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { type Tool, toolDefinition } from "@tanstack/ai";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { DomainCaller } from "~/server/api/domain";
-import { createMcpServer } from "~/server/mcp/server";
 
 /**
  * Bridges the existing Cubby MCP server (server/mcp/server.ts) to the
@@ -48,6 +45,18 @@ interface AgentToolset {
 export async function createAgentToolset(
   caller: DomainCaller,
 ): Promise<AgentToolset> {
+  // Imported dynamically, not at module scope. This module hangs off the tRPC
+  // router graph (root.ts → routers/agent.ts → runtime.ts → here), so a static
+  // import would put @modelcontextprotocol/sdk + ajv + zod-to-json-schema
+  // (~466 KiB) into the worker's eager chunk for every request — and defeat the
+  // `await import()` that routes/api/mcp.ts already uses for the same module.
+  const [{ Client }, { InMemoryTransport }, { createMcpServer }] =
+    await Promise.all([
+      import("@modelcontextprotocol/sdk/client/index.js"),
+      import("@modelcontextprotocol/sdk/inMemory.js"),
+      import("~/server/mcp/server"),
+    ]);
+
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
 

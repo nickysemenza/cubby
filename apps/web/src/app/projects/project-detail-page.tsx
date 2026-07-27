@@ -21,7 +21,7 @@ import {
   ShoppingCart,
   Wallet,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
@@ -55,6 +55,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
 import {
   ViewSwitcher,
@@ -65,16 +66,16 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { BudgetStrip } from "./BudgetStrip";
-import { CategoryBreakdown } from "./charts/category-breakdown";
-import { ProjectGantt } from "./charts/gantt/ProjectGantt";
-import { PlannedVsActual } from "./charts/planned-vs-actual";
-import { SpendingOverTime } from "./charts/spending-over-time";
-import { TaskHeatmap } from "./charts/task-heatmap";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
 import type { PivotCostKey } from "./charts/trade-cost-pivot";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
+import {
+  projectGanttSubtreeQueryParams,
+  projectSubtreePurchasesFilters,
+  projectSubtreeTasksFilters,
+} from "./project-query-params";
 import {
   capitalize,
   PROJECT_STATUS_LABELS,
@@ -84,6 +85,34 @@ import {
   TaskList,
 } from "./shared";
 import { splitPurchaseSpend } from "./spend";
+
+// Charts are Nivo/d3-heavy (~590 KiB with @react-spring + d3) and every one of
+// them is gated on data existing, below the fold. Lazy-loading keeps that stack
+// out of this page's chunk — and out of the SSR graph, since this route is
+// `ssr: false` and never renders them on the server anyway.
+const CategoryBreakdown = lazy(() =>
+  import("./charts/category-breakdown").then((m) => ({
+    default: m.CategoryBreakdown,
+  })),
+);
+const ProjectGantt = lazy(() =>
+  import("./charts/gantt/ProjectGantt").then((m) => ({
+    default: m.ProjectGantt,
+  })),
+);
+const PlannedVsActual = lazy(() =>
+  import("./charts/planned-vs-actual").then((m) => ({
+    default: m.PlannedVsActual,
+  })),
+);
+const SpendingOverTime = lazy(() =>
+  import("./charts/spending-over-time").then((m) => ({
+    default: m.SpendingOverTime,
+  })),
+);
+const TaskHeatmap = lazy(() =>
+  import("./charts/task-heatmap").then((m) => ({ default: m.TaskHeatmap })),
+);
 
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
 const NO_TASKS: TaskOut[] = [];
@@ -95,29 +124,6 @@ const TASKS_VIEW_OPTIONS: ViewSwitcherOption<"list" | "board">[] = [
 ];
 const NO_PURCHASES: PurchaseOut[] = [];
 const NO_CHILD_PROJECTS: ProjectOut[] = [];
-
-/** Cap well above any real subtree size (hundreds at most) but within the
- * shared `MAX_PAGE_SIZE` — one page covers the Gantt's whole descendant
- * project subtree. Exported so the route loader can prefetch with the exact
- * same params (identical query key ⇒ cache hit, no duplicate fetch). */
-const PROJECT_SCOPED_PAGE_SIZE = 500;
-
-/** The task/purchase `chartData` endpoints take the bare filters object (no
- * sort/pagination wrapper — they fetch-all). One subtree fetch feeds the
- * Gantt, the Task Timeline, the Task Board view, and the Budget/spend
- * charts — all of which need the whole (incl. done/past) subtree picture.
- * The Tasks/Purchases *list* views intentionally do NOT read from this
- * fetch (see `openTaskFilters`/`plannedPurchaseFilters` etc. below) — a
- * completed project with hundreds of historical rows shouldn't pull them
- * all in just to render its default (open-tasks / recent-purchases) view.
- * Exported so the route loader prefetches the identical key. */
-export function projectSubtreeTasksFilters(projectId: string) {
-  return { projectId, includeSubProjects: true };
-}
-
-export function projectSubtreePurchasesFilters(projectId: string) {
-  return { projectId, includeSubProjects: true };
-}
 
 /** Cap for the Tasks section's scoped open/history `task.list` queries —
  * generous relative to any real project's task count, within the shared
@@ -131,17 +137,6 @@ const PURCHASES_SECTION_PAGE_SIZE = 500;
 /** The default "recent actual purchases" page is deliberately small — it's a
  * glance, not the ledger (History expands to the full purchase list). */
 const RECENT_PURCHASES_PAGE_SIZE = 15;
-
-/** The Gantt's sub-project rows span arbitrary depth, so it needs the whole
- * live descendant subtree — not the direct-children query the Sub-projects
- * section relies on. Kept separate for exactly that reason. */
-export function projectGanttSubtreeQueryParams(projectId: string) {
-  return {
-    filters: { parentProjectId: projectId, includeSubProjects: true },
-    sort: { orderBy: "name" as const, direction: "asc" as const },
-    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
-  };
-}
 
 interface ProjectDetailPageProps {
   project: ProjectOut;
@@ -1204,67 +1199,71 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         subtreeTasks.length > 0 ||
         ganttSubtreeProjects.length > 0) && (
         <Stack className="pt-4">
-          {chartPurchases.length > 0 && (
-            <>
-              <Section
-                title="Spending Over Time"
-                description={
-                  hasSubtree
-                    ? "Cumulative spend against the estimate · includes sub-project purchases"
-                    : "Cumulative spend against the estimate"
-                }
-              >
-                <SpendingOverTime
+          {/* One boundary for the whole band — the charts load as a group, and
+              a single skeleton reads better than five staggered ones. */}
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            {chartPurchases.length > 0 && (
+              <>
+                <Section
+                  title="Spending Over Time"
+                  description={
+                    hasSubtree
+                      ? "Cumulative spend against the estimate · includes sub-project purchases"
+                      : "Cumulative spend against the estimate"
+                  }
+                >
+                  <SpendingOverTime
+                    purchases={chartPurchases}
+                    costEstimate={project.rollup.subtree.costEstimate}
+                  />
+                </Section>
+
+                <CategoryBreakdown
                   purchases={chartPurchases}
-                  costEstimate={project.rollup.subtree.costEstimate}
+                  donutHeight={350}
+                  onMatrixCellClick={handleMatrixCellClick}
+                  activeMatrixCell={activeMatrixCell}
                 />
-              </Section>
 
-              <CategoryBreakdown
-                purchases={chartPurchases}
-                donutHeight={350}
-                onMatrixCellClick={handleMatrixCellClick}
-                activeMatrixCell={activeMatrixCell}
-              />
-
-              {/* With zero future-flagged purchases this just restates the
+                {/* With zero future-flagged purchases this just restates the
                   pivot's column totals — only worth its own section when
                   something is actually planned. */}
-              {chartPurchases.some((p) => p.future) && (
-                <Section
-                  title="Planned vs Actual"
-                  description="Committed spend vs future-flagged purchases"
-                >
-                  <PlannedVsActual purchases={chartPurchases} />
-                </Section>
-              )}
-            </>
-          )}
+                {chartPurchases.some((p) => p.future) && (
+                  <Section
+                    title="Planned vs Actual"
+                    description="Committed spend vs future-flagged purchases"
+                  >
+                    <PlannedVsActual purchases={chartPurchases} />
+                  </Section>
+                )}
+              </>
+            )}
 
-          {/* Gated on dated content existing at all: a project with no tasks
+            {/* Gated on dated content existing at all: a project with no tasks
               and no sub-projects has nothing to plot. */}
-          {(subtreeTasks.length > 0 || ganttSubtreeProjects.length > 0) && (
-            <Section
-              title="Gantt"
-              description={
-                ganttSubtreeProjects.length > 0
-                  ? "Tasks and sub-projects across the whole subtree"
-                  : undefined
-              }
-            >
-              <ProjectGantt
-                projectId={project.id}
-                tasks={subtreeTasks}
-                subtreeProjects={ganttSubtreeProjects}
-              />
-            </Section>
-          )}
+            {(subtreeTasks.length > 0 || ganttSubtreeProjects.length > 0) && (
+              <Section
+                title="Gantt"
+                description={
+                  ganttSubtreeProjects.length > 0
+                    ? "Tasks and sub-projects across the whole subtree"
+                    : undefined
+                }
+              >
+                <ProjectGantt
+                  projectId={project.id}
+                  tasks={subtreeTasks}
+                  subtreeProjects={ganttSubtreeProjects}
+                />
+              </Section>
+            )}
 
-          {topLevelTasks.length > 0 && (
-            <Section title="Task Timeline">
-              <TaskHeatmap tasks={topLevelTasks} />
-            </Section>
-          )}
+            {topLevelTasks.length > 0 && (
+              <Section title="Task Timeline">
+                <TaskHeatmap tasks={topLevelTasks} />
+              </Section>
+            )}
+          </Suspense>
         </Stack>
       )}
     </Page>

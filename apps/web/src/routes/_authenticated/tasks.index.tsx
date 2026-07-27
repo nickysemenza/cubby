@@ -3,6 +3,7 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
@@ -10,15 +11,23 @@ import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { TaskInbox } from "~/app/tasks/inbox";
 import { NextTasks } from "~/app/tasks/next-tasks";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
-import { TasksTimelineView } from "~/app/tasks/TasksTimelineView";
 import { TaskActions } from "~/app/tasks/task-actions";
 import { TaskList } from "~/app/tasks/tasklist";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+
+// Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
+// until selected — lazy so that stack stays out of the default List view.
+const TasksTimelineView = lazy(() =>
+  import("~/app/tasks/TasksTimelineView").then((m) => ({
+    default: m.TasksTimelineView,
+  })),
+);
 
 const viewOptions = [
   "next",
@@ -107,7 +116,11 @@ function TasksPage() {
 
         {view === "board" && <TasksBoardView />}
 
-        {view === "timeline" && <TasksTimelineView />}
+        {view === "timeline" && (
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            <TasksTimelineView />
+          </Suspense>
+        )}
 
         {view === "all" && <TaskList initialSearch={q} />}
 

@@ -10,7 +10,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
-import { processBackgroundQueueMessage } from "./server/background-queue";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
@@ -155,7 +154,14 @@ const handler = {
     // Serial queue work does not need a local pg.Pool. Use one Worker-side
     // client for the whole invocation; Hyperdrive still owns the origin DB pool.
     await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-      const { db } = await import("./server/db");
+      // Imported here, not at module scope: the consumer pulls @tanstack/ai +
+      // @cloudflare/tanstack-ai + @anthropic-ai/sdk (~553 KiB, plus a second
+      // copy of zod) and only queue deliveries need it. A static import puts
+      // all of that on the module-init path of every fetch invocation too.
+      const [{ db }, { processBackgroundQueueMessage }] = await Promise.all([
+        import("./server/db"),
+        import("./server/background-queue"),
+      ]);
       for (const message of batch.messages) {
         // Per-message clock: a batch is processed serially in this one
         // invocation, so capture t0 at each message's start (NOT at batch
