@@ -68,4 +68,8 @@ export interface RecipeFilters {
   tagFilters?: string[];
   // Scope the list to a single cookbook by FK id. Powers the cookbook detail page.
   cookbookId?: CookbookId;
+  // Drop recipes that are used as an ingredient elsewhere (a recipe-as-ingredient
+  // Ingredient row points at them). Powers "what can I make?", where a sub-recipe
+  // is a component, not a meal.
+  excludeSubRecipes?: boolean;
 }

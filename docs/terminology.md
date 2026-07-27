@@ -110,9 +110,11 @@ The household project tracker (migrated from Notion) is a self-contained module:
   Images attach via the `ProjectImage` join table to the shared `Image` entity.
   Spend/progress rollups (`spent`, task counts) are SQL aggregates, never
   denormalized.
-- **Task** — `task.projectId` is nullable by design (future project-less
-  "inbox" tasks); `task.category` is deliberately free-form text, not an enum.
-  `taskDependency` mirrors the project blocked-by structure.
+- **Task** — `task.projectId` is nullable by design; project-less tasks are
+  "inbox" tasks (shipped: `/tasks?view=inbox` + promote-to-project).
+  `task.trade` is the shared 19-slug trade/costType taxonomy (see
+  `TRADE_LABELS`), not free-form text. `taskDependency` mirrors the project
+  blocked-by structure.
 - **Purchase** — the spend ledger. `future = true` marks planned (not yet
   actual) spend. A Purchase is free-text `name` + `cost` today — it does
   **not** link to a Product or InventoryEntry (a known roadmap item, see

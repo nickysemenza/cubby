@@ -80,12 +80,76 @@ describe("suggestions router", () => {
     await createRecipe("Short Recipe", sugar.id, { value: 2, unit: "cup" });
 
     const all = await suggestionsCaller.getMakeable({});
-    expect(all).toHaveLength(2);
-    expect(all[0]?.coverage).toBeGreaterThanOrEqual(all[1]?.coverage ?? 0);
-    expect(all[0]?.recipeName).toBe("Ready Recipe");
+    expect(all.recipes).toHaveLength(2);
+    expect(all.recipes[0]?.coverage).toBeGreaterThanOrEqual(
+      all.recipes[1]?.coverage ?? 0,
+    );
+    expect(all.recipes[0]?.recipeName).toBe("Ready Recipe");
+    expect(all.truncated).toBe(false);
 
     const readyOnly = await suggestionsCaller.getMakeable({ minCoverage: 1 });
-    expect(readyOnly).toHaveLength(1);
-    expect(readyOnly[0]?.recipeName).toBe("Ready Recipe");
+    expect(readyOnly.recipes).toHaveLength(1);
+    expect(readyOnly.recipes[0]?.recipeName).toBe("Ready Recipe");
+  });
+
+  // A recipe used as an ingredient by another recipe is a component, not an
+  // answer to "what can I make?" — it must not appear in the candidate pool.
+  it("getMakeable excludes recipes used as sub-recipes", async () => {
+    const flour = await seedIngredientWithStock("sub flour", {
+      value: 500,
+      unit: "g",
+    });
+    const sub = await createRecipe("Sub Recipe", flour.id, {
+      value: 2,
+      unit: "cup",
+    });
+    const parent = await recipeCaller.create({
+      name: "Parent Recipe",
+      meta: null,
+      sections: [
+        {
+          ingredients: [
+            {
+              type: "recipe" as const,
+              ingredientId: null,
+              recipeId: sub.id,
+              amounts: [{ value: 1, unit: "each" }],
+            },
+          ],
+          instructions: [{ instruction: "Assemble" }],
+        },
+      ],
+    });
+
+    const { recipes } = await suggestionsCaller.getMakeable({});
+    expect(recipes.map((r) => r.recipeName)).toEqual(["Parent Recipe"]);
+
+    // Dropping the sub-recipe line only soft-deletes the LINK — the pointer
+    // Ingredient row survives — so the exclusion has to key off the live link or
+    // "Sub Recipe" would stay hidden from suggestions forever.
+    await recipeCaller.update({
+      id: parent.id,
+      data: {
+        sections: [
+          {
+            ingredients: [
+              {
+                type: "ingredient" as const,
+                ingredientId: flour.id,
+                recipeId: null,
+                amounts: [{ value: 1, unit: "cup" }],
+              },
+            ],
+            instructions: [{ instruction: "Assemble" }],
+          },
+        ],
+      },
+    });
+
+    const after = await suggestionsCaller.getMakeable({});
+    expect(after.recipes.map((r) => r.recipeName).sort()).toEqual([
+      "Parent Recipe",
+      "Sub Recipe",
+    ]);
   });
 });

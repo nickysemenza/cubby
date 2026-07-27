@@ -55,16 +55,23 @@ export function MealSuggestionsPage({
         <StatusText tone="destructive" className="text-sm">
           {error.message}
         </StatusText>
-      ) : !data || data.length === 0 ? (
+      ) : !data || data.recipes.length === 0 ? (
         <Description>
           No recipes match — try lowering the coverage filter.
         </Description>
       ) : (
-        <Grid cols="cards3">
-          {data.map((recipe) => (
-            <RecipeCoverageCard key={recipe.recipeId} recipe={recipe} />
-          ))}
-        </Grid>
+        <>
+          <Grid cols="cards3">
+            {data.recipes.map((recipe) => (
+              <RecipeCoverageCard key={recipe.recipeId} recipe={recipe} />
+            ))}
+          </Grid>
+          {data.truncated && (
+            <Description size="xs">
+              Only the first {data.candidateCap} recipes were considered.
+            </Description>
+          )}
+        </>
       )}
     </Stack>
   );

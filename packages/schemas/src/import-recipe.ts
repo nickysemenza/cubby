@@ -169,8 +169,10 @@ export const importNotionSyncInput = z.object({
 
 export const cookbookSummariesOut = z.array(cookbookSummary);
 
-export const deleteCookbookRecipesOut = z.object({
-  deleted: z.number().int().nonnegative(),
+// Deleting a cookbook removes the book row itself plus every recipe imported
+// from it; the count is what the toast reports.
+export const deleteCookbookOut = z.object({
+  deletedRecipes: z.number().int().nonnegative(),
 });
 
 // Input for `recipe.extractCookbookChunk` (camelCased WASM request). Exported

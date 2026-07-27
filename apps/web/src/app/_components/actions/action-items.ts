@@ -71,7 +71,7 @@ function entityCreate(
  */
 export const actionItems: ActionItem[] = [
   {
-    id: "add-inventory",
+    id: "recount",
     name: "Recount",
     path: "/inventory/session",
     icon: ScanBarcode,
@@ -116,7 +116,7 @@ export const actionItems: ActionItem[] = [
     surfaces: ["palette-quick"],
   },
   {
-    id: "inventory-audit",
+    id: "bulk-edit",
     name: "Bulk Edit",
     path: "/inventory/bulk-edit",
     icon: ClipboardCheck,

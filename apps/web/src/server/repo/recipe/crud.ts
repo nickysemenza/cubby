@@ -17,11 +17,22 @@ import type {
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import { recipeSortableFields } from "@cubby/schemas/recipe";
-import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  notInArray,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { countBy } from "es-toolkit";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  ingredient,
   recipe,
   recipeImage,
   recipeSection,
@@ -253,6 +264,39 @@ export const recipeList = async (
 ) => {
   const dbClient = getDb(db);
 
+  // Recipes currently used as a sub-recipe: a live recipe-as-ingredient row
+  // (`ingredient.recipeId`) reached through a LIVE link — section-ingredient →
+  // section → parent recipe, each non-deleted. Matching the "in use" scoping the
+  // ingredient usage SQL uses (helpers.ts) matters because removing a sub-recipe
+  // line only soft-deletes the link, never the pointer `Ingredient` row: keying
+  // off the pointer alone would exclude a recipe from suggestions forever.
+  // Deliberately UNCORRELATED (no back-reference to the outer recipe.id): the RQB
+  // data query aliases the root table while `countWhere` doesn't, so a correlated
+  // EXISTS resolves against different names in each. `isNotNull` is load-bearing —
+  // a NULL in a NOT IN list matches no rows at all.
+  const parentRecipe = alias(recipe, "parentRecipe");
+  const subRecipeIds = dbClient
+    .select({ recipeId: ingredient.recipeId })
+    .from(ingredient)
+    .innerJoin(
+      recipeSectionIngredient,
+      eq(recipeSectionIngredient.ingredientId, ingredient.id),
+    )
+    .innerJoin(
+      recipeSection,
+      eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+    )
+    .innerJoin(parentRecipe, eq(parentRecipe.id, recipeSection.recipeId))
+    .where(
+      and(
+        isNotNull(ingredient.recipeId),
+        notDeleted(ingredient),
+        notDeleted(recipeSectionIngredient),
+        notDeleted(recipeSection),
+        notDeleted(parentRecipe),
+      ),
+    );
+
   // Build where conditions - always filter out deleted items. Scope to one
   // cookbook by FK id when browsing its detail page.
   const whereClause = buildSearchConditions(
@@ -264,6 +308,9 @@ export const recipeList = async (
         : undefined,
       filters.tagFilters && filters.tagFilters.length > 0
         ? sql`${recipe.tags} && ${filters.tagFilters}`
+        : undefined,
+      filters.excludeSubRecipes
+        ? notInArray(recipe.id, subRecipeIds)
         : undefined,
     ],
   );
@@ -647,6 +694,106 @@ export const updateRecipe = async (
 };
 
 /**
+ * Tx-scoped body of {@link deleteRecipes}. Split out so a caller that owns a
+ * wider transaction (the cookbook delete, which removes the book row in the same
+ * txn) shares the exact cascade, embedding cleanup, and audit trail.
+ */
+const deleteRecipesTx = async (
+  tx: DrizzleTransaction,
+  ids: RecipeId[],
+  actor: ActorContext,
+): Promise<void> => {
+  if (ids.length === 0) return;
+
+  // Lock recipes and validate they exist and aren't already deleted
+  // Prevents race conditions by acquiring row-level locks
+  await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
+
+  const now = new Date();
+
+  // Get all sections for these recipes
+  const sections = await tx.query.recipeSection.findMany({
+    where: and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
+    columns: { id: true, recipeId: true },
+  });
+
+  const sectionIds = sections.map((s) => s.id);
+
+  // Get counts of cascaded items (per recipe) for the audit trail.
+  const cascadedImages = await tx.query.recipeImage.findMany({
+    where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
+    columns: { recipeId: true },
+  });
+
+  let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
+  if (sectionIds.length > 0) {
+    cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
+      where: and(
+        inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+        notDeleted(recipeSectionIngredient),
+      ),
+      columns: { recipeSectionId: true },
+    });
+  }
+
+  // Ingredients are counted via their section's recipe (no direct recipeId).
+  const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
+  const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
+  const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
+  const ingredientsByRecipe = countBy(
+    cascadedIngredients
+      .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
+      .filter((id): id is RecipeId => id != null),
+    (id) => id,
+  );
+
+  // Soft delete recipe section ingredients
+  if (sectionIds.length > 0) {
+    await tx
+      .update(recipeSectionIngredient)
+      .set({ deletedAt: now })
+      .where(
+        and(
+          inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+          notDeleted(recipeSectionIngredient),
+        ),
+      );
+  }
+
+  // Soft delete recipe sections
+  await tx
+    .update(recipeSection)
+    .set({ deletedAt: now })
+    .where(
+      and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
+    );
+
+  // Soft delete recipe images
+  await tx
+    .update(recipeImage)
+    .set({ deletedAt: now })
+    .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
+
+  // Soft delete recipes
+  await tx
+    .update(recipe)
+    .set({ deletedAt: now })
+    .where(and(inArray(recipe.id, ids), notDeleted(recipe)));
+
+  // Cascade the search embedding so a direct repo delete (no mutation
+  // side-effect) can't leave an orphaned entityEmbedding row.
+  await softDeleteEntityEmbeddingsTx(tx, "recipe", ids);
+
+  const auditEntries = buildCascadeAuditEntries("recipe", ids, {
+    cascadedSections: sectionsByRecipe,
+    cascadedIngredients: ingredientsByRecipe,
+    cascadedImages: imagesByRecipe,
+  });
+
+  await logAuditEntries(tx, actor, auditEntries);
+};
+
+/**
  * Soft delete recipes by setting deletedAt timestamp.
  * Also soft deletes related sections, ingredients, and images.
  */
@@ -657,115 +804,26 @@ export const deleteRecipes = async (
 ): Promise<void> => {
   if (ids.length === 0) return;
 
-  await withTransaction(db, async (tx) => {
-    // Lock recipes and validate they exist and aren't already deleted
-    // Prevents race conditions by acquiring row-level locks
-    await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
-
-    const now = new Date();
-
-    // Get all sections for these recipes
-    const sections = await tx.query.recipeSection.findMany({
-      where: and(
-        inArray(recipeSection.recipeId, ids),
-        notDeleted(recipeSection),
-      ),
-      columns: { id: true, recipeId: true },
-    });
-
-    const sectionIds = sections.map((s) => s.id);
-
-    // Get counts of cascaded items (per recipe) for the audit trail.
-    const cascadedImages = await tx.query.recipeImage.findMany({
-      where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
-      columns: { recipeId: true },
-    });
-
-    let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
-    if (sectionIds.length > 0) {
-      cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
-        where: and(
-          inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
-          notDeleted(recipeSectionIngredient),
-        ),
-        columns: { recipeSectionId: true },
-      });
-    }
-
-    // Ingredients are counted via their section's recipe (no direct recipeId).
-    const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
-    const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
-    const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
-    const ingredientsByRecipe = countBy(
-      cascadedIngredients
-        .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
-        .filter((id): id is RecipeId => id != null),
-      (id) => id,
-    );
-
-    // Soft delete recipe section ingredients
-    if (sectionIds.length > 0) {
-      await tx
-        .update(recipeSectionIngredient)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
-            notDeleted(recipeSectionIngredient),
-          ),
-        );
-    }
-
-    // Soft delete recipe sections
-    await tx
-      .update(recipeSection)
-      .set({ deletedAt: now })
-      .where(
-        and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
-      );
-
-    // Soft delete recipe images
-    await tx
-      .update(recipeImage)
-      .set({ deletedAt: now })
-      .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
-
-    // Soft delete recipes
-    await tx
-      .update(recipe)
-      .set({ deletedAt: now })
-      .where(and(inArray(recipe.id, ids), notDeleted(recipe)));
-
-    // Cascade the search embedding so a direct repo delete (no mutation
-    // side-effect) can't leave an orphaned entityEmbedding row.
-    await softDeleteEntityEmbeddingsTx(tx, "recipe", ids);
-
-    const auditEntries = buildCascadeAuditEntries("recipe", ids, {
-      cascadedSections: sectionsByRecipe,
-      cascadedIngredients: ingredientsByRecipe,
-      cascadedImages: imagesByRecipe,
-    });
-
-    await logAuditEntries(tx, actor, auditEntries);
-  });
+  await withTransaction(db, (tx) => deleteRecipesTx(tx, ids, actor));
 };
 
 /**
- * Soft-delete every non-deleted recipe linked to a cookbook. Delegates to
- * {@link deleteRecipes} so the section/ingredient/image cascade, transaction, and
- * audit trail are shared. Returns the number of recipes deleted. (The Cookbook
- * row itself is left intact; deleting recipes doesn't delete the source.)
+ * Soft-delete every non-deleted recipe linked to a cookbook, inside the caller's
+ * transaction — the cookbook repo removes the `Cookbook` row in the same txn, so
+ * a book can't survive its recipes. Shares the section/ingredient/image cascade,
+ * embedding cleanup, and audit trail with {@link deleteRecipes}; returns the
+ * deleted ids so the caller can run mutation side-effects.
  */
-export const deleteRecipesByCookbook = async (
-  db: Database,
+export const deleteRecipesByCookbookTx = async (
+  tx: DrizzleTransaction,
   cookbookId: CookbookId,
   actor: ActorContext,
-): Promise<{ deleted: number }> => {
-  const rows = await getDb(db).query.recipe.findMany({
+): Promise<RecipeId[]> => {
+  const rows = await tx.query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { id: true },
   });
   const ids = rows.map((r) => r.id);
-  await deleteRecipes(db, ids, actor);
-  return { deleted: ids.length };
+  await deleteRecipesTx(tx, ids, actor);
+  return ids;
 };

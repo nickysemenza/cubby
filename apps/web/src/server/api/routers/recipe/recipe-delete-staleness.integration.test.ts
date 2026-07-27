@@ -120,11 +120,11 @@ describe("recipe delete propagates cost staleness to parents", () => {
     );
   });
 
-  // deleteByCookbook is a SECOND recipe-delete path (import router) — it must
+  // deleteCookbook is a SECOND recipe-delete path (import router) — it must
   // carry the same parent-staleness propagation as crud.ts's deleteItem, for a
   // parent in a DIFFERENT (or no) cookbook that uses a deleted book recipe as a
   // sub-recipe.
-  it("marks the parent stale when its sub-recipe is deleted via deleteByCookbook", async () => {
+  it("marks the parent stale when its sub-recipe is deleted via deleteCookbook", async () => {
     const bookName = "Doomed Book";
     const { id: cookbookId } = await upsertCookbook(
       ctx.db,
@@ -178,7 +178,7 @@ describe("recipe delete propagates cost staleness to parents", () => {
 
     installFakeQueue();
     const caller = createTestCaller(recipeRouter, ctx.db);
-    await caller.deleteByCookbook({ cookbookId });
+    await caller.deleteCookbook({ cookbookId });
 
     expect(
       (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
