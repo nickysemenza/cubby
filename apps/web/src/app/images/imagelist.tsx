@@ -7,12 +7,17 @@ import { useMemo } from "react";
 import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
+import { queryKeys } from "~/lib/query-keys";
+
+/** Module-level so the deletable config keeps a stable identity. */
+const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
 
 /**
  * Owning-entity kind → EntityInlineLink entity. A full Record over
@@ -37,6 +42,14 @@ export default function ImageList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<ImageWithEntity>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("image");
+
+  // Images are hard-deleted (no `deletedAt` column) — the row and its R2 object
+  // go away, and any owning entity simply loses the picture.
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.image.delete.mutationOptions,
+    entityLabel: "Image",
+    invalidateKeys: IMAGE_INVALIDATE_KEYS,
+  });
 
   // Memoize columns to prevent recreating on every render (feeds the
   // useStandardColumns columns memo, which now re-runs on identity change).
@@ -148,6 +161,8 @@ export default function ImageList() {
     isLoading,
     error,
     timing,
+    bulkActionBar,
+    deleteDialog,
     infiniteScroll,
     refreshControls,
     totalCount,
@@ -165,6 +180,7 @@ export default function ImageList() {
         placeholder: "Filter by filename...",
       },
     ],
+    deletable: deletableConfig,
     infinite: true,
   });
   usePageCount(totalCount);
@@ -180,9 +196,11 @@ export default function ImageList() {
         entity="image"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
       />
+      {deleteDialog}
       <PreviewSheet />
     </div>
   );

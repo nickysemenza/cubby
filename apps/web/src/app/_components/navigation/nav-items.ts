@@ -94,6 +94,19 @@ export const desktopNav: NavNode[] = [
     children: [
       recipes,
       { to: "/cookbooks", label: "Cookbooks", icon: BookOpen },
+      // Ingredients are daily cooking reference data, not a developer surface —
+      // they live beside recipes/cookbooks rather than under Dev.
+      {
+        to: "/ingredients",
+        label: "Ingredients",
+        icon: entities.ingredient.lucideIcon,
+      },
+      { to: "/ingredients/workbench", label: "Workbench", icon: ListChecks },
+      {
+        to: "/ingredients/equivalences",
+        label: "Equivalences",
+        icon: ArrowLeftRight,
+      },
       { to: "/meals/suggestions", label: "What can I make?", icon: Sparkles },
     ],
   },
@@ -166,17 +179,6 @@ export const desktopNav: NavNode[] = [
     label: "Dev",
     icon: Wrench,
     children: [
-      {
-        to: "/ingredients",
-        label: "Ingredients",
-        icon: entities.ingredient.lucideIcon,
-      },
-      { to: "/ingredients/workbench", label: "Workbench", icon: ListChecks },
-      {
-        to: "/ingredients/equivalences",
-        label: "Equivalences",
-        icon: ArrowLeftRight,
-      },
       { to: "/design", label: "Design", icon: Palette },
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
       { to: "/ai-usage", label: "AI usage", icon: Bot },

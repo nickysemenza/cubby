@@ -184,9 +184,16 @@ export const attachFileResponse = z.object({
 });
 export type AttachFileResponse = z.infer<typeof attachFileResponse>;
 
+/**
+ * Age threshold (hours) past which an unassociated PENDING image counts as an
+ * abandoned upload. Shared by the cull mutation's default and the Maintenance
+ * card's "N affected" count, so the number shown and the number deleted match.
+ */
+export const CULL_PENDING_IMAGES_DEFAULT_HOURS = 24;
+
 // Schema for culling pending images
 export const cullPendingImagesSchema = z.object({
-  olderThanHours: z.int().positive().default(24),
+  olderThanHours: z.int().positive().default(CULL_PENDING_IMAGES_DEFAULT_HOURS),
 });
 
 // Schema for image output (response)

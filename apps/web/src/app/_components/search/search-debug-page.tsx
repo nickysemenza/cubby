@@ -70,6 +70,20 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         compact
       />
     ))
+    .with({ entityType: "cookbook" }, (i) => (
+      <EntityInlineLink
+        entity="cookbook"
+        data={{ id: i.id, name: i.name, authors: i.authors }}
+        compact
+      />
+    ))
+    .with({ entityType: "meal" }, (i) => (
+      <EntityInlineLink
+        entity="meal"
+        data={{ id: i.id, name: i.name, date: i.date }}
+        compact
+      />
+    ))
     .with({ entityType: "project" }, (i) => (
       <EntityInlineLink
         entity="project"

@@ -20,7 +20,7 @@ export function QuickActionsCard() {
     >
       <div className="grid grid-cols-2 gap-2">
         {createActions.map((action) => (
-          <Link key={action.id} to={action.path}>
+          <Link key={action.id} to={action.path} search={action.search}>
             <Button
               variant="outline"
               size="sm"

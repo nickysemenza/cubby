@@ -38,6 +38,8 @@ type EntityInlineLinkProps = {
       data: MinimalEntityData & { manufacturer?: string };
     }
   | { entity: "recipe"; data: MinimalEntityData }
+  | { entity: "cookbook"; data: MinimalEntityData & { authors?: string[] } }
+  | { entity: "meal"; data: MinimalEntityData & { date?: string | null } }
   | {
       entity: "location";
       data: MinimalEntityData & { type?: LocationType };
@@ -167,6 +169,32 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         className={wrapperClass}
         icon={<EntityIcon entity="recipe" size={12} colored />}
         name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "cookbook" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="cookbook"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        icon={<EntityIcon entity="cookbook" size={12} colored />}
+        name={data.name}
+        metadata={data.authors?.length ? data.authors.join(", ") : undefined}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "meal" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="meal"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        icon={<EntityIcon entity="meal" size={12} colored />}
+        name={data.name}
+        metadata={data.date ?? undefined}
         compact={compact}
         truncate={truncate}
       />

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientId, recipeId } from "./identifiers";
+import {
+  type ProjectAttentionType,
+  projectAttentionItemSchema,
+} from "./project";
 import { searchableEntityRefFields } from "./search";
 
 // The four base measurement kinds a product's conversion graph can reach. The
@@ -212,6 +216,40 @@ const problemsUpcShape = {
 
 export const problemsUpcSchema = z.object(problemsUpcShape);
 
+// Household-tracker detectors (projects / tasks / purchases). Every row is a
+// `ProjectAttentionItem` — the exact shape `computeAttentionItems` already
+// produces for /projects?view=overview's Needs Attention, reused verbatim
+// rather than restated. The flat item list is split per rule so each detector
+// gets its own `problemsCount.byType` entry (and its own MCP `type` slice),
+// like every other detector; the Problems page merges them back into one
+// section with a subsection per rule. Cheap SQL — no WASM, no network — but its
+// own cost group so it runs in its own Worker invocation like the rest.
+const problemsTrackerShape = {
+  overdueTasks: z.array(projectAttentionItemSchema),
+  stalledProjects: z.array(projectAttentionItemSchema),
+  projectsMissingBudget: z.array(projectAttentionItemSchema),
+  pastDuePlannedPurchases: z.array(projectAttentionItemSchema),
+  unclassifiedPurchases: z.array(projectAttentionItemSchema),
+  blockedWorkProjects: z.array(projectAttentionItemSchema),
+};
+
+export const problemsTrackerSchema = z.object(problemsTrackerShape);
+export type ProblemsTracker = z.infer<typeof problemsTrackerSchema>;
+
+/**
+ * Attention rule type → the `ProblemsTracker` key its rows land in. The single
+ * source for the service's split and the Problems page's per-rule grouping;
+ * `satisfies` makes a new rule type a compile error until it has a slice.
+ */
+export const TRACKER_PROBLEM_KEY_BY_TYPE = {
+  overdue_task: "overdueTasks",
+  stalled_project: "stalledProjects",
+  missing_budget: "projectsMissingBudget",
+  past_due_planned_purchase: "pastDuePlannedPurchases",
+  unclassified_purchase: "unclassifiedPurchases",
+  blocked_work: "blockedWorkProjects",
+} as const satisfies Record<ProjectAttentionType, keyof ProblemsTracker>;
+
 // Combined output schema for all problems. It intentionally spells out the wire
 // contract while sharing the grouped shapes above, so lazy loading/cost grouping
 // never makes fields appear optional on the aggregate response.
@@ -219,6 +257,7 @@ const allProblemArrayFields = {
   ...problemsFastShape,
   ...problemsCoverageShape,
   ...problemsUpcShape,
+  ...problemsTrackerShape,
 };
 
 export const allProblemsSchema = z.object({
@@ -264,11 +303,13 @@ export const assembleAllProblems = (groups: {
   fast: ProblemsFast;
   coverage: ProblemsCoverage;
   upc: ProblemsUpc;
+  tracker: ProblemsTracker;
 }): AllProblems => {
   const sections = {
     ...groups.fast,
     ...groups.coverage,
     ...groups.upc,
+    ...groups.tracker,
   };
   const totalProblems = Object.values(sections).reduce(
     (n, items) => n + items.length,
@@ -322,6 +363,9 @@ export const maintenanceCountsSchema = z.object({
   // recompute queue normally drains these in seconds; a lingering count means a
   // wave was lost (DLQ) — recompute-all clears it.
   staleRecipeTotals: z.number().int(),
+  // Unassociated PENDING image rows older than the cull threshold (24h) — the
+  // abandoned-upload backlog the "Cull pending images" tool clears.
+  cullablePendingImages: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
 

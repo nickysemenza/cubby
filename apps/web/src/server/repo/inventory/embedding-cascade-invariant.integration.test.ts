@@ -9,6 +9,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { entityEmbedding, task, taskDependency } from "~/server/db/schema";
+import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import {
@@ -19,6 +20,7 @@ import {
   reconcileLocationSession,
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
+import { createMeal, deleteMeals } from "~/server/repo/meal";
 import { createProduct } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
 import { createPurchase, deletePurchases } from "~/server/repo/purchase";
@@ -292,6 +294,40 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
 
     expect(await embeddingDeletedAt("task", parentTask.id)).not.toBeNull();
     expect(await embeddingDeletedAt("task", subtask.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  // Cookbook and meal joined the searchable set later; their delete paths carry
+  // the same in-transaction embedding cleanup obligation.
+  it("deleteCookbook leaves no orphan", async () => {
+    const cookbook = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Embedding Cascade Cookbook",
+        rawJson: [],
+        sourceLabel: "cascade.epub",
+      },
+      TEST_ACTOR,
+    );
+    await seedEmbedding("cookbook", cookbook.id);
+
+    await deleteCookbook(ctx.db, cookbook.id, TEST_ACTOR);
+
+    expect(await embeddingDeletedAt("cookbook", cookbook.id)).not.toBeNull();
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
+  });
+
+  it("deleteMeals leaves no orphan", async () => {
+    const meal = await createMeal(
+      ctx.db,
+      { date: "2026-06-01", name: "Embedding Cascade Meal" },
+      TEST_ACTOR,
+    );
+    await seedEmbedding("meal", meal.id);
+
+    await deleteMeals(ctx.db, [meal.id], TEST_ACTOR);
+
+    expect(await embeddingDeletedAt("meal", meal.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 

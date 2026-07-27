@@ -29,6 +29,7 @@ const makeLocation = (
       `L-${String(locationSeq).padStart(4, "0")}`,
     ),
     name,
+    aliases: [],
     type,
     lastBulkInventory: null,
     aiDescription: null,

@@ -6,6 +6,7 @@ import {
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
+import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { TaskInbox } from "~/app/tasks/inbox";
 import { NextTasks } from "~/app/tasks/next-tasks";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
@@ -45,6 +46,9 @@ const searchSchema = z.object({
   // apply when `cols === "status"` inside TasksBoardView.
   cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
   lane: z.enum(["project", "trade"]).optional().catch(undefined),
+  // Quick-capture deep link (navbar "+" / command palette) — there is no
+  // /tasks/new route, so the create dialog is opened by this param.
+  create: z.boolean().optional().catch(undefined),
   ...tableSearchFields,
 });
 
@@ -53,6 +57,7 @@ const searchDefaults = {
   view: undefined,
   cols: undefined,
   lane: undefined,
+  create: undefined,
 } as const;
 
 export const Route = createFileRoute("/_authenticated/tasks/")({
@@ -108,6 +113,19 @@ function TasksPage() {
 
         {view === "history" && <TaskList completion="done" />}
       </Stack>
+
+      {/* Deep-linked quick capture: open state is read straight off the URL and
+          cleared (replace) on close, so a refresh or back-nav can't reopen it. */}
+      <CreateTaskDialog
+        open={search.create === true}
+        onOpenChange={(open) => {
+          if (!open)
+            navigate({
+              search: (prev) => ({ ...prev, create: undefined }),
+              replace: true,
+            });
+        }}
+      />
     </Page>
   );
 }

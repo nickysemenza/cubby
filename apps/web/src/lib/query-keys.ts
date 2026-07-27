@@ -48,8 +48,8 @@ export const queryKeys = {
   },
   problems: {
     // Broad prefix — invalidate every problems query so a fix re-reads whichever
-    // cost-grouped detector query (getFast / getCoverage / getUpc) owns the
-    // resolved card.
+    // cost-grouped detector query (getFast / getCoverage / getUpc / getTracker)
+    // owns the resolved card.
     all: entityKey("problems"),
   },
   search: {

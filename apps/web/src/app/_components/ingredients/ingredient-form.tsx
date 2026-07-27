@@ -7,13 +7,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
-import { type Control, Controller, useForm, useWatch } from "react-hook-form";
+import { type Control, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { ArrayFieldManager } from "~/components/forms/array-field-manager";
+import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/integrations/trpc/react";
 import { EntityInlineLink } from "../EntityInlineLink";
 import {
@@ -128,9 +127,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
 
   const handleSubmit = (values: IngredientFormValues) => {
     // Filter out empty alias strings
-    const filteredAliases = values.aliases.filter(
-      (alias) => alias.trim() !== "",
-    );
+    const filteredAliases = filterAliases(values.aliases);
 
     if (mode === "create") {
       // For creation, pass all fields
@@ -185,27 +182,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
         {mode === "create" && <DuplicateNameHint control={form.control} />}
       </Card>
 
-      <ArrayFieldManager<string, IngredientFormValues>
-        form={form}
-        name="aliases"
-        title="Aliases"
-        addButtonText="Add Alias"
-        emptyValue=""
-      >
-        {(_field, index) => (
-          <Controller
-            control={form.control}
-            name={`aliases.${index}`}
-            render={({ field: controllerField }) => (
-              <Input
-                {...controllerField}
-                placeholder="Alias name"
-                className="flex-1"
-              />
-            )}
-          />
-        )}
-      </ArrayFieldManager>
+      <AliasesField<IngredientFormValues> form={form} />
     </FormWrapper>
   );
 };

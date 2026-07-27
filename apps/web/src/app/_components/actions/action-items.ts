@@ -33,6 +33,14 @@ export interface ActionItem {
   entity?: Entity;
   name: string;
   path: string;
+  /**
+   * Search params to navigate with. Both surfaces use typed navigation
+   * (`<Link to>` / `navigate({ to })`), which treats `path` as a pathname —
+   * a query string embedded in `path` would never be parsed. The tracker
+   * entities have no `/new` route (they create via a dialog on their index
+   * page), so their actions deep-link with `{ create: true }` instead.
+   */
+  search?: Record<string, unknown>;
   icon: LucideIcon;
   keywords?: string[];
   surfaces: ActionSurface[];
@@ -99,6 +107,36 @@ export const actionItems: ActionItem[] = [
     ["navbar-create", "palette-quick"],
     ["create", "new", "place", "room"],
   ),
+  // House-domain quick capture. No `entity` (that variant renders "New {label}"
+  // pointing at `routes.new`, which these three deliberately don't have) — the
+  // create dialog is opened by the `create` search param on each index page.
+  {
+    id: "add-task",
+    name: "Add Task",
+    path: entities.task.routes.list,
+    search: { create: true },
+    icon: entities.task.lucideIcon,
+    keywords: ["create", "new", "todo", "house", "chore"],
+    surfaces: ["navbar-create", "palette-quick"],
+  },
+  {
+    id: "add-project",
+    name: "Add Project",
+    path: entities.project.routes.list,
+    search: { create: true },
+    icon: entities.project.lucideIcon,
+    keywords: ["create", "new", "house", "renovation", "trade"],
+    surfaces: ["navbar-create", "palette-quick"],
+  },
+  {
+    id: "add-purchase",
+    name: "Add Purchase",
+    path: entities.purchase.routes.list,
+    search: { create: true },
+    icon: entities.purchase.lucideIcon,
+    keywords: ["create", "new", "expense", "receipt", "spend", "cost"],
+    surfaces: ["navbar-create", "palette-quick"],
+  },
   {
     id: "bulk-move",
     name: "Bulk Move Inventory",

@@ -31,6 +31,7 @@ export const makeProductInput = (
   overrides: Partial<ProductCreateInput> = {},
 ): ProductCreateInput => ({
   name: "Test Product",
+  aliases: [],
   manufacturer: "Test Manufacturer",
   model: "TEST-123",
   upc: null,

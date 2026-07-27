@@ -3,7 +3,9 @@ export type HoverPreviewEntity =
   | "ingredient"
   | "product"
   | "usda-food"
+  | "cookbook"
   | "location"
+  | "meal"
   | "project"
   | "task"
   | "purchase";

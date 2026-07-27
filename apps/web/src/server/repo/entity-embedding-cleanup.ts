@@ -3,11 +3,14 @@ import type {
   LocationId,
   ProductId,
   ProjectId,
+  RecipeId,
 } from "@cubby/schemas/identifiers";
 import {
+  unsafeCookbookId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
+  unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
@@ -23,10 +26,13 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  cookbook,
   entityEmbedding,
   ingredient,
   inventoryEntry,
   location,
+  meal,
+  mealRecipe,
   product,
   project,
   purchase,
@@ -156,6 +162,29 @@ export async function findRecipeEmbeddingRefsForIngredients(
 }
 
 /**
+ * Meals embed the NAMES of the recipes planned into them, so a recipe rename
+ * must refresh every live meal embedding that plans it.
+ */
+export async function findMealEmbeddingRefsForRecipes(
+  db: Database,
+  recipeIds: RecipeId[],
+): Promise<SearchableEntityRef[]> {
+  if (recipeIds.length === 0) return [];
+  const rows = await getDb(db)
+    .selectDistinct({ mealId: mealRecipe.mealId })
+    .from(mealRecipe)
+    .innerJoin(meal, eq(meal.id, mealRecipe.mealId))
+    .where(
+      and(
+        inArray(mealRecipe.recipeId, recipeIds),
+        notDeleted(mealRecipe),
+        notDeleted(meal),
+      ),
+    );
+  return rows.map((row) => ({ entityType: "meal", entityId: row.mealId }));
+}
+
+/**
  * Tasks and purchases embed their project's NAME, so a project rename must
  * refresh every live task/purchase embedding under it.
  */
@@ -223,6 +252,12 @@ const liveIdLoaders = {
     ingredient.deletedAt,
     unsafeIngredientId,
   ),
+  cookbook: createLiveIdLoader(
+    cookbook,
+    cookbook.id,
+    cookbook.deletedAt,
+    unsafeCookbookId,
+  ),
   location: createLiveIdLoader(
     location,
     location.id,
@@ -235,6 +270,7 @@ const liveIdLoaders = {
     inventoryEntry.deletedAt,
     unsafeInventoryId,
   ),
+  meal: createLiveIdLoader(meal, meal.id, meal.deletedAt, unsafeMealId),
   project: createLiveIdLoader(
     project,
     project.id,

@@ -73,7 +73,9 @@ export function EntityPreviewContent({
     .with("usda-food", () => (
       <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />
     ))
+    .with("cookbook", () => <CookbookPreviewContent cookbookId={id} />)
     .with("location", () => <LocationPreviewContent locationId={id} />)
+    .with("meal", () => <MealPreviewContent mealId={id} />)
     .with("project", () => <ProjectPreviewContent projectId={id} />)
     .with("task", () => <TaskPreviewContent taskId={id} />)
     .with("purchase", () => <PurchasePreviewContent purchaseId={id} />)
@@ -495,6 +497,152 @@ export function LocationPreviewContent({ locationId }: { locationId: string }) {
               : undefined,
             itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
             subCount: data.childCount ?? data.children?.length ?? undefined,
+          })}
+        />
+      )}
+    </PreviewQuery>
+  );
+}
+
+// ── Cookbook ────────────────────────────────────────────────────────────────
+
+export type CookbookPreview = {
+  id: string;
+  name: string;
+  authors: string[];
+  subjects: string[];
+  recipeCount: number;
+  sourceRecipeCount: number;
+  coverUrl?: string | null;
+};
+
+export function toCookbookCard(vm: CookbookPreview): ManifestCardProps {
+  const body: BodyBlock[] = [];
+  if (vm.coverUrl) body.push({ kind: "thumb", url: vm.coverUrl });
+  body.push({
+    kind: "stats",
+    stats: [
+      {
+        label: "Recipes",
+        value: vm.recipeCount,
+        // How many of the book's extracted recipes are actually imported.
+        caption:
+          vm.sourceRecipeCount > vm.recipeCount
+            ? `of ${vm.sourceRecipeCount}`
+            : undefined,
+      },
+      {
+        label: "Subjects",
+        value:
+          vm.subjects.length > 0 ? vm.subjects.slice(0, 2).join(", ") : "—",
+      },
+    ],
+  });
+
+  return {
+    entity: "cookbook",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="cookbook" size={14} colored />,
+    name: vm.name,
+    tag: "cookbook",
+    identity: vm.authors.length > 0 ? vm.authors.join(", ") : undefined,
+    body,
+  };
+}
+
+export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
+  const trpc = useTRPC();
+  // Cookbooks have no getByID endpoint — the browse index carries every field
+  // the card needs and is already cached by /cookbooks (same source the detail
+  // page's hero reads).
+  const query = useQuery(trpc.recipe.listCookbooks.queryOptions());
+  const cookbook = query.data?.find((c) => c.id === cookbookId);
+
+  return (
+    <PreviewQuery
+      query={{ data: cookbook, isLoading: query.isLoading }}
+      label="Cookbook"
+    >
+      {(data) => (
+        <ManifestCard
+          {...toCookbookCard({
+            id: cookbookId,
+            name: data.book,
+            authors: data.author,
+            subjects: data.subjects,
+            recipeCount: data.recipeCount,
+            sourceRecipeCount: data.sourceRecipeCount,
+            coverUrl: data.coverUrl,
+          })}
+        />
+      )}
+    </PreviewQuery>
+  );
+}
+
+// ── Meal ────────────────────────────────────────────────────────────────────
+
+export type MealPreview = {
+  id: string;
+  name: string | null;
+  date: string;
+  recipeNames: string[];
+  cost: number;
+  calories: number;
+  /** At least one planned recipe has no computed totals yet. */
+  pending: boolean;
+};
+
+export function toMealCard(vm: MealPreview): ManifestCardProps {
+  return {
+    entity: "meal",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="meal" size={14} colored />,
+    // An unnamed meal is identified by its date — the same fallback the
+    // calendar uses.
+    name: vm.name || formatDate(vm.date),
+    tag: "meal",
+    identity: vm.name ? formatDate(vm.date) : undefined,
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          {
+            label: "Recipes",
+            value: vm.recipeNames.length,
+            caption:
+              vm.recipeNames.length > 0
+                ? vm.recipeNames.slice(0, 2).join(", ")
+                : undefined,
+          },
+          {
+            label: "Cost",
+            value: formatCurrency(vm.cost),
+            caption: vm.pending ? "partial" : undefined,
+          },
+          { label: "Calories", value: `${Math.round(vm.calories)} kcal` },
+        ],
+      },
+    ],
+  };
+}
+
+export function MealPreviewContent({ mealId }: { mealId: string }) {
+  const trpc = useTRPC();
+  const query = useQuery(trpc.meal.getByID.queryOptions({ id: mealId }));
+
+  return (
+    <PreviewQuery query={query} label="Meal">
+      {(data) => (
+        <ManifestCard
+          {...toMealCard({
+            id: mealId,
+            name: data.name,
+            date: data.date,
+            recipeNames: data.recipes.map((r) => r.recipe.name),
+            cost: data.totals.costTotal,
+            calories: data.totals.caloriesTotal,
+            pending: data.totals.pending,
           })}
         />
       )}

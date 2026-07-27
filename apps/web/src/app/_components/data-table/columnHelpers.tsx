@@ -30,7 +30,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import type { EntityDetailRoute } from "~/entities/entities";
+import type {
+  EntityDetailParams,
+  EntityDetailRoute,
+} from "~/entities/entities";
 import { entities } from "~/entities/entities";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -699,7 +702,7 @@ export function createActionsColumnBase<T>(
   columnHelper: ColumnHelper<T>,
   getLinkProps: (
     row: T,
-  ) => { to: EntityDetailRoute; params: { id: string } } | null,
+  ) => { to: EntityDetailRoute; params: EntityDetailParams } | null,
   extraActions?: (row: T) => ReactNode,
 ) {
   return columnHelper.display({
