@@ -100,7 +100,13 @@ export const findDuplicateUniqueProducts = async (
     }));
 };
 
-// Find products that have no inventory entries
+// Find products that have no *live* inventory entries.
+//
+// The `notDeleted(inventoryEntry)` inside the subquery is load-bearing: without
+// it a soft-deleted entry still satisfies EXISTS, so a product whose inventory
+// was deleted (rather than never created) stays invisible here — which is the
+// common case, since emptying a shelf soft-deletes the row instead of removing
+// it. That blind spot hid 18 of the 20 genuinely-uninventoried products.
 export const findOrphanedProducts = async (
   db: Database,
 ): Promise<OrphanedProduct[]> => {
@@ -122,7 +128,12 @@ export const findOrphanedProducts = async (
           dbClient
             .select({ id: sql`1` })
             .from(inventoryEntry)
-            .where(eq(inventoryEntry.productId, product.id)),
+            .where(
+              and(
+                eq(inventoryEntry.productId, product.id),
+                notDeleted(inventoryEntry),
+              ),
+            ),
         ),
       ),
     );
