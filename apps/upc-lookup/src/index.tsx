@@ -4,7 +4,6 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { setCookie, deleteCookie } from "hono/cookie";
 import { apiReference } from "@scalar/hono-api-reference";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { Env } from "./types";
 import {
   apiKeyAuth,
@@ -17,7 +16,6 @@ import { lookup } from "./routes/lookup";
 import { search } from "./routes/search";
 import { stats } from "./routes/stats";
 import { admin } from "./routes/admin";
-import { createMcpServer } from "./mcp/server";
 import { renderer } from "./renderer";
 import { openApiDocument } from "./openapi";
 
@@ -50,6 +48,16 @@ app.get("/health", (c) => {
 // Stateless: a fresh server + transport per request (the SDK's connect() is
 // single-use). Auth accepts X-API-Key or Authorization: Bearer.
 app.all("/mcp", mcpAuth, async (c) => {
+  // Imported here rather than at module scope. The MCP SDK pulls ajv,
+  // ajv-formats, zod-to-json-schema and fast-uri — ~440 KiB, roughly a third
+  // of this worker — to serve one route. Static imports put all of it on the
+  // startup path of every /lookup, /search and /images request too.
+  const [{ WebStandardStreamableHTTPServerTransport }, { createMcpServer }] =
+    await Promise.all([
+      import("@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"),
+      import("./mcp/server"),
+    ]);
+
   const baseUrl = new URL(c.req.url).origin;
   const server = createMcpServer(c.env, baseUrl);
   const transport = new WebStandardStreamableHTTPServerTransport({
