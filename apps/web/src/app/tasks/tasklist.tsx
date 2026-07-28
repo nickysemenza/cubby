@@ -21,6 +21,7 @@ import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
@@ -124,10 +125,7 @@ export function TaskList({
   );
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
-  const projectFilterOptions = useMemo(
-    () => ({ project: projectOptions }),
-    [projectOptions],
-  );
+  const projectFilterOptions = useFilterOptions({ project: projectOptions });
 
   // Scope constants that aren't column filters. Checklist subtasks are managed
   // from their parent's detail page, not surfaced as independent rows here.

@@ -105,6 +105,18 @@ export const locationListRefOut = z.object({
 });
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
+/**
+ * Lightweight `{id, name}` roster for the location filter's `parentLocation`
+ * picklist (see `useLocationParentOptions`) — only locations with at least
+ * one live child (repo/location/lookup.ts's `locationParentOptions`), not the
+ * full location universe. Mirrors `projectOptionsOut`'s role for projects.
+ */
+export const locationParentOptionsOut = z.object({
+  id: locationId,
+  name: z.string(),
+});
+export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
+
 const locationProductCategory = z.enum(productCategoryValues);
 
 const locationInventoryProductOut = z.object({

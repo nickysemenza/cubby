@@ -1,13 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
-import type {
-  ColumnDef,
-  ColumnHelper,
-  OnChangeFn,
-  RowSelectionState,
-  Table,
-} from "@tanstack/react-table";
+import type { ColumnDef, ColumnHelper, Table } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
@@ -80,16 +74,6 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   getMappings?: (item: TData) => UnitMapping[];
   /** Override table state options (initialSort / initialFilter / …) */
   tableStateOptions?: Parameters<typeof useTableState>[0];
-  /** Global filter state (for custom global filters like IngredientList) */
-  globalFilter?: unknown;
-  /** Global filter change handler */
-  onGlobalFilterChange?: (value: unknown) => void;
-  /** Enable row selection with checkbox column (for manual row selection management) */
-  enableRowSelection?: boolean;
-  /** Current row selection state (required if enableRowSelection is true) */
-  rowSelection?: RowSelectionState;
-  /** Callback when row selection changes */
-  onRowSelectionChange?: OnChangeFn<RowSelectionState>;
   /** Bulk actions configuration - automatically enables row selection */
   bulkActions?: BulkActionsConfig<TData>;
   /** Extra actions to render in the row action menu (after "View Details") */
@@ -122,6 +106,14 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   omitDetailLink?: boolean;
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
+  /**
+   * Column ids to render with no filter control — for a page that pins that
+   * column's value via `extraFilters` (which wins over the manifest-derived
+   * filters), so a header control would otherwise be interactive but inert.
+   * See `useStandardColumns`' doc comment. May be a fresh array literal each
+   * render — internally stabilized.
+   */
+  hiddenFilterColumns?: string[];
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
@@ -200,11 +192,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   filterOptions,
   getMappings,
   tableStateOptions,
-  globalFilter,
-  onGlobalFilterChange,
-  enableRowSelection,
-  rowSelection,
-  onRowSelectionChange,
   bulkActions,
   extraActions,
   deletable,
@@ -214,6 +201,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   nameEditable,
   omitDetailLink,
   nameSuffix,
+  hiddenFilterColumns,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
@@ -272,15 +260,14 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   });
 
   // Determine effective row selection state - bulk actions takes precedence
+  // (mirrors useClientEntityList's equivalent).
+  const effectiveEnableRowSelection = !!effectiveBulkActions;
   const effectiveRowSelection = effectiveBulkActions
     ? bulkActionsState.rowSelection
-    : (rowSelection ?? {});
+    : {};
   const effectiveOnRowSelectionChange = effectiveBulkActions
     ? bulkActionsState.onRowSelectionChange
-    : onRowSelectionChange;
-  const effectiveEnableRowSelection = effectiveBulkActions
-    ? true
-    : (enableRowSelection ?? false);
+    : undefined;
 
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { hasUnitMappings, defaultSort } = useMemo(() => {
@@ -393,6 +380,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     nameEditable,
     omitDetailLink,
     nameSuffix,
+    hiddenFilterColumns,
   });
 
   // Memoize getRowId to prevent recreating on every render
@@ -420,8 +408,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     tableState,
     totalCount: useInfiniteMode ? data.length : totalCount,
     manualPagination: !useInfiniteMode,
-    globalFilter,
-    onGlobalFilterChange,
     getRowId,
     enableRowSelection: effectiveEnableRowSelection,
     rowSelection: effectiveRowSelection,
