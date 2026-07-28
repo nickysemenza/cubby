@@ -31,7 +31,7 @@ import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
-import { EntityInlineLink } from "../EntityInlineLink";
+import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
@@ -177,8 +177,27 @@ export const RecipeIngredientList: React.FC<{
         const name = info.getValue();
         return (
           <div className="min-w-0">
-            <div className="truncate">
-              {name}
+            <div className="truncate" title={name}>
+              {match(row)
+                .with({ type: "ingredient" }, (r) => (
+                  <EntityPreviewLink
+                    entity="ingredient"
+                    id={r.ingredient.id}
+                    className={dottedEntityLink}
+                  >
+                    {name}
+                  </EntityPreviewLink>
+                ))
+                .with({ type: "recipe" }, (r) => (
+                  <EntityPreviewLink
+                    entity="recipe"
+                    id={r.recipe.id}
+                    className={dottedEntityLink}
+                  >
+                    {name}
+                  </EntityPreviewLink>
+                ))
+                .exhaustive()}
               <IngredientModifier modifier={row.modifier} />
             </div>
             {rawLine && rawLine !== name && (
@@ -396,27 +415,6 @@ export const RecipeIngredientList: React.FC<{
         },
       ),
     ),
-    columnHelper.display({
-      id: "ingredientDetails",
-      header: "Ingredient Details",
-      meta: { className: "w-36" },
-      cell: (props) =>
-        match(props.row.original)
-          .with({ type: "ingredient" }, (row) => (
-            <EntityInlineLink
-              entity="ingredient"
-              data={{
-                name: row.ingredient.name,
-                id: row.ingredient.id,
-              }}
-              compact
-            />
-          ))
-          .with({ type: "recipe" }, (row) => (
-            <EntityInlineLink entity="recipe" data={row.recipe} compact />
-          ))
-          .exhaustive(),
-    }),
     columnHelper.display({
       id: "mappings",
       header: "Unit Mappings",

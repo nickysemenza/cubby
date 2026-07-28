@@ -80,14 +80,6 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
   };
-  /**
-   * Skip the standard name column's link to the entity's detail page, and the
-   * actions menu's "View Details" item. For an entity with no dedicated detail
-   * page, `routes.detail` would point back at the list page itself — both
-   * affordances would be no-ops there. (No entity currently needs this; kept
-   * as the escape hatch for the next list-only entity.)
-   */
-  omitDetailLink?: boolean;
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
   /**
@@ -120,7 +112,6 @@ export function useStandardColumns<TData extends BaseListRow>({
   hasUnitMappings,
   nameClassName,
   nameEditable,
-  omitDetailLink,
   nameSuffix,
   expandable,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
@@ -191,7 +182,6 @@ export function useStandardColumns<TData extends BaseListRow>({
           ...(nameFilterConfig ? { filterConfig: nameFilterConfig } : {}),
           className: nameClassName,
           editable: nameEditable,
-          omitDetailLink,
           nameSuffix,
           expandable,
         }),
@@ -256,7 +246,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     cols.push(
       createActionsColumn(columnHelper, entity, {
         extraActions: combinedExtraActions,
-        omitDetailLink,
       }),
     );
 
@@ -274,7 +263,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     combinedExtraActions,
     nameClassName,
     nameEditable,
-    omitDetailLink,
     nameSuffix,
     expandable,
   ]);

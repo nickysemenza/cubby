@@ -1,5 +1,6 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
+import { Link } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
@@ -150,6 +151,14 @@ export function LocationInventoryTable({
           });
         },
         getUnitMappings: (row) => unitMappingsByProductId[row.product.id] ?? [],
+        // The only click-through to the row's OWN entity — every other column
+        // here points at the product or location. Same treatment as the
+        // /inventory index list.
+        renderDisplay: (content, row) => (
+          <Link to="/inventory/$id" params={{ id: row.id }}>
+            {content}
+          </Link>
+        ),
       }),
     ],
     [columnHelper, unitMappingsByProductId],

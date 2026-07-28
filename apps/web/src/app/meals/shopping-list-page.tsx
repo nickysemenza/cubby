@@ -359,22 +359,42 @@ function RowGroup({
           <Checkbox checked={isChecked} onCheckedChange={onToggleCheck} />
         </TableCell>
         <TableCell className="whitespace-normal">
-          <Row
-            as="button"
-            type="button"
-            align="center"
-            gap="snug"
-            onClick={onToggle}
-            className="text-left hover:underline"
-          >
-            {isOpen ? (
-              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          {/* Chevron toggles, name navigates — the same split `createNameColumn`
+              uses for expandable rows, so the name can be a real link. */}
+          <Row align="center" gap="snug">
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={isOpen}
+              aria-label={isOpen ? "Collapse" : "Expand"}
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {isOpen ? (
+                <ChevronDown className="size-3.5" />
+              ) : (
+                <ChevronRight className="size-3.5" />
+              )}
+            </button>
+            {item.ingredientId ? (
+              <Link
+                to="/ingredients/$id"
+                params={{ id: item.ingredientId }}
+                title={item.name}
+                className={cn(
+                  "font-medium hover:underline",
+                  isChecked && "line-through",
+                )}
+              >
+                {item.name}
+              </Link>
             ) : (
-              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+              <span
+                title={item.name}
+                className={cn("font-medium", isChecked && "line-through")}
+              >
+                {item.name}
+              </span>
             )}
-            <span className={cn("font-medium", isChecked && "line-through")}>
-              {item.name}
-            </span>
             <span className={`text-xs ${statusClass(status)}`}>
               · {statusLabel(status)}
             </span>
@@ -417,7 +437,14 @@ function RowGroup({
               </Link>
               <span className="ml-1">
                 — {c.scale !== 1 ? `${c.scale}× ` : ""}
-                {c.recipeName}
+                <Link
+                  to="/recipes/$id"
+                  params={{ id: c.recipeId }}
+                  title={c.recipeName}
+                  className="hover:underline"
+                >
+                  {c.recipeName}
+                </Link>
               </span>
             </TableCell>
             <TableCell className="py-1 text-right tabular-nums">

@@ -133,7 +133,9 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           <span className="shrink-0">
             {data.amount.value} {data.amount.unit}
           </span>
-          <span className="truncate">{data.productName}</span>
+          <span className="truncate" title={data.productName}>
+            {data.productName}
+          </span>
         </Link>
       </Row>
     );

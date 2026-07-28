@@ -45,7 +45,11 @@ export function LocationContentsPreview({ items }: { items: InventoryItem[] }) {
           </span>
         )}
       </Row>
-      <Description size="xs" className="min-w-0 flex-1 truncate">
+      <Description
+        size="xs"
+        className="min-w-0 flex-1 truncate"
+        title={nameLine}
+      >
         {nameLine}
       </Description>
     </Row>

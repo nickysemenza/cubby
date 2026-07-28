@@ -317,7 +317,9 @@ function MealChip({ meal }: { meal: MealOut }) {
       className="flex flex-col gap-0.5 rounded-md border bg-card p-1.5 text-xs transition-colors hover:bg-accent" /* tight: calendar meal chip */
     >
       <Row align="center" justify="between" gap="xs">
-        <span className="truncate font-medium">{meal.name || "Meal"}</span>
+        <span className="truncate font-medium" title={meal.name || "Meal"}>
+          {meal.name || "Meal"}
+        </span>
         <span className="shrink-0 text-muted-foreground tabular-nums">
           {formatMealCost(meal.totals)}
         </span>
@@ -325,8 +327,14 @@ function MealChip({ meal }: { meal: MealOut }) {
       {meal.recipes.length === 0 ? (
         <span className="text-muted-foreground italic">empty</span>
       ) : (
+        // Title only, no link: the whole chip is already an <a> to the meal, and
+        // an anchor can't nest another one. The meal page links each recipe.
         meal.recipes.map((r) => (
-          <span key={r.id} className="truncate text-muted-foreground">
+          <span
+            key={r.id}
+            className="truncate text-muted-foreground"
+            title={r.recipe.name}
+          >
             {r.scale !== 1 ? `${r.scale}× ` : ""}
             {r.recipe.name}
           </span>

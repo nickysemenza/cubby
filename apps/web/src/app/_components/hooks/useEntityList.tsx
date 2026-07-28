@@ -113,13 +113,6 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
   };
-  /**
-   * Skip the standard name column's link to the entity's detail page, and the
-   * actions menu's "View Details" item. For entities with no dedicated detail
-   * page (task, purchase), `routes.detail` points back at the list page
-   * itself — both affordances would be no-ops there.
-   */
-  omitDetailLink?: boolean;
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
   /** Group configuration — enables group toggle and server-side group ordering */
@@ -212,7 +205,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   initialColumnVisibility,
   nameClassName,
   nameEditable,
-  omitDetailLink,
   nameSuffix,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
@@ -391,7 +383,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     hasUnitMappings,
     nameClassName,
     nameEditable,
-    omitDetailLink,
     nameSuffix,
   });
 

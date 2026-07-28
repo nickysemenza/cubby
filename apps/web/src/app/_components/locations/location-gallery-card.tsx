@@ -107,6 +107,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
                 to="/locations/$id"
                 params={{ id: location.id }}
                 className="min-w-0 truncate font-medium text-xs hover:text-primary hover:underline"
+                title={location.name}
               >
                 {location.name}
               </Link>
@@ -149,6 +150,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
                   to="/products/$id"
                   params={{ id: product.id }}
                   className="line-clamp-2 flex-1 text-2xs leading-tight hover:text-primary"
+                  title={product.name}
                 >
                   {product.name}
                 </Link>
