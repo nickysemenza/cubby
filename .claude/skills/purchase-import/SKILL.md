@@ -39,7 +39,8 @@ This file is weighted toward **failure modes** — the happy path is easy, the t
 
 | Key | Strength | Notes |
 | --- | --- | --- |
-| Order ID already in `notes` | exact | Best. Reconcile cost vs that order directly. |
+| `Purchase.orderId` (+ `vendor`) | exact | Best. Reconcile cost vs that order directly. |
+| Order id in `notes` prose | exact, legacy | Pre-`orderId` rows. Lift it into the column as you touch the row. |
 | ASIN / SKU / model in `url` or `model` | proof-grade | Model appearing verbatim in the vendor title is proof. |
 | Exact tax-inclusive amount + date | strong *with* a name check | The workhorse; see traps below. |
 | Embedding / fuzzy name similarity | hint only | Never auto-apply. |
@@ -75,11 +76,22 @@ Also confirm the row's own notes don't name a different vendor — one row readi
 
 ## Phase 4 — writing
 
-- Set `vendor` on every row you touch.
-- Record provenance in `notes` as `"<Vendor> order <ID>"` — the established convention across
-  Amazon, Home Depot (`WN…`), and Direct Tools Outlet. Itemize the lines for aggregate rows so the
-  row is never re-flagged as missing. Append to substantive notes; replace bare markers like
-  `"amazon"`.
+- Set `vendor` **and `orderId`** on every row you touch. `orderId` is the vendor's own order/receipt
+  id, free text, scoped by `vendor` — `111-1234567-1234567`, `WN63446464`, `DT640921`, `#11334`.
+  This is the field the reconciliation in Phase 5 and the duplicate/aggregate queries below read;
+  putting the id only in `notes` leaves them blind to everything you import.
+- `notes` carries the *human-readable* provenance, not the identifier: itemize the lines for
+  aggregate rows so the row is never re-flagged as missing, and note anything odd (a cancelled twin
+  order, a line deliberately left unbooked). Append to substantive notes; replace bare markers like
+  `"amazon"`. Legacy rows store the id as `"<Vendor> order <ID>"` prose — lift it into `orderId`
+  when you touch them.
+- With `orderId` set, these become one-liners rather than heuristics:
+  ```sql
+  -- every multi-row order (aggregate rows, split siblings, buy/return pairs)
+  SELECT vendor, "orderId", count(*), sum(cost) FROM "Purchase"
+  WHERE "deletedAt" IS NULL AND "orderId" IS NOT NULL
+  GROUP BY vendor, "orderId" HAVING count(*) > 1;
+  ```
 - Canonical product link: `https://www.amazon.com/dp/<ASIN>`.
 - Vendor identifiers go in **`ProductExternalId`** (`source`/`externalId`/`url`) — never a new
   column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces the whole
@@ -98,10 +110,12 @@ Also confirm the row's own notes don't name a different vendor — one row readi
 
 ## Phase 5 — reconcile
 
-Once order IDs are recorded, run the exact check: every row's cost against its order total and that
-order's individual lines. In the 2026-07 pass this flagged **3 mismatches out of 162** — and caught a
-purchase recorded at $49.51 that was really $123.51, whose derived net had been reported as a $4.51
-gain when it was a $78.51 loss. This check is worth far more than any further fuzzy sweeping.
+Once `orderId` is populated, run the exact check: join every row on `(vendor, orderId)` and compare
+its cost against that order's total and its individual lines. In the 2026-07 pass this flagged
+**3 mismatches out of 162** — and caught a purchase recorded at $49.51 that was really $123.51, whose
+derived net had been reported as a $4.51 gain when it was a $78.51 loss. This check is worth far more
+than any further fuzzy sweeping, and it only works on rows whose id is in the **column** — a row
+whose id lives only in `notes` prose is invisible to it.
 
 ## Diminishing returns
 
