@@ -227,11 +227,16 @@ export function MobileCardView<TItem>({
         actions={model.actionsContent}
         entity={entity}
         onClick={
-          model.detailsHref
-            ? () => {
-                navigate({ to: model.detailsHref });
-              }
-            : undefined
+          // In selection mode a tap toggles the row rather than navigating —
+          // the iOS convention, and otherwise picking a second row means
+          // hitting a 20px checkbox instead of the row you're looking at.
+          selectionMode
+            ? () => row.toggleSelected(!row.getIsSelected())
+            : model.detailsHref
+              ? () => {
+                  navigate({ to: model.detailsHref });
+                }
+              : undefined
         }
       >
         {debugContent}
