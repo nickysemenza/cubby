@@ -206,6 +206,74 @@ describe("problems repo", () => {
     });
   });
 
+  describe("findOrphanedProducts", () => {
+    it("flags a product whose only inventory entry was soft-deleted", async () => {
+      // The regression this guards: the EXISTS subquery used to omit
+      // notDeleted(inventoryEntry), so a soft-deleted row still counted as
+      // "has inventory" and the product stayed invisible. Emptying a shelf
+      // soft-deletes rather than hard-deletes, so that was the common case —
+      // it hid 18 of 20 genuinely-uninventoried products in production.
+      const loc = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Orphan shelf" }),
+        ctx.actor,
+      );
+      const emptied = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Emptied Product" }),
+        ctx.actor,
+      );
+      const stocked = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Stocked Product" }),
+        ctx.actor,
+      );
+      const entry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: emptied.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      // Live inventory on both — neither is orphaned yet.
+      const before = await findAllProblems(
+        ctx.db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(before.orphanedProducts.some((p) => p.id === emptied.id)).toBe(
+        false,
+      );
+
+      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+
+      const after = await findAllProblems(
+        ctx.db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(after.orphanedProducts.some((p) => p.id === emptied.id)).toBe(
+        true,
+      );
+      // The still-stocked product must not be swept up.
+      expect(after.orphanedProducts.some((p) => p.id === stocked.id)).toBe(
+        false,
+      );
+    });
+  });
+
   describe("findProductsWithIslandedMappings", () => {
     it("flags a product whose mappings form 2+ islands but not a connected one", async () => {
       // widget↔gadget are custom units unreachable from the standard unit graph,

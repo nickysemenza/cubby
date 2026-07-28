@@ -68,6 +68,7 @@ The `Database` type is opaque (branded) — you can't call methods on it outside
 All major entities (products, recipes, locations, ingredients, inventory, projects, tasks, purchases) use soft delete with a `deletedAt` timestamp column. Deleted items are retained in the database but hidden from normal queries.
 
 - Always use `notDeleted(table)` helper to filter out deleted records in queries
+- **This applies *inside* `exists()` / `notExists()` subqueries too — guard-enforced.** A soft-deleted row still satisfies `EXISTS`, so `notExists(select().from(inventoryEntry).where(eq(...)))` reads as "has no inventory" but silently matches products whose inventory was merely emptied. Since emptying a shelf soft-deletes rather than removes, that's the *common* path: this exact omission made `findOrphanedProducts` miss 18 of 20 real hits (#428), and the same bug sat unnoticed in two more subqueries in the same file. `scripts/check-soft-delete-filters.mjs` (runs in `pnpm check`, so CI) fails any `exists`/`notExists` subquery over a soft-deletable table that has neither `notDeleted(…)` nor an explicit `deletedAt` predicate. For the rare subquery that genuinely must see deleted rows (cleanup/orphan sweeps), put an `includes-deleted: <reason>` comment above the call.
 - Delete operations cascade to related entities (e.g., deleting a product soft-deletes its images and unit mappings)
 - All deletions are wrapped in transactions and logged to audit trail
 - Safety checks prevent deletion of entities with dependencies (e.g., products with inventory)
