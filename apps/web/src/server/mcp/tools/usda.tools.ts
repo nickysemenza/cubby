@@ -40,8 +40,17 @@ export function registerUsdaTools(server: McpServer) {
         filters: {
           nameFilter: params.query,
           dataTypeFilter: params.dataType,
+          // Exclude the five sampling/research data types — provenance records
+          // carrying ~0 nutrients, which USDA FDC itself hides from food search.
+          foodsOnly: true,
         },
-        sort: { orderBy: "description", direction: "asc" },
+        // `relevance` is the ranked path: data-type richness (SR Legacy >
+        // Survey > Foundation > Branded), then exact/prefix description match,
+        // then bm25. Alphabetical ordering — the previous setting — put quoted
+        // branded label scans first, because `"` sorts before letters, so a
+        // search for "butter" led with three copies of one branded product and
+        // no plain butter at all.
+        sort: { orderBy: "relevance", direction: "asc" },
         pagination: {
           pageIndex: (params.pageIndex as number) ?? 0,
           pageSize: (params.pageSize as number) ?? 25,

@@ -109,6 +109,18 @@ Price-per-nutrient, daily-value %, nutrient-density comparisons, batch ingredien
 parsing (`parse_ingredient_lines`), and custom serving aliases all shipped. Remaining
 follow-ups:
 
+- [ ] **Collapse USDA duplicates by UPC — only if it resurfaces.** FDC mints a new
+  `fdc_id` on every republish, so one barcode maps to several rows (UPC
+  `857750003948` → `1433980` / `1726281` / `2160231`, the oldest with no nutrients
+  at all). Two fixes shipped: lookup now takes the newest row, and
+  `search_usda_foods` uses `relevance` ordering, which leads with UPC-less SR
+  Legacy / Foundation foods — so the duplicates fell off page one on their own and
+  no de-duplication was built. If they come back (a brand-name query, deep paging),
+  the cheap fix is to reuse the existing `dedupeUsdaFoodsByUpc`
+  (`lib/usda-food-stats.ts`, already used by the picker combobox and ingredient
+  review card) inside the MCP tool handler. **Not** a SQL dedupe in usda-api: the
+  list query's `count` and `data` come from different FROM clauses and are never
+  reconciled, and that count drives the `/usda` table's pager.
 - [ ] **Replace `NutritionInfoTable` with `NutritionLabel`** on the USDA food pages —
   the FDA-style label (with %DV) now coexists with the raw nutrient table on
   product detail; decide whether the raw table still earns its place. (2026-07
