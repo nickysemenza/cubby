@@ -317,11 +317,34 @@ export function registerMcpTool<TInput extends ZodSchemaLike>(
       title: config.title,
       description: config.description,
       inputSchema,
-      outputSchema: config.outputSchema,
+      outputSchema: sdkOutputSchema(config.outputSchema),
       annotations: config.annotations,
     },
     callback as unknown as ToolCallback<typeof inputSchema>,
   );
+}
+
+/**
+ * The output schema handed to the SDK, which is not always the one we validate
+ * against.
+ *
+ * The SDK runs `normalizeObjectSchema` on a tool's registered `outputSchema`
+ * and only recognizes a raw shape or an object schema — anything else (a union,
+ * say) normalizes to `undefined`. On `tools/list` that's silently dropped
+ * behind an `if (obj)` guard, but `validateToolOutput` then calls
+ * `safeParseAsync(undefined, structuredContent)` and dies with "Cannot read
+ * properties of undefined (reading '_zod')". So a non-object output schema
+ * doesn't degrade the tool, it breaks every call to it — which is what had
+ * `list_problems` (the one tool with a `z.union` output) failing outright since
+ * it gained a structured schema in #341.
+ *
+ * `structuredSuccess` already parses the real schema before we return, so the
+ * SDK's re-validation is redundant; handing it a permissive object keeps the
+ * precise check where it counts and lets the call through. Anything already
+ * object-shaped is passed untouched so it still publishes a useful JSON Schema.
+ */
+function sdkOutputSchema(schema: z.ZodType): z.ZodType {
+  return schema instanceof z.ZodObject ? schema : z.looseObject({});
 }
 
 export function getCaller(extra: ToolExtra): Caller {

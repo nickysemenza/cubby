@@ -25,6 +25,7 @@ import {
   getRegisteredTool,
   registerEntityCreateTool,
   registerEntityCrudToolset,
+  registerMcpTool,
   slimRecipe,
   stripMockFromJsonSchema,
   WRITE_CLOSED,
@@ -989,5 +990,58 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       id: ENTRY_ID,
       data: { amount: { value: 3, unit: "each" } },
     });
+  });
+});
+
+describe("registerMcpTool non-object output schemas", () => {
+  // Regression: the SDK's validateToolOutput runs normalizeObjectSchema on the
+  // registered outputSchema, which yields `undefined` for anything not
+  // object-shaped, then parses against it — "Cannot read properties of
+  // undefined (reading '_zod')". A union output therefore didn't degrade the
+  // tool, it broke every call. `list_problems` was the only such tool and had
+  // been failing outright since it gained a structured schema.
+  const unionOut = z.union([
+    z.object({ total: z.number() }),
+    z.object({ type: z.string(), items: z.array(z.unknown()) }),
+  ]);
+
+  const serverWithUnionTool = (payload: unknown) => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpTool(server, {
+      name: "union_out",
+      description: "returns one of two shapes",
+      outputSchema: unionOut,
+      annotations: { readOnlyHint: true },
+      handler: async () => payload,
+    });
+    return server;
+  };
+
+  it("calls through for each branch of a union output", async () => {
+    for (const payload of [
+      { total: 3 },
+      { type: "orphanedProducts", items: [{ id: "p1" }] },
+    ]) {
+      const result = (await callTool(
+        serverWithUnionTool(payload),
+        "union_out",
+        {},
+        {},
+      )) as CallToolResult;
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual(payload);
+    }
+  });
+
+  it("still enforces the precise schema, which the SDK stand-in cannot", async () => {
+    // The permissive object handed to the SDK must not become the real check:
+    // structuredSuccess parses the union itself, so a bad payload still errors.
+    const result = (await callTool(
+      serverWithUnionTool({ total: "not-a-number" }),
+      "union_out",
+      {},
+      {},
+    )) as CallToolResult;
+    expect(result.isError).toBe(true);
   });
 });
