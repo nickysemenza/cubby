@@ -589,3 +589,102 @@ describe("createEdgeUsdaDataSource", () => {
     }
   });
 });
+
+/**
+ * Records every SQL string the data source prepares, so the ordering that
+ * decides *which* row wins can be asserted.
+ *
+ * These are SQL-shape assertions, not runtime-ordering ones: this suite has no
+ * real D1 (the fakes branch on `query.includes(...)`), so nothing here executes
+ * ORDER BY. That's still the guard worth having — the failure mode being
+ * prevented is someone reading `fdc_id DESC` as a typo and "fixing" it, which a
+ * shape assertion catches and a mocked result set never would.
+ */
+function makeQueryRecordingEnv(): { env: EdgeBindings; queries: string[] } {
+  const queries: string[] = [];
+  const db = {
+    prepare(query: string) {
+      queries.push(query);
+      const statement = {
+        bind() {
+          return statement;
+        },
+        async first<T>() {
+          if (query.includes("usda_edge_meta")) return { value: "vtest" } as T;
+          if (query.includes("count(*)")) return { count: 0 } as T;
+          return null;
+        },
+        async all<T>() {
+          return { success: true, results: [] as T[] };
+        },
+      };
+      return statement;
+    },
+    async batch<T>(statements: Array<{ all(): Promise<T> }>) {
+      return Promise.all(statements.map((s) => s.all()));
+    },
+  };
+  return {
+    env: {
+      DB: db as unknown as EdgeBindings["DB"],
+      USDA_BUNDLES: { get: vi.fn() } as unknown as EdgeBindings["USDA_BUNDLES"],
+    },
+    queries,
+  };
+}
+
+describe("lookup resolves a barcode to its newest record", () => {
+  // One barcode maps to several rows: FDC mints a new fdc_id every time a
+  // branded item is republished. The lowest id is the oldest submission and is
+  // routinely the one with no nutrients — resolving to it made the
+  // `ingredient -> product -> fdc_id` hop land on an empty record.
+  it("orders the single lookup by fdc_id DESC", async () => {
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).findFoodByUpc("857750003948");
+
+    const lookup = queries.find((q) => q.includes("WHERE gtin_upc = ?"));
+    expect(lookup).toMatch(/ORDER BY fdc_id DESC LIMIT 1/);
+    expect(lookup).not.toMatch(/fdc_id ASC/);
+  });
+
+  it("orders the NDB lookup by fdc_id DESC too", async () => {
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).findFoodByNdb(1001);
+
+    expect(queries.find((q) => q.includes("WHERE ndb_number = ?"))).toMatch(
+      /ORDER BY fdc_id DESC LIMIT 1/,
+    );
+  });
+
+  it("keeps the batch path in agreement with the single path", async () => {
+    // `ORDER BY <column> ASC, fdc_id DESC` + the first-wins fold keeps the same
+    // row the single lookup returns. If these two disagree, a product resolves
+    // to a different food depending on which path enrichment happened to take.
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).findFoodsByLookupBatch([
+      { kind: "upc", gtin_upc: "857750003948" },
+    ]);
+
+    expect(queries.find((q) => q.includes("WHERE gtin_upc IN"))).toMatch(
+      /ORDER BY gtin_upc ASC, fdc_id DESC/,
+    );
+  });
+});
+
+describe("relevance ordering", () => {
+  it("ends with a unique key so paging is deterministic", async () => {
+    // Tied rows otherwise come back in SQLite-defined order, which lets the
+    // same row appear on two pages of a LIMIT/OFFSET scan, or on neither.
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "butter",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    const data = queries.find((q) => q.includes("ORDER BY CASE"));
+    expect(data).toMatch(/rank ASC, i\.fdc_id ASC/);
+  });
+});
