@@ -412,7 +412,10 @@ function ExpectedItemReviewRow({
           className="size-12 shrink-0 border border-[var(--border)] object-cover"
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-medium text-sm">
+          <div
+            className="truncate font-medium text-sm"
+            title={item.product.name}
+          >
             {item.product.name}
           </div>
           <Row align="baseline" gap="xs" wrap>

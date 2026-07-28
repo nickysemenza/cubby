@@ -4,6 +4,7 @@ import type {
   TaskStatus,
 } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
+import { Link } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
@@ -118,7 +119,14 @@ export function TaskStatusBoard({
           {rows.map((row) => (
             <tr key={row.projectId} className="border-border/50 border-t">
               <td className="max-w-[150px] truncate py-2 pr-2 font-medium">
-                {row.name}
+                <Link
+                  to="/projects/$id"
+                  params={{ id: row.projectId }}
+                  className="hover:underline"
+                  title={row.name}
+                >
+                  {row.name}
+                </Link>
               </td>
               {statuses.map((status) => {
                 const count = counts(row.breakdown, status);

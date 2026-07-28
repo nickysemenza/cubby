@@ -1058,6 +1058,7 @@ function NameCell({
         />
       )}
       <span
+        title={row.name}
         className={cn(
           "min-w-0 flex-1 truncate text-xs",
           onChain && "font-semibold",

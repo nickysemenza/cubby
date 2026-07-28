@@ -24,11 +24,16 @@ function IngredientStatusLink({ row }: { row: IngredientAvailability }) {
       to="/ingredients/$id"
       params={{ id: row.ingredientId }}
       className={cn(className, "hover:underline")}
+      title={row.name}
     >
       {row.name}
     </Link>
   ) : (
-    <span className={className}>{row.name}</span>
+    // Sub-recipe rows carry no id at all (see `ingredientAvailabilityOut`), so
+    // the title attribute is the only full-name recovery available here.
+    <span className={className} title={row.name}>
+      {row.name}
+    </span>
   );
 }
 

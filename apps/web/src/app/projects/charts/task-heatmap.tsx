@@ -1,4 +1,5 @@
 import type { TaskOut } from "@cubby/schemas/project";
+import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
 import { formatDate, StatusIcon } from "../shared";
@@ -69,7 +70,14 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
           className="flex items-center gap-2 rounded px-2 py-1 text-xs"
         >
           <StatusIcon status={task.status} />
-          <span className="truncate">{task.name}</span>
+          <Link
+            to="/tasks/$id"
+            params={{ id: task.id }}
+            className="truncate hover:underline"
+            title={task.name}
+          >
+            {task.name}
+          </Link>
           {task.projectName && (
             <span className="ml-auto shrink-0 text-muted-foreground">
               {task.projectName}

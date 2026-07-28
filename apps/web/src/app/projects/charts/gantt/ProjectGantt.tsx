@@ -175,6 +175,7 @@ export function ProjectGantt({
                 to="/tasks/$id"
                 params={{ id: task.id }}
                 className="max-w-64 truncate rounded-sm bg-muted px-2 py-1 text-xs hover:underline"
+                title={task.name}
               >
                 {task.name}
               </Link>

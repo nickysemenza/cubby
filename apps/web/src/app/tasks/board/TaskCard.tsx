@@ -157,7 +157,9 @@ export function TaskCard({
       )}
       <Stack gap="snug">
         <Row align="start" justify="between" gap="tight">
-          <span className="line-clamp-2 font-medium text-sm">{task.name}</span>
+          <span className="line-clamp-2 font-medium text-sm" title={task.name}>
+            {task.name}
+          </span>
           <Row align="center" gap="tight" className="shrink-0">
             {task.subtaskCount > 0 && (
               <Badge variant="outline">
