@@ -11,6 +11,7 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
 import { MobileFilterSheet } from "./MobileFilterSheet";
 import type { GroupConfig } from "./useGroupedList";
+import { mobileListShape } from "./useMobileListModel";
 
 interface MobileRefreshControls {
   onRefresh: () => Promise<void>;
@@ -88,7 +89,7 @@ export function MobileListScreen<TItem>({
       />
 
       {isLoading ? (
-        <MobileCardSkeletonList />
+        <MobileCardSkeletonList {...mobileListShape(table)} />
       ) : error ? (
         <div className="py-6">
           <ErrorDisplay error={error} />

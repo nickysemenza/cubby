@@ -321,9 +321,16 @@ export function TaskList({
   const columns = useMemo(
     () => [
       buildSelectColumn<TaskOut>(lastSelectedIdRef, shiftKeyRef),
-      taskStatusColumn(taskHelper, async (status, task) => {
-        await updateTaskMutation.mutateAsync({ id: task.id, data: { status } });
-      }),
+      taskStatusColumn(
+        taskHelper,
+        async (status, task) => {
+          await updateTaskMutation.mutateAsync({
+            id: task.id,
+            data: { status },
+          });
+        },
+        { mobile: { slot: "subtitle", priority: 10 } },
+      ),
       taskHelper.accessor("name", {
         header: "Task",
         cell: ({ row }) => row.original.name,
@@ -335,6 +342,7 @@ export function TaskList({
         ? [
             createProjectLinkColumn(taskHelper, {
               className: "w-40",
+              mobile: { slot: "meta", priority: 30, interactive: true },
               editable: {
                 onSave: async (newProjectId, task) => {
                   await updateTaskMutation.mutateAsync({
@@ -354,14 +362,18 @@ export function TaskList({
             data: { trade },
           });
         },
-        { emptyAsNull: true },
+        { emptyAsNull: true, mobile: { slot: "meta", priority: 50 } },
       ),
-      taskDueColumn(taskHelper, async (dueDate, task) => {
-        await updateTaskMutation.mutateAsync({
-          id: task.id,
-          data: { dueDate },
-        });
-      }),
+      taskDueColumn(
+        taskHelper,
+        async (dueDate, task) => {
+          await updateTaskMutation.mutateAsync({
+            id: task.id,
+            data: { dueDate },
+          });
+        },
+        { mobile: { slot: "meta", priority: 40, interactive: true } },
+      ),
     ],
     [showProjectColumn],
   );
@@ -825,6 +837,7 @@ export function PurchaseList({
         ? [
             createProjectLinkColumn(purchaseHelper, {
               className: "w-40",
+              mobile: { slot: "meta", priority: 40, interactive: true },
               editable: {
                 onSave: async (newProjectId, purchase) => {
                   await updatePurchaseMutation.mutateAsync({
@@ -836,12 +849,16 @@ export function PurchaseList({
             }),
           ]
         : []),
-      purchaseCostTypeColumn(purchaseHelper, async (costType, purchase) => {
-        await updatePurchaseMutation.mutateAsync({
-          id: purchase.id,
-          data: { costType },
-        });
-      }),
+      purchaseCostTypeColumn(
+        purchaseHelper,
+        async (costType, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { costType },
+          });
+        },
+        { mobile: { slot: "meta", priority: 20 } },
+      ),
       // Negative rows are credits/contributions (money in) — `signedTone`
       // greens them so they don't read as spend; `decimals: 0` keeps the
       // embedded table's whole-dollar density. `exactFilter` keeps the pivot's
@@ -854,7 +871,11 @@ export function PurchaseList({
             data: { trade },
           });
         },
-        { emptyAsNull: true, exactFilter: true },
+        {
+          emptyAsNull: true,
+          exactFilter: true,
+          mobile: { slot: "meta", priority: 60 },
+        },
       ),
       purchaseCostColumn(
         purchaseHelper,
@@ -864,20 +885,33 @@ export function PurchaseList({
             data: { cost },
           });
         },
-        { className: "w-20", decimals: 0, signedTone: true },
+        {
+          className: "w-20",
+          decimals: 0,
+          signedTone: true,
+          mobile: { slot: "trailing", priority: 10, interactive: true },
+        },
       ),
-      purchaseDateColumn(purchaseHelper, async (date, purchase) => {
-        await updatePurchaseMutation.mutateAsync({
-          id: purchase.id,
-          data: { date },
-        });
-      }),
-      purchaseFutureColumn(purchaseHelper, async (future, purchase) => {
-        await updatePurchaseMutation.mutateAsync({
-          id: purchase.id,
-          data: { future },
-        });
-      }),
+      purchaseDateColumn(
+        purchaseHelper,
+        async (date, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { date },
+          });
+        },
+        { mobile: { slot: "subtitle", priority: 15 } },
+      ),
+      purchaseFutureColumn(
+        purchaseHelper,
+        async (future, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { future },
+          });
+        },
+        { mobile: { slot: "meta", priority: 50 } },
+      ),
     ],
     [showProjectColumn],
   );
