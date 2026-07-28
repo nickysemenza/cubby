@@ -174,7 +174,12 @@ export const findProductsWithoutMappings = async (
           dbClient
             .select({ id: sql`1` })
             .from(productUnitMappings)
-            .where(eq(productUnitMappings.productId, product.id)),
+            .where(
+              and(
+                eq(productUnitMappings.productId, product.id),
+                notDeleted(productUnitMappings),
+              ),
+            ),
         ),
       ),
     );
@@ -234,7 +239,12 @@ export const findProductsWithUpcGaps = async (
         dbClient
           .select({ id: sql`1` })
           .from(productImage)
-          .where(eq(productImage.productId, product.id)),
+          .where(
+            and(
+              eq(productImage.productId, product.id),
+              notDeleted(productImage),
+            ),
+          ),
       ),
     })
     .from(product)
