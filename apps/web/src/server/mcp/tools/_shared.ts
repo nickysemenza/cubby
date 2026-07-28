@@ -79,7 +79,26 @@ type RegisterMcpToolConfig<TInput extends ZodSchemaLike> = {
   outputSchema: z.ZodType;
   annotations: ToolAnnotations;
   handler: McpToolHandler<TInput>;
+  /**
+   * `ui://` resource this tool renders through (MCP Apps / SEP-1865). Hosts that
+   * don't support the extension ignore it and show the structured output, so
+   * this is always additive.
+   */
+  uiResourceUri?: string;
 };
+
+/**
+ * `_meta` for a tool that declares an MCP App.
+ *
+ * Both keys are emitted on purpose: `ui.resourceUri` is the current spec, and
+ * the flat `ui/resourceUri` is the deprecated alias older hosts still read.
+ */
+function uiToolMeta(
+  resourceUri: string | undefined,
+): Record<string, unknown> | undefined {
+  if (!resourceUri) return undefined;
+  return { ui: { resourceUri }, "ui/resourceUri": resourceUri };
+}
 
 type SdkRegisteredTool = {
   title?: string;
@@ -87,6 +106,7 @@ type SdkRegisteredTool = {
   inputSchema?: z.ZodType;
   outputSchema?: z.ZodType;
   annotations?: ToolAnnotations;
+  _meta?: Record<string, unknown>;
   enabled: boolean;
 };
 
@@ -263,6 +283,12 @@ export function installMockStrippedListToolsHandler(server: McpServer) {
           ),
           annotations: tool.annotations,
         };
+        // `_meta` carries the MCP Apps `ui.resourceUri` pointer. Rebuilding the
+        // definition by hand silently drops it, and a host that never sees the
+        // pointer just renders text — no error to trace it back from.
+        if (tool._meta) {
+          definition._meta = tool._meta;
+        }
         if (tool.outputSchema) {
           definition.outputSchema = safeToJsonSchema(
             normalizeObjectSchema(tool.outputSchema),
@@ -319,6 +345,7 @@ export function registerMcpTool<TInput extends ZodSchemaLike>(
       inputSchema,
       outputSchema: sdkOutputSchema(config.outputSchema),
       annotations: config.annotations,
+      _meta: uiToolMeta(config.uiResourceUri),
     },
     callback as unknown as ToolCallback<typeof inputSchema>,
   );
@@ -992,6 +1019,7 @@ export function registerRouterTool<
     inputSchema?: TInput;
     outputSchema: z.ZodType;
     annotations: ToolAnnotations;
+    uiResourceUri?: string;
     call: (caller: Caller, params: InferSchemaLike<TInput>) => Promise<unknown>;
   },
 ) {
@@ -1001,6 +1029,7 @@ export function registerRouterTool<
     inputSchema: config.inputSchema ?? ({} as TInput),
     outputSchema: config.outputSchema,
     annotations: config.annotations,
+    uiResourceUri: config.uiResourceUri,
     handler: async (params, extra) => config.call(getCaller(extra), params),
   });
 }

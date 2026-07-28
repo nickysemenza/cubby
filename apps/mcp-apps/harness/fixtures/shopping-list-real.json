@@ -1,0 +1,133 @@
+{
+  "from": "2026-06-01",
+  "to": "2026-06-30",
+  "meals": [
+    {
+      "id": "00475668-767a-4cb4-bdcf-a270c1f724af",
+      "name": "test",
+      "date": "2026-06-14"
+    }
+  ],
+  "items": [
+    {
+      "ingredientId": "0e39b852-eda2-4e3b-af01-26a10116b5c7",
+      "name": "water",
+      "basisUnit": "g",
+      "needValue": 250,
+      "haveValue": null,
+      "shortfall": 250,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "00475668-767a-4cb4-bdcf-a270c1f724af",
+          "mealName": "test",
+          "date": "2026-06-14",
+          "recipeId": "750c3034-2388-4dfa-b203-3e50a2d1041d",
+          "recipeName": "Churros",
+          "scale": 1,
+          "needValue": 250
+        }
+      ]
+    },
+    {
+      "ingredientId": "858316d8-1b75-49a5-9fb2-4f92b5192a72",
+      "name": "All-purpose flour",
+      "basisUnit": "g",
+      "needValue": 150,
+      "haveValue": null,
+      "shortfall": 150,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "00475668-767a-4cb4-bdcf-a270c1f724af",
+          "mealName": "test",
+          "date": "2026-06-14",
+          "recipeId": "750c3034-2388-4dfa-b203-3e50a2d1041d",
+          "recipeName": "Churros",
+          "scale": 1,
+          "needValue": 150
+        }
+      ]
+    },
+    {
+      "ingredientId": "47410b9c-eec6-4aa7-b0ef-51545bfcc82f",
+      "name": "butter",
+      "basisUnit": "g",
+      "needValue": 50,
+      "haveValue": null,
+      "shortfall": 50,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "00475668-767a-4cb4-bdcf-a270c1f724af",
+          "mealName": "test",
+          "date": "2026-06-14",
+          "recipeId": "750c3034-2388-4dfa-b203-3e50a2d1041d",
+          "recipeName": "Churros",
+          "scale": 1,
+          "needValue": 50
+        }
+      ]
+    },
+    {
+      "ingredientId": "d5089dc9-3b5e-4f3c-a155-bc4ed7af28b4",
+      "name": "vanilla extract",
+      "basisUnit": "g",
+      "needValue": 4,
+      "haveValue": null,
+      "shortfall": 4,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "00475668-767a-4cb4-bdcf-a270c1f724af",
+          "mealName": "test",
+          "date": "2026-06-14",
+          "recipeId": "750c3034-2388-4dfa-b203-3e50a2d1041d",
+          "recipeName": "Churros",
+          "scale": 1,
+          "needValue": 4
+        }
+      ]
+    },
+    {
+      "ingredientId": "876a8654-b18e-4734-8288-713783f4a145",
+      "name": "Diamond Crystal kosher salt",
+      "basisUnit": "g",
+      "needValue": 3,
+      "haveValue": null,
+      "shortfall": 3,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "00475668-767a-4cb4-bdcf-a270c1f724af",
+          "mealName": "test",
+          "date": "2026-06-14",
+          "recipeId": "750c3034-2388-4dfa-b203-3e50a2d1041d",
+          "recipeName": "Churros",
+          "scale": 1,
+          "needValue": 3
+        }
+      ]
+    },
+    {
+      "ingredientId": "e609dadb-7d31-4531-88e0-b10fccdfdf46",
+      "name": "White sugar",
+      "basisUnit": "g",
+      "needValue": 15,
+      "haveValue": 1814,
+      "shortfall": 0,
+      "status": "ok",
+      "perMeal": [
+        {
+          "mealId": "00475668-767a-4cb4-bdcf-a270c1f724af",
+          "mealName": "test",
+          "date": "2026-06-14",
+          "recipeId": "750c3034-2388-4dfa-b203-3e50a2d1041d",
+          "recipeName": "Churros",
+          "scale": 1,
+          "needValue": 15
+        }
+      ]
+    }
+  ]
+}

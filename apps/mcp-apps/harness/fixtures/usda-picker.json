@@ -1,0 +1,115 @@
+{
+  "meta": { "totalCount": 41, "pageIndex": 0, "pageSize": 6 },
+  "items": [
+    {
+      "fdc_id": 173410,
+      "description": "Butter, salted",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "gtin_upc": null,
+      "ndb_number": 1001,
+      "ingredients": null,
+      "serving": null,
+      "nutrientsPer100": {
+        "208": 717,
+        "203": 0.85,
+        "204": 81.11,
+        "205": 0.06,
+        "307": 643
+      },
+      "nutrientSummary": [],
+      "portionInfoRaw": [],
+      "linkedProducts": [{ "id": "prod_kerrygold", "name": "Kerrygold Salted" }]
+    },
+    {
+      "fdc_id": 173430,
+      "description": "Butter, without salt",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "gtin_upc": null,
+      "ndb_number": 1145,
+      "ingredients": null,
+      "serving": null,
+      "nutrientsPer100": {
+        "208": 717,
+        "203": 0.85,
+        "204": 81.11,
+        "205": 0.06,
+        "307": 11
+      },
+      "nutrientSummary": [],
+      "portionInfoRaw": [],
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 789828,
+      "description": "Butter, stick, salted",
+      "data_type": "survey_fndds_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "gtin_upc": null,
+      "ndb_number": null,
+      "ingredients": null,
+      "serving": null,
+      "nutrientsPer100": { "208": 717, "203": 0.85, "204": 81.11, "205": 0.06 },
+      "nutrientSummary": [],
+      "portionInfoRaw": [],
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 2341777,
+      "description": "Butter, food service",
+      "data_type": "foundation_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "gtin_upc": null,
+      "ndb_number": null,
+      "ingredients": null,
+      "serving": null,
+      "nutrientsPer100": { "208": 723, "204": 82.3 },
+      "nutrientSummary": [],
+      "portionInfoRaw": [],
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 2019985,
+      "description": "PURE IRISH BUTTER",
+      "data_type": "branded_food",
+      "brand_owner": "Ornua Foods North America Inc.",
+      "brand_name": "KERRYGOLD",
+      "gtin_upc": "767707000015",
+      "ndb_number": null,
+      "ingredients": "PASTEURIZED CREAM, SALT.",
+      "serving": {
+        "serving_size": 14,
+        "serving_size_unit": "g",
+        "household_serving_fulltext": "1 tbsp"
+      },
+      "nutrientsPer100": { "208": 714, "204": 78.6, "203": 0, "205": 0 },
+      "nutrientSummary": [],
+      "portionInfoRaw": [],
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 2264907,
+      "description": "SWEET CREAM BUTTER, UNSALTED",
+      "data_type": "branded_food",
+      "brand_owner": "Land O'Lakes, Inc.",
+      "brand_name": "LAND O LAKES",
+      "gtin_upc": "034500110020",
+      "ndb_number": null,
+      "ingredients": "SWEET CREAM.",
+      "serving": {
+        "serving_size": 14,
+        "serving_size_unit": "g",
+        "household_serving_fulltext": "1 tbsp"
+      },
+      "nutrientsPer100": { "208": 714, "204": 78.6 },
+      "nutrientSummary": [],
+      "portionInfoRaw": [],
+      "linkedProducts": []
+    }
+  ]
+}
