@@ -53,6 +53,7 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -317,9 +318,11 @@ export const recipeList = async (
     recipe,
     [{ column: recipe.name, term: filters.nameFilter }],
     [
-      filters.cookbookId
-        ? eq(recipe.cookbookId, filters.cookbookId)
-        : undefined,
+      eqAnyOrPresence(
+        recipe.cookbookId,
+        filters.cookbookId,
+        filters.cookbookPresenceFilter,
+      ),
       // arrayOverlaps, not a hand-rolled `&&`: drizzle interpolates a JS array
       // into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`), which isn't a
       // text[] — the hand-rolled version failed for every tag count, one

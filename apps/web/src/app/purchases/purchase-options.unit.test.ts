@@ -57,7 +57,7 @@ describe("purchasePresetFilters", () => {
     expect(purchasePresetFilters("planned")).toEqual({ future: true });
     expect(purchasePresetFilters("unclassified")).toEqual({
       trade: "other",
-      costIsNull: true,
+      costPresenceFilter: "none",
     });
     expect(purchasePresetFilters("ledger")).toEqual({});
   });

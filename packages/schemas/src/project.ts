@@ -38,6 +38,19 @@ export const projectStatusValues = [
 export const projectStatusSchema = z.enum(projectStatusValues);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
+/**
+ * The "live" (not-done) statuses — spelled out rather than derived from
+ * `projectStatusValues` so it stays a literal tuple. It is the exact
+ * complement of `["done"]` today; the `satisfies` below catches a status
+ * being *removed* from `ProjectStatus`, not a fifth status being *added* — a
+ * new non-live status must be added here by hand.
+ */
+export const LIVE_PROJECT_STATUSES = [
+  "planning",
+  "not_started",
+  "in_progress",
+] as const satisfies readonly ProjectStatus[];
+
 export const projectKindValues = [
   "furniture",
   "workshop",
@@ -711,12 +724,13 @@ export const purchaseFilterFields = {
     .optional()
     .describe("Inclusive upper bound on purchase date"),
   /**
-   * `true` matches purchases with a null `cost`. Combined with
-   * `trade: "other"`, this is the Unclassified-purchase predicate
-   * (`trade='other' AND cost IS NULL`) — deliberately NOT a `costType`
-   * value, since `costType` stays a clean 3-value enum.
+   * `"none"` matches purchases with a null `cost`; `"has"` matches purchases
+   * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
+   * Unclassified-purchase predicate (`trade='other' AND cost IS NULL`) —
+   * deliberately NOT a `costType` value, since `costType` stays a clean
+   * 3-value enum.
    */
-  costIsNull: z.boolean().optional(),
+  costPresenceFilter: presenceFilter,
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -874,12 +888,19 @@ export const purchaseMcpListOut = createPaginatedResponseSchema(purchaseOut);
 // repo/project/dashboard-summary.ts / repo/project/analytics.ts)
 // ---------------------------------------------------------------------------
 
-/** Shared scope filters for both dashboard endpoints. */
+/**
+ * Shared scope filters for both dashboard endpoints. Empty/omitted
+ * `statusScope` means **no status condition** — all four statuses, not just
+ * the live ones. While a date window (`dateFrom`/`dateTo`) is set, projects
+ * with both `startDate` and `endDate` null are dropped.
+ */
 const projectDashboardFilterFields = {
   statusScope: z.array(projectStatusSchema).optional(),
   kinds: z.array(projectKindSchema).optional(),
   locations: z.array(z.string()).optional(),
   search: z.string().optional(),
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
 };
 export const projectDashboardFiltersSchema = z.object(
   projectDashboardFilterFields,
@@ -896,14 +917,12 @@ export type ProjectDashboardFilters = z.infer<
  */
 export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
 
-export const projectPortfolioAnalyticsInput = z.object({
-  ...projectDashboardFilterFields,
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
-});
-export type ProjectPortfolioAnalyticsInput = z.infer<
-  typeof projectPortfolioAnalyticsInput
->;
+/**
+ * `project.portfolioAnalytics`'s input is now identical to
+ * `projectDashboardFiltersSchema` (both scopes gained `dateFrom`/`dateTo`) —
+ * no separate value alias, matching `ProjectDashboardSummaryInput` above.
+ */
+export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
 
 export const projectAttentionTypeValues = [
   "overdue_task",

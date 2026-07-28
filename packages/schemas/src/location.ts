@@ -35,6 +35,7 @@ export const locationFilterFields = {
     .optional()
     .describe("Filter by location name (substring)"),
   itemTypeFilter: oneOrMany(locationType).optional(),
+  parentId: oneOrMany(locationId).optional(),
   parentPresenceFilter: presenceFilter,
 };
 

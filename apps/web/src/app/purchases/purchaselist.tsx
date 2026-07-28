@@ -53,7 +53,7 @@ interface PurchaseListProps {
    * `planned`: preset to `future: true`, sorted by date ascending (undated
    * last — Postgres's default NULLS LAST ordering, no extra sort logic
    * needed). `unclassified`: preset to the `trade='other' AND cost IS NULL`
-   * predicate via `costIsNull`. `unassigned`: preset to
+   * predicate via `costPresenceFilter: "none"`. `unassigned`: preset to
    * `projectPresenceFilter: "none"` — spend that never got attributed to a
    * project, whose detail pages offer ranked project suggestions to clear it.
    * That preset is now just the URL state `?project=__none__`, reachable from

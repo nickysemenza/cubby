@@ -22,7 +22,6 @@ import {
   projectFiltersSchema,
   projectOptionsOut,
   projectOut,
-  projectPortfolioAnalyticsInput,
   projectPortfolioAnalyticsOut,
   projectSortableFields,
   projectUpdateData,
@@ -82,7 +81,7 @@ const dashboardSummary = protectedProcedure
 
 /** `/projects?view=analytics`'s on-demand chart aggregates — see repo/project/portfolio-analytics.ts. */
 const portfolioAnalytics = protectedProcedure
-  .input(projectPortfolioAnalyticsInput)
+  .input(projectDashboardFiltersSchema)
   .output(projectPortfolioAnalyticsOut)
   .query(({ ctx, input }) => projectPortfolioAnalytics(ctx.db, input));
 

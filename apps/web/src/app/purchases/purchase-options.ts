@@ -114,7 +114,10 @@ export function purchasePresetFilters(
 ): Partial<PurchaseFilters> {
   return match(mode)
     .with("planned", () => ({ future: true }))
-    .with("unclassified", () => ({ trade: "other" as Trade, costIsNull: true }))
+    .with("unclassified", () => ({
+      trade: "other" as Trade,
+      costPresenceFilter: "none" as const,
+    }))
     .with("unassigned", () => ({ projectPresenceFilter: "none" as const }))
     .with("ledger", () => ({}))
     .exhaustive();

@@ -9,13 +9,13 @@
 import { projectId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
+  LIVE_PROJECT_STATUSES,
   projectCreateInput,
   projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
   projectFilterFields,
   projectMcpListOut,
   projectOut,
-  projectPortfolioAnalyticsInput,
   projectPortfolioAnalyticsOut,
   projectUpdateData,
   purchaseAnalyticsOut,
@@ -177,18 +177,28 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_house_status",
     description:
-      'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned purchases, missing budgets, unclassified purchases and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with get_project / list_tasks. Optional filters scope it to a status set, project kinds, locations, or a search term.',
+      'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned purchases, missing budgets, unclassified purchases and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with get_project / list_tasks. Optional filters scope it to a status set, project kinds, locations, a search term, or a startDate/endDate window (dateFrom/dateTo — projects with both dates null are dropped while a window is set). statusScope defaults to the live statuses (planning/not_started/in_progress) when omitted, so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
     inputSchema: projectDashboardFiltersSchema.shape,
     outputSchema: houseStatusOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.project.dashboardSummary(params),
+    // `projectDashboardFiltersSchema`'s own default is changing to "no status
+    // condition" (all four statuses) — this tool mirrors the UI's Overview
+    // default instead, so its payload doesn't balloon with completed-project
+    // history when the caller doesn't specify a scope. Behavior-preserving
+    // today: `ne(status,'done')` (the old default) is equivalent to
+    // `inArray(LIVE_PROJECT_STATUSES)` given exactly 4 statuses.
+    call: (caller, params) =>
+      caller.project.dashboardSummary({
+        statusScope: [...LIVE_PROJECT_STATUSES],
+        ...params,
+      }),
   });
 
   registerRouterTool(server, {
     name: "get_project_budget",
     description:
-      "Which projects are over budget: per project, the subtree budget estimate vs actual + committed spend, with remaining, percentUsed and an overBudget flag, sorted worst-overrun first (unbudgeted projects last). Also returns portfolio totals and planned-vs-actual spend by month. Same optional scope filters as get_house_status, plus dateFrom/dateTo (which bound the monthly series only — the per-project figures are lifetime).",
-    inputSchema: projectPortfolioAnalyticsInput.shape,
+      "Which projects are over budget: per project, the subtree budget estimate vs actual + committed spend, with remaining, percentUsed and an overBudget flag, sorted worst-overrun first (unbudgeted projects last). Also returns portfolio totals and planned-vs-actual spend by month. Same optional scope filters as get_house_status (status set, project kinds, locations, search, dateFrom/dateTo), but statusScope defaults to no condition (all four statuses, including done) — a budget tool silently omitting completed spend would be a bug, not a feature. dateFrom/dateTo scope the whole query, not just the monthly series: while a window is set, projects with both startDate and endDate null are dropped from the per-project figures too.",
+    inputSchema: projectDashboardFiltersSchema.shape,
     outputSchema: projectBudgetOut,
     annotations: READ_ONLY_CLOSED,
     call: async (caller, params) => {
@@ -329,7 +339,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_purchase_analytics",
     description:
-      'Spend aggregates over the purchase ledger, under the SAME filters as list_purchases (costType/trade/projectId/includeSubProjects/future/search/dateFrom/dateTo/costIsNull/projectPresenceFilter), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, and byProject. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits.',
+      'Spend aggregates over the purchase ledger, under the SAME filters as list_purchases (costType/trade/projectId/includeSubProjects/future/search/dateFrom/dateTo/costPresenceFilter/projectPresenceFilter), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, and byProject. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits.',
     inputSchema: purchaseFilterFields,
     outputSchema: purchaseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
