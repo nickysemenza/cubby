@@ -52,7 +52,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });
 
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: product.id,
     name: product.name,
     entityLabel: "Product",
@@ -223,11 +223,11 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           <Row gap="sm">
             <Button onClick={onEdit}>Edit</Button>
             <PrintLabelButton shortcode={product.shortcode} />
-            <DeleteButton />
+            {deleteButton}
           </Row>
         }
       />
-      <DeleteDialog />
+      {deleteDialog}
     </>
   );
 };

@@ -518,7 +518,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // `deleteProjects` refuses a project that still has sub-projects, tasks or
   // purchases (assertNoDependents) — that error surfaces as the hook's toast,
   // so the destructive case explains itself rather than needing a guard here.
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: project.id,
     name: project.name,
     entityLabel: "Project",
@@ -1179,14 +1179,14 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         tone: project.status === "done" ? "green" : "ink",
       }}
       heroStats={heroStats}
-      actions={<DeleteButton size="sm" />}
+      actions={deleteButton}
     >
       <DetailSections
         sections={sections}
         rawData={project}
         heroImages={images}
       />
-      <DeleteDialog />
+      {deleteDialog}
 
       <CreateProjectDialog
         open={isCreatingSubProject}

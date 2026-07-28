@@ -113,7 +113,7 @@ function RecipeDetailPage() {
     api.recipe.getByID.queryOptions({ id }),
   );
 
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id,
     name: recipe.name,
     entityLabel: "Recipe",
@@ -168,14 +168,14 @@ function RecipeDetailPage() {
             <AddToMeal recipeId={recipe.id} />
             <CopyRecipeParseButton recipe={recipe} />
             <Button onClick={startEditing} variant="outline" size="sm">
-              <Edit className="mr-2 size-4" />
+              <Edit />
               Edit Recipe
             </Button>
-            <DeleteButton size="sm" />
+            {deleteButton}
           </>
         ) : (
           <Button onClick={stopEditing} variant="outline" size="sm">
-            <X className="mr-2 size-4" />
+            <X />
             Cancel
           </Button>
         )
@@ -200,7 +200,7 @@ function RecipeDetailPage() {
         </Stack>
       )}
 
-      <DeleteDialog />
+      {deleteDialog}
     </Page>
   );
 }

@@ -50,7 +50,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
       ? format(parseISO(meal.date), "EEE, MMM d")
       : "";
   const {
-    DeleteDialog,
+    deleteDialog,
     openDeleteDialog,
     isPending: isDeleting,
   } = useEntityDelete({
@@ -140,12 +140,12 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
           disabled={isDeleting}
           onClick={openDeleteDialog}
         >
-          <Trash2 className="size-4" />
+          <Trash2 />
           Delete meal
         </Button>
       }
     >
-      <DeleteDialog />
+      {deleteDialog}
       <Stack>
         <Row align="end" wrap gap="md">
           <Stack gap="sm">

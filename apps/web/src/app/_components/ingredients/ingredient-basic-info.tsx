@@ -17,7 +17,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
   onEdit,
 }) => {
   const api = useTRPC();
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: ingredient.id,
     name: ingredient.name,
     entityLabel: "Ingredient",
@@ -47,11 +47,11 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
             <Button onClick={onEdit} variant="outline" size="sm">
               Edit Ingredient
             </Button>
-            <DeleteButton size="sm" />
+            {deleteButton}
           </Row>
         }
       />
-      <DeleteDialog />
+      {deleteDialog}
     </>
   );
 };

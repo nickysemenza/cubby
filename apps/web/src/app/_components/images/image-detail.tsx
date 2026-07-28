@@ -25,7 +25,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
   const api = useTRPC();
   // Hard delete — images have no `deletedAt`, so this removes the row and its
   // R2 object; any owning entity just loses the picture.
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: image.id,
     name: image.filename,
     entityLabel: "Image",
@@ -154,13 +154,11 @@ export function ImageDetail({ image }: ImageDetailProps) {
             <span className="text-muted-foreground">Created:</span>{" "}
             <HoverableTimestamp timestamp={image.createdAt} />
           </div>
-          <Row justify="end">
-            <DeleteButton />
-          </Row>
+          <Row justify="end">{deleteButton}</Row>
         </CardContent>
       </Card>
 
-      <DeleteDialog />
+      {deleteDialog}
     </Stack>
   );
 }

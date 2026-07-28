@@ -41,7 +41,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
-  const { DeleteButton, DeleteDialog, isPending } = useEntityDelete({
+  const { deleteButton, deleteDialog, isPending } = useEntityDelete({
     id: inventoryitem.id,
     name: inventoryitem.product.name,
     entityLabel: "Inventory Entry",
@@ -76,7 +76,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         onClick={editMode.startEditing}
         disabled={isPending}
       >
-        <Pencil className="mr-2 size-4" />
+        <Pencil />
         Edit
       </Button>
       <Button
@@ -85,10 +85,10 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         onClick={() => setShowMoveDialog(true)}
         disabled={isPending}
       >
-        <ArrowRightLeft className="mr-2 size-4" />
+        <ArrowRightLeft />
         Move
       </Button>
-      <DeleteButton />
+      {deleteButton}
     </Row>
   );
 
@@ -103,7 +103,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       >
         <DetailSections sections={sections} rawData={inventoryitem} />
       </Page>
-      <DeleteDialog />
+      {deleteDialog}
       {showMoveDialog && (
         <MoveInventoryDialog
           open

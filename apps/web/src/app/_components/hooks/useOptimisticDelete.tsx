@@ -258,7 +258,7 @@ export function useOptimisticDelete<
                 setDeleteTarget(row);
               }}
             >
-              <Trash className="mr-2 size-4" />
+              <Trash />
               Delete
             </DropdownMenuItem>
           </>
@@ -299,7 +299,15 @@ export function useOptimisticDelete<
           isPending={deletable ? deleteMutation.isPending : false}
         />
       ) : null,
-    [deletable, deleteTarget, deleteMutation],
+    // Not `deleteMutation` — react-query hands back a new result object every
+    // render, so depending on it made this memo a no-op. `mutateAsync` is
+    // bound once by the MutationObserver; `isPending` is the only field read.
+    [
+      deletable,
+      deleteTarget,
+      deleteMutation.isPending,
+      deleteMutation.mutateAsync,
+    ],
   );
 
   return {
