@@ -26,6 +26,7 @@ export {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   isNotDeleted,

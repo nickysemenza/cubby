@@ -4,8 +4,12 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { Page } from "~/components/page/Page";
+import { entityFilterSearchFields } from "~/entities/filter-manifest";
 
-const searchSchema = z.object(tableSearchFields);
+const searchSchema = z.object({
+  ...tableSearchFields,
+  ...entityFilterSearchFields("inventory"),
+});
 const searchDefaults = {} as const;
 
 export const Route = createFileRoute("/_authenticated/inventory/")({

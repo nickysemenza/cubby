@@ -17,6 +17,7 @@ import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { entityFilterSearchFields } from "~/entities/filter-manifest";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
@@ -33,6 +34,7 @@ const searchSchema = z.object({
   // Embedded RecipeList mirrors sort/page to the URL (useTableState urlSync) —
   // merge so this strict schema doesn't strip those keys.
   ...tableSearchFields,
+  ...entityFilterSearchFields("recipe"),
 });
 
 export const Route = createFileRoute("/_authenticated/cookbooks/$cookbookId")({

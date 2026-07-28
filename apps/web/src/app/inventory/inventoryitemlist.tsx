@@ -226,13 +226,8 @@ export function InventoryItemList() {
   } = useEntityList({
     entity: "inventory",
     queryOptions: api.inventory.list.queryOptions,
-    buildFilters: (ts) => ({
-      productNameFilter: ts.getColumnFilter("product"),
-      locationNameFilter: ts.getColumnFilter("location"),
-    }),
     // Inventory has custom columns (product image, amount instead of name)
     columns,
-    filters: ["product", "location"],
     deletable: deletableConfig,
     extraActions,
     bulkActions,

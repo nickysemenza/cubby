@@ -82,7 +82,14 @@ const { list } = createEntityListProcedure({
   schemas: {
     output: productListItemOut,
     filters: productFiltersSchema,
-    sort: { sortableFields: productSortableFields, defaultSort: "createdAt" },
+    sort: {
+      sortableFields: productSortableFields,
+      defaultSort: "createdAt",
+      // Pinned, not derived from sortableFields: `buildOrderBy`'s groupBy
+      // branch looks the field up as a real column, so a sort-only key like a
+      // joined name would be accepted and then silently emit no grouping.
+      groupableFields: ["category"] as const,
+    },
   },
   repository: {
     list: async (services, filters, sort, pagination, groupBy) => {

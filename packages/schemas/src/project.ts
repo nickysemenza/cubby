@@ -2,7 +2,11 @@ import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { productId, projectId, purchaseId, taskId } from "./identifiers";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import {
+  createPaginatedResponseSchema,
+  oneOrMany,
+  presenceFilter,
+} from "./pagination";
 
 /**
  * Home-project tracker schemas: `project` (a household undertaking), `task`
@@ -406,9 +410,9 @@ export const taskBulkReorderInput = z.object({
 export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
-  status: taskStatusSchema.optional(),
-  projectId: projectId.optional(),
-  trade: tradeSchema.optional(),
+  status: oneOrMany(taskStatusSchema).optional(),
+  projectId: oneOrMany(projectId).optional(),
+  trade: oneOrMany(tradeSchema).optional(),
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
   topLevelOnly: z.boolean().optional(),
@@ -441,6 +445,8 @@ export const taskSortableFields = [
   "status",
   "dueDate",
   "trade",
+  // Joined project name — see the resolver in repo/task/lookup.ts.
+  "project",
   "createdAt",
 ] as const;
 export type TaskSortField = (typeof taskSortableFields)[number];
@@ -672,9 +678,11 @@ export type PurchaseBulkCostTypeInput = z.infer<
 >;
 
 export const purchaseFilterFields = {
-  costType: costTypeSchema.optional(),
-  trade: tradeSchema.optional(),
-  projectId: projectId.optional(),
+  // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
+  // stay valid. Resolved with `eqAny` in the repo.
+  costType: oneOrMany(costTypeSchema).optional(),
+  trade: oneOrMany(tradeSchema).optional(),
+  projectId: oneOrMany(projectId).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
@@ -715,6 +723,12 @@ export const purchaseSortableFields = [
   "cost",
   "date",
   "costType",
+  // `trade` is a plain text column (alphabetical). `project`/`product` are
+  // joined names, resolved by correlated subqueries in repo/purchase/lookup.ts.
+  "trade",
+  "project",
+  "product",
+  "vendor",
   "createdAt",
 ] as const;
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];

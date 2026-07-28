@@ -3,7 +3,9 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities, getSortableFields } from "~/entities/entities";
+import { manifestFilterConfig } from "~/entities/filter-manifest";
 import {
   createActionsColumn,
   createCreatedAtColumn,
@@ -11,6 +13,7 @@ import {
   createNameColumn,
   createUnitMappingsColumn,
   type FilterConfig,
+  multiSelectFilterFn,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 
@@ -18,7 +21,7 @@ import { buildSelectColumn } from "../data-table/row-selection";
 interface FilterDef {
   id: string;
   placeholder: string;
-  filterType?: "text" | "select";
+  filterType?: "text" | "select" | "multiselect";
   options?: Array<{ value: string; label: string }>;
 }
 
@@ -43,8 +46,19 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   columnHelper: ColumnHelper<TData>;
   /** Custom columns (inserted between standard columns) */
   customColumns: AnyColumnDef<TData>[];
-  /** Filter definitions */
+  /**
+   * Fallback filter definitions for columns the manifest doesn't cover
+   * (client-only tables, one-off embedded tables). Entities in
+   * `entities/filter-manifest` should declare their filters there instead.
+   */
   filters: FilterInput[];
+  /**
+   * Option lists for manifest specs that name an `optionsKey` — picklists
+   * sourced from the server (the project roster, a recipe tag universe) that
+   * can't be static module data. MUST be referentially stable (useMemo at the
+   * page) or the columns memo churns every render.
+   */
+  filterOptions?: Record<string, FilterableComboboxItem[]>;
   /** Whether row selection is enabled */
   enableRowSelection: boolean;
   /** Combined extra actions renderer for row actions */
@@ -99,6 +113,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   columnHelper,
   customColumns,
   filters,
+  filterOptions,
   enableRowSelection,
   combinedExtraActions,
   mappingsMap,
@@ -133,8 +148,17 @@ export function useStandardColumns<TData extends BaseListRow>({
 
   // Build columns array with standard columns - memoized to prevent infinite re-renders
   return useMemo(() => {
-    // Convert FilterDef to FilterConfig for column meta
+    // The filter manifest is the source of truth for what a column can be
+    // filtered by; a page-supplied `filters` entry is the fallback for columns
+    // (and client-only tables) the manifest doesn't cover.
     const getFilterConfig = (columnId: string): FilterConfig | undefined => {
+      const fromManifest = manifestFilterConfig(
+        entity,
+        columnId,
+        filterOptions,
+      );
+      if (fromManifest) return fromManifest;
+
       const filterDef = stableFilters.find((f) =>
         typeof f === "string" ? f === columnId : f.id === columnId,
       );
@@ -174,17 +198,42 @@ export function useStandardColumns<TData extends BaseListRow>({
       );
     }
 
-    // Add custom columns with automatic enableSorting based on sortableFields
+    // Custom columns get two things applied from the registries: sorting from
+    // `sortableFields`, and their filter control from the manifest.
     const sortableFields = getSortableFields(entity);
     const processedColumns = customColumns.map((col) => {
-      // If enableSorting is explicitly set, respect it
-      if (col.enableSorting !== undefined) return col;
       // Get column id from id or accessorKey (need to cast for accessorKey access)
       const accessorCol = col as { accessorKey?: string };
       const colId = col.id ?? accessorCol.accessorKey ?? null;
-      // Auto-disable sorting for columns not in sortableFields
-      const canSort = colId ? sortableFields.includes(colId) : false;
-      return { ...col, enableSorting: canSort };
+
+      // Auto-disable sorting for columns not in sortableFields; an explicit
+      // enableSorting on the column def still wins.
+      const enableSorting =
+        col.enableSorting !== undefined
+          ? col.enableSorting
+          : colId
+            ? sortableFields.includes(colId)
+            : false;
+
+      // Manifest config overlays whatever the column factory baked in. The
+      // factories' own `filterConfig` (e.g. createFilterableSelectColumn
+      // deriving one from its editor options) stays as the fallback for
+      // columns and tables the manifest doesn't cover.
+      const manifestConfig = colId ? getFilterConfig(colId) : undefined;
+      if (!manifestConfig) return { ...col, enableSorting };
+
+      const meta = (col.meta ?? {}) as Record<string, unknown>;
+      return {
+        ...col,
+        enableSorting,
+        // Client-side tables would otherwise resolve a filterFn from the ROW
+        // value's type and silently match nothing against an array. Harmless
+        // on server-filtered tables, which never run it.
+        ...(manifestConfig.filterType === "multiselect"
+          ? { filterFn: multiSelectFilterFn }
+          : {}),
+        meta: { ...meta, filterConfig: manifestConfig },
+      };
     });
     cols.push(...processedColumns);
 
@@ -220,6 +269,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     standardColumns,
     mappingsMap,
     stableFilters,
+    filterOptions,
     enableRowSelection,
     combinedExtraActions,
     nameClassName,

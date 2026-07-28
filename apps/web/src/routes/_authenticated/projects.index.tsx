@@ -8,6 +8,7 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
+import { entityFilterSearchFields } from "~/entities/filter-manifest";
 
 const searchSchema = z.object({
   statuses: z.array(z.string()).optional().catch(undefined),
@@ -24,6 +25,7 @@ const searchSchema = z.object({
   // ProjectTable's sort/page URL sync writes to this route already — a
   // strict validateSearch without these would strip them.
   ...tableSearchFields,
+  ...entityFilterSearchFields("project"),
 });
 
 const searchDefaults = {

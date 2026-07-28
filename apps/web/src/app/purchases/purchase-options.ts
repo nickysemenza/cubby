@@ -1,11 +1,10 @@
-import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
-import type { CostType, PurchaseFilters, Trade } from "@cubby/schemas/project";
+import type { CostType } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
-import { presenceFilterOptions } from "~/app/_components/data-table/columnHelpers";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { presenceFilterOptions } from "~/entities/filters";
 import { buildSelectOptions } from "~/lib/select-options";
 
 /** Human labels for the fixed cost-type enum. */
@@ -87,89 +86,4 @@ export function resolveDateRange(preset: string | undefined): {
     .with("1y", () => format(subMonths(today, 12), "yyyy-MM-dd"))
     .otherwise(() => undefined);
   return dateFrom ? { dateFrom, dateTo } : {};
-}
-
-/**
- * Column-filter state → tRPC `PurchaseFilters`. Shared by the ledger table's
- * `useEntityList` query, the ledger's compact totals row, and (via
- * {@link purchaseFiltersFromSearch}) the analytics view — so "filtered" can
- * never mean something different across the two `/purchases` views.
- */
-/**
- * Sentinel project-filter value selecting purchases with no project at all —
- * the unassigned-spend worklist. Distinct from `""` ("All projects") and from
- * `move-to-project-dialog`'s `__none__`, which is a write target ("clear the
- * project") rather than a filter predicate. Stored URL-side as a plain string,
- * so it round-trips through `purchaseFiltersFromSearch` unchanged.
- */
-export const UNASSIGNED_PROJECT_FILTER = "__unassigned__";
-
-export function buildPurchaseFilters(
-  get: (columnId: string) => string | undefined,
-): PurchaseFilters {
-  const projectFilter = get("project");
-  const unassignedOnly = projectFilter === UNASSIGNED_PROJECT_FILTER;
-  const futureFilter = get("future");
-  const productIdFilter = get("productId");
-  const productPresenceFilter = get("product");
-  return {
-    search: get("name"),
-    costType: (get("costType") as CostType | undefined) || undefined,
-    trade: (get("trade") as Trade | undefined) || undefined,
-    projectId:
-      projectFilter && !unassignedOnly
-        ? unsafeProjectId(projectFilter)
-        : undefined,
-    noProject: unassignedOnly ? true : undefined,
-    productId: productIdFilter ? unsafeProductId(productIdFilter) : undefined,
-    productPresenceFilter:
-      productPresenceFilter === "has" || productPresenceFilter === "none"
-        ? productPresenceFilter
-        : undefined,
-    future:
-      futureFilter === undefined || futureFilter === ""
-        ? undefined
-        : futureFilter === "true",
-    ...resolveDateRange(get("date")),
-  };
-}
-
-/**
- * The subset of the `/purchases` route's search params that double as ledger
- * column-filter values (see the route file's search schema doc comment) —
- * `trade`/`costType`/`project`/`future`/`date` are stored URL-side with the
- * SAME string shape the table's column filters use, so this and
- * {@link buildPurchaseFilters} never need two different value encodings.
- */
-export interface PurchaseSearchFilters {
-  q?: string;
-  trade?: string;
-  costType?: string;
-  project?: string;
-  future?: string;
-  date?: string;
-  productId?: string;
-  product?: string;
-}
-
-/**
- * `purchaseFiltersFromSearch` — the URL-backed twin of `buildPurchaseFilters`
- * (table-state-backed). Used to seed the ledger table's initial filters and
- * to drive the analytics view's `purchase.analytics` call, so both derive
- * from the identical `PurchaseFilters` shape.
- */
-export function purchaseFiltersFromSearch(
-  search: PurchaseSearchFilters,
-): PurchaseFilters {
-  const map: Record<string, string | undefined> = {
-    name: search.q,
-    trade: search.trade,
-    costType: search.costType,
-    project: search.project,
-    future: search.future,
-    date: search.date,
-    productId: search.productId,
-    product: search.product,
-  };
-  return buildPurchaseFilters((id) => map[id]);
 }

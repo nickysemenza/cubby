@@ -61,7 +61,12 @@ const { list } = createEntityListProcedure({
   schemas: {
     output: locationListItemOut,
     filters: locationFiltersSchema,
-    sort: { sortableFields: locationSortableFields, defaultSort: "createdAt" },
+    sort: {
+      sortableFields: locationSortableFields,
+      defaultSort: "createdAt",
+      // See the note in product.ts — group keys must be real columns.
+      groupableFields: ["type"] as const,
+    },
   },
   repository: {
     list: async (services, filters, sort, pagination, groupBy) => {

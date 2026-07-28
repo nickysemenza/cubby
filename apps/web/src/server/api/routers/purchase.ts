@@ -46,7 +46,13 @@ const {
     updateInput: purchaseUpdateData,
     output: purchaseOut,
     filters: purchaseFiltersSchema,
-    sort: { sortableFields: purchaseSortableFields, defaultSort: "date" },
+    sort: {
+      sortableFields: purchaseSortableFields,
+      defaultSort: "date",
+      // No grouping on this table; an empty roster keeps the new joined-name
+      // sort keys from being accepted as group keys that do nothing.
+      groupableFields: ["costType"] as const,
+    },
     idSchema: purchaseId,
   },
   repository: {

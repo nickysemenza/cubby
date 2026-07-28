@@ -58,6 +58,7 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -292,7 +293,7 @@ export const productList = async (
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
-  category: ProductCategory | undefined,
+  category: ProductCategory | ProductCategory[] | undefined,
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
@@ -326,7 +327,7 @@ export const productList = async (
       { column: product.upc, term: upc },
     ],
     [
-      category !== undefined ? eq(product.category, category) : undefined,
+      eqAny(product.category, category),
       ingredientPresenceFilter === "none"
         ? isNull(product.ingredientId)
         : undefined,
@@ -394,7 +395,7 @@ export const productSearch = async (
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
-  category: ProductCategory | undefined,
+  category: ProductCategory | ProductCategory[] | undefined,
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: ProductPickerItemOut[]; count: number }> => {
@@ -408,7 +409,7 @@ export const productSearch = async (
       : undefined,
     formatSearchTerm(product.manufacturer, manufacturer),
     formatSearchTerm(product.upc, upc),
-    category !== undefined ? eq(product.category, category) : undefined,
+    eqAny(product.category, category),
   );
 
   // Same ordering rules as productList, so picker results match the table's sort

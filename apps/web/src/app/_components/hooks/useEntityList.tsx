@@ -12,7 +12,10 @@ import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { buildFiltersFromManifest } from "~/entities/filters";
 import type { QueryTiming } from "~/lib/query-timing";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
@@ -21,7 +24,10 @@ import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
-import { useTableState } from "../data-table/useTableState";
+import {
+  type TableStateReturn,
+  useTableState,
+} from "../data-table/useTableState";
 import {
   type InfiniteScrollControls,
   useInfiniteTableList,
@@ -41,17 +47,35 @@ export interface BaseListRow {
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData> = ColumnDef<TData, any>;
 
+/** Stable empty-filters default (avoids a fresh `[]` reference each render). */
+const NO_FILTERS: FilterInput[] = [];
+
 export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   /** The entity type */
   entity: Entity;
   /** tRPC queryOptions function */
   queryOptions: UseTableListOptions<TFilters>["queryOptions"];
-  /** Build filters from table state */
-  buildFilters: UseTableListOptions<TFilters>["buildFilters"];
+  /**
+   * Build filters from table state. Omit it to derive them from the entity's
+   * filter manifest, which is what every list page should do — a hand-written
+   * builder is for the leftovers a manifest spec can't express.
+   */
+  buildFilters?: UseTableListOptions<TFilters>["buildFilters"];
+  /**
+   * Filters that aren't column filters: page-level scope constants and view
+   * presets (a cookbook id, `topLevelOnly`, a mode's fixed `trade`). Merged
+   * OVER the manifest-derived filters. MUST be referentially stable.
+   */
+  extraFilters?: Partial<TFilters>;
   /** Custom columns (inserted between standard columns) - accepts any accessor type */
   columns: AnyColumnDef<TData>[];
-  /** Filter definitions - string shorthand or full FilterDef config */
-  filters: FilterInput[];
+  /** Fallback filter definitions for columns the manifest doesn't cover. */
+  filters?: FilterInput[];
+  /**
+   * Option lists for manifest specs naming an `optionsKey` (project roster,
+   * recipe tags). MUST be referentially stable.
+   */
+  filterOptions?: Record<string, FilterableComboboxItem[]>;
   /** For unit mappings - function to extract mappings from each row (must be synchronous) */
   getMappings?: (item: TData) => UnitMapping[];
   /** Override table state options (initialSort / initialFilter / …) */
@@ -170,8 +194,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   entity,
   queryOptions,
   buildFilters,
+  extraFilters,
   columns: customColumns,
   filters,
+  filterOptions,
   getMappings,
   tableStateOptions,
   globalFilter,
@@ -270,11 +296,14 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const mergedTableStateOptions = useMemo(
     () => ({
       initialSort: defaultSort,
-      ...tableStateOptions,
-      // Mirror sort + pagination to the URL (bookmarkable / shareable).
+      // Mirror sort + pagination + filters to the URL (bookmarkable /
+      // shareable). Overridable: `useTableState` wants exactly ONE writer per
+      // page, so a table embedded alongside others must opt out.
       urlSync: true,
+      filterSpecs: getEntityFilters(entity),
+      ...tableStateOptions,
     }),
-    [defaultSort, tableStateOptions],
+    [defaultSort, entity, tableStateOptions],
   );
 
   // ONE tableState owned here and shared by both data hooks. Keeping a single
@@ -283,11 +312,36 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   // the URL.
   const tableState = useTableState(mergedTableStateOptions);
 
+  // Column-filter state → the server's `*Filters` object, driven by the
+  // entity's manifest. This replaced a hand-written `buildFilters` on every
+  // list page, all of which were the same mechanical column-id → field map.
+  // A page may still pass its own for anything a spec can't express.
+  const manifestBuildFilters = useCallback(
+    (ts: TableStateReturn) =>
+      ({
+        ...buildFiltersFromManifest(
+          getEntityFilters(entity),
+          // Reads raw state rather than `getColumnFilter`, which deliberately
+          // throws on an array — the builder is the one caller that handles
+          // both shapes, per each spec's `kind`.
+          (columnId) =>
+            ts.columnFilters.find((f) => f.id === columnId)?.value as
+              | string
+              | string[]
+              | undefined,
+        ),
+        ...extraFilters,
+      }) as TFilters,
+    [entity, extraFilters],
+  );
+
+  const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;
+
   // Always call both hooks unconditionally (Rules of Hooks).
   // The unused hook has enabled: false so its query won't fire.
   const infiniteResult = useInfiniteTableList<TFilters, TData>({
     queryOptions,
-    buildFilters,
+    buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,
     enabled: useInfiniteMode,
@@ -295,7 +349,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
   const paginatedResult = useTableList<TFilters, TData>({
     queryOptions,
-    buildFilters,
+    buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,
     enabled: !useInfiniteMode,
@@ -329,7 +383,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     entity,
     columnHelper,
     customColumns,
-    filters,
+    filters: filters ?? NO_FILTERS,
+    filterOptions,
     enableRowSelection: effectiveEnableRowSelection,
     combinedExtraActions,
     mappingsMap: effectiveMappingsMap,

@@ -65,6 +65,18 @@ export const createSortParamsSchema = <
 export const presenceFilter = z.enum(["has", "none"]).optional();
 export type PresenceFilter = z.infer<typeof presenceFilter>;
 
+/**
+ * Accept one value or a set of them for the same filter — the shape a
+ * multi-select column filter produces.
+ *
+ * A union rather than a bare array so existing SCALAR callers keep working:
+ * these `*FilterFields` are spread into the MCP tool inputs via
+ * `mcpListInputShape`, and an LLM (or an old link) passing `trade: "drywall"`
+ * must stay valid. Repos resolve either shape through `eqAny`.
+ */
+export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
+  z.union([schema, z.array(schema)]);
+
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),

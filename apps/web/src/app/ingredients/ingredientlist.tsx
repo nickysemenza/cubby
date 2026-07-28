@@ -262,16 +262,8 @@ export function IngredientList() {
   } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
-    buildFilters: (ts) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      productPresenceFilter: ts.getColumnFilter("product") as
-        | "has"
-        | "none"
-        | undefined,
-    }),
     getMappings: getIngredientListMappings,
     columns,
-    filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
     bulkActions: {
       actions: [
         {

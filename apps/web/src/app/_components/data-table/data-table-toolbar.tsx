@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import { ActiveFilterChips } from "./ActiveFilterChips";
 import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTableToolbarProps<TData> {
@@ -41,12 +42,19 @@ export function DataTableToolbar<TData>({
       <Row
         align="center"
         gap="sm"
+        wrap
         className={cn(
-          "flex-1",
+          "min-w-0 flex-1",
           showViewOptions || bulkActionBar ? "justify-end" : "justify-start",
         )}
       >
         {additionalContent}
+
+        {/* Chips take their own line on narrow screens rather than squeezing
+            the actions off the right edge. */}
+        <div className="order-last w-full min-w-0 lg:order-none lg:w-auto">
+          <ActiveFilterChips table={table} />
+        </div>
 
         {isFiltered && (
           <Button

@@ -26,15 +26,12 @@ const columnHelper = createColumnHelper<SearchResultItem>();
  * roster so a newly-searchable entity can't silently go missing from the filter.
  */
 const entityTypeOptions: Array<{
-  value: SearchableEntity | "";
+  value: SearchableEntity;
   label: string;
-}> = [
-  { value: "", label: "All types" },
-  ...searchableEntities.map((entityType) => ({
-    value: entityType,
-    label: entities[entityTypeMap[entityType]].label,
-  })),
-];
+}> = searchableEntities.map((entityType) => ({
+  value: entityType,
+  label: entities[entityTypeMap[entityType]].label,
+}));
 
 export const searchColumns = [
   // Image - compact thumbnail
@@ -67,10 +64,7 @@ export const searchColumns = [
       filterConfig: {
         filterType: "select",
         placeholder: "All types",
-        options: entityTypeOptions.map((opt) => ({
-          value: opt.value,
-          label: opt.label,
-        })),
+        options: entityTypeOptions,
       },
     },
     cell: ({ row }) => {

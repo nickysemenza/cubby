@@ -40,6 +40,7 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -380,9 +381,7 @@ export const locationList = async (
     location,
     [{ column: location.name, term: filters.nameFilter }],
     [
-      filters.itemTypeFilter
-        ? eq(location.type, filters.itemTypeFilter)
-        : undefined,
+      eqAny(location.type, filters.itemTypeFilter),
       filters.parentPresenceFilter === "none"
         ? isNull(location.parentId)
         : undefined,
@@ -400,14 +399,26 @@ export const locationList = async (
       groupBy,
       // `valuation` is a persisted jsonb rollup; sort by direct value because
       // that is what the list cell renders in compact mode.
-      resolve: (s) =>
-        s.orderBy === "valuation"
-          ? [
-              s.direction === "asc"
-                ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
-                : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
-            ]
-          : null,
+      resolve: (s) => {
+        const dirSql =
+          s.direction === "asc" ? "asc nulls last" : "desc nulls last";
+        if (s.orderBy === "valuation")
+          return [
+            s.direction === "asc"
+              ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
+              : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+          ];
+        // Joined parent name — a correlated subquery keeps this a relational
+        // findMany. Soft-delete guarded, like the read path.
+        if (s.orderBy === "parent")
+          return [
+            sql.raw(
+              `(SELECT l."name" FROM "Location" l ` +
+                `WHERE l."id" = "location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
+            ),
+          ];
+        return null;
+      },
     },
   );
 
