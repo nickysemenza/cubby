@@ -455,6 +455,34 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 
+### Saved filters (the view-tab successor)
+
+Nullable picklists now carry `(none)` / `Has X` sentinels that OR with the selection
+(PR #447), which was the blocker: **"unassigned" is pure URL state now**
+(`?project=__none__`), not a hardcoded server preset. The remaining step is to persist
+named filter sets per entity and surface them in the table toolbar, then retire the
+view-switcher tabs into them.
+
+Storage should follow the existing per-entity table-state pattern — module cache +
+`localStorage` + `useSyncExternalStore`, as in `useTableColumnVisibility.ts` /
+`useTableColumnSizing.ts` (`table-columns:{entity}`). A saved view is just the
+`encodeFilters` output plus a name; applying one is a `navigate({search})`.
+
+Two things that look convertible but aren't:
+
+- **Analytics and the task Board are different *renderers*, not filter sets.** They
+  can never be saved filters; the switcher has to keep at least those two arms.
+- **`unclassified`** (`trade='other' AND cost IS NULL`) needs a null-filter path on a
+  **numeric** column first. The sentinel mechanism is picklist-only — Cost renders no
+  dropdown — so this one stays a preset until that exists.
+
+Also still open from PR #421 and unchanged by #447: the **`productId` deep link has no
+chip**. Its manifest spec is URL-only (`columnId: "productId"`, no column renders it),
+and `ActiveFilterChips` derives chips from column filter state, so arriving from a
+product's "See all in ledger" scopes the ledger invisibly. Saved views don't fix it —
+it needs either a real column or a chip sourced from the filter object rather than the
+table state.
+
 ### Background work — where it stands
 
 The **queue is shipped**, not pending: `BACKGROUND_QUEUE` → `cubby-background` with a
