@@ -16,7 +16,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -41,6 +41,7 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
+  eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -382,12 +383,11 @@ export const locationList = async (
     [{ column: location.name, term: filters.nameFilter }],
     [
       eqAny(location.type, filters.itemTypeFilter),
-      filters.parentPresenceFilter === "none"
-        ? isNull(location.parentId)
-        : undefined,
-      filters.parentPresenceFilter === "has"
-        ? isNotNull(location.parentId)
-        : undefined,
+      eqAnyOrPresence(
+        location.parentId,
+        filters.parentId,
+        filters.parentPresenceFilter,
+      ),
     ],
   );
 

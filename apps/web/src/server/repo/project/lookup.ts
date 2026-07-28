@@ -10,7 +10,6 @@ import type {
 } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
 import { asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import {
@@ -21,17 +20,16 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { projectDependencyIds, projectRollups } from "./analytics";
+import { projectDependencyIds } from "./analytics";
 import {
   dbProjectToAPI,
   EMPTY_PROJECT_OWN_ROLLUP,
   EMPTY_PROJECT_SUBTREE_ROLLUP,
 } from "./helpers";
 import {
-  aggregateSubtreeRollups,
-  allProjectParentRows,
-  buildChildrenMap,
   collectDescendantIds,
+  loadProjectSubtreeRollups,
+  loadProjectTree,
 } from "./subtree";
 
 /**
@@ -61,11 +59,12 @@ export const projectList = async (
   pagination: PaginationParams,
 ): Promise<{ data: ProjectOut[]; count: number }> => {
   // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
-  // comment. Fetched up front so it can also resolve `includeSubProjects`
-  // below; own rollups are then only fetched for this page's projects plus
-  // their descendants (never the whole tree), and aggregated in TS.
-  const allRows = await allProjectParentRows(db);
-  const childrenByParent = buildChildrenMap(allRows);
+  // comment. Fetched up front (rather than inside `loadProjectSubtreeRollups`
+  // below) because it also resolves `includeSubProjects` into the WHERE
+  // clause, which has to be built before this page's ids exist; it is then
+  // handed back in so the tree is never queried twice.
+  const tree = await loadProjectTree(db);
+  const { childrenByParent, nameById } = tree;
 
   // When scoped to a parent's subtree, resolve every live descendant id and
   // match on that set (excluding the parent itself — same shape as the plain
@@ -110,21 +109,16 @@ export const projectList = async (
   );
 
   const ids = rows.map((r) => r.id);
-  const nameById = new Map(allRows.map((r) => [r.id, r.name]));
-  const descendantIds = ids.flatMap((id) =>
-    collectDescendantIds(childrenByParent, id),
-  );
 
-  const [rollups, deps] = await Promise.all([
-    projectRollups(db, uniq([...ids, ...descendantIds])),
+  const [{ ownRollups, subtreeRollups }, deps] = await Promise.all([
+    loadProjectSubtreeRollups(db, ids, tree),
     projectDependencyIds(db, ids),
   ]);
-  const subtreeRollups = aggregateSubtreeRollups(allRows, rollups);
 
   const data = rows.map((row) =>
     dbProjectToAPI(
       row,
-      rollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+      ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
       subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],

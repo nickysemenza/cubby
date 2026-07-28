@@ -20,7 +20,7 @@ export function registerLocationTools(server: McpServer) {
     sort: { orderBy: "name", direction: "asc" },
     paging: { defaultPageSize: 200, maxPageSize: 200 },
     descriptions: {
-      list: "List all locations with optional name filter. Use to resolve location names to IDs.",
+      list: 'List all locations with optional name filter. Filter by parent with parentId (one or more location IDs) or parentPresenceFilter — "none" is top-level locations with no parent, "has" is every location that has one; matches DIRECT children only (no subtree walk). Use to resolve location names to IDs.',
       get: "Get a location by ID, including parent info.",
       create:
         "Create a new location. Use list_locations to find a parent location ID.",

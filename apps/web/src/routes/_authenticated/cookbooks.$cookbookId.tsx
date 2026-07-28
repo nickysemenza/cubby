@@ -202,7 +202,14 @@ function CookbookDetailPage() {
           <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
         </TabsList>
         <TabsContent value="recipes">
-          <RecipeList cookbookIdFilter={cookbookId} />
+          {/* cookbookIdFilter pins this table to one cookbook via extraFilters,
+              which wins over the manifest-derived filters — so the Source
+              column's control must be hidden here, or picking a cookbook there
+              would be interactive but inert (silently clobbered by the scope). */}
+          <RecipeList
+            cookbookIdFilter={cookbookId}
+            hiddenFilterColumns={["source"]}
+          />
         </TabsContent>
         <TabsContent value="ingredients">
           <IngredientUsagePanel cookbookId={cookbookId} />

@@ -8,6 +8,67 @@ interface ActiveFilterChipsProps<TData> {
   table: Table<TData>;
 }
 
+interface FilterChipShellProps {
+  name: string;
+  value: string;
+  onClear: () => void;
+  clearLabel: string;
+}
+
+/**
+ * The removable-chip shell shared by column-filter chips (below) and
+ * `ScopeChip` (a deep-link scope with no backing column — see its own doc).
+ * Only the markup is shared: the two callers build their `onClear` very
+ * differently, so the chip-building logic itself stays separate.
+ */
+function FilterChipShell({
+  name,
+  value,
+  onClear,
+  clearLabel,
+}: FilterChipShellProps) {
+  return (
+    <Badge variant="outline" className="gap-1 pr-1">
+      <span className="text-muted-foreground">{name}:</span>
+      <span className="font-sans normal-case tracking-normal">{value}</span>
+      <button
+        type="button"
+        aria-label={clearLabel}
+        onClick={onClear}
+        className="text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <X className="size-3" />
+      </button>
+    </Badge>
+  );
+}
+
+interface ScopeChipProps {
+  /** e.g. "Product" — reads as a scope, not a filter value. */
+  name: string;
+  /** The resolved display value, e.g. a product name — never a raw id. */
+  value: string;
+  onClear: () => void;
+}
+
+/**
+ * A removable chip for state that narrows the table but isn't a TanStack
+ * column filter — e.g. `/purchases?productId=<uuid>`, seeded straight from
+ * the URL with no header control behind it (see `purchaselist.tsx`). Visually
+ * identical to a column-filter chip via the shared `FilterChipShell` so it
+ * doesn't read as a second dialect.
+ */
+export function ScopeChip({ name, value, onClear }: ScopeChipProps) {
+  return (
+    <FilterChipShell
+      name={name}
+      value={value}
+      onClear={onClear}
+      clearLabel={`Clear ${name} scope`}
+    />
+  );
+}
+
 /**
  * What's currently filtered, as removable chips.
  *
@@ -60,20 +121,13 @@ export function ActiveFilterChips<TData>({
   return (
     <Row align="center" gap="xs" wrap>
       {chips.map((chip) => (
-        <Badge key={chip.id} variant="outline" className="gap-1 pr-1">
-          <span className="text-muted-foreground">{chip.name}:</span>
-          <span className="font-sans normal-case tracking-normal">
-            {chip.summary}
-          </span>
-          <button
-            type="button"
-            aria-label={`Clear ${chip.name} filter`}
-            onClick={() => chip.column.setFilterValue(undefined)}
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <X className="size-3" />
-          </button>
-        </Badge>
+        <FilterChipShell
+          key={chip.id}
+          name={chip.name}
+          value={chip.summary}
+          onClear={() => chip.column.setFilterValue(undefined)}
+          clearLabel={`Clear ${chip.name} filter`}
+        />
       ))}
     </Row>
   );

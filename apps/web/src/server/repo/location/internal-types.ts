@@ -51,5 +51,6 @@ export type LocationWithParentChild = LocationSelect & {
 export interface LocationFilters {
   nameFilter?: string;
   itemTypeFilter?: string | string[];
+  parentId?: string | string[];
   parentPresenceFilter?: "has" | "none";
 }

@@ -71,8 +71,12 @@ export interface RecipeFilters {
   // null OR an empty array — and it ORs with `tagFilters` rather than
   // narrowing it. See TAGS_ARE_EMPTY in ./crud.ts.
   tagsPresenceFilter?: PresenceFilter;
-  // Scope the list to a single cookbook by FK id. Powers the cookbook detail page.
-  cookbookId?: CookbookId;
+  // Scope the list to a single cookbook by FK id (or several — see `oneOrMany`).
+  // Powers the cookbook detail page.
+  cookbookId?: CookbookId | CookbookId[];
+  // The cookbook column's "(none)" / "Has cookbook" sentinel. ORs with
+  // `cookbookId` rather than narrowing it (see `tagsPresenceFilter` above).
+  cookbookPresenceFilter?: PresenceFilter;
   // Drop recipes that are used as an ingredient elsewhere (a recipe-as-ingredient
   // Ingredient row points at them). Powers "what can I make?", where a sub-recipe
   // is a component, not a meal.

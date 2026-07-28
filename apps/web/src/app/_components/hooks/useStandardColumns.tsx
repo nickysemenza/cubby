@@ -88,6 +88,18 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * Only meaningful when the table wires `getSubRows`/`getExpandedRowModel`.
    */
   expandable?: boolean;
+  /**
+   * Column ids to render with NO filter control, even though the manifest (or
+   * a column factory's own fallback) declares one. For a page that pins that
+   * column's value via `useEntityList`'s `extraFilters` — which spreads OVER
+   * the manifest-derived filters, so it silently wins — the header control
+   * would otherwise be interactive but inert: the user picks a value, the
+   * page-level scope clobbers it. E.g. the cookbook detail page's embedded
+   * `RecipeList` pins `cookbookId` and hides the Source column's control.
+   * May be a fresh array literal each render — internally stabilized like
+   * `filters`.
+   */
+  hiddenFilterColumns?: string[];
 }
 
 /**
@@ -114,6 +126,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   nameEditable,
   nameSuffix,
   expandable,
+  hiddenFilterColumns,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
   // Shift-click range selection: anchor (last clicked row id) + modifier flag.
   // Refs are stable across renders, so they don't perturb the useMemo deps below.
@@ -125,6 +138,14 @@ export function useStandardColumns<TData extends BaseListRow>({
   const filtersKey = JSON.stringify(filters);
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using filtersKey for deep comparison
   const stableFilters = useMemo(() => filters, [filtersKey]);
+
+  // Same stabilization for the (much rarer) hidden-columns opt-out.
+  const hiddenFilterColumnsKey = JSON.stringify(hiddenFilterColumns ?? []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using hiddenFilterColumnsKey for deep comparison
+  const hiddenFilterColumnSet = useMemo(
+    () => new Set(hiddenFilterColumns ?? []),
+    [hiddenFilterColumnsKey],
+  );
 
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, shouldUseMappings } = useMemo(() => {
@@ -143,6 +164,8 @@ export function useStandardColumns<TData extends BaseListRow>({
     // filtered by; a page-supplied `filters` entry is the fallback for columns
     // (and client-only tables) the manifest doesn't cover.
     const getFilterConfig = (columnId: string): FilterConfig | undefined => {
+      if (hiddenFilterColumnSet.has(columnId)) return undefined;
+
       const fromManifest = manifestFilterConfig(
         entity,
         columnId,
@@ -265,5 +288,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     nameEditable,
     nameSuffix,
     expandable,
+    hiddenFilterColumnSet,
   ]);
 }

@@ -1,3 +1,4 @@
+import { projectKindSchema, projectStatusSchema } from "@cubby/schemas/project";
 import {
   createFileRoute,
   stripSearchParams,
@@ -11,8 +12,13 @@ import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
 
 const searchSchema = z.object({
-  statuses: z.array(z.string()).optional().catch(undefined),
-  kinds: z.array(z.string()).optional().catch(undefined),
+  // Absent `statuses` means the three "live" statuses (everything but
+  // `done`), not "no filter" — see `defaultFilters` in
+  // `~/app/projects/dashboard-filter-state.ts`. `.catch(undefined)` degrades
+  // a bad/bookmarked value (e.g. `?statuses=bogus`) to that same default
+  // rather than a runtime error out of the tRPC call.
+  statuses: z.array(projectStatusSchema).optional().catch(undefined),
+  kinds: z.array(projectKindSchema).optional().catch(undefined),
   locations: z.array(z.string()).optional().catch(undefined),
   date: z.string().optional().catch(undefined),
   view: z

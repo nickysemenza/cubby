@@ -4,19 +4,26 @@
  * denormalized). See packages/schemas/src/project.ts's `projectRollup` doc
  * comment for the own-vs-subtree distinction.
  *
- * The load pattern every caller (crud.ts's reader, lookup.ts's list, the
- * dashboard router) follows: fetch ALL live projects' `{id, name,
- * parentProjectId}` via `allProjectParentRows` — cheap, single query,
- * single-user scale — build the parent→children map once, compute the
- * page's descendant id set in TS, then fetch OWN rollups (the one relatively
- * expensive aggregate) only for the page ids + their descendants via the
- * existing batched `projectRollups`. Never one query per project.
+ * The load pattern every caller (crud.ts's reader, lookup.ts's list, the two
+ * dashboard reads, attention.ts) follows: fetch ALL live projects' `{id,
+ * name, parentProjectId, costEstimate}` via `allProjectParentRows` — cheap,
+ * single query, single-user scale — build the parent→children map once,
+ * compute the page's descendant id set in TS, then fetch OWN rollups (the one
+ * relatively expensive aggregate) only for the page ids + their descendants
+ * via the existing batched `projectRollups`. Never one query per project.
+ *
+ * That whole sequence is {@link loadProjectSubtreeRollups} — call it rather
+ * than re-assembling the four steps by hand (it was copy-pasted across five
+ * files, and `projectDashboardSummary` ran it twice per request because
+ * `computeAttentionItems` re-derived the same thing independently).
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import { asc } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { projectRollups } from "./analytics";
 import {
   EMPTY_PROJECT_OWN_ROLLUP,
   type ProjectOwnRollup,
@@ -113,7 +120,7 @@ export function collectDescendantIds(
  * read the map entries for ids whose full descendant set was included in the
  * `ownRollups` fetch.
  */
-export function aggregateSubtreeRollups(
+function aggregateSubtreeRollups(
   projects: ReadonlyArray<
     Pick<ProjectParentRow, "id" | "parentProjectId" | "costEstimate">
   >,
@@ -180,4 +187,75 @@ export function aggregateSubtreeRollups(
     out.set(p.id, computeFor(p.id, 0));
   }
   return out;
+}
+
+/** The whole live project tree in the three shapes callers read it in. */
+export type ProjectTree = {
+  allRows: ProjectParentRow[];
+  childrenByParent: Map<ProjectId, ProjectId[]>;
+  nameById: Map<ProjectId, string>;
+};
+
+/** {@link ProjectTree} plus the OWN and SUBTREE rollups for the loaded ids. */
+export type ProjectSubtreeRollups = ProjectTree & {
+  ownRollups: Map<ProjectId, ProjectOwnRollup>;
+  subtreeRollups: Map<ProjectId, ProjectSubtreeRollup>;
+};
+
+/**
+ * Step 1 of the pipeline on its own — one query, no rollups. Only for the
+ * caller that needs the tree *before* it knows its ids: `projectList` resolves
+ * `includeSubProjects` into its WHERE clause, so it can't hand the ids to
+ * {@link loadProjectSubtreeRollups} until the tree is already in hand. Pass
+ * the result back in as that function's `tree` argument — never re-fetch.
+ */
+export async function loadProjectTree(db: Database): Promise<ProjectTree> {
+  const allRows = await allProjectParentRows(db);
+  return {
+    allRows,
+    childrenByParent: buildChildrenMap(allRows),
+    nameById: new Map(allRows.map((r) => [r.id, r.name])),
+  };
+}
+
+/**
+ * The whole load pattern in one call: tree → descendant ids → batched OWN
+ * rollups → subtree aggregation. Three queries total (one for the tree, two
+ * inside `projectRollups`), regardless of how many projects are involved.
+ *
+ * `ids` scopes the (relatively expensive) OWN-rollup fetch to those projects
+ * plus every live descendant — the minimum set whose subtree totals are then
+ * exact. **Omit it** for the whole-tree variant (`computeAttentionItems`, and
+ * `projectDashboardSummary` which feeds it): every id is already covered, so
+ * the descendant walk is skipped entirely.
+ *
+ * Reading a *superset* never changes a caller's numbers — `aggregateSubtree
+ * Rollups` only consults a node's own descendants — which is why the dashboard
+ * can share one whole-tree load with attention instead of running the pipeline
+ * twice.
+ *
+ * `tree` accepts an already-loaded {@link loadProjectTree} result.
+ */
+export async function loadProjectSubtreeRollups(
+  db: Database,
+  ids?: ProjectId[],
+  tree?: ProjectTree,
+): Promise<ProjectSubtreeRollups> {
+  const loaded = tree ?? (await loadProjectTree(db));
+  const rollupIds =
+    ids === undefined
+      ? loaded.allRows.map((r) => r.id)
+      : uniq([
+          ...ids,
+          ...ids.flatMap((id) =>
+            collectDescendantIds(loaded.childrenByParent, id),
+          ),
+        ]);
+
+  const ownRollups = await projectRollups(db, rollupIds);
+  return {
+    ...loaded,
+    ownRollups,
+    subtreeRollups: aggregateSubtreeRollups(loaded.allRows, ownRollups),
+  };
 }

@@ -1,6 +1,5 @@
 import {
   type ColumnDef,
-  type ExpandedState,
   getCoreRowModel,
   getExpandedRowModel,
   getFacetedRowModel,
@@ -17,7 +16,7 @@ import {
 import { useMemo, useState } from "react";
 import type { TableStateReturn } from "./useTableState";
 
-interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
+interface UseTableConfigOptions<TData> {
   data: TData[];
   // Note: ColumnDef is invariant in TValue; columns often mix TValue types across accessors.
   // Using `any` here intentionally erases TValue to allow heterogeneous columns while keeping TData strict.
@@ -31,8 +30,6 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   manualFiltering?: boolean;
   /** Disable column sorting entirely (hides header arrows + click). Default: enabled. */
   enableSorting?: boolean;
-  globalFilter?: GlobalFilterData;
-  onGlobalFilterChange?: (value: GlobalFilterData) => void;
   /** Custom row ID function for row selection */
   getRowId?: (row: TData) => string;
   /** Enable row selection */
@@ -75,12 +72,6 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   paginateExpandedRows?: boolean;
   /** Reset expanded state when data/filters change. TanStack default `true`. */
   autoResetExpanded?: boolean;
-  /**
-   * Controlled expansion state. Omit for uncontrolled expansion — TanStack
-   * manages it internally and `table.toggleAllRowsExpanded()` still works.
-   */
-  expanded?: ExpandedState;
-  onExpandedChange?: OnChangeFn<ExpandedState>;
 }
 
 interface ServerTotals {
@@ -104,7 +95,7 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export function useTableConfig<TData, GlobalFilterData>({
+export function useTableConfig<TData>({
   data,
   columns,
   tableState,
@@ -113,8 +104,6 @@ export function useTableConfig<TData, GlobalFilterData>({
   manualSorting = true,
   manualFiltering = true,
   enableSorting,
-  globalFilter,
-  onGlobalFilterChange,
   getRowId,
   enableRowSelection,
   rowSelection,
@@ -130,9 +119,7 @@ export function useTableConfig<TData, GlobalFilterData>({
   filterFromLeafRows,
   paginateExpandedRows,
   autoResetExpanded,
-  expanded,
-  onExpandedChange,
-}: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
+}: UseTableConfigOptions<TData>): Table<TData> {
   const {
     sorting,
     setSorting,
@@ -209,17 +196,13 @@ export function useTableConfig<TData, GlobalFilterData>({
       ...(filterFromLeafRows !== undefined ? { filterFromLeafRows } : {}),
       ...(paginateExpandedRows !== undefined ? { paginateExpandedRows } : {}),
       ...(autoResetExpanded !== undefined ? { autoResetExpanded } : {}),
-      ...(onExpandedChange ? { onExpandedChange } : {}),
       state: {
         sorting,
         columnFilters,
         columnVisibility,
         pagination,
-        ...(globalFilter ? { globalFilter } : {}),
         ...(rowSelection ? { rowSelection } : {}),
-        ...(expanded !== undefined ? { expanded } : {}),
       },
-      ...(onGlobalFilterChange ? { onGlobalFilterChange } : {}),
     }),
     [
       data,
@@ -251,15 +234,11 @@ export function useTableConfig<TData, GlobalFilterData>({
       enableRowSelection,
       rowSelection,
       onRowSelectionChange,
-      globalFilter,
-      onGlobalFilterChange,
       getSubRows,
       expandedRowModel,
       filterFromLeafRows,
       paginateExpandedRows,
       autoResetExpanded,
-      expanded,
-      onExpandedChange,
     ],
   );
 

@@ -8,7 +8,7 @@ import { StatTile } from "~/components/ui/stat-tile";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
-  decodeFilters,
+  filterGetterFromSearch,
   soleValue,
 } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -50,11 +50,9 @@ export function PurchaseAnalyticsView() {
   // schema for).
   const filters = useMemo(() => {
     const specs = getEntityFilters("purchase");
-    const decoded = new Map(
-      decodeFilters(specs, search).map((f) => [f.id, f.value]),
-    );
-    return buildFiltersFromManifest(specs, (columnId) =>
-      decoded.get(columnId),
+    return buildFiltersFromManifest(
+      specs,
+      filterGetterFromSearch(specs, search),
     ) as PurchaseFilters;
   }, [search]);
 

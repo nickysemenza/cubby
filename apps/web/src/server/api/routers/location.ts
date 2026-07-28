@@ -18,6 +18,7 @@ import {
   locationFiltersSchema,
   locationIdsInput,
   locationListItemOut,
+  locationParentOptionsOut,
   locationShortcodeInput,
   locationShortcodesInput,
   locationSortableFields,
@@ -28,6 +29,7 @@ import {
   recentlyActiveLocationsOut,
   recomputeLocationValuationsOut,
 } from "@cubby/schemas/location";
+import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransaction } from "~/server/repo/database-helpers";
 import {
@@ -42,6 +44,7 @@ import {
   getLocationsByShortcodes,
   getRecentlyActiveLocations,
   locationList,
+  locationParentOptions,
   updateLocation,
   updateLocationAiDescription,
 } from "~/server/repo/location";
@@ -152,6 +155,16 @@ const getLocationTypesCount = protectedProcedure
 const makeTree = protectedProcedure
   .output(infLocationListOut)
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
+
+/**
+ * Lightweight `{id, name}` options for the location filter's parent picklist
+ * (see `useLocationParentOptions`) — only locations with at least one live
+ * child, not the full location roster (see repo/location/lookup.ts's
+ * `locationParentOptions`). Mirrors `project.options`' role/shape.
+ */
+const parentOptions = protectedProcedure
+  .output(z.array(locationParentOptionsOut))
+  .query(({ ctx }) => locationParentOptions(ctx.db));
 
 const ensureGlobalUnknown = protectedProcedure
   .output(infLocation)
@@ -265,6 +278,7 @@ export const locationRouter = createTRPCRouter({
   getLocationTypesCount,
   getChildCountsByLocations,
   makeTree,
+  parentOptions,
   ensureGlobalUnknown,
   create,
   update,

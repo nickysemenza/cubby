@@ -26,22 +26,32 @@ const PurchaseAnalyticsView = lazy(() =>
   })),
 );
 
-const viewOptions = [
-  "ledger",
-  "planned",
-  "analytics",
-  "unclassified",
-  "unassigned",
-] as const;
+// Only two entries left, and both are genuinely different RENDERERS. The
+// former `planned` / `unclassified` / `unassigned` tabs were filter presets,
+// which are now declarations in the view manifest and reachable from the
+// table's own Views menu as ordinary, shareable URL state.
+const viewOptions = ["ledger", "analytics"] as const;
 type ViewOption = (typeof viewOptions)[number];
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "ledger", label: "Ledger" },
-  { value: "planned", label: "Planned" },
   { value: "analytics", label: "Analytics" },
-  { value: "unclassified", label: "Unclassified" },
-  { value: "unassigned", label: "Unassigned" },
 ];
+
+/**
+ * Old bookmarks pointed at `?view=planned|unclassified|unassigned`. Those tabs
+ * are gone; map each to the filter state its preset used to pin, so a stale
+ * link lands on the same rows instead of a dead tab. Precedent:
+ * `RecipeDetail.tsx`'s legacy-tab normalizer.
+ */
+const LEGACY_VIEW_FILTERS: Record<string, Record<string, string>> = {
+  planned: { future: "true" },
+  unassigned: { project: "__none__" },
+  unclassified: { trade: "other", cost: "none" },
+};
+
+const isViewOption = (v: string | undefined): v is ViewOption =>
+  v !== undefined && (viewOptions as readonly string[]).includes(v);
 
 // The ledger's filter params come from the purchase filter manifest, which is
 // also what the table encodes into the URL and what the Analytics view decodes
@@ -51,30 +61,46 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 // a product's "See all in ledger"); `product` is the presence value
 // ("has"/"none"), deliberately a separate key since the product column's
 // filter offers presence rather than a specific-product select.
-const searchSchema = z.object({
-  view: z.enum(viewOptions).optional().catch(undefined),
-  // Spread first so ANY manifest spec survives this strict schema — a new
-  // filter can't be silently stripped by being forgotten here. The keys read
-  // by name in TS are then declared explicitly below, because a computed
-  // Record has no literal key types for `Route.useSearch()` to expose.
-  ...entityFilterSearchFields("purchase"),
-  q: z.string().optional().catch(undefined),
-  trade: z.string().optional().catch(undefined),
-  costType: z.string().optional().catch(undefined),
-  project: z.string().optional().catch(undefined),
-  future: z.string().optional().catch(undefined),
-  date: z.string().optional().catch(undefined),
-  productId: z.string().optional().catch(undefined),
-  product: z.string().optional().catch(undefined),
-  // Quick-capture deep link (navbar "+" / command palette) — there is no
-  // /purchases/new route, so the create dialog is opened by this param.
-  create: z.boolean().optional().catch(undefined),
-  ...tableSearchFields,
-});
+const searchSchema = z
+  .object({
+    // Deliberately `string`, not `z.enum(viewOptions)`: a legacy `?view=planned`
+    // must survive validation long enough for the transform below to translate
+    // it. The transform is what narrows this to `ViewOption | undefined`.
+    view: z.string().optional().catch(undefined),
+    // Spread first so ANY manifest spec survives this strict schema — a new
+    // filter can't be silently stripped by being forgotten here. The keys read
+    // by name in TS are then declared explicitly below, because a computed
+    // Record has no literal key types for `Route.useSearch()` to expose.
+    ...entityFilterSearchFields("purchase"),
+    q: z.string().optional().catch(undefined),
+    trade: z.string().optional().catch(undefined),
+    costType: z.string().optional().catch(undefined),
+    cost: z.string().optional().catch(undefined),
+    project: z.string().optional().catch(undefined),
+    future: z.string().optional().catch(undefined),
+    date: z.string().optional().catch(undefined),
+    productId: z.string().optional().catch(undefined),
+    product: z.string().optional().catch(undefined),
+    // Quick-capture deep link (navbar "+" / command palette) — there is no
+    // /purchases/new route, so the create dialog is opened by this param.
+    create: z.boolean().optional().catch(undefined),
+    ...tableSearchFields,
+  })
+  .transform(({ view, ...rest }) => {
+    const legacy = view ? LEGACY_VIEW_FILTERS[view] : undefined;
+    // A retired preset tab becomes the filter state it used to pin, so the
+    // bookmark lands on the same rows — and now says so in the URL.
+    if (legacy) return { ...rest, ...legacy, view: undefined };
+    return {
+      ...rest,
+      view: isViewOption(view) ? view : undefined,
+    };
+  });
 
 const searchDefaults = {
   q: undefined,
   view: undefined,
+  cost: undefined,
   trade: undefined,
   costType: undefined,
   project: undefined,
@@ -94,7 +120,6 @@ export const Route = createFileRoute("/_authenticated/purchases/")({
 
 function PurchasesPage() {
   const search = Route.useSearch();
-  const { q } = search;
   const view = search.view ?? "ledger";
   const navigate = useNavigate({ from: Route.fullPath });
 
@@ -117,24 +142,12 @@ function PurchasesPage() {
           }
         />
 
-        {view === "ledger" && <PurchaseList mode="ledger" initialSearch={q} />}
-
-        {view === "planned" && (
-          <PurchaseList mode="planned" initialSearch={q} />
-        )}
+        {view === "ledger" && <PurchaseList />}
 
         {view === "analytics" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <PurchaseAnalyticsView />
           </Suspense>
-        )}
-
-        {view === "unclassified" && (
-          <PurchaseList mode="unclassified" initialSearch={q} />
-        )}
-
-        {view === "unassigned" && (
-          <PurchaseList mode="unassigned" initialSearch={q} />
         )}
       </Stack>
 

@@ -127,6 +127,13 @@ export const taskList = async (
       // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
       // ranged task still inside its window isn't treated as overdue, matching
       // the "overdue" semantics used on the board/stat tiles.
+      //
+      // A task with BOTH due columns null falls out of any window by plain SQL
+      // comparison semantics — `coalesce(NULL, NULL) >= x` is NULL, not true —
+      // that's intended, not a bug to work around (the identical rule is
+      // documented for `purchase.date` in `purchase/lookup.ts`'s
+      // `buildPurchaseWhereClause`). The dashboard surfaces the count of rows
+      // hidden this way as `hiddenByDate.tasks`.
       filters.dueFrom
         ? gte(
             sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,

@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import { eq, gte, inArray, isNull, lte, or, type SQL, sql } from "drizzle-orm";
+import { eq, gte, inArray, lte, or, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
@@ -96,7 +96,7 @@ export const buildPurchaseWhereClause = async (
       // semantics; that's intended, not a bug to work around.
       filters.dateFrom ? gte(purchase.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
-      filters.costIsNull ? isNull(purchase.cost) : undefined,
+      presenceCondition(purchase.cost, filters.costPresenceFilter),
     ],
   );
 };

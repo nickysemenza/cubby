@@ -7,9 +7,11 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationOut,
+  LocationParentOptionsOut,
   LocationType,
 } from "@cubby/schemas/location";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
@@ -23,6 +25,51 @@ import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
+
+// Self-join alias for the child-existence check in `locationParentOptions` —
+// the outer query and the EXISTS subquery both read the `location` table, and
+// Drizzle needs a distinct name to correlate `child.parentId = location.id`
+// instead of both referring to the same unaliased relation (mirrors
+// `recipe/crud.ts`'s `parentRecipe` alias for the same self-referential shape).
+const childLocation = alias(location, "childLocation");
+
+/**
+ * Locations that have at least one LIVE direct child — the bounded roster for
+ * the location filter's `parentLocation` picklist (`optionsKey:
+ * "parentLocation"`, see `useLocationParentOptions`). Scoped rather than the
+ * full ~136-row location table so every option in the picklist actually
+ * matches something (~27 rows) and the list stays scannable.
+ *
+ * Both the outer rows and the child-existence check exclude soft-deleted rows
+ * — a location whose only children were soft-deleted (a shelf emptied via
+ * delete, not just its inventory) must NOT appear, or the picklist would offer
+ * a "parent" filter value that matches zero locations.
+ */
+export const locationParentOptions = async (
+  db: Database,
+): Promise<LocationParentOptionsOut[]> => {
+  const dbClient = getDb(db);
+  return dbClient
+    .select({ id: location.id, name: location.name })
+    .from(location)
+    .where(
+      and(
+        notDeleted(location),
+        exists(
+          dbClient
+            .select({ one: sql`1` })
+            .from(childLocation)
+            .where(
+              and(
+                eq(childLocation.parentId, location.id),
+                notDeleted(childLocation),
+              ),
+            ),
+        ),
+      ),
+    )
+    .orderBy(asc(location.name));
+};
 
 /**
  * Find a location by its shortcode

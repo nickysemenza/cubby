@@ -455,33 +455,62 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 
-### Saved filters (the view-tab successor)
+### Saved filters — user-created views
 
-Nullable picklists now carry `(none)` / `Has X` sentinels that OR with the selection
-(PR #447), which was the blocker: **"unassigned" is pure URL state now**
-(`?project=__none__`), not a hardcoded server preset. The remaining step is to persist
-named filter sets per entity and surface them in the table toolbar, then retire the
-view-switcher tabs into them.
+**Hardcoded views shipped.** `entities/view-manifest.ts` declares a view as filters +
+sort; applying one sets column-filter state and the existing `useTableState` write-back
+serializes it, so a view and a shared link are the same thing. The purchases preset tabs
+(`planned` / `unassigned` / `unclassified`) are gone, with a legacy `?view=` normalizer
+for old bookmarks. `unclassified` stopped needing a special case once the Cost column
+got a real presence filter. The `productId` deep link now has a `ScopeChip`.
 
-Storage should follow the existing per-entity table-state pattern — module cache +
-`localStorage` + `useSyncExternalStore`, as in `useTableColumnVisibility.ts` /
-`useTableColumnSizing.ts` (`table-columns:{entity}`). A saved view is just the
-`encodeFilters` output plus a name; applying one is a `navigate({search})`.
+What's left is **persistence**: letting the user name and save their own filter sets
+rather than only picking from the hardcoded three. Storage should follow the existing
+per-entity table-state pattern — module cache + `localStorage` + `useSyncExternalStore`,
+as in `useTableColumnVisibility.ts` / `useTableColumnSizing.ts`
+(`table-columns:{entity}`). A saved view is the same shape `view-manifest.ts` already
+uses, so `DataTableViews` should just render two groups.
 
-Two things that look convertible but aren't:
+Still not convertible, and this is by design: **Analytics, the task Board, and the
+`/tasks` `history` tab are different *renderers* or non-column state** (`history` pins
+`completion: "done"`, a schema enum with no column and no manifest spec). The switcher
+has to keep those arms.
 
-- **Analytics and the task Board are different *renderers*, not filter sets.** They
-  can never be saved filters; the switcher has to keep at least those two arms.
-- **`unclassified`** (`trade='other' AND cost IS NULL`) needs a null-filter path on a
-  **numeric** column first. The sentinel mechanism is picklist-only — Cost renders no
-  dropdown — so this one stays a preset until that exists.
+### Deferred from the filter-honesty PR
 
-Also still open from PR #421 and unchanged by #447: the **`productId` deep link has no
-chip**. Its manifest spec is URL-only (`columnId: "productId"`, no column renders it),
-and `ActiveFilterChips` derives chips from column filter state, so arriving from a
-product's "See all in ledger" scopes the ledger invisibly. Saved views don't fix it —
-it needs either a real column or a chip sourced from the filter object rather than the
-table state.
+Found while auditing the table/dashboard layer; each is real but out of that PR's blast
+radius.
+
+- [ ] **`computeAttentionItems(db)` takes no filters.** Needs Attention ignores every
+      dashboard chip, and now that the rest of the dashboard filters honestly, the panel
+      *looks* more scoped than it is.
+- [ ] **~260 lines of byte-identical bulk-action machinery** duplicated between
+      `app/projects/shared.tsx` and `tasks/tasklist.tsx` / `purchases/purchaselist.tsx`
+      (three `useActionMutation`s + three dialogs + a `bulkActions` memo, twice). A
+      `useTaskBulkActions()` / `usePurchaseBulkActions()` pair returning
+      `{bulkActions, dialogs}` cuts it roughly in half.
+- [ ] **`useTableState` emits a meaningless `?page=`** on the 8 infinite-scroll lists —
+      `useInfiniteTableList` hardcodes `pageIndex: 0`, so a shared link carries a page
+      number that restores into state and does nothing. Needs an `infinite?: boolean` on
+      `TableStateOptions`, threaded from `useEntityList`, gating `PAGE_KEY` out of
+      `serializedUrlState`.
+- [ ] **`facetCount`** is declared on `FilterSpec` and plumbed through to
+      `HeaderFilter.tsx`, but no spec sets it — the faceting branch is unreachable. Wire
+      it on the one client-side table (`project`) or delete it.
+- [ ] **The always-call-both-hooks pagination path** (`useEntityList`): `useTableList`
+      has zero direct callers and exists only as the `enabled: false` arm.
+- [ ] **`task/lookup.ts` and `purchase/lookup.ts` still hand-roll the project-tree half**
+      (`allProjectParentRows` + `buildChildrenMap` + `collectDescendantIds`). They don't
+      run the rollup pipeline, so the `loadProjectSubtreeRollups` consolidation skipped
+      them; each is a ~3-line `loadProjectTree` collapse.
+- [ ] **`repo/ingredient/search.ts` declares a local `presenceCondition`** that shadows
+      the imported helper of the same name. It's a left-join null check, not column
+      presence, so the helper doesn't apply — but the shadowing is a trap. Rename.
+- [ ] **Splits worth doing eventually:** `app/projects/shared.tsx` (1345 lines) and
+      `data-table/columnHelpers.tsx` (1702 lines). Also `HistoryView`'s local `useState`
+      filters, which are unshareable unlike every other view on that page, and its
+      over-fetch (it reads only `data.projects` from a payload that includes the
+      expensive `computeAttentionItems`).
 
 ### Background work — where it stands
 

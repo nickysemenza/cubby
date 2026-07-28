@@ -13,6 +13,11 @@
  * parent's unmatched child still needs to count toward its subtree spend).
  * Simpler and more correct to always compute over every live project/task/
  * purchase; `dashboard-summary.ts` calls this once, unfiltered.
+ *
+ * Because that scope is the WHOLE tree, the caller's own whole-tree load is
+ * the identical query set — hence the optional `preloaded` argument (see
+ * `loadProjectSubtreeRollups`). `projectDashboardSummary` passes its bundle
+ * in; `problems.service.ts` calls this standalone and lets it load its own.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
@@ -22,14 +27,18 @@ import type { Database } from "~/server/db";
 import { project, purchase, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { listActionableTasks } from "~/server/repo/task/actionable";
-import { projectRollups } from "./analytics";
-import { aggregateSubtreeRollups, allProjectParentRows } from "./subtree";
+import {
+  loadProjectSubtreeRollups,
+  type ProjectSubtreeRollups,
+} from "./subtree";
 
 /** `stalled_project`'s no-activity window. */
 const STALE_ACTIVITY_DAYS = 30;
 
 export async function computeAttentionItems(
   db: Database,
+  /** A whole-tree `loadProjectSubtreeRollups(db)` the caller already has. */
+  preloaded?: ProjectSubtreeRollups,
 ): Promise<ProjectAttentionItem[]> {
   const today = householdLocalDate();
   const activityCutoff = householdDaysAgo(STALE_ACTIVITY_DAYS);
@@ -38,7 +47,7 @@ export async function computeAttentionItems(
   const [
     overdueTaskRows,
     inProgressProjectRows,
-    allProjectRows,
+    { allRows: allProjectRows, subtreeRollups },
     pastDuePurchaseRows,
     unclassifiedPurchaseRows,
     actionable,
@@ -66,7 +75,7 @@ export async function computeAttentionItems(
       })
       .from(project)
       .where(and(notDeleted(project), eq(project.status, "in_progress"))),
-    allProjectParentRows(db),
+    preloaded ?? loadProjectSubtreeRollups(db),
     getDb(db)
       .select({ id: purchase.id, name: purchase.name, date: purchase.date })
       .from(purchase)
@@ -178,9 +187,6 @@ export async function computeAttentionItems(
   // 3. missing_budget — subtree actual+committed spend > 0, subtree
   // costEstimate still null. Reuses the same batched rollup/aggregation the
   // project reads use — never re-derived here.
-  const allIds = allProjectRows.map((r) => r.id);
-  const ownRollups = await projectRollups(db, allIds);
-  const subtreeRollups = aggregateSubtreeRollups(allProjectRows, ownRollups);
   for (const row of allProjectRows) {
     const subtree = subtreeRollups.get(row.id);
     if (!subtree) continue;

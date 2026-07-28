@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
-import { formatDate } from "./shared";
+import { formatDate } from "./project-formatting";
 
 /**
  * Server-side rule metadata per {@link ProjectAttentionType} — icon, group
