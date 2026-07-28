@@ -48,7 +48,7 @@ jobs:
       - name: Resolve ingredient-parser HEAD
         id: parser
         run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         id: wasm-cache
         name: Restore cached WASM pkg
         with:
@@ -452,7 +452,7 @@ jobs:
       # template entirely in-process (CREATE EXTENSION pg_trgm + drizzle-kit
       # pushSchema), exactly like test-integration-web above.
       - name: Cache Playwright browsers
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
