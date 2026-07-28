@@ -43,6 +43,15 @@
  *     the `size-N` shorthand. Keeps icon sizing single-token and greppable (the
  *     density pass normalized ~540 of these). No exemptions.
  *
+ * (Numbering above has already drifted — see the two blocks both labelled
+ * "Rule 11" — so newer checks are referenced by slug, not number.)
+ *
+ * hand-rolled-array-overlap: `&& ${arr}` in a raw `sql` template inside
+ *     server/repo/ — drizzle interpolates a JS array into raw SQL as a ROW
+ *     CONSTRUCTOR (`&& ($1, $2)`), not a `text[]`, so `sql`${col} && ${arr}``
+ *     silently matches nothing at every input size. Use `arrayOverlaps(col,
+ *     arr)` instead (see CLAUDE.md / dashboard-shared.ts).
+ *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
 
@@ -147,6 +156,16 @@ const TEXT_PX_RE = /\btext-\[[0-9]+px\]/;
 // pairs (`h-4 w-full`) and same-axis noise (`h-4 h-4`) don't match.
 const HW_PAIR_RE =
   /\bh-(\d+(?:\.\d+)?)\s+w-\1\b|\bw-(\d+(?:\.\d+)?)\s+h-\2\b/;
+
+// Hand-rolled `&& ${arr}` array-overlap in a raw `sql` template — drizzle
+// interpolates a JS array into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`),
+// not a `text[]`, so this silently matches nothing at every input size. This
+// exact trap shipped in project/dashboard-shared.ts's location filter and
+// recipe/crud.ts's tag filter before both were fixed to use `arrayOverlaps`.
+// Deliberately loose (just `&&` followed by an interpolation) so it catches
+// the pattern regardless of which side the array is on or what's inside the
+// `sql` tag.
+const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
 
 // The old deleted TS costing engine. Test fixtures/helpers legitimately wrap
 // the WASM engine under this name, so exempt test + fixture files.
@@ -568,6 +587,22 @@ function scan(files) {
           rule: "hw-pair-shorthand",
         });
       }
+
+      // Rule (hand-rolled-array-overlap): raw `&& ${arr}` SQL in
+      // server/repo/ — the row-constructor trap. Use `arrayOverlaps` instead.
+      if (
+        isRepoFile(file) &&
+        !isTestOrFixture(file) &&
+        !isCommentLine(line) &&
+        HAND_ROLLED_ARRAY_OVERLAP_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "hand-rolled-array-overlap",
+        });
+      }
     }
   }
 
@@ -621,6 +656,8 @@ const byRule = {
     "getDb() used outside server/repo/ — the opaque Database type may only be unwrapped in the repo layer (CLAUDE.md Opaque Database Type); move the query behind a repo helper.",
   "hw-pair-shorthand":
     "Adjacent equal h-N/w-N pair — use the `size-N` shorthand (e.g. `h-4 w-4` → `size-4`) so icon sizing stays single-token (CLAUDE.md Colors / Design Tokens).",
+  "hand-rolled-array-overlap":
+    "Hand-rolled `&& ${arr}` array overlap — drizzle interpolates a JS array into raw SQL as a row constructor (`($1,$2)`), not a `text[]`, so this silently matches nothing at every input size. Use `arrayOverlaps(col, arr)` instead.",
   "script-target-exists":
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":

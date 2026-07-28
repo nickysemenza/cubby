@@ -967,6 +967,15 @@ export type ProjectTaskStatusBreakdown = z.infer<
 export const projectFilterOptionsOut = z.object({
   kinds: z.array(projectKindSchema),
   locations: z.array(z.string()),
+  /**
+   * Every calendar year (`"YYYY"`) the portfolio has data in — the union of
+   * purchase dates, task effective due dates, and project start/end dates —
+   * newest first. Computed server-side (three `selectDistinct`s) so the Date
+   * filter row offers the same year chips on every tab; deriving it
+   * client-side from the Data view's fetch-alls made the chips disappear on a
+   * fresh Overview/Analytics load.
+   */
+  years: z.array(z.string()),
 });
 export type ProjectFilterOptionsOut = z.infer<typeof projectFilterOptionsOut>;
 
@@ -989,6 +998,18 @@ export const projectDashboardSummaryOut = z.object({
   nextTasks: z.array(taskOut),
   attention: z.array(projectAttentionItemSchema),
   filterOptions: projectFilterOptionsOut,
+  /**
+   * How many rows the active date window (`dateFrom`/`dateTo`) removed for
+   * having NO date at all, per entity — the honest footnote under the date
+   * chips ("12 undated purchases hidden"). All three are 0 when no window is
+   * set. A row that has a date but falls outside the window is NOT counted:
+   * it's excluded on its own merits, which the chip already says.
+   */
+  hiddenByDate: z.object({
+    projects: z.number().int(),
+    tasks: z.number().int(),
+    purchases: z.number().int(),
+  }),
   completedCount: z.number().int(),
 });
 export type ProjectDashboardSummaryOut = z.infer<

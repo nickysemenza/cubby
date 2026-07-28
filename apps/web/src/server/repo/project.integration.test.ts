@@ -1,5 +1,7 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectCreateInput } from "@cubby/schemas/project";
 import {
+  LIVE_PROJECT_STATUSES,
   projectCreateInput,
   purchaseCreateInput,
   taskCreateInput,
@@ -920,7 +922,7 @@ describe("project dashboard — attention detector + summary", () => {
     expect(blockedWorkIds).not.toContain(unblockedProject.id);
   });
 
-  it("dashboardSummary's actualSpend/committedSpend match hand-computed subtree totals", async () => {
+  it("an omitted statusScope includes `done` projects in the list and in actualSpend/committedSpend", async () => {
     const projectA = await createProject(
       ctx.db,
       projectCreateInput.parse({
@@ -934,57 +936,375 @@ describe("project dashboard — attention detector + summary", () => {
       projectCreateInput.parse({ name: "summary spend b", status: "planning" }),
       ctx.actor,
     );
-    await createPurchase(
+    const projectDone = await createProject(
       ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "summary a actual",
-        projectId: projectA.id,
-        cost: 120,
-        future: false,
-      }),
+      projectCreateInput.parse({ name: "summary spend done", status: "done" }),
       ctx.actor,
     );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "summary a committed",
-        projectId: projectA.id,
-        cost: 30,
-        future: true,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "summary b actual",
-        projectId: projectB.id,
-        cost: 40,
-        future: false,
-      }),
-      ctx.actor,
-    );
+    for (const [project, name, cost, future] of [
+      [projectA, "summary a actual", 120, false],
+      [projectA, "summary a committed", 30, true],
+      [projectB, "summary b actual", 40, false],
+      [projectDone, "summary done actual", 90, false],
+      [projectDone, "summary done committed", 10, true],
+    ] as const) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          projectId: project.id,
+          cost,
+          future,
+        }),
+        ctx.actor,
+      );
+    }
 
-    const [aAfter, bAfter] = await Promise.all([
+    const [aAfter, bAfter, doneAfter] = await Promise.all([
       getProjectByID(ctx.db, projectA.id),
       getProjectByID(ctx.db, projectB.id),
+      getProjectByID(ctx.db, projectDone.id),
     ]);
-    const expectedActual =
+    const liveActual =
       aAfter.rollup.subtree.actualSpent + bAfter.rollup.subtree.actualSpent;
-    const expectedCommitted =
+    const liveCommitted =
       aAfter.rollup.subtree.committedSpent +
       bAfter.rollup.subtree.committedSpent;
 
-    // Default statusScope excludes `done` — both projects (in_progress,
-    // planning) are included.
+    // No statusScope = NO status condition: `done` is in scope like any other
+    // status. (This used to silently fall back to `!= 'done'` — an invisible
+    // filter nothing in the UI described.)
     const summary = await projectDashboardSummary(ctx.db, {});
-    expect(summary.summary.actualSpend).toBe(expectedActual);
-    expect(summary.summary.committedSpend).toBe(expectedCommitted);
+    expect(summary.projects.map((p) => p.name)).toEqual([
+      "summary spend a",
+      "summary spend b",
+      "summary spend done",
+    ]);
+    expect(summary.summary.actualSpend).toBe(
+      liveActual + doneAfter.rollup.subtree.actualSpent,
+    );
+    expect(summary.summary.committedSpend).toBe(
+      liveCommitted + doneAfter.rollup.subtree.committedSpent,
+    );
+    // The two portfolio headline stats keep a FIXED status regardless of the
+    // (here absent) statusScope.
+    expect(summary.summary.activeProjectCount).toBe(2);
+    expect(summary.completedCount).toBe(1);
+
+    // Excluding `done` is now something a caller opts into explicitly.
+    const live = await projectDashboardSummary(ctx.db, {
+      statusScope: [...LIVE_PROJECT_STATUSES],
+    });
+    expect(live.projects.map((p) => p.name)).toEqual([
+      "summary spend a",
+      "summary spend b",
+    ]);
+    expect(live.summary.actualSpend).toBe(liveActual);
+    expect(live.summary.committedSpend).toBe(liveCommitted);
+  });
+});
+
+describe("project dashboard — summary scope filters", () => {
+  const ctx = withTestDb();
+
+  /** Every fixture here is a bare project; only the scoped columns vary. */
+  const mkProject = (input: Partial<ProjectCreateInput> & { name: string }) =>
+    createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+
+  /** Names of the projects the summary's scoped set actually returned. */
+  const scopedNames = (summary: { projects: Array<{ name: string }> }) =>
+    summary.projects.map((p) => p.name);
+
+  it("statusScope selects exactly the listed statuses; omitted means all four", async () => {
+    await mkProject({ name: "status planning", status: "planning" });
+    await mkProject({ name: "status not started", status: "not_started" });
+    await mkProject({ name: "status in progress", status: "in_progress" });
+    await mkProject({ name: "status done", status: "done" });
+
+    expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
+      "status done",
+      "status in progress",
+      "status not started",
+      "status planning",
+    ]);
+
+    const live = await projectDashboardSummary(ctx.db, {
+      statusScope: [...LIVE_PROJECT_STATUSES],
+    });
+    expect(scopedNames(live)).toEqual([
+      "status in progress",
+      "status not started",
+      "status planning",
+    ]);
+
+    const doneOnly = await projectDashboardSummary(ctx.db, {
+      statusScope: ["done"],
+    });
+    expect(scopedNames(doneOnly)).toEqual(["status done"]);
+  });
+
+  it("a ONE-element locations filter matches by array overlap (the row-constructor regression)", async () => {
+    await mkProject({ name: "loc both", locations: ["Cabin", "Lake House"] });
+    await mkProject({ name: "loc cabin", locations: ["Cabin"] });
+    await mkProject({ name: "loc lake", locations: ["Lake House"] });
+
+    // `sql`${col} && ${["Cabin"]}`` interpolated a ROW CONSTRUCTOR (`($1)`)
+    // rather than a text[], so this returned nothing at all.
+    const summary = await projectDashboardSummary(ctx.db, {
+      locations: ["Cabin"],
+    });
+    expect(scopedNames(summary)).toEqual(["loc both", "loc cabin"]);
+  });
+
+  it("a multi-element locations filter is ANY-of, and an empty locations[] project never matches one", async () => {
+    await mkProject({ name: "loc both", locations: ["Cabin", "Lake House"] });
+    await mkProject({ name: "loc cabin", locations: ["Cabin"] });
+    await mkProject({ name: "loc empty", locations: [] });
+    await mkProject({ name: "loc lake", locations: ["Lake House"] });
+
+    const bothKnown = await projectDashboardSummary(ctx.db, {
+      locations: ["Cabin", "Lake House"],
+    });
+    expect(scopedNames(bothKnown)).toEqual([
+      "loc both",
+      "loc cabin",
+      "loc lake",
+    ]);
+
+    // One known + one that exists nowhere: still ANY-of, not all-of.
+    const oneUnknown = await projectDashboardSummary(ctx.db, {
+      locations: ["Barn", "Lake House"],
+    });
+    expect(scopedNames(oneUnknown)).toEqual(["loc both", "loc lake"]);
+
+    const noMatch = await projectDashboardSummary(ctx.db, {
+      locations: ["Barn"],
+    });
+    expect(scopedNames(noMatch)).toEqual([]);
+
+    // Unfiltered, the empty-locations project is in scope like any other.
+    expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
+      "loc both",
+      "loc cabin",
+      "loc empty",
+      "loc lake",
+    ]);
+  });
+
+  it("the kinds filter selects exactly the listed kinds; omitted keeps kind-less projects", async () => {
+    await mkProject({ name: "kind garden", kind: "garden" });
+    await mkProject({ name: "kind none", kind: null });
+    await mkProject({ name: "kind reno", kind: "renovation" });
+
+    const reno = await projectDashboardSummary(ctx.db, {
+      kinds: ["renovation"],
+    });
+    expect(scopedNames(reno)).toEqual(["kind reno"]);
+
+    const two = await projectDashboardSummary(ctx.db, {
+      kinds: ["renovation", "garden"],
+    });
+    expect(scopedNames(two)).toEqual(["kind garden", "kind reno"]);
+
+    expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
+      "kind garden",
+      "kind none",
+      "kind reno",
+    ]);
+  });
+
+  /**
+   * The four interval shapes a project's `[startDate, endDate]` can take, plus
+   * a fully-past control. Shared by the two date-window tests below.
+   */
+  const seedDateShapes = async () => {
+    await mkProject({
+      name: "date bounded",
+      startDate: "2025-03-01",
+      endDate: "2025-04-01",
+    });
+    await mkProject({
+      name: "date early",
+      startDate: null,
+      endDate: "2025-02-01",
+    });
+    await mkProject({
+      name: "date late",
+      startDate: "2025-06-01",
+      endDate: null,
+    });
+    await mkProject({ name: "date none", startDate: null, endDate: null });
+    await mkProject({
+      name: "date old",
+      startDate: "2023-01-01",
+      endDate: "2023-06-01",
+    });
+  };
+
+  it("a two-sided date window keeps overlapping intervals and drops the undated project", async () => {
+    await seedDateShapes();
+
+    // No window: every shape is in scope, `date none` included.
+    expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
+      "date bounded",
+      "date early",
+      "date late",
+      "date none",
+      "date old",
+    ]);
+
+    const windowed = await projectDashboardSummary(ctx.db, {
+      dateFrom: "2025-01-01",
+      dateTo: "2025-12-31",
+    });
+    // `date old` ends before the window; `date none` has no interval at all
+    // (without the `start IS NOT NULL OR end IS NOT NULL` conjunct it would
+    // pass the other two vacuously and match every window ever chosen).
+    expect(scopedNames(windowed)).toEqual([
+      "date bounded",
+      "date early",
+      "date late",
+    ]);
+    expect(windowed.hiddenByDate.projects).toBe(1);
+  });
+
+  it("one-sided date windows drop only their own half, and still drop the undated project", async () => {
+    await seedDateShapes();
+
+    // dateFrom only: keeps anything still running on/after it — an open end
+    // (null) counts as still running.
+    const fromOnly = await projectDashboardSummary(ctx.db, {
+      dateFrom: "2025-05-01",
+    });
+    expect(scopedNames(fromOnly)).toEqual(["date late"]);
+    expect(fromOnly.hiddenByDate.projects).toBe(1);
+
+    // dateTo only: keeps anything that had started by then — an open start
+    // (null) counts as always-having-started.
+    const toOnly = await projectDashboardSummary(ctx.db, {
+      dateTo: "2024-12-31",
+    });
+    expect(scopedNames(toOnly)).toEqual(["date early", "date old"]);
+    expect(toOnly.hiddenByDate.projects).toBe(1);
+  });
+
+  it("hiddenByDate counts scoped and inbox rows that lack a date, but not rows outside the scope", async () => {
+    const scoped = await mkProject({
+      name: "hidden scoped",
+      kind: "renovation",
+      startDate: "2025-03-01",
+      endDate: "2025-04-01",
+    });
+    const otherKind = await mkProject({
+      name: "hidden other kind",
+      kind: "garden",
+      startDate: "2025-03-01",
+      endDate: "2025-04-01",
+    });
+    await mkProject({
+      name: "hidden undated",
+      kind: "renovation",
+      startDate: null,
+      endDate: null,
+    });
+
+    for (const [name, projectId, dueDate] of [
+      ["hidden scoped task", scoped.id, null],
+      ["hidden inbox task", null, null],
+      ["hidden other kind task", otherKind.id, null],
+      ["hidden dated task", scoped.id, "2025-03-15"],
+    ] as const) {
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({ trade: "other", name, projectId, dueDate }),
+        ctx.actor,
+      );
+    }
+
+    for (const [name, projectId, date] of [
+      ["hidden scoped purchase", scoped.id, null],
+      ["hidden inbox purchase", null, null],
+      ["hidden other kind purchase", otherKind.id, null],
+      ["hidden dated purchase", scoped.id, "2025-03-15"],
+    ] as const) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          projectId,
+          date,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const summary = await projectDashboardSummary(ctx.db, {
+      kinds: ["renovation"],
+      dateFrom: "2025-01-01",
+      dateTo: "2025-12-31",
+    });
+    expect(scopedNames(summary)).toEqual(["hidden scoped"]);
+    // projects: the undated renovation project. tasks/purchases: the scoped
+    // row + the inbox row. The garden project's rows are NOT counted — they
+    // are hidden by the kind filter, not by the date window.
+    expect(summary.hiddenByDate).toEqual({
+      projects: 1,
+      tasks: 2,
+      purchases: 2,
+    });
+
+    // Nothing is "hidden by date" when no window is set.
+    const unwindowed = await projectDashboardSummary(ctx.db, {
+      kinds: ["renovation"],
+    });
+    expect(unwindowed.hiddenByDate).toEqual({
+      projects: 0,
+      tasks: 0,
+      purchases: 0,
+    });
+  });
+
+  it("filterOptions.years unions purchase/task/project dates, newest first, using a task's EFFECTIVE due date", async () => {
+    await mkProject({
+      name: "years project",
+      startDate: "2020-02-01",
+      endDate: "2022-03-01",
+    });
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "years purchase",
+        date: "2021-05-01",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "years task",
+        dueDate: "2019-01-01",
+        dueEndDate: "2023-06-01",
+      }),
+      ctx.actor,
+    );
+
+    const summary = await projectDashboardSummary(ctx.db, {});
+    // 2023 (task dueEndDate) > 2022 (project end) > 2021 (purchase) > 2020
+    // (project start); 2019 is absent because `dueEndDate` supersedes
+    // `dueDate` — the same effective-due expression task/lookup.ts filters on.
+    expect(summary.filterOptions.years).toEqual([
+      "2023",
+      "2022",
+      "2021",
+      "2020",
+    ]);
+    expect(summary.filterOptions.years).not.toContain("2019");
   });
 });

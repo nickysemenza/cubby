@@ -10,6 +10,13 @@
  * drift under the same filter set. Each breakdown is a single grouped SQL
  * aggregate — Postgres does the summing — run in parallel; never a
  * fetch-everything-then-group-in-JS pass.
+ *
+ * The aggregate column set (`actual`/`committed`/`credits`/`net`/`count`) and
+ * the month-bucket expression are shared with `project/portfolio-analytics.ts`
+ * — see `~/server/repo/purchase-aggregate-sql` for the definitions and why
+ * they live there instead of in either directory. Mirrors
+ * project/analytics.ts's `projectRollups` split (`spent := sum(cost)` is the
+ * same identity as this file's `net`).
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import type {
@@ -21,31 +28,11 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project, purchase } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  purchaseAggregateFields as aggregateSelect,
+  PURCHASE_MONTH_BUCKET as MONTH_BUCKET,
+} from "~/server/repo/purchase-aggregate-sql";
 import { buildPurchaseWhereClause } from "./lookup";
-
-/**
- * actual/committed/credits/net/count — the shared aggregate columns every
- * breakdown selects. Mirrors project/analytics.ts's `projectRollups` split:
- * `actual` = live spend already made, `committed` = future/planned spend,
- * `credits` = refunds & contributions (stored as negative `cost`, flipped
- * positive here). `net` is the purchase's blended total — algebraically
- * `actual + committed - credits`, which telescopes to a plain `sum(cost)`
- * (cost = 0 and NULL cost both contribute nothing to any of the three
- * either), the exact identity `projectRollups` uses for `spent := sum(cost)`.
- * Computed directly as one sum rather than three-way arithmetic to keep the
- * query plan cheap. A fresh object is returned per call since these `sql`
- * fragments get spread into several independent `select()`s below.
- */
-const aggregateSelect = () => ({
-  actual: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(${purchase.cost}) filter (where ${purchase.cost} < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(${purchase.cost}), 0)::float`,
-  count: sql<number>`count(*)::int`,
-});
-
-/** `"YYYY-MM"` bucket expression, reused for both the monthly SELECT and its GROUP/ORDER BY. */
-const MONTH_BUCKET = sql<string>`to_char(${purchase.date}, 'YYYY-MM')`;
 
 export async function purchaseAnalytics(
   db: Database,
