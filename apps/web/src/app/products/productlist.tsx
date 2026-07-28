@@ -314,34 +314,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
 
   // Memoize filters to prevent recreating on every render
-  const filters = useMemo(
-    () => [
-      "name",
-      "manufacturer",
-      "upc",
-      {
-        id: "category",
-        placeholder: "Filter by category...",
-        filterType: "select" as const,
-        options: productCategoryOptionsWithTheme,
-      },
-    ],
-    [],
-  );
-
-  // Memoize buildFilters to prevent recreating on every render
-  const buildFilters = useCallback(
-    (ts: { getColumnFilter: (id: string) => unknown }) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      manufacturerFilter: ts.getColumnFilter("manufacturer"),
-      upcFilter: ts.getColumnFilter("upc"),
-      categoryFilter: ts.getColumnFilter("category"),
-      inventoryPresenceFilter: ts.getColumnFilter("location"),
-      ingredientPresenceFilter: ts.getColumnFilter("ingredient"),
-    }),
-    [],
-  );
-
   const extraActions = useCallback(
     (row: ProductListItem) => (
       <>
@@ -409,11 +381,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   } = useEntityList({
     entity: "product",
     queryOptions,
-    buildFilters,
     getMappings: getProductListMappings,
     tableStateOptions,
     columns,
-    filters,
     deletable: deletableConfig,
     extraActions,
     nameEditable,

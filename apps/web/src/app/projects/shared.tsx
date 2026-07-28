@@ -1,14 +1,12 @@
-import {
-  type CostType,
-  type ProjectKind,
-  type ProjectOut,
-  type ProjectStatus,
-  type PurchaseOut,
-  projectStatusValues,
-  type TaskOut,
-  type TaskStatus,
-  type Trade,
-  tradeValues,
+import type {
+  CostType,
+  ProjectKind,
+  ProjectOut,
+  ProjectStatus,
+  PurchaseOut,
+  TaskOut,
+  TaskStatus,
+  Trade,
 } from "@cubby/schemas/project";
 import {
   type ColumnHelper,
@@ -22,32 +20,13 @@ import {
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
 import {
-  Archive,
   ArrowRightLeft,
-  Car,
-  ClipboardList,
-  Droplets,
   ExternalLink,
-  Fan,
-  Grid3x3,
-  Hammer,
   ListChecks,
   ListTodo,
-  type LucideIcon,
-  PaintRoller,
-  Palette,
-  RectangleHorizontal,
-  Refrigerator,
-  Ruler,
-  Shapes,
   ShoppingCart,
-  Square,
   Tag,
-  Trash2,
-  Trees,
-  Truck,
   Wrench,
-  Zap,
 } from "lucide-react";
 import {
   type ComponentType,
@@ -109,16 +88,12 @@ import {
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
-import {
-  capitalize,
-  PROJECT_STATUS_LABELS,
-  TRADE_LABELS,
-} from "./project-formatting";
-import { projectKindOptions } from "./project-options";
+import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
+import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
+import { TradeBadge, tradeOptions } from "./trade-options";
 
 /**
  * Human-facing labels for the raw DB enum values (`@cubby/schemas/project`).
@@ -140,84 +115,17 @@ export {
   TRADE_LABELS,
 } from "./project-formatting";
 
-/** Status select options for the detail page's inline `EditableCell` status field. */
-export const PROJECT_STATUS_OPTIONS: FilterableComboboxItem[] =
-  buildSelectOptions(projectStatusValues, PROJECT_STATUS_LABELS);
+export { PROJECT_STATUS_OPTIONS } from "./project-options";
 
 // -- Cost-type colors --
 
 export { getCostTypeColor } from "~/lib/status-colors";
 
-/**
- * Monochrome Lucide glyph per trade — a scannable leading mark for badges and
- * select rows. Icons live here (client) rather than in `@cubby/schemas` so the
- * schema package stays presentation-free. Full-color emoji were deliberately
- * dropped in the Notion migration; these `currentColor` glyphs sit on the
- * Warm-Paper Ledger without the glossy clash.
- */
-const TRADE_ICONS: Record<Trade, LucideIcon> = {
-  planning: ClipboardList,
-  demolition: Trash2,
-  building: Hammer,
-  drywall: Square,
-  electrical: Zap,
-  plumbing: Droplets,
-  mechanical: Fan,
-  cabinetry: Archive,
-  countertop: RectangleHorizontal,
-  flooring: Grid3x3,
-  millwork: Ruler,
-  finishes: PaintRoller,
-  appliances: Refrigerator,
-  landscaping: Trees,
-  logistics: Truck,
-  metalworking: Wrench,
-  crafts: Palette,
-  auto: Car,
-  other: Shapes,
-};
+// Trade glyphs / chips / select options moved to `./trade-options` so the
+// filter manifest can import `tradeOptions` without closing an import cycle
+// back through this file's tables. Re-exported so consumers don't care.
+export { TradeBadge, TradeIcon, tradeOptions } from "./trade-options";
 
-/** Outline badge with the trade's leading glyph + label — the canonical trade chip. */
-export function TradeBadge({ trade }: { trade: Trade }) {
-  const Icon = TRADE_ICONS[trade];
-  return (
-    <Badge variant="outline">
-      <Icon />
-      {TRADE_LABELS[trade]}
-    </Badge>
-  );
-}
-
-/**
- * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight
- * spots like the Gantt name pane where the label is already present.
- */
-export function TradeIcon({
-  trade,
-  className,
-}: {
-  trade: Trade;
-  className?: string;
-}) {
-  const Icon = TRADE_ICONS[trade];
-  return <Icon className={className} aria-label={TRADE_LABELS[trade]} />;
-}
-
-/**
- * `{value,label,icon}` options for the trade filter/inline-edit select — shared
- * by tasks and purchases. Not `buildSelectOptions` because that helper carries
- * no icon; the glyph mirrors `TradeBadge` so the select and the chip match.
- */
-export const tradeOptions: FilterableComboboxItem[] = tradeValues.map(
-  (value) => {
-    const Icon = TRADE_ICONS[value];
-    return {
-      value,
-      label: TRADE_LABELS[value],
-      icon: <Icon className="size-3.5 text-muted-foreground" />,
-    };
-  },
-);
 // -- Chart theme (consistent across all Nivo charts) --
 
 export {

@@ -28,6 +28,8 @@ import { Grid } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { buildFiltersFromManifest } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -47,13 +49,7 @@ import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
 import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
-import {
-  buildPurchaseFilters,
-  costTypeOptions,
-  dateRangeOptions,
-  futureFilterOptions,
-  productLinkedOptions,
-} from "./purchase-options";
+import { costTypeOptions } from "./purchase-options";
 import { SettlePurchaseDialog } from "./settle-purchase-dialog";
 
 const route = getRouteApi("/_authenticated/purchases/");
@@ -184,7 +180,11 @@ export function PurchaseList({
     [],
   );
 
-  const projectFilterOptions = projectOptions;
+  // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
+  const projectFilterOptions = useMemo(
+    () => ({ project: projectOptions }),
+    [projectOptions],
+  );
 
   // The cost / date / costType / trade / future columns come from the shared
   // factories in `~/app/projects/shared.tsx`, also used by the embedded
@@ -215,11 +215,6 @@ export function PurchaseList({
         },
         {
           mobile: { slot: "subtitle", priority: 15 },
-          filterConfig: {
-            placeholder: "Date…",
-            filterType: "select",
-            options: dateRangeOptions,
-          },
         },
       ),
       purchaseCostTypeColumn(
@@ -245,11 +240,6 @@ export function PurchaseList({
       createProjectLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 40, interactive: true },
-        filterConfig: {
-          placeholder: "Filter by project...",
-          filterType: "select",
-          options: projectFilterOptions,
-        },
         editable: {
           onSave: async (newProjectId, purchase) => {
             await updatePurchaseMutation.mutateAsync({
@@ -262,11 +252,6 @@ export function PurchaseList({
       createProductLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 45, interactive: true },
-        filterConfig: {
-          placeholder: "Filter by product...",
-          filterType: "select",
-          options: productLinkedOptions,
-        },
         editable: {
           onSave: async (newProductId, purchase) => {
             await updatePurchaseMutation.mutateAsync({
@@ -286,11 +271,6 @@ export function PurchaseList({
         },
         {
           mobile: { slot: "meta", priority: 50 },
-          filterConfig: {
-            placeholder: "Filter by status...",
-            filterType: "select",
-            options: futureFilterOptions,
-          },
         },
       ),
       columnHelper.accessor((row) => row.url, {
@@ -316,59 +296,12 @@ export function PurchaseList({
         },
       }),
     ],
-    [columnHelper, projectFilterOptions],
+    [columnHelper],
   );
 
   // `future` is fixed for the planned preset, `trade` is fixed for the
   // unclassified preset — dropping their filter dropdowns (the columns stay,
   // still inline-editable) avoids a filter control that can never do anything.
-  const filters = useMemo(() => {
-    const all = [
-      { id: "name", placeholder: "Search purchases..." },
-      {
-        id: "date",
-        placeholder: "Date…",
-        filterType: "select" as const,
-        options: dateRangeOptions,
-      },
-      {
-        id: "costType",
-        placeholder: "Filter by cost type...",
-        filterType: "select" as const,
-        options: costTypeOptions,
-      },
-      {
-        id: "trade",
-        placeholder: "Filter by trade...",
-        filterType: "select" as const,
-        options: tradeOptions,
-      },
-      {
-        id: "future",
-        placeholder: "Filter by status...",
-        filterType: "select" as const,
-        options: futureFilterOptions,
-      },
-      {
-        id: "project",
-        placeholder: "Filter by project...",
-        filterType: "select" as const,
-        options: projectFilterOptions,
-      },
-      {
-        id: "product",
-        placeholder: "Filter by product...",
-        filterType: "select" as const,
-        options: productLinkedOptions,
-      },
-    ];
-    return all.filter((f) => {
-      if (mode === "planned" && f.id === "future") return false;
-      if (mode === "unclassified" && f.id === "trade") return false;
-      return true;
-    });
-  }, [projectFilterOptions, mode]);
-
   // Ledger-only: seed initial column filters from the URL (mount-only, mirrors
   // useSeededFilter) so a chart-driven trade/costType click, or a bookmarked/
   // shared link, restores the same rows. `planned`/`unclassified` stay on the
@@ -426,12 +359,9 @@ export function PurchaseList({
   } = useEntityList({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
-    buildFilters: (ts) => ({
-      ...buildPurchaseFilters(ts.getColumnFilter),
-      ...presetFilters,
-    }),
+    extraFilters: presetFilters,
+    filterOptions: projectFilterOptions,
     columns,
-    filters,
     deletable: deletableConfig,
     nameEditable,
     bulkActions,
@@ -499,9 +429,9 @@ export function PurchaseList({
   const columnFilters = table.getState().columnFilters;
   const currentFilters = useMemo(
     () => ({
-      ...buildPurchaseFilters(
-        (id) =>
-          columnFilters.find((f) => f.id === id)?.value as string | undefined,
+      ...buildFiltersFromManifest(
+        getEntityFilters("purchase"),
+        (id) => columnFilters.find((f) => f.id === id)?.value as string,
       ),
       ...presetFilters,
     }),

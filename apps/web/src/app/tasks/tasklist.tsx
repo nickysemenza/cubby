@@ -1,10 +1,4 @@
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
-import type {
-  TaskCompletion,
-  TaskOut,
-  TaskStatus,
-  Trade,
-} from "@cubby/schemas/project";
+import type { TaskCompletion, TaskOut, Trade } from "@cubby/schemas/project";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, ListChecks, Wrench } from "lucide-react";
@@ -14,8 +8,8 @@ import {
   taskDueColumn,
   taskStatusColumn,
   taskTradeColumn,
-  tradeOptions,
 } from "~/app/projects/shared";
+import { tradeOptions } from "~/app/projects/trade-options";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -34,11 +28,6 @@ import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
 import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import { SetTaskStatusDialog } from "../_components/tracker/set-task-status-dialog";
-import {
-  dueRangeOptions,
-  resolveDueRange,
-  taskStatusOptions,
-} from "./task-options";
 
 /**
  * `N/M` checklist chip after a parent task's name. Module-level because
@@ -134,7 +123,18 @@ export function TaskList({
     [],
   );
 
-  const projectFilterOptions = projectOptions;
+  // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
+  const projectFilterOptions = useMemo(
+    () => ({ project: projectOptions }),
+    [projectOptions],
+  );
+
+  // Scope constants that aren't column filters. Checklist subtasks are managed
+  // from their parent's detail page, not surfaced as independent rows here.
+  const taskScope = useMemo(
+    () => ({ topLevelOnly: true, completion }),
+    [completion],
+  );
 
   // The status / due / trade columns come from the shared factories in
   // `~/app/projects/shared.tsx`, also used by the embedded `TaskList` on the
@@ -156,11 +156,6 @@ export function TaskList({
       createProjectLinkColumn(columnHelper, {
         className: "w-40",
         mobile: { slot: "meta", priority: 30, interactive: true },
-        filterConfig: {
-          placeholder: "Filter by project...",
-          filterType: "select",
-          options: projectFilterOptions,
-        },
         editable: {
           onSave: async (newProjectId, task) => {
             await updateTaskMutation.mutateAsync({
@@ -191,38 +186,7 @@ export function TaskList({
         { mobile: { slot: "meta", priority: 50 } },
       ),
     ],
-    [columnHelper, projectFilterOptions],
-  );
-
-  const filters = useMemo(
-    () => [
-      { id: "name", placeholder: "Search tasks..." },
-      {
-        id: "status",
-        placeholder: "Filter by status...",
-        filterType: "select" as const,
-        options: taskStatusOptions,
-      },
-      {
-        id: "trade",
-        placeholder: "Filter by trade...",
-        filterType: "select" as const,
-        options: tradeOptions,
-      },
-      {
-        id: "due",
-        placeholder: "Filter by due date...",
-        filterType: "select" as const,
-        options: dueRangeOptions,
-      },
-      {
-        id: "project",
-        placeholder: "Filter by project...",
-        filterType: "select" as const,
-        options: projectFilterOptions,
-      },
-    ],
-    [projectFilterOptions],
+    [columnHelper],
   );
 
   const tableStateOptions = useSeededFilter("name", initialSearch);
@@ -241,22 +205,9 @@ export function TaskList({
   } = useEntityList({
     entity: "task",
     queryOptions: api.task.list.queryOptions,
-    buildFilters: (ts) => {
-      const projectFilter = ts.getColumnFilter("project");
-      return {
-        search: ts.getColumnFilter("name"),
-        status: ts.getColumnFilter("status") as TaskStatus | undefined,
-        trade: ts.getColumnFilter("trade") as Trade | undefined,
-        projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
-        ...resolveDueRange(ts.getColumnFilter("due")),
-        // Checklist subtasks are managed from their parent's detail page, not
-        // surfaced as independent rows here.
-        topLevelOnly: true,
-        completion,
-      };
-    },
+    extraFilters: taskScope,
+    filterOptions: projectFilterOptions,
     columns,
-    filters,
     deletable: deletableConfig,
     nameEditable,
     nameSuffix: subtaskCountSuffix,

@@ -125,7 +125,7 @@ interface RecipeListProps {
 }
 
 // Stable fallback while getAllTags loads — an inline `= []` default would mint
-// a new reference every render and destabilize the tagOptions/columns memos.
+// a new reference every render and destabilize the tag options/columns memos.
 const NO_TAGS: string[] = [];
 
 export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
@@ -136,8 +136,15 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const { data: tags = NO_TAGS } = useQuery(
     api.recipe.getAllTags.queryOptions(),
   );
-  const tagOptions = useMemo(
-    () => tags.map((tag) => ({ value: tag, label: tag })),
+  // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
+  // Constant scope when rendered on a cookbook page.
+  const cookbookScope = useMemo(
+    () => (cookbookIdFilter ? { cookbookId: cookbookIdFilter } : {}),
+    [cookbookIdFilter],
+  );
+
+  const tagFilterOptions = useMemo(
+    () => ({ tags: tags.map((tag) => ({ value: tag, label: tag })) }),
     [tags],
   );
 
@@ -220,11 +227,6 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         enableSorting: true,
         meta: {
           className: "w-48",
-          filterConfig: {
-            placeholder: "Filter by tag...",
-            filterType: "select" as const,
-            options: tagOptions,
-          },
           mobile: { slot: "subtitle", priority: 10 },
           cellData: tagsCellDataDef,
         },
@@ -406,7 +408,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
       }),
     ];
-  }, [columnHelper, tagOptions]);
+  }, [columnHelper]);
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,
@@ -427,27 +429,12 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   } = useEntityList({
     entity: "recipe",
     queryOptions: api.recipe.list.queryOptions,
-    buildFilters: (ts) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      tagFilters: ts.getColumnFilter("tags")
-        ? [ts.getColumnFilter("tags") as string]
-        : undefined,
-      // Constant scope when rendered on a cookbook page; merged with the
-      // table's own name filter so search-within-a-book still works.
-      ...(cookbookIdFilter ? { cookbookId: cookbookIdFilter } : {}),
-    }),
+    // Constant scope when rendered on a cookbook page; merged over the
+    // table's own column filters so search-within-a-book still works.
+    extraFilters: cookbookScope,
+    filterOptions: tagFilterOptions,
     columns,
     nameClassName: "w-64",
-    filters: [
-      { id: "name", placeholder: "Filter by recipe name..." },
-      { id: "source", placeholder: "Filter by source..." },
-      {
-        id: "tags",
-        placeholder: "Filter by tag...",
-        filterType: "select",
-        options: tagOptions,
-      },
-    ],
     bulkActions: {
       actions: [
         {

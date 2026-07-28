@@ -1,6 +1,16 @@
-import { projectKindValues } from "@cubby/schemas/project";
+import { projectKindValues, projectStatusValues } from "@cubby/schemas/project";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { capitalize } from "./project-formatting";
+import { buildSelectOptions } from "~/lib/select-options";
+import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
+
+/**
+ * Status select options — the detail page's inline `EditableCell`, the create
+ * dialog, and the project table's status filter. Lives here rather than in
+ * `shared.tsx` so the filter manifest can import it without closing an import
+ * cycle back through that file's tables.
+ */
+export const PROJECT_STATUS_OPTIONS: FilterableComboboxItem[] =
+  buildSelectOptions(projectStatusValues, PROJECT_STATUS_LABELS);
 
 /**
  * `{value,label}` options for the kind filter/quick-add select — labels

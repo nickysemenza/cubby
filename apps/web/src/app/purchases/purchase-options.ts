@@ -95,7 +95,7 @@ export function resolveDateRange(preset: string | undefined): {
  * {@link purchaseFiltersFromSearch}) the analytics view — so "filtered" can
  * never mean something different across the two `/purchases` views.
  */
-export function buildPurchaseFilters(
+function buildPurchaseFilters(
   get: (columnId: string) => string | undefined,
 ): PurchaseFilters {
   const projectFilter = get("project");

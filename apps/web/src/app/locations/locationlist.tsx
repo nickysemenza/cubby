@@ -273,24 +273,7 @@ export function LocationList() {
   } = useEntityList({
     entity: "location",
     queryOptions: api.location.list.queryOptions,
-    buildFilters: (ts) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      itemTypeFilter: ts.getColumnFilter("type") as LocationType,
-      parentPresenceFilter: ts.getColumnFilter("parent") as
-        | "has"
-        | "none"
-        | undefined,
-    }),
     columns,
-    filters: [
-      { id: "name", placeholder: "Filter by location name..." },
-      {
-        id: "type",
-        placeholder: "Filter by type...",
-        filterType: "select",
-        options: locationTypeOptionsWithTheme,
-      },
-    ],
     deletable: deletableConfig,
     bulkActions,
     extraActions,
