@@ -9,6 +9,7 @@ import {
   READ_ONLY_OPEN,
   registerMcpTool,
   slimUsdaFood,
+  slimUsdaFoodListItem,
   structuredError,
 } from "./_shared";
 
@@ -58,7 +59,9 @@ export function registerUsdaTools(server: McpServer) {
       });
       return {
         meta: result.meta,
-        items: (result.items as Record<string, unknown>[]).map(slimUsdaFood),
+        items: (result.items as Record<string, unknown>[]).map(
+          slimUsdaFoodListItem,
+        ),
       };
     },
   });

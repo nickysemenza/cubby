@@ -12,7 +12,7 @@ import {
 import {
   dataTypePredicate,
   dataTypePriorityCase,
-  escapeLike,
+  matchQualityBindings,
   matchQualityCase,
   sqlDirection,
   sqlOrderBy,
@@ -27,6 +27,7 @@ export {
   dataTypePriorityCase,
   escapeLike,
   FOOD_DATA_TYPES,
+  matchQualityBindings,
   matchQualityCase,
 } from "./edge-index-query.js";
 export { normalizeUpc } from "./edge-bundle-loader.js";
@@ -402,8 +403,7 @@ export function createEdgeUsdaDataSource(
       let orderClause: string;
       if (orderBy === "relevance") {
         if (hasName) {
-          const term = nameFilter?.trim() ?? "";
-          orderValues.push(term, `${escapeLike(term)}%`);
+          orderValues.push(...matchQualityBindings(nameFilter?.trim() ?? ""));
           // The trailing `i.fdc_id ASC` is a stability tiebreak, not a
           // preference: without a unique terminal key, rows tied on all four
           // ranking keys come back in SQLite-defined order, which makes

@@ -9,7 +9,11 @@ import {
   inventoryMcpOut,
 } from "@cubby/schemas/inventory";
 import { type LocationOut, locationMcpOut } from "@cubby/schemas/location";
-import { type McpUsdaFoodOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
+import {
+  type McpUsdaFoodOut,
+  mcpUsdaFoodListItemOut,
+  mcpUsdaFoodOut,
+} from "@cubby/schemas/mcp";
 import { type MealOut, mealMcpOut } from "@cubby/schemas/meal";
 import { mcpListInputShape } from "@cubby/schemas/pagination";
 import {
@@ -562,6 +566,48 @@ export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
   linkedProducts?: McpUsdaFoodOut["linkedProducts"];
 };
+/**
+ * The nutrients worth reading first, in display order, as USDA names them.
+ *
+ * `nutrientSummary` arrives in arbitrary order — the top butter result opened
+ * with Fiber, Folic acid, Caffeine, Theobromine, then a long run of individual
+ * fatty acids, with Protein at index 92 of 115. Anything that reads the head of
+ * the list (an agent skimming, a UI slicing the first N) gets theobromine before
+ * protein. Entries carry no nutrient code, only a display name, so this matches
+ * on the exact USDA strings; an unrecognized name simply keeps its original
+ * position after these. Energy is disambiguated by unit — USDA emits both KCAL
+ * and kJ rows under the same name.
+ */
+const NUTRIENT_DISPLAY_ORDER: Array<[name: string, unit?: string]> = [
+  ["Energy", "KCAL"],
+  ["Protein"],
+  ["Total lipid (fat)"],
+  ["Carbohydrate, by difference"],
+  ["Fiber, total dietary"],
+  ["Total Sugars"],
+  ["Sodium, Na"],
+  ["Cholesterol"],
+  ["Fatty acids, total saturated"],
+];
+
+function nutrientRank(entry: { name: string; unit: string }): number {
+  const index = NUTRIENT_DISPLAY_ORDER.findIndex(
+    ([name, unit]) =>
+      name === entry.name && (unit === undefined || unit === entry.unit),
+  );
+  return index === -1 ? NUTRIENT_DISPLAY_ORDER.length : index;
+}
+
+/** Key nutrients first, everything else left in the order USDA sent it. */
+function orderNutrientSummary<T extends { name: string; unit: string }>(
+  summary: T[],
+): T[] {
+  return summary
+    .map((entry, index) => ({ entry, index, rank: nutrientRank(entry) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((x) => x.entry);
+}
+
 export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
   const f = fRow as UsdaFoodRow;
   return {
@@ -575,7 +621,9 @@ export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
     ingredients: f.brandedFoodInfo?.ingredients ?? null,
     serving: f.brandedFoodInfo?.serving ?? null,
     nutrientsPer100: f.nutritionInfo?.nutrientsPer100 ?? null,
-    nutrientSummary: f.nutritionInfo?.nutrientSummary ?? [],
+    nutrientSummary: orderNutrientSummary(
+      f.nutritionInfo?.nutrientSummary ?? [],
+    ),
     portionInfoRaw: f.portionInfoRaw ?? [],
     linkedProducts: (f.linkedProducts ?? []).map((p) => ({
       id: p.id,
@@ -583,6 +631,24 @@ export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
     })),
   };
 });
+
+/**
+ * Search-result projection: `slimUsdaFood` minus the full nutrient table.
+ *
+ * `nutrientSummary` runs to 115 entries (~6.5KB) on an SR Legacy row — every
+ * fatty acid, the whole amino-acid profile, all four tocotrienols — which was
+ * ~80% of a ten-result response. `nutrientsPer100` already carries the same
+ * numbers keyed by nutrient code in ~260B, which is what the picker renders and
+ * what an agent needs to choose between foods. `get_usda_food` still returns the
+ * full table for the one food you settled on.
+ */
+export const slimUsdaFoodListItem = defineSlim(
+  mcpUsdaFoodListItemOut,
+  (fRow: Row) => {
+    const { nutrientSummary: _dropped, ...rest } = slimUsdaFood(fRow);
+    return rest;
+  },
+);
 
 function parseResponse(schema: z.ZodType | undefined, value: unknown) {
   return schema ? schema.parse(value) : value;

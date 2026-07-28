@@ -131,11 +131,19 @@ function renderCard(app: App, food: Food, onPick: () => void): HTMLElement {
   );
   fdc.title = "Open in cubby";
 
-  head.append(
-    badge,
-    el("span", "card-title", food.description ?? "Untitled"),
-    fdc,
-  );
+  head.append(badge);
+
+  // "Already linked" outranks every other signal on the card: it means you've
+  // made this call before, and picking anything else silently creates a second
+  // product for one food. It gets a badge next to the data type rather than a
+  // footnote under the macros.
+  if (food.linkedProducts.length > 0) {
+    const linked = el("span", "badge badge-accent", "linked");
+    linked.title = food.linkedProducts.map((p) => p.name).join(", ");
+    head.append(linked);
+  }
+
+  head.append(el("span", "card-title", food.description ?? "Untitled"), fdc);
   card.append(head);
 
   const brand = [food.brand_name, food.brand_owner].filter(Boolean).join(" · ");
@@ -149,13 +157,12 @@ function renderCard(app: App, food: Food, onPick: () => void): HTMLElement {
   if (macros) card.append(macros);
 
   if (food.linkedProducts.length > 0) {
-    const linked = el(
+    const names = el(
       "div",
-      "eyebrow",
-      `linked · ${food.linkedProducts.map((p) => p.name).join(", ")}`,
+      "linked-names",
+      food.linkedProducts.map((p) => p.name).join(", "),
     );
-    linked.style.color = "var(--brand-ultramarine)";
-    card.append(linked);
+    card.append(names);
   }
 
   card.addEventListener("click", () => {

@@ -121,7 +121,8 @@ const mcpBrandedServingOut = z.object({
   household_serving_fulltext: z.string().nullable(),
 });
 
-export const mcpUsdaFoodOut = z.object({
+/** Everything a USDA food carries in both the search and detail shapes. */
+const usdaFoodSharedFields = {
   fdc_id: fdcId,
   description: z.string().nullable(),
   data_type: dataTypeEnum.nullable(),
@@ -132,13 +133,34 @@ export const mcpUsdaFoodOut = z.object({
   ingredients: z.string().nullable(),
   serving: mcpBrandedServingOut.nullable(),
   nutrientsPer100: nutrientsPer100.nullable(),
-  nutrientSummary: z.array(nutrientSummary),
   portionInfoRaw: z.array(foodPortion),
   linkedProducts: z.array(z.object({ id: productId, name: z.string() })),
+};
+
+export const mcpUsdaFoodOut = z.object({
+  ...usdaFoodSharedFields,
+  nutrientSummary: z.array(nutrientSummary),
 });
 export type McpUsdaFoodOut = z.infer<typeof mcpUsdaFoodOut>;
 
-export const usdaFoodMcpListOut = createPaginatedResponseSchema(mcpUsdaFoodOut);
+/**
+ * Search-result shape: the detail shape minus `nutrientSummary`.
+ *
+ * That field is the full USDA nutrient table — 115 entries on an SR Legacy row,
+ * every individual fatty acid and amino acid and all four tocotrienols. It was
+ * **87% of a ten-result response** (41.8KB of 47.9KB), dwarfing the compact
+ * `nutrientsPer100` that carries the same macros keyed by nutrient code in
+ * ~260B. Nothing reads it from a search result — the picker renders
+ * `nutrientsPer100`, and an agent choosing between foods needs a name and macros,
+ * not tocopherol beta. `get_usda_food` still returns it for the one food you
+ * settled on.
+ */
+export const mcpUsdaFoodListItemOut = z.object(usdaFoodSharedFields);
+export type McpUsdaFoodListItemOut = z.infer<typeof mcpUsdaFoodListItemOut>;
+
+export const usdaFoodMcpListOut = createPaginatedResponseSchema(
+  mcpUsdaFoodListItemOut,
+);
 
 export const usdaFoodMcpOut = mcpUsdaFoodOut.nullable();
 
