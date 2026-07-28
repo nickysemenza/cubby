@@ -66,6 +66,7 @@ const purchaseCrud = createEntityCrud({
       projectId: data.projectId,
       productId: data.productId,
       vendor: data.vendor,
+      orderId: data.orderId,
     }),
   auditUpdateFields: [
     "name",
@@ -79,6 +80,7 @@ const purchaseCrud = createEntityCrud({
     "projectId",
     "productId",
     "vendor",
+    "orderId",
   ],
 });
 
@@ -121,6 +123,7 @@ export const createPurchase = async (
       projectId: data.projectId,
       productId: data.productId,
       vendor: data.vendor,
+      orderId: data.orderId,
     });
     await logAuditEntry(tx, actor, {
       entityType: "purchase",
