@@ -131,7 +131,7 @@ export function multiSelectFilterFn(
  * (`buildOrderBy` in database-helpers/query.ts) so a client-sorted table and a
  * server-sorted one agree.
  */
-export function entityRefSortingFn(
+function entityRefSortingFn(
   a: { getValue: (id: string) => unknown },
   b: { getValue: (id: string) => unknown },
   columnId: string,
