@@ -13,10 +13,9 @@ import {
   CellSelectionContext,
 } from "./cell-selection-context";
 
-interface CellEditTriggerProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface CellEditTriggerProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** React 19 ref-as-prop (forwardRef is deprecated). */
-  ref?: React.Ref<HTMLButtonElement>;
+  ref?: React.Ref<HTMLSpanElement>;
   /**
    * Open the editor. `seedText` (type-to-edit) is threaded from
    * {@link CELL_EDIT_EVENT}'s detail; click/double-click open with no seed.
@@ -54,12 +53,25 @@ export function CellLinkFence({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The shared display-mode button for editable cells: click (or focus) to
+ * The shared display-mode trigger for editable cells: click (or focus) to
  * edit, hover-revealed pencil, focus ring (the raw buttons it replaced had
  * none, which made keyboard focus — and therefore cell copy/paste —
  * invisible), and the clipboard registration target. The explicit `.focus()`
  * on click matters: Safari/Firefox don't focus buttons on click, and the
  * clipboard listeners key off document.activeElement.
+ *
+ * A `<span role="button">`, NOT a `<button>`. Cells legitimately render rich
+ * content inside this trigger — links, badges, a `TruncatedList` overflow
+ * popover — and `<button>`/`<a>` inside `<button>` is invalid HTML. The tags
+ * cell on /recipes hit the parser rule React actually warns about ("<button>
+ * cannot be a descendant of <button>"), which cost the whole subtree its SSR
+ * markup; eight more sites nest an `<a>`, equally invalid but unwarned.
+ * `useCellSelection` already assumes this ("buttons/links inside the cell
+ * still need their click"), so the element was the thing in the wrong.
+ *
+ * A span, not a div: this renders inside `InfoRow`'s value `<span>` on every
+ * detail page, where a div would be flow content inside phrasing content —
+ * the same class of invalid nesting, just one React doesn't flag.
  */
 export function CellEditTrigger({
   ref: forwardedRef,
@@ -70,8 +82,8 @@ export function CellEditTrigger({
   children,
   ...rest
 }: CellEditTriggerProps) {
-  const localRef = React.useRef<HTMLButtonElement | null>(null);
-  const setRef = (node: HTMLButtonElement | null) => {
+  const localRef = React.useRef<HTMLSpanElement | null>(null);
+  const setRef = (node: HTMLSpanElement | null) => {
     localRef.current = node;
     if (typeof forwardedRef === "function") forwardedRef(node);
     else if (forwardedRef) forwardedRef.current = node;
@@ -125,12 +137,20 @@ export function CellEditTrigger({
   }, [hasClipboard, cellSelectionMode]);
 
   return (
-    <button
-      type="button"
+    // biome-ignore lint/a11y/useSemanticElements: must not be a <button> — cells render links/popovers inside it (see the doc comment)
+    <span
+      role="button"
+      // Load-bearing, not cosmetic: useCellSelection focuses this element
+      // before dispatching CELL_EDIT_EVENT, and the editor refocuses it on
+      // cancel. A span without tabIndex silently swallows both.
+      tabIndex={0}
       ref={setRef}
       data-cell-edit-trigger=""
       className={cn(
-        "group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted",
+        // `select-none` replaces what <button> gave for free: double-click is
+        // the edit gesture in cell-selection mode, and on a selectable span it
+        // would paint a native word selection under the editor.
+        "group inline-flex select-none items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "data-[clipboard-flash]:ring-2 data-[clipboard-flash]:ring-ring",
         className,
@@ -146,12 +166,28 @@ export function CellEditTrigger({
         if (!cellSelectionMode) onStartEdit();
       }}
       onDoubleClick={cellSelectionMode ? () => onStartEdit() : undefined}
+      // Keyboard activation, which <button> used to provide. Gated exactly
+      // like onClick: in cell-selection mode the CONTAINER owns Enter and
+      // every printable key (Space included, seeding " "), and since React
+      // bubbles target→container this handler would run FIRST — the
+      // container's preventDefault can't retract it, so it would open the
+      // editor twice. preventDefault on Space also stops the page scroll a
+      // <button> used to suppress.
+      onKeyDown={
+        cellSelectionMode
+          ? undefined
+          : (e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault();
+              onStartEdit();
+            }
+      }
       {...rest}
     >
       {children}
       {!hidePencilIcon && (
         <Pencil className="ml-1 size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       )}
-    </button>
+    </span>
   );
 }

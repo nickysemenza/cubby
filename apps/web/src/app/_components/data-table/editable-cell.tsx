@@ -142,7 +142,7 @@ export function useCellEditState(
   // open and cleared on cancel/commit. Held here — the ONE place — so every
   // editor reads it the same way instead of re-plumbing the CustomEvent.
   const [seedText, setSeedText] = useState<string | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLSpanElement | null>(null);
   const isEditingRef = useRef(false);
   isEditingRef.current = isEditing;
 
