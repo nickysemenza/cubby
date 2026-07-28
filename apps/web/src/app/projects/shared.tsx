@@ -1150,6 +1150,10 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by status...",
         selectOptions: PROJECT_STATUS_OPTIONS,
+        // No header filter: the dashboard's Status chips already scope this
+        // server-side. A column filter here would filter the already-scoped
+        // rows again, client-side, and the two would silently AND.
+        filterConfig: null,
         renderCell: (status: ProjectStatus) => (
           <Row align="center" gap="xs">
             <StatusIcon status={status} />
@@ -1171,6 +1175,8 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by kind...",
         selectOptions: projectKindOptions,
+        // See the Status column above — the dashboard's Kind chips own this.
+        filterConfig: null,
         renderCell: (kind: ProjectKind | null) =>
           kind ? (
             <Badge variant="secondary">{capitalize(kind)}</Badge>
@@ -1288,8 +1294,12 @@ export function ProjectTable({
     [columnHelper],
   );
 
-  // Status/kind/location filtering now lives in the dashboard's chips — only
-  // the name search stays as a local column filter.
+  // Status/kind are deliberately absent from the filter manifest (and so
+  // never URL-sync here): the dashboard's chips (`?statuses=&kinds=`) already
+  // scope `projects` server-side before it reaches this table, and a manifest
+  // spec on the same concept would silently AND with the chips instead of
+  // replacing them — a filter you can't see and can't clear from either
+  // control. Only the name search is manifest-driven; keep it that way.
   const filters = useMemo(
     () => [{ id: "name", placeholder: "Search projects..." }],
     [],

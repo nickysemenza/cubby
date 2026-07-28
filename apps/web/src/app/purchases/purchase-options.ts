@@ -4,7 +4,6 @@ import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { presenceFilterOptions } from "~/entities/filters";
 import { buildSelectOptions } from "~/lib/select-options";
 
 /** Human labels for the fixed cost-type enum. */
@@ -39,14 +38,6 @@ export const futureFilterOptions: FilterableComboboxItem[] = [
   { value: "true", label: "Planned" },
   { value: "false", label: "Already made" },
 ];
-
-/**
- * `{value,label}` options for the product-link presence filter ("has"/"none")
- * — a full product picklist isn't practical here (unlike `projectOptions`,
- * the product universe is unbounded), so the header filter only distinguishes
- * linked vs. unlinked rather than matching a specific product.
- */
-export const productLinkedOptions = presenceFilterOptions("product");
 
 /** Fixed preset values for the purchase-date-range filter. */
 const dateRangeValues = ["30d", "90d", "ytd", "1y"] as const;

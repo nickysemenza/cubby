@@ -276,10 +276,15 @@ export function decodeFilters(
  * Lives here rather than with the column helpers so the manifest can build its
  * specs without a runtime import of the column layer (which drags in the whole
  * entity/rendering graph, WASM included).
+ *
+ * `meta: true` matches `nullableSentinelOptions` — both are predicates about
+ * the data ("Has X" / "(none)"), not roster values, so both render in the
+ * eyebrow register (mono/uppercase, rule beneath) rather than looking like an
+ * ordinary picklist entry.
  */
 export const presenceFilterOptions = (
   label: string,
-): Array<{ value: string; label: string }> => [
-  { value: "has", label: `Has ${label}` },
-  { value: "none", label: "(none)" },
+): Array<{ value: string; label: string; meta: true }> => [
+  { value: "has", label: `Has ${label}`, meta: true },
+  { value: "none", label: "(none)", meta: true },
 ];

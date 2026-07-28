@@ -1,5 +1,6 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
-import { manifestFilterConfig } from "./filter-manifest";
+import { getEntityFilters, manifestFilterConfig } from "./filter-manifest";
 import { FILTER_ANY, FILTER_NONE } from "./filters";
 
 /**
@@ -61,7 +62,54 @@ describe("manifestFilterConfig", () => {
     expect(options?.some((o) => o.meta)).toBe(false);
   });
 
+  it.each([
+    ["recipe", "source", "cookbook"],
+    ["location", "parent", "parent"],
+  ] as const)(
+    "%s.%s prepends (none) / Has %s sentinels",
+    (entity, columnId, label) => {
+      // Same shape as `purchase.project` above: the two sentinels always lead,
+      // regardless of whether the runtime picklist (cookbook roster,
+      // sibling locations) has been injected.
+      expect(manifestFilterConfig(entity, columnId)?.options).toEqual([
+        { value: FILTER_ANY, label: `Has ${label}`, meta: true },
+        { value: FILTER_NONE, label: "(none)", meta: true },
+      ]);
+    },
+  );
+
   it("returns undefined for a column with no declared filter", () => {
-    expect(manifestFilterConfig("purchase", "cost")).toBeUndefined();
+    // `cost` now HAS a spec (the presence filter added alongside this test) —
+    // `createdAt` is a real purchases column that genuinely has none.
+    expect(manifestFilterConfig("purchase", "createdAt")).toBeUndefined();
+  });
+});
+
+/**
+ * Locks the naming convention `buildFiltersFromManifest` depends on: a
+ * `nullable.field` / a `presence` spec's server field must end in
+ * `PresenceFilter`, or the sentinel-routing logic in `./filters` silently
+ * writes to the wrong key. Loops the manifest's own entries so a newly added
+ * spec is covered automatically, with no per-entity list to keep in sync.
+ */
+describe("manifest naming invariant", () => {
+  it("every nullable.field and presence field ends in PresenceFilter", () => {
+    const violations: string[] = [];
+    for (const entity of entitySchema.options) {
+      for (const spec of getEntityFilters(entity)) {
+        if (spec.nullable && !spec.nullable.field.endsWith("PresenceFilter")) {
+          violations.push(
+            `${entity}.${spec.columnId}: nullable.field "${spec.nullable.field}"`,
+          );
+        }
+        if (spec.kind === "presence") {
+          const field = spec.field ?? spec.columnId;
+          if (!field.endsWith("PresenceFilter")) {
+            violations.push(`${entity}.${spec.columnId}: field "${field}"`);
+          }
+        }
+      }
+    }
+    expect(violations).toEqual([]);
   });
 });

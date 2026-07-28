@@ -1195,8 +1195,14 @@ export function createFilterableSelectColumn<
      * so a table that bypasses `useStandardColumns` (the embedded
      * project-detail tables) still gets the manifest's control type instead of
      * silently staying single-select.
+     *
+     * Pass `null` for **no filter control at all**. Omitting this prop derives
+     * one from `selectOptions`, so a column that must not be filterable here
+     * (because something else already owns that concept — e.g. the `/projects`
+     * dashboard's server-side status/kind chips) has no other way to say so,
+     * and would otherwise silently AND a second, client-side filter on top.
      */
-    filterConfig?: FilterConfig;
+    filterConfig?: FilterConfig | null;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: T[K], row: T) => Promise<void>;
@@ -1210,17 +1216,21 @@ export function createFilterableSelectColumn<
       ? (row, v) => options.editable!.onSave(v as T[K], row)
       : undefined,
   );
-  const filterConfig: FilterConfig = options.filterConfig ?? {
-    placeholder: options.placeholder,
-    filterType: "select",
-    options: options.selectOptions,
-  };
+  // `null` is an explicit opt-out (no control); `undefined` derives one.
+  const filterConfig: FilterConfig | undefined =
+    options.filterConfig === null
+      ? undefined
+      : (options.filterConfig ?? {
+          placeholder: options.placeholder,
+          filterType: "select",
+          options: options.selectOptions,
+        });
   return columnHelper.accessor((row) => row[accessor], {
     id: String(accessor),
     header: options.header,
     // Client-side tables resolve a filterFn from the ROW value's type, so a
     // string column handed an array would silently match nothing.
-    ...(filterConfig.filterType === "multiselect"
+    ...(filterConfig?.filterType === "multiselect"
       ? { filterFn: multiSelectFilterFn }
       : {}),
     meta: {
