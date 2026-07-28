@@ -36,7 +36,7 @@ const appearsInRecipesFromList = async (
 ) => {
   const { data } = await ingredientList(
     db,
-    undefined,
+    {},
     [{ orderBy: "appearsInRecipes", direction: "desc" }],
     { pageIndex: 0, pageSize: 50 },
   );

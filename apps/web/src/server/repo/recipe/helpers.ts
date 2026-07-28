@@ -18,7 +18,13 @@ import type {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { isNotDeleted, mapRelation } from "~/server/repo/database-helpers";
+import { recipeImage } from "~/server/db/schema";
+import {
+  imageOrder,
+  isNotDeleted,
+  mapRelation,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 
 import type {
   RecipeDeepDB,
@@ -105,6 +111,44 @@ export const cookbookOnlyForIngredientSql = (ingredientRef: string): string =>
   `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
   `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
   `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+
+/**
+ * Correlated subquery counting a recipe's live meal plans: a MealRecipe row
+ * that is itself not soft-deleted AND whose parent Meal is not soft-deleted —
+ * a live MealRecipe under a soft-deleted Meal is not a plan. Mirrors the
+ * join-guarded shape `recipeList`'s `recipeIdsInLiveMeals` presence filter
+ * uses (crud.ts), so the list's "Meals" count and the "has meals" filter can
+ * never disagree about what counts as planned.
+ *
+ * `recipeRef` is the SQL reference to the recipe id column in the OUTER
+ * query — interpolated verbatim, so it MUST be a trusted, hardcoded column
+ * expression (e.g. `"recipe"."id"` for the relational query builder's root
+ * alias), never user input. See {@link liveRecipeCountForIngredientSql} for
+ * the same contract on the ingredient side.
+ */
+export const liveMealCountForRecipeSql = (recipeRef: string): string =>
+  `(SELECT count(*) FROM "MealRecipe" mr ` +
+  `JOIN "Meal" m ON m."id" = mr."mealId" AND m."deletedAt" IS NULL ` +
+  `WHERE mr."recipeId" = ${recipeRef} AND mr."deletedAt" IS NULL)`;
+
+/**
+ * A single (sortOrder-first, i.e. cover) live image relation config for the
+ * recipe list — `limit: 1` so the list pays for one thumbnail per row
+ * instead of the full gallery. Meant to be spread as `with: { images:
+ * recipeListCoverImageRelation }` into the list's `query.recipe.findMany`
+ * call, alongside a `mealCount` extra built from
+ * {@link liveMealCountForRecipeSql}. Same ordering as the detail page's
+ * gallery (`imageOrder`: explicit sortOrder, then createdAt/id tie-break), so
+ * "first" here matches "first" there.
+ */
+export const recipeListCoverImageRelation = {
+  where: notDeleted(recipeImage),
+  orderBy: imageOrder,
+  limit: 1,
+  with: {
+    image: true,
+  },
+} as const;
 
 /**
  * A RecipeSectionIngredient row joined up to its section and recipe — the input
@@ -235,14 +279,47 @@ export const dbRecipeToTopLevelShape = (
 };
 
 /**
+ * The shared base shape under `RecipeOut`/`RecipeGraphOut`/`RecipeListItem`:
+ * top-level fields + persisted totals, no sections, no images, no list-only
+ * extras (`mealCount`). Each of those three output types layers its own
+ * remaining fields on top via spread — see {@link dbRecipeToAPI},
+ * {@link dbRecipeToAPIGraph}, {@link dbRecipeToListAPI}.
+ */
+type RecipeShallowOut = Omit<RecipeListItem, "mealCount" | "images">;
+
+/**
  * Convert a recipe DB record to a list item API type (without sections/images).
  */
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
-) => RecipeListItem = (recipeData) => ({
+) => RecipeShallowOut = (recipeData) => ({
   ...dbRecipeToTopLevelShape(recipeData),
   totals: recipeData.totals,
 });
+
+/** A recipe list row: the plain columns plus the list query's `mealCount`
+ * extra and a single-element (cover-only) `images` relation. See
+ * {@link liveMealCountForRecipeSql} and {@link recipeListCoverImageRelation}. */
+export type RecipeListDB = RecipeSelect & {
+  mealCount: number | string;
+  images?: RecipeImageRow[] | null;
+};
+
+/**
+ * Convert a recipe list-query DB row to the recipe list's API shape —
+ * `dbRecipeToAPIShallow` plus the list-only `mealCount` scalar and cover
+ * image.
+ */
+export const dbRecipeToListAPI = (recipeData: RecipeListDB): RecipeListItem => {
+  const { mealCount, images, ...rest } = recipeData;
+  return {
+    ...dbRecipeToAPIShallow(rest),
+    // count() returns bigint (string over the wire), so coerce — mirrors the
+    // ingredient list's appearsInRecipes/recipeCount handling.
+    mealCount: Number(mealCount),
+    images: mapRecipeImages(images ?? undefined),
+  };
+};
 
 const mapRecipeSections = (
   sections: RecipeDeepDB["sections"] | RecipeGraphDB["sections"],

@@ -1,13 +1,16 @@
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { location } from "~/server/db/schema";
+import { location, product } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
+import { createInventoryEntry } from "./inventory";
 import {
   createLocation,
   findOrCreateLocationByName,
   locationList,
 } from "./location";
+import { createProduct } from "./product";
+import { makeLocationInput, makeProductInput } from "./repo.fixtures";
 
 describe("findOrCreateLocationByName", () => {
   const ctx = withTestDb();
@@ -113,5 +116,96 @@ describe("locationList parentPresenceFilter", () => {
       { pageIndex: 0, pageSize: 10 },
     );
     expect(childrenOnly.data.map((l) => l.id)).toEqual([child.id]);
+  });
+
+  describe("inventoryPresenceFilter", () => {
+    const listWith = (filters: Parameters<typeof locationList>[1]) =>
+      locationList(ctx.db, filters, [{ orderBy: "name", direction: "asc" }], {
+        pageIndex: 0,
+        pageSize: 50,
+      });
+
+    it("partitions stocked shelves from empty ones", async () => {
+      const stocked = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Stocked Shelf" }),
+        ctx.actor,
+      );
+      const empty = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Empty Shelf" }),
+        ctx.actor,
+      );
+      const p = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Shelf Product" }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: p.id,
+          locationId: stocked.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      const has = await listWith({ inventoryPresenceFilter: "has" });
+      expect(has.data.map((l) => l.id)).toContain(stocked.id);
+      expect(has.data.map((l) => l.id)).not.toContain(empty.id);
+      expect(has.count).toBe(has.data.length);
+
+      const none = await listWith({ inventoryPresenceFilter: "none" });
+      expect(none.data.map((l) => l.id)).toContain(empty.id);
+      expect(none.data.map((l) => l.id)).not.toContain(stocked.id);
+    });
+
+    /**
+     * The subquery inner-joins Product with notDeleted to match
+     * `dbLocationToListAPI`, which drops entries whose product is soft-deleted
+     * (`isNotDeleted(entry.product)`). Without the join such a shelf renders
+     * empty but filters as stocked.
+     *
+     * The state is written directly here because `deleteProducts` refuses a
+     * product that still has live inventory (PRODUCT_HAS_INVENTORY), so the
+     * single-delete path can't produce it. Both the mapper's filter and this
+     * join are defensive against the paths that don't go through that guard —
+     * this test pins that the two stay in agreement either way.
+     */
+    it("a shelf holding only a soft-deleted product counts as empty", async () => {
+      const shelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Ghost Stock Shelf" }),
+        ctx.actor,
+      );
+      const doomed = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Doomed Shelf Product" }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: doomed.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(product)
+        .set({ deletedAt: new Date() })
+        .where(eq(product.id, doomed.id));
+
+      const none = await listWith({ inventoryPresenceFilter: "none" });
+      const row = none.data.find((l) => l.id === shelf.id);
+      expect(row).toBeDefined();
+      // The filter and the rendered cell must agree.
+      expect(row?.inventoryEntries).toEqual([]);
+
+      const has = await listWith({ inventoryPresenceFilter: "has" });
+      expect(has.data.map((l) => l.id)).not.toContain(shelf.id);
+    });
   });
 });

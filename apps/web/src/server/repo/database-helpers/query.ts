@@ -5,7 +5,7 @@
 
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
-import type { AnyColumn, SQL } from "drizzle-orm";
+import type { AnyColumn, SQL, SQLWrapper } from "drizzle-orm";
 import {
   and,
   asc,
@@ -15,6 +15,7 @@ import {
   isNotNull,
   isNull,
   not,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -266,10 +267,17 @@ export const eqAny = <TColumn extends AnyColumn>(
  * `@cubby/schemas/pagination`). `undefined` presence adds no condition.
  *
  * `emptyWhen` overrides what "empty" means for a column whose empty state
- * isn't simply NULL: a `text[]` is empty when it's NULL *or* zero-length.
- * "has" is always the exact negation of whatever "none" matched, derived from
- * the same predicate — so the two can never drift apart and leave a row that
+ * isn't simply NULL: a `text[]` is empty when it's NULL *or* zero-length, and
+ * a product has no USDA key when it has neither an fdc_id *nor* a upc. "has"
+ * is always the exact negation of whatever "none" matched, derived from the
+ * same predicate — so the two can never drift apart and leave a row that
  * matches neither option.
+ *
+ * A multi-clause `emptyWhen` is re-parenthesized here before negating, because
+ * drizzle's `not()` adds no parens of its own and `NOT a AND b` binds as
+ * `(NOT a) AND b` — a silent wrong answer on the "has" branch only (it cost us
+ * every UPC-only product on the USDA filter). Callers that already wrap are
+ * unaffected; the redundant parens are free.
  */
 export const presenceCondition = (
   column: AnyColumn,
@@ -278,7 +286,40 @@ export const presenceCondition = (
 ): SQL | undefined =>
   match(presence)
     .with("none", () => emptyWhen ?? isNull(column))
-    .with("has", () => (emptyWhen ? not(emptyWhen) : isNotNull(column)))
+    .with("has", () =>
+      emptyWhen ? not(sql`(${emptyWhen})`) : isNotNull(column),
+    )
+    .with(undefined, () => undefined)
+    .exhaustive();
+
+/**
+ * A cross-entity presence sentinel: "this row's id is / isn't in that set".
+ *
+ * `idSet` MUST be an UNCORRELATED subquery — one that references only the child
+ * table, never back at the root's id. Every list repo pairs a Drizzle
+ * relational-query-builder data query (which aliases the root table to its own
+ * name) with an unaliased `$count`, and `productList` adds a third unaliased
+ * aggregate. A correlated EXISTS resolves against different table names in each
+ * of those contexts; `inArray`/`notInArray` sidestep it because the root column
+ * is referenced at the WHERE's top level, where every builder rewrites it
+ * correctly.
+ *
+ * Two things the caller owns, because SQL won't warn about either:
+ * - **Soft deletes.** Guard the subquery with `notDeleted(...)` at *every* join
+ *   level. `scripts/check-soft-delete-filters.mjs` only scans `exists`/
+ *   `notExists` bodies, so it cannot see a hoisted `inArray` subquery.
+ * - **Nullable FKs.** If the selected column is nullable, add `isNotNull(...)`
+ *   to the subquery: a NULL inside a `NOT IN` list makes the whole predicate
+ *   UNKNOWN, so `"none"` would match zero rows instead of every unlinked row.
+ */
+export const idSetPresence = <TColumn extends AnyColumn>(
+  column: TColumn,
+  presence: PresenceFilter,
+  idSet: SQLWrapper,
+): SQL | undefined =>
+  match(presence)
+    .with("has", () => inArray(column, idSet))
+    .with("none", () => notInArray(column, idSet))
     .with(undefined, () => undefined)
     .exhaustive();
 

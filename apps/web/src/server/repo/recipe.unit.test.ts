@@ -138,6 +138,16 @@ const fullRecipeRow = {
   ],
 } satisfies RecipeDeepDB;
 
+// dbRecipeToAPIShallow produces the shared topLevel+totals base that
+// dbRecipeToAPI/dbRecipeToAPIGraph/dbRecipeToListAPI each layer their own
+// remaining fields on top of — it deliberately omits the list-only
+// `mealCount`/`images` extras (see dbRecipeToListAPI), so validate its
+// output against recipeListItemOut minus those two fields.
+const recipeShallowOut = recipeListItemOut.omit({
+  mealCount: true,
+  images: true,
+});
+
 describe("recipe repository helpers", () => {
   describe("dbRecipeToAPIShallow", () => {
     it("converts website recipe with URL without leaking DB-only fields", () => {
@@ -166,7 +176,7 @@ describe("recipe repository helpers", () => {
       expect(result).not.toHaveProperty("totalsComputedAt");
       expect(result).not.toHaveProperty("SourceType");
       expect(result).not.toHaveProperty("SourceData");
-      expect(recipeListItemOut.parse(result)).toEqual(result);
+      expect(recipeShallowOut.parse(result)).toEqual(result);
     });
 
     it("converts non-website recipe without URL", () => {
@@ -182,7 +192,7 @@ describe("recipe repository helpers", () => {
         meta: { url: null },
         source: { type: "other" },
       });
-      expect(recipeListItemOut.parse(result)).toEqual(result);
+      expect(recipeShallowOut.parse(result)).toEqual(result);
     });
   });
 

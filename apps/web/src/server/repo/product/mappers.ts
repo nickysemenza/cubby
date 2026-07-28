@@ -245,6 +245,9 @@ export const dbProductToListAPI = (
         location: dbLocationToProductListInventoryShape(entry.location),
       }),
     ),
+    // count() returns bigint (string over the wire), so coerce — mirrors the
+    // ingredient list's appearsInRecipes/recipeCount handling.
+    purchaseCount: Number(productData.purchaseCount),
   };
 
   return parseWithContext(productListItemOut, result, {

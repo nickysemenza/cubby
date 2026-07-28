@@ -34,7 +34,6 @@ import {
   createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
   createTextColumn,
-  presenceFilterOptions,
 } from "../_components/data-table/columnHelpers";
 import {
   ShelfTableToggle,
@@ -176,11 +175,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           className: "w-32",
           mobile: { slot: "meta", priority: 45, interactive: true },
           enableSorting: true,
-          filterConfig: {
-            placeholder: "Filter ingredient...",
-            filterType: "select",
-            options: presenceFilterOptions("ingredient"),
-          },
           editable: {
             onSave: async (newIngredientId, product) => {
               await updateProductMutation.mutateAsync({
@@ -195,7 +189,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       createTextColumn(columnHelper, "manufacturer", {
         className: "min-w-0 w-40 truncate",
         mobile: { slot: "subtitle", priority: 20 },
-        filterConfig: { placeholder: "Filter manufacturer..." },
         editable: {
           onSave: async (newValue, product) => {
             await updateProductMutation.mutateAsync({
@@ -209,7 +202,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         header: "UPC",
         className: "w-32",
         mobile: { interactive: true },
-        filterConfig: { placeholder: "Filter UPC..." },
         editable: {
           onSave: async (newValue, product) => {
             await updateProductMutation.mutateAsync({
@@ -290,11 +282,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           enableSorting: true,
           mobile: { slot: "meta", priority: 40, interactive: true },
           onQuickEdit: (product) => setQuickEditProductId(product.id),
-          filterConfig: {
-            placeholder: "Filter locations...",
-            filterType: "select",
-            options: presenceFilterOptions("inventory"),
-          },
           inlineEdit: {
             SearchProvider: WithLocationSearch,
             onMoveEntry: async (entry, locationId) => {
@@ -313,6 +300,29 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       ),
+      columnHelper.accessor("purchaseCount", {
+        id: "purchases",
+        header: "Purchases",
+        meta: {
+          numeric: true,
+          className: "w-24",
+          mobile: { slot: "meta", priority: 50, interactive: true },
+        },
+        cell: (info) => {
+          const count = info.getValue();
+          if (!count) return <NoneValue />;
+          return (
+            <Link
+              to="/purchases"
+              search={{ productId: info.row.original.id }}
+              className="font-mono text-primary tabular-nums transition-colors hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {count}
+            </Link>
+          );
+        },
+      }),
     ],
     [columnHelper],
   );

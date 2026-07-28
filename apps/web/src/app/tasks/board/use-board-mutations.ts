@@ -198,9 +198,54 @@ export function useBoardMutations(target: BoardCacheTarget) {
       invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
   });
 
+  // Delete, patched into the same cache for the same reason as the two above.
+  // Deliberately NOT `useOptimisticDelete`: that hook's cache scrub only knows
+  // arrays / {items} / {data} / {pages}, so `task.board`'s
+  // {active, recentDone, doneCount} falls through its no-op branch and the card
+  // would linger until the refetch. `writeFlatList` already gets `doneCount`
+  // right for both shapes.
+  const deleteBase = api.task.delete.mutationOptions();
+  const remove = useMutation({
+    mutationKey: deleteBase.mutationKey,
+    mutationFn: deleteBase.mutationFn,
+    // `ids` widens to `unknown[]` across the tRPC mutation boundary (branded
+    // ids don't survive it), so the Set is keyed on `unknown` and compared by
+    // identity — which is all a string id needs.
+    onMutate: async (vars: {
+      ids: unknown[];
+    }): Promise<OptimisticContext<TaskOut[] | TaskBoardOut>> => {
+      await cancelTRPCQueries(queryClient, [queryKey]);
+      const prev = queryClient.getQueryData<TaskOut[] | TaskBoardOut>(queryKey);
+      const flat = readFlatList(prev, target.source);
+      if (prev && flat) {
+        // The server cascades to live subtasks, so drop them here too — the
+        // board itself is top-level-only, but the `chartData` embed isn't.
+        const deleted = new Set<unknown>(vars.ids);
+        const nextList = flat.filter(
+          (t) =>
+            !deleted.has(t.id) &&
+            !(t.parentTaskId && deleted.has(t.parentTaskId)),
+        );
+        queryClient.setQueryData(
+          queryKey,
+          writeFlatList(prev, nextList, target.source),
+        );
+      }
+      return { prev };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+      toast.error(getErrorMessage(err));
+    },
+    onSettled: () =>
+      invalidateTRPCQueries(queryClient, taskMutationInvalidateKeys),
+  });
+
   return {
     moveTask: (taskId: TaskId, patch: TaskBoardPatch) =>
       update.mutate({ id: taskId, data: patch }),
     reorderTasks: (input: TaskBulkReorderInput) => reorder.mutate(input),
+    deleteTask: (taskId: TaskId) => remove.mutateAsync({ ids: [taskId] }),
+    isDeleting: remove.isPending,
   };
 }

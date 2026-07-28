@@ -221,6 +221,41 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter ingredient...",
       options: presenceFilterOptions("ingredient"),
     },
+    {
+      columnId: "purchases",
+      field: "purchasePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter purchases...",
+      options: presenceFilterOptions("purchases"),
+    },
+    {
+      // "USDA key", not "USDA food" — the predicate is `fdc_id IS NOT NULL OR
+      // upc IS NOT NULL`, and SQL can't know whether the usda worker actually
+      // resolves a food for that key. See `usdaPresenceFilter`'s schema doc.
+      columnId: "food",
+      field: "usdaPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter USDA...",
+      options: presenceFilterOptions("USDA key"),
+    },
+    {
+      columnId: "image",
+      field: "imagePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter images...",
+      options: presenceFilterOptions("image"),
+    },
+    {
+      // Bare presence, not a quality tier: the quality rule lives twice already
+      // (mappers.ts in TS, crud.ts as a raw-SQL CASE hardcoded to the RQB
+      // alias), so a quality filter needs an alias-safe extraction first.
+      // "none" here means no conversion edges at all — the hygiene worklist.
+      columnId: "unitMappingQuality",
+      field: "unitMappingPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter mappings...",
+      options: presenceFilterOptions("mappings"),
+    },
   ],
 
   recipe: [
@@ -252,6 +287,22 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       optionsKey: "cookbook",
       nullable: { field: "cookbookPresenceFilter", label: "cookbook" },
     },
+    {
+      // "none" is the never-planned worklist. A live MealRecipe under a
+      // soft-deleted Meal doesn't count.
+      columnId: "meals",
+      field: "mealPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter meals...",
+      options: presenceFilterOptions("meals"),
+    },
+    {
+      columnId: "image",
+      field: "imagePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter images...",
+      options: presenceFilterOptions("image"),
+    },
   ],
 
   ingredient: [
@@ -267,6 +318,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "presence",
       placeholder: "Filter product...",
       options: presenceFilterOptions("product"),
+    },
+    {
+      // "none" is the orphaned-ingredient worklist — the list already excludes
+      // recipe-as-ingredient pointer rows, so a hit really is unused.
+      columnId: "appearsInRecipes",
+      field: "recipePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter recipes...",
+      options: presenceFilterOptions("recipes"),
     },
   ],
 
@@ -311,6 +371,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter parent...",
       optionsKey: "parentLocation",
       nullable: { field: "parentPresenceFilter", label: "parent" },
+    },
+    {
+      // "none" is the empty-shelf worklist. Counts only entries whose product
+      // is live, matching what the cell renders (it drops deleted products).
+      columnId: "inventoryEntries",
+      field: "inventoryPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter inventory...",
+      options: presenceFilterOptions("inventory"),
     },
   ],
 

@@ -24,6 +24,7 @@ import {
   inventoryEntry,
   location,
   locationImage,
+  product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -44,6 +45,7 @@ import {
   eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
+  idSetPresence,
   insertAndReturn,
   lockAndValidateForDelete,
   nextImageSortOrder,
@@ -377,6 +379,20 @@ export const locationList = async (
   pagination: PaginationParams,
   groupBy?: string,
 ) => {
+  // Uncorrelated subquery of location ids holding live inventory. Inner-joins
+  // Product (notDeleted) because dbLocationToListAPI drops inventory entries
+  // whose product is soft-deleted — without that join, a shelf holding only
+  // deleted products would count as "has inventory" here but render empty on
+  // the list, so an empty-shelf search would miss it.
+  const locationIdsWithLiveInventory = getDb(db)
+    .select({ locationId: inventoryEntry.locationId })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+    )
+    .where(notDeleted(inventoryEntry));
+
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     location,
@@ -387,6 +403,11 @@ export const locationList = async (
         location.parentId,
         filters.parentId,
         filters.parentPresenceFilter,
+      ),
+      idSetPresence(
+        location.id,
+        filters.inventoryPresenceFilter,
+        locationIdsWithLiveInventory,
       ),
     ],
   );

@@ -26,6 +26,17 @@ describe("manifestFilterConfig", () => {
     // Complements — selecting both would mean "no filter".
     ["purchase", "product"],
     ["product", "ingredient"],
+    // The cross-entity presence filters. These also pin the exact `columnId`
+    // each one hangs on: a spec whose id matches no column renders NOTHING,
+    // silently (the bug recorded on `task.dueDate` in the manifest).
+    ["product", "purchases"],
+    ["product", "food"],
+    ["product", "image"],
+    ["product", "unitMappingQuality"],
+    ["location", "inventoryEntries"],
+    ["ingredient", "appearsInRecipes"],
+    ["recipe", "meals"],
+    ["recipe", "image"],
     // A boolean, and a set of mutually exclusive windows.
     ["purchase", "future"],
     ["purchase", "date"],

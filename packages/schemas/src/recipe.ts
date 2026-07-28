@@ -170,6 +170,14 @@ export const recipeGraphListOut = z.array(recipeGraphOut);
 export const recipeListItemOut = z.object({
   ...recipeTopLevelFields,
   totals: recipeTotals.nullish(),
+  // Live MealRecipe rows under a live Meal — a soft-deleted Meal's plan
+  // doesn't count. Backs the list's "Meals" column.
+  mealCount: z.number().int(),
+  // Single cover image only (sortOrder-first, limit 1) — the list only ever
+  // renders a thumbnail, and loading every image was the over-fetch the
+  // `totals` comment above already dropped `.sections` for. Backs the
+  // standard image column (createImageColumn).
+  images: z.array(imageOut),
 });
 export type RecipeListItem = z.infer<typeof recipeListItemOut>;
 
@@ -268,6 +276,16 @@ export const recipeFilterFields = {
    * `tagFilters` (see `taskFilterFields.projectPresenceFilter`).
    */
   tagsPresenceFilter: presenceFilter,
+  /**
+   * `"none"` is the never-planned worklist. A live MealRecipe under a
+   * soft-deleted Meal doesn't count — that isn't a plan.
+   */
+  mealPresenceFilter: presenceFilter.describe(
+    "Filter to recipes that have / haven't been planned on at least one live meal",
+  ),
+  imagePresenceFilter: presenceFilter.describe(
+    "Filter to recipes that do / don't have at least one image (PDFs don't count)",
+  ),
 };
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);

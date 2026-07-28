@@ -27,6 +27,7 @@ export interface CardRenderProps {
   showTrade: boolean;
   showStatus: boolean;
   onSetStatus: (taskId: TaskOut["id"], status: TaskStatus) => void;
+  onRequestDelete: (task: TaskOut) => void;
 }
 
 /** Stable React key for a column/lane key. */
@@ -212,6 +213,7 @@ export function BoardCell({
             showTrade={cardProps.showTrade}
             showStatus={cardProps.showStatus}
             onSetStatus={(status) => cardProps.onSetStatus(task.id, status)}
+            onRequestDelete={cardProps.onRequestDelete}
           />
         ))}
         {!expanded && hiddenDoneCount > 0 && (

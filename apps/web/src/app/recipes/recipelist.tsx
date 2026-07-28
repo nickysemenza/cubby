@@ -416,6 +416,26 @@ export function RecipeList({
           );
         },
       }),
+      // Meals column: how many live meal plans use this recipe. A live
+      // MealRecipe under a soft-deleted Meal doesn't count (see
+      // liveMealCountForRecipeSql) — mirrors the "meals" presence filter.
+      columnHelper.accessor("mealCount", {
+        id: "meals",
+        header: "Meals",
+        meta: {
+          numeric: true,
+          className: "w-20",
+          mobile: { slot: "meta", priority: 40 },
+        },
+        cell: (info) => {
+          const count = info.getValue();
+          return count ? (
+            <span className="font-mono tabular-nums">{count}</span>
+          ) : (
+            <NoneValue />
+          );
+        },
+      }),
     ];
   }, [columnHelper]);
 
