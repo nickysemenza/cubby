@@ -1224,46 +1224,40 @@ export function ProjectTable({
           );
         },
       }),
-      columnHelper.accessor(
-        (row) =>
-          row.rollup.subtree.projectCount > 0
-            ? row.rollup.subtree.actualSpent
-            : row.rollup.actualSpent,
-        {
-          id: "actual",
-          header: "Actual",
-          enableSorting: true,
-          meta: { numeric: true, className: "w-24" },
-          cell: ({ row }) => {
-            const { rollup, costEstimate } = row.original;
-            const hasSubtree = rollup.subtree.projectCount > 0;
-            // `actualSpent` = money already out (excludes planned/future +
-            // negative contributions), matching the detail hero's "Actual" so
-            // this column never means something the hero doesn't. subtree
-            // aggregates are over LIVE descendants — not the currently
-            // chip-filtered `projects` view (same caveat as
-            // spending-by-project.tsx): a filtered-out child's spend still
-            // rolls up into its visible parent's "Actual" here.
-            const actual = hasSubtree
-              ? rollup.subtree.actualSpent
-              : rollup.actualSpent;
-            if (actual === 0) return <NoneValue />;
-            const est = hasSubtree
-              ? (rollup.subtree.costEstimate ?? costEstimate)
-              : costEstimate;
-            const over = est != null && est > 0 && actual > est;
-            return (
-              <span
-                className={
-                  over ? "font-medium text-destructive" : "text-positive"
-                }
-              >
-                {formatCurrency(actual, 0)}
-              </span>
-            );
-          },
+      columnHelper.accessor((row) => row.rollup.subtree.actualSpent, {
+        id: "actual",
+        header: "Actual",
+        enableSorting: true,
+        meta: { numeric: true, className: "w-24" },
+        cell: ({ row }) => {
+          const { subtree } = row.original.rollup;
+          // `actualSpent` = money already out (excludes planned/future +
+          // negative contributions), matching the detail hero's "Actual" so
+          // this column never means something the hero doesn't. subtree
+          // aggregates are over LIVE descendants — not the currently
+          // chip-filtered `projects` view (same caveat as
+          // spending-by-project.tsx): a filtered-out child's spend still
+          // rolls up into its visible parent's "Actual" here.
+          //
+          // Read unconditionally: a leaf's subtree IS its own rollup and its
+          // subtree estimate IS its own estimate (repo/project/subtree.ts,
+          // pinned by the "no-branch invariant" integration test), so there
+          // is no projectCount branch or `?? costEstimate` fallback to make.
+          const actual = subtree.actualSpent;
+          if (actual === 0) return <NoneValue />;
+          const est = subtree.costEstimate;
+          const over = est != null && est > 0 && actual > est;
+          return (
+            <span
+              className={
+                over ? "font-medium text-destructive" : "text-positive"
+              }
+            >
+              {formatCurrency(actual, 0)}
+            </span>
+          );
         },
-      ),
+      }),
       createPlainDateColumn(columnHelper, "startDate", {
         header: "Start",
         className: "w-28",

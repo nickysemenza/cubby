@@ -842,9 +842,10 @@ function ProjectCard({
   // `spent` here would fold planned spend and negative contributions into the
   // badge (e.g. a −$75k contribution reading as "-$65,000 spent").
   const spent = project.rollup.subtree.actualSpent;
-  // Compare against the subtree estimate to match the subtree spend scope; fall
-  // back to the project's own estimate when the subtree has none.
-  const estimate = project.rollup.subtree.costEstimate ?? project.costEstimate;
+  // Compare against the subtree estimate to match the subtree spend scope. No
+  // `?? project.costEstimate` fallback: the subtree estimate is seeded FROM
+  // the project's own, so it is null only when the own estimate is too.
+  const estimate = project.rollup.subtree.costEstimate;
   const hasEstimate = estimate != null;
   const overBudget = estimate != null && spent > estimate;
 

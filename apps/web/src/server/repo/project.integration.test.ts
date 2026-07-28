@@ -18,6 +18,7 @@ import {
   getProjectByID,
   projectDashboardSummary,
   projectList,
+  projectPortfolioAnalytics,
   updateProject,
 } from "./project";
 import { createPurchase, purchaseList } from "./purchase";
@@ -725,6 +726,77 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(allNull.rollup.subtree.costEstimate).toBeNull();
   });
 
+  /**
+   * LOAD-BEARING for the UI: `ProjectTable`'s "Actual" column and
+   * `ProjectCard` both read `rollup.subtree.*` unconditionally rather than
+   * branching on `subtree.projectCount > 0` / falling back to
+   * `?? costEstimate`. That's only safe because a leaf's subtree IS its own
+   * rollup — `aggregateSubtreeRollups` seeds the accumulator from the own
+   * rollup and the own estimate, so with no children there is nothing to add.
+   * If this test ever fails, restore those branches before touching anything
+   * else.
+   */
+  it("a leaf's subtree rollup and subtree estimate degenerate to its own (the UI's no-branch invariant)", async () => {
+    const leaf = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "invariant leaf", costEstimate: 42 }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "invariant actual",
+        projectId: leaf.id,
+        cost: 30,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "invariant committed",
+        projectId: leaf.id,
+        cost: 12,
+        future: true,
+      }),
+      ctx.actor,
+    );
+
+    const assertLeafInvariant = (row: {
+      costEstimate: number | null;
+      rollup: (typeof leaf)["rollup"];
+    }) => {
+      const { subtree, ...own } = row.rollup;
+      expect(subtree.projectCount).toBe(0);
+      expect(subtree).toEqual({ ...own, projectCount: 0, costEstimate: 42 });
+      // The two dead fallbacks, spelled out: neither branch can ever differ.
+      expect(subtree.actualSpent).toBe(own.actualSpent);
+      expect(subtree.costEstimate ?? row.costEstimate).toBe(
+        subtree.costEstimate,
+      );
+    };
+
+    // Both read paths the UI uses: the single-project reader and the list.
+    assertLeafInvariant(await getProjectByID(ctx.db, leaf.id));
+    const { data } = await projectList(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    const listed = data.find((p) => p.id === leaf.id);
+    expect(listed).toBeDefined();
+    if (listed) assertLeafInvariant(listed);
+
+    // ...and the dashboard summary, which is what ProjectCard renders.
+    const summary = await projectDashboardSummary(ctx.db, {});
+    const carded = summary.projects.find((p) => p.id === leaf.id);
+    expect(carded).toBeDefined();
+    if (carded) assertLeafInvariant(carded);
+  });
+
   it("filters the list by topLevelOnly and parentProjectId", async () => {
     const parent = await createProject(
       ctx.db,
@@ -1306,5 +1378,238 @@ describe("project dashboard — summary scope filters", () => {
       "2020",
     ]);
     expect(summary.filterOptions.years).not.toContain("2019");
+  });
+});
+
+/**
+ * `projectPortfolioAnalytics` backs both the Analytics tab's charts and the
+ * MCP `get_project_budget` tool, and the only coverage it had was a mocked
+ * unit test (`mcp/server.unit.test.ts`). These pin the two aggregates whose
+ * numbers come out of the subtree rollup — `costVsEstimate` and
+ * `spendingByProject` — against a parent/child pair with spend on BOTH, plus
+ * the deliberate asymmetry with the purchase-grouped aggregates (which are
+ * scoped to a project's OWN purchases, never subtree-expanded).
+ */
+describe("project dashboard — portfolio analytics", () => {
+  const ctx = withTestDb();
+
+  const mkProject = (input: Partial<ProjectCreateInput> & { name: string }) =>
+    createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+
+  const mkPurchase = (
+    name: string,
+    projectId: string | null,
+    cost: number,
+    extra: {
+      future?: boolean;
+      date?: string;
+      trade?: "other" | "plumbing";
+    } = {},
+  ) =>
+    createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: extra.trade ?? "other",
+        costType: "materials",
+        name,
+        projectId,
+        cost,
+        future: extra.future ?? false,
+        date: extra.date ?? "2025-03-15",
+      }),
+      ctx.actor,
+    );
+
+  /**
+   * parent (est 100) ── child (est 50); plus an unrelated `done` project.
+   *
+   *   parent own: +100 actual, +25 committed
+   *   child  own: +40 actual, −15 contribution
+   *   solo   own: +200 actual
+   */
+  const seedPortfolio = async () => {
+    const parent = await mkProject({
+      name: "analytics parent",
+      status: "in_progress",
+      costEstimate: 100,
+    });
+    const child = await mkProject({
+      name: "analytics child",
+      status: "planning",
+      parentProjectId: parent.id,
+      costEstimate: 50,
+    });
+    const solo = await mkProject({
+      name: "analytics solo",
+      status: "done",
+      costEstimate: 10,
+    });
+
+    await mkPurchase("parent actual", parent.id, 100);
+    await mkPurchase("parent committed", parent.id, 25, { future: true });
+    await mkPurchase("child actual", child.id, 40, { trade: "plumbing" });
+    await mkPurchase("child contribution", child.id, -15);
+    await mkPurchase("solo actual", solo.id, 200);
+
+    return { parent, child, solo };
+  };
+
+  it("reports subtree actual/committed/estimate per project in costVsEstimate", async () => {
+    const { parent, child, solo } = await seedPortfolio();
+
+    const analytics = await projectPortfolioAnalytics(ctx.db, {});
+
+    // Ordered by project name (the scoped project query's `asc(project.name)`).
+    expect(analytics.costVsEstimate).toEqual([
+      {
+        projectId: child.id,
+        projectName: "analytics child",
+        // A leaf: subtree == own. The −15 contribution is NOT netted out of
+        // `actual` (that's `spent`'s job).
+        actual: 40,
+        committed: 0,
+        estimate: 50,
+      },
+      {
+        projectId: parent.id,
+        projectName: "analytics parent",
+        actual: 140, // 100 own + 40 child
+        committed: 25, // own only — the child has none
+        estimate: 150, // 100 own + 50 child
+      },
+      {
+        projectId: solo.id,
+        projectName: "analytics solo",
+        actual: 200,
+        committed: 0,
+        estimate: 10,
+      },
+    ]);
+  });
+
+  it("sorts spendingByProject by subtree `spent` descending, contributions netted in", async () => {
+    const { parent, child, solo } = await seedPortfolio();
+
+    const analytics = await projectPortfolioAnalytics(ctx.db, {});
+
+    // `spent` is the blended sum(cost): parent = 100 + 25 + (40 − 15) = 150,
+    // child = 40 − 15 = 25, solo = 200.
+    expect(analytics.spendingByProject).toEqual([
+      { projectId: solo.id, projectName: "analytics solo", spend: 200 },
+      { projectId: parent.id, projectName: "analytics parent", spend: 150 },
+      { projectId: child.id, projectName: "analytics child", spend: 25 },
+    ]);
+  });
+
+  it("keeps subtree totals whole while the purchase-grouped aggregates stay own-only", async () => {
+    const { parent } = await seedPortfolio();
+
+    // Scope to the parent alone — its child is NOT in the filtered id set.
+    const analytics = await projectPortfolioAnalytics(ctx.db, {
+      search: "analytics parent",
+    });
+
+    expect(analytics.costVsEstimate).toEqual([
+      {
+        projectId: parent.id,
+        projectName: "analytics parent",
+        // Subtree aggregates are over LIVE descendants, not the filtered set:
+        // the child's spend/estimate still rolls up here.
+        actual: 140,
+        committed: 25,
+        estimate: 150,
+      },
+    ]);
+    expect(analytics.spendingByProject).toEqual([
+      { projectId: parent.id, projectName: "analytics parent", spend: 150 },
+    ]);
+
+    // ...but the purchase-grouped aggregates count only purchases whose OWN
+    // projectId matched, so the child's rows are absent.
+    expect(analytics.tradeActivity).toEqual([
+      {
+        trade: "other",
+        actual: 100,
+        committed: 25,
+        credits: 0,
+        net: 125,
+        count: 2,
+      },
+    ]);
+    expect(analytics.monthlySpend).toEqual([
+      {
+        month: "2025-03",
+        actual: 100,
+        committed: 25,
+        credits: 0,
+        net: 125,
+        count: 2,
+      },
+    ]);
+    expect(analytics.plannedVsActual).toEqual([
+      { month: "2025-03", planned: 25, actual: 100 },
+    ]);
+  });
+
+  it("scopes the whole result by statusScope, and returns empty when nothing matches", async () => {
+    const { solo } = await seedPortfolio();
+
+    const doneOnly = await projectPortfolioAnalytics(ctx.db, {
+      statusScope: ["done"],
+    });
+    expect(doneOnly.costVsEstimate.map((r) => r.projectId)).toEqual([solo.id]);
+    expect(doneOnly.spendingByProject.map((r) => r.projectId)).toEqual([
+      solo.id,
+    ]);
+
+    const none = await projectPortfolioAnalytics(ctx.db, {
+      search: "no such project",
+    });
+    expect(none).toEqual({
+      costVsEstimate: [],
+      spendingByProject: [],
+      monthlySpend: [],
+      plannedVsActual: [],
+      tradeActivity: [],
+      taskHeatmap: [],
+    });
+  });
+
+  it("counts open top-level tasks per project in taskHeatmap (own tasks, not subtree)", async () => {
+    const { parent, child, solo } = await seedPortfolio();
+
+    for (const [name, projectId] of [
+      ["heatmap parent open", parent.id],
+      ["heatmap child open a", child.id],
+      ["heatmap child open b", child.id],
+    ] as const) {
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({ trade: "other", name, projectId }),
+        ctx.actor,
+      );
+    }
+    const doneTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "heatmap parent done",
+        projectId: parent.id,
+      }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, doneTask.id, { status: "done" }, ctx.actor);
+
+    const analytics = await projectPortfolioAnalytics(ctx.db, {});
+    expect(analytics.taskHeatmap).toEqual([
+      { projectId: child.id, projectName: "analytics child", openTaskCount: 2 },
+      // 1, not 3 — own open tasks only, and the done one doesn't count.
+      {
+        projectId: parent.id,
+        projectName: "analytics parent",
+        openTaskCount: 1,
+      },
+      { projectId: solo.id, projectName: "analytics solo", openTaskCount: 0 },
+    ]);
   });
 });

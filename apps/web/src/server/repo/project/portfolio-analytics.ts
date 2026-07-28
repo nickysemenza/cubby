@@ -35,7 +35,6 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { project, purchase, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -43,15 +42,9 @@ import {
   PURCHASE_MONTH_BUCKET,
   purchaseAggregateFields,
 } from "~/server/repo/purchase-aggregate-sql";
-import { projectRollups } from "./analytics";
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
-import {
-  aggregateSubtreeRollups,
-  allProjectParentRows,
-  buildChildrenMap,
-  collectDescendantIds,
-} from "./subtree";
+import { loadProjectSubtreeRollups } from "./subtree";
 
 const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   costVsEstimate: [],
@@ -66,9 +59,6 @@ export async function projectPortfolioAnalytics(
   db: Database,
   filters: ProjectPortfolioAnalyticsInput,
 ): Promise<ProjectPortfolioAnalyticsOut> {
-  const allRows = await allProjectParentRows(db);
-  const childrenByParent = buildChildrenMap(allRows);
-
   const projectRows = await getDb(db).query.project.findMany({
     where: buildDashboardProjectWhere(filters),
     orderBy: [asc(project.name)],
@@ -78,12 +68,7 @@ export async function projectPortfolioAnalytics(
   if (ids.length === 0) return EMPTY_OUT;
 
   const nameById = new Map(projectRows.map((r) => [r.id, r.name]));
-  const descendantIds = ids.flatMap((id) =>
-    collectDescendantIds(childrenByParent, id),
-  );
-
-  const ownRollups = await projectRollups(db, uniq([...ids, ...descendantIds]));
-  const subtreeRollups = aggregateSubtreeRollups(allRows, ownRollups);
+  const { subtreeRollups } = await loadProjectSubtreeRollups(db, ids);
 
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;

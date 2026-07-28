@@ -38,7 +38,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { taskDependencyIds, taskSubtaskCounts } from "~/server/repo/task/crud";
 import { dbTaskToAPI } from "~/server/repo/task/helpers";
-import { projectDependencyIds, projectRollups } from "./analytics";
+import { projectDependencyIds } from "./analytics";
 import { computeAttentionItems } from "./attention";
 import {
   buildDashboardProjectWhere,
@@ -50,12 +50,7 @@ import {
   EMPTY_PROJECT_OWN_ROLLUP,
   EMPTY_PROJECT_SUBTREE_ROLLUP,
 } from "./helpers";
-import {
-  aggregateSubtreeRollups,
-  allProjectParentRows,
-  buildChildrenMap,
-  collectDescendantIds,
-} from "./subtree";
+import { loadProjectSubtreeRollups } from "./subtree";
 
 /** Cap on `nextTasks` — a preview strip, not a full list (see `task.board`/`task.listActionable` for those). */
 const NEXT_TASKS_CAP = 10;
@@ -81,9 +76,15 @@ export async function projectDashboardSummary(
   db: Database,
   filters: ProjectDashboardSummaryInput,
 ): Promise<ProjectDashboardSummaryOut> {
-  const allRows = await allProjectParentRows(db);
-  const childrenByParent = buildChildrenMap(allRows);
-  const nameById = new Map(allRows.map((r) => [r.id, r.name]));
+  // ONE whole-tree load for the entire request. `computeAttentionItems` is
+  // global by construction (see attention.ts) and used to re-derive exactly
+  // this — same tree query, same batched `projectRollups` — so it is handed
+  // the bundle rather than loading its own. Whole-tree rather than
+  // page-scoped is free here for the same reason: attention already needed
+  // every id, and a superset never changes a page row's subtree numbers.
+  const subtreeLoad = await loadProjectSubtreeRollups(db);
+  const { childrenByParent, nameById, ownRollups, subtreeRollups } =
+    subtreeLoad;
 
   // Carries status + kind/location + the date window (see dashboard-shared.ts).
   const scopedWhere = buildDashboardProjectWhere(filters);
@@ -177,13 +178,10 @@ export async function projectDashboardSummary(
           or(isNotNull(project.startDate), isNotNull(project.endDate)),
         ),
       ),
-    computeAttentionItems(db),
+    computeAttentionItems(db, subtreeLoad),
   ]);
 
   const ids = projectRows.map((r) => r.id);
-  const descendantIds = ids.flatMap((id) =>
-    collectDescendantIds(childrenByParent, id),
-  );
 
   /**
    * Mirrors the Data view's client-side join (projects-dashboard.tsx): a row
@@ -194,14 +192,12 @@ export async function projectDashboardSummary(
     ids.length > 0 ? or(inArray(column, ids), isNull(column)) : isNull(column);
 
   const [
-    rollups,
     deps,
     taskStatusRows,
     nextTaskRows,
     undatedTaskCount,
     undatedPurchaseCount,
   ] = await Promise.all([
-    projectRollups(db, uniq([...ids, ...descendantIds])),
     projectDependencyIds(db, ids),
     ids.length > 0
       ? getDb(db)
@@ -271,11 +267,10 @@ export async function projectDashboardSummary(
       : Promise.resolve(0),
   ]);
 
-  const subtreeRollups = aggregateSubtreeRollups(allRows, rollups);
   const projects = projectRows.map((row) =>
     dbProjectToAPI(
       row,
-      rollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+      ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
       subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],

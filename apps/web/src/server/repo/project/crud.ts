@@ -15,7 +15,7 @@ import type {
   ProjectUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or } from "drizzle-orm";
-import { countBy, uniq } from "es-toolkit";
+import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   project,
@@ -45,19 +45,13 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
-import { projectDependencyIds, projectRollups } from "./analytics";
+import { projectDependencyIds } from "./analytics";
 import {
   dbProjectToAPI,
   EMPTY_PROJECT_OWN_ROLLUP,
   EMPTY_PROJECT_SUBTREE_ROLLUP,
 } from "./helpers";
-import {
-  aggregateSubtreeRollups,
-  allProjectParentRows,
-  buildChildrenMap,
-  collectDescendantIds,
-  MAX_PROJECT_TREE_DEPTH,
-} from "./subtree";
+import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
 type ProjectUpdateData = ProjectUpdateInput["data"];
@@ -71,23 +65,18 @@ const projectReader = createEntityReader({
   entityName: "project",
   fetchById: fetchProjectById,
   fromDB: async (db, row) => {
-    // Whole-tree parent/child map — cheap single query (id/name/parentId
-    // only) — see subtree.ts's doc comment for why this is loaded in full
-    // rather than walked with per-row queries.
-    const allRows = await allProjectParentRows(db);
-    const childrenByParent = buildChildrenMap(allRows);
-    const descendantIds = collectDescendantIds(childrenByParent, row.id);
-
-    const [rollups, deps] = await Promise.all([
-      projectRollups(db, uniq([row.id, ...descendantIds])),
-      projectDependencyIds(db, [row.id]),
-    ]);
-    const subtreeRollups = aggregateSubtreeRollups(allRows, rollups);
-    const nameById = new Map(allRows.map((r) => [r.id, r.name]));
+    // Whole-tree parent/child map + this project's subtree rollup — see
+    // subtree.ts's doc comment for why the tree is loaded in full rather than
+    // walked with per-row queries.
+    const [{ childrenByParent, nameById, ownRollups, subtreeRollups }, deps] =
+      await Promise.all([
+        loadProjectSubtreeRollups(db, [row.id]),
+        projectDependencyIds(db, [row.id]),
+      ]);
 
     return dbProjectToAPI(
       row,
-      rollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+      ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
       subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
       deps.blockedBy.get(row.id) ?? [],
       deps.blocking.get(row.id) ?? [],
