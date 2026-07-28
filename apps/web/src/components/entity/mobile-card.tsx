@@ -151,12 +151,17 @@ export function MobileCard({
               : "grid-cols-[1fr_auto]",
           // Touch devices have no :hover — give a pressed state so taps register.
           onClick && "cursor-pointer transition-colors active:bg-muted/50",
-          // A long-pressable row must opt out of iOS's own long-press: Safari
-          // otherwise starts a text selection and raises the Copy/Look Up
-          // callout on top of the selection mode we just entered. Scoped to
-          // rows that actually take a long press, so ordinary rows keep
-          // selectable text.
-          onLongPress && "select-none [-webkit-touch-callout:none]",
+          // A row involved in long-press selection must opt out of iOS's own
+          // long-press: Safari otherwise starts a text selection and raises the
+          // Copy/Look Up callout on top of the selection we just made.
+          //
+          // `selectable` matters as much as `onLongPress` here — once selection
+          // mode is on, rows stop taking a long press (they toggle on tap), so
+          // gating on `onLongPress` alone would drop the opt-out for the rest
+          // of the session and let the callout reappear the moment a thumb
+          // lingers while adding another row.
+          (onLongPress || selectable) &&
+            "select-none [-webkit-touch-callout:none]",
           className,
         )}
         onClick={(e) => {
