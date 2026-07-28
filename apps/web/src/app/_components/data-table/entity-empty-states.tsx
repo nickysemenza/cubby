@@ -178,10 +178,7 @@ export function FilteredEmptyState({
   );
 }
 
-/** Check if a table has active filters (column filters or global search text) */
-export function hasActiveFilters(
-  columnFilters: unknown[],
-  globalFilter?: string,
-): boolean {
-  return columnFilters.length > 0 || (!!globalFilter && globalFilter !== "");
+/** Check if a table has active (column) filters. */
+export function hasActiveFilters(columnFilters: unknown[]): boolean {
+  return columnFilters.length > 0;
 }

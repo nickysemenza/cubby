@@ -67,6 +67,10 @@ export function MealsCard() {
           meals.map((meal) => {
             const date = parseISO(meal.date);
             const isToday = hydrated && isSameDay(date, today);
+            const mealLabel =
+              meal.name ||
+              meal.recipes.map((r) => r.recipe.name).join(", ") ||
+              "Untitled meal";
             return (
               <Link
                 key={meal.id}
@@ -78,10 +82,8 @@ export function MealsCard() {
                   <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums">
                     {isToday ? "Today" : format(date, "EEE d")}
                   </span>
-                  <span className="truncate">
-                    {meal.name ||
-                      meal.recipes.map((r) => r.recipe.name).join(", ") ||
-                      "Untitled meal"}
+                  <span className="truncate" title={mealLabel}>
+                    {mealLabel}
                   </span>
                 </Row>
                 <span className="shrink-0 text-muted-foreground tabular-nums">

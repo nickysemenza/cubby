@@ -1,5 +1,6 @@
 import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import {
@@ -9,7 +10,7 @@ import {
   Tag,
   Wrench,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   purchaseCostColumn,
   purchaseCostTypeColumn,
@@ -23,11 +24,15 @@ import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { buildFiltersFromManifest } from "~/entities/filters";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+} from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
+import { ScopeChip } from "../_components/data-table/ActiveFilterChips";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -37,42 +42,23 @@ import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
-import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
 import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
-import { costTypeOptions, purchasePresetFilters } from "./purchase-options";
+import { costTypeOptions } from "./purchase-options";
 import { SettlePurchaseDialog } from "./settle-purchase-dialog";
 
-interface PurchaseListProps {
-  /**
-   * `ledger` (default): the full URL-backed filter set, plus a compact
-   * totals row and the analytics-view URL bridge (see the effect below).
-   * `planned`: preset to `future: true`, sorted by date ascending (undated
-   * last — Postgres's default NULLS LAST ordering, no extra sort logic
-   * needed). `unclassified`: preset to the `trade='other' AND cost IS NULL`
-   * predicate via `costIsNull`. `unassigned`: preset to
-   * `projectPresenceFilter: "none"` — spend that never got attributed to a
-   * project, whose detail pages offer ranked project suggestions to clear it.
-   * That preset is now just the URL state `?project=__none__`, reachable from
-   * the Project column's own `(none)` option.
-   */
-  mode?: "ledger" | "planned" | "unclassified" | "unassigned";
-  /**
-   * Seed the "name" column filter from the route's `q` search param (e.g. a
-   * command-palette deep link). Only used on mount for `planned`/
-   * `unclassified` — the `ledger` mode instead seeds (and live-syncs) from
-   * the full URL filter set below.
-   */
-  initialSearch?: string;
-}
+// Scoped rather than a plain `useNavigate()` so `search` stays typed to this
+// route's schema (which is where `productId` is declared) without importing
+// the `Route` object itself — that would be circular, since this route file
+// renders `PurchaseList`. Same idiom as `purchase-analytics-view.tsx`'s
+// `route`.
+const purchasesRoute = getRouteApi("/_authenticated/purchases/");
 
-export function PurchaseList({
-  mode = "ledger",
-  initialSearch,
-}: PurchaseListProps) {
+export function PurchaseList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
@@ -104,15 +90,17 @@ export function PurchaseList({
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
 
-  // Planned-view-only row action: settle a planned purchase without leaving
-  // the table, and move a single planned purchase to a project. Reschedule /
-  // change-estimate quick edits aren't duplicated here — the Date and Cost
-  // columns below are already inline-editable (`purchaseDateColumn` /
-  // `purchaseCostColumn`), which IS "the inline-edit pattern the codebase
-  // already has" for those two fields.
+  // Settle a planned purchase without leaving the table, and move a single one
+  // to a project. Reschedule / change-estimate aren't duplicated here — the
+  // Date and Cost columns are already inline-editable.
+  //
+  // Keyed on the ROW, not the view: "mark purchased" / "move to project" are
+  // meaningful for any planned purchase, whichever filters got you to it.
+  // They used to be gated on the `planned` tab, which meant the same row
+  // offered different actions depending on how you'd navigated to it.
   const extraActions = useCallback(
     (row: PurchaseOut) =>
-      mode === "planned" ? (
+      row.future ? (
         <>
           <DropdownMenuItem
             onClick={(e) => {
@@ -134,7 +122,7 @@ export function PurchaseList({
           </DropdownMenuItem>
         </>
       ) : null,
-    [mode],
+    [],
   );
 
   const bulkActions = useMemo(
@@ -177,10 +165,7 @@ export function PurchaseList({
   );
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
-  const projectFilterOptions = useMemo(
-    () => ({ project: projectOptions }),
-    [projectOptions],
-  );
+  const projectFilterOptions = useFilterOptions({ project: projectOptions });
 
   // The cost / date / costType / trade / future columns come from the shared
   // factories in `~/app/projects/shared.tsx`, also used by the embedded
@@ -295,23 +280,35 @@ export function PurchaseList({
     [columnHelper],
   );
 
-  // NOTE: the preset modes no longer drop the filter dropdown for the field
-  // they pin — adopting the filter manifest made `manifestFilterConfig` attach
-  // every spec's control unconditionally. So in `planned`/`unclassified`/
-  // `unassigned` the pinned column's control is still interactive but can't
-  // change the result: `presetFilters` spreads last and wins. Harmless-but-
-  // confusing, and pre-existing for the first two; hiding a control per mode
-  // needs a manifest-level "locked columns" notion, which is its own change.
-  // `planned`/`unclassified` keep the single-field `initialSearch` seed; the
-  // ledger's full filter set now round-trips through the generic URL sync in
-  // `useTableState` (driven by the purchase filter manifest), which replaced a
-  // hand-rolled seed + write-back pair here.
-  const seededFilter = useSeededFilter(
-    "name",
-    mode === "ledger" ? undefined : initialSearch,
-  );
-
-  const presetFilters = useMemo(() => purchasePresetFilters(mode), [mode]);
+  // `?productId=` (the product detail page's "See all in ledger" link) scopes
+  // the ledger to one product via the manifest's `productId` spec — but no
+  // column has that id, so it renders no header control and would otherwise
+  // be an invisible-but-active filter with Reset as the only way out. This is
+  // its one visible surface: a removable chip showing the resolved product
+  // name (never the raw id). `getByID` is the same query every other
+  // id→product-name lookup in the app uses (e.g. `ProductPreviewContent`),
+  // reused rather than duplicated.
+  const purchasesSearch = purchasesRoute.useSearch();
+  const purchasesNavigate = purchasesRoute.useNavigate();
+  const scopedProductId = purchasesSearch.productId;
+  const scopedProductQuery = useQuery({
+    ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
+    enabled: Boolean(scopedProductId),
+  });
+  const clearProductScope = useCallback(() => {
+    void purchasesNavigate({
+      search: (prev) => ({ ...prev, productId: undefined }),
+      replace: true,
+    });
+  }, [purchasesNavigate]);
+  const productScopeChip =
+    scopedProductId && scopedProductQuery.data ? (
+      <ScopeChip
+        name="Product"
+        value={scopedProductQuery.data.name}
+        onClear={clearProductScope}
+      />
+    ) : undefined;
 
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 
@@ -328,7 +325,6 @@ export function PurchaseList({
   } = useEntityList({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
-    extraFilters: presetFilters,
     filterOptions: projectFilterOptions,
     columns,
     deletable: deletableConfig,
@@ -336,20 +332,8 @@ export function PurchaseList({
     bulkActions,
     extraActions,
     infinite: true,
-    tableStateOptions: seededFilter,
   });
   usePageCount(totalCount);
-
-  // Planned view defaults to expected-date ascending (undated last, via
-  // Postgres's NULLS LAST default — see `database-helpers/query.ts`) instead
-  // of the table's usual "newest first". Runs once on mount; a user re-sort
-  // afterwards is left alone.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only by design, `table` is intentionally excluded
-  useEffect(() => {
-    if (mode === "planned") {
-      table.setSorting([{ id: "date", desc: false }]);
-    }
-  }, [mode]);
 
   const bulkMoveMutation = useActionMutation({
     mutationFn: api.purchase.bulkMove.mutationOptions,
@@ -397,48 +381,38 @@ export function PurchaseList({
   // ledger's compact totals row (`purchase.analytics`) below.
   const columnFilters = table.getState().columnFilters;
   const currentFilters = useMemo(
-    () => ({
-      ...buildFiltersFromManifest(
+    () =>
+      buildFiltersFromManifest(
         getEntityFilters("purchase"),
-        (id) =>
-          columnFilters.find((f) => f.id === id)?.value as
-            | string
-            | string[]
-            | undefined,
+        filterGetterFromColumnFilters(columnFilters),
       ),
-      ...presetFilters,
-    }),
-    [columnFilters, presetFilters],
+    [columnFilters],
   );
 
   const analyticsQuery = useQuery({
     ...api.purchase.analytics.queryOptions(currentFilters),
-    enabled: mode === "ledger",
     placeholderData: keepPreviousData,
   });
   const summary = analyticsQuery.data?.summary;
 
   return (
     <div>
-      {mode === "ledger" && (
-        <Grid cols="summary" className="mb-4">
-          <StatTile label="Actual">
-            {formatCurrency(summary?.actual ?? 0, 0)}
-          </StatTile>
-          <StatTile label="Committed">
-            {formatCurrency(summary?.committed ?? 0, 0)}
-          </StatTile>
-          <StatTile label="Credits">
-            {formatCurrency(summary?.credits ?? 0, 0)}
-          </StatTile>
-          <StatTile label="Net">
-            {formatCurrency(summary?.net ?? 0, 0)}
-          </StatTile>
-          <StatTile label="Count">{summary?.count ?? 0}</StatTile>
-        </Grid>
-      )}
+      <Grid cols="summary" className="mb-4">
+        <StatTile label="Actual">
+          {formatCurrency(summary?.actual ?? 0, 0)}
+        </StatTile>
+        <StatTile label="Committed">
+          {formatCurrency(summary?.committed ?? 0, 0)}
+        </StatTile>
+        <StatTile label="Credits">
+          {formatCurrency(summary?.credits ?? 0, 0)}
+        </StatTile>
+        <StatTile label="Net">{formatCurrency(summary?.net ?? 0, 0)}</StatTile>
+        <StatTile label="Count">{summary?.count ?? 0}</StatTile>
+      </Grid>
       <RTable
         table={table}
+        additionalToolbarContent={productScopeChip}
         isLoading={isLoading}
         error={error}
         ariaLabel="Purchases Table"

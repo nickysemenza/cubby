@@ -103,7 +103,10 @@ export function ArrangeLocationCard({
         )}
       >
         <LocationIcon type={node.type} size={16} />
-        <span className="min-w-0 flex-1 truncate font-medium text-sm">
+        <span
+          className="min-w-0 flex-1 truncate font-medium text-sm"
+          title={node.name}
+        >
           {node.name}
         </span>
         {count > 0 && (

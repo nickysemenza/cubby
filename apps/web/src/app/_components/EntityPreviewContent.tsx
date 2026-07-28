@@ -31,6 +31,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { formatCurrency } from "~/lib/utils";
+import { tryFormatAmount } from "./inventory/format-amount";
 import { LocationIcon } from "./locations/location-icons";
 import {
   type BodyBlock,
@@ -75,6 +76,7 @@ export function EntityPreviewContent({
     ))
     .with("cookbook", () => <CookbookPreviewContent cookbookId={id} />)
     .with("location", () => <LocationPreviewContent locationId={id} />)
+    .with("inventory", () => <InventoryPreviewContent inventoryId={id} />)
     .with("meal", () => <MealPreviewContent mealId={id} />)
     .with("project", () => <ProjectPreviewContent projectId={id} />)
     .with("task", () => <TaskPreviewContent taskId={id} />)
@@ -497,6 +499,93 @@ export function LocationPreviewContent({ locationId }: { locationId: string }) {
               : undefined,
             itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
             subCount: data.childCount ?? data.children?.length ?? undefined,
+          })}
+        />
+      )}
+    </PreviewQuery>
+  );
+}
+
+// ── Inventory ───────────────────────────────────────────────────────────────
+
+export type InventoryPreview = {
+  id: string;
+  /** An entry has no name of its own — the product it holds identifies it. */
+  productName: string;
+  productId: string;
+  locationName: string;
+  locationId: string;
+  locationType: LocationType;
+  amountText: string;
+  valuation?: number | null;
+  thumbUrl?: string;
+};
+
+export function toInventoryCard(vm: InventoryPreview): ManifestCardProps {
+  const stats: { label: string; value: ReactNode }[] = [
+    { label: "On hand", value: vm.amountText },
+  ];
+  // Plain currency, not PriceValue — valuation is amount × price, a total, so
+  // PriceValue's "/ea" unit-price suffix would misread it.
+  if (vm.valuation != null)
+    stats.push({ label: "Value", value: formatCurrency(vm.valuation) });
+
+  const body: BodyBlock[] = [];
+  if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
+  body.push({ kind: "stats", stats });
+
+  return {
+    entity: "inventory",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="inventory" size={14} colored />,
+    name: vm.productName,
+    tag: "inventory",
+    identity: vm.locationName,
+    crossLinks: [
+      {
+        to: "/products/$id",
+        params: { id: vm.productId },
+        icon: <EntityIcon entity="product" size={12} colored />,
+        label: vm.productName,
+      },
+      {
+        to: "/locations/$id",
+        params: { id: vm.locationId },
+        icon: <LocationIcon type={vm.locationType} size={12} colored />,
+        label: vm.locationName,
+      },
+    ],
+    body,
+  };
+}
+
+export function InventoryPreviewContent({
+  inventoryId,
+}: {
+  inventoryId: string;
+}) {
+  const trpc = useTRPC();
+  const query = useQuery(
+    trpc.inventory.getByID.queryOptions({ id: inventoryId }),
+  );
+
+  return (
+    <PreviewQuery query={query} label="Inventory item">
+      {(data) => (
+        <ManifestCard
+          {...toInventoryCard({
+            id: inventoryId,
+            productName: isMiscProduct(data.product.name)
+              ? getMiscDisplayName(data.product.name)
+              : data.product.name,
+            productId: data.product.id,
+            locationName: data.location.name,
+            locationId: data.location.id,
+            locationType: data.location.type,
+            amountText: tryFormatAmount(data.amount),
+            valuation: data.valuation,
+            thumbUrl: data.product.images.find((img) => !isDocumentFile(img))
+              ?.url,
           })}
         />
       )}

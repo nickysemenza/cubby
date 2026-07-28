@@ -269,6 +269,33 @@ export function decodeFilters(
 }
 
 /**
+ * The two ways a caller gets at a column's filter value, as adapters for
+ * {@link buildFiltersFromManifest}'s `get`.
+ *
+ * Three sites build the same `specs → get → buildFiltersFromManifest`
+ * sequence and must agree, because the ledger table and the analytics view
+ * call the same procedure and any disagreement silently opens a second React
+ * Query cache entry (see the note on `many` above). They differ only in where
+ * the value comes from — live table state, or the URL when no table is
+ * mounted. Naming both makes that the whole difference, rather than three
+ * hand-rolled lookups that happen to match.
+ */
+export const filterGetterFromColumnFilters =
+  (columnFilters: ReadonlyArray<{ id: string; value: unknown }>) =>
+  (columnId: string): FilterValue =>
+    columnFilters.find((f) => f.id === columnId)?.value as FilterValue;
+
+export function filterGetterFromSearch(
+  specs: readonly FilterSpecCore[],
+  search: Record<string, unknown>,
+): (columnId: string) => FilterValue {
+  const decoded = new Map(
+    decodeFilters(specs, search).map((f) => [f.id, f.value]),
+  );
+  return (columnId) => decoded.get(columnId);
+}
+
+/**
  * Options for a relation-presence filter: pages map the selected value
  * ("has" | "none") to the entity's `*PresenceFilter` field, resolved
  * server-side as an exists / is-null condition. Clearing it means "any".
@@ -276,10 +303,15 @@ export function decodeFilters(
  * Lives here rather than with the column helpers so the manifest can build its
  * specs without a runtime import of the column layer (which drags in the whole
  * entity/rendering graph, WASM included).
+ *
+ * `meta: true` matches `nullableSentinelOptions` — both are predicates about
+ * the data ("Has X" / "(none)"), not roster values, so both render in the
+ * eyebrow register (mono/uppercase, rule beneath) rather than looking like an
+ * ordinary picklist entry.
  */
 export const presenceFilterOptions = (
   label: string,
-): Array<{ value: string; label: string }> => [
-  { value: "has", label: `Has ${label}` },
-  { value: "none", label: "(none)" },
+): Array<{ value: string; label: string; meta: true }> => [
+  { value: "has", label: `Has ${label}`, meta: true },
+  { value: "none", label: "(none)", meta: true },
 ];

@@ -1,6 +1,5 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { RotateCcw, Scale } from "lucide-react";
@@ -21,9 +20,12 @@ import {
 import { EditableCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
+import { useCookbookOptions } from "../_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
+import { useRecipeTagOptions } from "../_components/hooks/useRecipeTagOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { EditableTagsCell } from "../_components/recipe/editable-tags-cell";
 import {
@@ -122,31 +124,38 @@ interface RecipeListProps {
    * main recipes page (shows everything).
    */
   cookbookIdFilter?: CookbookId;
+  /**
+   * Column ids to hide the header filter control for — the cookbook detail
+   * page pins `cookbookId` via `cookbookIdFilter` above, which wins over
+   * whatever the Source column's filter would pick, so it hides `["source"]`
+   * rather than leave an interactive-but-inert control. See
+   * `useStandardColumns`' doc comment.
+   */
+  hiddenFilterColumns?: string[];
 }
 
-// Stable fallback while getAllTags loads — an inline `= []` default would mint
-// a new reference every render and destabilize the tag options/columns memos.
-const NO_TAGS: string[] = [];
-
-export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
+export function RecipeList({
+  actions,
+  cookbookIdFilter,
+  hiddenFilterColumns,
+}: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(() => createColumnHelper<RecipeListItem>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
-  const { data: tags = NO_TAGS } = useQuery(
-    api.recipe.getAllTags.queryOptions(),
-  );
-  // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
-  // Constant scope when rendered on a cookbook page.
+  // Runtime picklists for the manifest's `tags`/`source` specs (optionsKey:
+  // "tags" / "cookbook"). Constant scope when rendered on a cookbook page.
   const cookbookScope = useMemo(
     () => (cookbookIdFilter ? { cookbookId: cookbookIdFilter } : {}),
     [cookbookIdFilter],
   );
 
-  const tagFilterOptions = useMemo(
-    () => ({ tags: tags.map((tag) => ({ value: tag, label: tag })) }),
-    [tags],
-  );
+  const { options: tagOptions } = useRecipeTagOptions();
+  const { options: cookbookOptions } = useCookbookOptions();
+  const filterOptions = useFilterOptions({
+    tags: tagOptions,
+    cookbook: cookbookOptions,
+  });
 
   // Mutation for inline editing (name, servings).
   const updateRecipeMutation = useUpdateMutation({
@@ -432,9 +441,10 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     // Constant scope when rendered on a cookbook page; merged over the
     // table's own column filters so search-within-a-book still works.
     extraFilters: cookbookScope,
-    filterOptions: tagFilterOptions,
+    filterOptions,
     columns,
     nameClassName: "w-64",
+    hiddenFilterColumns,
     bulkActions: {
       actions: [
         {

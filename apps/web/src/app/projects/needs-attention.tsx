@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
-import { formatDate } from "./shared";
+import { formatDate } from "./project-formatting";
 
 /**
  * Server-side rule metadata per {@link ProjectAttentionType} — icon, group
@@ -110,7 +110,11 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
                 gap="sm"
                 className="text-xs"
               >
-                <Link to={item.href} className="truncate hover:underline">
+                <Link
+                  to={item.href}
+                  className="truncate hover:underline"
+                  title={item.description}
+                >
                   {item.description}
                 </Link>
                 {item.date && (

@@ -1,10 +1,9 @@
-import type { CostType, PurchaseFilters, Trade } from "@cubby/schemas/project";
+import type { CostType } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { presenceFilterOptions } from "~/entities/filters";
 import { buildSelectOptions } from "~/lib/select-options";
 
 /** Human labels for the fixed cost-type enum. */
@@ -39,14 +38,6 @@ export const futureFilterOptions: FilterableComboboxItem[] = [
   { value: "true", label: "Planned" },
   { value: "false", label: "Already made" },
 ];
-
-/**
- * `{value,label}` options for the product-link presence filter ("has"/"none")
- * — a full product picklist isn't practical here (unlike `projectOptions`,
- * the product universe is unbounded), so the header filter only distinguishes
- * linked vs. unlinked rather than matching a specific product.
- */
-export const productLinkedOptions = presenceFilterOptions("product");
 
 /** Fixed preset values for the purchase-date-range filter. */
 const dateRangeValues = ["30d", "90d", "ytd", "1y"] as const;
@@ -86,36 +77,4 @@ export function resolveDateRange(preset: string | undefined): {
     .with("1y", () => format(subMonths(today, 12), "yyyy-MM-dd"))
     .otherwise(() => undefined);
   return dateFrom ? { dateFrom, dateTo } : {};
-}
-
-/** The `/purchases` view modes. `ledger` is the unrestricted default. */
-export type PurchaseViewMode =
-  | "ledger"
-  | "planned"
-  | "unclassified"
-  | "unassigned";
-
-/**
- * Server-filter preset a view mode pins, fed to `useEntityList`'s
- * `extraFilters`.
- *
- * `extraFilters` spreads AFTER the manifest's column filters, so a preset here
- * always beats a live header-filter selection on the same key — which is the
- * intended precedence. `unassigned` pins `projectPresenceFilter: "none"`,
- * which is exactly the value the project column's nullable sentinel writes
- * for `?project=__none__` — so the preset is equivalent to a URL state a
- * saved view could reproduce, and needs no clobber of `projectId` alongside
- * it: the repo now ORs presence with any live project selection, so picking
- * a project on this tab *widens* it ("unassigned or Kitchen") instead of
- * emptying it.
- */
-export function purchasePresetFilters(
-  mode: PurchaseViewMode,
-): Partial<PurchaseFilters> {
-  return match(mode)
-    .with("planned", () => ({ future: true }))
-    .with("unclassified", () => ({ trade: "other" as Trade, costIsNull: true }))
-    .with("unassigned", () => ({ projectPresenceFilter: "none" as const }))
-    .with("ledger", () => ({}))
-    .exhaustive();
 }

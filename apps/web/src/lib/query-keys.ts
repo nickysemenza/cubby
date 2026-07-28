@@ -35,6 +35,10 @@ export const queryKeys = {
   location: {
     list: procedureKey("location", "list"),
     makeTree: procedureKey("location", "makeTree"),
+    // The bounded parent-filter roster (`useLocationParentOptions`) — only
+    // locations with a live child, so it needs its own key rather than
+    // reusing `list`'s (different filter shape, would collide in the cache).
+    parentOptions: procedureKey("location", "parentOptions"),
     // Broad prefix — invalidate every location query (list / makeTree / getByID)
     // so persisted valuation rollups are re-read after an inventory/price change.
     all: entityKey("location"),

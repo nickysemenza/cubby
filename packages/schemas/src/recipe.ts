@@ -18,6 +18,7 @@ import { imageOut } from "./image";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
+  oneOrMany,
   presenceFilter,
 } from "./pagination";
 import {
@@ -253,7 +254,13 @@ export const recipeSectionInput = z.object({
 export const recipeFilterFields = {
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
-  cookbookId: cookbookId.optional(),
+  cookbookId: oneOrMany(cookbookId).optional(),
+  /**
+   * `"none"` matches recipes with no cookbook; `"has"` matches those with
+   * any cookbook. Combined with `cookbookId` it **widens** rather than
+   * narrows, same OR semantics as `taskFilterFields.projectPresenceFilter`.
+   */
+  cookbookPresenceFilter: presenceFilter,
   /**
    * `recipe.tags` is a nullable array, so `"none"` means untagged —
    * `tags IS NULL OR cardinality(tags) = 0`. A cleared-to-`{}` recipe is just

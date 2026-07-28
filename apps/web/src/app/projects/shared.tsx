@@ -44,6 +44,7 @@ import {
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
+  createNameColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
   type FilterConfig,
@@ -277,6 +278,7 @@ export function TaskList({
     entity: "task",
     invalidateKeys: taskMutationInvalidateKeys,
   });
+  const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
   const bulkActions = useMemo(
     () => ({
@@ -332,10 +334,9 @@ export function TaskList({
         },
         { mobile: { slot: "subtitle", priority: 10 } },
       ),
-      taskHelper.accessor("name", {
+      createNameColumn(taskHelper, "task", "name", {
         header: "Task",
-        cell: ({ row }) => row.original.name,
-        enableSorting: true,
+        editable: nameEditable,
       }),
       // The inline move-to-sub-project affordance — omitted on leaf projects
       // where every row shares the one project (see `showProjectColumn`).
@@ -376,7 +377,7 @@ export function TaskList({
         { mobile: { slot: "meta", priority: 40, interactive: true } },
       ),
     ],
-    [showProjectColumn],
+    [showProjectColumn, nameEditable],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -769,6 +770,9 @@ export function PurchaseList({
     entity: "purchase",
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
+  const nameEditable = useNameEditable<PurchaseOut>(
+    updatePurchaseMutation.mutateAsync,
+  );
 
   const bulkActions = useMemo(
     () => ({
@@ -814,24 +818,26 @@ export function PurchaseList({
   const columns = useMemo(
     () => [
       buildSelectColumn<PurchaseOut>(lastSelectedIdRef, shiftKeyRef),
-      purchaseHelper.accessor("name", {
+      createNameColumn(purchaseHelper, "purchase", "name", {
         header: "Purchase",
-        cell: ({ row }) => {
-          const url = row.original.url;
-          if (!url) return row.original.name;
-          return (
+        editable: nameEditable,
+        // The name itself goes to /purchases/$id; the vendor page keeps its own
+        // icon-only affordance beside it (same treatment as the index list's
+        // dedicated url column, minus the column). stopPropagation so it opens
+        // the vendor link instead of the cell's inline editor.
+        nameSuffix: (purchase) =>
+          purchase.url ? (
             <a
-              href={url}
+              href={purchase.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground transition-colors hover:text-primary"
             >
-              {row.original.name}
-              <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+              <ExternalLink className="size-3.5" />
+              <span className="sr-only">Open vendor link</span>
             </a>
-          );
-        },
-        enableSorting: true,
+          ) : null,
       }),
       // The inline move-to-sub-project affordance — omitted on leaf projects
       // where every row shares the one project (see `showProjectColumn`).
@@ -915,7 +921,7 @@ export function PurchaseList({
         { mobile: { slot: "meta", priority: 50 } },
       ),
     ],
-    [showProjectColumn],
+    [showProjectColumn, nameEditable],
   );
   const table = useReactTable({
     data: purchases,
@@ -1150,6 +1156,10 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by status...",
         selectOptions: PROJECT_STATUS_OPTIONS,
+        // No header filter: the dashboard's Status chips already scope this
+        // server-side. A column filter here would filter the already-scoped
+        // rows again, client-side, and the two would silently AND.
+        filterConfig: null,
         renderCell: (status: ProjectStatus) => (
           <Row align="center" gap="xs">
             <StatusIcon status={status} />
@@ -1171,6 +1181,8 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by kind...",
         selectOptions: projectKindOptions,
+        // See the Status column above — the dashboard's Kind chips own this.
+        filterConfig: null,
         renderCell: (kind: ProjectKind | null) =>
           kind ? (
             <Badge variant="secondary">{capitalize(kind)}</Badge>
@@ -1218,46 +1230,40 @@ export function ProjectTable({
           );
         },
       }),
-      columnHelper.accessor(
-        (row) =>
-          row.rollup.subtree.projectCount > 0
-            ? row.rollup.subtree.actualSpent
-            : row.rollup.actualSpent,
-        {
-          id: "actual",
-          header: "Actual",
-          enableSorting: true,
-          meta: { numeric: true, className: "w-24" },
-          cell: ({ row }) => {
-            const { rollup, costEstimate } = row.original;
-            const hasSubtree = rollup.subtree.projectCount > 0;
-            // `actualSpent` = money already out (excludes planned/future +
-            // negative contributions), matching the detail hero's "Actual" so
-            // this column never means something the hero doesn't. subtree
-            // aggregates are over LIVE descendants — not the currently
-            // chip-filtered `projects` view (same caveat as
-            // spending-by-project.tsx): a filtered-out child's spend still
-            // rolls up into its visible parent's "Actual" here.
-            const actual = hasSubtree
-              ? rollup.subtree.actualSpent
-              : rollup.actualSpent;
-            if (actual === 0) return <NoneValue />;
-            const est = hasSubtree
-              ? (rollup.subtree.costEstimate ?? costEstimate)
-              : costEstimate;
-            const over = est != null && est > 0 && actual > est;
-            return (
-              <span
-                className={
-                  over ? "font-medium text-destructive" : "text-positive"
-                }
-              >
-                {formatCurrency(actual, 0)}
-              </span>
-            );
-          },
+      columnHelper.accessor((row) => row.rollup.subtree.actualSpent, {
+        id: "actual",
+        header: "Actual",
+        enableSorting: true,
+        meta: { numeric: true, className: "w-24" },
+        cell: ({ row }) => {
+          const { subtree } = row.original.rollup;
+          // `actualSpent` = money already out (excludes planned/future +
+          // negative contributions), matching the detail hero's "Actual" so
+          // this column never means something the hero doesn't. subtree
+          // aggregates are over LIVE descendants — not the currently
+          // chip-filtered `projects` view (same caveat as
+          // spending-by-project.tsx): a filtered-out child's spend still
+          // rolls up into its visible parent's "Actual" here.
+          //
+          // Read unconditionally: a leaf's subtree IS its own rollup and its
+          // subtree estimate IS its own estimate (repo/project/subtree.ts,
+          // pinned by the "no-branch invariant" integration test), so there
+          // is no projectCount branch or `?? costEstimate` fallback to make.
+          const actual = subtree.actualSpent;
+          if (actual === 0) return <NoneValue />;
+          const est = subtree.costEstimate;
+          const over = est != null && est > 0 && actual > est;
+          return (
+            <span
+              className={
+                over ? "font-medium text-destructive" : "text-positive"
+              }
+            >
+              {formatCurrency(actual, 0)}
+            </span>
+          );
         },
-      ),
+      }),
       createPlainDateColumn(columnHelper, "startDate", {
         header: "Start",
         className: "w-28",
@@ -1288,8 +1294,12 @@ export function ProjectTable({
     [columnHelper],
   );
 
-  // Status/kind/location filtering now lives in the dashboard's chips — only
-  // the name search stays as a local column filter.
+  // Status/kind are deliberately absent from the filter manifest (and so
+  // never URL-sync here): the dashboard's chips (`?statuses=&kinds=`) already
+  // scope `projects` server-side before it reaches this table, and a manifest
+  // spec on the same concept would silently AND with the chips instead of
+  // replacing them — a filter you can't see and can't clear from either
+  // control. Only the name search is manifest-driven; keep it that way.
   const filters = useMemo(
     () => [{ id: "name", placeholder: "Search projects..." }],
     [],

@@ -6,7 +6,6 @@ import type {
 } from "@cubby/schemas/project";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import {
@@ -238,20 +237,16 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
       );
     })
     .with({ entity: "inventory" }, ({ data }) => (
-      <Link
-        to="/inventory/$id"
-        params={{ id: data.id }}
-        target={openInNewTab ? "_blank" : undefined}
-        rel={openInNewTab ? "noopener noreferrer" : undefined}
+      <PreviewEntityLink
+        entity="inventory"
+        id={data.id}
+        openInNewTab={openInNewTab}
         className={wrapperClass}
-      >
-        <EntityLinkBody
-          icon={<EntityIcon entity="inventory" size={12} colored />}
-          name={data.name}
-          compact={compact}
-          truncate={truncate}
-        />
-      </Link>
+        icon={<EntityIcon entity="inventory" size={12} colored />}
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
     ))
     .with({ entity: "usda-food" }, ({ data }) => {
       const text = data.foodInfo.description || "Unnamed Food";

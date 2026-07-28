@@ -67,7 +67,15 @@ function ShoppingList({
             key={need.ingredientId}
             className="border-border/50 border-b border-dashed py-1"
           >
-            <span className="truncate">{need.name}</span>
+            <span className="truncate" title={need.name}>
+              <EntityPreviewLink
+                entity="ingredient"
+                id={need.ingredientId}
+                className={dottedEntityLink}
+              >
+                {need.name}
+              </EntityPreviewLink>
+            </span>
             <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
               {need.grams != null ? gramText(need.grams) : "—"}
               {need.estimated && <span className="text-warning"> ~</span>}
