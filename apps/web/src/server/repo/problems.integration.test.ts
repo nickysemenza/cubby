@@ -274,6 +274,89 @@ describe("problems repo", () => {
     });
   });
 
+  describe("findProductsMissingPrice", () => {
+    it("flags stocked unpriced products, partitions misc buckets, and ignores priced or unstocked ones", async () => {
+      const loc = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Valuation shelf" }),
+        ctx.actor,
+      );
+      const unpriced = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unpriced Stocked Tool", price: null }),
+        ctx.actor,
+      );
+      const priced = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Priced Stocked Tool", price: 42 }),
+        ctx.actor,
+      );
+      // A `misc:` pile is a heterogeneous bucket with no meaningful unit price,
+      // so it belongs in the informational section, not the actionable one.
+      const bucket = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "misc: assorted clamps", price: null }),
+        ctx.actor,
+      );
+      // Unpriced but not stocked — contributes to no rollup, so not a problem
+      // here (findOrphanedProducts already covers it).
+      const unstocked = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unpriced Unstocked Tool", price: null }),
+        ctx.actor,
+      );
+
+      const unpricedEntry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: unpriced.id,
+          locationId: loc.id,
+          amount: { value: 3, unit: "each" },
+        },
+        ctx.actor,
+      );
+      for (const productId of [priced.id, bucket.id]) {
+        await createInventoryEntry(
+          ctx.db,
+          { productId, locationId: loc.id, amount: { value: 1, unit: "each" } },
+          ctx.actor,
+        );
+      }
+
+      const found = await findFastProblems(ctx.db);
+
+      const flagged = found.productsMissingPrice.find(
+        (p) => p.id === unpriced.id,
+      );
+      expect(flagged).toBeDefined();
+      // Quantity is summed across live entries so the card can say how much
+      // value is going unrecorded.
+      expect(flagged?.inventoryQuantity).toBe(3);
+      expect(flagged?.locations.map((l) => l.id)).toEqual([loc.id]);
+
+      // A price, no inventory, or misc-bucket status each keep it out.
+      for (const id of [priced.id, bucket.id, unstocked.id]) {
+        expect(found.productsMissingPrice.some((p) => p.id === id)).toBe(false);
+      }
+      expect(found.unvaluedBucketProducts.some((p) => p.id === bucket.id)).toBe(
+        true,
+      );
+      expect(
+        found.unvaluedBucketProducts.some((p) => p.id === unstocked.id),
+      ).toBe(false);
+
+      // Soft-deleting the only entry un-stocks it, so it drops out of both.
+      await deleteInventoryEntries(ctx.db, [unpricedEntry.id], ctx.actor);
+      const after = await findFastProblems(ctx.db);
+      expect(after.productsMissingPrice.some((p) => p.id === unpriced.id)).toBe(
+        false,
+      );
+      expect(
+        after.unvaluedBucketProducts.some((p) => p.id === unpriced.id),
+      ).toBe(false);
+    });
+  });
+
   describe("findProductsWithIslandedMappings", () => {
     it("flags a product whose mappings form 2+ islands but not a connected one", async () => {
       // widget↔gadget are custom units unreachable from the standard unit graph,

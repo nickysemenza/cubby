@@ -72,6 +72,7 @@ export const buildPurchaseWhereClause = async (
       filters.costType ? eq(purchase.costType, filters.costType) : undefined,
       filters.trade ? eq(purchase.trade, filters.trade) : undefined,
       projectCondition,
+      filters.noProject ? isNull(purchase.projectId) : undefined,
       filters.productId ? eq(purchase.productId, filters.productId) : undefined,
       // "linked" means productId IS NOT NULL — this deliberately includes
       // purchases whose product was later soft-deleted (those read back with

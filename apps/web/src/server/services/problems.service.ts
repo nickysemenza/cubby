@@ -66,6 +66,7 @@ import {
   findNeverVerifiedInventory,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
+  findProductsMissingPrice,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findStaleIngredientParses,
@@ -419,6 +420,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     traceAllSeq({
       duplicateUniqueProducts: () => findDuplicateUniqueProducts(scoped),
       orphanedProducts: () => findOrphanedProducts(scoped),
+      productsMissingPrice: () => findProductsMissingPrice(scoped),
       productsWithoutMappings: () => findProductsWithoutMappings(scoped),
       ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
       unusedIngredients: () => findUnusedIngredients(scoped),
@@ -437,6 +439,8 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   return {
     duplicateUniqueProducts: r.duplicateUniqueProducts,
     orphanedProducts: r.orphanedProducts,
+    productsMissingPrice: r.productsMissingPrice.real,
+    unvaluedBucketProducts: r.productsMissingPrice.buckets,
     productsWithoutMappings: r.productsWithoutMappings,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
     unusedIngredientsWithProduct: r.unusedIngredients.withProduct,

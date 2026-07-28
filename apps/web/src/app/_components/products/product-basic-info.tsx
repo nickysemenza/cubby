@@ -20,6 +20,7 @@ import { EntityInlineLink } from "../EntityInlineLink";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
 import { CategoryLabel } from "./CategoryLabel";
+import { PriceSuggestion } from "./price-suggestion";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
 import { ProductNotesMarkdown } from "./product-notes-markdown";
 
@@ -189,19 +190,32 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     <>
       <BasicInfo
         fields={fields}
-        // Notes render as a block below the fact rows — InfoRow's right-aligned
-        // value span is hostile to multi-line markdown.
+        // Notes and the price suggestion render as blocks below the fact rows —
+        // InfoRow's right-aligned value span is hostile to multi-line markdown
+        // and to anything with its own action button.
         footer={
-          product.notes ? (
-            <Stack gap="xs">
-              <p className="eyebrow my-0">Notes</p>
-              <ProductNotesMarkdown
-                notes={product.notes}
-                documents={documents}
-                onManualLink={onManualLink}
-              />
-            </Stack>
-          ) : undefined
+          <Stack gap="sm">
+            {product.notes ? (
+              <Stack gap="xs">
+                <p className="eyebrow my-0">Notes</p>
+                <ProductNotesMarkdown
+                  notes={product.notes}
+                  documents={documents}
+                  onManualLink={onManualLink}
+                />
+              </Stack>
+            ) : null}
+            <PriceSuggestion
+              product={product}
+              isPending={updateProductMutation.isPending}
+              onAccept={async (price) => {
+                await updateProductMutation.mutateAsync({
+                  id: product.id,
+                  data: { price },
+                });
+              }}
+            />
+          </Stack>
         }
         actions={
           // Add to Inventory lives on the Stocked At section header now —

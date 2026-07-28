@@ -14,6 +14,7 @@ import {
   purchaseListAndSideEffectsOut,
   purchaseOut,
   purchaseSortableFields,
+  purchaseTradeAffinityOut,
   purchaseUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
@@ -24,6 +25,7 @@ import {
   movePurchases,
   purchaseAnalytics,
   purchaseList,
+  purchaseTradeAffinity,
   setPurchasesCostType,
   setPurchasesTrade,
   updatePurchase,
@@ -94,6 +96,15 @@ const analytics = protectedProcedure
   .output(purchaseAnalyticsOut)
   .query(({ ctx, input }) => purchaseAnalytics(ctx.db, input));
 
+/**
+ * The project x trade purchase-count matrix behind project suggestions. One
+ * grouped aggregate for the whole ledger, fetched once and ranked against
+ * client-side for many purchases — see rankProjectSuggestions.
+ */
+const tradeAffinity = protectedProcedure
+  .output(z.array(purchaseTradeAffinityOut))
+  .query(({ ctx }) => purchaseTradeAffinity(ctx.db));
+
 // Bulk "move to project" — projectId: null moves every listed purchase to the
 // inbox. Mirrors inventory.bulkMove/task.bulkMove's shape: one repo call
 // inside a transaction, then one wave-wide runMutationSideEffectsForEntities
@@ -157,6 +168,7 @@ export const purchaseRouter = createTRPCRouter({
   delete: deleteItem,
   chartData,
   analytics,
+  tradeAffinity,
   bulkMove,
   bulkSetTrade,
   bulkSetCostType,

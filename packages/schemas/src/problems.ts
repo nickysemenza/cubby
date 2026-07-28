@@ -52,6 +52,24 @@ export const orphanedProductSchema = z.object({
   createdAt: z.date(),
 });
 
+// A product that is stocked but carries no `price`, so its inventory entries
+// value at nothing and the location rollup silently under-reports. Split into
+// two sections rather than one: a `misc:` bucket is a heterogeneous pile with no
+// meaningful unit price, so flagging it alongside real products would keep the
+// section permanently red. Mirrors the miscNoPrice/missingPricing split the
+// per-location valuation summary already makes.
+export const productMissingPriceSchema = z.object({
+  ...productProblemFields,
+  // Total live inventory quantity — how much value is going unrecorded.
+  inventoryQuantity: z.number(),
+  locations: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+    }),
+  ),
+});
+
 export const productWithoutMappingsSchema = z.object({
   ...productProblemFields,
   createdAt: z.date(),
@@ -239,6 +257,8 @@ export const productWithBetterUpcDataSchema = z.object({
 const problemsFastShape = {
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
   orphanedProducts: z.array(orphanedProductSchema),
+  productsMissingPrice: z.array(productMissingPriceSchema),
+  unvaluedBucketProducts: z.array(productMissingPriceSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
@@ -380,6 +400,7 @@ export type DuplicateUniqueProduct = z.infer<
   typeof duplicateUniqueProductSchema
 >;
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
+export type ProductMissingPrice = z.infer<typeof productMissingPriceSchema>;
 export type ProductWithoutMappings = z.infer<
   typeof productWithoutMappingsSchema
 >;

@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
+  type ProductMissingPrice,
   TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
 import type {
@@ -9,6 +10,7 @@ import type {
   ProjectAttentionType,
 } from "@cubby/schemas/project";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
+import { getMiscDisplayName } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import {
@@ -429,6 +431,30 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   };
 }
 
+/** `by {mfr} · {n} unit(s) unvalued` — the unpriced-product card subtitle. */
+function unpricedSubtitle(product: ProductMissingPrice): string {
+  const qty = product.inventoryQuantity;
+  return `${byManufacturer(product.manufacturer)} · ${qty} ${qty === 1 ? "unit" : "units"} unvalued`;
+}
+
+/** Clickable location chips, matching the duplicate-products card. */
+function locationBadges(
+  locations: ProductMissingPrice["locations"],
+): ReactNode[] {
+  return locations.map((location) => (
+    <Link key={location.id} to="/locations/$id" params={{ id: location.id }}>
+      <Badge
+        variant="outline"
+        // Free-form location names — opt out of the mono-uppercase stamp.
+        className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
+      >
+        <EntityIcon entity="location" colored className="size-3" />
+        {location.name}
+      </Badge>
+    </Link>
+  ));
+}
+
 /**
  * The Problems page in declaration order — the summary chips and the section
  * list both derive from this, so adding a check is a single entry here.
@@ -491,6 +517,38 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           />
         ),
       },
+    }),
+  }),
+  section({
+    id: "missing-price",
+    label: "Unpriced",
+    select: (p) => p.productsMissingPrice,
+    entity: "product",
+    title: "Stocked Without a Price",
+    description:
+      "These products are on a shelf but have no price, so their inventory values at nothing and the location totals under-report. Set a price to bring them into the valuation.",
+    emptyMessage: "No stocked products are missing a price.",
+    renderItem: (product) => ({
+      title: product.name,
+      subtitle: unpricedSubtitle(product),
+      badges: locationBadges(product.locations),
+      route: { to: "/products/$id", params: { id: product.id } },
+    }),
+  }),
+  section({
+    id: "unvalued-buckets",
+    label: "Unvalued buckets",
+    select: (p) => p.unvaluedBucketProducts,
+    entity: "product",
+    title: "Unvalued Bucket Products",
+    description:
+      "Misc buckets holding inventory with no price. Unlike the section above these are expected to be unpriced — a bucket is a heterogeneous pile, not a unit. Give one a lump-sum price only if you want its contents counted in the valuation.",
+    emptyMessage: "Every misc bucket carries a price.",
+    renderItem: (product) => ({
+      title: getMiscDisplayName(product.name),
+      subtitle: unpricedSubtitle(product),
+      badges: locationBadges(product.locations),
+      route: { to: "/products/$id", params: { id: product.id } },
     }),
   }),
   section({
