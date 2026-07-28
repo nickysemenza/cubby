@@ -1053,6 +1053,49 @@ describe("MCP Apps ui:// metadata", () => {
     }
   });
 
+  it("serves each app over resources/read, ready to render", async () => {
+    // The end of the chain nothing else covered: `resources/list` proving a
+    // pointer resolves says nothing about what `resources/read` actually
+    // returns. A host fetches this exact payload and renders it, so assert the
+    // three things that decide whether it renders at all — the MCP Apps mime
+    // type, a self-contained document, and a substituted origin. The last one
+    // is what silently broke deep links once already.
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const server = createMcpServer();
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+
+    try {
+      const { resources } = await client.listResources();
+      expect(resources.length).toBeGreaterThan(0);
+
+      for (const resource of resources) {
+        const { contents } = await client.readResource({ uri: resource.uri });
+        const [content] = contents;
+        expect(content?.mimeType).toBe("text/html;profile=mcp-app");
+        // The contents union is text-or-blob; an app must be the text arm.
+        expect(content && "text" in content).toBe(true);
+
+        const html = (content as { text: string }).text;
+        expect(html.startsWith("<!doctype html>")).toBe(true);
+        // Self-contained: a sandboxed iframe has no origin to fetch from.
+        expect(html).not.toMatch(/<script[^>]+src=/);
+        expect(html).not.toMatch(/<link[^>]+href=/);
+        // Substituted, and only in the meta tag.
+        expect(html).not.toContain('content="__CUBBY_ORIGIN__"');
+        expect(html).toMatch(
+          /<meta name="cubby-origin" content="https?:\/\/[^"]+"/,
+        );
+      }
+    } finally {
+      await Promise.allSettled([client.close(), server.close()]);
+    }
+  });
+
   it("keeps the UI additive — the data is still on the wire without a host", async () => {
     // A host with no MCP Apps support ignores `_meta.ui` entirely, so these
     // tools must stay fully usable as plain structured-output tools.
