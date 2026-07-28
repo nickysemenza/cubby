@@ -21,6 +21,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { entityFilterSearchFields } from "~/entities/filter-manifest";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -34,6 +35,7 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 const searchSchema = z.object({
   view: z.enum(viewOptions).optional().catch(undefined),
   ...tableSearchFields,
+  ...entityFilterSearchFields("location"),
 });
 
 const searchDefaults = { view: undefined } as const;

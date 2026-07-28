@@ -153,10 +153,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         header: "Category",
         className: "w-32",
         placeholder: "Filter by category...",
-        selectOptions: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
+        selectOptions: productCategoryOptionsWithTheme,
         renderCell: (cat) => <CategoryLabel category={cat} />,
         // Mobile lists group by category (section headers), so the category
         // chip is redundant per-row — prefer manufacturer as the subtitle.
@@ -317,37 +314,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
 
   // Memoize filters to prevent recreating on every render
-  const filters = useMemo(
-    () => [
-      "name",
-      "manufacturer",
-      "upc",
-      {
-        id: "category",
-        placeholder: "Filter by category...",
-        filterType: "select" as const,
-        options: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
-      },
-    ],
-    [],
-  );
-
-  // Memoize buildFilters to prevent recreating on every render
-  const buildFilters = useCallback(
-    (ts: { getColumnFilter: (id: string) => unknown }) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      manufacturerFilter: ts.getColumnFilter("manufacturer"),
-      upcFilter: ts.getColumnFilter("upc"),
-      categoryFilter: ts.getColumnFilter("category"),
-      inventoryPresenceFilter: ts.getColumnFilter("location"),
-      ingredientPresenceFilter: ts.getColumnFilter("ingredient"),
-    }),
-    [],
-  );
-
   const extraActions = useCallback(
     (row: ProductListItem) => (
       <>
@@ -415,11 +381,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   } = useEntityList({
     entity: "product",
     queryOptions,
-    buildFilters,
     getMappings: getProductListMappings,
     tableStateOptions,
     columns,
-    filters,
     deletable: deletableConfig,
     extraActions,
     nameEditable,

@@ -14,6 +14,11 @@ import {
   useTransition,
 } from "react";
 import {
+  decodeFilters,
+  encodeFilters,
+  type FilterSpecCore,
+} from "~/entities/filters";
+import {
   buildSortParams,
   buildSortsParams,
   defaultPagination,
@@ -25,6 +30,13 @@ interface TableStateOptions {
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
   /**
+   * The entity's filter manifest. When given (with `urlSync`), column filters
+   * round-trip through the URL alongside sort/page — so a filtered view is
+   * shareable and survives a reload, on every table rather than only the ones
+   * that hand-rolled it.
+   */
+  filterSpecs?: readonly FilterSpecCore[];
+  /**
    * Mirror sort + pagination to the URL search params (bookmarkable / shareable
    * / survives reload). Write-through is keyed on the serialized state, never
    * URL→state, so it can't render-loop. Enable on exactly one tableState per
@@ -32,6 +44,9 @@ interface TableStateOptions {
    */
   urlSync?: boolean;
 }
+
+/** Stable empty default (a fresh `[]` per render would churn the memos). */
+const NO_SPECS: readonly FilterSpecCore[] = [];
 
 // URL search keys for table state.
 const SORT_KEY = "sort";
@@ -79,6 +94,8 @@ export interface TableStateReturn {
     value: PaginationState | ((old: PaginationState) => PaginationState),
   ) => void;
   getColumnFilter: (columnId: string) => string | undefined;
+  /** Multi-value read for `multiselect` columns; scalars normalize to `[v]`. */
+  getColumnFilterValues: (columnId: string) => string[] | undefined;
   /** Primary sort only — single-sort consumers (remote USDA list API). */
   getSortParams: () => SortParams;
   /** Full shift-click sort stack — the tRPC list input. */
@@ -92,6 +109,7 @@ export function useTableState(
     initialSort = "createdAt",
     initialFilter = [],
     initialPagination = defaultPagination,
+    filterSpecs = NO_SPECS,
     urlSync = false,
   } = options;
 
@@ -112,8 +130,14 @@ export function useTableState(
     const fromUrl = paramToSort(search[SORT_KEY]);
     return fromUrl ?? defaultSortState(initialSort);
   });
-  const [columnFilters, setColumnFiltersRaw] =
-    useState<ColumnFiltersState>(initialFilter);
+  // Lazy initializer: URL filters win over the caller's seed, so a shared link
+  // restores the same rows before first paint.
+  const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>(
+    () => {
+      const fromUrl = decodeFilters(filterSpecs, search);
+      return fromUrl.length ? fromUrl : initialFilter;
+    },
+  );
   const [pagination, setPaginationRaw] = useState<PaginationState>(() => {
     const page = Number(search[PAGE_KEY]);
     const size = Number(search[SIZE_KEY]);
@@ -156,10 +180,33 @@ export function useTableState(
 
   // Memoize getColumnFilter to prevent recreating on every render - CRITICAL
   const getColumnFilter = useCallback(
-    (columnId: string) => {
-      return columnFilters.find((filter) => filter.id === columnId)?.value as
-        | string
-        | undefined;
+    (columnId: string): string | undefined => {
+      const value = columnFilters.find(
+        (filter) => filter.id === columnId,
+      )?.value;
+      // A multiselect column holds `string[]`. Returning it typed as `string`
+      // would send an array to a scalar zod field and blow up at the tRPC
+      // boundary at runtime instead of here — fail loudly at the call site
+      // that forgot to switch to getColumnFilterValues.
+      if (Array.isArray(value)) {
+        throw new Error(
+          `Column "${columnId}" holds a multi-value filter; use getColumnFilterValues.`,
+        );
+      }
+      return value as string | undefined;
+    },
+    [columnFilters],
+  );
+
+  /** Multi-value counterpart, normalizing a scalar up into a one-element set. */
+  const getColumnFilterValues = useCallback(
+    (columnId: string): string[] | undefined => {
+      const value = columnFilters.find(
+        (filter) => filter.id === columnId,
+      )?.value;
+      if (Array.isArray(value))
+        return value.length ? (value as string[]) : undefined;
+      return typeof value === "string" && value ? [value] : undefined;
     },
     [columnFilters],
   );
@@ -183,6 +230,14 @@ export function useTableState(
   const serializedUrlState = useMemo(() => {
     const sortP = sortToParam(sorting);
     return JSON.stringify({
+      ...encodeFilters(
+        filterSpecs,
+        (columnId) =>
+          columnFilters.find((f) => f.id === columnId)?.value as
+            | string
+            | string[]
+            | undefined,
+      ),
       [SORT_KEY]: sortP === defaultSortParam ? undefined : sortP,
       [PAGE_KEY]:
         pagination.pageIndex > 0 ? pagination.pageIndex + 1 : undefined,
@@ -191,7 +246,21 @@ export function useTableState(
           ? pagination.pageSize
           : undefined,
     });
-  }, [sorting, pagination, defaultSortParam]);
+  }, [sorting, pagination, columnFilters, filterSpecs, defaultSortParam]);
+
+  // Every key this hook owns. Enumerated rather than derived from `next`'s
+  // own keys: JSON.stringify drops undefined, so a cleared filter is ABSENT
+  // from `next` — iterating its keys could set and update a param but never
+  // delete one.
+  const managedKeys = useMemo(
+    () => [
+      SORT_KEY,
+      PAGE_KEY,
+      SIZE_KEY,
+      ...filterSpecs.map((spec) => spec.urlKey ?? spec.columnId),
+    ],
+    [filterSpecs],
+  );
 
   const lastWrittenUrlState = useRef<string | null>(null);
   useEffect(() => {
@@ -203,7 +272,7 @@ export function useTableState(
       to: ".",
       search: (prev: Record<string, unknown>) => {
         const merged = { ...prev };
-        for (const key of [SORT_KEY, PAGE_KEY, SIZE_KEY]) {
+        for (const key of managedKeys) {
           if (next[key] === undefined) delete merged[key];
           else merged[key] = next[key];
         }
@@ -211,7 +280,7 @@ export function useTableState(
       },
       replace: true,
     });
-  }, [urlSync, serializedUrlState, navigate]);
+  }, [urlSync, serializedUrlState, managedKeys, navigate]);
 
   // Memoize the entire return object to prevent recreating on every render - CRITICAL
   return useMemo(
@@ -223,6 +292,7 @@ export function useTableState(
       pagination,
       setPagination,
       getColumnFilter,
+      getColumnFilterValues,
       getSortParams,
       getSorts,
     }),
@@ -234,6 +304,7 @@ export function useTableState(
       pagination,
       setPagination,
       getColumnFilter,
+      getColumnFilterValues,
       getSortParams,
       getSorts,
     ],

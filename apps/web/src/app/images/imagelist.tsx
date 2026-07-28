@@ -169,17 +169,7 @@ export default function ImageList() {
   } = useEntityList({
     entity: "image",
     queryOptions: (params) => api.image.list.queryOptions(params),
-    buildFilters: (ts) => ({
-      // Map the filename column filter to the API's nameFilter
-      nameFilter: ts.getColumnFilter("filename") ?? undefined,
-    }),
     columns,
-    filters: [
-      {
-        id: "filename",
-        placeholder: "Filter by filename...",
-      },
-    ],
     deletable: deletableConfig,
     infinite: true,
   });

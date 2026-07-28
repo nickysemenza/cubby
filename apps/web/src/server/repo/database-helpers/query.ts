@@ -6,7 +6,7 @@
 import type { SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -227,3 +227,23 @@ export async function assertNoDependents<TId extends string>(opts: {
   const names = offenders.map((o) => o.name).join(", ");
   throw createAppError(opts.reason, opts.message(offenders.length, names));
 }
+
+/**
+ * Equality against one value or any of a set — the server half of a
+ * multi-select column filter (see `oneOrMany`).
+ *
+ * An empty set means "no constraint", NOT "match nothing": it returns
+ * undefined so the condition drops out rather than degenerating into an
+ * `IN ()`, which is a syntax error. Every caller must go through here rather
+ * than branching on Array.isArray itself, so that stays true everywhere.
+ */
+export const eqAny = <TColumn extends AnyColumn>(
+  column: TColumn,
+  value: unknown,
+): SQL | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) return eq(column, value);
+  if (value.length === 0) return undefined;
+  if (value.length === 1) return eq(column, value[0]);
+  return inArray(column, value);
+};

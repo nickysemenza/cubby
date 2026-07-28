@@ -2,6 +2,7 @@ import type { ColumnHelper } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { entities } from "~/entities/entities";
+import { getEntityFilters } from "~/entities/filter-manifest";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import { useBulkActions } from "../data-table/useBulkActions";
@@ -158,11 +159,13 @@ export function useClientEntityList<TData extends BaseListRow>({
     () => ({
       initialSort: defaultSort,
       initialPagination: { pageIndex: 0, pageSize: DEFAULT_CLIENT_PAGE_SIZE },
-      ...tableStateOptions,
-      // Mirror sort + pagination to the URL (bookmarkable / shareable).
+      // Mirror sort + pagination + filters to the URL (bookmarkable /
+      // shareable). Overridable — one URL writer per page.
       urlSync: true,
+      filterSpecs: getEntityFilters(entity),
+      ...tableStateOptions,
     }),
-    [defaultSort, tableStateOptions],
+    [defaultSort, entity, tableStateOptions],
   );
 
   const tableState = useTableState(mergedTableStateOptions);

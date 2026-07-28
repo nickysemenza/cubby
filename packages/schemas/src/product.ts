@@ -16,7 +16,11 @@ import {
 } from "./identifiers";
 import { imageOut } from "./image";
 import { locationListRefOut, locationOut } from "./location";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import {
+  createPaginatedResponseSchema,
+  oneOrMany,
+  presenceFilter,
+} from "./pagination";
 import { baseKind } from "./problems";
 import { recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -185,7 +189,9 @@ export const productFilterFields = {
   nameFilter: z.string().optional().describe("Filter by product name"),
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   upcFilter: z.string().optional().describe("Filter by UPC code"),
-  categoryFilter: productCategory.optional().describe("Filter by category"),
+  categoryFilter: oneOrMany(productCategory)
+    .optional()
+    .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
   ingredientPresenceFilter: presenceFilter,
 };

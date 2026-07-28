@@ -3,11 +3,17 @@ import { useNavigate } from "@tanstack/react-router";
 import type { Table as ITable } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useRef } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { EntityIcon } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
@@ -122,6 +128,16 @@ export function MobileCardView<TItem>({
     .some((col) => col.id === "select");
   const isSelectable = hasRowSelection && hasSelectColumn;
 
+  // Checkboxes are a 44px gutter on EVERY row for an action most taps never
+  // take, so selection is a mode: long-press a row to enter it (the iOS
+  // convention), and it ends when the last row is deselected.
+  const [selectionArmed, setSelectionArmed] = useState(false);
+  const anySelected = table.getSelectedRowModel().rows.length > 0;
+  const selectionMode = isSelectable && (selectionArmed || anySelected);
+  useEffect(() => {
+    if (!anySelected) setSelectionArmed(false);
+  }, [anySelected]);
+
   const virtualItems = virtualizer.getVirtualItems();
 
   const renderVirtualItem = (vi: (typeof virtualItems)[number]) => {
@@ -186,34 +202,41 @@ export function MobileCardView<TItem>({
         variant="row"
         title={model.title}
         subtitle={model.subtitle}
-        imageSlot={
-          model.imageSlot ??
-          // Recipes have no per-item image; a generic chef-hat on every row
-          // is noise. Let the grid collapse and reclaim the 44px gutter.
-          (entity && entity !== "recipe" && (
-            <div className="flex size-11 items-center justify-center rounded bg-muted/50">
-              <EntityIcon entity={entity} colored className="size-5" />
-            </div>
-          ))
-        }
+        // No generic entity-icon fallback: a chef hat (or package, or receipt)
+        // repeated down every row is decoration, not information, and it costs
+        // the same 44px the real thumbnails use.
+        imageSlot={model.imageSlot}
         rightValues={model.rightValues}
         rightValueInteractive={model.rightValueInteractive}
         selectable={
-          isSelectable
+          selectionMode
             ? {
                 isSelected: row.getIsSelected(),
                 onSelectionChange: (checked) => row.toggleSelected(checked),
               }
             : undefined
         }
+        onLongPress={
+          isSelectable && !selectionMode
+            ? () => {
+                setSelectionArmed(true);
+                row.toggleSelected(true);
+              }
+            : undefined
+        }
         actions={model.actionsContent}
         entity={entity}
         onClick={
-          model.detailsHref
-            ? () => {
-                navigate({ to: model.detailsHref });
-              }
-            : undefined
+          // In selection mode a tap toggles the row rather than navigating —
+          // the iOS convention, and otherwise picking a second row means
+          // hitting a 20px checkbox instead of the row you're looking at.
+          selectionMode
+            ? () => row.toggleSelected(!row.getIsSelected())
+            : model.detailsHref
+              ? () => {
+                  navigate({ to: model.detailsHref });
+                }
+              : undefined
         }
       >
         {debugContent}

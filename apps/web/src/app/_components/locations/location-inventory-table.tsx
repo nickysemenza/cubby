@@ -3,8 +3,9 @@ import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
+import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
@@ -29,16 +30,20 @@ import { ImageThumbnail } from "../table/ImageThumbnail";
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
 /**
- * The location-scoped inventory.list input. Shared with LocationContents so
- * its header valuation/count reads hit the SAME React Query cache entry as
- * this table's list — one fetch serves both.
+ * The location-scoped inventory.list input, used by LocationContents' header
+ * valuation/count reads.
+ *
+ * Deliberately spelled to match the table's DEFAULT sort + page (the array
+ * sort form, `createdAt` desc, 100 per page — see `defaultSortState` /
+ * `defaultPagination`), so on first load the header and the table still hit
+ * one React Query cache entry. They diverge once the user sorts or pages,
+ * which is correct: the table is then showing something else.
  */
-export const locationInventoryListInput = (locationId: LocationId) =>
-  ({
-    sort: { orderBy: "createdAt", direction: "desc" },
-    pagination: { pageIndex: 0, pageSize: 100 },
-    filters: { locationIdFilter: locationId },
-  }) as const;
+export const locationInventoryListInput = (locationId: LocationId) => ({
+  sort: [{ orderBy: "createdAt", direction: "desc" as const }],
+  pagination: { pageIndex: 0, pageSize: 100 },
+  filters: { locationIdFilter: locationId },
+});
 
 interface LocationInventoryTableProps {
   locationId: LocationId;
@@ -48,6 +53,10 @@ interface LocationInventoryTableProps {
 
 const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, index) => id === b[index]);
+
+/** Stable hook config (see apps/web/CLAUDE.md on inline objects). */
+const EMBEDDED_TABLE_STATE = { urlSync: false } as const;
+const NO_TABLE_FILTERS = () => ({}) as Record<string, never>;
 
 export function LocationInventoryTable({
   locationId,
@@ -146,15 +155,33 @@ export function LocationInventoryTable({
     [columnHelper, unitMappingsByProductId],
   );
 
+  // Fixed parent scope merged with the table's live sort/pagination.
+  const listQueryOptions: TRPCQueryOptionsFn<Record<string, never>> =
+    useCallback(
+      (params) =>
+        api.inventory.list.queryOptions({
+          sort: params.sort,
+          pagination: params.pagination,
+          filters: { locationIdFilter: locationId },
+        }),
+      [api, locationId],
+    );
+
   const { table, data, isLoading, error, bulkActionBar } = useEntityList<
     InventoryItem,
     Record<string, never>
   >({
     entity: "inventory",
-    queryOptions: () =>
-      api.inventory.list.queryOptions(locationInventoryListInput(locationId)),
-    buildFilters: () => ({}),
+    // Forward the table's own sort/pagination — dropping the argument left the
+    // Product/Amount sort headers doing nothing (manualSorting is on, so
+    // TanStack doesn't sort client-side either) and made every page of a
+    // >100-entry location show the same first 100 rows.
+    queryOptions: listQueryOptions,
+    buildFilters: NO_TABLE_FILTERS,
     filters: [],
+    // One URL writer per page: the location detail page owns the params, and
+    // this table is embedded alongside its other content.
+    tableStateOptions: EMBEDDED_TABLE_STATE,
     columns,
     extraActions: (item) => (
       <>

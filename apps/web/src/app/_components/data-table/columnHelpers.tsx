@@ -84,7 +84,7 @@ import { InventoryEntriesCell } from "./inventory-entries-cell";
 /** Configuration for inline column header filters */
 export interface FilterConfig {
   placeholder: string;
-  filterType?: "text" | "select";
+  filterType?: "text" | "select" | "multiselect";
   options?: FilterableComboboxItem[];
   // Append a `(count)` of matching rows to each select option. Off by default:
   // the count comes from TanStack's client-side faceting, which only sees the
@@ -98,12 +98,57 @@ export interface FilterConfig {
  * ("has" | "none") to the entity's `*PresenceFilter` field, resolved server-side
  * as an exists / is-null condition. Clearing the filter means "any".
  */
-export function presenceFilterOptions(label: string): FilterableComboboxItem[] {
-  return [
-    { value: "has", label: `Has ${label}` },
-    { value: "none", label: "(none)" },
-  ];
+/**
+ * Client-side filterFn for a multiselect column (cell value is one of the
+ * selected set).
+ *
+ * Required, not optional: TanStack picks a filterFn from the ROW value's type,
+ * not the filter value's. A string column handed `["a","b"]` resolves to
+ * `includesString`, which tests `String(rowValue).includes("a,b")` and so
+ * matches nothing — silently. Server-side tables (`manualFiltering: true`)
+ * never run this, but every client-side table would quietly show zero rows.
+ */
+export function multiSelectFilterFn(
+  row: { getValue: (id: string) => unknown },
+  columnId: string,
+  filterValue: unknown,
+): boolean {
+  if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
+  return (filterValue as string[]).includes(String(row.getValue(columnId)));
 }
+
+/**
+ * Sorts an entity-reference column ({id, name}) by name.
+ *
+ * REQUIRED on any column with an object accessor that allows sorting. TanStack's
+ * `getAutoSortingFn` sees no string/Date and falls back to `sortingFns.basic`
+ * (`a === b ? 0 : a > b ? 1 : -1`) — for two distinct objects BOTH comparisons
+ * are false, so it returns -1 for every pair. That's an inconsistent
+ * comparator, and Array.sort on one yields an arbitrary permutation, not an
+ * unsorted list.
+ *
+ * Nulls last in both directions, matching the server's convention
+ * (`buildOrderBy` in database-helpers/query.ts) so a client-sorted table and a
+ * server-sorted one agree.
+ */
+function entityRefSortingFn(
+  a: { getValue: (id: string) => unknown },
+  b: { getValue: (id: string) => unknown },
+  columnId: string,
+): number {
+  const nameOf = (row: { getValue: (id: string) => unknown }) =>
+    (row.getValue(columnId) as { name?: string | null } | null)?.name ?? null;
+  const left = nameOf(a);
+  const right = nameOf(b);
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return left.localeCompare(right);
+}
+
+// Moved to the pure filter core so the manifest can use it without importing
+// this module at runtime; re-exported for this file's existing consumers.
+export { presenceFilterOptions } from "~/entities/filters";
 
 export type MobileSlot =
   | "title"
@@ -1139,6 +1184,13 @@ export function createFilterableSelectColumn<
     renderCell: (value: T[K]) => ReactNode;
     className?: string;
     mobile?: MobileColumnMeta;
+    /**
+     * Override the derived filter control — pass `manifestFilterConfig(...)`
+     * so a table that bypasses `useStandardColumns` (the embedded
+     * project-detail tables) still gets the manifest's control type instead of
+     * silently staying single-select.
+     */
+    filterConfig?: FilterConfig;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: T[K], row: T) => Promise<void>;
@@ -1152,17 +1204,23 @@ export function createFilterableSelectColumn<
       ? (row, v) => options.editable!.onSave(v as T[K], row)
       : undefined,
   );
+  const filterConfig: FilterConfig = options.filterConfig ?? {
+    placeholder: options.placeholder,
+    filterType: "select",
+    options: options.selectOptions,
+  };
   return columnHelper.accessor((row) => row[accessor], {
     id: String(accessor),
     header: options.header,
+    // Client-side tables resolve a filterFn from the ROW value's type, so a
+    // string column handed an array would silently match nothing.
+    ...(filterConfig.filterType === "multiselect"
+      ? { filterFn: multiSelectFilterFn }
+      : {}),
     meta: {
       className: options.className,
       mobile: options.mobile,
-      filterConfig: {
-        placeholder: options.placeholder,
-        filterType: "select",
-        options: options.selectOptions,
-      },
+      filterConfig,
       cellData,
     },
     cell: (info) => {
@@ -1497,7 +1555,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     {
       id: "project",
       header: options?.header ?? "Project",
-      enableSorting: false,
+      sortingFn: entityRefSortingFn,
       meta: {
         className: options?.className,
         mobile: options?.mobile,
@@ -1589,7 +1647,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     {
       id: "product",
       header: options?.header ?? "Product",
-      enableSorting: false,
+      sortingFn: entityRefSortingFn,
       meta: {
         className: options?.className,
         mobile: options?.mobile,

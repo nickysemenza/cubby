@@ -7,12 +7,14 @@ import {
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
 import { eq, gte, inArray, isNull, lte, ne, type SQL, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   getDb,
   relations,
@@ -36,19 +38,38 @@ import { dbTaskToAPI } from "./helpers";
  */
 export async function buildTaskProjectCondition(
   db: Database,
-  projectId: ProjectId | undefined,
+  projectId: ProjectId | ProjectId[] | undefined,
   includeSubProjects: boolean | undefined,
 ): Promise<SQL | undefined> {
-  if (!projectId) return undefined;
-  if (!includeSubProjects) return eq(task.projectId, projectId);
+  const selected = projectId ? [projectId].flat() : [];
+  if (selected.length === 0) return undefined;
+  if (!includeSubProjects) return eqAny(task.projectId, projectId);
 
-  const parentRows = await allProjectParentRows(db);
-  const descendantIds = collectDescendantIds(
-    buildChildrenMap(parentRows),
-    projectId,
+  const childrenMap = buildChildrenMap(await allProjectParentRows(db));
+  return inArray(
+    task.projectId,
+    uniq(
+      selected.flatMap((id) => [id, ...collectDescendantIds(childrenMap, id)]),
+    ),
   );
-  return inArray(task.projectId, [projectId, ...descendantIds]);
 }
+
+/**
+ * The joined project name isn't a column on `task` — a correlated subquery
+ * keeps `taskList` a relational `findMany`. Soft-delete guarded and NULLS LAST
+ * in both directions, matching `buildOrderBy`'s convention.
+ */
+const resolveTaskSort = (sort: SortParams) => {
+  if (sort.orderBy !== "project") return null;
+  const dirSql =
+    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
+  return [
+    sql.raw(
+      `(SELECT p."name" FROM "Project" p ` +
+        `WHERE p."id" = "task"."projectId" AND p."deletedAt" IS NULL) ${dirSql}`,
+    ),
+  ];
+};
 
 export const taskList = async (
   db: Database,
@@ -66,10 +87,10 @@ export const taskList = async (
     task,
     [{ column: task.name, term: filters.search }],
     [
-      filters.status ? eq(task.status, filters.status) : undefined,
+      eqAny(task.status, filters.status),
       projectCondition,
       filters.noProject ? isNull(task.projectId) : undefined,
-      filters.trade ? eq(task.trade, filters.trade) : undefined,
+      eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId
         ? eq(task.parentTaskId, filters.parentTaskId)
@@ -96,7 +117,9 @@ export const taskList = async (
     ],
   );
 
-  const orderByArray = buildOrderBy(task, sorts, [...taskSortableFields]);
+  const orderByArray = buildOrderBy(task, sorts, [...taskSortableFields], {
+    resolve: resolveTaskSort,
+  });
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount(

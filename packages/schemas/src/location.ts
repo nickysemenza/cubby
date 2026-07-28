@@ -14,7 +14,11 @@ import {
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import {
+  createPaginatedResponseSchema,
+  oneOrMany,
+  presenceFilter,
+} from "./pagination";
 
 export const locationType = z
   .enum(locationTypeValues)
@@ -30,7 +34,7 @@ export const locationFilterFields = {
     .string()
     .optional()
     .describe("Filter by location name (substring)"),
-  itemTypeFilter: locationType.optional(),
+  itemTypeFilter: oneOrMany(locationType).optional(),
   parentPresenceFilter: presenceFilter,
 };
 
@@ -40,6 +44,8 @@ export const locationSortableFields = [
   "createdAt",
   "name",
   "type",
+  // Joined parent name — resolved by a correlated subquery in repo/location.
+  "parent",
   "lastBulkInventory",
   "valuation",
 ] as const;

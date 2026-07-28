@@ -34,6 +34,8 @@ export * from "./recipe-shared";
 export const recipeSortableFields = [
   "createdAt",
   "name",
+  // Joined cookbook name — resolved by a correlated subquery in repo/recipe.
+  "cookbook",
   "costTotal",
   "caloriesTotal",
   "source",
