@@ -92,7 +92,12 @@ describe("calculateInventoryValuation", () => {
     expect(res.pricingStatus.missingPricing.count).toBe(1);
   });
 
-  it("handles zero valuation as unpriced", () => {
+  it("counts an explicit zero valuation as priced, not missing", () => {
+    // Was previously asserted as *unpriced*, which was fine while the schema
+    // forbade `price: 0` — a zero valuation could then only mean zero quantity.
+    // Now that 0 is a legal price meaning "genuinely free" (accessories that
+    // came bundled with a tool), a zero valuation is a real answer and must
+    // stop being reported as a pricing gap. The total is unaffected: adding 0.
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i4",
@@ -103,7 +108,9 @@ describe("calculateInventoryValuation", () => {
 
     const res = calculateInventoryValuation(items);
     expect(res.totalValuation).toBe(0);
-    expect(res.pricingStatus.missingPricing.count).toBe(1);
+    expect(res.pricingStatus.missingPricing.count).toBe(0);
+    expect(res.pricingStatus.priced.count).toBe(1);
+    expect(res.pricingStatus.priced.itemNames).toContain("Rice");
   });
 
   it("categorizes misc: products as miscNoPrice instead of missingPricing", () => {

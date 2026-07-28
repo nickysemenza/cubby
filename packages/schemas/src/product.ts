@@ -102,10 +102,12 @@ const productCreateShape = {
     ),
   price: z
     .number()
-    .positive()
+    .nonnegative()
     .nullable()
     .optional()
-    .describe("price per each ($), source of truth"),
+    .describe(
+      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention purchase.cost uses.",
+    ),
   unitMappings: z
     .array(unitMappingInput)
     .default([])
@@ -430,7 +432,7 @@ export const productQuickCreatePayload = z.object({
   expectedQuantity: z.number().int().positive().nullable().optional(),
   model: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-  price: z.number().positive().nullable().optional(),
+  price: z.number().nonnegative().nullable().optional(),
   category: productCategory.nullable().optional(),
 });
 
@@ -454,10 +456,12 @@ export const mcpProductCreateInput = z.object({
     ),
   price: z
     .number()
-    .positive()
+    .nonnegative()
     .nullable()
     .optional()
-    .describe("price per each ($), source of truth"),
+    .describe(
+      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention purchase.cost uses.",
+    ),
   unitMappings: z
     .array(unitMappingInput)
     .default([])
@@ -494,7 +498,7 @@ export const mcpProductUpdateInput = z.object({
   expectedQuantity: z.number().int().positive().nullable().optional(),
   category: productCategory.nullable().optional(),
   ingredientId: ingredientId.nullable().optional(),
-  price: z.number().positive().nullable().optional(),
+  price: z.number().nonnegative().nullable().optional(),
   usdaUnavailable: z.boolean().nullable().optional(),
 });
 
