@@ -16,6 +16,7 @@ import {
   purchaseSortableFields,
   purchaseTradeAffinityOut,
   purchaseUpdateData,
+  purchaseVendorOptionsOut,
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import {
@@ -26,6 +27,7 @@ import {
   purchaseAnalytics,
   purchaseList,
   purchaseTradeAffinity,
+  purchaseVendorOptions,
   setPurchasesCostType,
   setPurchasesTrade,
   updatePurchase,
@@ -103,6 +105,15 @@ const analytics = protectedProcedure
   .query(({ ctx, input }) => purchaseAnalytics(ctx.db, input));
 
 /**
+ * Vendor roster for the ledger's Vendor filter picklist — a single grouped
+ * query (see `purchaseVendorOptions`), same "cheap options query" shape as
+ * `project.options`.
+ */
+const vendorOptions = protectedProcedure
+  .output(purchaseVendorOptionsOut)
+  .query(({ ctx }) => purchaseVendorOptions(ctx.db));
+
+/**
  * The project x trade purchase-count matrix behind project suggestions. One
  * grouped aggregate for the whole ledger, fetched once and ranked against
  * client-side for many purchases — see rankProjectSuggestions.
@@ -175,6 +186,7 @@ export const purchaseRouter = createTRPCRouter({
   chartData,
   analytics,
   tradeAffinity,
+  vendorOptions,
   bulkMove,
   bulkSetTrade,
   bulkSetCostType,

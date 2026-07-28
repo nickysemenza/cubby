@@ -76,6 +76,7 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
             <TableHead>Date</TableHead>
             <TableHead>Purchase</TableHead>
             <TableHead>Vendor</TableHead>
+            <TableHead>Order #</TableHead>
             <TableHead className="text-right">Cost</TableHead>
           </TableRow>
         </TableHeader>
@@ -94,6 +95,9 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {purchase.vendor ?? <NoneValue />}
+              </TableCell>
+              <TableCell className="font-mono">
+                {purchase.orderId ?? <NoneValue />}
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">
                 {purchase.cost != null ? formatCurrency(purchase.cost) : "—"}

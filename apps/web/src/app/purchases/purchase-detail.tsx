@@ -254,6 +254,22 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       ),
     },
     {
+      label: "Order #",
+      value: (
+        <EditableCell
+          value={purchase.orderId}
+          config={{ type: "text", placeholder: "Vendor order #" }}
+          onSave={async (orderId) => {
+            await updateMutation.mutateAsync({
+              id: purchase.id,
+              data: { orderId },
+            });
+          }}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      ),
+    },
+    {
       label: "Project",
       value: (
         <EditableEntityCell

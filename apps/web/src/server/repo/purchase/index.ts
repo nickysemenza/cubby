@@ -31,4 +31,4 @@ export {
   setPurchasesTrade,
   updatePurchase,
 } from "./crud";
-export { purchaseList } from "./lookup";
+export { purchaseList, purchaseVendorOptions } from "./lookup";

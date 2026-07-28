@@ -45,6 +45,7 @@ const settlePurchaseSchema = z.object({
   trade: tradeSchema,
   notes: z.string().nullable(),
   vendor: z.string(),
+  orderId: z.string(),
 });
 type SettlePurchaseValues = z.infer<typeof settlePurchaseSchema>;
 
@@ -78,6 +79,7 @@ export function SettlePurchaseDialog({
       trade: purchase.trade,
       notes: purchase.notes,
       vendor: purchase.vendor ?? "",
+      orderId: purchase.orderId ?? "",
     }),
     [purchase],
   );
@@ -109,6 +111,7 @@ export function SettlePurchaseDialog({
           trade: values.trade,
           notes: values.notes,
           vendor: values.vendor.trim() || null,
+          orderId: values.orderId.trim() || null,
           future: false,
         },
       },
@@ -172,6 +175,12 @@ export function SettlePurchaseDialog({
           name="vendor"
           label="Vendor"
           placeholder="Where from?"
+        />
+        <UnifiedTextField
+          form={form}
+          name="orderId"
+          label="Order #"
+          placeholder="Vendor order #"
         />
         <NullableTextareaField
           form={form}
