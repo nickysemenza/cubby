@@ -75,6 +75,12 @@ const STATUS_COLOR: Record<Status, string> = {
 
 const checked = new Set<string>();
 
+/**
+ * Identity for check-off state. `ingredientId` is non-null for everything
+ * `get_shopping_list` emits today (`getAggregatedNeeds` skips sub-recipes —
+ * availability.service.ts), but the schema allows null, so the fallback keys off
+ * the item's position in the full list rather than trusting that invariant.
+ */
 function itemKey(item: Item, index: number): string {
   return item.ingredientId ?? `${item.name}:${index}`;
 }
@@ -222,9 +228,13 @@ function render(app: App, list: ShoppingList): void {
   head.append(title, range);
   panel.append(head);
 
+  // Positions in the full list, not per group: they feed the check-off key, and
+  // a per-group index would repeat across groups.
+  const indexed = list.items.map((item, index) => ({ item, index }));
+
   let rendered = 0;
   for (const group of GROUPS) {
-    const items = list.items.filter((item) => item.status === group.status);
+    const items = indexed.filter(({ item }) => item.status === group.status);
     if (items.length === 0) continue;
     rendered += items.length;
 
@@ -246,7 +256,7 @@ function render(app: App, list: ShoppingList): void {
     groupHead.append(count);
     panel.append(groupHead);
 
-    for (const [index, item] of items.entries()) {
+    for (const { item, index } of items) {
       panel.append(renderItem(app, item, index));
     }
   }
