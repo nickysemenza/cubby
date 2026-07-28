@@ -62,7 +62,6 @@ export function DataTableToolbar<TData>({
             size="default"
             onClick={() => {
               table.resetColumnFilters();
-              table.setGlobalFilter({});
             }}
             className="text-muted-foreground hover:text-foreground"
           >

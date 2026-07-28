@@ -207,14 +207,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
     if (!rows.length) {
       const state = table.getState();
-      const isFiltered = hasActiveFilters(
-        state.columnFilters,
-        state.globalFilter as string | undefined,
-      );
+      const isFiltered = hasActiveFilters(state.columnFilters);
       const clearFilters = isFiltered
         ? () => {
             table.resetColumnFilters();
-            table.setGlobalFilter("");
           }
         : undefined;
       const emptyContent = entity ? (
