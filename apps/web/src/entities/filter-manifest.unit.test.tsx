@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { manifestFilterConfig } from "./filter-manifest";
+import { FILTER_ANY, FILTER_NONE } from "./filters";
 
 /**
  * `manifestFilterConfig` is what tables that bypass `useStandardColumns` (the
@@ -37,13 +38,27 @@ describe("manifestFilterConfig", () => {
   });
 
   it("resolves a runtime picklist by key", () => {
+    // `purchase.project` is a `nullable` spec, so its two sentinels
+    // ("Has project" / "(none)") always lead the resolved options.
+    const sentinels = [
+      { value: FILTER_ANY, label: "Has project", meta: true },
+      { value: FILTER_NONE, label: "(none)", meta: true },
+    ];
     const injected = [{ value: "p1", label: "Kitchen" }];
     expect(
       manifestFilterConfig("purchase", "project", { project: injected })
         ?.options,
-    ).toEqual(injected);
-    // Absent injection yields an empty list, not the spec's static options.
-    expect(manifestFilterConfig("purchase", "project")?.options).toEqual([]);
+    ).toEqual([...sentinels, ...injected]);
+    // Absent injection still yields the sentinels, not the spec's static
+    // options — proves it doesn't fall back to `spec.options`.
+    expect(manifestFilterConfig("purchase", "project")?.options).toEqual(
+      sentinels,
+    );
+  });
+
+  it("does not prepend sentinels to a non-nullable multiselect", () => {
+    const options = manifestFilterConfig("purchase", "trade")?.options;
+    expect(options?.some((o) => o.meta)).toBe(false);
   });
 
   it("returns undefined for a column with no declared filter", () => {

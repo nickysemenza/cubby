@@ -244,7 +244,7 @@ export function registerProjectTools(server: McpServer) {
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
-      list: "List project tasks with status, due dates, trade, project name, parent task, and subtask counts. Filter by status/projectId/trade/search/topLevelOnly/parentTaskId/includeSubProjects. Pass topLevelOnly=true to exclude checklist subtasks; pass includeSubProjects=true with projectId to also match tasks in that project's live descendant sub-projects.",
+      list: 'List project tasks with status, due dates, trade, project name, parent task, and subtask counts. Filter by status/projectId/trade/search/topLevelOnly/parentTaskId/includeSubProjects/projectPresenceFilter. Pass topLevelOnly=true to exclude checklist subtasks; pass includeSubProjects=true with projectId to also match tasks in that project\'s live descendant sub-projects. projectPresenceFilter="none" is the Inbox (tasks with no project) and "has" is filed work; combined with projectId it WIDENS rather than narrows — {projectId, projectPresenceFilter:"none"} means that project OR unassigned.',
       get: "Get a task by ID, including blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
       create:
         "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project. Set parentTaskId to create it as a checklist subtask of another task — one level only (a subtask can't itself have subtasks), and projectId is inherited from the parent when omitted. A subtask's own status is independent — the parent never auto-completes.",
@@ -316,7 +316,7 @@ export function registerProjectTools(server: McpServer) {
     slim: slimPurchase,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
-      list: "List purchases (project spend ledger) with cost, date, costType/trade, and project name. Filter by costType/trade/projectId/future/search/includeSubProjects/dateFrom/dateTo (dateFrom/dateTo are inclusive YYYY-MM-DD bounds on purchase date). Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own purchases.",
+      list: 'List purchases (project spend ledger) with cost, date, costType/trade, and project name. Filter by costType/trade/projectId/future/search/includeSubProjects/dateFrom/dateTo/projectPresenceFilter (dateFrom/dateTo are inclusive YYYY-MM-DD bounds on purchase date). Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own purchases. projectPresenceFilter="none" is the unassigned-spend worklist and "has" is attributed spend; combined with projectId it WIDENS rather than narrows — {projectId, projectPresenceFilter:"none"} means that project OR unassigned.',
       get: "Get a purchase by ID.",
       create:
         "Log a purchase (costType materials|tools|services; set future=true for planned spend), optionally attached to a project.",
@@ -329,7 +329,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_purchase_analytics",
     description:
-      'Spend aggregates over the purchase ledger, under the SAME filters as list_purchases (costType/trade/projectId/includeSubProjects/future/search/dateFrom/dateTo/costIsNull), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, and byProject. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits.',
+      'Spend aggregates over the purchase ledger, under the SAME filters as list_purchases (costType/trade/projectId/includeSubProjects/future/search/dateFrom/dateTo/costIsNull/projectPresenceFilter), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, and byProject. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits.',
     inputSchema: purchaseFilterFields,
     outputSchema: purchaseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,

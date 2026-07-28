@@ -104,6 +104,7 @@ const { list } = createEntityListProcedure({
         groupBy,
         filters.inventoryPresenceFilter,
         filters.ingredientPresenceFilter,
+        filters.categoryPresenceFilter,
       );
     },
   },

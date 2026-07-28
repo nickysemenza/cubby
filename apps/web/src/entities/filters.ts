@@ -1,3 +1,4 @@
+import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
 
 /**
@@ -51,7 +52,45 @@ export interface FilterSpecCore {
   brand?: (value: string) => unknown;
   /** Expands a preset key into multiple server fields (`range` only). */
   expand?: (value: string) => Record<string, unknown>;
+  /**
+   * Marks a picklist as covering a NULLABLE column: the control gains the two
+   * sentinel options below, and the builder routes them to `field` (a
+   * `presenceFilter`) instead of into the value list. `multiselect` / `idMulti`
+   * only — a `presence` kind IS this filter, for relations with no picklist.
+   *
+   * `label` is the noun in "Has {label}".
+   */
+  nullable?: { field: string; label: string };
 }
+
+/**
+ * Picklist sentinels for a nullable column.
+ *
+ * Double-underscored so they can't collide with anything a real option carries
+ * — a uuid, an enum slug, or a user-authored tag. They never reach the wire:
+ * `buildFiltersFromManifest` partitions them out and emits a `presenceFilter`
+ * instead, so the tRPC input schemas never see them.
+ */
+export const FILTER_ANY = "__any__";
+export const FILTER_NONE = "__none__";
+
+const isSentinel = (value: string): boolean =>
+  value === FILTER_ANY || value === FILTER_NONE;
+
+/**
+ * The two options a `nullable` picklist prepends to its roster.
+ *
+ * `meta` renders them in the eyebrow register (mono/uppercase/slate, with a
+ * rule beneath) so a predicate about the data doesn't read as a row of it.
+ * `label` stays a plain string — `ActiveFilterChips` and the collapsed
+ * multi-combobox summary interpolate it into `"(none) +2"`.
+ */
+export const nullableSentinelOptions = (
+  label: string,
+): Array<{ value: string; label: string; meta: true }> => [
+  { value: FILTER_ANY, label: `Has ${label}`, meta: true },
+  { value: FILTER_NONE, label: "(none)", meta: true },
+];
 
 /** A column filter's state: TanStack stores whatever we set on it. */
 export type FilterValue = string | string[] | undefined;
@@ -109,15 +148,29 @@ export function buildFiltersFromManifest(
         if (!value) return undefined;
         return { [field]: spec.brand ? spec.brand(value) : value };
       })
-      .with("multiselect", () => {
-        const values = many(raw);
-        return values ? { [field]: values } : undefined;
-      })
-      .with("idMulti", () => {
+      .with("multiselect", "idMulti", () => {
         const values = many(raw);
         if (!values) return undefined;
-        const brand = spec.brand;
-        return { [field]: brand ? values.map(brand) : values };
+        // Only `idMulti` carries a brand, so the two kinds share one arm.
+        const brandAll = (items: string[]) =>
+          spec.brand ? items.map(spec.brand) : items;
+        const nullable = spec.nullable;
+        if (!nullable) return { [field]: brandAll(values) };
+
+        // Partition BEFORE branding — a sentinel is not an entity id, and
+        // `unsafe*Id` would happily brand the string into a lie.
+        const [sentinels, rest] = partition(values, isSentinel);
+        const wantsNone = sentinels.includes(FILTER_NONE);
+        const wantsAny = sentinels.includes(FILTER_ANY);
+        // `IS NULL OR IS NOT NULL` is every row, and the OR swallows any value
+        // selection sitting alongside it — so both sentinels together mean no
+        // constraint at all. Degenerate, but the control permits it.
+        if (wantsNone && wantsAny) return undefined;
+        const presence = wantsNone ? "none" : wantsAny ? "has" : undefined;
+        return {
+          ...(rest.length ? { [field]: brandAll(rest) } : {}),
+          ...(presence ? { [nullable.field]: presence } : {}),
+        };
       })
       .with("range", () =>
         // A range preset owns several server fields at once (dateFrom+dateTo),

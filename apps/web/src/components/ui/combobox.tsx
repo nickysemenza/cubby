@@ -13,6 +13,14 @@ export interface FilterableComboboxItem {
   label: string;
   icon?: React.ReactNode;
   color?: string;
+  /**
+   * A meta option is a predicate ABOUT the data (e.g. "Has project" / "(none)"
+   * nullable-filter sentinels), not a value drawn FROM it — it renders in the
+   * eyebrow register instead of alongside the roster it sits above. `label`
+   * still MUST stay a plain string even for meta items: `ActiveFilterChips` and
+   * the collapsed multi-combobox summary interpolate it into `${label} +${n}`.
+   */
+  meta?: boolean;
 }
 
 interface FilterableComboboxProps {
@@ -180,6 +188,11 @@ function ComboboxPopup({
   anchorRef: React.RefObject<HTMLDivElement | null>;
   isLoading?: boolean;
 }) {
+  // Where the leading meta block (nullable-filter sentinels) ends and the real
+  // roster begins — the hairline goes above this index. `> 0` is the "list
+  // actually mixes the two" test: 0 means no meta items lead the list, -1 means
+  // every item is meta.
+  const rosterStart = items.findIndex((i) => !i.meta);
   return (
     <>
       <ComboboxPrimitive.Portal>
@@ -212,39 +225,49 @@ function ComboboxPopup({
             )}
           >
             <ComboboxPrimitive.List className="max-h-60 overflow-y-auto overscroll-contain p-1">
-              {items.map((item) => (
-                <ComboboxPrimitive.Item
-                  key={item.value}
-                  value={item.value}
-                  className={cn(
-                    // Compact layout
-                    "relative flex items-center gap-2 rounded-none px-2 py-1",
-                    // Typography
-                    "cursor-default text-xs outline-none select-none",
-                    // Interactive states
-                    "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
-                    // Selected state - subtle background highlight
-                    "data-[selected]:bg-accent/50",
-                    // Disabled
-                    "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                  )}
-                >
-                  <ComboboxPrimitive.ItemIndicator className="shrink-0">
-                    <CheckIcon className="size-3.5" />
-                  </ComboboxPrimitive.ItemIndicator>
-                  {item.color && (
-                    <span
-                      aria-hidden
-                      className="inline-block size-2 shrink-0 rounded-none"
-                      style={{ backgroundColor: item.color }}
-                    />
-                  )}
-                  <span className="flex-1 truncate">{item.label}</span>
-                  {item.icon && (
-                    <span className="shrink-0">{item.icon}</span>
-                  )}
-                </ComboboxPrimitive.Item>
-              ))}
+              {items.map((item, index) => {
+                const isFirstNonMeta =
+                  rosterStart > 0 && index === rosterStart;
+                return (
+                  <ComboboxPrimitive.Item
+                    key={item.value}
+                    value={item.value}
+                    className={cn(
+                      // Compact layout
+                      "relative flex items-center gap-2 rounded-none px-2 py-1",
+                      // Typography
+                      "cursor-default text-xs outline-none select-none",
+                      // Interactive states
+                      "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                      // Selected state - subtle background highlight
+                      "data-[selected]:bg-accent/50",
+                      // Disabled
+                      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                      // Meta options (nullable-filter sentinels) render in the
+                      // eyebrow register — a predicate about the data, not a
+                      // value drawn from it.
+                      item.meta &&
+                        "font-mono text-2xs uppercase tracking-wider text-slate",
+                      isFirstNonMeta && "border-t border-[var(--border)]",
+                    )}
+                  >
+                    <ComboboxPrimitive.ItemIndicator className="shrink-0">
+                      <CheckIcon className="size-3.5" />
+                    </ComboboxPrimitive.ItemIndicator>
+                    {item.color && (
+                      <span
+                        aria-hidden
+                        className="inline-block size-2 shrink-0 rounded-none"
+                        style={{ backgroundColor: item.color }}
+                      />
+                    )}
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.icon && (
+                      <span className="shrink-0">{item.icon}</span>
+                    )}
+                  </ComboboxPrimitive.Item>
+                );
+              })}
             </ComboboxPrimitive.List>
             {items.length === 0 && (
               <div className="py-2 text-center text-muted-foreground text-xs">

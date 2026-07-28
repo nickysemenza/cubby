@@ -241,11 +241,12 @@ export function taskDueColumn(
  * and capped by the caller's query), so server pagination would buy nothing at
  * this data scale. More importantly, this component is also rendered by the
  * projects dashboard's Data view, which scopes rows to
- * `!row.projectId || dashboardProjectIds.has(row.projectId)` — an OR that no
- * server filter expresses (`eqAny` gives `inArray`; `noProject` is a separate
- * AND-ed condition), over a project set that only `project.dashboardSummary`'s
- * kind/location chips understand. Converting would mean two data paths in one
- * component, which is how these tables drifted from the index pages before.
+ * `!row.projectId || dashboardProjectIds.has(row.projectId)`, over a project
+ * set that only `project.dashboardSummary`'s kind/location chips understand.
+ * (`{projectId, projectPresenceFilter: "none"}` now expresses that OR
+ * server-side — but the chip-derived project set still doesn't survive the
+ * trip.) Converting would mean two data paths in one component, which is how
+ * these tables drifted from the index pages before.
  *
  * Columns come from the shared factories above — the same ones the /tasks
  * index page feeds through `useEntityList` — and their filter controls come
@@ -727,11 +728,12 @@ export function purchaseFutureColumn(
  * and capped by the caller's query), so server pagination would buy nothing at
  * this data scale. More importantly, this component is also rendered by the
  * projects dashboard's Data view, which scopes rows to
- * `!row.projectId || dashboardProjectIds.has(row.projectId)` — an OR that no
- * server filter expresses (`eqAny` gives `inArray`; `noProject` is a separate
- * AND-ed condition), over a project set that only `project.dashboardSummary`'s
- * kind/location chips understand. Converting would mean two data paths in one
- * component, which is how these tables drifted from the index pages before.
+ * `!row.projectId || dashboardProjectIds.has(row.projectId)`, over a project
+ * set that only `project.dashboardSummary`'s kind/location chips understand.
+ * (`{projectId, projectPresenceFilter: "none"}` now expresses that OR
+ * server-side — but the chip-derived project set still doesn't survive the
+ * trip.) Converting would mean two data paths in one component, which is how
+ * these tables drifted from the index pages before.
  *
  * Columns come from the shared factories above — the same ones the /purchases
  * index page feeds through `useEntityList` — and their filter controls come

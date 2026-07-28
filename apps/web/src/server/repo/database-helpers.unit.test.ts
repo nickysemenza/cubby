@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { product } from "~/server/db/schema";
 import {
   buildPartialUpdateValues,
+  eqAnyOrPresence,
   formatSearchTerm,
 } from "~/server/repo/database-helpers";
 
@@ -47,6 +48,32 @@ describe("formatSearchTerm", () => {
     const result = formatSearchTerm(product.name, "  trimmed  ");
     expect(result).toBeDefined();
     expect(result).toBeTruthy();
+  });
+});
+
+describe("eqAnyOrPresence", () => {
+  it("returns undefined when value is empty/undefined and presence is unset (no constraint)", () => {
+    expect(
+      eqAnyOrPresence(product.category, undefined, undefined),
+    ).toBeUndefined();
+    expect(eqAnyOrPresence(product.category, [], undefined)).toBeUndefined();
+  });
+
+  it("falls back to eqAny's clause when presence is unset", () => {
+    const result = eqAnyOrPresence(product.category, ["food"], undefined);
+    expect(result).toBeDefined();
+  });
+
+  it("returns a presence-only clause when value is empty/undefined", () => {
+    expect(eqAnyOrPresence(product.category, undefined, "none")).toBeDefined();
+    expect(eqAnyOrPresence(product.category, [], "has")).toBeDefined();
+  });
+
+  it("ORs the value clause with the presence clause when both are set", () => {
+    const none = eqAnyOrPresence(product.category, ["food"], "none");
+    const has = eqAnyOrPresence(product.category, ["food"], "has");
+    expect(none).toBeDefined();
+    expect(has).toBeDefined();
   });
 });
 

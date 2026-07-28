@@ -196,6 +196,11 @@ export const productFilterFields = {
     .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
   ingredientPresenceFilter: presenceFilter,
+  /**
+   * `product.category` is nullable, so `"none"` is the uncategorized worklist.
+   * OR-ed with `categoryFilter` — see `taskFilterFields.projectPresenceFilter`.
+   */
+  categoryPresenceFilter: presenceFilter,
 };
 
 export const productFiltersSchema = z.object(productFilterFields);

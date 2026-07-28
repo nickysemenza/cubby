@@ -3,12 +3,24 @@
  * Search formatting, ordering, and list queries with counts.
  */
 
-import type { SortParams } from "@cubby/schemas/pagination";
+import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { and, asc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+import { match } from "ts-pattern";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -247,3 +259,47 @@ export const eqAny = <TColumn extends AnyColumn>(
   if (value.length === 1) return eq(column, value[0]);
   return inArray(column, value);
 };
+
+/**
+ * One nullable column's presence sentinel as a condition — the server half of
+ * a picklist's `(none)` / `Has X` options (see `presenceFilter` in
+ * `@cubby/schemas/pagination`). `undefined` presence adds no condition.
+ *
+ * `emptyWhen` overrides what "empty" means for a column whose empty state
+ * isn't simply NULL: a `text[]` is empty when it's NULL *or* zero-length.
+ * "has" is always the exact negation of whatever "none" matched, derived from
+ * the same predicate — so the two can never drift apart and leave a row that
+ * matches neither option.
+ */
+export const presenceCondition = (
+  column: AnyColumn,
+  presence: PresenceFilter,
+  emptyWhen?: SQL,
+): SQL | undefined =>
+  match(presence)
+    .with("none", () => emptyWhen ?? isNull(column))
+    .with("has", () => (emptyWhen ? not(emptyWhen) : isNotNull(column)))
+    .with(undefined, () => undefined)
+    .exhaustive();
+
+/**
+ * `eqAny` OR the column's presence sentinel.
+ *
+ * Deliberately OR, not AND: `{value: [A], presence: "none"}` means "category A
+ * *or* uncategorized" — that's what picking a value *and* `(none)` in the same
+ * header filter produces, not "category A that is also null" (which no row can
+ * ever satisfy; that contradiction is the bug this replaced). With no value
+ * set there's nothing to OR against, so presence alone decides; with neither,
+ * `or` yields `undefined` and the condition drops out.
+ *
+ * Every nullable picklist column should come through here rather than pairing
+ * `eqAny` with a hand-written `isNull`, so the OR rule lives in one place.
+ * Call `presenceCondition` directly only when the value half isn't an `eqAny`
+ * — a subtree `inArray`, or `arrayOverlaps` on a tag column.
+ */
+export const eqAnyOrPresence = <TColumn extends AnyColumn>(
+  column: TColumn,
+  value: unknown,
+  presence: PresenceFilter,
+): SQL | undefined =>
+  or(eqAny(column, value), presenceCondition(column, presence));
