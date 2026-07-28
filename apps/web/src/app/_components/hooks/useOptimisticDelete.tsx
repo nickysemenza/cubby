@@ -133,7 +133,7 @@ function removeDeletedIdsFromCache(
  * - Delete confirmation dialog
  */
 export function useOptimisticDelete<
-  TData extends { id: string; name?: string },
+  TData extends { id: string; name?: string | null },
 >({
   deletable,
   extraActions,

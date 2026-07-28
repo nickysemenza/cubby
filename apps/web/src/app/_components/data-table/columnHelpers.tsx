@@ -202,7 +202,10 @@ declare module "@tanstack/react-table" {
 
 interface BaseRow {
   id: string | number;
-  name?: string;
+  // Nullable: `meal.name` is optional (an unnamed meal is identified by its
+  // date). Widened from `string` so such entities can use these factories at
+  // all — see `emptyLabel` on createNameColumn.
+  name?: string | null;
   createdAt?: string | Date;
 }
 
@@ -262,6 +265,13 @@ export function createNameColumn<T extends BaseRow>(
      * unset, so every non-tree entity table renders exactly as before.
      */
     expandable?: boolean;
+    /**
+     * Label to render when the row's name is null/empty. The entity stays
+     * clickable and readable (see the "entity names are always readable and
+     * always clickable" rule) instead of showing a blank link — or, before
+     * this existed, the literal string "null".
+     */
+    emptyLabel?: (row: T) => string;
   },
 ) {
   const entityConfig = entities[entity];
@@ -298,7 +308,11 @@ export function createNameColumn<T extends BaseRow>(
       return `${count} ${count === 1 ? entityConfig.label.toLowerCase() : entityConfig.pluralLabel.toLowerCase()}`;
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
-      const value = String(info.getValue());
+      // NOT `String(info.getValue())` — that renders a null name as the literal
+      // text "null", in the cell, the tooltip, AND the link.
+      const raw = info.getValue();
+      const stored = raw == null ? "" : String(raw);
+      const value = stored || (options?.emptyLabel?.(info.row.original) ?? "");
       const suffix = options?.nameSuffix?.(info.row.original);
       // Only wrap when a suffix is actually present — every other entity's
       // name column renders exactly as before (no extra markup).
@@ -361,7 +375,10 @@ export function createNameColumn<T extends BaseRow>(
       if (options?.editable) {
         return wrapExpandable(
           <EditableCell
-            value={value}
+            // The EDITOR gets the stored value, not the fallback — prefilling
+            // it with a derived label would silently persist that label as a
+            // real name on the next save.
+            value={stored}
             onSave={(newVal) =>
               options.editable!.onSave(newVal ?? "", info.row.original)
             }
@@ -390,11 +407,11 @@ export function createNameColumn<T extends BaseRow>(
                       to={entities[entity].routes.detail}
                       params={{ id: String(info.row.original.id) }}
                     >
-                      {v ?? ""}
+                      {v || value}
                     </TableLink>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs">
-                    {v ?? ""}
+                    {v || value}
                   </TooltipContent>
                 </Tooltip>,
               )

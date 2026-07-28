@@ -33,7 +33,7 @@ import { type UseTableListOptions, useTableList } from "./useTableList";
 /** Base interface for entities in list views */
 export interface BaseListRow {
   id: string;
-  name?: string;
+  name?: string | null;
   createdAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
 }
