@@ -53,6 +53,7 @@ import {
   dateRangeOptions,
   futureFilterOptions,
   productLinkedOptions,
+  UNASSIGNED_PROJECT_FILTER,
 } from "./purchase-options";
 import { SettlePurchaseDialog } from "./settle-purchase-dialog";
 
@@ -185,7 +186,13 @@ export function PurchaseList({
   );
 
   const projectFilterOptions = useMemo(
-    () => [{ value: "", label: "All projects" }, ...projectOptions],
+    () => [
+      { value: "", label: "All projects" },
+      // The unassigned-spend worklist — the rows the project-suggestion chips
+      // on each purchase's detail page exist to clear.
+      { value: UNASSIGNED_PROJECT_FILTER, label: "Unassigned" },
+      ...projectOptions,
+    ],
     [projectOptions],
   );
 

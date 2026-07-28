@@ -1,4 +1,4 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Lightbulb } from "lucide-react";
@@ -75,7 +75,9 @@ export function ProjectSuggestionChips({
           size="sm"
           variant="outline"
           disabled={isPending}
-          onClick={() => void onAssign(suggestion.id as ProjectId)}
+          // The ranking module is deliberately dependency-free, so its ids are
+          // plain strings — re-brand at this boundary.
+          onClick={() => void onAssign(unsafeProjectId(suggestion.id))}
           // The affinity count is the whole basis for the ordering, so show it
           // rather than presenting the ranking as an oracle.
           title={`${suggestion.affinity} ${purchase.trade} purchase${suggestion.affinity === 1 ? "" : "s"} already on this project`}

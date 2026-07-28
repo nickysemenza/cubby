@@ -95,10 +95,20 @@ export function resolveDateRange(preset: string | undefined): {
  * {@link purchaseFiltersFromSearch}) the analytics view — so "filtered" can
  * never mean something different across the two `/purchases` views.
  */
+/**
+ * Sentinel project-filter value selecting purchases with no project at all —
+ * the unassigned-spend worklist. Distinct from `""` ("All projects") and from
+ * `move-to-project-dialog`'s `__none__`, which is a write target ("clear the
+ * project") rather than a filter predicate. Stored URL-side as a plain string,
+ * so it round-trips through `purchaseFiltersFromSearch` unchanged.
+ */
+export const UNASSIGNED_PROJECT_FILTER = "__unassigned__";
+
 export function buildPurchaseFilters(
   get: (columnId: string) => string | undefined,
 ): PurchaseFilters {
   const projectFilter = get("project");
+  const unassignedOnly = projectFilter === UNASSIGNED_PROJECT_FILTER;
   const futureFilter = get("future");
   const productIdFilter = get("productId");
   const productPresenceFilter = get("product");
@@ -106,7 +116,11 @@ export function buildPurchaseFilters(
     search: get("name"),
     costType: (get("costType") as CostType | undefined) || undefined,
     trade: (get("trade") as Trade | undefined) || undefined,
-    projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+    projectId:
+      projectFilter && !unassignedOnly
+        ? unsafeProjectId(projectFilter)
+        : undefined,
+    noProject: unassignedOnly ? true : undefined,
     productId: productIdFilter ? unsafeProductId(productIdFilter) : undefined,
     productPresenceFilter:
       productPresenceFilter === "has" || productPresenceFilter === "none"
