@@ -44,7 +44,12 @@ export const projectNameOptions = async (
   db: Database,
 ): Promise<ProjectOptionsOut[]> =>
   getDb(db)
-    .select({ id: project.id, name: project.name })
+    .select({
+      id: project.id,
+      name: project.name,
+      startDate: project.startDate,
+      endDate: project.endDate,
+    })
     .from(project)
     .where(notDeleted(project))
     .orderBy(asc(project.name));

@@ -1,9 +1,4 @@
-import type {
-  CostType,
-  PurchaseFilters,
-  PurchaseOut,
-  Trade,
-} from "@cubby/schemas/project";
+import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -48,7 +43,7 @@ import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
 import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
-import { costTypeOptions } from "./purchase-options";
+import { costTypeOptions, purchasePresetFilters } from "./purchase-options";
 import { SettlePurchaseDialog } from "./settle-purchase-dialog";
 
 interface PurchaseListProps {
@@ -58,9 +53,11 @@ interface PurchaseListProps {
    * `planned`: preset to `future: true`, sorted by date ascending (undated
    * last — Postgres's default NULLS LAST ordering, no extra sort logic
    * needed). `unclassified`: preset to the `trade='other' AND cost IS NULL`
-   * predicate via `costIsNull`.
+   * predicate via `costIsNull`. `unassigned`: preset to `noProject` — spend
+   * that never got attributed to a project, whose detail pages offer ranked
+   * project suggestions to clear it.
    */
-  mode?: "ledger" | "planned" | "unclassified";
+  mode?: "ledger" | "planned" | "unclassified" | "unassigned";
   /**
    * Seed the "name" column filter from the route's `q` search param (e.g. a
    * command-palette deep link). Only used on mount for `planned`/
@@ -296,9 +293,13 @@ export function PurchaseList({
     [columnHelper],
   );
 
-  // `future` is fixed for the planned preset, `trade` is fixed for the
-  // unclassified preset — dropping their filter dropdowns (the columns stay,
-  // still inline-editable) avoids a filter control that can never do anything.
+  // NOTE: the preset modes no longer drop the filter dropdown for the field
+  // they pin — adopting the filter manifest made `manifestFilterConfig` attach
+  // every spec's control unconditionally. So in `planned`/`unclassified`/
+  // `unassigned` the pinned column's control is still interactive but can't
+  // change the result: `presetFilters` spreads last and wins. Harmless-but-
+  // confusing, and pre-existing for the first two; hiding a control per mode
+  // needs a manifest-level "locked columns" notion, which is its own change.
   // `planned`/`unclassified` keep the single-field `initialSearch` seed; the
   // ledger's full filter set now round-trips through the generic URL sync in
   // `useTableState` (driven by the purchase filter manifest), which replaced a
@@ -308,11 +309,7 @@ export function PurchaseList({
     mode === "ledger" ? undefined : initialSearch,
   );
 
-  const presetFilters = useMemo((): Partial<PurchaseFilters> => {
-    if (mode === "planned") return { future: true };
-    if (mode === "unclassified") return { trade: "other", costIsNull: true };
-    return {};
-  }, [mode]);
+  const presetFilters = useMemo(() => purchasePresetFilters(mode), [mode]);
 
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 

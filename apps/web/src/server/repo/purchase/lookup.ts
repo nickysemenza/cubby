@@ -78,6 +78,8 @@ export const buildPurchaseWhereClause = async (
       eqAny(purchase.costType, filters.costType),
       eqAny(purchase.trade, filters.trade),
       projectCondition,
+      // The unassigned-spend worklist. Mirrors taskFilterFields.noProject.
+      filters.noProject ? isNull(purchase.projectId) : undefined,
       eqAny(purchase.productId, filters.productId),
       // "linked" means productId IS NOT NULL — this deliberately includes
       // purchases whose product was later soft-deleted (those read back with

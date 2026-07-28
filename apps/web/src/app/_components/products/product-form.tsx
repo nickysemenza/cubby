@@ -53,7 +53,9 @@ const productFormSchema = z
     upc: upc.nullable(), // Allow empty string and transform to null
     fdc_id: fdcId.nullable(), // Explicit USDA link (set via search)
     expectedQuantity: z.number().int().positive().nullable(),
-    price: z.number().positive().nullable(), // Price per each ($); own field, not a mapping
+    // Price per each ($); own field, not a mapping. 0 is allowed and means
+    // "genuinely free" (bundled accessories) — distinct from null, "unpriced".
+    price: z.number().nonnegative().nullable(),
     ingredient: optionalIngredientField, // Ingredient association
     // Per-each price has its own field, so a canonical "1 each = $X" conversion
     // is forbidden (it would duplicate the price). Per-measure money mappings

@@ -12,6 +12,7 @@ import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type {
   DuplicateUniqueProduct,
   OrphanedProduct,
+  ProductMissingPrice,
   ProductWithBetterUpcData,
   ProductWithoutMappings,
 } from "@cubby/schemas/problems";
@@ -139,6 +140,69 @@ export const findOrphanedProducts = async (
     );
 
   return orphaned;
+};
+
+// Find stocked products with no `price`.
+//
+// `inventoryEntry.valuation` is precomputed as `amount.value * product.price`,
+// so a null price yields a null valuation and the location rollup silently
+// omits the item. Keyed off `product.price` (the cause) rather than
+// `inventoryEntry.valuation` (the symptom, which can lag a recompute).
+//
+// Returned partitioned, not as one list: a `misc:` bucket is a heterogeneous
+// pile with no meaningful unit price and is *expected* to be unpriced — the
+// per-location summary already treats those as `miscNoPrice` rather than
+// `missingPricing`. Folding them in would leave the section permanently red.
+export const findProductsMissingPrice = async (
+  db: Database,
+): Promise<{
+  real: ProductMissingPrice[];
+  buckets: ProductMissingPrice[];
+}> => {
+  const dbClient = getDb(db);
+
+  const stockedWithoutPrice = await dbClient.query.product.findMany({
+    where: and(notDeleted(product), isNull(product.price)),
+    columns: { id: true, name: true, manufacturer: true },
+    with: {
+      inventoryEntry: {
+        where: notDeleted(inventoryEntry),
+        columns: { id: true, amount: true },
+        with: { location: { columns: { id: true, name: true } } },
+      },
+    },
+  });
+
+  const real: ProductMissingPrice[] = [];
+  const buckets: ProductMissingPrice[] = [];
+
+  for (const prod of stockedWithoutPrice) {
+    // Products with no live inventory contribute nothing to any rollup, so an
+    // absent price costs nothing — `findOrphanedProducts` already covers them.
+    if (prod.inventoryEntry.length === 0) continue;
+
+    const item: ProductMissingPrice = {
+      id: prod.id,
+      name: prod.name,
+      manufacturer: prod.manufacturer,
+      inventoryQuantity: prod.inventoryEntry.reduce(
+        (sum, entry) => sum + entry.amount.value,
+        0,
+      ),
+      locations: prod.inventoryEntry.map((entry) => ({
+        id: entry.location.id,
+        name: entry.location.name,
+      })),
+    };
+
+    if (isMiscProduct(prod.name)) {
+      buckets.push(item);
+    } else {
+      real.push(item);
+    }
+  }
+
+  return { real, buckets };
 };
 
 // Find products with invalid or duplicate UPC codes

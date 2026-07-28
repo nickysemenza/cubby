@@ -506,6 +506,75 @@ describe("purchase router", () => {
     expect(result.map((p) => p.name)).toEqual(["chart match"]);
   });
 
+  it("noProject filter returns only unassigned purchases", async () => {
+    const caller = createTestCaller(purchaseRouter, ctx.db);
+    const proj = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "assigned home" }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "drywall",
+        costType: "tools",
+        name: "has a project",
+        projectId: proj.id,
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "drywall",
+        costType: "tools",
+        name: "needs a project",
+      }),
+      ctx.actor,
+    );
+
+    const unassigned = await caller.chartData({ noProject: true });
+    const names = unassigned.map((p) => p.name);
+    expect(names).toContain("needs a project");
+    expect(names).not.toContain("has a project");
+  });
+
+  it("tradeAffinity counts assigned purchases per project and trade", async () => {
+    const caller = createTestCaller(purchaseRouter, ctx.db);
+    const proj = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "affinity project" }),
+      ctx.actor,
+    );
+    for (const trade of ["drywall", "drywall", "electrical"] as const) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade,
+          costType: "materials",
+          name: `affinity ${trade}`,
+          projectId: proj.id,
+        }),
+        ctx.actor,
+      );
+    }
+    // Unassigned rows have no project to weight, so they must not appear.
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "drywall",
+        costType: "materials",
+        name: "affinity unassigned",
+      }),
+      ctx.actor,
+    );
+
+    const matrix = await caller.tradeAffinity();
+    const forProject = matrix.filter((row) => row.projectId === proj.id);
+    expect(forProject.find((row) => row.trade === "drywall")?.count).toBe(2);
+    expect(forProject.find((row) => row.trade === "electrical")?.count).toBe(1);
+  });
+
   it("bulkMove moves purchases to another project and to the inbox (null), returning items + sideEffects", async () => {
     const caller = createTestCaller(purchaseRouter, ctx.db);
     const projectA = await createProject(

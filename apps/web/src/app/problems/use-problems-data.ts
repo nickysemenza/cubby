@@ -54,6 +54,8 @@ export function useProblemsData(opts?: {
       const sections = {
         duplicateUniqueProducts: fast.data?.duplicateUniqueProducts ?? [],
         orphanedProducts: fast.data?.orphanedProducts ?? [],
+        productsMissingPrice: fast.data?.productsMissingPrice ?? [],
+        unvaluedBucketProducts: fast.data?.unvaluedBucketProducts ?? [],
         productsWithoutMappings: fast.data?.productsWithoutMappings ?? [],
         ingredientsWithoutProduct: fast.data?.ingredientsWithoutProduct ?? [],
         unusedIngredientsWithProduct:
