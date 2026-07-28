@@ -44,6 +44,8 @@ export const locationSortableFields = [
   "createdAt",
   "name",
   "type",
+  // Joined parent name — resolved by a correlated subquery in repo/location.
+  "parent",
   "lastBulkInventory",
   "valuation",
 ] as const;

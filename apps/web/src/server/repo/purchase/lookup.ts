@@ -13,6 +13,7 @@ import {
   isNull,
   lte,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
@@ -101,6 +102,44 @@ export const buildPurchaseWhereClause = async (
   );
 };
 
+/**
+ * Sorts the generic column path can't produce: the joined project/product
+ * names shown in those columns aren't columns on `purchase`.
+ *
+ * Correlated subqueries rather than joins so `purchaseList` stays a relational
+ * `findMany` (its count query is then untouched). The soft-delete guard mirrors
+ * what `resolveLiveJoinName` applies on read, so a purchase whose project or
+ * product was deleted sorts as null — the same way it renders.
+ *
+ * NULLS LAST in both directions is the house convention (see `buildOrderBy`).
+ * `trade` needs no entry: it's a plain text column, so it falls through to the
+ * generic path and sorts alphabetically.
+ */
+const resolvePurchaseSort = (sort: SortParams) => {
+  const dirSql =
+    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
+
+  if (sort.orderBy === "project") {
+    return [
+      sql.raw(
+        `(SELECT p."name" FROM "Project" p ` +
+          `WHERE p."id" = "purchase"."projectId" AND p."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
+  if (sort.orderBy === "product") {
+    return [
+      sql.raw(
+        `(SELECT pr."name" FROM "Product" pr ` +
+          `WHERE pr."id" = "purchase"."productId" AND pr."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
+  return null;
+};
+
 export const purchaseList = async (
   db: Database,
   filters: PurchaseFilters,
@@ -109,9 +148,14 @@ export const purchaseList = async (
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
   const whereClause = await buildPurchaseWhereClause(db, filters);
 
-  const orderByArray = buildOrderBy(purchase, sorts, [
-    ...purchaseSortableFields,
-  ]);
+  const orderByArray = buildOrderBy(
+    purchase,
+    sorts,
+    [...purchaseSortableFields],
+    {
+      resolve: resolvePurchaseSort,
+    },
+  );
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount(

@@ -51,7 +51,11 @@ const { list } = createEntityListProcedure({
   schemas: {
     output: recipeListItemOut,
     filters: recipeFiltersSchema,
-    sort: { sortableFields: recipeSortableFields, defaultSort: "createdAt" },
+    sort: {
+      sortableFields: recipeSortableFields,
+      defaultSort: "createdAt",
+      groupableFields: ["name"] as const,
+    },
   },
   repository: {
     list: async (services, filters, sort, pagination) => {

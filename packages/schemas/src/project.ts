@@ -441,6 +441,8 @@ export const taskSortableFields = [
   "status",
   "dueDate",
   "trade",
+  // Joined project name — see the resolver in repo/task/lookup.ts.
+  "project",
   "createdAt",
 ] as const;
 export type TaskSortField = (typeof taskSortableFields)[number];
@@ -711,6 +713,12 @@ export const purchaseSortableFields = [
   "cost",
   "date",
   "costType",
+  // `trade` is a plain text column (alphabetical). `project`/`product` are
+  // joined names, resolved by correlated subqueries in repo/purchase/lookup.ts.
+  "trade",
+  "project",
+  "product",
+  "vendor",
   "createdAt",
 ] as const;
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];

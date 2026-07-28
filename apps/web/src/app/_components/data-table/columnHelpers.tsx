@@ -117,6 +117,35 @@ export function multiSelectFilterFn(
   return (filterValue as string[]).includes(String(row.getValue(columnId)));
 }
 
+/**
+ * Sorts an entity-reference column ({id, name}) by name.
+ *
+ * REQUIRED on any column with an object accessor that allows sorting. TanStack's
+ * `getAutoSortingFn` sees no string/Date and falls back to `sortingFns.basic`
+ * (`a === b ? 0 : a > b ? 1 : -1`) — for two distinct objects BOTH comparisons
+ * are false, so it returns -1 for every pair. That's an inconsistent
+ * comparator, and Array.sort on one yields an arbitrary permutation, not an
+ * unsorted list.
+ *
+ * Nulls last in both directions, matching the server's convention
+ * (`buildOrderBy` in database-helpers/query.ts) so a client-sorted table and a
+ * server-sorted one agree.
+ */
+export function entityRefSortingFn(
+  a: { getValue: (id: string) => unknown },
+  b: { getValue: (id: string) => unknown },
+  columnId: string,
+): number {
+  const nameOf = (row: { getValue: (id: string) => unknown }) =>
+    (row.getValue(columnId) as { name?: string | null } | null)?.name ?? null;
+  const left = nameOf(a);
+  const right = nameOf(b);
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return left.localeCompare(right);
+}
+
 export function presenceFilterOptions(label: string): FilterableComboboxItem[] {
   return [
     { value: "has", label: `Has ${label}` },
@@ -1516,7 +1545,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     {
       id: "project",
       header: options?.header ?? "Project",
-      enableSorting: false,
+      sortingFn: entityRefSortingFn,
       meta: {
         className: options?.className,
         mobile: options?.mobile,
@@ -1608,7 +1637,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     {
       id: "product",
       header: options?.header ?? "Product",
-      enableSorting: false,
+      sortingFn: entityRefSortingFn,
       meta: {
         className: options?.className,
         mobile: options?.mobile,

@@ -54,7 +54,11 @@ const {
     updateInput: taskUpdateData,
     output: taskOut,
     filters: taskFiltersSchema,
-    sort: { sortableFields: taskSortableFields, defaultSort: "createdAt" },
+    sort: {
+      sortableFields: taskSortableFields,
+      defaultSort: "createdAt",
+      groupableFields: ["status"] as const,
+    },
     idSchema: taskId,
   },
   repository: {

@@ -54,6 +54,23 @@ export async function buildTaskProjectCondition(
   );
 }
 
+/**
+ * The joined project name isn't a column on `task` — a correlated subquery
+ * keeps `taskList` a relational `findMany`. Soft-delete guarded and NULLS LAST
+ * in both directions, matching `buildOrderBy`'s convention.
+ */
+const resolveTaskSort = (sort: SortParams) => {
+  if (sort.orderBy !== "project") return null;
+  const dirSql =
+    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
+  return [
+    sql.raw(
+      `(SELECT p."name" FROM "Project" p ` +
+        `WHERE p."id" = "task"."projectId" AND p."deletedAt" IS NULL) ${dirSql}`,
+    ),
+  ];
+};
+
 export const taskList = async (
   db: Database,
   filters: TaskFilters,
@@ -100,7 +117,9 @@ export const taskList = async (
     ],
   );
 
-  const orderByArray = buildOrderBy(task, sorts, [...taskSortableFields]);
+  const orderByArray = buildOrderBy(task, sorts, [...taskSortableFields], {
+    resolve: resolveTaskSort,
+  });
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount(

@@ -340,6 +340,14 @@ export const recipeList = async (
         : s.orderBy === "caloriesTotal"
           ? "caloriesTotal"
           : null;
+    if (s.orderBy === "cookbook")
+      return [
+        sql.raw(
+          `(SELECT c."name" FROM "Cookbook" c ` +
+            `WHERE c."id" = "recipe"."cookbookId" AND c."deletedAt" IS NULL) ` +
+            `${isAsc ? "asc" : "desc"} nulls last`,
+        ),
+      ];
     if (s.orderBy === "source")
       return [dir(recipe.SourceType), dir(recipe.SourceData)];
     if (s.orderBy === "yield") return [dir(recipe.servings)];
