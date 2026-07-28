@@ -20,6 +20,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { entityFilterSearchFields } from "~/entities/filter-manifest";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
 // until selected — lazy so that stack stays out of the default List view.
@@ -59,6 +60,7 @@ const searchSchema = z.object({
   // /tasks/new route, so the create dialog is opened by this param.
   create: z.boolean().optional().catch(undefined),
   ...tableSearchFields,
+  ...entityFilterSearchFields("task"),
 });
 
 const searchDefaults = {

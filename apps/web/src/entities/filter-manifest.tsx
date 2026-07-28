@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import { z } from "zod";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
@@ -346,4 +347,30 @@ export function manifestFilterConfig(
       : spec.options,
     facetCount: spec.facetCount,
   };
+}
+
+/**
+ * `validateSearch` fragment for an entity's filter params.
+ *
+ * A route with a strict `z.object` schema strips any key it doesn't declare —
+ * so without this, `useTableState` writes a filter to the URL and the router
+ * removes it again before anything can read it back. Derived from the manifest
+ * rather than hand-listed per route, so a new spec can't be forgotten here.
+ *
+ * Values stay `z.string()`: sets are comma-joined, and the enums are validated
+ * where they're consumed (`decodeFilters` → `buildFiltersFromManifest` → the
+ * tRPC input schema). `.catch(undefined)` keeps a malformed value from
+ * throwing the whole route.
+ */
+export function entityFilterSearchFields(
+  entity: Entity,
+): Record<string, z.ZodType<string | undefined>> {
+  const fields: Record<string, z.ZodType<string | undefined>> = {};
+  for (const spec of getEntityFilters(entity)) {
+    fields[spec.urlKey ?? spec.columnId] = z
+      .string()
+      .optional()
+      .catch(undefined);
+  }
+  return fields;
 }

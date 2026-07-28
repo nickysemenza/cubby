@@ -248,6 +248,20 @@ export function useTableState(
     });
   }, [sorting, pagination, columnFilters, filterSpecs, defaultSortParam]);
 
+  // Every key this hook owns. Enumerated rather than derived from `next`'s
+  // own keys: JSON.stringify drops undefined, so a cleared filter is ABSENT
+  // from `next` — iterating its keys could set and update a param but never
+  // delete one.
+  const managedKeys = useMemo(
+    () => [
+      SORT_KEY,
+      PAGE_KEY,
+      SIZE_KEY,
+      ...filterSpecs.map((spec) => spec.urlKey ?? spec.columnId),
+    ],
+    [filterSpecs],
+  );
+
   const lastWrittenUrlState = useRef<string | null>(null);
   useEffect(() => {
     if (!urlSync) return;
@@ -258,7 +272,7 @@ export function useTableState(
       to: ".",
       search: (prev: Record<string, unknown>) => {
         const merged = { ...prev };
-        for (const key of [SORT_KEY, PAGE_KEY, SIZE_KEY]) {
+        for (const key of managedKeys) {
           if (next[key] === undefined) delete merged[key];
           else merged[key] = next[key];
         }
@@ -266,7 +280,7 @@ export function useTableState(
       },
       replace: true,
     });
-  }, [urlSync, serializedUrlState, navigate]);
+  }, [urlSync, serializedUrlState, managedKeys, navigate]);
 
   // Memoize the entire return object to prevent recreating on every render - CRITICAL
   return useMemo(

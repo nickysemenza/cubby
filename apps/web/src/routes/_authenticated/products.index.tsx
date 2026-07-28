@@ -9,10 +9,12 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { ProductList } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { entityFilterSearchFields } from "~/entities/filter-manifest";
 
 const searchSchema = z.object({
   category: z.string().optional().catch(undefined),
   ...tableSearchFields,
+  ...entityFilterSearchFields("product"),
 });
 
 const searchDefaults = { category: undefined } as const;
