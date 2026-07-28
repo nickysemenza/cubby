@@ -140,13 +140,23 @@ let truncateTargets = "";
  * `duplicate key ... "user_pkey"`. Releasing here keeps the ring honest.
  *
  * `recreate` (not `reuse`) because we have dirtied it.
+ *
+ * The status check is load-bearing: `fetch` only rejects on a network error, so
+ * a 404/500 (stale `testId`, hash mismatch) would resolve normally and leave a
+ * dirty database in the ring — resurfacing as `duplicate key ... "user_pkey"` in
+ * some unrelated file later. Fail here, where the cause is still legible.
  */
 async function releaseTestDb(testId: number) {
   const hash = await getTemplateHash();
-  await fetch(
-    `http://localhost:5000/api/v1/templates/${hash}/tests/${testId}/recreate`,
-    { method: "POST" },
-  );
+  const url = `http://localhost:5000/api/v1/templates/${hash}/tests/${testId}/recreate`;
+  const response = await fetch(url, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(
+      `test-setup: failed to release IntegreSQL database ${testId} (${response.status} ${response.statusText}). ` +
+        "It will be re-handed to another test file while still dirty. " +
+        `Body: ${await response.text().catch(() => "<unreadable>")}`,
+    );
+  }
 }
 
 async function getFileDb() {
