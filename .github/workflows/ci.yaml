@@ -192,7 +192,7 @@ jobs:
 
       - name: Publish Test Results
         if: always()
-        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           name: Unit Tests - web
           path: apps/web/test-results/vitest-junit.xml
@@ -282,7 +282,7 @@ jobs:
 
       - name: Publish Test Results
         if: always()
-        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           name: Integration Tests - web (shard ${{ matrix.shard }})
           path: apps/web/test-results/vitest-junit.xml
@@ -355,7 +355,7 @@ jobs:
 
       - name: Publish Test Results
         if: always()
-        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           name: Unit Tests - ${{ matrix.package.name }}
           path: ${{ matrix.package.path }}/test-results/vitest-junit.xml
@@ -469,7 +469,7 @@ jobs:
         run: pnpm --filter @cubby/web run test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Publish Playwright Results
         if: always()
-        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           name: E2E Tests (shard ${{ matrix.shard }})
           path: apps/web/test-results/junit.xml
