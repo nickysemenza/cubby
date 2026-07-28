@@ -13,10 +13,25 @@ import {
 import shoppingList from "./fixtures/shopping-list.json";
 import usdaPicker from "./fixtures/usda-picker.json";
 
-const FIXTURES: Record<string, Record<string, unknown>> = {
-  "shopping-list": shoppingList,
-  "usda-picker": usdaPicker,
-};
+/**
+ * The apps this harness knows how to drive, keyed by bundle name. Each entry
+ * carries its own URL rather than having callers interpolate one: building a
+ * path out of `<select>.value` reads as a DOM-text-to-URL sink (CodeQL flags
+ * it), and an unknown name should fail loudly here rather than 404 in the frame.
+ */
+const APPS = {
+  "shopping-list": { url: "/app/shopping-list.html", fixture: shoppingList },
+  "usda-picker": { url: "/app/usda-picker.html", fixture: usdaPicker },
+} as const satisfies Record<
+  string,
+  { url: string; fixture: Record<string, unknown> }
+>;
+
+type AppName = keyof typeof APPS;
+
+function isAppName(value: string): value is AppName {
+  return Object.hasOwn(APPS, value);
+}
 
 const logEl = document.getElementById("log") as HTMLElement;
 const frame = document.getElementById("frame") as HTMLIFrameElement;
@@ -32,7 +47,8 @@ function log(label: string, detail?: unknown) {
 
 let active: AppBridge | null = null;
 
-async function load(app: string) {
+async function load(name: AppName) {
+  const app = APPS[name];
   logEl.replaceChildren();
   // Each bridge registers a window `message` listener; without closing the
   // previous one every event fires N times and the log stops being trustworthy.
@@ -55,7 +71,7 @@ async function load(app: string) {
 
   bridge.oncalltool = async (params) => {
     log("tools/call →", params);
-    return { content: [], structuredContent: FIXTURES[app] };
+    return { content: [], structuredContent: app.fixture };
   };
   bridge.onopenlink = async (params) => {
     log("ui/open-link →", params);
@@ -75,10 +91,7 @@ async function load(app: string) {
   };
   bridge.oninitialized = () => {
     log("initialized — pushing tool result");
-    void bridge.sendToolResult({
-      content: [],
-      structuredContent: FIXTURES[app] as Record<string, unknown>,
-    });
+    void bridge.sendToolResult({ content: [], structuredContent: app.fixture });
   };
 
   bridge.setHostContext({
@@ -92,8 +105,14 @@ async function load(app: string) {
   active = bridge;
   log("bridge connected — loading app");
 
-  frame.src = `/app/${app}.html`;
+  frame.src = app.url;
 }
 
-pick.addEventListener("change", () => void load(pick.value));
-void load(pick.value);
+function loadSelected() {
+  const name = pick.value;
+  if (!isAppName(name)) throw new Error(`unknown app: ${name}`);
+  void load(name);
+}
+
+pick.addEventListener("change", loadSelected);
+loadSelected();

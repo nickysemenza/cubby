@@ -15,16 +15,19 @@ import { defineConfig, type Plugin } from "vite";
  * scripts in it — the real host sidesteps this by serving apps from a dedicated
  * origin (`_meta.ui.domain`), which this route stands in for.
  */
+/** Allowlist, not a pattern — the request path never reaches `resolve`. */
+const APPS = ["shopping-list", "usda-picker"];
+
 function serveApps(): Plugin {
   return {
     name: "mcp-apps-harness",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const match = /^\/app\/([\w-]+)\.html$/.exec(req.url ?? "");
-        if (!match) return next();
+        const name = APPS.find((app) => req.url === `/app/${app}.html`);
+        if (!name) return next();
         try {
           const html = await readFile(
-            resolve(__dirname, "..", "dist", `${match[1]}.html`),
+            resolve(__dirname, "..", "dist", `${name}.html`),
             "utf-8",
           );
           res.setHeader("Content-Type", "text/html");

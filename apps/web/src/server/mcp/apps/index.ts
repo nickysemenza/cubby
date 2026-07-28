@@ -20,10 +20,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { APP_ORIGIN } from "~/lib/auth";
 // Built by `pnpm build:mcp-apps` into a gitignored dist/ (see
 // mcp-apps/vite.config.ts). Inlined as a string because the worker has no
-// filesystem to read an HTML file out of at request time. `?raw` resolves
-// through vite/client's ambient wildcard, so typecheck passes even before the
-// first build — but a stale dist/ silently ships an old UI, which is what
-// scripts/ensure-mcp-apps.mjs exists to prevent.
+// filesystem to read an HTML file out of at request time.
+//
+// `?raw` types resolve through vite/client's ambient wildcard, so `tsc` is
+// happy without the artifact — but any *runtime* consumer (vite, vitest) has to
+// actually read the file, so importing this module with no dist/ is a hard
+// ENOENT. `scripts/ensure-mcp-apps.mjs` therefore gates `dev`, `test`, and
+// `build:cf`; it's mtime-aware, so it also catches the quieter failure of a
+// stale dist/ shipping an old UI.
 import shoppingListHtml from "../../../../mcp-apps/dist/shopping-list.html?raw";
 import usdaPickerHtml from "../../../../mcp-apps/dist/usda-picker.html?raw";
 
