@@ -146,12 +146,9 @@ function entityRefSortingFn(
   return left.localeCompare(right);
 }
 
-export function presenceFilterOptions(label: string): FilterableComboboxItem[] {
-  return [
-    { value: "has", label: `Has ${label}` },
-    { value: "none", label: "(none)" },
-  ];
-}
+// Moved to the pure filter core so the manifest can use it without importing
+// this module at runtime; re-exported for this file's existing consumers.
+export { presenceFilterOptions } from "~/entities/filters";
 
 export type MobileSlot =
   | "title"
@@ -1187,6 +1184,13 @@ export function createFilterableSelectColumn<
     renderCell: (value: T[K]) => ReactNode;
     className?: string;
     mobile?: MobileColumnMeta;
+    /**
+     * Override the derived filter control — pass `manifestFilterConfig(...)`
+     * so a table that bypasses `useStandardColumns` (the embedded
+     * project-detail tables) still gets the manifest's control type instead of
+     * silently staying single-select.
+     */
+    filterConfig?: FilterConfig;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: T[K], row: T) => Promise<void>;
@@ -1200,17 +1204,23 @@ export function createFilterableSelectColumn<
       ? (row, v) => options.editable!.onSave(v as T[K], row)
       : undefined,
   );
+  const filterConfig: FilterConfig = options.filterConfig ?? {
+    placeholder: options.placeholder,
+    filterType: "select",
+    options: options.selectOptions,
+  };
   return columnHelper.accessor((row) => row[accessor], {
     id: String(accessor),
     header: options.header,
+    // Client-side tables resolve a filterFn from the ROW value's type, so a
+    // string column handed an array would silently match nothing.
+    ...(filterConfig.filterType === "multiselect"
+      ? { filterFn: multiSelectFilterFn }
+      : {}),
     meta: {
       className: options.className,
       mobile: options.mobile,
-      filterConfig: {
-        placeholder: options.placeholder,
-        filterType: "select",
-        options: options.selectOptions,
-      },
+      filterConfig,
       cellData,
     },
     cell: (info) => {

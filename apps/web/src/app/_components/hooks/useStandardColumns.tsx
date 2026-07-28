@@ -5,10 +5,7 @@ import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities, getSortableFields } from "~/entities/entities";
-import {
-  filterTypeForKind,
-  getEntityFilters,
-} from "~/entities/filter-manifest";
+import { manifestFilterConfig } from "~/entities/filter-manifest";
 import {
   createActionsColumn,
   createCreatedAtColumn,
@@ -154,22 +151,13 @@ export function useStandardColumns<TData extends BaseListRow>({
     // The filter manifest is the source of truth for what a column can be
     // filtered by; a page-supplied `filters` entry is the fallback for columns
     // (and client-only tables) the manifest doesn't cover.
-    const specs = getEntityFilters(entity);
-
     const getFilterConfig = (columnId: string): FilterConfig | undefined => {
-      const spec = specs.find((s) => s.columnId === columnId);
-      if (spec) {
-        return {
-          placeholder: spec.placeholder,
-          filterType: filterTypeForKind(spec.kind),
-          // A runtime picklist (project roster, tag universe) can't be static
-          // module data, so the page injects it by key.
-          options: spec.optionsKey
-            ? (filterOptions?.[spec.optionsKey] ?? [])
-            : spec.options,
-          facetCount: spec.facetCount,
-        };
-      }
+      const fromManifest = manifestFilterConfig(
+        entity,
+        columnId,
+        filterOptions,
+      );
+      if (fromManifest) return fromManifest;
 
       const filterDef = stableFilters.find((f) =>
         typeof f === "string" ? f === columnId : f.id === columnId,

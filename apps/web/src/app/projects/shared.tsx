@@ -81,6 +81,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
+import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   projectMutationInvalidateKeys,
@@ -169,6 +170,7 @@ export function taskStatusColumn(
     className: "w-32",
     placeholder: "Filter by status...",
     selectOptions: taskStatusOptions,
+    filterConfig: manifestFilterConfig("task", "status"),
     renderCell: (status: TaskStatus) => (
       <Badge variant={taskStatusBadgeVariant[status]}>
         {TASK_STATUS_LABELS[status]}
@@ -195,6 +197,7 @@ export function taskTradeColumn(
     className: "w-32",
     placeholder: "Filter by trade...",
     selectOptions: tradeOptions,
+    filterConfig: manifestFilterConfig("task", "trade"),
     renderCell: (trade: Trade | null) =>
       trade ? (
         <TradeBadge trade={trade} />
@@ -231,9 +234,23 @@ export function taskDueColumn(
 }
 
 /**
- * The embedded task table renders a caller-supplied array (no server
- * pagination/filters of its own via `useEntityList`), so it wires its columns
- * from the shared factories above rather than this page's `useEntityList`.
+ * The embedded task table: client-side filter/sort/pagination over a
+ * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
+ *
+ * These are bounded sub-lists (one project's tasks, already server-scoped
+ * and capped by the caller's query), so server pagination would buy nothing at
+ * this data scale. More importantly, this component is also rendered by the
+ * projects dashboard's Data view, which scopes rows to
+ * `!row.projectId || dashboardProjectIds.has(row.projectId)` — an OR that no
+ * server filter expresses (`eqAny` gives `inArray`; `noProject` is a separate
+ * AND-ed condition), over a project set that only `project.dashboardSummary`'s
+ * kind/location chips understand. Converting would mean two data paths in one
+ * component, which is how these tables drifted from the index pages before.
+ *
+ * Columns come from the shared factories above — the same ones the /tasks
+ * index page feeds through `useEntityList` — and their filter controls come
+ * from the filter manifest via `manifestFilterConfig`, so the embedded and
+ * index tables can't diverge even though their data paths differ.
  */
 export function TaskList({
   tasks,
@@ -531,6 +548,7 @@ export function purchaseCostTypeColumn(
     className: "w-28",
     placeholder: "Filter by cost type...",
     selectOptions: costTypeOptions,
+    filterConfig: manifestFilterConfig("purchase", "costType"),
     renderCell: (costType: CostType | null) =>
       costType ? (
         <Badge variant={costTypeBadgeVariant[costType]}>
@@ -568,6 +586,7 @@ export function purchaseTradeColumn(
     className: "w-32",
     placeholder: "Filter by trade...",
     selectOptions: tradeOptions,
+    filterConfig: manifestFilterConfig("purchase", "trade"),
     renderCell: (trade: Trade | null) =>
       trade ? (
         <TradeBadge trade={trade} />
@@ -689,9 +708,23 @@ export function purchaseFutureColumn(
 }
 
 /**
- * The embedded purchase table renders a caller-supplied array (no server
- * pagination/filters of its own via `useEntityList`), so it wires its columns
- * from the shared factories above rather than this page's `useEntityList`.
+ * The embedded purchase table: client-side filter/sort/pagination over a
+ * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
+ *
+ * These are bounded sub-lists (one project's purchases, already server-scoped
+ * and capped by the caller's query), so server pagination would buy nothing at
+ * this data scale. More importantly, this component is also rendered by the
+ * projects dashboard's Data view, which scopes rows to
+ * `!row.projectId || dashboardProjectIds.has(row.projectId)` — an OR that no
+ * server filter expresses (`eqAny` gives `inArray`; `noProject` is a separate
+ * AND-ed condition), over a project set that only `project.dashboardSummary`'s
+ * kind/location chips understand. Converting would mean two data paths in one
+ * component, which is how these tables drifted from the index pages before.
+ *
+ * Columns come from the shared factories above — the same ones the /purchases
+ * index page feeds through `useEntityList` — and their filter controls come
+ * from the filter manifest via `manifestFilterConfig`, so the embedded and
+ * index tables can't diverge even though their data paths differ.
  */
 export function PurchaseList({
   purchases,
@@ -864,11 +897,16 @@ export function PurchaseList({
     },
   });
 
-  // Mirror the pivot's active cell onto the table's column filters. The
-  // pivot cost keys ARE `CostType`, so values pass straight through.
+  // Mirror the pivot's active cell onto the table's column filters. Wrapped in
+  // a one-element array because both columns are multi-select: their filterFn
+  // expects a set, and a bare scalar would make it match every row.
   useEffect(() => {
-    table.getColumn("trade")?.setFilterValue(tradeFilter ?? undefined);
-    table.getColumn("costType")?.setFilterValue(costTypeFilter ?? undefined);
+    table
+      .getColumn("trade")
+      ?.setFilterValue(tradeFilter ? [tradeFilter] : undefined);
+    table
+      .getColumn("costType")
+      ?.setFilterValue(costTypeFilter ? [costTypeFilter] : undefined);
   }, [table, tradeFilter, costTypeFilter]);
 
   const bulkMoveMutation = useActionMutation({

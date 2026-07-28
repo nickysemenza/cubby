@@ -214,3 +214,19 @@ export function decodeFilters(
   }
   return filters;
 }
+
+/**
+ * Options for a relation-presence filter: pages map the selected value
+ * ("has" | "none") to the entity's `*PresenceFilter` field, resolved
+ * server-side as an exists / is-null condition. Clearing it means "any".
+ *
+ * Lives here rather than with the column helpers so the manifest can build its
+ * specs without a runtime import of the column layer (which drags in the whole
+ * entity/rendering graph, WASM included).
+ */
+export const presenceFilterOptions = (
+  label: string,
+): Array<{ value: string; label: string }> => [
+  { value: "has", label: `Has ${label}` },
+  { value: "none", label: "(none)" },
+];

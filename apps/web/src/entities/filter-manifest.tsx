@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
-import { presenceFilterOptions } from "~/app/_components/data-table/columnHelpers";
+import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import {
@@ -25,6 +25,7 @@ import {
   type FilterKind,
   type FilterSpecCore,
   isMultiFilterKind,
+  presenceFilterOptions,
 } from "./filters";
 
 /**
@@ -59,7 +60,7 @@ export interface FilterSpec extends FilterSpecCore {
 }
 
 /** The control a kind renders as. */
-export const filterTypeForKind = (
+const filterTypeForKind = (
   kind: FilterKind,
 ): "text" | "select" | "multiselect" =>
   kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
@@ -318,3 +319,31 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
 /** The specs for an entity, or an empty list when it has no list table. */
 export const getEntityFilters = (entity: Entity): readonly FilterSpec[] =>
   entityFilters[entity] ?? [];
+
+/**
+ * The `FilterConfig` for one column, straight from the manifest.
+ *
+ * `useStandardColumns` applies this to every column automatically. Tables that
+ * bypass that hook (the embedded project-detail tables, which are raw
+ * `useReactTable` over a caller-supplied array) call it explicitly through
+ * their column factories, so their controls match the index pages' instead of
+ * silently staying single-select.
+ */
+export function manifestFilterConfig(
+  entity: Entity,
+  columnId: string,
+  runtimeOptions?: Record<string, FilterableComboboxItem[]>,
+): FilterConfig | undefined {
+  const spec = getEntityFilters(entity).find((s) => s.columnId === columnId);
+  if (!spec) return undefined;
+  return {
+    placeholder: spec.placeholder,
+    filterType: filterTypeForKind(spec.kind),
+    // A runtime picklist (project roster, tag universe) can't be static module
+    // data, so the caller injects it by key.
+    options: spec.optionsKey
+      ? (runtimeOptions?.[spec.optionsKey] ?? [])
+      : spec.options,
+    facetCount: spec.facetCount,
+  };
+}

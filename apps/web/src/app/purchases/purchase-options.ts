@@ -2,9 +2,9 @@ import type { CostType } from "@cubby/schemas/project";
 import { costTypeValues } from "@cubby/schemas/project";
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { match } from "ts-pattern";
-import { presenceFilterOptions } from "~/app/_components/data-table/columnHelpers";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { presenceFilterOptions } from "~/entities/filters";
 import { buildSelectOptions } from "~/lib/select-options";
 
 /** Human labels for the fixed cost-type enum. */
