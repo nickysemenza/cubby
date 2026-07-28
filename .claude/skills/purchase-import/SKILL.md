@@ -74,6 +74,25 @@ their own (a 4-line combo once "explained" a ZipWall as a book).
 Also confirm the row's own notes don't name a different vendor — one row reading
 `home depot WN22422541` was set to Amazon on an amount+one-token match.
 
+**"Explained" means *nothing to add* — not *nothing to do*.** This is a second, subtler failure of
+the same phase. A row identified as an aggregate match is correctly excluded from the *missing*
+list, and then routinely forgotten. It still needs:
+
+1. **`vendor` + `orderId`**, like any other matched row. Skipping this is self-defeating: the
+   Phase 5 reconciliation and the `GROUP BY vendor, "orderId"` queries only see rows whose id is in
+   the column, so the very rows most likely to hide an error stay invisible to both.
+2. **A line itemization in `notes`**, so the next pass recognises it as an aggregate instead of
+   re-deriving it (or re-proposing its components as missing).
+3. **Splitting into sibling rows** where the components are separately tracked products — one row
+   per product, summing to the original total, sharing date/trade/project/vendor/orderId.
+   `productId` is single-valued, so an unsplit aggregate can never link more than one product, and
+   any product in inventory whose only purchase is inside an aggregate has **no cost basis at all**.
+
+Real case: `scaffolding` $434.47 was correctly identified as covering a 2-line MetalTech order and
+then dropped. Months later both MetalTech products still sat in inventory with zero purchases, and
+**11 of 14** aggregate rows had neither `vendor` nor `orderId`. Treat the aggregate bucket as a
+worklist, not a dead end.
+
 ## Phase 4 — writing
 
 - Set `vendor` **and `orderId`** on every row you touch. `orderId` is the vendor's own order/receipt
