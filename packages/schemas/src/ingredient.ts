@@ -35,6 +35,14 @@ export const ingredientFilterFields = {
     .optional()
     .describe("Filter by ingredient name (substring)"),
   productPresenceFilter: presenceFilter,
+  /**
+   * `"none"` is the orphaned-ingredient worklist. The list already excludes
+   * recipe-as-ingredient pointer rows (`ingredient.recipeId IS NULL`), so a
+   * `"none"` hit really is an ingredient no live recipe references.
+   */
+  recipePresenceFilter: presenceFilter.describe(
+    "Filter to ingredients that are / aren't used by at least one live recipe",
+  ),
 };
 
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);

@@ -42,6 +42,7 @@ import {
   specFromCellData,
 } from "~/app/_components/data-table/cell-data";
 import {
+  createActionsColumn,
   createCurrencyColumn,
   createFilterableSelectColumn,
   createNameColumn,
@@ -58,6 +59,7 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { MoveToProjectDialog } from "~/app/_components/tracker/move-to-project-dialog";
 import { SetFieldDialog } from "~/app/_components/tracker/set-field-dialog";
@@ -280,6 +282,19 @@ export function TaskList({
   });
   const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
+  // These tables are raw `useReactTable`, not `useEntityList`, so delete is
+  // hand-wired from the same primitive the list hooks use. (Migrating to
+  // `useClientEntityList` would url-sync `sort`/`page`/`size` — and this
+  // component renders twice on a project detail page — and would re-sort
+  // `sortedData` away.)
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.task.delete.mutationOptions,
+    entityLabel: "Task",
+    invalidateKeys: taskMutationInvalidateKeys,
+  });
+  const { deleteBulkAction, combinedExtraActions, deleteDialog } =
+    useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
+
   const bulkActions = useMemo(
     () => ({
       actions: [
@@ -313,10 +328,11 @@ export function TaskList({
             return { success: true };
           },
         },
+        ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
       clearSelectionOnComplete: false,
     }),
-    [],
+    [deleteBulkAction],
   );
   const bulkActionsState = useBulkActions({ config: bulkActions });
 
@@ -376,8 +392,11 @@ export function TaskList({
         },
         { mobile: { slot: "meta", priority: 40, interactive: true } },
       ),
+      createActionsColumn(taskHelper, "task", {
+        extraActions: combinedExtraActions,
+      }),
     ],
-    [showProjectColumn, nameEditable],
+    [showProjectColumn, nameEditable, combinedExtraActions],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -477,6 +496,7 @@ export function TaskList({
   return (
     <>
       <RTable table={table} embedded bulkActionBar={bulkActionBar} />
+      {deleteDialog}
       {bulkMoveItems.length > 0 && (
         <MoveToProjectDialog
           open={bulkMoveItems.length > 0}
@@ -774,6 +794,17 @@ export function PurchaseList({
     updatePurchaseMutation.mutateAsync,
   );
 
+  // Hand-wired for the same reason as `TaskList` above — raw `useReactTable`,
+  // and the pivot drives `trade`'s column filter imperatively, which
+  // `useClientEntityList` would funnel into url state and a page reset.
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.purchase.delete.mutationOptions,
+    entityLabel: "Purchase",
+    invalidateKeys: purchaseMutationInvalidateKeys,
+  });
+  const { deleteBulkAction, combinedExtraActions, deleteDialog } =
+    useOptimisticDelete<PurchaseOut>({ deletable: deletableConfig });
+
   const bulkActions = useMemo(
     () => ({
       actions: [
@@ -807,10 +838,11 @@ export function PurchaseList({
             return { success: true };
           },
         },
+        ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
       clearSelectionOnComplete: false,
     }),
-    [],
+    [deleteBulkAction],
   );
   const bulkActionsState = useBulkActions({ config: bulkActions });
 
@@ -920,8 +952,11 @@ export function PurchaseList({
         },
         { mobile: { slot: "meta", priority: 50 } },
       ),
+      createActionsColumn(purchaseHelper, "purchase", {
+        extraActions: combinedExtraActions,
+      }),
     ],
-    [showProjectColumn, nameEditable],
+    [showProjectColumn, nameEditable, combinedExtraActions],
   );
   const table = useReactTable({
     data: purchases,
@@ -1022,6 +1057,7 @@ export function PurchaseList({
   return (
     <>
       <RTable table={table} embedded bulkActionBar={bulkActionBar} />
+      {deleteDialog}
       {bulkMoveItems.length > 0 && (
         <MoveToProjectDialog
           open={bulkMoveItems.length > 0}

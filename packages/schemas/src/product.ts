@@ -201,9 +201,31 @@ export const productFilterFields = {
    * OR-ed with `categoryFilter` — see `taskFilterFields.projectPresenceFilter`.
    */
   categoryPresenceFilter: presenceFilter,
+  purchasePresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have at least one purchase in the ledger. Both acquisitions and exits (negative rows) count.",
+  ),
+  /**
+   * A *key* filter, not a resolution filter. The USDA link is resolved at read
+   * time by `foodLookupParamFromProduct` — explicit `fdc_id` first, else the
+   * `upc` is auto-matched against USDA branded foods, which may find nothing.
+   * SQL can only see whether a key exists. `usdaUnavailable` is deliberately
+   * NOT folded in: setting it doesn't clear `fdc_id`/`upc`, so a product can be
+   * both "has key" and "confirmed unavailable", and conflating them would make
+   * neither recoverable.
+   */
+  usdaPresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, or a UPC to auto-match). NOT whether USDA actually resolves a food for that key.",
+  ),
+  imagePresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have at least one image (PDF manuals don't count).",
+  ),
+  unitMappingPresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have at least one unit mapping (conversion edge).",
+  ),
 };
 
 export const productFiltersSchema = z.object(productFilterFields);
+export type ProductFilters = z.infer<typeof productFiltersSchema>;
 
 export const productSortableFields = [
   "createdAt",
@@ -361,6 +383,10 @@ export const productListItemOut = z.object({
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
   unitMappingQuality: productUnitMappingQuality,
+  // Live purchases (acquisitions + negative exit rows) linked to this
+  // product — backs the list's "Purchases" column + its deep link to
+  // `/purchases?productId=`.
+  purchaseCount: z.number().int(),
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 

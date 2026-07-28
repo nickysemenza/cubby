@@ -7,18 +7,19 @@
  */
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import type { IngredientMergeCandidateImpact } from "@cubby/schemas/ingredient";
+import type {
+  IngredientFilters,
+  IngredientMergeCandidateImpact,
+} from "@cubby/schemas/ingredient";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import {
   buildTakeSkip,
   type PaginationParams,
-  type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import {
   and,
-  count,
   eq,
   inArray,
   isNotNull,
@@ -31,6 +32,8 @@ import type { Database } from "~/server/db";
 import {
   ingredient,
   product,
+  recipe,
+  recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
@@ -39,6 +42,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  idSetPresence,
   imageOrder,
   notDeleted,
   relations,
@@ -385,24 +389,67 @@ export const getIngredientMatches = async (
 
 export const ingredientList = async (
   db: Database,
-  name: string | undefined,
+  filters: IngredientFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  productPresenceFilter?: PresenceFilter,
 ) => {
+  const dbClient = getDb(db);
+
+  // Ingredients with at least one live linked product. `product.ingredientId`
+  // is a nullable FK, so `isNotNull` is load-bearing — a NULL inside a NOT IN
+  // list makes the whole predicate UNKNOWN and "none" would match zero rows.
+  const ingredientIdsWithLiveProducts = dbClient
+    .select({ ingredientId: product.ingredientId })
+    .from(product)
+    .where(and(notDeleted(product), isNotNull(product.ingredientId)));
+
+  // Ingredients used by at least one live recipe. Join-guarded at every level
+  // (rsi, section, recipe) to match `liveRecipeCountForIngredientSql` exactly
+  // (recipe/helpers.ts) — a looser predicate here would disagree with the
+  // `appearsInRecipes` cell this same filter is supposed to partition on.
+  const ingredientIdsInLiveRecipes = dbClient
+    .select({ ingredientId: recipeSectionIngredient.ingredientId })
+    .from(recipeSectionIngredient)
+    .innerJoin(
+      recipeSection,
+      and(
+        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+        notDeleted(recipeSection),
+      ),
+    )
+    .innerJoin(
+      recipe,
+      and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
+    )
+    .where(notDeleted(recipeSectionIngredient));
+
   // Always filter out deleted items and recipe ingredients
-  const conditions = [isNull(ingredient.recipeId), notDeleted(ingredient)];
+  const conditions: (SQL | undefined)[] = [
+    isNull(ingredient.recipeId),
+    notDeleted(ingredient),
+  ];
 
   // Add name filter if provided
-  if (name) {
-    const nameCondition = buildIngredientWhere(false, name);
+  if (filters.nameFilter) {
+    const nameCondition = buildIngredientWhere(false, filters.nameFilter);
     if (nameCondition) {
       conditions.push(nameCondition);
     }
   }
 
-  // For the product-presence filter, we need to use a left join and check for
-  // null/non-null product ids.
+  conditions.push(
+    idSetPresence(
+      ingredient.id,
+      filters.productPresenceFilter,
+      ingredientIdsWithLiveProducts,
+    ),
+    idSetPresence(
+      ingredient.id,
+      filters.recipePresenceFilter,
+      ingredientIdsInLiveRecipes,
+    ),
+  );
+
   const whereClause = and(...conditions);
 
   // Build order by. `appearsInRecipes` and `product` are computed counts (not
@@ -454,55 +501,6 @@ export const ingredientList = async (
     },
   } as const;
 
-  if (productPresenceFilter) {
-    // Left join + null-check on the product side finds ingredients with
-    // ("has") or without ("none") at least one linked product. groupBy
-    // dedupes ingredients that fan out over multiple joined product rows, so
-    // the same subquery is reused for both the id filter and the count
-    // (a plain count() over the ungrouped join would over-count "has" rows).
-    const presenceCondition =
-      productPresenceFilter === "none"
-        ? isNull(product.id)
-        : isNotNull(product.id);
-
-    const filteredIngredientIds = getDb(db)
-      .select({ id: ingredient.id })
-      .from(ingredient)
-      // notDeleted in the JOIN condition (not the WHERE): a soft-deleted
-      // product must count as no product at all, so its ingredient still
-      // yields a null-product row for the "none" branch.
-      .leftJoin(
-        product,
-        and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
-      )
-      .where(and(whereClause, presenceCondition))
-      .groupBy(ingredient.id)
-      .as("filtered");
-
-    const { data: results, count: totalCount } =
-      await executeListQueryWithCount(
-        getDb(db).query.ingredient.findMany({
-          where: inArray(
-            ingredient.id,
-            getDb(db)
-              .select({ id: filteredIngredientIds.id })
-              .from(filteredIngredientIds),
-          ),
-          ...leanRelations,
-          orderBy: orderByClause,
-          limit: take,
-          offset: skip,
-        }),
-        getDb(db)
-          .select({ count: count() })
-          .from(filteredIngredientIds)
-          .then((rows) => rows[0]?.count ?? 0),
-      );
-
-    return { data: results.map(dbIngredientToListAPI), count: totalCount };
-  }
-
-  // Normal query without a product-presence filter
   const { data: results, count: totalCount } = await executeListQueryWithCount(
     getDb(db).query.ingredient.findMany({
       where: whereClause,

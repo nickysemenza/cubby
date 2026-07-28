@@ -30,6 +30,7 @@ export {
   eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
+  idSetPresence,
   isNotDeleted,
   lockAndValidateForDelete,
   notDeleted,

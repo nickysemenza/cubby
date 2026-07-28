@@ -11,6 +11,7 @@ import {
 import { upsertCookbook } from "./cookbook";
 import { getDb, notDeleted } from "./database-helpers";
 import { createIngredient } from "./ingredient";
+import { createMeal, deleteMeals } from "./meal";
 import {
   createRecipe,
   deleteRecipes,
@@ -327,6 +328,60 @@ describe("recipe crud repo", () => {
         tagsPresenceFilter: "none",
       });
       expect(names).toEqual(["never tagged", "tagged", "tags cleared"]);
+    });
+
+    describe("mealPresenceFilter", () => {
+      it("partitions planned recipes from never-planned ones", async () => {
+        const planned = await createRecipe(
+          ctx.db,
+          makeRecipeInput({ name: "planned recipe" }),
+          ctx.actor,
+        );
+        await createRecipe(
+          ctx.db,
+          makeRecipeInput({ name: "unplanned recipe" }),
+          ctx.actor,
+        );
+        await createMeal(
+          ctx.db,
+          { date: "2026-07-01", recipes: [{ recipeId: planned.id, scale: 1 }] },
+          ctx.actor,
+        );
+
+        expect(await listNames({ mealPresenceFilter: "has" })).toEqual([
+          "planned recipe",
+        ]);
+        expect(await listNames({ mealPresenceFilter: "none" })).toEqual([
+          "unplanned recipe",
+        ]);
+      });
+
+      /**
+       * The subquery inner-joins Meal with notDeleted: a live MealRecipe row
+       * under a soft-deleted Meal is not a plan. A one-table subquery over
+       * MealRecipe alone would still count this recipe as planned.
+       */
+      it("a soft-deleted meal doesn't count as a plan", async () => {
+        const stranded = await createRecipe(
+          ctx.db,
+          makeRecipeInput({ name: "stranded recipe" }),
+          ctx.actor,
+        );
+        const doomed = await createMeal(
+          ctx.db,
+          {
+            date: "2026-07-02",
+            recipes: [{ recipeId: stranded.id, scale: 1 }],
+          },
+          ctx.actor,
+        );
+        await deleteMeals(ctx.db, [doomed.id], ctx.actor);
+
+        expect(await listNames({ mealPresenceFilter: "has" })).toEqual([]);
+        expect(await listNames({ mealPresenceFilter: "none" })).toEqual([
+          "stranded recipe",
+        ]);
+      });
     });
   });
 });

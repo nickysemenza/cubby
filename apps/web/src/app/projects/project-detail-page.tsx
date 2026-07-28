@@ -33,6 +33,7 @@ import {
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
+import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
@@ -512,6 +513,19 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     mutationFn: api.project.update.mutationOptions,
     entity: "project",
     invalidateKeys: projectMutationInvalidateKeys,
+  });
+
+  // `deleteProjects` refuses a project that still has sub-projects, tasks or
+  // purchases (assertNoDependents) — that error surfaces as the hook's toast,
+  // so the destructive case explains itself rather than needing a guard here.
+  const { DeleteButton, DeleteDialog } = useEntityDelete({
+    id: project.id,
+    name: project.name,
+    entityLabel: "Project",
+    mutationOptions: (callbacks) =>
+      api.project.delete.mutationOptions(callbacks),
+    invalidateKeys: projectMutationInvalidateKeys,
+    redirectTo: "/projects",
   });
 
   // Lightweight {id,name} projection (no rollups/dependency joins) — enough
@@ -1165,12 +1179,14 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         tone: project.status === "done" ? "green" : "ink",
       }}
       heroStats={heroStats}
+      actions={<DeleteButton size="sm" />}
     >
       <DetailSections
         sections={sections}
         rawData={project}
         heroImages={images}
       />
+      <DeleteDialog />
 
       <CreateProjectDialog
         open={isCreatingSubProject}

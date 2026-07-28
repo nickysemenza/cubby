@@ -6,6 +6,7 @@ import {
   locationCreateInput,
 } from "@cubby/schemas/location";
 import type { ProductCreateInput } from "@cubby/schemas/product";
+import type { PurchaseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
@@ -40,6 +41,26 @@ export const makeProductInput = (
   ingredientId: null,
   unitMappings: [],
   externalIds: [],
+  ...overrides,
+});
+
+/** A purchase create input; every link (project/product) defaults to unset so a
+ * test spells out only the relation it's asserting on. */
+export const makePurchaseInput = (
+  overrides: Partial<PurchaseCreateInput> = {},
+): PurchaseCreateInput => ({
+  name: "Test Purchase",
+  cost: 100,
+  date: null,
+  costType: "materials",
+  trade: "other",
+  url: null,
+  notes: null,
+  future: false,
+  projectId: null,
+  productId: null,
+  vendor: null,
+  orderId: null,
   ...overrides,
 });
 

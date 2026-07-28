@@ -33,6 +33,12 @@ interface UseEntityDeleteOptions {
   invalidateKeys: readonly QueryKey[];
   /** Route to navigate to after deletion */
   redirectTo: string;
+  /**
+   * Overrides the dialog's body copy. Pass this when the delete cascades to
+   * things the row itself doesn't show — a task's subtasks and dependency
+   * edges, say — since the generic sentence gives no hint that they go too.
+   */
+  description?: string;
 }
 
 interface UseEntityDeleteReturn {
@@ -58,6 +64,7 @@ export function useEntityDelete({
   mutationOptions,
   invalidateKeys,
   redirectTo,
+  description,
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
   const queryClient = useQueryClient();
   const api = useTRPC();
@@ -112,7 +119,10 @@ export function useEntityDelete({
       action="Delete"
       variant="destructive"
       pendingLabel="Deleting..."
-      description={`This will permanently remove ${entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`}
+      description={
+        description ??
+        `This will permanently remove ${entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`
+      }
       renderItem={(item) => item.name}
       onSubmit={async () => {
         await deleteMutation.mutateAsync({ ids: [id] });

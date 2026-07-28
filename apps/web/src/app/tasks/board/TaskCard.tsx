@@ -3,7 +3,7 @@ import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Ban, EllipsisVertical } from "lucide-react";
+import { Ban, EllipsisVertical, Trash } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
@@ -18,6 +18,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
@@ -48,6 +49,12 @@ interface TaskCardProps {
   /** Show the status badge (project/trade-columns modes — no status column says it). */
   showStatus: boolean;
   onSetStatus: (status: TaskStatus) => void;
+  /**
+   * Hands the task up to the board, which owns the confirm dialog. It can't
+   * live here: the optimistic delete unmounts this card, and an open dialog
+   * inside it would go with it mid-flight.
+   */
+  onRequestDelete: (task: TaskOut) => void;
 }
 
 /** "YYYY-MM-DD" -> "Mon d", parsed component-wise (no UTC day-shift). */
@@ -71,6 +78,7 @@ export function TaskCard({
   showTrade,
   showStatus,
   onSetStatus,
+  onRequestDelete,
 }: TaskCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -173,12 +181,12 @@ export function TaskCard({
                     variant="ghost"
                     size="icon"
                     className="size-6"
-                    aria-label="Change status"
+                    aria-label="Task actions"
                     onClick={(e) => e.stopPropagation()}
                   />
                 }
               >
-                <EllipsisVertical className="size-4" />
+                <EllipsisVertical />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
@@ -201,6 +209,18 @@ export function TaskCard({
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>
+                {/* Outside the group on purpose — Delete isn't a status. */}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestDelete(task);
+                  }}
+                >
+                  <Trash />
+                  Delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </Row>

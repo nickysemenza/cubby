@@ -95,16 +95,10 @@ const { list } = createEntityListProcedure({
     list: async (services, filters, sort, pagination, groupBy) => {
       return await productListRepo(
         services.db,
-        filters.nameFilter,
-        filters.manufacturerFilter,
-        filters.upcFilter,
-        filters.categoryFilter,
+        filters,
         sort,
         pagination,
         groupBy,
-        filters.inventoryPresenceFilter,
-        filters.ingredientPresenceFilter,
-        filters.categoryPresenceFilter,
       );
     },
   },
@@ -158,12 +152,17 @@ const { list: search } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
+      // Explicit pick, not a spread: `productSearch` ignores the presence
+      // filters by design, and its narrowed param type makes that a compile
+      // error rather than a silent drop.
       const lexical = await productSearch(
         services.db,
-        filters.nameFilter,
-        filters.manufacturerFilter,
-        filters.upcFilter,
-        filters.categoryFilter,
+        {
+          nameFilter: filters.nameFilter,
+          manufacturerFilter: filters.manufacturerFilter,
+          upcFilter: filters.upcFilter,
+          categoryFilter: filters.categoryFilter,
+        },
         sort,
         pagination,
       );

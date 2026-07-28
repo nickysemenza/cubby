@@ -1,3 +1,4 @@
+import type { ProductFilters } from "@cubby/schemas/product";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createIngredient } from "./ingredient";
@@ -10,7 +11,12 @@ import {
   productList,
   updateProduct,
 } from "./product";
-import { makeLocationInput, makeProductInput } from "./repo.fixtures";
+import { createPurchase, deletePurchases } from "./purchase";
+import {
+  makeLocationInput,
+  makeProductInput,
+  makePurchaseInput,
+} from "./repo.fixtures";
 
 describe("product repository", () => {
   const ctx = withTestDb();
@@ -66,10 +72,7 @@ describe("product repository", () => {
     // Test listing with pagination - first page
     const firstPage = await productList(
       ctx.db,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      {},
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 2 },
     );
@@ -83,10 +86,7 @@ describe("product repository", () => {
     // Test listing with pagination - second page
     const secondPage = await productList(
       ctx.db,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      {},
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 1, pageSize: 2 },
     );
@@ -99,10 +99,9 @@ describe("product repository", () => {
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
       ctx.db,
-      undefined,
-      "Manufacturer X",
-      undefined,
-      undefined,
+      {
+        manufacturerFilter: "Manufacturer X",
+      },
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 10 },
     );
@@ -117,10 +116,7 @@ describe("product repository", () => {
     // orders within each manufacturer (C before A within X)
     const stacked = await productList(
       ctx.db,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      {},
       [
         { orderBy: "manufacturer", direction: "asc" },
         { orderBy: "name", direction: "desc" },
@@ -301,28 +297,22 @@ describe("product repository", () => {
 
       const noneFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          inventoryPresenceFilter: "none",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        "none",
       );
       expect(noneFiltered.data.map((p) => p.id)).toContain(empty.id);
       expect(noneFiltered.data.map((p) => p.id)).not.toContain(stocked.id);
 
       const hasFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          inventoryPresenceFilter: "has",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        "has",
       );
       expect(hasFiltered.data.map((p) => p.id)).toContain(stocked.id);
       expect(hasFiltered.data.map((p) => p.id)).not.toContain(empty.id);
@@ -357,27 +347,21 @@ describe("product repository", () => {
 
       const noneFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          inventoryPresenceFilter: "none",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        "none",
       );
       expect(noneFiltered.data.map((p) => p.id)).toContain(softDeletedOnly.id);
 
       const hasFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          inventoryPresenceFilter: "has",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        "has",
       );
       expect(hasFiltered.data.map((p) => p.id)).not.toContain(
         softDeletedOnly.id,
@@ -408,30 +392,22 @@ describe("product repository", () => {
 
       const noneFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          ingredientPresenceFilter: "none",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        undefined,
-        "none",
       );
       expect(noneFiltered.data.map((p) => p.id)).toContain(unlinked.id);
       expect(noneFiltered.data.map((p) => p.id)).not.toContain(linked.id);
 
       const hasFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          ingredientPresenceFilter: "has",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        undefined,
-        "has",
       );
       expect(hasFiltered.data.map((p) => p.id)).toContain(linked.id);
       expect(hasFiltered.data.map((p) => p.id)).not.toContain(unlinked.id);
@@ -458,16 +434,11 @@ describe("product repository", () => {
 
       const noneFiltered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        {
+          categoryPresenceFilter: "none",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        undefined,
-        undefined,
-        "none",
       );
       expect(noneFiltered.data.map((p) => p.id)).toContain(uncategorized.id);
       expect(noneFiltered.data.map((p) => p.id)).not.toContain(categorized.id);
@@ -503,22 +474,220 @@ describe("product repository", () => {
 
       const filtered = await productList(
         ctx.db,
-        undefined,
-        undefined,
-        undefined,
-        ["food"],
+        {
+          categoryFilter: ["food"],
+          categoryPresenceFilter: "none",
+        },
         [{ orderBy: "name", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
-        undefined,
-        undefined,
-        undefined,
-        "none",
       );
 
       const ids = filtered.data.map((p) => p.id);
       expect(ids).toContain(foodCategorized.id);
       expect(ids).toContain(uncategorized.id);
       expect(ids).not.toContain(otherCategorized.id);
+    });
+
+    const listWith = (filters: ProductFilters) =>
+      productList(ctx.db, filters, [{ orderBy: "name", direction: "asc" }], {
+        pageIndex: 0,
+        pageSize: 50,
+      });
+
+    describe("purchasePresenceFilter", () => {
+      /**
+       * The `NOT IN (NULL)` trap, and the most important test in this file.
+       * `purchase.productId` is nullable, so the subquery behind this filter
+       * MUST carry `isNotNull(purchase.productId)`. Without it a single
+       * product-less purchase row anywhere in the table makes the whole
+       * `notInArray` predicate UNKNOWN and `"none"` returns ZERO rows — a
+       * silent, total failure that no other assertion here would catch, since
+       * the unlinked purchase is invisible from the product side.
+       */
+      it("none still returns rows when an unlinked purchase exists", async () => {
+        const bought = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Bought Product", upc: "710000000001" }),
+          ctx.actor,
+        );
+        const neverBought = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Never Bought", upc: "710000000002" }),
+          ctx.actor,
+        );
+
+        await createPurchase(
+          ctx.db,
+          { ...makePurchaseInput(), name: "Linked", productId: bought.id },
+          ctx.actor,
+        );
+        // The poison row: a real purchase with no product, which is the common
+        // case in this ledger (most material runs stay unlinked).
+        await createPurchase(
+          ctx.db,
+          { ...makePurchaseInput(), name: "Unlinked", productId: null },
+          ctx.actor,
+        );
+
+        const none = await listWith({ purchasePresenceFilter: "none" });
+        expect(none.data.map((p) => p.id)).toContain(neverBought.id);
+        expect(none.data.map((p) => p.id)).not.toContain(bought.id);
+
+        const has = await listWith({ purchasePresenceFilter: "has" });
+        expect(has.data.map((p) => p.id)).toContain(bought.id);
+        expect(has.data.map((p) => p.id)).not.toContain(neverBought.id);
+      });
+
+      it("a soft-deleted purchase doesn't count as having one", async () => {
+        const product = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Refunded Product", upc: "710000000003" }),
+          ctx.actor,
+        );
+        const p = await createPurchase(
+          ctx.db,
+          { ...makePurchaseInput(), name: "Deleted", productId: product.id },
+          ctx.actor,
+        );
+        await deletePurchases(ctx.db, [p.id], ctx.actor);
+
+        const none = await listWith({ purchasePresenceFilter: "none" });
+        expect(none.data.map((p) => p.id)).toContain(product.id);
+      });
+    });
+
+    describe("unitMappingPresenceFilter", () => {
+      it("partitions on having at least one conversion edge", async () => {
+        const mapped = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Mapped Product",
+            upc: "710000000004",
+            unitMappings: [
+              {
+                a: { value: 1, unit: "cup" },
+                b: { value: 120, unit: "g" },
+                source: null,
+              },
+            ],
+          }),
+          ctx.actor,
+        );
+        const unmapped = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Unmapped Product",
+            upc: "710000000005",
+            unitMappings: [],
+          }),
+          ctx.actor,
+        );
+
+        const has = await listWith({ unitMappingPresenceFilter: "has" });
+        expect(has.data.map((p) => p.id)).toContain(mapped.id);
+        expect(has.data.map((p) => p.id)).not.toContain(unmapped.id);
+
+        const none = await listWith({ unitMappingPresenceFilter: "none" });
+        expect(none.data.map((p) => p.id)).toContain(unmapped.id);
+        expect(none.data.map((p) => p.id)).not.toContain(mapped.id);
+      });
+    });
+
+    describe("usdaPresenceFilter", () => {
+      it("matches on either key — an fdc_id or a upc to auto-match", async () => {
+        const byFdcId = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Has Fdc", upc: null, fdc_id: 123456 }),
+          ctx.actor,
+        );
+        const byUpc = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Has Upc", upc: "710000000006" }),
+          ctx.actor,
+        );
+        const neither = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "No Usda Key", upc: null }),
+          ctx.actor,
+        );
+
+        const has = await listWith({ usdaPresenceFilter: "has" });
+        const hasIds = has.data.map((p) => p.id);
+        expect(hasIds).toContain(byFdcId.id);
+        expect(hasIds).toContain(byUpc.id);
+        expect(hasIds).not.toContain(neither.id);
+
+        const none = await listWith({ usdaPresenceFilter: "none" });
+        expect(none.data.map((p) => p.id)).toEqual([neither.id]);
+      });
+
+      /**
+       * Pins the deliberate decision NOT to fold `usdaUnavailable` into
+       * `"none"`: the flag doesn't clear the key, so the two questions stay
+       * independent and both remain answerable.
+       */
+      it("usdaUnavailable does not clear the key", async () => {
+        const flagged = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Unavailable But Keyed",
+            upc: "710000000007",
+            usdaUnavailable: true,
+          }),
+          ctx.actor,
+        );
+
+        const has = await listWith({ usdaPresenceFilter: "has" });
+        expect(has.data.map((p) => p.id)).toContain(flagged.id);
+      });
+    });
+
+    /**
+     * `whereClause` is shared by THREE query builders — the RQB data query, the
+     * unaliased `$count`, and the unaliased price-sum aggregate. Only the first
+     * is exercised by the assertions above, so an alias regression in either of
+     * the other two would pass every test in this file. These two check the
+     * other two builders agree with the rows actually returned.
+     */
+    describe("all three query builders agree", () => {
+      it("count matches the returned rows under a cross-entity filter", async () => {
+        const mapped = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Parity Mapped",
+            upc: "710000000008",
+            price: 10,
+            unitMappings: [
+              {
+                a: { value: 1, unit: "cup" },
+                b: { value: 120, unit: "g" },
+                source: null,
+              },
+            ],
+          }),
+          ctx.actor,
+        );
+        await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Parity Unmapped",
+            upc: "710000000009",
+            price: 999,
+            unitMappings: [],
+          }),
+          ctx.actor,
+        );
+
+        const has = await listWith({ unitMappingPresenceFilter: "has" });
+        expect(has.count).toEqual(has.data.length);
+        expect(has.data.map((p) => p.id)).toContain(mapped.id);
+
+        // The footer total must cover the FILTERED set, not the whole table —
+        // the 999 of the excluded product must not be in it.
+        expect(has.sums.price).toEqual(
+          has.data.reduce((acc, p) => acc + (p.price ?? 0), 0),
+        );
+      });
     });
   });
 

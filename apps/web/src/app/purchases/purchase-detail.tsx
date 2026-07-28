@@ -23,6 +23,7 @@ import {
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { entityCellClipboard } from "../_components/data-table/inventory-column-helpers";
+import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { ProjectSuggestionChips } from "./project-suggestion-chips";
@@ -55,6 +56,18 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     data: purchase,
     mutationOptions: api.purchase.update.mutationOptions(),
     invalidateKeys: purchaseMutationInvalidateKeys,
+  });
+
+  // Record-level delete lives on the detail plate, not in a section header —
+  // Overview's headerAction is the constructive "Receive into inventory".
+  const { DeleteButton, DeleteDialog } = useEntityDelete({
+    id: purchase.id,
+    name: purchase.name,
+    entityLabel: "Purchase",
+    mutationOptions: (callbacks) =>
+      api.purchase.delete.mutationOptions(callbacks),
+    invalidateKeys: purchaseMutationInvalidateKeys,
+    redirectTo: "/purchases",
   });
 
   const fields: BasicInfoField[] = [
@@ -398,6 +411,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
         tone: purchase.future ? "ink" : "green",
       }}
       heroStats={heroStats}
+      actions={<DeleteButton size="sm" />}
     >
       <DetailSections sections={sections} rawData={purchase} />
       {purchase.productId ? (
@@ -408,6 +422,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
           purchaseName={purchase.name}
         />
       ) : null}
+      <DeleteDialog />
     </Page>
   );
 };

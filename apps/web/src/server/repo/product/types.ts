@@ -53,4 +53,7 @@ export type ProductListDB = ProductSelect & {
     image: typeof image.$inferSelect;
     deletedAt?: Date | null;
   }>;
+  // Scalar extras from `relations.product.list.extras` — count() returns
+  // bigint, which comes back as a string over the wire, hence the union.
+  purchaseCount: number | string;
 };

@@ -35,7 +35,6 @@ import {
   createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
-  presenceFilterOptions,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
@@ -188,7 +187,6 @@ export function IngredientList() {
         // fixed layout and leave a big gap); the flex space goes to Recipes +
         // Product below, whose content actually benefits from it.
         className: "w-56",
-        filterConfig: { placeholder: "Filter by ingredient name..." },
         editable: {
           onSave: async (newName, ingredient) => {
             await updateIngredientMutation.mutateAsync({
@@ -236,11 +234,6 @@ export function IngredientList() {
         meta: {
           className: "w-72 overflow-hidden",
           mobile: { slot: "subtitle", priority: 10 },
-          filterConfig: {
-            placeholder: "Filter product...",
-            filterType: "select",
-            options: presenceFilterOptions("product"),
-          },
         },
         cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,
       }),

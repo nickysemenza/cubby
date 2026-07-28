@@ -86,13 +86,7 @@ const { list } = createEntityListProcedure({
     // Straight repo call — the list path does no USDA enrichment, so per the
     // service-boundary rule there's no service layer here.
     list: async (services, filters, sort, pagination) => {
-      return await ingredientList(
-        services.db,
-        filters.nameFilter,
-        sort,
-        pagination,
-        filters.productPresenceFilter,
-      );
+      return await ingredientList(services.db, filters, sort, pagination);
     },
   },
   entityName: "ingredient",

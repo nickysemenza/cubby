@@ -1,10 +1,11 @@
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientFilters } from "@cubby/schemas/ingredient";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { ingredient, recipe } from "~/server/db/schema";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
-import { createRecipe } from "~/server/repo/recipe";
+import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import {
   createIngredient,
@@ -446,7 +447,7 @@ describe("ingredient", () => {
 
     const { data } = await ingredientList(
       ctx.db,
-      undefined,
+      {},
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 50 },
     );
@@ -498,10 +499,9 @@ describe("ingredient", () => {
 
     const { data: hasRows, count: hasCount } = await ingredientList(
       ctx.db,
-      undefined,
+      { productPresenceFilter: "has" },
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 50 },
-      "has",
     );
     expect(hasRows.some((i) => i.id === withProducts.id)).toBe(true);
     expect(hasRows.some((i) => i.id === withoutProducts.id)).toBe(false);
@@ -509,10 +509,9 @@ describe("ingredient", () => {
 
     const { data: noneRows } = await ingredientList(
       ctx.db,
-      undefined,
+      { productPresenceFilter: "none" },
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 50 },
-      "none",
     );
     expect(noneRows.some((i) => i.id === withoutProducts.id)).toBe(true);
     expect(noneRows.some((i) => i.id === withProducts.id)).toBe(false);
@@ -538,21 +537,89 @@ describe("ingredient", () => {
 
     const { data: hasRows } = await ingredientList(
       ctx.db,
-      undefined,
+      { productPresenceFilter: "has" },
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 50 },
-      "has",
     );
     expect(hasRows.some((i) => i.id === orphaned.id)).toBe(false);
 
     const { data: noneRows, count: noneCount } = await ingredientList(
       ctx.db,
-      undefined,
+      { productPresenceFilter: "none" },
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 50 },
-      "none",
     );
     expect(noneRows.some((i) => i.id === orphaned.id)).toBe(true);
     expect(noneCount).toBe(noneRows.length);
+  });
+
+  describe("ingredientList: recipePresenceFilter", () => {
+    const listWith = (filters: IngredientFilters) =>
+      ingredientList(ctx.db, filters, [{ orderBy: "name", direction: "asc" }], {
+        pageIndex: 0,
+        pageSize: 50,
+      });
+
+    it("partitions used from orphaned ingredients", async () => {
+      const used = await createIngredient(
+        ctx.db,
+        { name: "recipe-presence used", aliases: [] },
+        ctx.actor,
+      );
+      const orphan = await createIngredient(
+        ctx.db,
+        { name: "recipe-presence orphan", aliases: [] },
+        ctx.actor,
+      );
+      await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Recipe Presence Recipe",
+          sections: [{ ingredients: [ingredientRef(used.id)] }],
+        }),
+        ctx.actor,
+      );
+
+      const has = await listWith({ recipePresenceFilter: "has" });
+      expect(has.data.map((i) => i.id)).toContain(used.id);
+      expect(has.data.map((i) => i.id)).not.toContain(orphan.id);
+      expect(has.count).toBe(has.data.length);
+
+      const none = await listWith({ recipePresenceFilter: "none" });
+      expect(none.data.map((i) => i.id)).toContain(orphan.id);
+      expect(none.data.map((i) => i.id)).not.toContain(used.id);
+    });
+
+    /**
+     * The subquery walks RecipeSectionIngredient → RecipeSection → Recipe, and
+     * must guard `deletedAt` at EVERY level. Deleting the recipe soft-deletes
+     * the whole chain, so this pins that a one-table subquery (which would
+     * still see the live-looking join rows) isn't enough — and keeps the filter
+     * agreeing with the `appearsInRecipes` cell, which reads 0 here.
+     */
+    it("a soft-deleted recipe leaves its ingredient orphaned", async () => {
+      const stranded = await createIngredient(
+        ctx.db,
+        { name: "recipe-presence stranded", aliases: [] },
+        ctx.actor,
+      );
+      const doomed = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Doomed Recipe",
+          sections: [{ ingredients: [ingredientRef(stranded.id)] }],
+        }),
+        ctx.actor,
+      );
+      await deleteRecipes(ctx.db, [doomed.id], ctx.actor);
+
+      const has = await listWith({ recipePresenceFilter: "has" });
+      expect(has.data.map((i) => i.id)).not.toContain(stranded.id);
+
+      const none = await listWith({ recipePresenceFilter: "none" });
+      const row = none.data.find((i) => i.id === stranded.id);
+      expect(row).toBeDefined();
+      expect(row?.appearsInRecipes).toEqual([]);
+    });
   });
 });

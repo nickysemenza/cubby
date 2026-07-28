@@ -146,10 +146,6 @@ function entityRefSortingFn(
   return left.localeCompare(right);
 }
 
-// Moved to the pure filter core so the manifest can use it without importing
-// this module at runtime; re-exported for this file's existing consumers.
-export { presenceFilterOptions } from "~/entities/filters";
-
 export type MobileSlot =
   | "title"
   | "subtitle"
@@ -497,9 +493,13 @@ export function createImageColumn<T extends BaseRow>(
     header: () => <ImageIcon className="size-3 text-muted-foreground" />,
     enableSorting: false,
     // h-px trick: setting height:1px on td makes h-full work on children
-    // overflow-hidden prevents image from expanding the row
+    // overflow-hidden prevents image from expanding the row. w-16 (not w-10):
+    // a select-combobox header filter renders in this column and needs room
+    // for more than a bare chevron — widening the shared default affects
+    // every entity's image column, which is fine (they're all this narrow
+    // for the same "just a thumbnail" reason).
     meta: {
-      className: cn("h-px w-10 overflow-hidden px-0 py-0", options?.className),
+      className: cn("h-px w-16 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
     cell: (info) => (

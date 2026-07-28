@@ -2,6 +2,7 @@ import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { keyBy } from "es-toolkit";
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
+import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { CreateTaskDialog } from "../create-task-dialog";
@@ -81,7 +82,8 @@ export function TaskBoard({
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
-  const { moveTask, reorderTasks } = useBoardMutations(cacheTarget);
+  const { moveTask, reorderTasks, deleteTask, isDeleting } =
+    useBoardMutations(cacheTarget);
   useBoardDnd({ tasks, moveTask, reorderTasks });
 
   // One hoisted quick-add dialog (not one per column/cell) — the "+" in a
@@ -92,6 +94,11 @@ export function TaskBoard({
   const [pendingPreset, setPendingPreset] = useState<TaskCreatePreset | null>(
     null,
   );
+
+  // Hoisted for the same reason as the quick-add dialog above, plus one of its
+  // own: the optimistic delete drops the card out of `cellTasks`, so a dialog
+  // owned by the card would unmount before the mutation settles.
+  const [pendingDelete, setPendingDelete] = useState<TaskOut | null>(null);
 
   const columns = useMemo(() => buildColumns(tasks, cols), [tasks, cols]);
   const lanes = useMemo(
@@ -112,6 +119,7 @@ export function TaskBoard({
       showStatus: cols !== "status",
       onSetStatus: (taskId: TaskOut["id"], status: TaskStatus) =>
         moveTask(taskId, { status }),
+      onRequestDelete: setPendingDelete,
     }),
     [taskById, showProjectOnCards, cols, lane, moveTask],
   );
@@ -228,6 +236,30 @@ export function TaskBoard({
           presetStatus={pendingPreset.status}
           presetProjectId={pendingPreset.projectId}
           presetTrade={pendingPreset.trade}
+        />
+      )}
+      {pendingDelete && (
+        <BulkActionDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPendingDelete(null);
+          }}
+          items={[{ id: pendingDelete.id, name: pendingDelete.name }]}
+          itemNoun="Task"
+          action="Delete"
+          variant="destructive"
+          pendingLabel="Deleting..."
+          description={`${
+            pendingDelete.subtaskCount > 0
+              ? `This also deletes ${pendingDelete.subtaskCount} subtask${pendingDelete.subtaskCount === 1 ? "" : "s"}, and removes`
+              : "This also removes"
+          } the task from any dependency chains. This action cannot be undone.`}
+          renderItem={(item) => item.name}
+          onSubmit={async () => {
+            await deleteTask(pendingDelete.id);
+            setPendingDelete(null);
+          }}
+          isPending={isDeleting}
         />
       )}
     </>

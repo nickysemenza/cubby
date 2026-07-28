@@ -187,6 +187,33 @@ export function useStandardColumns<TData extends BaseListRow>({
       };
     };
 
+    /**
+     * Overlay the manifest's filter control onto one column def.
+     *
+     * Applies to the columns this hook APPENDS (image, unit mappings) as well
+     * as the caller's own — they're real, filterable columns, and a manifest
+     * spec pointing at one used to render nothing at all, silently, because
+     * only the caller's columns went through the overlay.
+     */
+    const withManifestFilter = (
+      col: AnyColumnDef<TData>,
+      colId: string,
+    ): AnyColumnDef<TData> => {
+      const manifestConfig = getFilterConfig(colId);
+      if (!manifestConfig) return col;
+      const meta = (col.meta ?? {}) as Record<string, unknown>;
+      return {
+        ...col,
+        // Client-side tables would otherwise resolve a filterFn from the ROW
+        // value's type and silently match nothing against an array. Harmless
+        // on server-filtered tables, which never run it.
+        ...(manifestConfig.filterType === "multiselect"
+          ? { filterFn: multiSelectFilterFn }
+          : {}),
+        meta: { ...meta, filterConfig: manifestConfig },
+      };
+    };
+
     const cols: AnyColumnDef<TData>[] = [];
 
     // Prepend select column if row selection is enabled
@@ -196,7 +223,12 @@ export function useStandardColumns<TData extends BaseListRow>({
 
     // Prepend standard columns
     if (standardColumns.includes("image")) {
-      cols.push(createImageColumn(columnHelper, { entity }));
+      cols.push(
+        withManifestFilter(
+          createImageColumn(columnHelper, { entity }),
+          "image",
+        ),
+      );
     }
     if (standardColumns.includes("name")) {
       const nameFilterConfig = getFilterConfig("name");
@@ -232,31 +264,23 @@ export function useStandardColumns<TData extends BaseListRow>({
       // factories' own `filterConfig` (e.g. createFilterableSelectColumn
       // deriving one from its editor options) stays as the fallback for
       // columns and tables the manifest doesn't cover.
-      const manifestConfig = colId ? getFilterConfig(colId) : undefined;
-      if (!manifestConfig) return { ...col, enableSorting };
-
-      const meta = (col.meta ?? {}) as Record<string, unknown>;
-      return {
-        ...col,
-        enableSorting,
-        // Client-side tables would otherwise resolve a filterFn from the ROW
-        // value's type and silently match nothing against an array. Harmless
-        // on server-filtered tables, which never run it.
-        ...(manifestConfig.filterType === "multiselect"
-          ? { filterFn: multiSelectFilterFn }
-          : {}),
-        meta: { ...meta, filterConfig: manifestConfig },
-      };
+      const withSorting = { ...col, enableSorting };
+      return colId ? withManifestFilter(withSorting, colId) : withSorting;
     });
     cols.push(...processedColumns);
 
     // Append unit mappings column if configured
     if (shouldUseMappings && mappingsMap) {
+      const mappingsColId =
+        entity === "product" ? "unitMappingQuality" : "unitMappings";
       cols.push(
-        createUnitMappingsColumn(columnHelper, mappingsMap, {
-          id: entity === "product" ? "unitMappingQuality" : "unitMappings",
-          enableSorting: entity === "product",
-        }),
+        withManifestFilter(
+          createUnitMappingsColumn(columnHelper, mappingsMap, {
+            id: mappingsColId,
+            enableSorting: entity === "product",
+          }),
+          mappingsColId,
+        ),
       );
     }
 

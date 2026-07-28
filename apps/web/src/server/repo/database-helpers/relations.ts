@@ -17,7 +17,7 @@
  * relations not yet annotated here.
  */
 
-import { type AnyColumn, asc } from "drizzle-orm";
+import { type AnyColumn, asc, sql } from "drizzle-orm";
 import {
   inventoryEntry,
   location,
@@ -186,6 +186,19 @@ export const relations = {
             location: true,
           },
         },
+      },
+      // Uncorrelated-per-row scalar: how many live purchases (acquisitions +
+      // negative exit rows) point at this product. Mirrors the ingredient
+      // list's `appearsInRecipes` extras — a raw string hand-qualified to the
+      // relational query builder's root alias ("product"), since a
+      // Drizzle-typed column ref would get rewritten to that same alias
+      // anyway for a same-table column, but a cross-table correlated
+      // reference must stay a literal string to survive the rewrite.
+      extras: {
+        purchaseCount:
+          sql<number>`(SELECT count(*) FROM "Purchase" pu WHERE pu."productId" = "product"."id" AND pu."deletedAt" IS NULL)`.as(
+            "purchaseCount",
+          ),
       },
     },
   },

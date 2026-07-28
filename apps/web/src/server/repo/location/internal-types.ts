@@ -53,4 +53,7 @@ export interface LocationFilters {
   itemTypeFilter?: string | string[];
   parentId?: string | string[];
   parentPresenceFilter?: "has" | "none";
+  // The inventory column's "(none)" / "Has inventory" sentinel — "none" is the
+  // empty-shelf worklist. Counts only entries whose product is itself live.
+  inventoryPresenceFilter?: "has" | "none";
 }

@@ -37,9 +37,19 @@ export const locationFilterFields = {
   itemTypeFilter: oneOrMany(locationType).optional(),
   parentId: oneOrMany(locationId).optional(),
   parentPresenceFilter: presenceFilter,
+  /**
+   * `"none"` is the empty-shelf worklist. Counts only entries whose product is
+   * itself live — `dbLocationToListAPI` drops entries on soft-deleted products,
+   * so a shelf holding only deleted products renders empty and must filter as
+   * empty too.
+   */
+  inventoryPresenceFilter: presenceFilter.describe(
+    "Filter to locations that do / don't hold at least one live inventory entry",
+  ),
 };
 
 export const locationFiltersSchema = z.object(locationFilterFields);
+export type LocationFiltersInput = z.infer<typeof locationFiltersSchema>;
 
 export const locationSortableFields = [
   "createdAt",

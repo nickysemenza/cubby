@@ -6,13 +6,16 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
   type PaginationParams,
-  type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type { ProductPickerItemOut } from "@cubby/schemas/product";
+import type {
+  ProductFilters,
+  ProductPickerItemOut,
+} from "@cubby/schemas/product";
 import {
   hasFoodIndicators,
   type ProductCategory,
@@ -30,7 +33,7 @@ import {
   inArray,
   isNotNull,
   isNull,
-  notInArray,
+  ne,
   or,
   sql,
   sum,
@@ -44,6 +47,7 @@ import {
   productExternalId,
   productImage,
   productUnitMappings,
+  purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -63,9 +67,11 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  idSetPresence,
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
+  presenceCondition,
   relations,
   updateLiveAndReturn,
   withTransaction,
@@ -291,57 +297,116 @@ export const getProductsByShortcodes = async (
 
 export const productList = async (
   db: Database,
-  name: string | undefined,
-  manufacturer: string | undefined,
-  upc: string | undefined,
-  category: ProductCategory | ProductCategory[] | undefined,
+  filters: ProductFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
-  inventoryPresenceFilter?: PresenceFilter,
-  ingredientPresenceFilter?: PresenceFilter,
-  categoryPresenceFilter?: PresenceFilter,
 ) => {
   const dbClient = getDb(db);
 
-  // Product ids with at least one live (non-deleted) inventory entry —
-  // soft-deleted entries don't count. Deliberately an UNCORRELATED subquery
-  // (only references inventoryEntry columns, no back-reference to
-  // product.id): the data query below runs through Drizzle's relational
-  // query builder, which aliases the root table to "product", while the
-  // count query (`countWhere`) runs a plain, unaliased `$count`. A
-  // correlated EXISTS referencing `product.id` from inside the subquery
-  // resolves against different table names in each context (and breaks the
-  // RQB data query, which only sees the "product" alias) — inArray/notInArray
-  // sidestep that because `product.id` is referenced at the WHERE's top
-  // level, where both query builders rewrite it correctly.
+  // Every cross-entity filter below is an UNCORRELATED subquery (it references
+  // only the child table, never back at product.id), applied with
+  // inArray/notInArray. That shape is load-bearing, not stylistic: THREE query
+  // builders share `whereClause` — the data query runs through Drizzle's
+  // relational query builder (which aliases the root table to "product"), the
+  // count runs a plain unaliased `$count`, and the price-sum runs a plain
+  // unaliased `.select().from(product)`. A correlated EXISTS referencing
+  // `product.id` from inside a subquery resolves against different table names
+  // in each context (and breaks the RQB data query, which only sees the
+  // "product" alias). inArray/notInArray sidestep it because `product.id` is
+  // referenced at the WHERE's top level, where all three rewrite it correctly.
+  //
+  // Every subquery is notDeleted-guarded at each join level. `pnpm check`'s
+  // soft-delete guard only scans exists()/notExists() bodies, so it cannot see
+  // these — the repo integration tests are the guard here.
   const productIdsWithLiveInventory = dbClient
     .select({ productId: inventoryEntry.productId })
     .from(inventoryEntry)
     .where(notDeleted(inventoryEntry));
 
+  // `purchase.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL
+  // inside a NOT IN list makes the whole predicate UNKNOWN and `notInArray`
+  // would match zero rows instead of "products with no purchases".
+  const productIdsWithPurchases = dbClient
+    .select({ productId: purchase.productId })
+    .from(purchase)
+    .where(and(notDeleted(purchase), isNotNull(purchase.productId)));
+
+  // Joins Image so this matches what the thumbnail cell actually renders — it
+  // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
+  const productIdsWithImages = dbClient
+    .select({ productId: productImage.productId })
+    .from(productImage)
+    .innerJoin(
+      image,
+      and(eq(image.id, productImage.imageId), notDeleted(image)),
+    )
+    .where(
+      and(notDeleted(productImage), ne(image.contentType, PDF_CONTENT_TYPE)),
+    );
+
+  const productIdsWithUnitMappings = dbClient
+    .select({ productId: productUnitMappings.productId })
+    .from(productUnitMappings)
+    .where(notDeleted(productUnitMappings));
+
+  // Mirrors `foodLookupParamFromProduct` returning null: no explicit fdc_id AND
+  // no upc to auto-match. This is the closest pure-SQL predicate — it cannot
+  // know whether the USDA worker resolves a food for that key, which is why the
+  // filter is labelled "USDA key". Passed as `presenceCondition`'s `emptyWhen`
+  // so "has" is derived as not(this) and the two branches can't drift.
+  // The outer parens are load-bearing, same as TAGS_ARE_EMPTY in recipe/crud.ts:
+  // `presenceCondition` derives "has" as `not(this)`, and drizzle's `not()`
+  // doesn't add its own. Unparenthesized, `NOT a IS NULL AND b IS NULL` binds as
+  // `(NOT a IS NULL) AND (b IS NULL)` — i.e. "has fdc_id AND has no upc", which
+  // silently drops every UPC-only product from "has".
+  const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND ${product.upc} IS NULL)`;
+
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
     [
-      { column: product.name, term: name },
-      { column: product.manufacturer, term: manufacturer },
-      { column: product.upc, term: upc },
+      { column: product.name, term: filters.nameFilter },
+      { column: product.manufacturer, term: filters.manufacturerFilter },
+      { column: product.upc, term: filters.upcFilter },
     ],
     [
-      eqAnyOrPresence(product.category, category, categoryPresenceFilter),
-      ingredientPresenceFilter === "none"
+      eqAnyOrPresence(
+        product.category,
+        filters.categoryFilter,
+        filters.categoryPresenceFilter,
+      ),
+      filters.ingredientPresenceFilter === "none"
         ? isNull(product.ingredientId)
         : undefined,
-      ingredientPresenceFilter === "has"
+      filters.ingredientPresenceFilter === "has"
         ? isNotNull(product.ingredientId)
         : undefined,
-      inventoryPresenceFilter === "none"
-        ? notInArray(product.id, productIdsWithLiveInventory)
-        : undefined,
-      inventoryPresenceFilter === "has"
-        ? inArray(product.id, productIdsWithLiveInventory)
-        : undefined,
+      idSetPresence(
+        product.id,
+        filters.inventoryPresenceFilter,
+        productIdsWithLiveInventory,
+      ),
+      idSetPresence(
+        product.id,
+        filters.purchasePresenceFilter,
+        productIdsWithPurchases,
+      ),
+      idSetPresence(
+        product.id,
+        filters.imagePresenceFilter,
+        productIdsWithImages,
+      ),
+      idSetPresence(
+        product.id,
+        filters.unitMappingPresenceFilter,
+        productIdsWithUnitMappings,
+      ),
+      presenceCondition(
+        product.fdc_id,
+        filters.usdaPresenceFilter,
+        NO_USDA_KEY,
+      ),
     ],
   );
 
@@ -394,13 +459,16 @@ export const productList = async (
  */
 export const productSearch = async (
   db: Database,
-  name: string | undefined,
-  manufacturer: string | undefined,
-  upc: string | undefined,
-  category: ProductCategory | ProductCategory[] | undefined,
+  // Narrowed on purpose: this path ignores the presence filters, and the type
+  // should say so rather than accept the full ProductFilters and drop them.
+  filters: Pick<
+    ProductFilters,
+    "nameFilter" | "manufacturerFilter" | "upcFilter" | "categoryFilter"
+  >,
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: ProductPickerItemOut[]; count: number }> => {
+  const name = filters.nameFilter;
   const whereClause = and(
     notDeleted(product),
     name !== undefined && name.trim() !== ""
@@ -409,9 +477,9 @@ export const productSearch = async (
           sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${`%${name}%`})`,
         )
       : undefined,
-    formatSearchTerm(product.manufacturer, manufacturer),
-    formatSearchTerm(product.upc, upc),
-    eqAny(product.category, category),
+    formatSearchTerm(product.manufacturer, filters.manufacturerFilter),
+    formatSearchTerm(product.upc, filters.upcFilter),
+    eqAny(product.category, filters.categoryFilter),
   );
 
   // Same ordering rules as productList, so picker results match the table's sort

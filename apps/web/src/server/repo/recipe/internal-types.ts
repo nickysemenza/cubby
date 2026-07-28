@@ -81,4 +81,9 @@ export interface RecipeFilters {
   // Ingredient row points at them). Powers "what can I make?", where a sub-recipe
   // is a component, not a meal.
   excludeSubRecipes?: boolean;
+  // "none" is the never-planned worklist. A live MealRecipe under a
+  // soft-deleted Meal doesn't count as a plan.
+  mealPresenceFilter?: PresenceFilter;
+  // "none" matches recipes with no live, non-PDF image.
+  imagePresenceFilter?: PresenceFilter;
 }

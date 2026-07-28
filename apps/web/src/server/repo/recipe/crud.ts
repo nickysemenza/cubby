@@ -5,6 +5,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -24,6 +25,7 @@ import {
   eq,
   inArray,
   isNotNull,
+  ne,
   notInArray,
   or,
   type SQL,
@@ -34,7 +36,10 @@ import { countBy } from "es-toolkit";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  image,
   ingredient,
+  meal,
+  mealRecipe,
   recipe,
   recipeImage,
   recipeSection,
@@ -56,6 +61,7 @@ import {
   eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
+  idSetPresence,
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
@@ -72,7 +78,9 @@ import { TraceNames, withTrace } from "~/server/tracing";
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,
-  dbRecipeToAPIShallow,
+  dbRecipeToListAPI,
+  liveMealCountForRecipeSql,
+  recipeListCoverImageRelation,
 } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
 import {
@@ -312,6 +320,25 @@ export const recipeList = async (
       ),
     );
 
+  // Recipes planned into a live meal. A live MealRecipe under a soft-deleted
+  // Meal is not a plan — join-guarded, not just notDeleted(mealRecipe).
+  const recipeIdsInLiveMeals = dbClient
+    .select({ recipeId: mealRecipe.recipeId })
+    .from(mealRecipe)
+    .innerJoin(meal, and(eq(meal.id, mealRecipe.mealId), notDeleted(meal)))
+    .where(notDeleted(mealRecipe));
+
+  // Recipes with at least one live, non-PDF image — mirrors the product list's
+  // `productIdsWithImages` (Image is separately soft-deletable from RecipeImage,
+  // and a PDF is a document attachment, not a displayable photo).
+  const recipeIdsWithImages = dbClient
+    .select({ recipeId: recipeImage.recipeId })
+    .from(recipeImage)
+    .innerJoin(image, and(eq(image.id, recipeImage.imageId), notDeleted(image)))
+    .where(
+      and(notDeleted(recipeImage), ne(image.contentType, PDF_CONTENT_TYPE)),
+    );
+
   // Build where conditions - always filter out deleted items. Scope to one
   // cookbook by FK id when browsing its detail page.
   const whereClause = buildSearchConditions(
@@ -348,6 +375,16 @@ export const recipeList = async (
       filters.excludeSubRecipes
         ? notInArray(recipe.id, subRecipeIds)
         : undefined,
+      idSetPresence(
+        recipe.id,
+        filters.mealPresenceFilter,
+        recipeIdsInLiveMeals,
+      ),
+      idSetPresence(
+        recipe.id,
+        filters.imagePresenceFilter,
+        recipeIdsWithImages,
+      ),
     ],
   );
 
@@ -403,18 +440,31 @@ export const recipeList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Summary fetch: flat recipe rows (no section graph) + persisted totals via dbRecipeToAPIShallow — the nested graph nobody renders was the ~4.7s over-fetch.
+  // Summary fetch: flat recipe rows (no section graph) + persisted totals via dbRecipeToListAPI — the nested graph nobody renders was the ~4.7s over-fetch.
+  // `images` is capped to a single (cover) row via recipeListCoverImageRelation
+  // — the list only ever renders a thumbnail, never the full gallery.
+  // `mealCount` is a scalar extra so the "Meals" column doesn't need a second
+  // round trip; same live-join semantics as `recipeIdsInLiveMeals` above (see
+  // liveMealCountForRecipeSql's doc comment).
   const { data: results, count: totalCount } = await executeListQueryWithCount(
     dbClient.query.recipe.findMany({
       where: whereClause,
       orderBy: orderByClause,
       limit: take,
       offset: skip,
+      with: {
+        images: recipeListCoverImageRelation,
+      },
+      extras: {
+        mealCount: sql<number>`${sql.raw(
+          liveMealCountForRecipeSql('"recipe"."id"'),
+        )}`.as("mealCount"),
+      },
     }),
     countWhere(db, recipe, whereClause),
   );
 
-  const items = results.map(dbRecipeToAPIShallow);
+  const items = results.map(dbRecipeToListAPI);
   return { data: items, count: totalCount };
 };
 
