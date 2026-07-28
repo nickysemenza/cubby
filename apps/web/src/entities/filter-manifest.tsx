@@ -138,6 +138,20 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter by product...",
       options: presenceFilterOptions("product"),
     },
+    {
+      columnId: "vendor",
+      kind: "select",
+      placeholder: "Filter by vendor...",
+      optionsKey: "vendor",
+    },
+    {
+      // "none" is the unreconciled worklist — no vendor order id recorded.
+      columnId: "orderId",
+      field: "orderIdPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter by order id...",
+      options: presenceFilterOptions("order id"),
+    },
   ],
 
   task: [

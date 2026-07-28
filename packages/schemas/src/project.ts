@@ -738,6 +738,13 @@ export const purchaseFilterFields = {
    * 3-value enum.
    */
   costPresenceFilter: presenceFilter,
+  /**
+   * `"none"` matches purchases with a null `orderId`; `"has"` matches
+   * purchases that carry one. Same shape as `costPresenceFilter` — there's no
+   * bounded order-id picklist (free text, one per retailer's format), so this
+   * only distinguishes reconciled-to-an-order vs. not.
+   */
+  orderIdPresenceFilter: presenceFilter,
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -753,6 +760,7 @@ export const purchaseSortableFields = [
   "project",
   "product",
   "vendor",
+  "orderId",
   "createdAt",
 ] as const;
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];
@@ -781,6 +789,21 @@ export const purchaseListAndSideEffectsOut = z.object({
 export type PurchaseListAndSideEffectsOut = z.infer<
   typeof purchaseListAndSideEffectsOut
 >;
+
+/**
+ * `purchase.vendorOptions`'s output — the distinct vendor roster feeding the
+ * ledger's Vendor filter picklist, ranked by how many rows carry each vendor
+ * (see `purchaseVendorOptions` in repo/purchase/lookup.ts). No `{id, name}`
+ * shape like `projectOptionsOut`: vendor is a free-text column on `purchase`
+ * itself, not a joined entity.
+ */
+export const purchaseVendorOptionsOut = z.array(
+  z.object({
+    vendor: z.string(),
+    count: z.number().int(),
+  }),
+);
+export type PurchaseVendorOptionsOut = z.infer<typeof purchaseVendorOptionsOut>;
 
 // ---------------------------------------------------------------------------
 // Purchase analytics (server-side chart aggregates — see

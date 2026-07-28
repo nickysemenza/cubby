@@ -16,11 +16,14 @@ import {
   purchaseCostTypeColumn,
   purchaseDateColumn,
   purchaseFutureColumn,
+  purchaseOrderIdColumn,
   purchaseTradeColumn,
+  purchaseVendorColumn,
   tradeOptions,
 } from "~/app/projects/shared";
 import { Grid } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
 import { getEntityFilters } from "~/entities/filter-manifest";
@@ -58,10 +61,29 @@ import { SettlePurchaseDialog } from "./settle-purchase-dialog";
 // `route`.
 const purchasesRoute = getRouteApi("/_authenticated/purchases/");
 
+// Stable empty default — see apps/web/CLAUDE.md's `unstable-hook-default` rule:
+// an inline `?? []` would allocate a fresh array every render while the query
+// is loading, destabilizing the `useFilterOptions`/`useMemo` chain below it.
+const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
+
 export function PurchaseList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
+  // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor") —
+  // labeled with a `(count)` suffix so the most-used vendors sort to the top
+  // (the query is already ranked by frequency; see `purchaseVendorOptions`).
+  const vendorOptionsQuery = useQuery(
+    api.purchase.vendorOptions.queryOptions(),
+  );
+  const vendorOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      vendorOptionsQuery.data?.map(({ vendor, count }) => ({
+        value: vendor,
+        label: `${vendor} (${count})`,
+      })) ?? NO_VENDOR_OPTIONS,
+    [vendorOptionsQuery.data],
+  );
   const [bulkMoveItems, setBulkMoveItems] = useState<PurchaseOut[]>([]);
   const [bulkTradeItems, setBulkTradeItems] = useState<PurchaseOut[]>([]);
   const [bulkCostTypeItems, setBulkCostTypeItems] = useState<PurchaseOut[]>([]);
@@ -164,8 +186,11 @@ export function PurchaseList() {
     [],
   );
 
-  // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
-  const projectFilterOptions = useFilterOptions({ project: projectOptions });
+  // Runtime picklists for the manifest's `project`/`vendor` specs (optionsKey).
+  const projectFilterOptions = useFilterOptions({
+    project: projectOptions,
+    vendor: vendorOptions,
+  });
 
   // The cost / date / costType / trade / future columns come from the shared
   // factories in `~/app/projects/shared.tsx`, also used by the embedded
@@ -254,6 +279,29 @@ export function PurchaseList() {
           mobile: { slot: "meta", priority: 50 },
         },
       ),
+      // Hidden by default (see `initialColumnVisibility` below) — revealed via
+      // the column-visibility toggle when a vendor-heavy view (e.g. an Amazon
+      // reconciliation pass) actually wants them.
+      purchaseVendorColumn(
+        columnHelper,
+        async (vendor, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { vendor },
+          });
+        },
+        { mobile: { slot: "meta", priority: 70 } },
+      ),
+      purchaseOrderIdColumn(
+        columnHelper,
+        async (orderId, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { orderId },
+          });
+        },
+        { mobile: { slot: "meta", priority: 80 } },
+      ),
       columnHelper.accessor((row) => row.url, {
         id: "url",
         header: "",
@@ -332,6 +380,11 @@ export function PurchaseList() {
     bulkActions,
     extraActions,
     infinite: true,
+    // Newly added columns default VISIBLE unless declared here (see
+    // useTableColumnVisibility's `{ ...initial, ...stored }` merge) — vendor
+    // and order id are niche enough (mostly an Amazon-reconciliation need) to
+    // stay opt-in via the column toggle rather than clutter the default view.
+    initialColumnVisibility: { vendor: false, orderId: false },
   });
   usePageCount(totalCount);
 

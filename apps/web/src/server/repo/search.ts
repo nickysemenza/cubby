@@ -365,6 +365,8 @@ const searchQueries = {
         formatSearchTerm(purchase.name, query),
         formatSearchTerm(purchase.trade, query),
         formatSearchTerm(purchase.notes, query),
+        formatSearchTerm(purchase.vendor, query),
+        formatSearchTerm(purchase.orderId, query),
       ),
     idCondition: (ids) => idIn(purchase.id, ids),
     load: (client, condition, limit) =>
