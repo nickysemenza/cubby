@@ -272,7 +272,11 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         header: "USDA Food",
         meta: {
           className: "w-32",
-          mobile: { slot: "meta", priority: 70 },
+          // No mobile slot on purpose. This is a display column, so the
+          // model's empty-value check can't reach it, and most products have
+          // no USDA link — it rendered a "USDA Food —" line on nearly every
+          // row. (It had been declared but silently swallowed by a deny-list
+          // until that ordering was fixed; the declaration was aspirational.)
         },
         cell: ({ row }) => <ProductFoodCell product={row.original} />,
       }),

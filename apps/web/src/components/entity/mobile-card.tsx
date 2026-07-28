@@ -1,10 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type HTMLAttributes, type ReactNode } from "react";
+import type { MobileMetaValue } from "~/app/_components/data-table/useMobileListModel";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { entities } from "~/entities/entities";
 import { useLongPress } from "~/hooks/useLongPress";
 import { cn } from "~/lib/utils";
@@ -58,6 +60,11 @@ interface MobileCardProps {
    * clipped/cramped below a usable tap target. Omit for plain text values.
    */
   rightValueInteractive?: boolean[];
+  /**
+   * Labeled values rendered as a spec grid below the identity line. Unlabeled
+   * at six values these read as noise, so each carries its column's header.
+   */
+  metaValues?: MobileMetaValue[];
 }
 
 /**
@@ -94,6 +101,83 @@ function RightValueSlot({
 }
 
 /**
+ * The row variant's chrome — grid, divider, padding, and column derivation —
+ * shared by `MobileCard` and the loading skeleton so the two can't drift
+ * (they had already diverged on the divider: `border-border/30` vs `/60`).
+ *
+ * The outer grid stays two rows no matter how tall the content gets: the
+ * identity line and the spec block are ONE grid item that stacks internally,
+ * so `row-span-2` on the side cells stays correct and nothing has to count
+ * lines.
+ */
+export function MobileRowShell({
+  leading = [],
+  title,
+  content,
+  actions,
+  footer,
+  tall,
+  className,
+  ...divProps
+}: {
+  /** Checkbox / image cells, in order. Determines the column template. */
+  leading?: ReactNode[];
+  title: ReactNode;
+  content?: ReactNode;
+  actions?: ReactNode;
+  footer?: ReactNode;
+  /** Content is taller than the side cells — align them to the top instead. */
+  tall?: boolean;
+  className?: string;
+  // `title` and `content` above are nodes; both are also HTML attribute names
+  // (tooltip, microdata) that `HTMLAttributes` types as strings, so omit them
+  // from the spread rather than letting the two meanings collide.
+} & Omit<HTMLAttributes<HTMLDivElement>, "title" | "content">) {
+  const span = content != null ? "row-span-2" : undefined;
+  const align = tall ? "self-start" : "self-center";
+  return (
+    <div
+      className={cn(
+        "grid w-full max-w-full gap-x-2 overflow-hidden border-border/60 border-b px-2 py-2",
+        leading.length === 2
+          ? "grid-cols-[auto_auto_1fr_auto]"
+          : leading.length === 1
+            ? "grid-cols-[auto_1fr_auto]"
+            : "grid-cols-[1fr_auto]",
+        tall ? "items-start" : "items-center",
+        className,
+      )}
+      {...divProps}
+    >
+      {leading.map((node, index) => (
+        <div
+          // Callers key their own nodes ("select"/"image"); the index is the
+          // fallback for the fixed-order slots.
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-order slots
+          key={index}
+          className={cn(span, align)}
+        >
+          {node}
+        </div>
+      ))}
+      {title}
+      <div className={cn(span, align)}>{actions}</div>
+      {content}
+      {/* Explicit placement — auto-placed children landed in the checkbox
+          column's 44px gutter. */}
+      {footer && <div className="col-span-full">{footer}</div>}
+    </div>
+  );
+}
+
+/**
+ * The spec grid: a mono label gutter + value column. Exported so the skeleton
+ * reproduces the exact geometry.
+ */
+export const MOBILE_SPEC_GRID_CLASS =
+  "grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1";
+
+/**
  * A mobile-friendly card component with optional selection checkbox.
  * Provides consistent layout: [Checkbox] | Content | [Actions]
  *
@@ -122,6 +206,7 @@ export function MobileCard({
   variant = "card",
   rightValues,
   rightValueInteractive,
+  metaValues,
   onLongPress,
 }: MobileCardProps) {
   const longPress = useLongPress(onLongPress);
@@ -130,25 +215,76 @@ export function MobileCard({
     : "border-l-primary";
 
   const isRow = variant === "row";
-  const hasSecondLine =
-    isRow && (subtitle || (rightValues && rightValues.length > 0));
+  const specValues = metaValues ?? [];
+  const hasIdentityLine = Boolean(subtitle || rightValues?.length);
+  const hasSpec = specValues.length > 0;
 
   if (isRow) {
-    // Compact row layout using CSS grid:
-    //   Col: [checkbox?] [image?] [content: 1fr] [actions?]
-    //   Row 1: title
-    //   Row 2: subtitle ... rightValues
+    const content =
+      hasIdentityLine || hasSpec ? (
+        <Stack gap="tight" className="min-w-0">
+          {hasIdentityLine && (
+            <Row align="center" gap="sm" className="min-w-0">
+              {subtitle && (
+                <Description
+                  as="span"
+                  size="xs"
+                  className="block min-w-0 flex-1 truncate"
+                >
+                  {subtitle}
+                </Description>
+              )}
+              <Row
+                align="center"
+                justify="end"
+                gap="sm"
+                className="ml-auto shrink-0"
+              >
+                {rightValues?.map((node, index) => (
+                  <RightValueSlot
+                    // biome-ignore lint/suspicious/noArrayIndexKey: positional slots
+                    key={index}
+                    node={node}
+                    interactive={rightValueInteractive?.[index]}
+                  />
+                ))}
+              </Row>
+            </Row>
+          )}
+          {hasSpec && (
+            <dl className={MOBILE_SPEC_GRID_CLASS}>
+              {specValues.map((item) => (
+                <Fragment key={item.id}>
+                  <Eyebrow as="dt" className="truncate">
+                    {item.label}
+                  </Eyebrow>
+                  <dd
+                    className={cn(
+                      "min-w-0 text-xs",
+                      item.interactive
+                        ? // Stretch the cell WRAPPER, not the edit trigger.
+                          // Widening the trigger itself made it take the
+                          // wrapper's whole width, starving the sibling
+                          // `min-w-0 truncate` value span to 0px — the value
+                          // was in the DOM and invisible on screen.
+                          "flex min-h-8 items-center [&>*]:w-full"
+                        : // Room to wrap now, and hiding data is the bug being
+                          // fixed — so clamp rather than truncate.
+                          "line-clamp-2 text-muted-foreground",
+                    )}
+                  >
+                    {item.value}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+        </Stack>
+      ) : undefined;
+
     return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
-      <div
+      <MobileRowShell
         className={cn(
-          "grid w-full max-w-full items-center gap-x-2 overflow-hidden border-border/60 border-b px-2 py-2",
-          // Dynamic grid columns based on which slots are present
-          selectable && imageSlot
-            ? "grid-cols-[auto_auto_1fr_auto]"
-            : selectable || imageSlot
-              ? "grid-cols-[auto_1fr_auto]"
-              : "grid-cols-[1fr_auto]",
           // Touch devices have no :hover — give a pressed state so taps register.
           onClick && "cursor-pointer transition-colors active:bg-muted/50",
           // A row involved in long-press selection must opt out of iOS's own
@@ -164,6 +300,50 @@ export function MobileCard({
             "select-none [-webkit-touch-callout:none]",
           className,
         )}
+        // The side cells centre against a short row, but a tall spec block
+        // would leave them floating mid-row — pin them to the title line.
+        tall={hasSpec}
+        leading={[
+          selectable ? (
+            <div
+              key="select"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center"
+              onClickCapture={(e) => e.stopPropagation()}
+            >
+              <Checkbox
+                checked={selectable.isSelected}
+                onCheckedChange={(checked) =>
+                  selectable.onSelectionChange(!!checked)
+                }
+                className="shrink-0"
+                aria-label="Select item"
+              />
+            </div>
+          ) : null,
+          imageSlot ? (
+            <div key="image" className="size-11 overflow-hidden rounded">
+              {imageSlot}
+            </div>
+          ) : null,
+        ].filter(Boolean)}
+        title={
+          <Row align="baseline" gap="sm" className="min-w-0">
+            {TitleIcon && (
+              <TitleIcon
+                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" /* tight */
+              />
+            )}
+            <span
+              className="block min-w-0 flex-1 truncate font-medium text-sm leading-snug"
+              title={title}
+            >
+              {title}
+            </span>
+          </Row>
+        }
+        content={content}
+        actions={actions}
+        footer={children}
         onClick={(e) => {
           if (longPress.consumeClick()) {
             e.preventDefault();
@@ -181,96 +361,7 @@ export function MobileCard({
         onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
         role={onClick ? "button" : undefined}
         tabIndex={onClick ? 0 : undefined}
-      >
-        {/* Checkbox */}
-        {selectable && (
-          <div
-            className={cn(
-              "flex min-h-[44px] min-w-[44px] items-center justify-center self-center",
-              hasSecondLine && "row-span-2",
-            )}
-            onClickCapture={(e) => e.stopPropagation()}
-          >
-            <Checkbox
-              checked={selectable.isSelected}
-              onCheckedChange={(checked) =>
-                selectable.onSelectionChange(!!checked)
-              }
-              className="shrink-0"
-              aria-label="Select item"
-            />
-          </div>
-        )}
-
-        {/* Image */}
-        {imageSlot && (
-          <div
-            className={cn(
-              "size-11 self-center overflow-hidden rounded",
-              hasSecondLine && "row-span-2",
-            )}
-          >
-            {imageSlot}
-          </div>
-        )}
-
-        {/* Title (content column, row 1) */}
-        <Row align="baseline" gap="sm" className="min-w-0">
-          {TitleIcon && (
-            <TitleIcon
-              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" /* tight */
-            />
-          )}
-          <span
-            className="block min-w-0 flex-1 truncate font-medium text-sm leading-snug"
-            title={title}
-          >
-            {title}
-          </span>
-        </Row>
-
-        {/* Actions */}
-        <div className={cn("self-center", hasSecondLine && "row-span-2")}>
-          {actions}
-        </div>
-
-        {/* Second line (content column, row 2) */}
-        {hasSecondLine && (
-          <Row align="center" gap="sm" className="min-w-0">
-            {subtitle && (
-              <Description
-                as="span"
-                size="xs"
-                className="block min-w-0 flex-1 truncate"
-              >
-                {subtitle}
-              </Description>
-            )}
-            <Row
-              align="center"
-              justify="end"
-              gap="sm"
-              className="ml-auto shrink-0"
-            >
-              {rightValues?.[0] !== undefined && (
-                <RightValueSlot
-                  node={rightValues[0]}
-                  interactive={rightValueInteractive?.[0]}
-                />
-              )}
-              {rightValues?.[1] !== undefined && (
-                <RightValueSlot
-                  node={rightValues[1]}
-                  interactive={rightValueInteractive?.[1]}
-                />
-              )}
-            </Row>
-          </Row>
-        )}
-
-        {/* Extra children (debug, etc.) */}
-        {children}
-      </div>
+      />
     );
   }
 

@@ -172,6 +172,12 @@ export interface MobileColumnMeta {
    * on columns whose cell renders an editor — don't rely on DOM sniffing.
    */
   interactive?: boolean;
+  /**
+   * Shorter label for the mobile spec grid's label gutter, which is much
+   * narrower than a desktop header cell. Defaults to the column's own string
+   * `header`; set this only where that would truncate (e.g. "Manufacturer").
+   */
+  label?: string;
 }
 
 // Extend TanStack Table's meta type to include our custom properties
