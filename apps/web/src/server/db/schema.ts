@@ -955,6 +955,14 @@ export const purchase = pgTable(
       .$type<ProductId>()
       .references(() => product.id),
     vendor: text("vendor"),
+    // Vendor's own order/receipt identifier, scoped by `vendor` — Amazon
+    // "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325".
+    // Deliberately free text: every retailer formats these differently and
+    // validating them would only reject real data. Previously lived in `notes`
+    // as prose, which made reconciliation a per-vendor regex; a typed column
+    // lets sibling rows from one order be grouped (`GROUP BY vendor, orderId`),
+    // which is how duplicate rows and multi-line "aggregate" rows are found.
+    orderId: text("orderId"),
     notionPageId: text("notionPageId"),
     ...baseTimestamps(),
     ...softDeletedAt(),

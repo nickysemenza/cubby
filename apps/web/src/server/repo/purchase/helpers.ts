@@ -18,6 +18,7 @@ type PurchaseRow = {
   projectId: PurchaseOut["projectId"];
   productId: PurchaseOut["productId"];
   vendor: string | null;
+  orderId: string | null;
   createdAt: Date;
   updatedAt: Date;
   project: { name: string; deletedAt: Date | null } | null;
@@ -39,6 +40,7 @@ export const dbPurchaseToAPI = (row: PurchaseRow): PurchaseOut => ({
   productId: row.productId,
   productName: resolveLiveJoinName(row.product),
   vendor: row.vendor,
+  orderId: row.orderId,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
