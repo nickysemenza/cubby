@@ -3,14 +3,22 @@
  *
  * Drives the real SEP-1865 protocol (AppBridge + PostMessageTransport over a
  * sandboxed iframe), so what renders here is what Claude renders. `pnpm
- * --filter @cubby/mcp-apps dev` serves it. Fixtures mirror the tools' real output schemas;
- * update them alongside the schemas, not the apps.
+ * --filter @cubby/mcp-apps dev` serves it.
+ *
+ * Two fixtures per app. `*-real.json` is a verbatim capture from a live MCP
+ * call against the production database — the honest case, and the one that
+ * caught the USDA ordering problem. The other is hand-built to exercise states
+ * real data happens not to contain right now (every availability status, a
+ * partially-stocked item, multi-meal contributions). Keep both: the synthetic
+ * one is UI coverage, the real one is the reality check.
  */
 import {
   AppBridge,
   PostMessageTransport,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
+import shoppingListReal from "./fixtures/shopping-list-real.json";
 import shoppingList from "./fixtures/shopping-list.json";
+import usdaPickerReal from "./fixtures/usda-picker-real.json";
 import usdaPicker from "./fixtures/usda-picker.json";
 
 /**
@@ -20,7 +28,15 @@ import usdaPicker from "./fixtures/usda-picker.json";
  * it), and an unknown name should fail loudly here rather than 404 in the frame.
  */
 const APPS = {
+  "shopping-list (real)": {
+    url: "/app/shopping-list.html",
+    fixture: shoppingListReal,
+  },
   "shopping-list": { url: "/app/shopping-list.html", fixture: shoppingList },
+  "usda-picker (real)": {
+    url: "/app/usda-picker.html",
+    fixture: usdaPickerReal,
+  },
   "usda-picker": { url: "/app/usda-picker.html", fixture: usdaPicker },
 } as const satisfies Record<
   string,

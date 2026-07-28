@@ -1,0 +1,103 @@
+{
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 6,
+    "totalCount": 72865
+  },
+  "items": [
+    {
+      "fdc_id": 1433980,
+      "description": "\"\"EUROPEAN STYLE\"\" FRESH, RICH & SILKY BUTTER, \"\"EUROPEAN STYLE\"\"",
+      "data_type": "branded_food",
+      "brand_owner": "Zoe's Meats Inc",
+      "brand_name": "DAPHNE'S CREAMERY",
+      "nutrientsPer100": {},
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 1726281,
+      "description": "\"\"EUROPEAN STYLE\"\" FRESH, RICH & SILKY BUTTER, \"\"EUROPEAN STYLE\"\"",
+      "data_type": "branded_food",
+      "brand_owner": "Zoe's Meats Inc",
+      "brand_name": "DAPHNE'S CREAMERY",
+      "nutrientsPer100": {
+        "203": 0,
+        "204": 78.57,
+        "205": 0,
+        "208": 714,
+        "307": 0,
+        "601": 214,
+        "606": 50
+      },
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 2160231,
+      "description": "\"\"EUROPEAN STYLE\"\" FRESH, RICH & SILKY BUTTER, \"\"EUROPEAN STYLE\"\"",
+      "data_type": "branded_food",
+      "brand_owner": "Zoe's Meats Inc",
+      "brand_name": "DAPHNE'S CREAMERY",
+      "nutrientsPer100": {
+        "203": 0,
+        "204": 78.57,
+        "205": 0,
+        "208": 714,
+        "307": 0,
+        "601": 214,
+        "606": 50
+      },
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 1998614,
+      "description": "\"\"LUMBER JACK\"\" CENTER-CUT SMOKED SAUSAGE, FRESH BUTTERMILK BISCUIT, EGG & CHEESE SUPER-SIZE SANDWICHES, \"\"LUMBER JACK\"\"",
+      "data_type": "branded_food",
+      "brand_owner": "Roger Wood Foods, Inc.",
+      "brand_name": "ROGER WOOD",
+      "nutrientsPer100": {
+        "203": 10.26,
+        "204": 17.31,
+        "205": 13.46,
+        "208": 250,
+        "291": 0.6,
+        "301": 96,
+        "303": 0.64,
+        "306": 0,
+        "307": 923,
+        "601": 74,
+        "606": 8.33
+      },
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 1387514,
+      "description": "\"\"ORIGINAL\"\" MOOSE TRACKS CHURNED LIGHT ICE CREAM VANILLA LIGHT ICE CREAM WITH PEANUT BUTTER CUPS AND FAMOUS MOOSE TRACKS FUDGE, \"\"ORIGINAL\"\" MOOSE TRACKS",
+      "data_type": "branded_food",
+      "brand_owner": "Rafael Padilla & Cia S. En C.",
+      "brand_name": "HEINEN'S",
+      "nutrientsPer100": {},
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 1679756,
+      "description": "\"\"ORIGINAL\"\" MOOSE TRACKS CHURNED LIGHT ICE CREAM VANILLA LIGHT ICE CREAM WITH PEANUT BUTTER CUPS AND FAMOUS MOOSE TRACKS FUDGE, \"\"ORIGINAL\"\" MOOSE TRACKS",
+      "data_type": "branded_food",
+      "brand_owner": "Rafael Padilla & Cia S. En C.",
+      "brand_name": "HEINEN'S",
+      "nutrientsPer100": {
+        "203": 3.75,
+        "204": 8.75,
+        "205": 28.75,
+        "208": 212,
+        "291": 1.2,
+        "301": 125,
+        "303": 0.75,
+        "306": 262,
+        "307": 88,
+        "601": 12,
+        "606": 4.38
+      },
+      "linkedProducts": []
+    }
+  ]
+}
