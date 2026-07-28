@@ -1,5 +1,6 @@
 import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import {
@@ -28,6 +29,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
+import { ScopeChip } from "../_components/data-table/ActiveFilterChips";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -37,6 +39,7 @@ import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
@@ -68,6 +71,13 @@ interface PurchaseListProps {
    */
   initialSearch?: string;
 }
+
+// Scoped rather than a plain `useNavigate()` so `search` stays typed to this
+// route's schema (which is where `productId` is declared) without importing
+// the `Route` object itself — that would be circular, since this route file
+// renders `PurchaseList`. Same idiom as `purchase-analytics-view.tsx`'s
+// `route`.
+const purchasesRoute = getRouteApi("/_authenticated/purchases/");
 
 export function PurchaseList({
   mode = "ledger",
@@ -177,10 +187,7 @@ export function PurchaseList({
   );
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
-  const projectFilterOptions = useMemo(
-    () => ({ project: projectOptions }),
-    [projectOptions],
-  );
+  const projectFilterOptions = useFilterOptions({ project: projectOptions });
 
   // The cost / date / costType / trade / future columns come from the shared
   // factories in `~/app/projects/shared.tsx`, also used by the embedded
@@ -313,6 +320,36 @@ export function PurchaseList({
 
   const presetFilters = useMemo(() => purchasePresetFilters(mode), [mode]);
 
+  // `?productId=` (the product detail page's "See all in ledger" link) scopes
+  // the ledger to one product via the manifest's `productId` spec — but no
+  // column has that id, so it renders no header control and would otherwise
+  // be an invisible-but-active filter with Reset as the only way out. This is
+  // its one visible surface: a removable chip showing the resolved product
+  // name (never the raw id). `getByID` is the same query every other
+  // id→product-name lookup in the app uses (e.g. `ProductPreviewContent`),
+  // reused rather than duplicated.
+  const purchasesSearch = purchasesRoute.useSearch();
+  const purchasesNavigate = purchasesRoute.useNavigate();
+  const scopedProductId = purchasesSearch.productId;
+  const scopedProductQuery = useQuery({
+    ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
+    enabled: Boolean(scopedProductId),
+  });
+  const clearProductScope = useCallback(() => {
+    void purchasesNavigate({
+      search: (prev) => ({ ...prev, productId: undefined }),
+      replace: true,
+    });
+  }, [purchasesNavigate]);
+  const productScopeChip =
+    scopedProductId && scopedProductQuery.data ? (
+      <ScopeChip
+        name="Product"
+        value={scopedProductQuery.data.name}
+        onClear={clearProductScope}
+      />
+    ) : undefined;
+
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 
   const {
@@ -439,6 +476,7 @@ export function PurchaseList({
       )}
       <RTable
         table={table}
+        additionalToolbarContent={productScopeChip}
         isLoading={isLoading}
         error={error}
         ariaLabel="Purchases Table"
