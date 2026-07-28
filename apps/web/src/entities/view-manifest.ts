@@ -28,7 +28,7 @@ import { FILTER_NONE } from "./filters";
 /** A view's pinned filter state, in the manifest's own vocabulary — the same
  *  `{id, value}` shape `decodeFilters` produces and `table.setColumnFilters`
  *  consumes, so no translation layer is needed in either direction. */
-export interface ViewFilter {
+interface ViewFilter {
   /** A `columnId` of a filter spec declared for this entity. */
   id: string;
   value: string | string[];
