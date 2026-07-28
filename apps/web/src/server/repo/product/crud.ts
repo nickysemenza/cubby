@@ -114,19 +114,6 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
-  if (sort.orderBy === "unitMappingQuality") {
-    return [
-      sql.raw(
-        `(CASE ` +
-          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 3 THEN 3 ` +
-          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 2 THEN 2 ` +
-          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 1 ` +
-          `OR "product"."price" IS NOT NULL OR "product"."fdc_id" IS NOT NULL OR "product"."upc" IS NOT NULL THEN 1 ` +
-          `ELSE 0 END) ${dirSql}`,
-      ),
-    ];
-  }
-
   if (sort.orderBy === "ingredient") {
     return [
       sql.raw(

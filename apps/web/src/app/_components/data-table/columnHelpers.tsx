@@ -36,6 +36,7 @@ import type {
   EntityDetailRoute,
 } from "~/entities/entities";
 import { entities } from "~/entities/entities";
+import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
@@ -585,7 +586,11 @@ type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
  * Creates a column that displays unit mappings for an entity.
  * Requires a pre-computed mappingsMap that maps entity IDs to their unit mappings.
  */
-export function createUnitMappingsColumn<T extends { id: string }>(
+export function createUnitMappingsColumn<
+  // `ingredient.naKinds` is the coverage opt-out; optional so the ingredient
+  // list (whose rows ARE the ingredient) and any future caller still fit.
+  T extends { id: string; ingredient?: { naKinds?: BaseKind[] | null } | null },
+>(
   columnHelper: ColumnHelper<T>,
   mappingsMap: Record<string, UnitMapping[]>,
   options?: {
@@ -616,6 +621,12 @@ export function createUnitMappingsColumn<T extends { id: string }>(
             title=""
             compact={compact}
             showTier={compact}
+            // Grade against the linked ingredient's applicable kinds, same as
+            // the Problems panel and the enrichment workbench. Without this the
+            // list graded against all four BASE_KINDS and disagreed with both —
+            // an ingredient that opted out of `volume` read worse here than on
+            // the page you'd go to act on it.
+            kinds={gradedKinds(entity.ingredient?.naKinds)}
           />
         </div>
       );

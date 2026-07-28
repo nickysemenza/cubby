@@ -238,21 +238,10 @@ export const productSortableFields = [
   "price",
   "notes",
   "location",
-  "unitMappingQuality",
   "ingredient",
 ] as const;
 
 export type ProductSortField = (typeof productSortableFields)[number];
-
-export const productUnitMappingQuality = z.enum([
-  "none",
-  "partial",
-  "good",
-  "complete",
-]);
-export type ProductUnitMappingQuality = z.infer<
-  typeof productUnitMappingQuality
->;
 
 const productTopLevelFields = {
   id: productId,
@@ -382,7 +371,6 @@ export const productListItemOut = z.object({
   unitMappings: z.array(unitMappingOut),
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
-  unitMappingQuality: productUnitMappingQuality,
   // Live purchases (acquisitions + negative exit rows) linked to this
   // product — backs the list's "Purchases" column + its deep link to
   // `/purchases?productId=`.
