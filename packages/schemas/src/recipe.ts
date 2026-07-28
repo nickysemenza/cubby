@@ -18,6 +18,7 @@ import { imageOut } from "./image";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
+  presenceFilter,
 } from "./pagination";
 import {
   recipeMeta,
@@ -253,6 +254,13 @@ export const recipeFilterFields = {
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
   cookbookId: cookbookId.optional(),
+  /**
+   * `recipe.tags` is a nullable array, so `"none"` means untagged —
+   * `tags IS NULL OR cardinality(tags) = 0`. A cleared-to-`{}` recipe is just
+   * as untagged as a never-tagged one, and both must match. OR-ed with
+   * `tagFilters` (see `taskFilterFields.projectPresenceFilter`).
+   */
+  tagsPresenceFilter: presenceFilter,
 };
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);

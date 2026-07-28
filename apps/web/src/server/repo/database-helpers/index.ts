@@ -27,11 +27,13 @@ export {
   buildSearchConditions,
   countWhere,
   eqAny,
+  eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
   isNotDeleted,
   lockAndValidateForDelete,
   notDeleted,
+  presenceCondition,
 } from "./query";
 // Relation loaders
 export { imageOrder, relations } from "./relations";

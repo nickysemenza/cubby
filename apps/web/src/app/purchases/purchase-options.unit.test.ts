@@ -41,20 +41,16 @@ describe("resolveDateRange", () => {
 });
 
 describe("purchasePresetFilters", () => {
-  it("clears projectId in unassigned mode so the preset can't self-contradict", () => {
-    // The bug this pins: `extraFilters` spreads after the manifest's column
-    // filters, so a live selection in the project header filter would survive
-    // next to `noProject`. buildPurchaseWhereClause then ANDs
-    // `projectId IN (…)` with `projectId IS NULL` — unsatisfiable, so the table
-    // silently empties. The explicit `projectId: undefined` overrides it away.
+  it("pins projectPresenceFilter: none in unassigned mode, with no projectId clobber", () => {
+    // Used to also clear `projectId: undefined` here: `noProject` ANDed with a
+    // live project-column selection produced `projectId IN (…) AND projectId
+    // IS NULL`, an unsatisfiable contradiction that silently emptied the
+    // table. Presence now ORs with the selection instead, so a project pick
+    // on this tab *widens* it ("unassigned or Kitchen") rather than emptying
+    // it — the clobber would discard the user's selection, which is worse.
     const preset = purchasePresetFilters("unassigned");
-    expect(preset.noProject).toBe(true);
-    expect(preset.projectId).toBeUndefined();
-    expect("projectId" in preset).toBe(true);
-
-    // Prove the override actually wins under the real merge order.
-    const merged = { projectId: ["some-project-id"], ...preset };
-    expect(merged.projectId).toBeUndefined();
+    expect(preset).toEqual({ projectPresenceFilter: "none" });
+    expect("projectId" in preset).toBe(false);
   });
 
   it("pins the documented preset for each other mode", () => {

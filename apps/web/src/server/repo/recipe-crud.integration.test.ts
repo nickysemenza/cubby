@@ -15,11 +15,13 @@ import {
   createRecipe,
   deleteRecipes,
   getRecipeByID,
+  recipeList,
   updateRecipe,
   upsertCookbookRecipe,
   upsertNotionRecipe,
   upsertRecipe,
 } from "./recipe";
+import type { RecipeFilters } from "./recipe/internal-types";
 import { ingredientRef, makeRecipeInput } from "./repo.fixtures";
 
 // Direct repo-layer tests for recipe/crud.ts: the soft-delete cascade + audit
@@ -269,6 +271,62 @@ describe("recipe crud repo", () => {
         from: "Old Name",
         to: "New Name",
       });
+    });
+  });
+
+  describe("tagsPresenceFilter", () => {
+    /** Both shapes of "untagged" plus one tagged recipe. */
+    const seedTagMix = async () => {
+      await createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "never tagged", tags: null }),
+        ctx.actor,
+      );
+      await createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "tags cleared", tags: [] }),
+        ctx.actor,
+      );
+      await createRecipe(
+        ctx.db,
+        makeRecipeInput({ name: "tagged", tags: ["quick"] }),
+        ctx.actor,
+      );
+    };
+
+    const listNames = async (filters: RecipeFilters) =>
+      (
+        await recipeList(
+          ctx.db,
+          filters,
+          [{ orderBy: "name", direction: "asc" }],
+          { pageIndex: 0, pageSize: 50 },
+        )
+      ).data.map((r) => r.name);
+
+    // The `cardinality` half of TAGS_ARE_EMPTY exists for "tags cleared":
+    // removing a recipe's last tag writes `{}`, not NULL, so an IS NULL-only
+    // predicate would hide it from the very view meant to find it.
+    it("'none' matches a null tags column AND an empty array", async () => {
+      await seedTagMix();
+      const names = await listNames({ tagsPresenceFilter: "none" });
+      expect(names).toEqual(["never tagged", "tags cleared"]);
+    });
+
+    it("'has' is the exact complement — only genuinely tagged recipes", async () => {
+      await seedTagMix();
+      expect(await listNames({ tagsPresenceFilter: "has" })).toEqual([
+        "tagged",
+      ]);
+    });
+
+    it("ORs with tagFilters rather than narrowing them", async () => {
+      await seedTagMix();
+      const names = await listNames({
+        tagFilters: ["quick"],
+        tagsPresenceFilter: "none",
+      });
+      expect(names).toEqual(["never tagged", "tagged", "tags cleared"]);
     });
   });
 });

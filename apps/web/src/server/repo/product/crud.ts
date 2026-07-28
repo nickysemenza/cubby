@@ -59,6 +59,7 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
+  eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -299,6 +300,7 @@ export const productList = async (
   groupBy?: string,
   inventoryPresenceFilter?: PresenceFilter,
   ingredientPresenceFilter?: PresenceFilter,
+  categoryPresenceFilter?: PresenceFilter,
 ) => {
   const dbClient = getDb(db);
 
@@ -327,7 +329,7 @@ export const productList = async (
       { column: product.upc, term: upc },
     ],
     [
-      eqAny(product.category, category),
+      eqAnyOrPresence(product.category, category, categoryPresenceFilter),
       ingredientPresenceFilter === "none"
         ? isNull(product.ingredientId)
         : undefined,

@@ -5,16 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import {
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { eq, gte, inArray, isNull, lte, or, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
@@ -26,6 +17,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
 import {
@@ -52,10 +44,10 @@ export const buildPurchaseWhereClause = async (
   const selectedProjectIds = filters.projectId
     ? [filters.projectId].flat()
     : [];
-  let projectCondition = eqAny(purchase.projectId, filters.projectId);
+  let projectValues = eqAny(purchase.projectId, filters.projectId);
   if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
     const childrenMap = buildChildrenMap(await allProjectParentRows(db));
-    projectCondition = inArray(
+    projectValues = inArray(
       purchase.projectId,
       uniq(
         selectedProjectIds.flatMap((id) => [
@@ -65,6 +57,16 @@ export const buildPurchaseWhereClause = async (
       ),
     );
   }
+  // The `(none)` / `Has project` sentinels OR with that selection instead of
+  // ANDing against it, so "Kitchen or unassigned" is one filter. The
+  // unassigned-spend worklist is just `projectPresenceFilter: "none"` with no
+  // `projectId`. (This replaced a `noProject` boolean that AND-ed, which is
+  // why the Unassigned view had to clobber `projectId` to avoid matching
+  // nothing at all.)
+  const projectCondition = or(
+    projectValues,
+    presenceCondition(purchase.projectId, filters.projectPresenceFilter),
+  );
 
   // `search` stays a single-column term: buildSearchConditions ANDs its
   // searchFilters entries, so adding `{ column: vendor, term: filters.search }`
@@ -78,18 +80,13 @@ export const buildPurchaseWhereClause = async (
       eqAny(purchase.costType, filters.costType),
       eqAny(purchase.trade, filters.trade),
       projectCondition,
-      // The unassigned-spend worklist. Mirrors taskFilterFields.noProject.
-      filters.noProject ? isNull(purchase.projectId) : undefined,
       eqAny(purchase.productId, filters.productId),
       // "linked" means productId IS NOT NULL — this deliberately includes
       // purchases whose product was later soft-deleted (those read back with
-      // productId still set and productName null; see dbPurchaseToAPI).
-      filters.productPresenceFilter === "has"
-        ? isNotNull(purchase.productId)
-        : undefined,
-      filters.productPresenceFilter === "none"
-        ? isNull(purchase.productId)
-        : undefined,
+      // productId still set and productName null; see dbPurchaseToAPI). The
+      // same column-null-only rule applies to the project presence above: a
+      // purchase whose project was soft-deleted is NOT "(none)".
+      presenceCondition(purchase.productId, filters.productPresenceFilter),
       formatSearchTerm(purchase.vendor, filters.vendor),
       filters.future !== undefined
         ? eq(purchase.future, filters.future)

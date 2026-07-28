@@ -26,6 +26,7 @@ import {
   type FilterKind,
   type FilterSpecCore,
   isMultiFilterKind,
+  nullableSentinelOptions,
   presenceFilterOptions,
 } from "./filters";
 
@@ -109,6 +110,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       brand: unsafeProjectId,
       placeholder: "Filter by project...",
       optionsKey: "project",
+      nullable: { field: "projectPresenceFilter", label: "project" },
     },
     {
       // No column renders this — it's seeded from the URL only (a deep link
@@ -165,6 +167,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       brand: unsafeProjectId,
       placeholder: "Filter by project...",
       optionsKey: "project",
+      nullable: { field: "projectPresenceFilter", label: "project" },
     },
   ],
 
@@ -193,6 +196,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "multiselect",
       placeholder: "Filter by category...",
       options: productCategoryOptionsWithTheme,
+      nullable: { field: "categoryPresenceFilter", label: "category" },
     },
     {
       columnId: "location",
@@ -226,6 +230,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "multiselect",
       placeholder: "Filter by tag...",
       optionsKey: "tags",
+      nullable: { field: "tagsPresenceFilter", label: "tags" },
     },
   ],
 
@@ -337,14 +342,19 @@ export function manifestFilterConfig(
 ): FilterConfig | undefined {
   const spec = getEntityFilters(entity).find((s) => s.columnId === columnId);
   if (!spec) return undefined;
+  // A runtime picklist (project roster, tag universe) can't be static module
+  // data, so the caller injects it by key.
+  const resolvedOptions = spec.optionsKey
+    ? (runtimeOptions?.[spec.optionsKey] ?? [])
+    : (spec.options ?? []);
+  // Sentinels come first so they're reachable without scrolling a long roster.
+  const options = spec.nullable
+    ? [...nullableSentinelOptions(spec.nullable.label), ...resolvedOptions]
+    : resolvedOptions;
   return {
     placeholder: spec.placeholder,
     filterType: filterTypeForKind(spec.kind),
-    // A runtime picklist (project roster, tag universe) can't be static module
-    // data, so the caller injects it by key.
-    options: spec.optionsKey
-      ? (runtimeOptions?.[spec.optionsKey] ?? [])
-      : spec.options,
+    options,
     facetCount: spec.facetCount,
   };
 }

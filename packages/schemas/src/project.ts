@@ -432,10 +432,13 @@ export const taskFilterFields = {
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
   /**
-   * `true` matches tasks with `projectId IS NULL` — the Inbox predicate.
-   * Mutually meaningful only when `projectId` is omitted.
+   * `"none"` matches tasks with `projectId IS NULL` (the Inbox predicate);
+   * `"has"` matches those with any project. Combined with `projectId` it
+   * **widens** rather than narrows — the repo ORs the two, so
+   * `{projectId: [A], projectPresenceFilter: "none"}` means "project A or
+   * unassigned". That's what the header filter's `(none)` sentinel produces.
    */
-  noProject: z.boolean().optional(),
+  projectPresenceFilter: presenceFilter,
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -687,11 +690,11 @@ export const purchaseFilterFields = {
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
   /**
-   * `true` matches purchases with `projectId IS NULL` — the unassigned-spend
-   * worklist. Mirrors `taskFilterFields.noProject`; meaningful only when
-   * `projectId` is omitted.
+   * `"none"` matches purchases with `projectId IS NULL` — the unassigned-spend
+   * worklist. Mirrors `taskFilterFields.projectPresenceFilter`, including the
+   * OR-with-`projectId` semantics documented there.
    */
-  noProject: z.boolean().optional(),
+  projectPresenceFilter: presenceFilter,
   productId: productId.optional(),
   productPresenceFilter: presenceFilter,
   // Its own filter, deliberately NOT folded into `search`: buildSearchConditions

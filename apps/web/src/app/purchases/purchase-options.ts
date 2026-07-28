@@ -101,12 +101,13 @@ export type PurchaseViewMode =
  *
  * `extraFilters` spreads AFTER the manifest's column filters, so a preset here
  * always beats a live header-filter selection on the same key — which is the
- * intended precedence. The subtlety is a preset that conflicts with a
- * *different* key: `unassigned` pins `noProject`, while the project column
- * writes `projectId`. Left alone, both would reach
- * `buildPurchaseWhereClause` and AND into `projectId IN (…) AND projectId IS
- * NULL`, which no row can satisfy — the table would silently empty with no
- * hint why. Clearing `projectId` here keeps the preset authoritative.
+ * intended precedence. `unassigned` pins `projectPresenceFilter: "none"`,
+ * which is exactly the value the project column's nullable sentinel writes
+ * for `?project=__none__` — so the preset is equivalent to a URL state a
+ * saved view could reproduce, and needs no clobber of `projectId` alongside
+ * it: the repo now ORs presence with any live project selection, so picking
+ * a project on this tab *widens* it ("unassigned or Kitchen") instead of
+ * emptying it.
  */
 export function purchasePresetFilters(
   mode: PurchaseViewMode,
@@ -114,7 +115,7 @@ export function purchasePresetFilters(
   return match(mode)
     .with("planned", () => ({ future: true }))
     .with("unclassified", () => ({ trade: "other" as Trade, costIsNull: true }))
-    .with("unassigned", () => ({ noProject: true, projectId: undefined }))
+    .with("unassigned", () => ({ projectPresenceFilter: "none" as const }))
     .with("ledger", () => ({}))
     .exhaustive();
 }

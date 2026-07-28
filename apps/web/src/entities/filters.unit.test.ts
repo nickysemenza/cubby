@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFiltersFromManifest,
+  FILTER_ANY,
+  FILTER_NONE,
   type FilterSpecCore,
   type FilterValue,
   isMultiFilterKind,
+  nullableSentinelOptions,
 } from "./filters";
 
 /** Reads from a plain record, mirroring `tableState.getColumnFilter`. */
@@ -114,6 +117,109 @@ describe("buildFiltersFromManifest", () => {
         buildFiltersFromManifest(idSpecs, getter({ project: ["p1", "p2"] })),
       ).toEqual({ projectId: ["branded:p1", "branded:p2"] });
     });
+
+    describe("nullable sentinels", () => {
+      const specs: FilterSpecCore[] = [
+        {
+          columnId: "category",
+          field: "categoryFilters",
+          kind: "multiselect",
+          nullable: { field: "categoryPresence", label: "Category" },
+        },
+      ];
+
+      it("passes real values through untouched when no sentinel is selected", () => {
+        expect(
+          buildFiltersFromManifest(specs, getter({ category: ["a", "b"] })),
+        ).toEqual({ categoryFilters: ["a", "b"] });
+      });
+
+      it("routes a lone __none__ to the nullable field as a presence filter", () => {
+        expect(
+          buildFiltersFromManifest(specs, getter({ category: [FILTER_NONE] })),
+        ).toEqual({ categoryPresence: "none" });
+      });
+
+      it("routes a lone __any__ to the nullable field as a presence filter", () => {
+        expect(
+          buildFiltersFromManifest(specs, getter({ category: [FILTER_ANY] })),
+        ).toEqual({ categoryPresence: "has" });
+      });
+
+      it("keeps both the values and the presence field when one sentinel rides along with real values", () => {
+        expect(
+          buildFiltersFromManifest(
+            specs,
+            getter({ category: ["a", FILTER_NONE] }),
+          ),
+        ).toEqual({ categoryFilters: ["a"], categoryPresence: "none" });
+      });
+
+      it("drops the constraint entirely when both sentinels are selected", () => {
+        // IS NULL OR IS NOT NULL is every row, so selecting both sentinels
+        // means no constraint at all -- not a filter matching everything.
+        expect(
+          buildFiltersFromManifest(
+            specs,
+            getter({ category: [FILTER_ANY, FILTER_NONE] }),
+          ),
+        ).toEqual({});
+      });
+
+      it("still drops the constraint when values ride along with both sentinels", () => {
+        // The OR swallows any value selection sitting next to it, so this
+        // must produce no filter at all, not `{ categoryFilters: ["a"] }`.
+        expect(
+          buildFiltersFromManifest(
+            specs,
+            getter({ category: ["a", FILTER_ANY, FILTER_NONE] }),
+          ),
+        ).toEqual({});
+      });
+
+      it("never brands a sentinel, only the real ids alongside it", () => {
+        const idSpecs: FilterSpecCore[] = [
+          {
+            columnId: "project",
+            field: "projectId",
+            kind: "idMulti",
+            // A brand that would visibly mangle a sentinel if it slipped
+            // through unpartitioned.
+            brand: (v) => ({ branded: v }),
+            nullable: { field: "projectPresence", label: "Project" },
+          },
+        ];
+        expect(
+          buildFiltersFromManifest(
+            idSpecs,
+            getter({ project: ["p1", FILTER_NONE] }),
+          ),
+        ).toEqual({
+          projectId: [{ branded: "p1" }],
+          projectPresence: "none",
+        });
+      });
+
+      it("normalizes a bare sentinel scalar into the presence patch", () => {
+        // Same load-bearing scalar-to-array normalization as the plain
+        // multiselect case above -- a nullable filter's stored state can
+        // still arrive as a scalar string, and `many()` must fold it into a
+        // one-element array before partitioning so it produces the same
+        // patch as the array form (React Query key stability).
+        expect(
+          buildFiltersFromManifest(specs, getter({ category: FILTER_NONE })),
+        ).toEqual({ categoryPresence: "none" });
+      });
+
+      it("leaves sentinel-shaped strings as ordinary values when the spec isn't nullable", () => {
+        const plainSpecs: FilterSpecCore[] = [
+          { columnId: "tags", field: "tagFilters", kind: "multiselect" },
+        ];
+        expect(
+          buildFiltersFromManifest(plainSpecs, getter({ tags: [FILTER_NONE] })),
+        ).toEqual({ tagFilters: [FILTER_NONE] });
+      });
+    });
   });
 
   it("merges every spec into one object", () => {
@@ -157,5 +263,14 @@ describe("isMultiFilterKind", () => {
     expect(isMultiFilterKind("select")).toBe(false);
     expect(isMultiFilterKind("text")).toBe(false);
     expect(isMultiFilterKind("range")).toBe(false);
+  });
+});
+
+describe("nullableSentinelOptions", () => {
+  it("returns the has/none sentinel pair, both flagged as meta options", () => {
+    expect(nullableSentinelOptions("Category")).toEqual([
+      { value: FILTER_ANY, label: "Has Category", meta: true },
+      { value: FILTER_NONE, label: "(none)", meta: true },
+    ]);
   });
 });

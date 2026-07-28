@@ -506,37 +506,103 @@ describe("purchase router", () => {
     expect(result.map((p) => p.name)).toEqual(["chart match"]);
   });
 
-  it("noProject filter returns only unassigned purchases", async () => {
-    const caller = createTestCaller(purchaseRouter, ctx.db);
-    const proj = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "assigned home" }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "drywall",
-        costType: "tools",
-        name: "has a project",
-        projectId: proj.id,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "drywall",
-        costType: "tools",
-        name: "needs a project",
-      }),
-      ctx.actor,
-    );
+  describe("projectPresenceFilter", () => {
+    /** One assigned purchase, one unassigned, plus a decoy in another project. */
+    const seedProjectMix = async () => {
+      const [projA, projB] = await Promise.all([
+        createProject(
+          ctx.db,
+          projectCreateInput.parse({ name: "assigned home" }),
+          ctx.actor,
+        ),
+        createProject(
+          ctx.db,
+          projectCreateInput.parse({ name: "other home" }),
+          ctx.actor,
+        ),
+      ]);
+      for (const [name, projectId] of [
+        ["has a project", projA.id],
+        ["other project", projB.id],
+        ["needs a project", undefined],
+      ] as const) {
+        await createPurchase(
+          ctx.db,
+          purchaseCreateInput.parse({
+            trade: "drywall",
+            costType: "tools",
+            name,
+            ...(projectId ? { projectId } : {}),
+          }),
+          ctx.actor,
+        );
+      }
+      return { projA, projB };
+    };
 
-    const unassigned = await caller.chartData({ noProject: true });
-    const names = unassigned.map((p) => p.name);
-    expect(names).toContain("needs a project");
-    expect(names).not.toContain("has a project");
+    it("'none' returns only unassigned purchases", async () => {
+      const caller = createTestCaller(purchaseRouter, ctx.db);
+      await seedProjectMix();
+
+      const rows = await caller.chartData({ projectPresenceFilter: "none" });
+      const names = rows.map((p) => p.name);
+      expect(names).toContain("needs a project");
+      expect(names).not.toContain("has a project");
+      expect(names).not.toContain("other project");
+    });
+
+    it("'has' returns only assigned purchases", async () => {
+      const caller = createTestCaller(purchaseRouter, ctx.db);
+      await seedProjectMix();
+
+      const names = (
+        await caller.chartData({ projectPresenceFilter: "has" })
+      ).map((p) => p.name);
+      expect(names).toEqual(
+        expect.arrayContaining(["has a project", "other project"]),
+      );
+      expect(names).not.toContain("needs a project");
+    });
+
+    // The case the old `noProject` boolean could not express at all: it AND-ed
+    // with projectId, so this pair matched nothing. Presence now ORs.
+    it("combines with projectId as OR — that project plus the unassigned", async () => {
+      const caller = createTestCaller(purchaseRouter, ctx.db);
+      const { projA } = await seedProjectMix();
+
+      const names = (
+        await caller.chartData({
+          projectId: [projA.id],
+          projectPresenceFilter: "none",
+        })
+      ).map((p) => p.name);
+      expect(names).toEqual(
+        expect.arrayContaining(["has a project", "needs a project"]),
+      );
+      expect(names).not.toContain("other project");
+    });
+
+    // buildPurchaseWhereClause backs BOTH the ledger list and the analytics
+    // aggregates; this pins that they still agree through the new OR branch.
+    it("keeps ledger totals and analytics totals in agreement", async () => {
+      const caller = createTestCaller(purchaseRouter, ctx.db);
+      const { projA } = await seedProjectMix();
+      const filters = {
+        projectId: [projA.id],
+        projectPresenceFilter: "none" as const,
+      };
+
+      const [listed, analytics] = await Promise.all([
+        caller.list({ filters }),
+        caller.analytics(filters),
+      ]);
+
+      expect(analytics.summary.count).toBe(listed.items.length);
+      expect(analytics.summary.net).toBeCloseTo(
+        listed.items.reduce((sum, p) => sum + (p.cost ?? 0), 0),
+        2,
+      );
+    });
   });
 
   it("tradeAffinity counts assigned purchases per project and trade", async () => {

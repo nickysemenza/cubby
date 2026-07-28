@@ -54,11 +54,12 @@ const INBOX_PAGE_SIZE = 500;
 
 /**
  * The `/tasks?view=inbox` surface: top-level, open tasks with no project — the
- * triage queue. Scoped server-side via `task.list`'s `noProject: true`
- * predicate (`projectId IS NULL`) — NOT `task.chartData`'s fetch-all — so this
- * view never pulls every open task in the household, only the inbox's own
- * (small) row set. Rendered through `useClientEntityList` (client-data table
- * — no UI pagination needed at inbox scale, but the fetch itself is bounded).
+ * triage queue. Scoped server-side via `task.list`'s
+ * `projectPresenceFilter: "none"` predicate (`projectId IS NULL`) — NOT
+ * `task.chartData`'s fetch-all — so this view never pulls every open task in
+ * the household, only the inbox's own (small) row set. Rendered through
+ * `useClientEntityList` (client-data table — no UI pagination needed at inbox
+ * scale, but the fetch itself is bounded).
  */
 export function TaskInbox() {
   const api = useTRPC();
@@ -75,7 +76,11 @@ export function TaskInbox() {
   // (topLevelOpen + projectId IS NULL) — the stat tile and this view agree.
   const { data, isLoading } = useQuery(
     api.task.list.queryOptions({
-      filters: { topLevelOnly: true, completion: "open", noProject: true },
+      filters: {
+        topLevelOnly: true,
+        completion: "open",
+        projectPresenceFilter: "none",
+      },
       pagination: { pageIndex: 0, pageSize: INBOX_PAGE_SIZE },
     }),
   );
