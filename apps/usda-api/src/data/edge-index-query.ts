@@ -46,14 +46,35 @@ export function escapeLike(term: string): string {
 }
 
 // SQL CASE that scores how closely a row's description matches the raw search
-// term (lower = surfaced first): exact (case-insensitive) beats prefix beats
-// everything else. This is the "smart" tier that mimics USDA FDC's own search —
-// it floats a literal "VANILLA BEAN" above noisy long descriptions like
-// "VANILLA BEAN COCONUTMILK, VANILLA BEAN" that BM25 over-rewards because the
-// query tokens repeat. Two `?` placeholders: the exact term, then the escaped
-// `term%` prefix pattern. `column` is a fixed column name (not a bind surface).
+// term (lower = surfaced first). This is the "smart" tier that mimics USDA FDC's
+// own search — it floats a literal "VANILLA BEAN" above noisy long descriptions
+// like "VANILLA BEAN COCONUTMILK, VANILLA BEAN" that BM25 over-rewards because
+// the query tokens repeat.
+//
+// Four tiers, because a bare prefix match isn't specific enough: FTS matches on
+// `term*`, so searching "butter" also matches "Butterbur" (a Japanese
+// vegetable), and since the tiers below it only compare description LENGTH,
+// "Butterbur, canned" outranked "Butter, whipped, with salt" on brevity alone.
+// Tier 1 requires the term to end at a word boundary — a space or a comma,
+// which is how USDA separates a food from its qualifiers ("Butter, salted",
+// "Butter oil, anhydrous") — so real butters sort above butterbur while the
+// plain-prefix tier still catches everything else.
+//
+// FOUR `?` placeholders, bound in this order: the exact term, the two
+// word-boundary patterns, then the plain prefix. `column` is a fixed column name
+// (not a bind surface). Keep `matchQualityBindings` in sync.
 export function matchQualityCase(column: string): string {
-  return `CASE WHEN ${column} = ? COLLATE NOCASE THEN 0 WHEN ${column} LIKE ? ESCAPE '\\' THEN 1 ELSE 2 END`;
+  return (
+    `CASE WHEN ${column} = ? COLLATE NOCASE THEN 0` +
+    ` WHEN ${column} LIKE ? ESCAPE '\\' OR ${column} LIKE ? ESCAPE '\\' THEN 1` +
+    ` WHEN ${column} LIKE ? ESCAPE '\\' THEN 2 ELSE 3 END`
+  );
+}
+
+/** The bind values `matchQualityCase` expects, in SQL appearance order. */
+export function matchQualityBindings(term: string): string[] {
+  const escaped = escapeLike(term);
+  return [term, `${escaped} %`, `${escaped},%`, `${escaped}%`];
 }
 
 // The four user-facing food types. The other five (agricultural_acquisition,

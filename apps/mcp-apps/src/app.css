@@ -91,6 +91,19 @@ h2 {
   white-space: nowrap;
 }
 
+/* The accent badge — reserved for "you already linked this", the one signal on
+   a USDA card that can decide the choice on its own. */
+.badge-accent {
+  border-color: var(--brand-ultramarine);
+  background: var(--brand-cream);
+  color: var(--brand-ultramarine);
+}
+
+.linked-names {
+  font-size: 11px;
+  color: var(--brand-ultramarine);
+}
+
 /* Panel — a bounded surface. Hairline border, ink top-rule, zero elevation. */
 .panel {
   border: 1px solid var(--brand-hairline);

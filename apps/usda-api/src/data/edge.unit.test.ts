@@ -5,6 +5,7 @@ import {
   dataTypePriorityCase,
   escapeLike,
   FOOD_DATA_TYPES,
+  matchQualityBindings,
   matchQualityCase,
   normalizeUpc,
 } from "./edge";
@@ -118,23 +119,48 @@ describe("escapeLike", () => {
 });
 
 describe("matchQualityCase", () => {
-  // Tier order is the "smart match" signal: an exact description beats a prefix
-  // beats everything else, so a literal "VANILLA BEAN" outranks the long noisy
-  // descriptions bm25 would otherwise float. Guard the monotonic order + the two
-  // bind placeholders (exact term, then `term%` prefix pattern).
-  it("scores exact < prefix < other and exposes exactly two placeholders", () => {
+  // Tier order is the "smart match" signal: exact beats a whole-word match beats
+  // a bare prefix beats everything else, so a literal "VANILLA BEAN" outranks
+  // the long noisy descriptions bm25 would otherwise float.
+  it("scores exact < word < prefix < other", () => {
     const sql = matchQualityCase("i.description");
-    const tier = (clause: RegExp) => {
-      const m = sql.match(clause);
-      if (!m) throw new Error(`no THEN for ${clause}`);
-      return Number(m[1]);
+    const tiers = [...sql.matchAll(/THEN (\d+)/g)].map((m) => Number(m[1]));
+    const other = Number(sql.match(/ELSE (\d+) END$/)?.[1]);
+    expect(tiers).toEqual([0, 1, 2]);
+    expect(other).toBe(3);
+  });
+
+  it("binds one value per placeholder, in SQL appearance order", () => {
+    // Drift here is silent and ugly: SQLite binds positionally, so a mismatch
+    // shifts every later parameter (LIMIT/OFFSET included) rather than erroring.
+    const sql = matchQualityCase("i.description");
+    expect((sql.match(/\?/g) ?? []).length).toBe(
+      matchQualityBindings("butter").length,
+    );
+  });
+
+  it("separates a whole-word match from a mere prefix", () => {
+    // The bug this exists for: FTS matches `butter*`, so "Butterbur" (a Japanese
+    // vegetable) tied with real butters on the prefix tier and then won on
+    // description length — outranking "Butter, whipped, with salt" and ghee.
+    const [, wordSpace, wordComma, prefix] = matchQualityBindings("butter");
+    const like = (pattern: string, value: string) => {
+      const re = new RegExp(
+        `^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*")}$`,
+        "i",
+      );
+      return re.test(value);
     };
-    const exact = tier(/= \? COLLATE NOCASE THEN (\d+)/);
-    const prefix = tier(/LIKE \? ESCAPE '\\' THEN (\d+)/);
-    const other = tier(/ELSE (\d+) END$/);
-    expect(exact).toBeLessThan(prefix);
-    expect(prefix).toBeLessThan(other);
-    expect((sql.match(/\?/g) ?? []).length).toBe(2);
+    const isWord = (d: string) =>
+      like(wordSpace as string, d) || like(wordComma as string, d);
+
+    expect(isWord("Butter, salted")).toBe(true);
+    expect(isWord("Butter oil, anhydrous")).toBe(true);
+    expect(isWord("Butter, whipped, with salt")).toBe(true);
+    expect(isWord("Butterbur, canned")).toBe(false);
+    expect(isWord("Butterbur, (fuki), raw")).toBe(false);
+    // Butterbur still matches the looser prefix tier, so it is ranked, not lost.
+    expect(like(prefix as string, "Butterbur, canned")).toBe(true);
   });
 });
 
