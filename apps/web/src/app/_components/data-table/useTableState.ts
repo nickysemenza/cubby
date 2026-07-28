@@ -159,15 +159,45 @@ export function useTableState(
       ),
     [],
   );
+  // Mirrors columnFilters into a ref so setColumnFilters (memoized with `[]`
+  // deps — see the "CRITICAL" callbacks below) can read the pre-update value
+  // without going stale. Plain assignment during render, not an effect: it
+  // only needs to be fresh by the time a callback fires, never drives
+  // rendering itself.
+  const columnFiltersRef = useRef(columnFilters);
+  columnFiltersRef.current = columnFilters;
+
   const setColumnFilters = useCallback(
     (
       value:
         | ColumnFiltersState
         | ((old: ColumnFiltersState) => ColumnFiltersState),
     ) =>
-      startTransition(() =>
-        setColumnFiltersRaw(typeof value === "function" ? value : () => value),
-      ),
+      startTransition(() => {
+        const old = columnFiltersRef.current;
+        const next = typeof value === "function" ? value(old) : value;
+        setColumnFiltersRaw(next);
+        // Reset to page 1 whenever the filters actually change. These tables
+        // run manualPagination:true (see useTableConfig's default, ~L112),
+        // which makes TanStack's autoResetPageIndex — it falls back to
+        // `!manualPagination` — inert here; nothing else in the app resets
+        // the page on a filter change (`setPageIndex` is otherwise only
+        // called by data-table-pagination.tsx's first/last buttons). Left
+        // alone, filtering from page 3 strands the user on page 3 of a
+        // smaller (often empty) result set, with a stale `?page=3` in the
+        // URL. useTableConfig wires `onColumnFiltersChange: setColumnFilters`,
+        // so this setter is the single funnel for every filter change across
+        // all tables (header controls, the mobile filter sheet, chip clears,
+        // Reset, and a saved-view apply) — fixing it here covers all of them.
+        // Guarded on an actual change so re-applying the same filters (e.g. a
+        // saved view matching the current state) doesn't knock the user off
+        // their page.
+        if (JSON.stringify(next) !== JSON.stringify(old)) {
+          setPaginationRaw((p) =>
+            p.pageIndex === 0 ? p : { ...p, pageIndex: 0 },
+          );
+        }
+      }),
     [],
   );
   const setPagination = useCallback(

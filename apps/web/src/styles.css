@@ -3,23 +3,22 @@
 @import "@daveyplate/better-auth-ui/css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* The Warm-Paper Ledger primitives (paper ramp, ink, ultramarine, semantic
+   tones, type stacks) live in one framework-free file so apps/mcp-apps — which
+   has no Tailwind and ships as standalone iframe HTML — renders as cubby
+   instead of drifting from a copy. Imported first; everything below only
+   references these vars. */
+@import "@cubby/design-tokens/brand.css";
 /*
   ---break---
 */
 
 @theme {
-  /* Warm-Paper Ledger type system.
-     Space Grotesk - tight geometric sans for headings / panel titles. */
-  --font-heading:
-    "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
-  /* Inter - crisp neutral UI sans for body / prose. */
-  --font-sans:
-    "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  /* JetBrains Mono - the substrate for all data / cells / metrics / numerals. */
-  --font-mono:
-    "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", Monaco,
-    "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  /* Warm-Paper Ledger type system — stacks defined in @cubby/design-tokens;
+     mirrored here so Tailwind generates font-heading/sans/mono utilities. */
+  --font-heading: var(--brand-font-heading);
+  --font-sans: var(--brand-font-sans);
+  --font-mono: var(--brand-font-mono);
 
   /* Sub-xs caption sizes - a home for what used to be arbitrary text-[10px]/[8px] */
   --text-2xs: 0.625rem; /* 10px */
@@ -27,9 +26,8 @@
   --text-3xs: 0.5rem; /* 8px */
   --text-3xs--line-height: 0.75rem;
 
-  /* Ledger easing - a flat, mechanical settle. The matte instrument panel has
-     no overshoot/bounce; motion is restrained and square. Use via `ease-cozy`. */
-  --ease-cozy: cubic-bezier(0.2, 0, 0, 1);
+  /* Mirrored from @cubby/design-tokens so `ease-cozy` exists as a utility. */
+  --ease-cozy: var(--brand-ease-cozy);
 }
 
 /*
@@ -152,32 +150,14 @@
   Cubby Theme - Cool-neutral surfaces + warm accent palette
 */
 :root {
-  /* Warm-Paper Ledger palette (2026-06-25 total visual overhaul). A matte
-     print-instrument look: dense mono data on warm paper, panels separated by
-     ink rules and hairlines instead of elevation, a lone ultramarine accent
-     reserved for the live/active value. Light mode only. Supersedes the
-     2026-06-14 cool-neutral / terracotta "Crisp Refresh". */
-  --brand-foreground: #16170f; /* --ink: near-black, not pure */
-  /* Ultramarine - the one loud thing on screen: active/hover/focus + the single
-     most important live value. Everywhere else is ink + paper. */
-  --brand-ultramarine: #2244cc;
-  --brand-ultramarine-dark: #16308f;
-  /* Paper ramp - the warm matte substrate. cream=raised panels/headers,
-     paper=base background, paper-alt=zebra stripe / inset (a whisper darker). */
-  --brand-cream: #fcfaf4; /* --paper-surface */
-  --brand-paper: #f7f4ec; /* --paper */
-  --brand-paper-alt: #efeae0; /* --paper-alt */
-  --brand-hairline: #d8d2c4; /* --hairline: dividers, panel borders, thin rules */
-  --brand-shelf: #6b6658; /* muted ink for secondary text/labels */
+  /* The Warm-Paper Ledger palette itself lives in @cubby/design-tokens
+     (imported above) — shared with apps/mcp-apps. Only cubby-web-specific
+     derivations stay here. */
   /* Retained terracotta refs (legacy consumers fade out as primitives reskin;
      point them at ink so nothing strands on the old spot color). */
   --brand-terracotta: var(--brand-ultramarine);
   --brand-terra-light: var(--brand-ultramarine);
   --brand-sage: oklch(0.94 0.025 145);
-  /* Aubergine - the second accent: a not-blue spot color reserved for the
-     recipe/cookbook entity identity, so those entities read distinct from the
-     ultramarine interactive accent. Off the blue/green/amber/red axes. */
-  --brand-aubergine: #7a3f63;
 
   /* Ledger elevation: NONE. Separation comes from rules and tone, never from
      shadow — the moment a surface casts a shadow it reads as glass. The
@@ -196,9 +176,6 @@
   --shadow-scan-flash: 0 0 0 9999px oklch(0 0 0 / 0.55);
   /* Chart labels sit on flat matte fills now, so no text shadow is needed. */
   --text-shadow-chart: none;
-  /* The signature 3px ink top-rule for panels and sticky table headers — the
-     "printed control sheet" header underline. Use via border-top / border-bottom. */
-  --rule-ink: 3px solid var(--brand-foreground);
   /* Entity-colored left "spine" on the detail spec-plate (centrally tunable
      instead of an inline border-l-[6px]). */
   --border-spine: 6px;
@@ -230,11 +207,6 @@
   --accent: var(--brand-paper-alt);
   --accent-foreground: var(--brand-foreground);
 
-  /* Warning - matte amber, kept off the blue accent axis */
-  --warning: oklch(0.62 0.13 65);
-
-  /* Destructive - matte deep red, kept off the blue accent axis */
-  --destructive: oklch(0.45 0.18 25);
   --destructive-foreground: #ffffff;
 
   /* Borders and inputs - paper hairlines */
@@ -271,8 +243,7 @@
   /* Slate - the single muted-ink neutral for mono micro-labels (eyebrows, table
      column headers, stat-card labels), quiet entity accents (ingredient,
      location, image), and neutral status pills. Consolidates the former
-     eyebrow/subtle/slate trio into one tone. */
-  --slate: oklch(0.5 0.008 80);
+     eyebrow/subtle/slate trio into one tone. Value in @cubby/design-tokens. */
 
   /* Ingredient parts - one tone per section of the "amount name modifier"
      display format. Kept deliberately off the pure red/green axis and now on
@@ -281,9 +252,6 @@
   --ingredient-amount: var(--brand-ultramarine);
   --ingredient-name: var(--brand-foreground);
   --ingredient-modifier: var(--brand-shelf);
-
-  /* Positive / money - matte green, kept off the blue accent axis */
-  --positive: oklch(0.5 0.1 150);
 
   /* Ledger categorical chart ramp - a monochrome ink ladder (dark→light tints
      of ink over paper) with ultramarine as the single highlight. Matte, no

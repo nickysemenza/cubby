@@ -108,6 +108,17 @@ Three layers — pick by what the surface is, never hand-roll table styling:
   - Two defaults are tuned for `<RTable>`'s explicitly-sized columns: `<Table>` is **`table-fixed`** and `<TableCell>` is **`whitespace-nowrap`**. For content-sized columns pass `className="table-auto"`; for wrapping prose cells add `whitespace-normal`. Suppress an unwanted row divider with `border-b-0` (e.g. grouped/`rowSpan` clusters). Keep the bordered-card wrapper via `containerClassName`.
 - **Raw `<table>`** only when those defaults actively fight the layout: **matrices / cross-tabs** (entities as columns, sticky panes, per-cell heatmap/stat styling — e.g. `RecipeCompareGrid`, `IngredientComponentGrid`), **dev/debug-only** surfaces (`perf-overlay`, costing-debug card), and **external-content** rendering (`markdown.tsx`).
 
+## Entity names are always readable and always clickable
+
+Every entity in `entities.tsx` has a detail route, so **a rendered entity name is never plain truncated text.** Two acceptable shapes:
+
+- **`EntityInlineLink`** — links to the detail route and reveals the full name in its hover preview card. Every entity is previewable (`HoverPreviewEntity`); adding a `title` on top of it would just double up with the card.
+- **A truncated span/link carrying `title={name}`** — for the surfaces `EntityInlineLink` doesn't fit (chart axis labels, tree rows, calendar chips). Link it too unless an ancestor `<a>` already owns the click (nested anchors are invalid — see the calendar `MealChip`) or the row genuinely carries no id (`ingredientAvailabilityOut`'s sub-recipe rows).
+
+Inside an `<RTable>`, **use `createNameColumn`** — it bundles width + `truncate` + full-name `Tooltip` + `TableLink` to the detail route, plus optional inline rename. Hand-rolling `cell: ({row}) => row.original.name` is what made the project detail page's Task/Purchase names unreadable and unreachable. `header` overrides the label for tables embedded under another entity ("Task", not "NAME"); `nameSuffix` carries any secondary affordance (e.g. a purchase's external vendor link) without stealing the name's own click.
+
+An embedded table must also reach **its own** rows' entity, not just their relations — `location-inventory-table` links product and location on every row, so the amount cell carries the `/inventory/$id` link (`renderDisplay`).
+
 ## Page shell
 
 - Every list and detail page renders through one shell: `Page` from `~/components/page/Page` (`HydrateClient` + `PageWrapper` + unified `PageHeader` + `Suspense`). Props are a discriminated union — `variant="detail"` requires `entity` at compile time. List = eyebrow/title/actions/accent header; detail = the spec-plate placard. Don't reintroduce `EntityLayout`/`DetailPage` (deleted) or call `PageHero`/`PageWrapper` directly in pages — use `Page`. Detail bodies use `DetailSections` (`~/app/_components/data-table/detail-page`) as `Page`'s children.

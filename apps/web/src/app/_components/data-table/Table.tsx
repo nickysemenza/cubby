@@ -207,14 +207,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
     if (!rows.length) {
       const state = table.getState();
-      const isFiltered = hasActiveFilters(
-        state.columnFilters,
-        state.globalFilter as string | undefined,
-      );
+      const isFiltered = hasActiveFilters(state.columnFilters);
       const clearFilters = isFiltered
         ? () => {
             table.resetColumnFilters();
-            table.setGlobalFilter("");
           }
         : undefined;
       const emptyContent = entity ? (
@@ -395,6 +391,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               >
                 <DataTableToolbar
                   table={table}
+                  entity={entity}
                   additionalContent={
                     <div className="flex items-center gap-2">
                       {additionalToolbarContent}

@@ -5,6 +5,7 @@ import {
   dataTypePriorityCase,
   escapeLike,
   FOOD_DATA_TYPES,
+  matchQualityBindings,
   matchQualityCase,
   normalizeUpc,
 } from "./edge";
@@ -118,23 +119,48 @@ describe("escapeLike", () => {
 });
 
 describe("matchQualityCase", () => {
-  // Tier order is the "smart match" signal: an exact description beats a prefix
-  // beats everything else, so a literal "VANILLA BEAN" outranks the long noisy
-  // descriptions bm25 would otherwise float. Guard the monotonic order + the two
-  // bind placeholders (exact term, then `term%` prefix pattern).
-  it("scores exact < prefix < other and exposes exactly two placeholders", () => {
+  // Tier order is the "smart match" signal: exact beats a whole-word match beats
+  // a bare prefix beats everything else, so a literal "VANILLA BEAN" outranks
+  // the long noisy descriptions bm25 would otherwise float.
+  it("scores exact < word < prefix < other", () => {
     const sql = matchQualityCase("i.description");
-    const tier = (clause: RegExp) => {
-      const m = sql.match(clause);
-      if (!m) throw new Error(`no THEN for ${clause}`);
-      return Number(m[1]);
+    const tiers = [...sql.matchAll(/THEN (\d+)/g)].map((m) => Number(m[1]));
+    const other = Number(sql.match(/ELSE (\d+) END$/)?.[1]);
+    expect(tiers).toEqual([0, 1, 2]);
+    expect(other).toBe(3);
+  });
+
+  it("binds one value per placeholder, in SQL appearance order", () => {
+    // Drift here is silent and ugly: SQLite binds positionally, so a mismatch
+    // shifts every later parameter (LIMIT/OFFSET included) rather than erroring.
+    const sql = matchQualityCase("i.description");
+    expect((sql.match(/\?/g) ?? []).length).toBe(
+      matchQualityBindings("butter").length,
+    );
+  });
+
+  it("separates a whole-word match from a mere prefix", () => {
+    // The bug this exists for: FTS matches `butter*`, so "Butterbur" (a Japanese
+    // vegetable) tied with real butters on the prefix tier and then won on
+    // description length — outranking "Butter, whipped, with salt" and ghee.
+    const [, wordSpace, wordComma, prefix] = matchQualityBindings("butter");
+    const like = (pattern: string, value: string) => {
+      const re = new RegExp(
+        `^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*")}$`,
+        "i",
+      );
+      return re.test(value);
     };
-    const exact = tier(/= \? COLLATE NOCASE THEN (\d+)/);
-    const prefix = tier(/LIKE \? ESCAPE '\\' THEN (\d+)/);
-    const other = tier(/ELSE (\d+) END$/);
-    expect(exact).toBeLessThan(prefix);
-    expect(prefix).toBeLessThan(other);
-    expect((sql.match(/\?/g) ?? []).length).toBe(2);
+    const isWord = (d: string) =>
+      like(wordSpace as string, d) || like(wordComma as string, d);
+
+    expect(isWord("Butter, salted")).toBe(true);
+    expect(isWord("Butter oil, anhydrous")).toBe(true);
+    expect(isWord("Butter, whipped, with salt")).toBe(true);
+    expect(isWord("Butterbur, canned")).toBe(false);
+    expect(isWord("Butterbur, (fuki), raw")).toBe(false);
+    // Butterbur still matches the looser prefix tier, so it is ranked, not lost.
+    expect(like(prefix as string, "Butterbur, canned")).toBe(true);
   });
 });
 
@@ -587,5 +613,104 @@ describe("createEdgeUsdaDataSource", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+/**
+ * Records every SQL string the data source prepares, so the ordering that
+ * decides *which* row wins can be asserted.
+ *
+ * These are SQL-shape assertions, not runtime-ordering ones: this suite has no
+ * real D1 (the fakes branch on `query.includes(...)`), so nothing here executes
+ * ORDER BY. That's still the guard worth having — the failure mode being
+ * prevented is someone reading `fdc_id DESC` as a typo and "fixing" it, which a
+ * shape assertion catches and a mocked result set never would.
+ */
+function makeQueryRecordingEnv(): { env: EdgeBindings; queries: string[] } {
+  const queries: string[] = [];
+  const db = {
+    prepare(query: string) {
+      queries.push(query);
+      const statement = {
+        bind() {
+          return statement;
+        },
+        async first<T>() {
+          if (query.includes("usda_edge_meta")) return { value: "vtest" } as T;
+          if (query.includes("count(*)")) return { count: 0 } as T;
+          return null;
+        },
+        async all<T>() {
+          return { success: true, results: [] as T[] };
+        },
+      };
+      return statement;
+    },
+    async batch<T>(statements: Array<{ all(): Promise<T> }>) {
+      return Promise.all(statements.map((s) => s.all()));
+    },
+  };
+  return {
+    env: {
+      DB: db as unknown as EdgeBindings["DB"],
+      USDA_BUNDLES: { get: vi.fn() } as unknown as EdgeBindings["USDA_BUNDLES"],
+    },
+    queries,
+  };
+}
+
+describe("lookup resolves a barcode to its newest record", () => {
+  // One barcode maps to several rows: FDC mints a new fdc_id every time a
+  // branded item is republished. The lowest id is the oldest submission and is
+  // routinely the one with no nutrients — resolving to it made the
+  // `ingredient -> product -> fdc_id` hop land on an empty record.
+  it("orders the single lookup by fdc_id DESC", async () => {
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).findFoodByUpc("857750003948");
+
+    const lookup = queries.find((q) => q.includes("WHERE gtin_upc = ?"));
+    expect(lookup).toMatch(/ORDER BY fdc_id DESC LIMIT 1/);
+    expect(lookup).not.toMatch(/fdc_id ASC/);
+  });
+
+  it("orders the NDB lookup by fdc_id DESC too", async () => {
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).findFoodByNdb(1001);
+
+    expect(queries.find((q) => q.includes("WHERE ndb_number = ?"))).toMatch(
+      /ORDER BY fdc_id DESC LIMIT 1/,
+    );
+  });
+
+  it("keeps the batch path in agreement with the single path", async () => {
+    // `ORDER BY <column> ASC, fdc_id DESC` + the first-wins fold keeps the same
+    // row the single lookup returns. If these two disagree, a product resolves
+    // to a different food depending on which path enrichment happened to take.
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).findFoodsByLookupBatch([
+      { kind: "upc", gtin_upc: "857750003948" },
+    ]);
+
+    expect(queries.find((q) => q.includes("WHERE gtin_upc IN"))).toMatch(
+      /ORDER BY gtin_upc ASC, fdc_id DESC/,
+    );
+  });
+});
+
+describe("relevance ordering", () => {
+  it("ends with a unique key so paging is deterministic", async () => {
+    // Tied rows otherwise come back in SQLite-defined order, which lets the
+    // same row appear on two pages of a LIMIT/OFFSET scan, or on neither.
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "butter",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    const data = queries.find((q) => q.includes("ORDER BY CASE"));
+    expect(data).toMatch(/rank ASC, i\.fdc_id ASC/);
   });
 });

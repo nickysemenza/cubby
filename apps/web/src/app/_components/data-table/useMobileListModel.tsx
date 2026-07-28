@@ -10,20 +10,6 @@ import { entities } from "~/entities/entities";
 import { extractEntityTitle } from "~/lib/entity-utils";
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
 
-const DEFAULT_HIDDEN_COLUMN_IDS = new Set([
-  "createdAt",
-  "notes",
-  "model",
-  "fdc_id",
-  "unitMapping",
-  "unitMappings",
-  "inventoryEntry",
-  "inventoryEntries",
-  "food",
-  "nutrition",
-  "meta",
-]);
-
 interface MobileCellMeta {
   mobile?: MobileColumnMeta;
 }
@@ -33,21 +19,69 @@ interface SlotValue {
   value: ReactNode;
   /** See `MobileColumnMeta.interactive`. */
   interactive?: boolean;
+  /** Column id — a stable React key for the spec grid. */
+  id: string;
+  /** Label for the spec grid's gutter. */
+  label: string;
 }
 
-interface MobileListRowModel<TItem> {
+/** One labeled row of the mobile card's spec grid. */
+export interface MobileMetaValue {
+  id: string;
+  label: string;
+  value: ReactNode;
+  interactive?: boolean;
+}
+
+export interface MobileListRowModel<TItem> {
   row: Row<TItem>;
   title: string;
   subtitle?: ReactNode;
   imageSlot?: ReactNode;
   actionsContent?: ReactNode;
+  /**
+   * The identity line's right-aligned values — the `trailing` slot, i.e. this
+   * row's headline number (cost, price, amount). Right-aligned and
+   * tabular-nums so they form a column down the list.
+   */
   rightValues: ReactNode[];
   /**
    * Parallel array to `rightValues` — `rightValueInteractive[i]` is true when
    * `rightValues[i]`'s source column set `meta.mobile.interactive`.
    */
   rightValueInteractive: boolean[];
+  /**
+   * Everything else, each labeled, rendered as a two-column spec grid below
+   * the identity line. Unlabeled at six values these read as noise, which is
+   * why they carry their column's header rather than flowing inline.
+   */
+  metaValues: MobileMetaValue[];
   detailsHref?: string;
+}
+
+/** `costType` → `Cost Type`. Fallback when a column's header isn't a string. */
+function humanizeColumnId(colId: string): string {
+  return colId
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * Whether a cell's raw value carries nothing worth a labeled spec row.
+ *
+ * The object case matters: the entity-link columns accessor to
+ * `{ id, name }`, which is truthy even when both are null — so an unlinked
+ * purchase rendered a full `PRODUCT —` line, 30px of vertical space saying
+ * there is no product.
+ */
+function isEmptyCellValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") {
+    return Object.values(value).every((v) => v === null || v === undefined);
+  }
+  return false;
 }
 
 function hasRenderableContent(content: ReactNode): boolean {
@@ -60,16 +94,6 @@ function hasRenderableContent(content: ReactNode): boolean {
   return true;
 }
 
-/**
- * Which part of the card a column renders into.
- *
- * A mobile row is opt-IN: a column with no `mobile` config is hidden. It used
- * to default to "meta", so every column an entity had never thought about got
- * crammed into the row as a right-value — each a full desktop cell squeezed
- * into ~90px, truncating to fragments like "whole pea" and "P…" that carry
- * less information than showing nothing. Declaring `mobile` at all (even just
- * `{ interactive: true }`) opts a column in.
- */
 /** Whether a row carries a real image, vs. the cell's placeholder glyph. */
 function rowHasImage(original: unknown): boolean {
   if (!original || typeof original !== "object") return false;
@@ -84,11 +108,26 @@ function rowHasImage(original: unknown): boolean {
   return Array.isArray(nested) && nested.length > 0;
 }
 
+/**
+ * Which part of the card a column renders into.
+ *
+ * A mobile row is opt-IN: a column with no `mobile` config is hidden. It used
+ * to default to "meta", so every column an entity had never thought about got
+ * crammed in as a value — a full desktop cell squeezed into ~90px, truncating
+ * to fragments like "whole pea" and "P…" that carry less than showing nothing.
+ * Declaring `mobile` at all (even just `{ interactive: true }`) opts a column in.
+ *
+ * This used to consult a `DEFAULT_HIDDEN_COLUMN_IDS` deny-list FIRST, which
+ * outranked the opt-in — so two columns whose authors did ask for a slot
+ * (productlist's `food`, locationlist's `inventoryEntries`) could never render
+ * no matter what they declared. Under opt-in the deny-list is redundant by
+ * construction: anything not asked for is already hidden, and a column that
+ * wants to opt out says `slot: "hidden"`.
+ */
 function resolveSlot(colId: string, meta?: MobileCellMeta): MobileSlot {
   if (colId === "image") return "image";
   if (colId === "actions") return "actions";
   if (colId === "name" || colId === "filename") return "title";
-  if (DEFAULT_HIDDEN_COLUMN_IDS.has(colId)) return "hidden";
   if (meta?.mobile) return meta.mobile.slot ?? "meta";
   return "hidden";
 }
@@ -103,11 +142,9 @@ function getPriority(
 export function useMobileListModel<TItem>({
   table,
   entity,
-  maxRightValues = 2,
 }: {
   table: ITable<TItem>;
   entity?: Entity;
-  maxRightValues?: number;
 }): MobileListRowModel<TItem>[] {
   const rows = table.getRowModel().rows;
   const basePath = entity ? entities[entity].basePath : undefined;
@@ -147,14 +184,7 @@ export function useMobileListModel<TItem>({
           // check instead.
           if (cell.column.accessorFn) {
             const rawValue = cell.getValue();
-            if (
-              rawValue === null ||
-              rawValue === undefined ||
-              rawValue === "" ||
-              (Array.isArray(rawValue) && rawValue.length === 0)
-            ) {
-              continue;
-            }
+            if (isEmptyCellValue(rawValue)) continue;
           }
 
           const rendered = flexRender(
@@ -183,30 +213,64 @@ export function useMobileListModel<TItem>({
 
           const priority = getPriority(meta, 50);
           const interactive = meta?.mobile?.interactive;
+          // The spec grid's gutter is much narrower than a desktop header
+          // cell, so an explicit `mobile.label` wins; otherwise reuse the
+          // column's own string header (every meta column that matters has
+          // one) and fall back to humanizing the id.
+          const header = cell.column.columnDef.header;
+          const label =
+            meta?.mobile?.label ??
+            (typeof header === "string" ? header : undefined) ??
+            humanizeColumnId(colId);
+          const entry: SlotValue = {
+            priority,
+            value: rendered,
+            interactive,
+            id: colId,
+            label,
+          };
           if (slot === "subtitle") {
-            subtitleCandidates.push({ priority, value: rendered });
+            subtitleCandidates.push(entry);
             continue;
           }
           if (slot === "trailing") {
-            trailingValues.push({ priority, value: rendered, interactive });
+            trailingValues.push(entry);
             continue;
           }
-          metaValues.push({ priority, value: rendered, interactive });
+          metaValues.push(entry);
         }
 
         subtitleCandidates.sort((a, b) => a.priority - b.priority);
         trailingValues.sort((a, b) => a.priority - b.priority);
         metaValues.sort((a, b) => a.priority - b.priority);
 
-        const subtitle = subtitleCandidates[0]?.value;
-        const rightValueSlots = [...trailingValues, ...metaValues].slice(
-          0,
-          maxRightValues,
-        );
-        const rightValues = rightValueSlots.map((item) => item.value);
-        const rightValueInteractive = rightValueSlots.map(
+        // Nothing is capped — the row grows to fit instead. A fixed budget of
+        // two meant purchases declared six values and rendered two, with no
+        // way to tell which four were missing.
+        //
+        // The leading subtitle keeps its own prop (it reads as prose, not a
+        // labeled spec value). ADDITIONAL subtitle candidates fall through to
+        // the spec grid rather than being dropped — five entities declare two
+        // and showed one, a drop nobody had counted.
+        const [leadingSubtitle, ...extraSubtitles] = subtitleCandidates;
+        const subtitle = leadingSubtitle?.value;
+
+        // `trailing` stays on the identity line: it's the row's headline
+        // number, and right-aligned tabular-nums is what makes it scan as a
+        // column down the list. Everything else gets a label.
+        const rightValues = trailingValues.map((item) => item.value);
+        const rightValueInteractive = trailingValues.map(
           (item) => !!item.interactive,
         );
+        const specValues: MobileMetaValue[] = [
+          ...extraSubtitles,
+          ...metaValues,
+        ].map(({ id, label, value, interactive }) => ({
+          id,
+          label,
+          value,
+          interactive,
+        }));
 
         const rowData = row.original as Record<string, unknown>;
         const entityId = rowData.id as string | undefined;
@@ -221,9 +285,78 @@ export function useMobileListModel<TItem>({
           actionsContent,
           rightValues,
           rightValueInteractive,
+          metaValues: specValues,
           detailsHref,
         };
       }),
-    [basePath, entity, maxRightValues, rows],
+    [basePath, entity, rows],
   );
+}
+
+// --- Height + shape, shared by the virtualizer and the loading skeleton -----
+//
+// Measured in the browser against real rows, not derived from the type scale:
+// spec rows come out at 28-32px, not the ~16px a bare text line would suggest,
+// because most values are chunky (badges, entity links) and the interactive
+// ones carry `min-h-8`. A purchase with 5 spec rows measures 226px total.
+//   py-2 x2 (16) + title (~19) + hairline (1)        = 36
+//   identity line                                     = 24
+//   spec block: 2 + n*30 + (n-1)*4
+const ROW_CHROME = 36;
+const IDENTITY_LINE = 24;
+const SPEC_ROW = 30;
+const SPEC_GAP = 4;
+
+/** Height of one spec grid, or 0 when there is none. */
+const specBlockHeight = (count: number): number =>
+  count ? 2 + count * SPEC_ROW + (count - 1) * SPEC_GAP : 0;
+
+/**
+ * Per-row height estimate for the virtualizer.
+ *
+ * Estimated per row rather than as one constant: rows now range from ~55px
+ * (search results, no spec values) to ~152px (a fully-populated purchase), and
+ * a flat guess that far off makes `getTotalSize()` lurch as measurements land
+ * during a fast scroll. This knows a purchase missing its project renders one
+ * fewer line, so `measureElement` corrects by a few px instead of ~100.
+ */
+export function estimateMobileRowHeight(
+  model?: Pick<
+    MobileListRowModel<unknown>,
+    "subtitle" | "rightValues" | "metaValues" | "imageSlot"
+  >,
+): number {
+  if (!model) return 56;
+  const identity =
+    model.subtitle || model.rightValues.length ? IDENTITY_LINE : 0;
+  const spec = specBlockHeight(model.metaValues.length);
+  // Floor: the 44px image (plus padding) sets a minimum a short row can't
+  // undercut.
+  return Math.max(ROW_CHROME + identity + spec, model.imageSlot ? 61 : 41);
+}
+
+/**
+ * The shape a table's mobile rows will take, for the loading skeleton — so it
+ * renders the right number of lines and the list doesn't jump when real rows
+ * replace it.
+ */
+export function mobileListShape<TItem>(table: ITable<TItem>): {
+  metaLines: number;
+  hasImage: boolean;
+} {
+  let metaCols = 0;
+  let subtitleCols = 0;
+  let hasImage = false;
+  for (const column of table.getVisibleLeafColumns()) {
+    const meta = column.columnDef.meta as MobileCellMeta | undefined;
+    const slot = resolveSlot(column.id, meta);
+    if (slot === "image") hasImage = true;
+    else if (slot === "subtitle") subtitleCols += 1;
+    else if (slot === "meta") metaCols += 1;
+  }
+  return {
+    // Extra subtitles fall through to the spec grid — see the model above.
+    metaLines: metaCols + Math.max(0, subtitleCols - 1),
+    hasImage,
+  };
 }

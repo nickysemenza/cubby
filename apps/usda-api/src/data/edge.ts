@@ -12,7 +12,7 @@ import {
 import {
   dataTypePredicate,
   dataTypePriorityCase,
-  escapeLike,
+  matchQualityBindings,
   matchQualityCase,
   sqlDirection,
   sqlOrderBy,
@@ -27,6 +27,7 @@ export {
   dataTypePriorityCase,
   escapeLike,
   FOOD_DATA_TYPES,
+  matchQualityBindings,
   matchQualityCase,
 } from "./edge-index-query.js";
 export { normalizeUpc } from "./edge-bundle-loader.js";
@@ -63,13 +64,21 @@ export function createEdgeUsdaDataSource(
       .first<FoodIndexRow>();
   }
 
+  // `fdc_id DESC` is load-bearing, not cosmetic: one barcode maps to several
+  // rows because FDC mints a NEW fdc_id every time a branded item is
+  // republished, so the highest id is the latest revision and the lowest is the
+  // oldest — routinely one with no nutrients at all. Picking ASC silently
+  // resolved products to those empty records, which is the
+  // `ingredient -> product -> fdc_id` nutrition hop landing on nothing. Matches
+  // the tiebreak `dedupeUsdaFoodsByUpc` uses on the cubby side. Don't "tidy"
+  // this back to ASC.
   async function findRowByColumn(
     column: "gtin_upc" | "ndb_number",
     value: string | number,
   ): Promise<FoodIndexRow | null> {
     const tables = await getActiveVersion(env.DB);
     return env.DB.prepare(
-      `SELECT * FROM ${tables.foodIndex} WHERE ${column} = ? ORDER BY fdc_id ASC LIMIT 1`,
+      `SELECT * FROM ${tables.foodIndex} WHERE ${column} = ? ORDER BY fdc_id DESC LIMIT 1`,
     )
       .bind(value)
       .first<FoodIndexRow>();
@@ -125,7 +134,11 @@ export function createEdgeUsdaDataSource(
         specs.push({
           column,
           stmt: env.DB.prepare(
-            `SELECT * FROM ${tables.foodIndex} WHERE ${column} IN (${placeholders}) ORDER BY ${column} ASC, fdc_id ASC`,
+            // `fdc_id DESC` + the first-wins fold below keeps the NEWEST row
+            // per key, matching findRowByColumn — see its comment for why. The
+            // single and batch paths must agree, or a product resolves to a
+            // different food depending on which one enrichment happened to take.
+            `SELECT * FROM ${tables.foodIndex} WHERE ${column} IN (${placeholders}) ORDER BY ${column} ASC, fdc_id DESC`,
           ).bind(...chunk),
         });
       }
@@ -390,9 +403,13 @@ export function createEdgeUsdaDataSource(
       let orderClause: string;
       if (orderBy === "relevance") {
         if (hasName) {
-          const term = nameFilter?.trim() ?? "";
-          orderValues.push(term, `${escapeLike(term)}%`);
-          orderClause = `${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, ${matchQualityCase("i.description")} ASC, LENGTH(i.description) ASC, ${tables.foodSearch}.rank ASC`;
+          orderValues.push(...matchQualityBindings(nameFilter?.trim() ?? ""));
+          // The trailing `i.fdc_id ASC` is a stability tiebreak, not a
+          // preference: without a unique terminal key, rows tied on all four
+          // ranking keys come back in SQLite-defined order, which makes
+          // LIMIT/OFFSET paging non-deterministic — the same row can appear on
+          // two pages, or on neither.
+          orderClause = `${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, ${matchQualityCase("i.description")} ASC, LENGTH(i.description) ASC, ${tables.foodSearch}.rank ASC, i.fdc_id ASC`;
         } else {
           orderClause = "i.description ASC";
         }

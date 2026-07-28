@@ -4,6 +4,7 @@
  */
 
 import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { PresenceFilter } from "@cubby/schemas/pagination";
 import type {
   image,
   ingredient,
@@ -66,8 +67,16 @@ export type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
 export interface RecipeFilters {
   nameFilter?: string;
   tagFilters?: string[];
-  // Scope the list to a single cookbook by FK id. Powers the cookbook detail page.
-  cookbookId?: CookbookId;
+  // The tag column's "(none)" / "Has tags" sentinel. "none" is untagged —
+  // null OR an empty array — and it ORs with `tagFilters` rather than
+  // narrowing it. See TAGS_ARE_EMPTY in ./crud.ts.
+  tagsPresenceFilter?: PresenceFilter;
+  // Scope the list to a single cookbook by FK id (or several — see `oneOrMany`).
+  // Powers the cookbook detail page.
+  cookbookId?: CookbookId | CookbookId[];
+  // The cookbook column's "(none)" / "Has cookbook" sentinel. ORs with
+  // `cookbookId` rather than narrowing it (see `tagsPresenceFilter` above).
+  cookbookPresenceFilter?: PresenceFilter;
   // Drop recipes that are used as an ingredient elsewhere (a recipe-as-ingredient
   // Ingredient row points at them). Powers "what can I make?", where a sub-recipe
   // is a component, not a meal.

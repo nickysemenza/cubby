@@ -25,6 +25,7 @@ import {
   inArray,
   isNotNull,
   notInArray,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -52,11 +53,13 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
+  presenceCondition,
   relations,
   unwrapDb,
   updateLiveAndReturn,
@@ -255,6 +258,17 @@ export const getNotionRecipesForDiff = async (
 };
 
 /**
+ * "This recipe has no tags" — the empty state of a nullable `text[]`.
+ *
+ * Written as one parenthesized raw fragment rather than `or(isNull(...), ...)`
+ * so it types as a plain `SQL` (drizzle's `or` is `SQL | undefined`) and so
+ * `not()` wraps it correctly. Interpolating a COLUMN is safe here; the
+ * row-constructor trap documented at the `arrayOverlaps` call below is about
+ * interpolating a JS array.
+ */
+const TAGS_ARE_EMPTY = sql`(${recipe.tags} IS NULL OR cardinality(${recipe.tags}) = 0)`;
+
+/**
  * List recipes with filters, sorting, and pagination.
  */
 export const recipeList = async (
@@ -304,16 +318,33 @@ export const recipeList = async (
     recipe,
     [{ column: recipe.name, term: filters.nameFilter }],
     [
-      filters.cookbookId
-        ? eq(recipe.cookbookId, filters.cookbookId)
-        : undefined,
+      eqAnyOrPresence(
+        recipe.cookbookId,
+        filters.cookbookId,
+        filters.cookbookPresenceFilter,
+      ),
       // arrayOverlaps, not a hand-rolled `&&`: drizzle interpolates a JS array
       // into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`), which isn't a
       // text[] — the hand-rolled version failed for every tag count, one
       // included. Semantics are unchanged (ANY-of / array overlap).
-      filters.tagFilters && filters.tagFilters.length > 0
-        ? arrayOverlaps(recipe.tags, filters.tagFilters)
-        : undefined,
+      //
+      // OR-ed with the tag column's presence sentinel, so "quick or untagged"
+      // is one filter. `tags` is a nullable array, so untagged means NULL *or*
+      // zero-length: clearing a recipe's last tag writes `{}`, not NULL, and
+      // keying off IS NULL alone would hide those rows from the very view
+      // meant to find them. "has" is `not()` of the same predicate rather than
+      // a second hand-written one, so the two can never drift into a gap that
+      // hides a recipe from BOTH options.
+      or(
+        filters.tagFilters && filters.tagFilters.length > 0
+          ? arrayOverlaps(recipe.tags, filters.tagFilters)
+          : undefined,
+        presenceCondition(
+          recipe.tags,
+          filters.tagsPresenceFilter,
+          TAGS_ARE_EMPTY,
+        ),
+      ),
       filters.excludeSubRecipes
         ? notInArray(recipe.id, subRecipeIds)
         : undefined,

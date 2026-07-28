@@ -99,11 +99,15 @@ export const makeRecipeInput = (
     name?: string;
     url?: string | null;
     sections?: RecipeCreateInput["sections"];
+    tags?: RecipeCreateInput["tags"];
   } = {},
 ): RecipeCreateInput => ({
   name: opts.name ?? "Test Recipe",
   meta: { url: opts.url ?? null },
   sections: opts.sections ?? [],
+  // Passed through only when the caller opts in, so the default stays a
+  // tags-absent input rather than an explicit null.
+  ...("tags" in opts ? { tags: opts.tags } : {}),
 });
 
 /** A raw ImportRecipe (the parser's shape; lines parsed server-side on import). */

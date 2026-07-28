@@ -1,0 +1,31 @@
+{
+  "name": "@cubby/mcp-apps",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/bundles.ts"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "pnpm run build && vite --config harness/vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
+    "check": "biome check && pnpm typecheck",
+    "format:check": "biome check",
+    "format:write": "biome check --write",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cubby/design-tokens": "workspace:*",
+    "@modelcontextprotocol/ext-apps": "^1.7.5"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.10"
+  }
+}

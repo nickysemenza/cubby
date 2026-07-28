@@ -3,12 +3,21 @@
  * along in `project.dashboard`'s full task/purchase arrays (client-side
  * reduced by projects-dashboard.tsx), now computed server-side and loaded
  * only when the Charts/Analytics tab is selected. Scoped by the same
- * `statusScope`/`kinds`/`locations`/`search` filters as `dashboardSummary`
- * (see `dashboard-shared.ts`), plus `dateFrom`/`dateTo` bounding the
- * purchase-based aggregates (`monthlySpend`/`plannedVsActual`/`tradeActivity`)
- * — `costVsEstimate`/`spendingByProject` stay LIFETIME totals (they reuse the
- * same subtree rollup shown on project cards, which has no date axis) and
- * `taskHeatmap` has no purchase date to bound against either.
+ * `statusScope`/`kinds`/`locations`/`search`/`dateFrom`/`dateTo` filters as
+ * `dashboardSummary` (`buildDashboardProjectWhere`, see `dashboard-shared.ts`).
+ *
+ * The `dateFrom`/`dateTo` window does TWO things, not one:
+ *   - it narrows the PROJECT SET itself (interval-overlap against each
+ *     project's `[startDate, endDate]`, baked into `buildDashboardProjectWhere`
+ *     via `dashboardProjectDateCondition`) — so `costVsEstimate`,
+ *     `spendingByProject`, and `taskHeatmap` ARE scoped by it too, even though
+ *     each still reports a project's LIFETIME actual/committed/spend/
+ *     openTaskCount (the same subtree rollup shown on project cards, which has
+ *     no date axis of its own): a project outside the window just doesn't
+ *     appear in `ids` at all, rather than having its totals date-clipped;
+ *   - it additionally bounds `purchase.date` directly for the purchase-grouped
+ *     aggregates (`monthlySpend`/`plannedVsActual`/`tradeActivity`), which need
+ *     it to bucket by month in the first place.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import type {
@@ -26,19 +35,16 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { project, purchase, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { projectRollups } from "./analytics";
+import {
+  PURCHASE_MONTH_BUCKET,
+  purchaseAggregateFields,
+} from "~/server/repo/purchase-aggregate-sql";
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
-import {
-  aggregateSubtreeRollups,
-  allProjectParentRows,
-  buildChildrenMap,
-  collectDescendantIds,
-} from "./subtree";
+import { loadProjectSubtreeRollups } from "./subtree";
 
 const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   costVsEstimate: [],
@@ -49,22 +55,10 @@ const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   taskHeatmap: [],
 };
 
-/** Shared actual/committed/credits/net/count SQL, matching `purchaseAggregateFields`. */
-const purchaseAggregateSelect = {
-  actual: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(${purchase.cost}) filter (where ${purchase.cost} < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(${purchase.cost}), 0)::float`,
-  count: sql<number>`count(*)::int`,
-};
-
 export async function projectPortfolioAnalytics(
   db: Database,
   filters: ProjectPortfolioAnalyticsInput,
 ): Promise<ProjectPortfolioAnalyticsOut> {
-  const allRows = await allProjectParentRows(db);
-  const childrenByParent = buildChildrenMap(allRows);
-
   const projectRows = await getDb(db).query.project.findMany({
     where: buildDashboardProjectWhere(filters),
     orderBy: [asc(project.name)],
@@ -74,12 +68,7 @@ export async function projectPortfolioAnalytics(
   if (ids.length === 0) return EMPTY_OUT;
 
   const nameById = new Map(projectRows.map((r) => [r.id, r.name]));
-  const descendantIds = ids.flatMap((id) =>
-    collectDescendantIds(childrenByParent, id),
-  );
-
-  const ownRollups = await projectRollups(db, uniq([...ids, ...descendantIds]));
-  const subtreeRollups = aggregateSubtreeRollups(allRows, ownRollups);
+  const { subtreeRollups } = await loadProjectSubtreeRollups(db, ids);
 
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
@@ -113,31 +102,30 @@ export async function projectPortfolioAnalytics(
     filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
   );
   const purchaseScopeWithDate = and(purchaseScope, isNotNull(purchase.date));
-  const monthExpr = sql`to_char(${purchase.date}, 'YYYY-MM')`;
 
   const [monthlyRows, plannedVsActualRows, tradeRows, taskHeatmapRows] =
     await Promise.all([
       getDb(db)
         .select({
-          month: sql<string>`${monthExpr}`,
-          ...purchaseAggregateSelect,
+          month: sql<string>`${PURCHASE_MONTH_BUCKET}`,
+          ...purchaseAggregateFields(),
         })
         .from(purchase)
         .where(purchaseScopeWithDate)
-        .groupBy(monthExpr)
-        .orderBy(monthExpr),
+        .groupBy(PURCHASE_MONTH_BUCKET)
+        .orderBy(PURCHASE_MONTH_BUCKET),
       getDb(db)
         .select({
-          month: sql<string>`${monthExpr}`,
+          month: sql<string>`${PURCHASE_MONTH_BUCKET}`,
           planned: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.future} = true), 0)::float`,
           actual: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.future} = false), 0)::float`,
         })
         .from(purchase)
         .where(purchaseScopeWithDate)
-        .groupBy(monthExpr)
-        .orderBy(monthExpr),
+        .groupBy(PURCHASE_MONTH_BUCKET)
+        .orderBy(PURCHASE_MONTH_BUCKET),
       getDb(db)
-        .select({ trade: purchase.trade, ...purchaseAggregateSelect })
+        .select({ trade: purchase.trade, ...purchaseAggregateFields() })
         .from(purchase)
         .where(purchaseScope)
         .groupBy(purchase.trade),

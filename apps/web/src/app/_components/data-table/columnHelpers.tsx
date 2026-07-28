@@ -172,6 +172,12 @@ export interface MobileColumnMeta {
    * on columns whose cell renders an editor — don't rely on DOM sniffing.
    */
   interactive?: boolean;
+  /**
+   * Shorter label for the mobile spec grid's label gutter, which is much
+   * narrower than a desktop header cell. Defaults to the column's own string
+   * `header`; set this only where that would truncate (e.g. "Manufacturer").
+   */
+  label?: string;
 }
 
 // Extend TanStack Table's meta type to include our custom properties
@@ -240,12 +246,12 @@ export function createNameColumn<T extends BaseRow>(
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
     /**
-     * Skip the link to `entities[entity].routes.detail`. For entities with no
-     * dedicated detail page (task, purchase) that route points back at the
-     * list page itself — linkifying the name there is a no-op affordance, so
-     * render plain text (still inline-editable) instead of `TableLink`.
+     * Override the header label. Defaults to the field name (TanStack's
+     * column-id fallback), which reads fine as "NAME" on an index page but not
+     * in a table embedded under another entity — there the entity itself is the
+     * label ("Task", "Purchase").
      */
-    omitDetailLink?: boolean;
+    header?: string;
     /**
      * Extra content rendered inline after the name (e.g. a subtask-count
      * badge) — return `undefined`/`null` for rows with nothing to show.
@@ -366,47 +372,37 @@ export function createNameColumn<T extends BaseRow>(
             config={{ type: "text" }}
             renderValue={(v) =>
               wrapWithSuffix(
-                options?.omitDetailLink ? (
-                  <span className="block truncate">{v ?? ""}</span>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        // The link lives INSIDE the CellEditTrigger button, so
-                        // without this a click on the name text would both
-                        // navigate AND open the inline editor — a race that
-                        // resolves nondeterministically on slow machines (the
-                        // route swap can unmount the editor mid-edit; this
-                        // failed CI E2E). Text click = navigate only; the
-                        // pencil / button padding remains the edit affordance.
-                        // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
-                        <span
-                          className="block truncate"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      }
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      // The link lives INSIDE the CellEditTrigger button, so
+                      // without this a click on the name text would both
+                      // navigate AND open the inline editor — a race that
+                      // resolves nondeterministically on slow machines (the
+                      // route swap can unmount the editor mid-edit; this
+                      // failed CI E2E). Text click = navigate only; the
+                      // pencil / button padding remains the edit affordance.
+                      // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
+                      <span
+                        className="block truncate"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    }
+                  >
+                    <TableLink
+                      to={entities[entity].routes.detail}
+                      params={{ id: String(info.row.original.id) }}
                     >
-                      <TableLink
-                        to={entities[entity].routes.detail}
-                        params={{ id: String(info.row.original.id) }}
-                      >
-                        {v ?? ""}
-                      </TableLink>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-xs">
                       {v ?? ""}
-                    </TooltipContent>
-                  </Tooltip>
-                ),
+                    </TableLink>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    {v ?? ""}
+                  </TooltipContent>
+                </Tooltip>,
               )
             }
           />,
-        );
-      }
-
-      if (options?.omitDetailLink) {
-        return wrapExpandable(
-          wrapWithSuffix(<span className="block truncate">{value}</span>),
         );
       }
 
@@ -430,15 +426,15 @@ export function createNameColumn<T extends BaseRow>(
     },
   };
 
-  // Only add header if it's not the default "name" field
-  if (fieldName === "filename") {
-    return columnHelper.accessor((row) => row[fieldName], {
-      ...config,
-      header: "Filename",
-    });
-  }
+  // Otherwise TanStack falls back to the column id ("name"), which is what
+  // every index page wants.
+  const header =
+    options?.header ?? (fieldName === "filename" ? "Filename" : undefined);
 
-  return columnHelper.accessor((row) => row[fieldName], config);
+  return columnHelper.accessor(
+    (row) => row[fieldName],
+    header ? { ...config, header } : config,
+  );
 }
 
 /**
@@ -710,12 +706,6 @@ export function createInventoryEntriesColumn<
 interface ActionsColumnOptions<T> {
   /** Additional actions to render after "View Details" */
   extraActions?: (row: T) => ReactNode;
-  /**
-   * Skip the "View Details" menu item. For entities with no dedicated detail
-   * page (task, purchase), `entities[entity].routes.detail` points back at
-   * the list page itself — "View Details" there is a no-op affordance.
-   */
-  omitDetailLink?: boolean;
 }
 
 /**
@@ -729,12 +719,10 @@ export function createActionsColumn<T extends { id: string | number }>(
 ) {
   return createActionsColumnBase(
     columnHelper,
-    options?.omitDetailLink
-      ? () => null
-      : (row) => ({
-          to: entities[entity].routes.detail,
-          params: { id: String(row.id) },
-        }),
+    (row) => ({
+      to: entities[entity].routes.detail,
+      params: { id: String(row.id) },
+    }),
     options?.extraActions,
   );
 }
@@ -1041,6 +1029,10 @@ interface SingleEntityEditableConfig<T, TId extends string> {
 /**
  * Creates a column that displays a single related entity as an inline link.
  * Shows NoneValue when the entity is null/undefined.
+ *
+ * The name fills its column and truncates at the column edge (`truncate`), NOT
+ * at `compact`'s fixed 8rem — every caller here declares an explicit width, and
+ * clipping a name to 8rem inside a `w-64` column just wastes the column.
  * Optionally supports inline editing (async entity picker) via `editable` —
  * available for every entity except `usda-food` (no generic picker).
  */
@@ -1055,7 +1047,6 @@ export function createSingleEntityInlineLinkColumn<
   options?: {
     header?: string;
     className?: string;
-    compact?: boolean;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     enableSorting?: boolean;
@@ -1064,8 +1055,6 @@ export function createSingleEntityInlineLinkColumn<
       : never;
   },
 ) {
-  const compact = options?.compact ?? true;
-
   const editableConfig = options?.editable as
     | SingleEntityEditableConfig<T, string>
     | undefined;
@@ -1144,7 +1133,7 @@ export function createSingleEntityInlineLinkColumn<
                     <EntityInlineLink
                       entity={entity}
                       data={item as never}
-                      compact={compact}
+                      truncate
                     />
                   );
                 }
@@ -1156,11 +1145,7 @@ export function createSingleEntityInlineLinkColumn<
 
         if (!item) return <NoneValue />;
         return (
-          <EntityInlineLink
-            entity={entity}
-            data={item as never}
-            compact={compact}
-          />
+          <EntityInlineLink entity={entity} data={item as never} truncate />
         );
       },
     },
@@ -1189,8 +1174,14 @@ export function createFilterableSelectColumn<
      * so a table that bypasses `useStandardColumns` (the embedded
      * project-detail tables) still gets the manifest's control type instead of
      * silently staying single-select.
+     *
+     * Pass `null` for **no filter control at all**. Omitting this prop derives
+     * one from `selectOptions`, so a column that must not be filterable here
+     * (because something else already owns that concept — e.g. the `/projects`
+     * dashboard's server-side status/kind chips) has no other way to say so,
+     * and would otherwise silently AND a second, client-side filter on top.
      */
-    filterConfig?: FilterConfig;
+    filterConfig?: FilterConfig | null;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: T[K], row: T) => Promise<void>;
@@ -1204,17 +1195,21 @@ export function createFilterableSelectColumn<
       ? (row, v) => options.editable!.onSave(v as T[K], row)
       : undefined,
   );
-  const filterConfig: FilterConfig = options.filterConfig ?? {
-    placeholder: options.placeholder,
-    filterType: "select",
-    options: options.selectOptions,
-  };
+  // `null` is an explicit opt-out (no control); `undefined` derives one.
+  const filterConfig: FilterConfig | undefined =
+    options.filterConfig === null
+      ? undefined
+      : (options.filterConfig ?? {
+          placeholder: options.placeholder,
+          filterType: "select",
+          options: options.selectOptions,
+        });
   return columnHelper.accessor((row) => row[accessor], {
     id: String(accessor),
     header: options.header,
     // Client-side tables resolve a filterFn from the ROW value's type, so a
     // string column handed an array would silently match nothing.
-    ...(filterConfig.filterType === "multiselect"
+    ...(filterConfig?.filterType === "multiselect"
       ? { filterFn: multiSelectFilterFn }
       : {}),
     meta: {

@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 6,
+    "totalCount": 70491
+  },
+  "items": [
+    {
+      "fdc_id": 173410,
+      "description": "Butter, salted",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "nutrientsPer100": {
+        "203": 0.85,
+        "204": 81.11,
+        "205": 0.06,
+        "208": 717
+      },
+      "linkedProducts": [
+        {
+          "name": "salted European-style butter"
+        }
+      ]
+    },
+    {
+      "fdc_id": 170387,
+      "description": "Butterbur, canned",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "nutrientsPer100": {
+        "203": 0.11,
+        "204": 0.13,
+        "205": 0.38,
+        "208": 3
+      },
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 173430,
+      "description": "Butter, without salt",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "nutrientsPer100": {
+        "203": 0.85,
+        "204": 81.11,
+        "205": 0.06,
+        "208": 717
+      },
+      "linkedProducts": [
+        {
+          "name": "butter"
+        }
+      ]
+    },
+    {
+      "fdc_id": 173412,
+      "description": "Butter oil, anhydrous",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "nutrientsPer100": {
+        "203": 0.28,
+        "204": 99.48,
+        "205": 0,
+        "208": 876
+      },
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 170385,
+      "description": "Butterbur, (fuki), raw",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "nutrientsPer100": {
+        "203": 0.39,
+        "204": 0.04,
+        "205": 3.61,
+        "208": 14
+      },
+      "linkedProducts": []
+    },
+    {
+      "fdc_id": 173411,
+      "description": "Butter, whipped, with salt",
+      "data_type": "sr_legacy_food",
+      "brand_owner": null,
+      "brand_name": null,
+      "nutrientsPer100": {
+        "203": 0.49,
+        "204": 78.3,
+        "205": 0,
+        "208": 731
+      },
+      "linkedProducts": []
+    }
+  ]
+}

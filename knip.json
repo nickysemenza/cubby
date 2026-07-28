@@ -43,6 +43,19 @@
       "vitest": { "config": "vitest.config.ts" },
       "playwright": { "config": "playwright.config.ts" }
     },
+    "apps/mcp-apps": {
+      "entry": [
+        "src/bundles.ts!",
+        "build.mjs!",
+        "vite.config.ts!",
+        "src/{shopping-list,usda-picker}.ts!",
+        "harness/{host.ts,vite.config.ts}!"
+      ],
+      "project": ["src/**/*.ts!", "harness/**/*.ts!"],
+      "vitest": { "config": "vitest.config.ts" },
+      // Consumed by `src/app.css`'s @import, which knip doesn't follow.
+      "ignoreDependencies": ["@cubby/design-tokens"]
+    },
     "apps/upc-lookup": {
       "entry": [
         "src/index.tsx!",

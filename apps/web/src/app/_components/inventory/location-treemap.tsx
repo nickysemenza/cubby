@@ -161,7 +161,9 @@ function Treemap({ data }: TreemapProps) {
                           size={12}
                           className="shrink-0"
                         />
-                        <span className="truncate">{node.data.name}</span>
+                        <span className="truncate" title={node.data.name}>
+                          {node.data.name}
+                        </span>
                       </Link>
                       {width > 160 && node.data.totalCount > 0 && (
                         <span className="shrink-0 text-2xs opacity-80">

@@ -22,13 +22,14 @@ import {
   createSingleEntityInlineLinkColumn,
   createTextColumn,
   createTimestampColumn,
-  presenceFilterOptions,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
+import { useLocationParentOptions } from "../_components/hooks/useLocationParentOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { BulkReparentLocationsDialog } from "../_components/locations/bulk-reparent-locations-dialog";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
@@ -47,6 +48,12 @@ export function LocationList() {
   const [reparentLocations, setReparentLocations] = useState<
     LocationListItemOut[]
   >([]);
+
+  // Runtime picklist for the manifest's `parent` spec (optionsKey: "parentLocation").
+  const { options: parentLocationOptions } = useLocationParentOptions();
+  const filterOptions = useFilterOptions({
+    parentLocation: parentLocationOptions,
+  });
 
   // Mutation for inline editing (name, type)
   const updateLocationMutation = useUpdateMutation({
@@ -93,11 +100,9 @@ export function LocationList() {
         header: "Parent",
         className: "w-56",
         mobile: { slot: "subtitle", priority: 20 },
-        filterConfig: {
-          placeholder: "Filter parent...",
-          filterType: "select",
-          options: presenceFilterOptions("parent"),
-        },
+        // No `filterConfig` here — the manifest's `location.parent` spec
+        // (idMulti + nullable) now always overlays this column via
+        // `useStandardColumns`, so a hand-coded fallback would be dead code.
         editable: {
           onSave: async (newParentId, location) => {
             await updateLocationMutation.mutateAsync({
@@ -273,6 +278,7 @@ export function LocationList() {
   } = useEntityList({
     entity: "location",
     queryOptions: api.location.list.queryOptions,
+    filterOptions,
     columns,
     deletable: deletableConfig,
     bulkActions,

@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { Table } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
@@ -5,10 +6,14 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { ActiveFilterChips } from "./ActiveFilterChips";
+import { DataTableViews } from "./DataTableViews";
 import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
+  /** Which entity this table lists — drives the saved-views menu, which
+   *  renders nothing for an entity with no declared views. */
+  entity?: Entity;
   /** Slot for additional content like summaries (e.g., "Value: $5,845.91") */
   additionalContent?: ReactNode;
   /** Primary actions (e.g., "Create New" button) */
@@ -23,19 +28,20 @@ interface DataTableToolbarProps<TData> {
 
 export function DataTableToolbar<TData>({
   table,
+  entity,
   additionalContent,
   actions,
   bulkActionBar,
   showViewOptions = true,
   className,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered =
-    table.getState().columnFilters.length > 0 || table.getState().globalFilter;
+  const isFiltered = table.getState().columnFilters.length > 0;
 
   return (
     <Row align="center" justify="between" gap="sm" className={className}>
       <Row align="center" gap="sm">
         {showViewOptions && <DataTableViewOptions table={table} />}
+        <DataTableViews table={table} entity={entity} />
         {bulkActionBar}
       </Row>
 
@@ -62,7 +68,6 @@ export function DataTableToolbar<TData>({
             size="default"
             onClick={() => {
               table.resetColumnFilters();
-              table.setGlobalFilter({});
             }}
             className="text-muted-foreground hover:text-foreground"
           >

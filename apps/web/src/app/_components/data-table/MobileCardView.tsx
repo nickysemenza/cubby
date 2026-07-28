@@ -22,7 +22,10 @@ import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
 import type { GroupConfig } from "./useGroupedList";
 import { useGroupedList } from "./useGroupedList";
-import { useMobileListModel } from "./useMobileListModel";
+import {
+  estimateMobileRowHeight,
+  useMobileListModel,
+} from "./useMobileListModel";
 
 // Absolutely-positioned virtualizer row wrapper — virtualizer mechanics
 // (measureElement ref + data-index + translateY), shared by all 3 render sites.
@@ -97,14 +100,20 @@ export function MobileCardView<TItem>({
 
   // Determine virtualizer item count and estimate sizes
   const itemCount = groupedItems ? groupedItems.length : mobileRows.length;
+  // Estimated per row, not as one constant: rows now range from ~55px (no spec
+  // values) to ~152px (a fully-populated purchase), and a flat guess that far
+  // off makes getTotalSize() lurch as measurements land during a fast scroll.
   const estimateSize = useCallback(
     (index: number) => {
       if (groupedItems) {
-        return groupedItems[index]?.kind === "header" ? 36 : 56;
+        const item = groupedItems[index];
+        if (!item) return 56;
+        if (item.kind === "header") return 36;
+        return estimateMobileRowHeight(rowIndexToModel.get(item.index));
       }
-      return 56;
+      return estimateMobileRowHeight(mobileRows[index]);
     },
-    [groupedItems],
+    [groupedItems, mobileRows, rowIndexToModel],
   );
 
   // Ref for scrollMargin offset calculation
@@ -114,7 +123,10 @@ export function MobileCardView<TItem>({
   const virtualizer = useWindowVirtualizer({
     count: itemCount,
     estimateSize,
-    overscan: 8,
+    // A count, not a pixel budget — and rows got ~2.5x taller, each carrying
+    // several edit-triggers. 8 would now hold far more (and heavier) DOM than
+    // it did; 4 still covers ~600px on the dense lists.
+    overscan: 4,
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
@@ -208,6 +220,7 @@ export function MobileCardView<TItem>({
         imageSlot={model.imageSlot}
         rightValues={model.rightValues}
         rightValueInteractive={model.rightValueInteractive}
+        metaValues={model.metaValues}
         selectable={
           selectionMode
             ? {

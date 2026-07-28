@@ -56,6 +56,11 @@ export async function getTaskBoard(
   db: Database,
   input: TaskBoardInput,
 ): Promise<TaskBoardOut> {
+  // No presence argument on purpose: `taskBoardInput` has no project-presence
+  // filter, because the board renders unassigned work as its own Inbox lane
+  // (board-model.ts prepends a null-projectId column) rather than filtering to
+  // it. Omitting the arg keeps every task in scope, which is what that lane
+  // needs.
   const projectCondition = await buildTaskProjectCondition(
     db,
     input.projectId,

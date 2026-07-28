@@ -14,8 +14,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { mock } from "~/lib/test/mock-schema";
+import { SHOPPING_LIST_UI, USDA_PICKER_UI } from "./apps";
 import {
   createMcpServer,
+  listMcpResourceCatalog,
   listMcpToolCatalog,
   slimMeal,
   slimProduct,
@@ -23,8 +25,10 @@ import {
 } from "./server";
 import {
   getRegisteredTool,
+  installMockStrippedListToolsHandler,
   registerEntityCreateTool,
   registerEntityCrudToolset,
+  registerMcpTool,
   slimRecipe,
   stripMockFromJsonSchema,
   WRITE_CLOSED,
@@ -989,5 +993,169 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       id: ENTRY_ID,
       data: { amount: { value: 3, unit: "each" } },
     });
+  });
+});
+
+describe("MCP Apps ui:// metadata", () => {
+  // Regression: installMockStrippedListToolsHandler replaces the SDK's
+  // tools/list handler and rebuilds each definition by hand. It used to omit
+  // `_meta`, which is exactly where `ui.resourceUri` lives — so a host would
+  // never learn the tool had a UI and would silently render text instead. There
+  // is no error anywhere in that path, which is why this is guarded.
+  it("survives the hand-rolled tools/list handler", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpTool(server, {
+      name: "ui_tool",
+      description: "renders an app",
+      outputSchema: z.object({ ok: z.boolean() }),
+      annotations: { readOnlyHint: true },
+      uiResourceUri: "ui://cubby/test.html",
+      handler: async () => ({ ok: true }),
+    });
+    installMockStrippedListToolsHandler(server);
+
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+    try {
+      const { tools } = await client.listTools();
+      const meta = tools.find((t) => t.name === "ui_tool")?._meta;
+      expect(meta?.ui).toEqual({ resourceUri: "ui://cubby/test.html" });
+      // The deprecated flat alias ships too, for hosts that only read that one.
+      expect(meta?.["ui/resourceUri"]).toBe("ui://cubby/test.html");
+    } finally {
+      await Promise.allSettled([client.close(), server.close()]);
+    }
+  });
+
+  it("points the UI tools at registered ui:// resources", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const declared = new Set(
+      tools
+        .map((tool) => tool._meta?.ui as { resourceUri?: string } | undefined)
+        .map((ui) => ui?.resourceUri)
+        .filter((uri): uri is string => uri !== undefined),
+    );
+    expect([...declared].sort()).toEqual(
+      [SHOPPING_LIST_UI, USDA_PICKER_UI].sort(),
+    );
+
+    // Every declared pointer must resolve, or the host fetches a 404 and the
+    // tool renders nothing.
+    const resources = await listMcpResourceCatalog();
+    const served = new Set(resources.resources.map((r) => r.uri));
+    for (const uri of declared) {
+      expect(served.has(uri)).toBe(true);
+    }
+  });
+
+  it("serves each app over resources/read, ready to render", async () => {
+    // The end of the chain nothing else covered: `resources/list` proving a
+    // pointer resolves says nothing about what `resources/read` actually
+    // returns. A host fetches this exact payload and renders it, so assert the
+    // three things that decide whether it renders at all — the MCP Apps mime
+    // type, a self-contained document, and a substituted origin. The last one
+    // is what silently broke deep links once already.
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const server = createMcpServer();
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+
+    try {
+      const { resources } = await client.listResources();
+      expect(resources.length).toBeGreaterThan(0);
+
+      for (const resource of resources) {
+        const { contents } = await client.readResource({ uri: resource.uri });
+        const [content] = contents;
+        expect(content?.mimeType).toBe("text/html;profile=mcp-app");
+        // The contents union is text-or-blob; an app must be the text arm.
+        expect(content && "text" in content).toBe(true);
+
+        const html = (content as { text: string }).text;
+        expect(html.startsWith("<!doctype html>")).toBe(true);
+        // Self-contained: a sandboxed iframe has no origin to fetch from.
+        expect(html).not.toMatch(/<script[^>]+src=/);
+        expect(html).not.toMatch(/<link[^>]+href=/);
+        // Substituted, and only in the meta tag.
+        expect(html).not.toContain('content="__CUBBY_ORIGIN__"');
+        expect(html).toMatch(
+          /<meta name="cubby-origin" content="https?:\/\/[^"]+"/,
+        );
+      }
+    } finally {
+      await Promise.allSettled([client.close(), server.close()]);
+    }
+  });
+
+  it("keeps the UI additive — the data is still on the wire without a host", async () => {
+    // A host with no MCP Apps support ignores `_meta.ui` entirely, so these
+    // tools must stay fully usable as plain structured-output tools.
+    const { tools } = await listMcpToolCatalog();
+    for (const name of ["get_shopping_list", "search_usda_foods"]) {
+      const tool = tools.find((t) => t.name === name);
+      expect(tool?.outputSchema).toBeDefined();
+    }
+  });
+});
+
+describe("registerMcpTool non-object output schemas", () => {
+  // Regression: the SDK's validateToolOutput runs normalizeObjectSchema on the
+  // registered outputSchema, which yields `undefined` for anything not
+  // object-shaped, then parses against it — "Cannot read properties of
+  // undefined (reading '_zod')". A union output therefore didn't degrade the
+  // tool, it broke every call. `list_problems` was the only such tool and had
+  // been failing outright since it gained a structured schema.
+  const unionOut = z.union([
+    z.object({ total: z.number() }),
+    z.object({ type: z.string(), items: z.array(z.unknown()) }),
+  ]);
+
+  const serverWithUnionTool = (payload: unknown) => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpTool(server, {
+      name: "union_out",
+      description: "returns one of two shapes",
+      outputSchema: unionOut,
+      annotations: { readOnlyHint: true },
+      handler: async () => payload,
+    });
+    return server;
+  };
+
+  it("calls through for each branch of a union output", async () => {
+    for (const payload of [
+      { total: 3 },
+      { type: "orphanedProducts", items: [{ id: "p1" }] },
+    ]) {
+      const result = (await callTool(
+        serverWithUnionTool(payload),
+        "union_out",
+        {},
+        {},
+      )) as CallToolResult;
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual(payload);
+    }
+  });
+
+  it("still enforces the precise schema, which the SDK stand-in cannot", async () => {
+    // The permissive object handed to the SDK must not become the real check:
+    // structuredSuccess parses the union itself, so a bad payload still errors.
+    const result = (await callTool(
+      serverWithUnionTool({ total: "not-a-number" }),
+      "union_out",
+      {},
+      {},
+    )) as CallToolResult;
+    expect(result.isError).toBe(true);
   });
 });

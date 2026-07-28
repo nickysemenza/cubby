@@ -436,6 +436,90 @@ describe("product repository", () => {
       expect(hasFiltered.data.map((p) => p.id)).toContain(linked.id);
       expect(hasFiltered.data.map((p) => p.id)).not.toContain(unlinked.id);
     });
+
+    it("categoryPresenceFilter: none returns only products with a null category", async () => {
+      const categorized = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Categorized Product",
+          upc: "700000000006",
+          category: "tools",
+        }),
+        ctx.actor,
+      );
+      const uncategorized = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Uncategorized Product",
+          upc: "700000000007",
+        }),
+        ctx.actor,
+      );
+
+      const noneFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        undefined,
+        undefined,
+        "none",
+      );
+      expect(noneFiltered.data.map((p) => p.id)).toContain(uncategorized.id);
+      expect(noneFiltered.data.map((p) => p.id)).not.toContain(categorized.id);
+    });
+
+    it("categoryFilter + categoryPresenceFilter: none is OR, not AND — returns both the selected category and the uncategorized products", async () => {
+      const foodCategorized = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Food Category Product",
+          upc: "700000000008",
+          category: "food",
+        }),
+        ctx.actor,
+      );
+      const otherCategorized = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Other Category Product",
+          upc: "700000000009",
+          category: "tools",
+        }),
+        ctx.actor,
+      );
+      const uncategorized = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Uncategorized Product Two",
+          upc: "700000000010",
+        }),
+        ctx.actor,
+      );
+
+      const filtered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        ["food"],
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        undefined,
+        undefined,
+        "none",
+      );
+
+      const ids = filtered.data.map((p) => p.id);
+      expect(ids).toContain(foodCategorized.id);
+      expect(ids).toContain(uncategorized.id);
+      expect(ids).not.toContain(otherCategorized.id);
+    });
   });
 
   describe("findProductByNameFuzzyManufacturer", () => {

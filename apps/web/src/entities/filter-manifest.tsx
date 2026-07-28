@@ -1,19 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  unsafeCookbookId,
+  unsafeLocationId,
+  unsafeProductId,
+  unsafeProjectId,
+} from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
-import {
-  PROJECT_STATUS_OPTIONS,
-  projectKindOptions,
-} from "~/app/projects/project-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import {
   costTypeOptions,
   dateRangeOptions,
   futureFilterOptions,
-  productLinkedOptions,
   resolveDateRange,
 } from "~/app/purchases/purchase-options";
 import {
@@ -26,6 +26,7 @@ import {
   type FilterKind,
   type FilterSpecCore,
   isMultiFilterKind,
+  nullableSentinelOptions,
   presenceFilterOptions,
 } from "./filters";
 
@@ -38,8 +39,7 @@ import {
  *
  * Import direction matters: `useStandardColumns` imports this, so nothing
  * here may import a module that reaches back into the table hooks. That's why
- * `tradeOptions` / `PROJECT_STATUS_OPTIONS` live in leaf modules rather than
- * in `app/projects/shared.tsx`.
+ * `tradeOptions` lives in a leaf module rather than in `app/projects/shared.tsx`.
  */
 export interface FilterSpec extends FilterSpecCore {
   /** Full placeholder. `HeaderFilter` shortens it for select controls. */
@@ -103,12 +103,23 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: futureFilterOptions,
     },
     {
+      // The Cost column has no picklist of its own — this only distinguishes
+      // recorded vs. not, which is what makes the Unclassified predicate
+      // (`trade='other' AND cost IS NULL`) expressible as plain URL state.
+      columnId: "cost",
+      field: "costPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter by cost...",
+      options: presenceFilterOptions("cost"),
+    },
+    {
       columnId: "project",
       field: "projectId",
       kind: "idMulti",
       brand: unsafeProjectId,
       placeholder: "Filter by project...",
       optionsKey: "project",
+      nullable: { field: "projectPresenceFilter", label: "project" },
     },
     {
       // No column renders this — it's seeded from the URL only (a deep link
@@ -125,7 +136,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       field: "productPresenceFilter",
       kind: "presence",
       placeholder: "Filter by product...",
-      options: productLinkedOptions,
+      options: presenceFilterOptions("product"),
     },
   ],
 
@@ -165,6 +176,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       brand: unsafeProjectId,
       placeholder: "Filter by project...",
       optionsKey: "project",
+      nullable: { field: "projectPresenceFilter", label: "project" },
     },
   ],
 
@@ -193,6 +205,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "multiselect",
       placeholder: "Filter by category...",
       options: productCategoryOptionsWithTheme,
+      nullable: { field: "categoryPresenceFilter", label: "category" },
     },
     {
       columnId: "location",
@@ -226,6 +239,18 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "multiselect",
       placeholder: "Filter by tag...",
       optionsKey: "tags",
+      nullable: { field: "tagsPresenceFilter", label: "tags" },
+    },
+    {
+      // The Source column renders the cookbook link (RecipeSourceLink) for
+      // book recipes; this scopes it to one or more cookbooks.
+      columnId: "source",
+      field: "cookbookId",
+      kind: "idMulti",
+      brand: unsafeCookbookId,
+      placeholder: "Filter by cookbook...",
+      optionsKey: "cookbook",
+      nullable: { field: "cookbookPresenceFilter", label: "cookbook" },
     },
   ],
 
@@ -275,11 +300,17 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: locationTypeOptionsWithTheme,
     },
     {
+      // Matches direct children only — this is what the Parent column
+      // literally shows on each row. There's no location-side descendant walk
+      // (unlike projects' `collectDescendantIds`); subtree scoping would be a
+      // separate, larger change.
       columnId: "parent",
-      field: "parentPresenceFilter",
-      kind: "presence",
+      field: "parentId",
+      kind: "idMulti",
+      brand: unsafeLocationId,
       placeholder: "Filter parent...",
-      options: presenceFilterOptions("parent"),
+      optionsKey: "parentLocation",
+      nullable: { field: "parentPresenceFilter", label: "parent" },
     },
   ],
 
@@ -292,27 +323,18 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
   ],
 
-  // Client-side tree table: these filter in the browser (`useClientEntityList`
-  // runs with manualFiltering off), so the specs are presentation-only — no
-  // `field` reaches a server filter object. Status/kind scoping for the
-  // dashboard as a whole lives in its chips, not here.
+  // Client-side tree table: this filters in the browser (`useClientEntityList`
+  // runs with manualFiltering off), so the spec is presentation-only — no
+  // `field` reaches a server filter object. Status/kind are deliberately NOT
+  // here: the dashboard's chips (`?statuses=&kinds=`) already scope this
+  // table's data server-side, and a second column-filter on the same concept
+  // would silently AND with the chips instead of replacing them — see
+  // `ProjectTable`'s comment in `app/projects/shared.tsx`.
   project: [
     {
       columnId: "name",
       kind: "text",
       placeholder: "Filter by project name...",
-    },
-    {
-      columnId: "status",
-      kind: "multiselect",
-      placeholder: "Filter by status...",
-      options: PROJECT_STATUS_OPTIONS,
-    },
-    {
-      columnId: "kind",
-      kind: "multiselect",
-      placeholder: "Filter by kind...",
-      options: projectKindOptions,
     },
   ],
 };
@@ -337,14 +359,19 @@ export function manifestFilterConfig(
 ): FilterConfig | undefined {
   const spec = getEntityFilters(entity).find((s) => s.columnId === columnId);
   if (!spec) return undefined;
+  // A runtime picklist (project roster, tag universe) can't be static module
+  // data, so the caller injects it by key.
+  const resolvedOptions = spec.optionsKey
+    ? (runtimeOptions?.[spec.optionsKey] ?? [])
+    : (spec.options ?? []);
+  // Sentinels come first so they're reachable without scrolling a long roster.
+  const options = spec.nullable
+    ? [...nullableSentinelOptions(spec.nullable.label), ...resolvedOptions]
+    : resolvedOptions;
   return {
     placeholder: spec.placeholder,
     filterType: filterTypeForKind(spec.kind),
-    // A runtime picklist (project roster, tag universe) can't be static module
-    // data, so the caller injects it by key.
-    options: spec.optionsKey
-      ? (runtimeOptions?.[spec.optionsKey] ?? [])
-      : spec.options,
+    options,
     facetCount: spec.facetCount,
   };
 }

@@ -38,6 +38,19 @@ export const projectStatusValues = [
 export const projectStatusSchema = z.enum(projectStatusValues);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
+/**
+ * The "live" (not-done) statuses — spelled out rather than derived from
+ * `projectStatusValues` so it stays a literal tuple. It is the exact
+ * complement of `["done"]` today; the `satisfies` below catches a status
+ * being *removed* from `ProjectStatus`, not a fifth status being *added* — a
+ * new non-live status must be added here by hand.
+ */
+export const LIVE_PROJECT_STATUSES = [
+  "planning",
+  "not_started",
+  "in_progress",
+] as const satisfies readonly ProjectStatus[];
+
 export const projectKindValues = [
   "furniture",
   "workshop",
@@ -432,10 +445,13 @@ export const taskFilterFields = {
     .optional()
     .describe('Undefined = "all" (today\'s default, unchanged)'),
   /**
-   * `true` matches tasks with `projectId IS NULL` — the Inbox predicate.
-   * Mutually meaningful only when `projectId` is omitted.
+   * `"none"` matches tasks with `projectId IS NULL` (the Inbox predicate);
+   * `"has"` matches those with any project. Combined with `projectId` it
+   * **widens** rather than narrows — the repo ORs the two, so
+   * `{projectId: [A], projectPresenceFilter: "none"}` means "project A or
+   * unassigned". That's what the header filter's `(none)` sentinel produces.
    */
-  noProject: z.boolean().optional(),
+  projectPresenceFilter: presenceFilter,
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -694,11 +710,11 @@ export const purchaseFilterFields = {
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
   /**
-   * `true` matches purchases with `projectId IS NULL` — the unassigned-spend
-   * worklist. Mirrors `taskFilterFields.noProject`; meaningful only when
-   * `projectId` is omitted.
+   * `"none"` matches purchases with `projectId IS NULL` — the unassigned-spend
+   * worklist. Mirrors `taskFilterFields.projectPresenceFilter`, including the
+   * OR-with-`projectId` semantics documented there.
    */
-  noProject: z.boolean().optional(),
+  projectPresenceFilter: presenceFilter,
   productId: productId.optional(),
   productPresenceFilter: presenceFilter,
   // Its own filter, deliberately NOT folded into `search`: buildSearchConditions
@@ -715,12 +731,13 @@ export const purchaseFilterFields = {
     .optional()
     .describe("Inclusive upper bound on purchase date"),
   /**
-   * `true` matches purchases with a null `cost`. Combined with
-   * `trade: "other"`, this is the Unclassified-purchase predicate
-   * (`trade='other' AND cost IS NULL`) — deliberately NOT a `costType`
-   * value, since `costType` stays a clean 3-value enum.
+   * `"none"` matches purchases with a null `cost`; `"has"` matches purchases
+   * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
+   * Unclassified-purchase predicate (`trade='other' AND cost IS NULL`) —
+   * deliberately NOT a `costType` value, since `costType` stays a clean
+   * 3-value enum.
    */
-  costIsNull: z.boolean().optional(),
+  costPresenceFilter: presenceFilter,
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -878,12 +895,19 @@ export const purchaseMcpListOut = createPaginatedResponseSchema(purchaseOut);
 // repo/project/dashboard-summary.ts / repo/project/analytics.ts)
 // ---------------------------------------------------------------------------
 
-/** Shared scope filters for both dashboard endpoints. */
+/**
+ * Shared scope filters for both dashboard endpoints. Empty/omitted
+ * `statusScope` means **no status condition** — all four statuses, not just
+ * the live ones. While a date window (`dateFrom`/`dateTo`) is set, projects
+ * with both `startDate` and `endDate` null are dropped.
+ */
 const projectDashboardFilterFields = {
   statusScope: z.array(projectStatusSchema).optional(),
   kinds: z.array(projectKindSchema).optional(),
   locations: z.array(z.string()).optional(),
   search: z.string().optional(),
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
 };
 export const projectDashboardFiltersSchema = z.object(
   projectDashboardFilterFields,
@@ -900,14 +924,12 @@ export type ProjectDashboardFilters = z.infer<
  */
 export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
 
-export const projectPortfolioAnalyticsInput = z.object({
-  ...projectDashboardFilterFields,
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
-});
-export type ProjectPortfolioAnalyticsInput = z.infer<
-  typeof projectPortfolioAnalyticsInput
->;
+/**
+ * `project.portfolioAnalytics`'s input is now identical to
+ * `projectDashboardFiltersSchema` (both scopes gained `dateFrom`/`dateTo`) —
+ * no separate value alias, matching `ProjectDashboardSummaryInput` above.
+ */
+export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
 
 export const projectAttentionTypeValues = [
   "overdue_task",
@@ -952,6 +974,15 @@ export type ProjectTaskStatusBreakdown = z.infer<
 export const projectFilterOptionsOut = z.object({
   kinds: z.array(projectKindSchema),
   locations: z.array(z.string()),
+  /**
+   * Every calendar year (`"YYYY"`) the portfolio has data in — the union of
+   * purchase dates, task effective due dates, and project start/end dates —
+   * newest first. Computed server-side (three `selectDistinct`s) so the Date
+   * filter row offers the same year chips on every tab; deriving it
+   * client-side from the Data view's fetch-alls made the chips disappear on a
+   * fresh Overview/Analytics load.
+   */
+  years: z.array(z.string()),
 });
 export type ProjectFilterOptionsOut = z.infer<typeof projectFilterOptionsOut>;
 
@@ -974,6 +1005,18 @@ export const projectDashboardSummaryOut = z.object({
   nextTasks: z.array(taskOut),
   attention: z.array(projectAttentionItemSchema),
   filterOptions: projectFilterOptionsOut,
+  /**
+   * How many rows the active date window (`dateFrom`/`dateTo`) removed for
+   * having NO date at all, per entity — the honest footnote under the date
+   * chips ("12 undated purchases hidden"). All three are 0 when no window is
+   * set. A row that has a date but falls outside the window is NOT counted:
+   * it's excluded on its own merits, which the chip already says.
+   */
+  hiddenByDate: z.object({
+    projects: z.number().int(),
+    tasks: z.number().int(),
+    purchases: z.number().int(),
+  }),
   completedCount: z.number().int(),
 });
 export type ProjectDashboardSummaryOut = z.infer<

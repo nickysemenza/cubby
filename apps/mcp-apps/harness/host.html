@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MCP App harness</title>
+    <style>
+      body {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        height: 100vh;
+        font: 13px system-ui;
+        background: #1e1e1e;
+        color: #ddd;
+      }
+      #stage {
+        padding: 16px;
+        overflow: auto;
+      }
+      iframe {
+        width: 100%;
+        border: 0;
+        background: transparent;
+      }
+      #log {
+        border-left: 1px solid #444;
+        padding: 8px;
+        overflow: auto;
+        font: 11px ui-monospace, monospace;
+        white-space: pre-wrap;
+      }
+      #log div {
+        border-bottom: 1px solid #333;
+        padding: 3px 0;
+      }
+      select {
+        margin-bottom: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <select id="pick">
+        <option value="shopping-list (real)">shopping-list (real)</option>
+        <option value="shopping-list">shopping-list (synthetic)</option>
+        <option value="usda-picker (real)">usda-picker (real)</option>
+        <option value="usda-picker">usda-picker (synthetic)</option>
+      </select>
+      <!-- allow-same-origin is required for module scripts to run; see the
+           harness vite config for why the real host doesn't need it. -->
+      <iframe
+        id="frame"
+        title="MCP App"
+        sandbox="allow-scripts allow-same-origin"
+      ></iframe>
+    </div>
+    <div id="log"></div>
+    <script type="module" src="./host.ts"></script>
+  </body>
+</html>

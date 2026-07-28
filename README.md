@@ -377,6 +377,40 @@ Preview deploys are not supported: each gets a unique
 `<prefix>-cubby.nicky.workers.dev` host, and the accepted token audience is
 pinned to one origin per environment in [auth.ts](apps/web/src/lib/auth.ts).
 
+### MCP Apps (interactive UIs in the conversation)
+
+Two tools render an interactive UI in hosts that support the
+[MCP Apps extension](https://modelcontextprotocol.io/docs/extensions/apps)
+(SEP-1865) — Claude web and desktop among them:
+
+| Tool | App |
+|---|---|
+| `get_shopping_list` | Checkable list grouped by availability, per-meal breakdown behind each item |
+| `search_usda_foods` | Pickable cards with data-type richness cues and macros; selection flows back to the agent |
+
+The UI is **strictly additive** — a host without the extension ignores
+`_meta.ui.resourceUri` and gets the same `structuredContent` as before. Scope is
+deliberately narrow: an app earns its place only where the chat is the right
+home for the interaction *and* text is a bad medium for it. Tables, boards, and
+charts stay in the web app, one `openLink` away.
+
+Sources live in [apps/mcp-apps/](apps/mcp-apps/) — its own workspace package,
+because it's a separate build target with a different runtime (sandboxed iframe,
+no React, no tRPC, no Tailwind). It doesn't deploy on its own: it builds to
+self-contained HTML that [server/mcp/apps/](apps/web/src/server/mcp/apps/)
+inlines and serves as `ui://` resources, driven off the manifest in
+[src/bundles.ts](apps/mcp-apps/src/bundles.ts) — the one place an app is
+declared. `scripts/ensure-mcp-apps.mjs` gates apps/web's `dev`, `test`, and
+`build:cf`, rebuilding only when a source is newer than the bundles.
+
+`pnpm --filter @cubby/mcp-apps dev` runs a local host harness that drives the
+real AppBridge protocol against fixture data — no tunnel or connector needed,
+which matters because MCP is unreachable on preview deploys.
+
+Brand primitives come from [@cubby/design-tokens](packages/design-tokens/) — the
+same file `apps/web` imports — so the palette and type stacks can't drift
+between the web app and the iframes.
+
 ## 🥫 Product Types
 
 | Type | Example | Characteristics |

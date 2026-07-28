@@ -3,6 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { registerMcpApps } from "./apps";
 import { installMockStrippedListToolsHandler } from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
 import { registerImageTools } from "./tools/image.tools";
@@ -54,6 +55,10 @@ function registerTools(server: McpServer) {
   registerUsdaTools(server);
   registerImageTools(server);
   registerAuditTools(server);
+  // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
+  // to. Adds the `resources` capability, which is otherwise unused — cubby's
+  // MCP surface is tools-only.
+  registerMcpApps(server);
 }
 
 export function createMcpServer() {
@@ -71,8 +76,8 @@ export function createMcpServer() {
   return server;
 }
 
-/** Introspect the live tool catalog (same JSON external MCP clients see). */
-export async function listMcpToolCatalog() {
+/** Run one introspection call against a throwaway in-process client/server pair. */
+async function introspect<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const server = createMcpServer();
@@ -84,10 +89,20 @@ export async function listMcpToolCatalog() {
   ]);
 
   try {
-    return await client.listTools();
+    return await fn(client);
   } finally {
     await Promise.allSettled([client.close(), server.close()]);
   }
+}
+
+/** Introspect the live tool catalog (same JSON external MCP clients see). */
+export async function listMcpToolCatalog() {
+  return introspect((client) => client.listTools());
+}
+
+/** Introspect the live resource catalog — the `ui://` MCP App bundles. */
+export async function listMcpResourceCatalog() {
+  return introspect((client) => client.listResources());
 }
 
 /**

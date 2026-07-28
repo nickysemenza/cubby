@@ -911,6 +911,72 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 });
 
+describe("task repository — projectPresenceFilter", () => {
+  const ctx = withTestDb();
+
+  const seedProjectMix = async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "presence project" }),
+      ctx.actor,
+    );
+    for (const [name, projectId] of [
+      ["filed", project.id],
+      ["inbox", undefined],
+    ] as const) {
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          trade: "other",
+          name,
+          ...(projectId ? { projectId } : {}),
+        }),
+        ctx.actor,
+      );
+    }
+    return project;
+  };
+
+  const listNames = async (filters: Parameters<typeof taskList>[1]) =>
+    (
+      await taskList(ctx.db, filters, [], { pageIndex: 0, pageSize: 500 })
+    ).data.map((t) => t.name);
+
+  it("'none' reproduces the Inbox row set", async () => {
+    await seedProjectMix();
+    const names = await listNames({ projectPresenceFilter: "none" });
+    expect(names).toContain("inbox");
+    expect(names).not.toContain("filed");
+  });
+
+  it("'has' is the complement", async () => {
+    await seedProjectMix();
+    const names = await listNames({ projectPresenceFilter: "has" });
+    expect(names).toContain("filed");
+    expect(names).not.toContain("inbox");
+  });
+
+  // buildTaskProjectCondition folds presence INTO the id condition rather than
+  // adding a sibling — an AND there would make this pair match nothing.
+  it("ORs with projectId instead of contradicting it", async () => {
+    const project = await seedProjectMix();
+    const names = await listNames({
+      projectId: [project.id],
+      projectPresenceFilter: "none",
+    });
+    expect(names).toEqual(expect.arrayContaining(["filed", "inbox"]));
+  });
+
+  // The board shares buildTaskProjectCondition but passes no presence: its
+  // Inbox lane is a client-side column, so it must still see every task.
+  it("leaves the board unscoped", async () => {
+    await seedProjectMix();
+    const board = await getTaskBoard(ctx.db, {});
+    const names = board.active.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["filed", "inbox"]));
+  });
+});
+
 describe("task repository — moveTasks (bulk move to project)", () => {
   const ctx = withTestDb();
 

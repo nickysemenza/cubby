@@ -9,6 +9,7 @@ import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
+import { CellLinkFence } from "../_components/data-table/cell-edit-trigger";
 import {
   createCreatedAtColumn,
   createCurrencyColumn,
@@ -142,11 +143,15 @@ export function InventoryItemList() {
           });
         },
         // Keep the pre-editable click-through to the entry's detail page
-        // (same link-in-display pattern as createNameColumn's editable).
+        // (same link-in-display pattern as createNameColumn's editable —
+        // including the click fence, without which this click would also open
+        // the amount editor).
         renderDisplay: (content, row) => (
-          <Link to="/inventory/$id" params={{ id: row.id }}>
-            {content}
-          </Link>
+          <CellLinkFence>
+            <Link to="/inventory/$id" params={{ id: row.id }}>
+              {content}
+            </Link>
+          </CellLinkFence>
         ),
       }),
       createCurrencyColumn(columnHelper, "valuation", {

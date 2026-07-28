@@ -53,7 +53,9 @@ const EntityImageList: FC<EntityImageListProps> = ({
                   hoverEffect="both"
                   transition="all"
                 />
-                <p className="mt-1 truncate text-sm">{image.filename}</p>
+                <p className="mt-1 truncate text-sm" title={image.filename}>
+                  {image.filename}
+                </p>
               </Link>
             ))}
           </Grid>

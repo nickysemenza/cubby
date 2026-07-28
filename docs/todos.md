@@ -109,6 +109,18 @@ Price-per-nutrient, daily-value %, nutrient-density comparisons, batch ingredien
 parsing (`parse_ingredient_lines`), and custom serving aliases all shipped. Remaining
 follow-ups:
 
+- [ ] **Collapse USDA duplicates by UPC — only if it resurfaces.** FDC mints a new
+  `fdc_id` on every republish, so one barcode maps to several rows (UPC
+  `857750003948` → `1433980` / `1726281` / `2160231`, the oldest with no nutrients
+  at all). Two fixes shipped: lookup now takes the newest row, and
+  `search_usda_foods` uses `relevance` ordering, which leads with UPC-less SR
+  Legacy / Foundation foods — so the duplicates fell off page one on their own and
+  no de-duplication was built. If they come back (a brand-name query, deep paging),
+  the cheap fix is to reuse the existing `dedupeUsdaFoodsByUpc`
+  (`lib/usda-food-stats.ts`, already used by the picker combobox and ingredient
+  review card) inside the MCP tool handler. **Not** a SQL dedupe in usda-api: the
+  list query's `count` and `data` come from different FROM clauses and are never
+  reconciled, and that count drives the `/usda` table's pager.
 - [ ] **Replace `NutritionInfoTable` with `NutritionLabel`** on the USDA food pages —
   the FDA-style label (with %DV) now coexists with the raw nutrient table on
   product detail; decide whether the raw table still earns its place. (2026-07
@@ -454,6 +466,93 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 ## Architecture / engineering
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
+
+### MCP Apps — further candidates
+
+The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
+`search_usda_foods`) — see [the README](../README.md#mcp-apps-interactive-uis-in-the-conversation).
+Adding another is now three files: `apps/mcp-apps/<id>.html`,
+`apps/mcp-apps/src/<id>.ts`, and an entry in `apps/mcp-apps/src/bundles.ts`
+(the build discovers entry points, and the server maps the manifest) — plus
+`uiResourceUri` on the tool.
+
+The bar stays **chat is the right home AND text is a bad medium**. Candidates
+that clear it, in rough order:
+
+- [ ] **`explain_recipe_costing`** — a nested per-ingredient cost/calorie
+  breakdown that reads terribly as prose. An expandable tree with the
+  diagnostics inline is a genuine win. The most likely next one.
+- [ ] **Merge confirmation** for `find_similar_entities` / `merge_ingredients` —
+  a side-by-side of the two candidates with a single confirm. Deferred because
+  the destructive path deserves more thought than a pretty diff: decide first
+  whether the app should call `merge_ingredients` directly or hand the decision
+  back to the agent the way the USDA picker does.
+- [ ] **`resolve_ingredients` ambiguity** — same picker shape as USDA, but only
+  worth building if the batch resolver's ambiguous-row rate stays annoying in
+  practice.
+
+**Rejected, don't re-litigate**: apps for `list_tasks` (kanban),
+`get_purchase_analytics` (charts), `list_problems` (triage), and the inventory
+tables. The web app already does all four better, and `app.openLink()` back into
+it is the correct zero-maintenance answer. An iframe is not the place to
+reimplement `RTable`.
+
+### Saved filters — user-created views
+
+**Hardcoded views shipped.** `entities/view-manifest.ts` declares a view as filters +
+sort; applying one sets column-filter state and the existing `useTableState` write-back
+serializes it, so a view and a shared link are the same thing. The purchases preset tabs
+(`planned` / `unassigned` / `unclassified`) are gone, with a legacy `?view=` normalizer
+for old bookmarks. `unclassified` stopped needing a special case once the Cost column
+got a real presence filter. The `productId` deep link now has a `ScopeChip`.
+
+What's left is **persistence**: letting the user name and save their own filter sets
+rather than only picking from the hardcoded three. Storage should follow the existing
+per-entity table-state pattern — module cache + `localStorage` + `useSyncExternalStore`,
+as in `useTableColumnVisibility.ts` / `useTableColumnSizing.ts`
+(`table-columns:{entity}`). A saved view is the same shape `view-manifest.ts` already
+uses, so `DataTableViews` should just render two groups.
+
+Still not convertible, and this is by design: **Analytics, the task Board, and the
+`/tasks` `history` tab are different *renderers* or non-column state** (`history` pins
+`completion: "done"`, a schema enum with no column and no manifest spec). The switcher
+has to keep those arms.
+
+### Deferred from the filter-honesty PR
+
+Found while auditing the table/dashboard layer; each is real but out of that PR's blast
+radius.
+
+- [ ] **`computeAttentionItems(db)` takes no filters.** Needs Attention ignores every
+      dashboard chip, and now that the rest of the dashboard filters honestly, the panel
+      *looks* more scoped than it is.
+- [ ] **~260 lines of byte-identical bulk-action machinery** duplicated between
+      `app/projects/shared.tsx` and `tasks/tasklist.tsx` / `purchases/purchaselist.tsx`
+      (three `useActionMutation`s + three dialogs + a `bulkActions` memo, twice). A
+      `useTaskBulkActions()` / `usePurchaseBulkActions()` pair returning
+      `{bulkActions, dialogs}` cuts it roughly in half.
+- [ ] **`useTableState` emits a meaningless `?page=`** on the 8 infinite-scroll lists —
+      `useInfiniteTableList` hardcodes `pageIndex: 0`, so a shared link carries a page
+      number that restores into state and does nothing. Needs an `infinite?: boolean` on
+      `TableStateOptions`, threaded from `useEntityList`, gating `PAGE_KEY` out of
+      `serializedUrlState`.
+- [ ] **`facetCount`** is declared on `FilterSpec` and plumbed through to
+      `HeaderFilter.tsx`, but no spec sets it — the faceting branch is unreachable. Wire
+      it on the one client-side table (`project`) or delete it.
+- [ ] **The always-call-both-hooks pagination path** (`useEntityList`): `useTableList`
+      has zero direct callers and exists only as the `enabled: false` arm.
+- [ ] **`task/lookup.ts` and `purchase/lookup.ts` still hand-roll the project-tree half**
+      (`allProjectParentRows` + `buildChildrenMap` + `collectDescendantIds`). They don't
+      run the rollup pipeline, so the `loadProjectSubtreeRollups` consolidation skipped
+      them; each is a ~3-line `loadProjectTree` collapse.
+- [ ] **`repo/ingredient/search.ts` declares a local `presenceCondition`** that shadows
+      the imported helper of the same name. It's a left-join null check, not column
+      presence, so the helper doesn't apply — but the shadowing is a trap. Rename.
+- [ ] **Splits worth doing eventually:** `app/projects/shared.tsx` (1345 lines) and
+      `data-table/columnHelpers.tsx` (1702 lines). Also `HistoryView`'s local `useState`
+      filters, which are unshareable unlike every other view on that page, and its
+      over-fetch (it reads only `data.projects` from a payload that includes the
+      expensive `computeAttentionItems`).
 
 ### Background work — where it stands
 

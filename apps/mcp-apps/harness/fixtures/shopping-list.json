@@ -1,0 +1,189 @@
+{
+  "from": "2026-08-03",
+  "to": "2026-08-09",
+  "meals": [
+    { "id": "meal_1", "name": "Sunday braise", "date": "2026-08-03" },
+    { "id": "meal_2", "name": null, "date": "2026-08-06" },
+    { "id": "meal_3", "name": "Friday pasta", "date": "2026-08-08" }
+  ],
+  "items": [
+    {
+      "ingredientId": "ing_short_ribs",
+      "name": "beef short ribs",
+      "basisUnit": "g",
+      "needValue": 1800,
+      "haveValue": 0,
+      "shortfall": 1800,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "meal_1",
+          "mealName": "Sunday braise",
+          "date": "2026-08-03",
+          "recipeId": "rec_braise",
+          "recipeName": "Red wine braised short ribs",
+          "scale": 1.5,
+          "needValue": 1800
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_pancetta",
+      "name": "pancetta",
+      "basisUnit": "g",
+      "needValue": 220,
+      "haveValue": 0,
+      "shortfall": 220,
+      "status": "missing",
+      "perMeal": [
+        {
+          "mealId": "meal_3",
+          "mealName": "Friday pasta",
+          "date": "2026-08-08",
+          "recipeId": "rec_carbonara",
+          "recipeName": "Carbonara",
+          "scale": 2,
+          "needValue": 220
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_butter",
+      "name": "unsalted butter",
+      "basisUnit": "g",
+      "needValue": 340,
+      "haveValue": 113,
+      "shortfall": 227,
+      "status": "short",
+      "perMeal": [
+        {
+          "mealId": "meal_1",
+          "mealName": "Sunday braise",
+          "date": "2026-08-03",
+          "recipeId": "rec_mash",
+          "recipeName": "Potato purée",
+          "scale": 1,
+          "needValue": 200
+        },
+        {
+          "mealId": "meal_2",
+          "mealName": null,
+          "date": "2026-08-06",
+          "recipeId": "rec_scones",
+          "recipeName": "Buttermilk scones",
+          "scale": 1,
+          "needValue": 140
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_parmesan",
+      "name": "parmigiano reggiano",
+      "basisUnit": "g",
+      "needValue": 160,
+      "haveValue": 85,
+      "shortfall": 75,
+      "status": "short",
+      "perMeal": [
+        {
+          "mealId": "meal_3",
+          "mealName": "Friday pasta",
+          "date": "2026-08-08",
+          "recipeId": "rec_carbonara",
+          "recipeName": "Carbonara",
+          "scale": 2,
+          "needValue": 160
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_thyme",
+      "name": "fresh thyme",
+      "basisUnit": null,
+      "needValue": 6,
+      "haveValue": null,
+      "shortfall": 6,
+      "status": "unconvertible",
+      "perMeal": [
+        {
+          "mealId": "meal_1",
+          "mealName": "Sunday braise",
+          "date": "2026-08-03",
+          "recipeId": "rec_braise",
+          "recipeName": "Red wine braised short ribs",
+          "scale": 1.5,
+          "needValue": 6
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_soffritto",
+      "name": "soffritto base",
+      "basisUnit": "g",
+      "needValue": 400,
+      "haveValue": null,
+      "shortfall": 400,
+      "status": "subrecipe",
+      "perMeal": [
+        {
+          "mealId": "meal_1",
+          "mealName": "Sunday braise",
+          "date": "2026-08-03",
+          "recipeId": "rec_braise",
+          "recipeName": "Red wine braised short ribs",
+          "scale": 1.5,
+          "needValue": 400
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_kosher_salt",
+      "name": "Diamond Crystal kosher salt",
+      "basisUnit": "g",
+      "needValue": 48,
+      "haveValue": 1360,
+      "shortfall": 0,
+      "status": "ok",
+      "perMeal": [
+        {
+          "mealId": "meal_1",
+          "mealName": "Sunday braise",
+          "date": "2026-08-03",
+          "recipeId": "rec_braise",
+          "recipeName": "Red wine braised short ribs",
+          "scale": 1.5,
+          "needValue": 30
+        },
+        {
+          "mealId": "meal_3",
+          "mealName": "Friday pasta",
+          "date": "2026-08-08",
+          "recipeId": "rec_carbonara",
+          "recipeName": "Carbonara",
+          "scale": 2,
+          "needValue": 18
+        }
+      ]
+    },
+    {
+      "ingredientId": "ing_olive_oil",
+      "name": "extra virgin olive oil",
+      "basisUnit": "g",
+      "needValue": 90,
+      "haveValue": 740,
+      "shortfall": 0,
+      "status": "ok",
+      "perMeal": [
+        {
+          "mealId": "meal_2",
+          "mealName": null,
+          "date": "2026-08-06",
+          "recipeId": "rec_roast_veg",
+          "recipeName": "Roasted vegetables",
+          "scale": 1,
+          "needValue": 90
+        }
+      ]
+    }
+  ]
+}

@@ -196,6 +196,11 @@ export const productFilterFields = {
     .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
   ingredientPresenceFilter: presenceFilter,
+  /**
+   * `product.category` is nullable, so `"none"` is the uncategorized worklist.
+   * OR-ed with `categoryFilter` — see `taskFilterFields.projectPresenceFilter`.
+   */
+  categoryPresenceFilter: presenceFilter,
 };
 
 export const productFiltersSchema = z.object(productFilterFields);
@@ -492,6 +497,14 @@ export const mcpProductUpdateInput = z.object({
     .array(z.string())
     .optional()
     .describe("Alternate names (replaces the existing list)"),
+  // Same reason as aliases — hand-written shape, so this has to be listed to be
+  // writable. Omitting it leaves existing rows untouched (see productUpdateData).
+  externalIds: z
+    .array(externalIdInput)
+    .optional()
+    .describe(
+      'Retailer/vendor identifiers, e.g. an Amazon ASIN → [{ source: "amazon", externalId: "B0..." }]. Pass the COMPLETE desired set: it replaces the existing list. One id per (product, source).',
+    ),
   upc: upc.nullable().optional(),
   fdc_id: fdcId.nullable().optional(),
   manufacturer: z
