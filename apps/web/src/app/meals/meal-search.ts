@@ -1,5 +1,6 @@
 import { addDays, format, isValid, parseISO, startOfWeek } from "date-fns";
 import { z } from "zod";
+import { tableSearchFields } from "~/app/_components/data-table/table-search";
 
 const dateParamSchema = z
   .string()
@@ -9,9 +10,15 @@ const dateParamSchema = z
 
 export type MealCalendarView = "calendar" | "table";
 
+// Merges `tableSearchFields` (sort/page/pageSize) so the Table view's
+// useTableState urlSync round-trips through this route's search params —
+// without it, this strict z.object strips those keys on every navigate and
+// the table's sort/page silently resets (see tasks.index.tsx for the same
+// pattern).
 export const mealCalendarSearchSchema = z.object({
   view: z.enum(["calendar", "table"]).optional().catch(undefined),
   week: dateParamSchema,
+  ...tableSearchFields,
 });
 
 export const mealCalendarSearchDefaults = {

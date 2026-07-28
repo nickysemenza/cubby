@@ -81,6 +81,7 @@ import type {
   InventoryRelatedEntity,
 } from "./inventory-column-helpers";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
+import { nameLabel } from "./name-label";
 
 /** Configuration for inline column header filters */
 export interface FilterConfig {
@@ -309,10 +310,13 @@ export function createNameColumn<T extends BaseRow>(
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       // NOT `String(info.getValue())` — that renders a null name as the literal
-      // text "null", in the cell, the tooltip, AND the link.
-      const raw = info.getValue();
-      const stored = raw == null ? "" : String(raw);
-      const value = stored || (options?.emptyLabel?.(info.row.original) ?? "");
+      // text "null", in the cell, the tooltip, AND the link. `stored` and
+      // `value` must stay distinct; see nameLabel's doc.
+      const { stored, label: value } = nameLabel(
+        info.getValue(),
+        info.row.original,
+        options?.emptyLabel,
+      );
       const suffix = options?.nameSuffix?.(info.row.original);
       // Only wrap when a suffix is actually present — every other entity's
       // name column renders exactly as before (no extra markup).

@@ -33,6 +33,14 @@ interface UseOptimisticDeleteOptions<TData extends { id: string }> {
   deletable: DeletableConfig | undefined;
   /** Extra actions to render in the row action menu */
   extraActions?: (row: TData) => ReactNode;
+  /**
+   * How to name a row in the confirm dialog when `row.name` is null/empty.
+   * Without it such a row is listed by its raw UUID, which tells the user
+   * nothing about what they're about to delete — the same problem
+   * `createNameColumn`'s `emptyLabel` solves in the table cell, and it should
+   * give the same answer.
+   */
+  emptyLabel?: (row: TData) => string;
 }
 
 interface UseOptimisticDeleteReturn<TData> {
@@ -137,6 +145,7 @@ export function useOptimisticDelete<
 >({
   deletable,
   extraActions,
+  emptyLabel,
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
@@ -279,7 +288,10 @@ export function useOptimisticDelete<
               ? [
                   {
                     id: deleteTarget.id,
-                    name: deleteTarget.name ?? deleteTarget.id,
+                    name:
+                      deleteTarget.name ||
+                      emptyLabel?.(deleteTarget) ||
+                      deleteTarget.id,
                   },
                 ]
               : []
@@ -307,6 +319,7 @@ export function useOptimisticDelete<
       deleteTarget,
       deleteMutation.isPending,
       deleteMutation.mutateAsync,
+      emptyLabel,
     ],
   );
 
