@@ -1,0 +1,16 @@
+{
+  "name": "@cubby/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./brand.css": "./brand.css"
+  },
+  "files": [
+    "brand.css"
+  ],
+  "scripts": {
+    "format:check": "biome check",
+    "format:write": "biome check --write"
+  }
+}

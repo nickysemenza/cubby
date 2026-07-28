@@ -1,97 +1,59 @@
 /**
- * MCP Apps (SEP-1865) — the `ui://` resources cubby's tools render through.
+ * MCP Apps (SEP-1865) — serving the `ui://` resources cubby's tools render
+ * through.
  *
- * A tool points at one of these with `_meta.ui.resourceUri` (see the
- * `uiResourceUri` option on `registerMcpTool`); the host fetches the resource,
- * renders the HTML in a sandboxed iframe, and brokers `postMessage` JSON-RPC
- * between it and this server. Hosts without the extension ignore the pointer
- * and show the structured output, so every UI here is strictly additive — no
- * tool's data is reachable *only* through its app.
+ * A tool points at one with `_meta.ui.resourceUri` (see the `uiResourceUri`
+ * option on `registerMcpTool`); the host fetches the resource, renders the HTML
+ * in a sandboxed iframe, and brokers `postMessage` JSON-RPC between it and this
+ * server. Hosts without the extension ignore the pointer and show the
+ * structured output, so every UI is strictly additive — no tool's data is
+ * reachable *only* through its app.
  *
- * Scope is deliberately narrow: an app earns its place only where the chat is
- * the right home for the interaction AND text is a bad medium for it. Tables,
- * boards, and charts stay in the web app, one `openLink` away.
+ * The apps themselves (and the manifest below) live in `@cubby/mcp-apps`; this
+ * file is only the MCP wiring, which needs cubby's origin and the SDK.
  */
+import {
+  MCP_APP_BUNDLES,
+  type McpAppBundle,
+  withCubbyOrigin,
+} from "@cubby/mcp-apps";
 import {
   RESOURCE_MIME_TYPE,
   registerAppResource,
 } from "@modelcontextprotocol/ext-apps/server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { APP_ORIGIN } from "~/lib/auth";
-// Built by `pnpm build:mcp-apps` into a gitignored dist/ (see
-// mcp-apps/vite.config.ts). Inlined as a string because the worker has no
-// filesystem to read an HTML file out of at request time.
-//
-// `?raw` types resolve through vite/client's ambient wildcard, so `tsc` is
-// happy without the artifact — but any *runtime* consumer (vite, vitest) has to
-// actually read the file, so importing this module with no dist/ is a hard
-// ENOENT. `scripts/ensure-mcp-apps.mjs` therefore gates `dev`, `test`, and
-// `build:cf`; it's mtime-aware, so it also catches the quieter failure of a
-// stale dist/ shipping an old UI.
-import shoppingListHtml from "../../../../mcp-apps/dist/shopping-list.html?raw";
-import usdaPickerHtml from "../../../../mcp-apps/dist/usda-picker.html?raw";
 
-export const SHOPPING_LIST_UI = "ui://cubby/shopping-list.html";
-export const USDA_PICKER_UI = "ui://cubby/usda-picker.html";
+export { SHOPPING_LIST_UI, USDA_PICKER_UI } from "@cubby/mcp-apps";
 
-const CUBBY_ORIGIN_PLACEHOLDER = "__CUBBY_ORIGIN__";
-
-type CubbyApp = {
-  uri: string;
-  name: string;
-  description: string;
-  html: string;
-};
-
-const APPS: CubbyApp[] = [
-  {
-    uri: SHOPPING_LIST_UI,
-    name: "Shopping List",
-    description:
-      "Checkable shopping list grouped by availability, with the per-meal breakdown behind each item.",
-    html: shoppingListHtml,
-  },
-  {
-    uri: USDA_PICKER_UI,
-    name: "USDA Food Picker",
-    description:
-      "USDA search results as pickable cards, showing data-type richness and macros per 100g.",
-    html: usdaPickerHtml,
-  },
-];
-
-/**
- * The apps deep-link back into cubby, but a sandboxed iframe has no way to know
- * what origin its server is served from. Substituting at read time keeps the
- * origin out of tool payloads and out of the committed bundles.
- */
-function withOrigin(html: string): string {
-  return html.replaceAll(CUBBY_ORIGIN_PLACEHOLDER, APP_ORIGIN);
+function register(server: McpServer, app: McpAppBundle) {
+  registerAppResource(
+    server,
+    app.name,
+    app.uri,
+    { description: app.description },
+    () => ({
+      contents: [
+        {
+          uri: app.uri,
+          mimeType: RESOURCE_MIME_TYPE,
+          // The apps deep-link back into cubby, but a sandboxed iframe can't
+          // know what origin its server is served from. Substituting at read
+          // time keeps the origin out of tool payloads and out of the bundles.
+          text: withCubbyOrigin(app.html, APP_ORIGIN),
+          _meta: {
+            ui: {
+              // The apps draw their own hairline rules and ink top-rule; a
+              // host-supplied border/background frames a frame.
+              prefersBorder: false,
+            },
+          },
+        },
+      ],
+    }),
+  );
 }
 
 export function registerMcpApps(server: McpServer) {
-  for (const app of APPS) {
-    registerAppResource(
-      server,
-      app.name,
-      app.uri,
-      { description: app.description },
-      () => ({
-        contents: [
-          {
-            uri: app.uri,
-            mimeType: RESOURCE_MIME_TYPE,
-            text: withOrigin(app.html),
-            _meta: {
-              ui: {
-                // The apps draw their own hairline rules and ink top-rule; a
-                // host-supplied border/background frames a frame.
-                prefersBorder: false,
-              },
-            },
-          },
-        ],
-      }),
-    );
-  }
+  for (const app of MCP_APP_BUNDLES) register(server, app);
 }

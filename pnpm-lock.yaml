@@ -35,6 +35,31 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  apps/mcp-apps:
+    dependencies:
+      '@cubby/design-tokens':
+        specifier: workspace:*
+        version: link:../../packages/design-tokens
+      '@modelcontextprotocol/ext-apps':
+        specifier: ^1.7.5
+        version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+    devDependencies:
+      jsdom:
+        specifier: ^30.0.0
+        version: 30.0.0(@noble/hashes@2.2.0)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vite:
+        specifier: ^8.0.0
+        version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)
+      vite-plugin-singlefile:
+        specifier: ^2.3.3
+        version: 2.3.3(rollup@4.62.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.1.1)(typescript@7.0.2))(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
+
   apps/upc-lookup:
     dependencies:
       '@cubby/shared':
@@ -192,6 +217,12 @@ importers:
       '@cloudflare/tanstack-ai':
         specifier: 0.2.1
         version: 0.2.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(@tanstack/ai@0.41.0(@opentelemetry/api@1.9.1))(ws@8.21.1)(zod@4.4.3)
+      '@cubby/design-tokens':
+        specifier: workspace:*
+        version: link:../../packages/design-tokens
+      '@cubby/mcp-apps':
+        specifier: workspace:*
+        version: link:../mcp-apps
       '@cubby/recipebridge':
         specifier: workspace:*
         version: link:../../packages/wasm
@@ -556,9 +587,6 @@ importers:
       vite:
         specifier: ^8.0.0
         version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0)
-      vite-plugin-singlefile:
-        specifier: ^2.3.3
-        version: 2.3.3(rollup@4.62.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
       vite-plugin-top-level-await:
         specifier: ^1.6.0
         version: 1.6.0(rollup@4.62.2)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.23.1)(yaml@2.9.0))
@@ -571,6 +599,8 @@ importers:
       wrangler:
         specifier: ^4.112.0
         version: 4.112.0(@cloudflare/workers-types@5.20260719.1)
+
+  packages/design-tokens: {}
 
   packages/schemas:
     dependencies:

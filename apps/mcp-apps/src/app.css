@@ -1,0 +1,317 @@
+/*
+ * Styles for the MCP Apps.
+ *
+ * Brand primitives come from @cubby/design-tokens — the same file apps/web
+ * imports — so the palette and type stacks can't drift from the web app. Only
+ * the component classes below are local, because these bundles ship as
+ * standalone single-file HTML with no Tailwind and no access to the web app's
+ * component library.
+ *
+ * Light mode only, matching the design system. The host may render dark chrome
+ * around the iframe; a warm paper panel sitting in that is the intended look —
+ * a printed sheet pinned into the conversation.
+ *
+ * No font files: three @fontsource-variable woff2 faces inlined as base64 would
+ * dwarf the bundle, so the stacks ride their system fallbacks.
+ */
+
+@import "@cubby/design-tokens/brand.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--brand-paper);
+  color: var(--brand-foreground);
+  font-family: var(--brand-font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+h2 {
+  margin: 0;
+  font-family: var(--brand-font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ── Text tiers. Exactly three, as in the web app: primary, muted, eyebrow. ── */
+
+.muted {
+  color: var(--brand-shelf);
+}
+
+/* Mono uppercase micro-label — the third and last tier. */
+.eyebrow {
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--slate);
+}
+
+.eyebrow-ink {
+  color: var(--brand-foreground);
+}
+
+/* All data / metrics / numerals are mono. Non-negotiable in this system. */
+.mono {
+  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A secondary figure sitting beside a primary one. */
+.sub {
+  flex: none;
+  font-size: 11px;
+  color: var(--brand-shelf);
+}
+
+/* ── Surfaces ── */
+
+/* Badge — the canonical categorical chip. Square, mono, uppercase, no shadow. */
+.badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--brand-hairline);
+  background: var(--brand-paper-alt);
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* Panel — a bounded surface. Hairline border, ink top-rule, zero elevation. */
+.panel {
+  border: 1px solid var(--brand-hairline);
+  border-top: var(--rule-ink);
+  background: var(--brand-cream);
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--brand-hairline);
+}
+
+/* Rows separate by hairline, never by whitespace or a stack of cards. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--brand-hairline);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row-tappable {
+  cursor: pointer;
+}
+
+.row-checked {
+  opacity: 0.45;
+}
+
+/* A group heading inside a panel: status dot, label, note, count. */
+.row-group {
+  padding: 6px 10px;
+  gap: 6px;
+  background: var(--brand-paper-alt);
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+}
+
+.push {
+  margin-left: auto;
+}
+
+/* Name + inline disclosure, taking the free space in a row. */
+.row-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.row-label-text {
+  min-width: 0;
+}
+
+/* After the bare `.row-label-text` rule, so the strike-through wins. */
+.row-checked .row-label-text {
+  text-decoration: line-through;
+}
+
+.figure {
+  flex: none;
+}
+
+/* Expanded detail beneath a row — inset, indented past the checkbox. */
+.detail {
+  padding: 5px 10px 7px 32px;
+  background: var(--brand-paper-alt);
+  border-bottom: 1px solid var(--brand-hairline);
+}
+
+.detail-line {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  color: var(--brand-shelf);
+}
+
+/* ── Cards ── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--brand-hairline);
+  background: var(--brand-cream);
+  cursor: pointer;
+  transition: border-color 120ms var(--brand-ease-cozy);
+}
+
+.card:hover {
+  border-color: var(--brand-shelf);
+}
+
+.card-selected {
+  border-color: var(--brand-ultramarine);
+  box-shadow: inset 3px 0 0 var(--brand-ultramarine);
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+/* ── Controls ── */
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.btn {
+  padding: 4px 10px;
+  border: 1px solid var(--brand-foreground);
+  background: var(--brand-foreground);
+  color: var(--brand-cream);
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: background 120ms var(--brand-ease-cozy);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--brand-ultramarine);
+  border-color: var(--brand-ultramarine);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-quiet {
+  background: transparent;
+  border: 1px solid var(--brand-hairline);
+  color: var(--brand-shelf);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--brand-paper-alt);
+  border-color: var(--brand-foreground);
+  color: var(--brand-foreground);
+}
+
+/* A button that reads as a link — no chrome, just the accent. */
+.btn-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-ultramarine);
+  font-size: 11px;
+}
+
+/* A button that reads as a mono micro-label (row disclosure, id links). */
+.btn-eyebrow {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--slate);
+}
+
+.btn-eyebrow-open {
+  color: var(--brand-ultramarine);
+}
+
+input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--brand-ultramarine);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-ultramarine);
+  outline-offset: 1px;
+}
+
+/* ── Page furniture ── */
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.empty {
+  padding: 24px 10px;
+  text-align: center;
+  color: var(--brand-shelf);
+}

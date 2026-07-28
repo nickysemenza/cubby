@@ -16,8 +16,10 @@ import { viteSingleFile } from "vite-plugin-singlefile";
  * gets `rm -rf`'d at the top of `build:cf`).
  */
 export default defineConfig(() => {
+  // Unset means something is only *loading* this config (knip, an editor)
+  // rather than building — fall through to vite's default input instead of
+  // throwing, which would make those tools report a broken config.
   const entry = process.env.MCP_APP;
-  if (!entry) throw new Error("MCP_APP must name the app to build");
 
   return {
     root: __dirname,
@@ -29,7 +31,9 @@ export default defineConfig(() => {
       // Hosts render this in an iframe on desktop and mobile Claude — no legacy
       // browser in that set, so skip the downlevel transforms.
       target: "es2022",
-      rollupOptions: { input: resolve(__dirname, `${entry}.html`) },
+      rollupOptions: entry
+        ? { input: resolve(__dirname, `${entry}.html`) }
+        : {},
     },
   };
 });

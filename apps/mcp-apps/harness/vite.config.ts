@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
+import { withCubbyOrigin } from "../src/origin";
 
 /**
- * Dev server for the local MCP App harness (`pnpm dev:mcp-apps`).
+ * Dev server for the local MCP App harness
+ * (`pnpm --filter @cubby/mcp-apps dev`).
  *
  * Serves harness/host.html, which loads the *built* bundles and drives them
  * over the real AppBridge protocol.
@@ -31,12 +33,12 @@ function serveApps(): Plugin {
             "utf-8",
           );
           res.setHeader("Content-Type", "text/html");
-          res.end(
-            html.replaceAll("__CUBBY_ORIGIN__", "https://example.invalid"),
-          );
+          // Same substitution the MCP server does, from the same helper — a
+          // harness that rewrites differently would hide origin bugs.
+          res.end(withCubbyOrigin(html, "https://example.invalid"));
         } catch {
           res.statusCode = 404;
-          res.end("run `pnpm build:mcp-apps` first");
+          res.end("run `pnpm --filter @cubby/mcp-apps build` first");
         }
       });
     },

@@ -32,7 +32,7 @@
     {
       "name": "mcp-apps-harness",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@cubby/web", "run", "dev:mcp-apps"],
+      "runtimeArgs": ["--filter", "@cubby/mcp-apps", "run", "dev"],
       "port": 5199
     }
   ]

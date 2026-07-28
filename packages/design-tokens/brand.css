@@ -1,0 +1,77 @@
+/*
+ * Warm-Paper Ledger — the brand primitives, and the single source of truth for
+ * them.
+ *
+ * Everything here is a raw value with no framework coupling: plain custom
+ * properties, no Tailwind `@theme`, no `@apply`. That's what lets it be shared
+ * by consumers that have nothing else in common —
+ *
+ *   - apps/web           Tailwind v4; maps these onto shadcn semantic tokens
+ *                        (`--background: var(--brand-paper)`) and mirrors them
+ *                        into `@theme` for utility generation.
+ *   - apps/mcp-apps      standalone single-file HTML in a sandboxed iframe, no
+ *                        Tailwind at all; consumes the vars directly.
+ *
+ * Import this first — consumers only reference the vars, never redefine them,
+ * so ordinary cascade order does the rest.
+ *
+ * The look: a matte print-instrument surface. Dense mono data on warm paper,
+ * panels separated by ink rules and hairlines rather than elevation, one loud
+ * ultramarine reserved for the live/active value. Light mode only.
+ * (2026-06-25 overhaul; supersedes the cool-neutral / terracotta "Crisp Refresh".)
+ */
+
+:root {
+  --brand-foreground: #16170f; /* --ink: near-black, not pure */
+
+  /* Ultramarine - the one loud thing on screen: active/hover/focus + the single
+     most important live value. Everywhere else is ink + paper. */
+  --brand-ultramarine: #2244cc;
+  --brand-ultramarine-dark: #16308f;
+
+  /* Paper ramp - the warm matte substrate. cream=raised panels/headers,
+     paper=base background, paper-alt=zebra stripe / inset (a whisper darker). */
+  --brand-cream: #fcfaf4; /* --paper-surface */
+  --brand-paper: #f7f4ec; /* --paper */
+  --brand-paper-alt: #efeae0; /* --paper-alt */
+  --brand-hairline: #d8d2c4; /* --hairline: dividers, panel borders, thin rules */
+  --brand-shelf: #6b6658; /* muted ink for secondary text/labels */
+
+  /* Aubergine - the second accent: a not-blue spot color reserved for the
+     recipe/cookbook entity identity, so those entities read distinct from the
+     ultramarine interactive accent. Off the blue/green/amber/red axes. */
+  --brand-aubergine: #7a3f63;
+
+  /* Semantic tones, all kept off the blue accent axis so nothing competes with
+     ultramarine for "this is the live value". */
+  --positive: oklch(0.5 0.1 150); /* positive / money */
+  --warning: oklch(0.62 0.13 65); /* matte amber */
+  --destructive: oklch(0.45 0.18 25); /* matte deep red */
+  --slate: oklch(0.5 0.008 80); /* mono micro-labels / eyebrows */
+
+  /* The signature 3px ink top-rule for panels and sticky table headers — the
+     "printed control sheet" header underline. Use via border-top / border-bottom. */
+  --rule-ink: 3px solid var(--brand-foreground);
+
+  /* Ledger easing - a flat, mechanical settle. The matte instrument panel has
+     no overshoot/bounce; motion is restrained and square. Prefixed because
+     apps/web mirrors it into `@theme` as `--ease-cozy`, and a `@theme` entry
+     referencing its own name would be circular. */
+  --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Type system. Space Grotesk for headings, Inter for UI prose, JetBrains Mono
+     as the substrate for all data / cells / metrics / numerals.
+     apps/web loads the variable faces via @fontsource and mirrors these into
+     `@theme`; apps/mcp-apps ships no font files and rides the fallbacks (three
+     base64 woff2 faces would dwarf the bundle). Hence the full fallback chains
+     here rather than in either consumer. */
+  --brand-font-heading:
+    "Space Grotesk Variable", "Space Grotesk", ui-sans-serif, system-ui,
+    sans-serif;
+  --brand-font-sans:
+    "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --brand-font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", Monaco,
+    "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+}

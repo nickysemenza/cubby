@@ -3,7 +3,7 @@
  *
  * Drives the real SEP-1865 protocol (AppBridge + PostMessageTransport over a
  * sandboxed iframe), so what renders here is what Claude renders. `pnpm
- * dev:mcp-apps` serves it. Fixtures mirror the tools' real output schemas;
+ * --filter @cubby/mcp-apps dev` serves it. Fixtures mirror the tools' real output schemas;
  * update them alongside the schemas, not the apps.
  */
 import {

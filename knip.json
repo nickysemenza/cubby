@@ -17,13 +17,9 @@
         "scripts/**/*.{ts,mjs}!",
         "tooling/**/*.{ts,tsx}!",
         "drizzle.config.ts!",
-        "instrument.server.mjs!",
-        "mcp-apps/build.mjs!",
-        "mcp-apps/vite.config.ts!",
-        "mcp-apps/src/{shopping-list,usda-picker}.ts!",
-        "mcp-apps/harness/{host.ts,vite.config.ts}!"
+        "instrument.server.mjs!"
       ],
-      "project": ["src/**/*.{ts,tsx}!", "mcp-apps/**/*.ts!"],
+      "project": ["src/**/*.{ts,tsx}!"],
       "paths": {
         "~/*": ["./src/*"],
         "tooling/*": ["./tooling/*"]
@@ -46,6 +42,19 @@
       ],
       "vitest": { "config": "vitest.config.ts" },
       "playwright": { "config": "playwright.config.ts" }
+    },
+    "apps/mcp-apps": {
+      "entry": [
+        "src/bundles.ts!",
+        "build.mjs!",
+        "vite.config.ts!",
+        "src/{shopping-list,usda-picker}.ts!",
+        "harness/{host.ts,vite.config.ts}!"
+      ],
+      "project": ["src/**/*.ts!", "harness/**/*.ts!"],
+      "vitest": { "config": "vitest.config.ts" },
+      // Consumed by `src/app.css`'s @import, which knip doesn't follow.
+      "ignoreDependencies": ["@cubby/design-tokens"]
     },
     "apps/upc-lookup": {
       "entry": [

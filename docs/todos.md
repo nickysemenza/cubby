@@ -459,8 +459,10 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
 `search_usda_foods`) — see [the README](../README.md#mcp-apps-interactive-uis-in-the-conversation).
-Adding another is now cheap: an entry in `mcp-apps/`, a line in `build.mjs`, an
-entry in `server/mcp/apps/index.ts`, and `uiResourceUri` on the tool.
+Adding another is now three files: `apps/mcp-apps/<id>.html`,
+`apps/mcp-apps/src/<id>.ts`, and an entry in `apps/mcp-apps/src/bundles.ts`
+(the build discovers entry points, and the server maps the manifest) — plus
+`uiResourceUri` on the tool.
 
 The bar stays **chat is the right home AND text is a bad medium**. Candidates
 that clear it, in rough order:
