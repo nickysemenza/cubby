@@ -1,0 +1,148 @@
+import { describe, expect, it } from "vitest";
+import {
+  rankProjectSuggestions,
+  type SuggestableProject,
+  type TradeAffinityCell,
+} from "./project-suggestions";
+
+const TODAY = "2026-07-27";
+
+/**
+ * The real shape this exists to solve: a long parent renovation with many
+ * trade-specific sub-projects all live at once, so date overlap alone leaves
+ * ~9 candidates and only trade history separates them.
+ */
+const KITCHEN_SUBPROJECTS = [
+  "cabinetry",
+  "building",
+  "electrical",
+  "drywall",
+  "plumbing",
+  "demolition",
+  "millwork",
+  "finishes",
+] as const;
+
+const projects: SuggestableProject[] = [
+  {
+    id: "kitchen-remodel",
+    name: "Kitchen Remodel",
+    startDate: "2024-01-01",
+    endDate: "2025-06-30",
+  },
+  ...KITCHEN_SUBPROJECTS.map((trade) => ({
+    id: `kitchen-${trade}`,
+    name: `Kitchen: ${trade}`,
+    startDate: "2024-05-01",
+    endDate: "2024-08-31",
+  })),
+  {
+    id: "landscaping",
+    name: "2025 backyard landscaping",
+    startDate: "2025-04-01",
+    endDate: "2025-11-30",
+  },
+];
+
+// Each sub-project dominates its own trade, as the real ledger does.
+const affinity: TradeAffinityCell[] = KITCHEN_SUBPROJECTS.flatMap((trade) => [
+  { projectId: `kitchen-${trade}`, trade, count: 40 },
+  // The parent has absorbed a few of everything — enough to be a plausible
+  // wrong answer if trade weighting were ignored.
+  { projectId: "kitchen-remodel", trade, count: 5 },
+]);
+
+describe("rankProjectSuggestions", () => {
+  it("picks the trade-matched sub-project out of many concurrent candidates", () => {
+    const overlapping = projects.filter(
+      (p) =>
+        p.startDate! <= "2024-06-15" && (p.endDate ?? TODAY) >= "2024-06-15",
+    );
+    // Guard the premise: date overlap alone leaves a wide field.
+    expect(overlapping.length).toBe(9);
+
+    const suggestions = rankProjectSuggestions(
+      { date: "2024-06-15", trade: "drywall" },
+      projects,
+      affinity,
+      TODAY,
+    );
+
+    expect(suggestions[0]?.id).toBe("kitchen-drywall");
+    expect(suggestions[0]?.affinity).toBe(40);
+    expect(suggestions).toHaveLength(3);
+  });
+
+  it("excludes projects whose window does not contain the purchase date", () => {
+    const suggestions = rankProjectSuggestions(
+      { date: "2024-06-15", trade: "landscaping" },
+      projects,
+      affinity,
+      TODAY,
+    );
+    // Landscaping ran in 2025 — right trade, wrong year.
+    expect(suggestions.map((s) => s.id)).not.toContain("landscaping");
+  });
+
+  it("prefers the tighter window when trade history ties", () => {
+    const suggestions = rankProjectSuggestions(
+      // A trade nothing has history for, so every candidate ties at 0.
+      { date: "2024-06-15", trade: "auto" },
+      projects,
+      affinity,
+      TODAY,
+    );
+    // The 4-month sub-projects beat the 18-month parent that contains them.
+    expect(suggestions[0]?.affinity).toBe(0);
+    expect(suggestions.map((s) => s.id)).not.toContain("kitchen-remodel");
+  });
+
+  it("treats an open-ended project as still running but ranks it last", () => {
+    const openEnded: SuggestableProject[] = [
+      {
+        id: "ongoing",
+        name: "Ongoing maintenance",
+        startDate: "2024-01-01",
+        endDate: null,
+      },
+      {
+        id: "bounded",
+        name: "Bounded job",
+        startDate: "2024-06-01",
+        endDate: "2024-07-01",
+      },
+    ];
+    const suggestions = rankProjectSuggestions(
+      { date: "2024-06-15", trade: "auto" },
+      openEnded,
+      [],
+      TODAY,
+    );
+    expect(suggestions.map((s) => s.id)).toEqual(["bounded", "ongoing"]);
+  });
+
+  it("returns nothing for a purchase with no date", () => {
+    expect(
+      rankProjectSuggestions(
+        { date: null, trade: "drywall" },
+        projects,
+        affinity,
+        TODAY,
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores projects with no start date", () => {
+    const undated: SuggestableProject[] = [
+      { id: "undated", name: "Undated", startDate: null, endDate: null },
+    ];
+    expect(
+      rankProjectSuggestions(
+        { date: "2024-06-15", trade: "drywall" },
+        undated,
+        [],
+        TODAY,
+      ),
+    ).toEqual([]);
+  });
+});

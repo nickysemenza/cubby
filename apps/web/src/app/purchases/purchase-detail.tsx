@@ -25,6 +25,7 @@ import { EditableEntityCell } from "../_components/data-table/editable-entity-ce
 import { entityCellClipboard } from "../_components/data-table/inventory-column-helpers";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { ProjectSuggestionChips } from "./project-suggestion-chips";
 import {
   costTypeBadgeVariant,
   costTypeLabels,
@@ -333,7 +334,25 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     {
       title: "Overview",
       icon: Info,
-      content: <BasicInfo fields={fields} />,
+      content: (
+        <BasicInfo
+          fields={fields}
+          // In the footer, not beside the Project row: InfoRow's value span is
+          // right-aligned and capped at 65%, which would crush the chips.
+          footer={
+            <ProjectSuggestionChips
+              purchase={purchase}
+              isPending={updateMutation.isPending}
+              onAssign={async (projectId) => {
+                await updateMutation.mutateAsync({
+                  id: purchase.id,
+                  data: { projectId },
+                });
+              }}
+            />
+          }
+        />
+      ),
       // Receiving is deliberately a separate, explicit act — linking a product
       // records what was bought, it never moves inventory on its own.
       headerAction: purchase.productId ? (

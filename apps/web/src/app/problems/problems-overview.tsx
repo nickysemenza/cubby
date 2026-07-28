@@ -37,6 +37,8 @@ export function ProblemsOverview() {
             [
               ...problems.duplicateUniqueProducts,
               ...problems.orphanedProducts,
+              ...problems.productsMissingPrice,
+              ...problems.unvaluedBucketProducts,
               ...problems.productsWithoutMappings,
               ...problems.ingredientsWithPartialCoverage,
               ...problems.productsWithIslandedMappings,

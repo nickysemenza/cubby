@@ -106,7 +106,12 @@ export function calculateInventoryValuation(
     const product = item.product;
     const valuation = item.valuation;
 
-    const hasValuation = valuation != null && valuation > 0;
+    // Priced means "somebody set a price", not "worth something". A valuation
+    // is null exactly when `product.price` is null (see
+    // computeInventoryValuation), so `!= null` is the faithful test — and an
+    // explicit $0 (bundled freebies) is a real answer that shouldn't keep
+    // nagging as unpriced. Adding 0 to the total is a no-op either way.
+    const hasValuation = valuation != null;
 
     if (hasValuation) {
       // Category: priced

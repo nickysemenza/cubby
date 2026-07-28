@@ -21,7 +21,7 @@
  * (row→API mapping) is internal.
  */
 
-export { purchaseAnalytics } from "./analytics";
+export { purchaseAnalytics, purchaseTradeAffinity } from "./analytics";
 export {
   createPurchase,
   deletePurchases,

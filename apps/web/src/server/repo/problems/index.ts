@@ -8,8 +8,9 @@
  * `~/server/repo/problems` (this barrel) rather than the individual modules.
  *
  *   PRODUCT     → `detectors-product.ts`   (duplicates, orphans, no-coverage,
- *                                            better-UPC, coverage pull, usage
- *                                            counts, linked-product ids)
+ *                                            stocked-but-unpriced, better-UPC,
+ *                                            coverage pull, usage counts,
+ *                                            linked-product ids)
  *   INGREDIENT  → `detectors-ingredient.ts` (no-product, unused aliases,
  *                                            unused ingredients, alias pruning)
  *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description,
@@ -52,6 +53,7 @@ export {
   findDuplicateUniqueProducts,
   findLinkedProductIds,
   findOrphanedProducts,
+  findProductsMissingPrice,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   loadProductsForCoverage,

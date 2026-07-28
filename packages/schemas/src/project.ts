@@ -191,6 +191,10 @@ export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
 export const projectOptionsOut = z.object({
   id: projectId,
   name: z.string(),
+  // Carried so a picker can rank by "was this project running on that date?"
+  // without a second round trip — see rankProjectSuggestions.
+  startDate: plainDate.nullable(),
+  endDate: plainDate.nullable(),
 });
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
@@ -682,6 +686,12 @@ export const purchaseFilterFields = {
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
+  /**
+   * `true` matches purchases with `projectId IS NULL` — the unassigned-spend
+   * worklist. Mirrors `taskFilterFields.noProject`; meaningful only when
+   * `projectId` is omitted.
+   */
+  noProject: z.boolean().optional(),
   productId: productId.optional(),
   productPresenceFilter: presenceFilter,
   // Its own filter, deliberately NOT folded into `search`: buildSearchConditions
@@ -834,6 +844,18 @@ export const purchaseAnalyticsOut = z.object({
   byProject: z.array(purchaseProjectAggregate),
 });
 export type PurchaseAnalyticsOut = z.infer<typeof purchaseAnalyticsOut>;
+
+/**
+ * One cell of the project x trade purchase-count matrix — how many purchases of
+ * a given trade a project has already absorbed. Ranks project suggestions for
+ * an unassigned purchase; see repo/purchase/analytics.ts.
+ */
+export const purchaseTradeAffinityOut = z.object({
+  projectId,
+  trade: tradeSchema,
+  count: z.number(),
+});
+export type PurchaseTradeAffinityOut = z.infer<typeof purchaseTradeAffinityOut>;
 
 // ---------------------------------------------------------------------------
 // MCP / dashboard projections

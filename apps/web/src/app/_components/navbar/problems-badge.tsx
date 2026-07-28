@@ -26,6 +26,8 @@ const PROBLEM_LABELS: Record<
 > = {
   duplicateUniqueProducts: (n) => pl(n, "duplicate"),
   orphanedProducts: (n) => `${n} orphaned`,
+  productsMissingPrice: (n) => `${n} stocked without a price`,
+  unvaluedBucketProducts: (n) => pl(n, "unvalued bucket"),
   productsWithoutMappings: (n) => `${n} without pricing`,
   ingredientsWithPartialCoverage: (n) => `${n} partial coverage`,
   ingredientsWithoutProduct: (n) => `${n} without a product`,

@@ -26,7 +26,13 @@ const PurchaseAnalyticsView = lazy(() =>
   })),
 );
 
-const viewOptions = ["ledger", "planned", "analytics", "unclassified"] as const;
+const viewOptions = [
+  "ledger",
+  "planned",
+  "analytics",
+  "unclassified",
+  "unassigned",
+] as const;
 type ViewOption = (typeof viewOptions)[number];
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
@@ -34,6 +40,7 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "planned", label: "Planned" },
   { value: "analytics", label: "Analytics" },
   { value: "unclassified", label: "Unclassified" },
+  { value: "unassigned", label: "Unassigned" },
 ];
 
 // The ledger's filter params come from the purchase filter manifest, which is
@@ -124,6 +131,10 @@ function PurchasesPage() {
 
         {view === "unclassified" && (
           <PurchaseList mode="unclassified" initialSearch={q} />
+        )}
+
+        {view === "unassigned" && (
+          <PurchaseList mode="unassigned" initialSearch={q} />
         )}
       </Stack>
 
