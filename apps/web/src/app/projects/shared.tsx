@@ -44,6 +44,7 @@ import {
 import {
   createCurrencyColumn,
   createFilterableSelectColumn,
+  createNameColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
   type FilterConfig,
@@ -277,6 +278,7 @@ export function TaskList({
     entity: "task",
     invalidateKeys: taskMutationInvalidateKeys,
   });
+  const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
   const bulkActions = useMemo(
     () => ({
@@ -332,10 +334,9 @@ export function TaskList({
         },
         { mobile: { slot: "subtitle", priority: 10 } },
       ),
-      taskHelper.accessor("name", {
+      createNameColumn(taskHelper, "task", "name", {
         header: "Task",
-        cell: ({ row }) => row.original.name,
-        enableSorting: true,
+        editable: nameEditable,
       }),
       // The inline move-to-sub-project affordance — omitted on leaf projects
       // where every row shares the one project (see `showProjectColumn`).
@@ -376,7 +377,7 @@ export function TaskList({
         { mobile: { slot: "meta", priority: 40, interactive: true } },
       ),
     ],
-    [showProjectColumn],
+    [showProjectColumn, nameEditable],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -769,6 +770,9 @@ export function PurchaseList({
     entity: "purchase",
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
+  const nameEditable = useNameEditable<PurchaseOut>(
+    updatePurchaseMutation.mutateAsync,
+  );
 
   const bulkActions = useMemo(
     () => ({
@@ -814,24 +818,26 @@ export function PurchaseList({
   const columns = useMemo(
     () => [
       buildSelectColumn<PurchaseOut>(lastSelectedIdRef, shiftKeyRef),
-      purchaseHelper.accessor("name", {
+      createNameColumn(purchaseHelper, "purchase", "name", {
         header: "Purchase",
-        cell: ({ row }) => {
-          const url = row.original.url;
-          if (!url) return row.original.name;
-          return (
+        editable: nameEditable,
+        // The name itself goes to /purchases/$id; the vendor page keeps its own
+        // icon-only affordance beside it (same treatment as the index list's
+        // dedicated url column, minus the column). stopPropagation so it opens
+        // the vendor link instead of the cell's inline editor.
+        nameSuffix: (purchase) =>
+          purchase.url ? (
             <a
-              href={url}
+              href={purchase.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground transition-colors hover:text-primary"
             >
-              {row.original.name}
-              <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+              <ExternalLink className="size-3.5" />
+              <span className="sr-only">Open vendor link</span>
             </a>
-          );
-        },
-        enableSorting: true,
+          ) : null,
       }),
       // The inline move-to-sub-project affordance — omitted on leaf projects
       // where every row shares the one project (see `showProjectColumn`).
@@ -915,7 +921,7 @@ export function PurchaseList({
         { mobile: { slot: "meta", priority: 50 } },
       ),
     ],
-    [showProjectColumn],
+    [showProjectColumn, nameEditable],
   );
   const table = useReactTable({
     data: purchases,

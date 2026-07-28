@@ -17,6 +17,7 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   type CookbookPreview,
   type IngredientPreview,
+  type InventoryPreview,
   type LocationPreview,
   type MealPreview,
   type ProductPreview,
@@ -26,6 +27,7 @@ import {
   type TaskPreview,
   toCookbookCard,
   toIngredientCard,
+  toInventoryCard,
   toLocationCard,
   toMealCard,
   toProductCard,
@@ -1464,6 +1466,16 @@ const LOCATION_SAMPLE: LocationPreview = {
   itemCount: 12,
   subCount: 3,
 };
+const INVENTORY_SAMPLE: InventoryPreview = {
+  id: "sample-inventory",
+  productName: "Diamond Crystal Kosher Salt",
+  productId: "sample-product",
+  locationName: "Top Shelf",
+  locationId: "sample-location",
+  locationType: "shelf",
+  amountText: "3 lb",
+  valuation: 11.97,
+};
 const COOKBOOK_SAMPLE: CookbookPreview = {
   id: "sample-cookbook",
   name: "Salt Fat Acid Heat",
@@ -1531,6 +1543,10 @@ const PREVIEW_DEMOS = [
   {
     key: "location",
     node: <ManifestCard {...toLocationCard(LOCATION_SAMPLE)} />,
+  },
+  {
+    key: "inventory",
+    node: <ManifestCard {...toInventoryCard(INVENTORY_SAMPLE)} />,
   },
   { key: "meal", node: <ManifestCard {...toMealCard(MEAL_SAMPLE)} /> },
   { key: "project", node: <ManifestCard {...toProjectCard(PROJECT_SAMPLE)} /> },

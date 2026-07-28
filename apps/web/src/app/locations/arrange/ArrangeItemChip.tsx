@@ -58,7 +58,9 @@ export function ArrangeItemChip({
       )}
     >
       <GripVertical className="size-3 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate">{item.productName}</span>
+      <span className="min-w-0 flex-1 truncate" title={item.productName}>
+        {item.productName}
+      </span>
       <span className="shrink-0 text-muted-foreground">
         {tryFormatAmount(item.amount)}
       </span>

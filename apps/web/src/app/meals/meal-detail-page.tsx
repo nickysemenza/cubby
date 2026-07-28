@@ -268,6 +268,7 @@ function RecipeRow({
         to="/recipes/$id"
         params={{ id: mr.recipeId }}
         className="flex-1 truncate font-medium text-sm hover:underline"
+        title={mr.recipe.name}
       >
         {mr.recipe.name}
       </Link>

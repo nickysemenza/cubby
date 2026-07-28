@@ -73,6 +73,7 @@ export function LocationTreeRow({
         >
           <span
             data-slot="tree-row-title"
+            title={location.name}
             className={cn(
               "truncate font-medium",
               compact ? "text-xs" : "text-sm",
