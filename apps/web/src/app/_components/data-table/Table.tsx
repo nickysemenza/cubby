@@ -391,6 +391,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               >
                 <DataTableToolbar
                   table={table}
+                  entity={entity}
                   additionalContent={
                     <div className="flex items-center gap-2">
                       {additionalToolbarContent}
