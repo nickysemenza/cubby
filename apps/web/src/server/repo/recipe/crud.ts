@@ -20,6 +20,7 @@ import { recipeSortableFields } from "@cubby/schemas/recipe";
 import {
   type AnyColumn,
   and,
+  arrayOverlaps,
   eq,
   inArray,
   isNotNull,
@@ -306,8 +307,12 @@ export const recipeList = async (
       filters.cookbookId
         ? eq(recipe.cookbookId, filters.cookbookId)
         : undefined,
+      // arrayOverlaps, not a hand-rolled `&&`: drizzle interpolates a JS array
+      // into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`), which isn't a
+      // text[] — the hand-rolled version failed for every tag count, one
+      // included. Semantics are unchanged (ANY-of / array overlap).
       filters.tagFilters && filters.tagFilters.length > 0
-        ? sql`${recipe.tags} && ${filters.tagFilters}`
+        ? arrayOverlaps(recipe.tags, filters.tagFilters)
         : undefined,
       filters.excludeSubRecipes
         ? notInArray(recipe.id, subRecipeIds)

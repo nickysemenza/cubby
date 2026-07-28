@@ -16,6 +16,7 @@ import {
   createNameColumn,
   createUnitMappingsColumn,
   type FilterConfig,
+  multiSelectFilterFn,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 
@@ -23,7 +24,7 @@ import { buildSelectColumn } from "../data-table/row-selection";
 interface FilterDef {
   id: string;
   placeholder: string;
-  filterType?: "text" | "select";
+  filterType?: "text" | "select" | "multiselect";
   options?: Array<{ value: string; label: string }>;
 }
 
@@ -237,6 +238,12 @@ export function useStandardColumns<TData extends BaseListRow>({
       return {
         ...col,
         enableSorting,
+        // Client-side tables would otherwise resolve a filterFn from the ROW
+        // value's type and silently match nothing against an array. Harmless
+        // on server-filtered tables, which never run it.
+        ...(manifestConfig.filterType === "multiselect"
+          ? { filterFn: multiSelectFilterFn }
+          : {}),
         meta: { ...meta, filterConfig: manifestConfig },
       };
     });

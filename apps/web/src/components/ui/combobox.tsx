@@ -154,7 +154,34 @@ export function FilterableCombobox({
         </ComboboxPrimitive.Trigger>
       </ComboboxPrimitive.InputGroup>
 
-      {/* Refined popup */}
+      <ComboboxPopup
+        items={filteredItems}
+        anchorRef={anchorRef}
+        isLoading={isLoading}
+      />
+    </ComboboxPrimitive.Root>
+  );
+}
+
+/**
+ * The portaled list, shared verbatim by the single- and multi-select
+ * comboboxes. Markup only — it reads selection state from `Combobox.Root`
+ * context, so it works under either selection mode. Kept as a child rather
+ * than a generic wrapper because `Combobox.Root`'s `multiple` prop must be a
+ * literal `true`/`false` for its value type to infer; a shared Root taking a
+ * boolean would collapse the value to `string | string[]` for every consumer.
+ */
+function ComboboxPopup({
+  items,
+  anchorRef,
+  isLoading,
+}: {
+  items: FilterableComboboxItem[];
+  anchorRef: React.RefObject<HTMLDivElement | null>;
+  isLoading?: boolean;
+}) {
+  return (
+    <>
       <ComboboxPrimitive.Portal>
         <ComboboxPrimitive.Positioner
           side="bottom"
@@ -185,7 +212,7 @@ export function FilterableCombobox({
             )}
           >
             <ComboboxPrimitive.List className="max-h-60 overflow-y-auto overscroll-contain p-1">
-              {filteredItems.map((item) => (
+              {items.map((item) => (
                 <ComboboxPrimitive.Item
                   key={item.value}
                   value={item.value}
@@ -219,7 +246,7 @@ export function FilterableCombobox({
                 </ComboboxPrimitive.Item>
               ))}
             </ComboboxPrimitive.List>
-            {filteredItems.length === 0 && (
+            {items.length === 0 && (
               <div className="py-2 text-center text-muted-foreground text-xs">
                 {isLoading ? "Searching…" : "No results"}
               </div>
@@ -227,6 +254,118 @@ export function FilterableCombobox({
           </ComboboxPrimitive.Popup>
         </ComboboxPrimitive.Positioner>
       </ComboboxPrimitive.Portal>
+    </>
+  );
+}
+
+interface MultiFilterableComboboxProps {
+  items: FilterableComboboxItem[];
+  value: string[];
+  onValueChange: (value: string[]) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}
+
+/**
+ * Multi-select sibling of {@link FilterableCombobox} — picks any-of a set.
+ *
+ * Collapsed it reads `Drywall +2`: the first selection by name plus a count of
+ * the rest. Chips (Base UI's `Combobox.Chips`) would be richer but can't fit
+ * the dense table filter row, and `Combobox.Clear` is unusable here for the
+ * same reason — in multiple mode it only renders when chips are present.
+ */
+export function MultiFilterableCombobox({
+  items,
+  value,
+  onValueChange,
+  placeholder,
+  className,
+  disabled,
+}: MultiFilterableComboboxProps) {
+  const [inputValue, setInputValue] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const anchorRef = React.useRef<HTMLDivElement>(null);
+
+  const filteredItems = React.useMemo(() => {
+    if (!inputValue) return items;
+    const lower = inputValue.toLowerCase();
+    return items.filter((item) => item.label.toLowerCase().includes(lower));
+  }, [items, inputValue]);
+
+  // "Drywall +2" — the specific value stays visible for the common case of one
+  // or two selections, which a bare count ("3 selected") would hide.
+  const summaryLabel = React.useMemo(() => {
+    const first = value[0];
+    if (first === undefined) return "";
+    const firstLabel = items.find((item) => item.value === first)?.label ?? first;
+    return value.length > 1 ? `${firstLabel} +${value.length - 1}` : firstLabel;
+  }, [value, items]);
+
+  return (
+    // `multiple` MUST stay a literal true: Combobox.Root is generic over it, so
+    // a variable would widen the value type to `string | string[]`.
+    <ComboboxPrimitive.Root
+      multiple={true}
+      value={value}
+      onValueChange={(newValue: string[]) => {
+        onValueChange(newValue);
+        setInputValue("");
+      }}
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+    >
+      <ComboboxPrimitive.InputGroup
+        ref={anchorRef}
+        className={cn(
+          "flex w-full items-center justify-between gap-1.5 rounded-none border px-2 h-7",
+          "border-border bg-input/20",
+          "hover:bg-input/30",
+          "focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[2px]",
+          "text-xs/relaxed",
+          "transition-colors duration-150 outline-none",
+          "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50",
+          className,
+        )}
+      >
+        <ComboboxPrimitive.Input
+          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+          placeholder={placeholder}
+          value={open ? inputValue : summaryLabel}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setInputValue(e.target.value)
+          }
+        />
+        {value.length > 0 && (
+          <button
+            type="button"
+            aria-label="Clear filter"
+            onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              setInputValue("");
+              onValueChange([]);
+            }}
+            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <XIcon className="size-3" />
+          </button>
+        )}
+        <ComboboxPrimitive.Trigger
+          aria-label={`Open ${placeholder ?? "options"}`}
+          className="-mr-2 flex h-full min-w-7 shrink-0 items-center justify-center"
+        >
+          <ChevronDownIcon
+            className={cn(
+              "size-3.5 text-muted-foreground transition-transform duration-150",
+              open && "rotate-180",
+            )}
+          />
+        </ComboboxPrimitive.Trigger>
+      </ComboboxPrimitive.InputGroup>
+
+      <ComboboxPopup items={filteredItems} anchorRef={anchorRef} />
     </ComboboxPrimitive.Root>
   );
 }

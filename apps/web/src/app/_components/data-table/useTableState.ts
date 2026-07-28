@@ -79,6 +79,8 @@ export interface TableStateReturn {
     value: PaginationState | ((old: PaginationState) => PaginationState),
   ) => void;
   getColumnFilter: (columnId: string) => string | undefined;
+  /** Multi-value read for `multiselect` columns; scalars normalize to `[v]`. */
+  getColumnFilterValues: (columnId: string) => string[] | undefined;
   /** Primary sort only — single-sort consumers (remote USDA list API). */
   getSortParams: () => SortParams;
   /** Full shift-click sort stack — the tRPC list input. */
@@ -156,10 +158,33 @@ export function useTableState(
 
   // Memoize getColumnFilter to prevent recreating on every render - CRITICAL
   const getColumnFilter = useCallback(
-    (columnId: string) => {
-      return columnFilters.find((filter) => filter.id === columnId)?.value as
-        | string
-        | undefined;
+    (columnId: string): string | undefined => {
+      const value = columnFilters.find(
+        (filter) => filter.id === columnId,
+      )?.value;
+      // A multiselect column holds `string[]`. Returning it typed as `string`
+      // would send an array to a scalar zod field and blow up at the tRPC
+      // boundary at runtime instead of here — fail loudly at the call site
+      // that forgot to switch to getColumnFilterValues.
+      if (Array.isArray(value)) {
+        throw new Error(
+          `Column "${columnId}" holds a multi-value filter; use getColumnFilterValues.`,
+        );
+      }
+      return value as string | undefined;
+    },
+    [columnFilters],
+  );
+
+  /** Multi-value counterpart, normalizing a scalar up into a one-element set. */
+  const getColumnFilterValues = useCallback(
+    (columnId: string): string[] | undefined => {
+      const value = columnFilters.find(
+        (filter) => filter.id === columnId,
+      )?.value;
+      if (Array.isArray(value))
+        return value.length ? (value as string[]) : undefined;
+      return typeof value === "string" && value ? [value] : undefined;
     },
     [columnFilters],
   );
@@ -223,6 +248,7 @@ export function useTableState(
       pagination,
       setPagination,
       getColumnFilter,
+      getColumnFilterValues,
       getSortParams,
       getSorts,
     }),
@@ -234,6 +260,7 @@ export function useTableState(
       pagination,
       setPagination,
       getColumnFilter,
+      getColumnFilterValues,
       getSortParams,
       getSorts,
     ],

@@ -316,8 +316,16 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const manifestBuildFilters = useCallback(
     (ts: TableStateReturn) =>
       ({
-        ...buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
-          ts.getColumnFilter(columnId),
+        ...buildFiltersFromManifest(
+          getEntityFilters(entity),
+          // Reads raw state rather than `getColumnFilter`, which deliberately
+          // throws on an array — the builder is the one caller that handles
+          // both shapes, per each spec's `kind`.
+          (columnId) =>
+            ts.columnFilters.find((f) => f.id === columnId)?.value as
+              | string
+              | string[]
+              | undefined,
         ),
         ...extraFilters,
       }) as TFilters,

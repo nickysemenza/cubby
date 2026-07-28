@@ -21,7 +21,11 @@ import {
   taskStatusOptions,
 } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import type { FilterKind, FilterSpecCore } from "./filters";
+import {
+  type FilterKind,
+  type FilterSpecCore,
+  isMultiFilterKind,
+} from "./filters";
 
 /**
  * The filter manifest: what each entity's list table can be filtered by.
@@ -54,16 +58,11 @@ export interface FilterSpec extends FilterSpecCore {
   facetCount?: boolean;
 }
 
-/**
- * The control a kind renders as.
- *
- * Multi kinds still render the single-select control for now — the
- * multi-select combobox lands with the `HeaderFilter` array path. The server
- * mapping is already array-shaped either way, because `buildFiltersFromManifest`
- * normalizes a scalar up into a one-element array.
- */
-export const filterTypeForKind = (kind: FilterKind): "text" | "select" =>
-  kind === "text" ? "text" : "select";
+/** The control a kind renders as. */
+export const filterTypeForKind = (
+  kind: FilterKind,
+): "text" | "select" | "multiselect" =>
+  kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
 
 const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
   purchase: [

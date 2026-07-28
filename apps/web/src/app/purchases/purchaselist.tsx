@@ -431,7 +431,11 @@ export function PurchaseList({
     () => ({
       ...buildFiltersFromManifest(
         getEntityFilters("purchase"),
-        (id) => columnFilters.find((f) => f.id === id)?.value as string,
+        (id) =>
+          columnFilters.find((f) => f.id === id)?.value as
+            | string
+            | string[]
+            | undefined,
       ),
       ...presetFilters,
     }),

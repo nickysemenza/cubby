@@ -84,7 +84,7 @@ import { InventoryEntriesCell } from "./inventory-entries-cell";
 /** Configuration for inline column header filters */
 export interface FilterConfig {
   placeholder: string;
-  filterType?: "text" | "select";
+  filterType?: "text" | "select" | "multiselect";
   options?: FilterableComboboxItem[];
   // Append a `(count)` of matching rows to each select option. Off by default:
   // the count comes from TanStack's client-side faceting, which only sees the
@@ -98,6 +98,25 @@ export interface FilterConfig {
  * ("has" | "none") to the entity's `*PresenceFilter` field, resolved server-side
  * as an exists / is-null condition. Clearing the filter means "any".
  */
+/**
+ * Client-side filterFn for a multiselect column (cell value is one of the
+ * selected set).
+ *
+ * Required, not optional: TanStack picks a filterFn from the ROW value's type,
+ * not the filter value's. A string column handed `["a","b"]` resolves to
+ * `includesString`, which tests `String(rowValue).includes("a,b")` and so
+ * matches nothing — silently. Server-side tables (`manualFiltering: true`)
+ * never run this, but every client-side table would quietly show zero rows.
+ */
+export function multiSelectFilterFn(
+  row: { getValue: (id: string) => unknown },
+  columnId: string,
+  filterValue: unknown,
+): boolean {
+  if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
+  return (filterValue as string[]).includes(String(row.getValue(columnId)));
+}
+
 export function presenceFilterOptions(label: string): FilterableComboboxItem[] {
   return [
     { value: "has", label: `Has ${label}` },
