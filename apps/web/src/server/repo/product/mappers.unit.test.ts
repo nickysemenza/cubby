@@ -243,7 +243,6 @@ describe("product mappers", () => {
           sourceMetadata: { type: "product", productId: PRODUCT_ID },
         },
       ],
-      unitMappingQuality: "partial",
       externalIds: [{ id: EXTERNAL_ID }],
       images: [{ id: IMAGE_ID }],
       inventoryEntry: [
@@ -264,46 +263,6 @@ describe("product mappers", () => {
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
     expect(productListItemOut.parse(result)).toEqual(result);
-  });
-
-  it("grades list-row unit mapping quality for sorting/display", () => {
-    const qualityFor = (
-      overrides: Partial<
-        Pick<ProductListDB, "unitMappings" | "price" | "fdc_id" | "upc">
-      >,
-    ) =>
-      dbProductToListAPI({
-        ...baseProduct,
-        price: null,
-        fdc_id: null,
-        upc: null,
-        ingredient: null,
-        unitMappings: [],
-        externalIds: [],
-        images: [],
-        inventoryEntry: [],
-        ...overrides,
-      } satisfies ProductListDB).unitMappingQuality;
-
-    expect(qualityFor({ unitMappings: [] })).toBe("none");
-    expect(qualityFor({ price: 4 })).toBe("partial");
-    expect(
-      qualityFor({
-        unitMappings: [
-          activeUnitMapping,
-          { ...activeUnitMapping, id: "00000000-0000-4000-8000-0000000000a1" },
-        ],
-      }),
-    ).toBe("good");
-    expect(
-      qualityFor({
-        unitMappings: [
-          activeUnitMapping,
-          { ...activeUnitMapping, id: "00000000-0000-4000-8000-0000000000a1" },
-          { ...activeUnitMapping, id: "00000000-0000-4000-8000-0000000000a2" },
-        ],
-      }),
-    ).toBe("complete");
   });
 
   it("maps full product detail rows exactly", () => {

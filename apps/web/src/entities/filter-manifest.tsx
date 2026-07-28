@@ -260,10 +260,14 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("image"),
     },
     {
-      // Bare presence, not a quality tier: the quality rule lives twice already
-      // (mappers.ts in TS, crud.ts as a raw-SQL CASE hardcoded to the RQB
-      // alias), so a quality filter needs an alias-safe extraction first.
-      // "none" here means no conversion edges at all — the hygiene worklist.
+      // Bare presence, not a quality tier — and it has to stay that way. The
+      // cell's tier is conversion COVERAGE: graph reachability through the unit
+      // engine over stored edges PLUS USDA-derived ones (portions, servings,
+      // per-nutrient calories) that live in the usda-api service, not Postgres.
+      // No SQL predicate can reproduce it, so a "Complete/Good/Partial" control
+      // here would return rows whose badge says something else. Presence has no
+      // such conflict: "(none)" is exactly "no chips", which is always tier
+      // `none`. A truthful quality filter needs a persisted coverage column.
       columnId: "unitMappingQuality",
       field: "unitMappingPresenceFilter",
       kind: "presence",

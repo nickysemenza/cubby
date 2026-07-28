@@ -60,7 +60,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
 
   // Record-level delete lives on the detail plate, not in a section header —
   // Overview's headerAction is the constructive "Receive into inventory".
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: purchase.id,
     name: purchase.name,
     entityLabel: "Purchase",
@@ -427,7 +427,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
         tone: purchase.future ? "ink" : "green",
       }}
       heroStats={heroStats}
-      actions={<DeleteButton size="sm" />}
+      actions={deleteButton}
     >
       <DetailSections sections={sections} rawData={purchase} />
       {purchase.productId ? (
@@ -438,7 +438,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
           purchaseName={purchase.name}
         />
       ) : null}
-      <DeleteDialog />
+      {deleteDialog}
     </Page>
   );
 };

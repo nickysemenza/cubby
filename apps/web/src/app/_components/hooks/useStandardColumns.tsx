@@ -271,13 +271,19 @@ export function useStandardColumns<TData extends BaseListRow>({
 
     // Append unit mappings column if configured
     if (shouldUseMappings && mappingsMap) {
+      // The product id stays "unitMappingQuality" — it's what the manifest's
+      // presence filter hangs on. NOT sortable: the cell grades conversion
+      // COVERAGE (a graph reachability run through the unit engine, over
+      // USDA-derived edges the server never loads), which no SQL ORDER BY can
+      // reproduce. The old sort ordered by an edge-count proxy instead, i.e.
+      // by a quantity that isn't on screen.
       const mappingsColId =
         entity === "product" ? "unitMappingQuality" : "unitMappings";
       cols.push(
         withManifestFilter(
           createUnitMappingsColumn(columnHelper, mappingsMap, {
             id: mappingsColId,
-            enableSorting: entity === "product",
+            enableSorting: false,
           }),
           mappingsColId,
         ),

@@ -43,6 +43,7 @@ import type { Database } from "~/server/db";
 import {
   image,
   inventoryEntry,
+  location,
   product,
   productExternalId,
   productImage,
@@ -109,19 +110,6 @@ const resolveProductSort = (sort: SortParams) => {
         `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
           `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
           `WHERE ie."productId" = "product"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
-  }
-
-  if (sort.orderBy === "unitMappingQuality") {
-    return [
-      sql.raw(
-        `(CASE ` +
-          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 3 THEN 3 ` +
-          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 2 THEN 2 ` +
-          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 1 ` +
-          `OR "product"."price" IS NOT NULL OR "product"."fdc_id" IS NOT NULL OR "product"."upc" IS NOT NULL THEN 1 ` +
-          `ELSE 0 END) ${dirSql}`,
       ),
     ];
   }
@@ -319,9 +307,25 @@ export const productList = async (
   // Every subquery is notDeleted-guarded at each join level. `pnpm check`'s
   // soft-delete guard only scans exists()/notExists() bodies, so it cannot see
   // these — the repo integration tests are the guard here.
+  // Inner-joins Location so this matches what `dbProductToListAPI` renders — it
+  // drops entries whose location is soft-deleted (`isNotDeleted(entry.location)`).
+  // The exact mirror of locationList's product join.
+  //
+  // DEFENSIVE, not a live bug: no write path can currently produce a live entry
+  // under a soft-deleted location. `deleteLocations` guards
+  // LOCATION_HAS_INVENTORY symmetrically with `deleteProducts`'
+  // PRODUCT_HAS_INVENTORY, and every inventory write rejects a soft-deleted
+  // parent (inventory-softdelete-guard.integration.test.ts). This is
+  // invariant-drift insurance: if a future bulk path ever breaks that pairing,
+  // the filter and the rendered cell stay in agreement instead of silently
+  // disagreeing — the failure mode of #428.
   const productIdsWithLiveInventory = dbClient
     .select({ productId: inventoryEntry.productId })
     .from(inventoryEntry)
+    .innerJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
     .where(notDeleted(inventoryEntry));
 
   // `purchase.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL

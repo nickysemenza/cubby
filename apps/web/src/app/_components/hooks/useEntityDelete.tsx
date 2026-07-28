@@ -3,7 +3,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
-import { type FC, useCallback, useState } from "react";
+import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
@@ -44,10 +44,16 @@ interface UseEntityDeleteOptions {
 interface UseEntityDeleteReturn {
   /** Opens the delete confirmation dialog */
   openDeleteDialog: () => void;
-  /** Pre-configured delete button */
-  DeleteButton: FC<{ size?: "sm" | "default" }>;
+  /**
+   * Pre-configured destructive delete button — an ELEMENT, not a component.
+   * Declaring these as components inside the hook body gave React a new
+   * element *type* every render, so it tore down and rebuilt the subtree —
+   * including this dialog while it was open mid-confirm. Same shape as
+   * `useOptimisticDelete`'s `deleteDialog`.
+   */
+  deleteButton: ReactElement;
   /** Delete dialog (must be rendered) */
-  DeleteDialog: FC;
+  deleteDialog: ReactElement;
   /** Whether delete is in progress */
   isPending: boolean;
 }
@@ -103,39 +109,56 @@ export function useEntityDelete({
     setShowDialog(true);
   }, []);
 
-  const DeleteButton: FC<{ size?: "sm" | "default" }> = ({ size = "sm" }) => (
-    <Button variant="destructive" size={size} onClick={openDeleteDialog}>
-      <Trash className="mr-2 size-4" />
-      Delete
-    </Button>
+  const deleteButton = useMemo(
+    () => (
+      <Button variant="destructive" size="sm" onClick={openDeleteDialog}>
+        <Trash />
+        Delete
+      </Button>
+    ),
+    [openDeleteDialog],
   );
 
-  const DeleteDialog: FC = () => (
-    <BulkActionDialog
-      open={showDialog}
-      onOpenChange={setShowDialog}
-      items={[{ id, name }]}
-      itemNoun={entityLabel}
-      action="Delete"
-      variant="destructive"
-      pendingLabel="Deleting..."
-      description={
-        description ??
-        `This will permanently remove ${entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`
-      }
-      renderItem={(item) => item.name}
-      onSubmit={async () => {
-        await deleteMutation.mutateAsync({ ids: [id] });
-        setShowDialog(false);
-      }}
-      isPending={deleteMutation.isPending}
-    />
+  // Depend on `isPending`/`mutateAsync`, never the whole mutation object:
+  // react-query returns a new result object every render, which would make
+  // this memo a no-op. `mutateAsync` is bound once by the MutationObserver.
+  const deleteDialog = useMemo(
+    () => (
+      <BulkActionDialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        items={[{ id, name }]}
+        itemNoun={entityLabel}
+        action="Delete"
+        variant="destructive"
+        pendingLabel="Deleting..."
+        description={
+          description ??
+          `This will permanently remove ${entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`
+        }
+        renderItem={(item) => item.name}
+        onSubmit={async () => {
+          await deleteMutation.mutateAsync({ ids: [id] });
+          setShowDialog(false);
+        }}
+        isPending={deleteMutation.isPending}
+      />
+    ),
+    [
+      showDialog,
+      id,
+      name,
+      entityLabel,
+      description,
+      deleteMutation.isPending,
+      deleteMutation.mutateAsync,
+    ],
   );
 
   return {
     openDeleteDialog,
-    DeleteButton,
-    DeleteDialog,
+    deleteButton,
+    deleteDialog,
     isPending: deleteMutation.isPending,
   };
 }

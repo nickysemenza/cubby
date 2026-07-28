@@ -172,7 +172,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
   // `deleteTasks` also soft-deletes live subtasks and hard-deletes this task's
   // dependency edges (server/repo/task/crud.ts) — neither is visible from the
   // generic dialog copy, so spell the cascade out.
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: task.id,
     name: task.name,
     entityLabel: "Task",
@@ -440,10 +440,10 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               : "ink",
       }}
       heroStats={heroStats}
-      actions={<DeleteButton size="sm" />}
+      actions={deleteButton}
     >
       <DetailSections sections={sections} rawData={task} />
-      <DeleteDialog />
+      {deleteDialog}
     </Page>
   );
 };

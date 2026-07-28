@@ -95,8 +95,8 @@ const entityDefinitions = {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
-      // `ingredient`, `location`, and `unitMappingQuality` are computed sorts
-      // handled explicitly by productList, not physical product columns.
+      // `ingredient` and `location` are computed sorts handled explicitly by
+      // productList, not physical product columns.
       sortableFields: productSortableFields,
     },
   },

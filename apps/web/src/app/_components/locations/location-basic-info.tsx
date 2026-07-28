@@ -24,7 +24,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
   onEdit,
 }) => {
   const api = useTRPC();
-  const { DeleteButton, DeleteDialog } = useEntityDelete({
+  const { deleteButton, deleteDialog } = useEntityDelete({
     id: location.id,
     name: location.name,
     entityLabel: "Location",
@@ -84,11 +84,11 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
             {typeSupportsQrCode(location.type) && (
               <PrintLabelButton shortcode={location.shortcode} />
             )}
-            <DeleteButton />
+            {deleteButton}
           </Row>
         }
       />
-      <DeleteDialog />
+      {deleteDialog}
     </>
   );
 };
