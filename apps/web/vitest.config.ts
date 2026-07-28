@@ -41,34 +41,40 @@ export default defineConfig({
         extends: true,
         test: {
           globalSetup: ["./tooling/test-setup.ts"],
+          // File-scoped `afterAll` that returns this file's database to
+          // IntegreSQL. Must be a setupFile, not something `withTestDb()`
+          // registers — see `closeTestDb` in tooling/test-setup.ts.
+          setupFiles: ["./tooling/integration-teardown.ts"],
           name: "integration",
           include: ["**/*.integration.test.ts"],
           testTimeout: 10000, // Increase timeout for integration tests
-          // `withTestDb()` provisions a fresh IntegreSQL database in a
-          // `beforeEach`, so the HOOK — not the test body — carries the cost of
-          // a `CREATE DATABASE ... TEMPLATE`. Vitest's default hookTimeout is
-          // 10s, which was too tight and made this suite fail ~8% of CI runs
-          // (both shards, every branch) with "Hook timed out in 10000ms" on an
-          // arbitrary scatter of tests — never a real assertion failure.
-          //
-          // Measured locally (8-core, NVMe): `getTestDatabase` takes ~43ms mean
-          // running one file alone, but mean 788ms / p99 1.9s under full-suite
-          // parallelism — an 18x contention penalty before CI's much slower
-          // disk is accounted for. 30s keeps a genuinely hung hook failing,
-          // just past the point where normal provisioning has finished.
+          // The `beforeEach` still does real work, so this stays above the 10s
+          // default. `withTestDb()` now provisions one database per file and
+          // resets between tests, but the reset is not free — measured across
+          // the full parallel suite: terminate-backends ~19ms mean, TRUNCATE of
+          // 40 tables **266ms mean / 1.0s p99**, seed ~20ms, and the whole hook
+          // p99 11.5s / max 16.9s once the first-test-in-file provision is
+          // included. 10s was tried and still timed out under load.
+          hookTimeout: 30000,
           //
           // NB: raising IntegreSQL's pool size does NOT help — measured with
           // INTEGRESQL_TEST_INITIAL_POOL_SIZE 8 -> 32 (pool grew 8 -> 64 dbs)
           // and the distribution was unchanged (mean 777ms vs 788ms). The wait
           // is the per-database CREATE cost, not queueing for a free slot.
-          // The structural fix is provisioning per-file instead of per-test
-          // (294 provisions -> 35); see docs/todos.md.
-          hookTimeout: 30000,
+          //
           // NB: `poolOptions.forks.isolate: false` was tried to reuse the server
           // module graph across files — it was measurably SLOWER (~50s vs ~27s)
           // and dropped test discovery (161 vs 164), because the per-worker pg
           // pools / IntegreSQL client don't share cleanly across files. Keep
           // isolation on.
+          //
+          // Isolation is now load-bearing for CORRECTNESS, not just speed:
+          // test-setup.ts caches its database in module scope, which is
+          // per-file only because `isolate: true` gives each file a fresh module
+          // registry. Turning it off would silently share one database across
+          // files, and the suite's global "zero" invariants
+          // (findOrphanedEntityEmbeddings) and recent-N windows
+          // (listBackgroundBatches) are only meaningful within one file.
         },
       },
     ],
