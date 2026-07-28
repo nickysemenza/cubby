@@ -1,6 +1,9 @@
 import type { ProductFilters } from "@cubby/schemas/product";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { location } from "~/server/db/schema";
+import { getDb } from "./database-helpers";
 import { createIngredient } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import { createLocation } from "./location";
@@ -493,6 +496,53 @@ describe("product repository", () => {
         pageIndex: 0,
         pageSize: 50,
       });
+
+    /**
+     * The mirror of location.integration.test.ts's "a shelf holding only a
+     * soft-deleted product counts as empty". `productIdsWithLiveInventory`
+     * inner-joins Location with notDeleted to match `dbProductToListAPI`, which
+     * drops entries via `isNotDeleted(entry.location)`.
+     *
+     * The state is written directly because `deleteLocations` refuses a location
+     * that still has live inventory (LOCATION_HAS_INVENTORY), so no repo path
+     * can produce it. The join and the mapper's filter are both defensive; this
+     * pins that they stay in agreement either way.
+     */
+    it("a product held only in a soft-deleted location counts as having no inventory", async () => {
+      const shelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Vanishing Shelf" }),
+        ctx.actor,
+      );
+      const stranded = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Stranded Product", upc: "720000000001" }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: stranded.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(location)
+        .set({ deletedAt: new Date() })
+        .where(eq(location.id, shelf.id));
+
+      const none = await listWith({ inventoryPresenceFilter: "none" });
+      const row = none.data.find((p) => p.id === stranded.id);
+      expect(row).toBeDefined();
+      // Assert BOTH halves — filter agreement alone would still pass if the
+      // mapper drifted.
+      expect(row?.inventoryEntry).toEqual([]);
+
+      const has = await listWith({ inventoryPresenceFilter: "has" });
+      expect(has.data.map((p) => p.id)).not.toContain(stranded.id);
+    });
 
     describe("purchasePresenceFilter", () => {
       /**

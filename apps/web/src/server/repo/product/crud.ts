@@ -43,6 +43,7 @@ import type { Database } from "~/server/db";
 import {
   image,
   inventoryEntry,
+  location,
   product,
   productExternalId,
   productImage,
@@ -319,9 +320,25 @@ export const productList = async (
   // Every subquery is notDeleted-guarded at each join level. `pnpm check`'s
   // soft-delete guard only scans exists()/notExists() bodies, so it cannot see
   // these — the repo integration tests are the guard here.
+  // Inner-joins Location so this matches what `dbProductToListAPI` renders — it
+  // drops entries whose location is soft-deleted (`isNotDeleted(entry.location)`).
+  // The exact mirror of locationList's product join.
+  //
+  // DEFENSIVE, not a live bug: no write path can currently produce a live entry
+  // under a soft-deleted location. `deleteLocations` guards
+  // LOCATION_HAS_INVENTORY symmetrically with `deleteProducts`'
+  // PRODUCT_HAS_INVENTORY, and every inventory write rejects a soft-deleted
+  // parent (inventory-softdelete-guard.integration.test.ts). This is
+  // invariant-drift insurance: if a future bulk path ever breaks that pairing,
+  // the filter and the rendered cell stay in agreement instead of silently
+  // disagreeing — the failure mode of #428.
   const productIdsWithLiveInventory = dbClient
     .select({ productId: inventoryEntry.productId })
     .from(inventoryEntry)
+    .innerJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
     .where(notDeleted(inventoryEntry));
 
   // `purchase.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL
