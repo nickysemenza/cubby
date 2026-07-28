@@ -67,7 +67,7 @@ jobs:
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 10.34.1
+          version: 11.17.0
       - name: Install wasm-pack
         uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
         with:

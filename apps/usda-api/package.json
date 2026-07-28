@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.34.1",
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev": "wrangler dev --port 8787 --persist-to .wrangler/state",
     "build": "wrangler deploy --dry-run --outdir dist",
