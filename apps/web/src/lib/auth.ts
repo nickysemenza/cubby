@@ -21,6 +21,8 @@ const appUrl = isDev
   ? "http://localhost:3000"
   : "https://cubby.nickysemenza.com";
 
+/** Origin the app is reachable at, per the same one-host-per-env rule above. */
+export const APP_ORIGIN = appUrl;
 /** The `aud` an MCP access token must carry. Also the RFC 9728 `resource`. */
 export const MCP_RESOURCE = `${appUrl}/api/mcp`;
 /** Issuer / `iss` of MCP access tokens, and the RFC 8414 authorization server. */

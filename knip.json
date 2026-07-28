@@ -17,9 +17,13 @@
         "scripts/**/*.{ts,mjs}!",
         "tooling/**/*.{ts,tsx}!",
         "drizzle.config.ts!",
-        "instrument.server.mjs!"
+        "instrument.server.mjs!",
+        "mcp-apps/build.mjs!",
+        "mcp-apps/vite.config.ts!",
+        "mcp-apps/src/{shopping-list,usda-picker}.ts!",
+        "mcp-apps/harness/{host.ts,vite.config.ts}!"
       ],
-      "project": ["src/**/*.{ts,tsx}!"],
+      "project": ["src/**/*.{ts,tsx}!", "mcp-apps/**/*.ts!"],
       "paths": {
         "~/*": ["./src/*"],
         "tooling/*": ["./tooling/*"]

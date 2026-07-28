@@ -28,6 +28,12 @@
         "export WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=$(grep -E '^DATABASE_URL=' apps/web/.env | head -1 | cut -d= -f2-); exec pnpm --filter @cubby/web exec wrangler dev --config dist/server/wrangler.json --port 8788"
       ],
       "port": 8788
+    },
+    {
+      "name": "mcp-apps-harness",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@cubby/web", "run", "dev:mcp-apps"],
+      "port": 5199
     }
   ]
 }

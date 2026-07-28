@@ -455,6 +455,34 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 
+### MCP Apps — further candidates
+
+The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
+`search_usda_foods`) — see [the README](../README.md#mcp-apps-interactive-uis-in-the-conversation).
+Adding another is now cheap: an entry in `mcp-apps/`, a line in `build.mjs`, an
+entry in `server/mcp/apps/index.ts`, and `uiResourceUri` on the tool.
+
+The bar stays **chat is the right home AND text is a bad medium**. Candidates
+that clear it, in rough order:
+
+- [ ] **`explain_recipe_costing`** — a nested per-ingredient cost/calorie
+  breakdown that reads terribly as prose. An expandable tree with the
+  diagnostics inline is a genuine win. The most likely next one.
+- [ ] **Merge confirmation** for `find_similar_entities` / `merge_ingredients` —
+  a side-by-side of the two candidates with a single confirm. Deferred because
+  the destructive path deserves more thought than a pretty diff: decide first
+  whether the app should call `merge_ingredients` directly or hand the decision
+  back to the agent the way the USDA picker does.
+- [ ] **`resolve_ingredients` ambiguity** — same picker shape as USDA, but only
+  worth building if the batch resolver's ambiguous-row rate stays annoying in
+  practice.
+
+**Rejected, don't re-litigate**: apps for `list_tasks` (kanban),
+`get_purchase_analytics` (charts), `list_problems` (triage), and the inventory
+tables. The web app already does all four better, and `app.openLink()` back into
+it is the correct zero-maintenance answer. An iframe is not the place to
+reimplement `RTable`.
+
 ### Saved filters (the view-tab successor)
 
 Nullable picklists now carry `(none)` / `Has X` sentinels that OR with the selection

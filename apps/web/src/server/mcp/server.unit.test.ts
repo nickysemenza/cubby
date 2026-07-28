@@ -14,8 +14,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { mock } from "~/lib/test/mock-schema";
+import { SHOPPING_LIST_UI, USDA_PICKER_UI } from "./apps";
 import {
   createMcpServer,
+  listMcpResourceCatalog,
   listMcpToolCatalog,
   slimMeal,
   slimProduct,
@@ -23,6 +25,7 @@ import {
 } from "./server";
 import {
   getRegisteredTool,
+  installMockStrippedListToolsHandler,
   registerEntityCreateTool,
   registerEntityCrudToolset,
   registerMcpTool,
@@ -990,6 +993,74 @@ describe("update_inventory_entry value/unit pairing guard", () => {
       id: ENTRY_ID,
       data: { amount: { value: 3, unit: "each" } },
     });
+  });
+});
+
+describe("MCP Apps ui:// metadata", () => {
+  // Regression: installMockStrippedListToolsHandler replaces the SDK's
+  // tools/list handler and rebuilds each definition by hand. It used to omit
+  // `_meta`, which is exactly where `ui.resourceUri` lives — so a host would
+  // never learn the tool had a UI and would silently render text instead. There
+  // is no error anywhere in that path, which is why this is guarded.
+  it("survives the hand-rolled tools/list handler", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpTool(server, {
+      name: "ui_tool",
+      description: "renders an app",
+      outputSchema: z.object({ ok: z.boolean() }),
+      annotations: { readOnlyHint: true },
+      uiResourceUri: "ui://cubby/test.html",
+      handler: async () => ({ ok: true }),
+    });
+    installMockStrippedListToolsHandler(server);
+
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+    try {
+      const { tools } = await client.listTools();
+      const meta = tools.find((t) => t.name === "ui_tool")?._meta;
+      expect(meta?.ui).toEqual({ resourceUri: "ui://cubby/test.html" });
+      // The deprecated flat alias ships too, for hosts that only read that one.
+      expect(meta?.["ui/resourceUri"]).toBe("ui://cubby/test.html");
+    } finally {
+      await Promise.allSettled([client.close(), server.close()]);
+    }
+  });
+
+  it("points the UI tools at registered ui:// resources", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const declared = new Set(
+      tools
+        .map((tool) => tool._meta?.ui as { resourceUri?: string } | undefined)
+        .map((ui) => ui?.resourceUri)
+        .filter((uri): uri is string => uri !== undefined),
+    );
+    expect([...declared].sort()).toEqual(
+      [SHOPPING_LIST_UI, USDA_PICKER_UI].sort(),
+    );
+
+    // Every declared pointer must resolve, or the host fetches a 404 and the
+    // tool renders nothing.
+    const resources = await listMcpResourceCatalog();
+    const served = new Set(resources.resources.map((r) => r.uri));
+    for (const uri of declared) {
+      expect(served.has(uri)).toBe(true);
+    }
+  });
+
+  it("keeps the UI additive — the data is still on the wire without a host", async () => {
+    // A host with no MCP Apps support ignores `_meta.ui` entirely, so these
+    // tools must stay fully usable as plain structured-output tools.
+    const { tools } = await listMcpToolCatalog();
+    for (const name of ["get_shopping_list", "search_usda_foods"]) {
+      const tool = tools.find((t) => t.name === name);
+      expect(tool?.outputSchema).toBeDefined();
+    }
   });
 });
 
