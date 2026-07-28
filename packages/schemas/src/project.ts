@@ -623,6 +623,12 @@ const purchaseFields = {
       "Optional link to the product this purchase bought. A negative-cost purchase on the same product records an exit (sale, return, or a 0-cost disposal).",
     ),
   vendor: z.string().nullable().describe("Where it was bought"),
+  orderId: z
+    .string()
+    .nullable()
+    .describe(
+      'The vendor\'s order/receipt id, scoped by `vendor` — e.g. Amazon "111-1234567-1234567", Home Depot "WN63446464". Free text; formats differ per retailer. Rows sharing one orderId came from the same order.',
+    ),
 };
 
 const purchaseCreateShape = {
@@ -635,6 +641,7 @@ const purchaseCreateShape = {
   projectId: projectId.nullable().default(null),
   productId: productId.nullable().default(null),
   vendor: z.string().nullable().default(null),
+  orderId: z.string().nullable().default(null),
 };
 
 export const purchaseCreateInput = z.object(purchaseCreateShape);
