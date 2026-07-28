@@ -6,6 +6,7 @@ import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { entities } from "~/entities/entities";
+import { useLongPress } from "~/hooks/useLongPress";
 import { cn } from "~/lib/utils";
 
 interface MobileCardProps {
@@ -36,6 +37,12 @@ interface MobileCardProps {
   onClick?: () => void;
   /** Optional touchstart handler (e.g., for route preloading) */
   onTouchStart?: () => void;
+  /**
+   * Press-and-hold handler — the row variant's way into selection mode, so a
+   * checkbox gutter isn't spent on every row for an action most taps never
+   * take. Suppresses the subsequent click so holding doesn't also navigate.
+   */
+  onLongPress?: () => void;
   /**
    * Display variant:
    * - "card" (default): bordered card with shadow, used by LocationCardGrid, ProblemSection
@@ -115,7 +122,9 @@ export function MobileCard({
   variant = "card",
   rightValues,
   rightValueInteractive,
+  onLongPress,
 }: MobileCardProps) {
+  const longPress = useLongPress(onLongPress);
   const borderColor = entity
     ? entities[entity].color.border
     : "border-l-primary";
@@ -133,7 +142,7 @@ export function MobileCard({
       // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
       <div
         className={cn(
-          "grid w-full max-w-full items-center gap-x-2 overflow-hidden border-border/30 border-b px-2 py-2",
+          "grid w-full max-w-full items-center gap-x-2 overflow-hidden border-border/60 border-b px-2 py-2",
           // Dynamic grid columns based on which slots are present
           selectable && imageSlot
             ? "grid-cols-[auto_auto_1fr_auto]"
@@ -144,8 +153,20 @@ export function MobileCard({
           onClick && "cursor-pointer transition-colors active:bg-muted/50",
           className,
         )}
-        onClick={onClick}
-        onTouchStart={onTouchStart}
+        onClick={(e) => {
+          if (longPress.consumeClick()) {
+            e.preventDefault();
+            return;
+          }
+          onClick?.();
+        }}
+        onTouchStart={() => {
+          onTouchStart?.();
+          longPress.start();
+        }}
+        onTouchEnd={longPress.cancel}
+        onTouchMove={longPress.cancel}
+        onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
         onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
         role={onClick ? "button" : undefined}
         tabIndex={onClick ? 0 : undefined}
@@ -190,7 +211,7 @@ export function MobileCard({
             />
           )}
           <span
-            className="block min-w-0 flex-1 truncate font-medium text-sm"
+            className="block min-w-0 flex-1 truncate font-medium text-sm leading-snug"
             title={title}
           >
             {title}
@@ -218,7 +239,7 @@ export function MobileCard({
               align="center"
               justify="end"
               gap="sm"
-              className="ml-auto min-w-0 max-w-[55%]"
+              className="ml-auto shrink-0"
             >
               {rightValues?.[0] !== undefined && (
                 <RightValueSlot

@@ -42,14 +42,19 @@ export function DataTableToolbar<TData>({
       <Row
         align="center"
         gap="sm"
+        wrap
         className={cn(
-          "flex-1",
+          "min-w-0 flex-1",
           showViewOptions || bulkActionBar ? "justify-end" : "justify-start",
         )}
       >
         {additionalContent}
 
-        <ActiveFilterChips table={table} />
+        {/* Chips take their own line on narrow screens rather than squeezing
+            the actions off the right edge. */}
+        <div className="order-last w-full min-w-0 lg:order-none lg:w-auto">
+          <ActiveFilterChips table={table} />
+        </div>
 
         {isFiltered && (
           <Button

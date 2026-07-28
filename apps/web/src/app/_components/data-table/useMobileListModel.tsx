@@ -60,14 +60,37 @@ function hasRenderableContent(content: ReactNode): boolean {
   return true;
 }
 
+/**
+ * Which part of the card a column renders into.
+ *
+ * A mobile row is opt-IN: a column with no `mobile` config is hidden. It used
+ * to default to "meta", so every column an entity had never thought about got
+ * crammed into the row as a right-value — each a full desktop cell squeezed
+ * into ~90px, truncating to fragments like "whole pea" and "P…" that carry
+ * less information than showing nothing. Declaring `mobile` at all (even just
+ * `{ interactive: true }`) opts a column in.
+ */
+/** Whether a row carries a real image, vs. the cell's placeholder glyph. */
+function rowHasImage(original: unknown): boolean {
+  if (!original || typeof original !== "object") return false;
+  const row = original as {
+    images?: unknown[];
+    imageUrl?: string | null;
+    product?: { images?: unknown[] };
+  };
+  if (Array.isArray(row.images) && row.images.length > 0) return true;
+  if (typeof row.imageUrl === "string" && row.imageUrl.length > 0) return true;
+  const nested = row.product?.images;
+  return Array.isArray(nested) && nested.length > 0;
+}
+
 function resolveSlot(colId: string, meta?: MobileCellMeta): MobileSlot {
-  if (meta?.mobile?.slot) return meta.mobile.slot;
-  if (DEFAULT_HIDDEN_COLUMN_IDS.has(colId)) return "hidden";
   if (colId === "image") return "image";
   if (colId === "actions") return "actions";
   if (colId === "name" || colId === "filename") return "title";
-
-  return "meta";
+  if (DEFAULT_HIDDEN_COLUMN_IDS.has(colId)) return "hidden";
+  if (meta?.mobile) return meta.mobile.slot ?? "meta";
+  return "hidden";
 }
 
 function getPriority(
@@ -145,7 +168,10 @@ export function useMobileListModel<TItem>({
             continue;
           }
           if (slot === "image") {
-            imageSlot = rendered;
+            // Only when the row HAS an image. The image cell renders a
+            // placeholder glyph otherwise, which read as content while being
+            // none — a 44px gutter of noise on every image-less row.
+            if (rowHasImage(row.original)) imageSlot = rendered;
             continue;
           }
           if (slot === "title") {
