@@ -29,6 +29,31 @@ interface CellEditTriggerProps
 }
 
 /**
+ * Fences a link rendered INSIDE a {@link CellEditTrigger} from the trigger's
+ * own click, so clicking the text navigates only.
+ *
+ * TanStack's `<Link>` calls `preventDefault` but not `stopPropagation`, so
+ * without this the click also reaches the trigger button — which outside
+ * cell-selection mode opens the editor on the very click that swaps the route
+ * (the editor unmounts mid-edit; this failed CI E2E once already, see
+ * `createNameColumn`), and inside cell-selection mode makes the cell
+ * impossible to double-click-edit at all, since click #1 navigates away.
+ *
+ * Only `click` is stopped — selection is driven by `mousedown`, which must
+ * keep bubbling for the range engine to see it.
+ *
+ * (`createNameColumn` inlines this same guard rather than using this
+ * component: its span carries a width/truncate class and is consumed as a
+ * `TooltipTrigger` render target, so it can't be a wrapper.)
+ */
+export function CellLinkFence({ children }: { children: React.ReactNode }) {
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
+    <span onClick={(e) => e.stopPropagation()}>{children}</span>
+  );
+}
+
+/**
  * The shared display-mode button for editable cells: click (or focus) to
  * edit, hover-revealed pencil, focus ring (the raw buttons it replaced had
  * none, which made keyboard focus — and therefore cell copy/paste —
