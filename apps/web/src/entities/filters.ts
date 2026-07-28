@@ -41,6 +41,11 @@ export interface FilterSpecCore {
   columnId: string;
   /** Server filter key. Defaults to `columnId` when the two agree. */
   field?: string;
+  /**
+   * URL search-param key. Defaults to `columnId`; override only to keep an
+   * established link shape working (purchases' name filter is `?q=`).
+   */
+  urlKey?: string;
   kind: FilterKind;
   /** Brands a raw string into an entity id (`id` / `idMulti` only). */
   brand?: (value: string) => unknown;
@@ -140,3 +145,72 @@ const MULTI_KINDS: ReadonlySet<FilterKind> = new Set<FilterKind>([
 
 export const isMultiFilterKind = (kind: FilterKind): boolean =>
   MULTI_KINDS.has(kind);
+
+/**
+ * The single value of a `oneOrMany` filter, or undefined when it holds a set.
+ *
+ * For UI that can only mirror one value — the purchases analytics matrix
+ * highlights a single (trade, costType) cell, so a multi-trade filter has no
+ * cell to light up.
+ */
+export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return value;
+  return value.length === 1 ? value[0] : undefined;
+};
+
+// --- URL round-trip ---------------------------------------------------------
+//
+// Filters live in the URL so a filtered view is shareable, bookmarkable, and
+// survives a reload. Sets are comma-joined (`?trade=drywall,electrical`),
+// matching the `sort=name,-createdAt` convention already used for sorting.
+//
+// TanStack Router's default `stringifySearch` JSON-encodes a non-string value,
+// which would give `?trade=%5B%22drywall%22%2C...%5D`. There's no custom
+// parseSearch/stringifySearch on this router, so arrays are joined on write and
+// split on read here — uniformly, from the manifest, so no two keys can end up
+// encoding differently.
+
+const LIST_SEPARATOR = ",";
+
+/** Column-filter state → search params. Absent keys mean "not filtered". */
+export function encodeFilters(
+  specs: readonly FilterSpecCore[],
+  get: (columnId: string) => FilterValue,
+): Record<string, string | undefined> {
+  const params: Record<string, string | undefined> = {};
+  for (const spec of specs) {
+    const raw = get(spec.columnId);
+    const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    // undefined, never "" — `stripSearchParams` only strips on undefined, so
+    // an empty string would stick in the URL forever.
+    params[spec.urlKey ?? spec.columnId] = values.length
+      ? values.join(LIST_SEPARATOR)
+      : undefined;
+  }
+  return params;
+}
+
+/** Search params → column-filter state, shaped per each spec's `kind`. */
+export function decodeFilters(
+  specs: readonly FilterSpecCore[],
+  search: Record<string, unknown>,
+): Array<{ id: string; value: string | string[] }> {
+  const filters: Array<{ id: string; value: string | string[] }> = [];
+  for (const spec of specs) {
+    const raw = search[spec.urlKey ?? spec.columnId];
+    if (typeof raw !== "string" || raw === "") continue;
+    const parts = raw
+      .split(LIST_SEPARATOR)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length === 0) continue;
+    filters.push({
+      id: spec.columnId,
+      // A multi column always holds an array, even for one value — mixing the
+      // two shapes is what splits the React Query cache.
+      value: isMultiFilterKind(spec.kind) ? parts : (parts[0] as string),
+    });
+  }
+  return filters;
+}

@@ -7,12 +7,14 @@ import {
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
 import { eq, gte, inArray, isNull, lte, ne, type SQL, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   getDb,
   relations,
@@ -36,18 +38,20 @@ import { dbTaskToAPI } from "./helpers";
  */
 export async function buildTaskProjectCondition(
   db: Database,
-  projectId: ProjectId | undefined,
+  projectId: ProjectId | ProjectId[] | undefined,
   includeSubProjects: boolean | undefined,
 ): Promise<SQL | undefined> {
-  if (!projectId) return undefined;
-  if (!includeSubProjects) return eq(task.projectId, projectId);
+  const selected = projectId ? [projectId].flat() : [];
+  if (selected.length === 0) return undefined;
+  if (!includeSubProjects) return eqAny(task.projectId, projectId);
 
-  const parentRows = await allProjectParentRows(db);
-  const descendantIds = collectDescendantIds(
-    buildChildrenMap(parentRows),
-    projectId,
+  const childrenMap = buildChildrenMap(await allProjectParentRows(db));
+  return inArray(
+    task.projectId,
+    uniq(
+      selected.flatMap((id) => [id, ...collectDescendantIds(childrenMap, id)]),
+    ),
   );
-  return inArray(task.projectId, [projectId, ...descendantIds]);
 }
 
 export const taskList = async (
@@ -66,10 +70,10 @@ export const taskList = async (
     task,
     [{ column: task.name, term: filters.search }],
     [
-      filters.status ? eq(task.status, filters.status) : undefined,
+      eqAny(task.status, filters.status),
       projectCondition,
       filters.noProject ? isNull(task.projectId) : undefined,
-      filters.trade ? eq(task.trade, filters.trade) : undefined,
+      eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId
         ? eq(task.parentTaskId, filters.parentTaskId)

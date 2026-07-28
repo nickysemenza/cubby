@@ -1,4 +1,3 @@
-import { costTypeSchema, tradeSchema } from "@cubby/schemas/project";
 import {
   createFileRoute,
   stripSearchParams,
@@ -50,8 +49,11 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   view: z.enum(viewOptions).optional().catch(undefined),
-  trade: tradeSchema.optional().catch(undefined),
-  costType: costTypeSchema.optional().catch(undefined),
+  // Comma-joined sets (`?trade=drywall,electrical`) — these header filters are
+  // multi-select. Parsed back by the filter manifest's `decodeFilters`, so the
+  // enums are validated there rather than here.
+  trade: z.string().optional().catch(undefined),
+  costType: z.string().optional().catch(undefined),
   project: z.string().optional().catch(undefined),
   future: z.enum(["true", "false"]).optional().catch(undefined),
   date: z.string().optional().catch(undefined),

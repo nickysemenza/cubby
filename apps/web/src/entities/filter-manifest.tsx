@@ -69,6 +69,9 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       columnId: "name",
       field: "search",
+      // `?q=`, not `?name=` — an established link shape (command palette, the
+      // "see all in ledger" links), kept working across the URL-sync move.
+      urlKey: "q",
       kind: "text",
       placeholder: "Search purchases...",
     },
@@ -81,13 +84,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "costType",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by cost type...",
       options: costTypeOptions,
     },
     {
       columnId: "trade",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by trade...",
       options: tradeOptions,
     },
@@ -100,7 +103,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       columnId: "project",
       field: "projectId",
-      kind: "id",
+      kind: "idMulti",
       brand: unsafeProjectId,
       placeholder: "Filter by project...",
       optionsKey: "project",
@@ -133,13 +136,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "status",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by status...",
       options: taskStatusOptions,
     },
     {
       columnId: "trade",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by trade...",
       options: tradeOptions,
     },
@@ -156,7 +159,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       columnId: "project",
       field: "projectId",
-      kind: "id",
+      kind: "idMulti",
       brand: unsafeProjectId,
       placeholder: "Filter by project...",
       optionsKey: "project",
@@ -185,7 +188,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       columnId: "category",
       field: "categoryFilter",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by category...",
       options: productCategoryOptionsWithTheme,
     },
@@ -265,7 +268,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       columnId: "type",
       field: "itemTypeFilter",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by type...",
       options: locationTypeOptionsWithTheme,
     },
@@ -299,13 +302,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "status",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by status...",
       options: PROJECT_STATUS_OPTIONS,
     },
     {
       columnId: "kind",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by kind...",
       options: projectKindOptions,
     },

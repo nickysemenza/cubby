@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import { ActiveFilterChips } from "./ActiveFilterChips";
 import { DataTableViewOptions } from "./data-table-view-options";
 
 interface DataTableToolbarProps<TData> {
@@ -47,6 +48,8 @@ export function DataTableToolbar<TData>({
         )}
       >
         {additionalContent}
+
+        <ActiveFilterChips table={table} />
 
         {isFiltered && (
           <Button

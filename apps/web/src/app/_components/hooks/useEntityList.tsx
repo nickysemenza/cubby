@@ -296,11 +296,14 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const mergedTableStateOptions = useMemo(
     () => ({
       initialSort: defaultSort,
-      ...tableStateOptions,
-      // Mirror sort + pagination to the URL (bookmarkable / shareable).
+      // Mirror sort + pagination + filters to the URL (bookmarkable /
+      // shareable). Overridable: `useTableState` wants exactly ONE writer per
+      // page, so a table embedded alongside others must opt out.
       urlSync: true,
+      filterSpecs: getEntityFilters(entity),
+      ...tableStateOptions,
     }),
-    [defaultSort, tableStateOptions],
+    [defaultSort, entity, tableStateOptions],
   );
 
   // ONE tableState owned here and shared by both data hooks. Keeping a single

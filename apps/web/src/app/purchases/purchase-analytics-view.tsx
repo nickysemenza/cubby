@@ -1,10 +1,16 @@
-import type { CostType, Trade } from "@cubby/schemas/project";
+import type { CostType, PurchaseFilters, Trade } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Grid, Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StatTile } from "~/components/ui/stat-tile";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import {
+  buildFiltersFromManifest,
+  decodeFilters,
+  soleValue,
+} from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import { CostTypeDonut } from "./charts/cost-type-donut";
@@ -16,7 +22,6 @@ import {
   TradeBarsAggregate,
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
-import { purchaseFiltersFromSearch } from "./purchase-options";
 
 const route = getRouteApi("/_authenticated/purchases/");
 
@@ -27,12 +32,11 @@ const route = getRouteApi("/_authenticated/purchases/");
  * `PurchaseChartStrip` (which fetched every matching row via
  * `purchase.chartData` and grouped client-side).
  *
- * Filters are read straight off the route's URL search params via
- * `purchaseFiltersFromSearch` — the SAME conversion `purchaselist.tsx`'s
- * ledger table uses to seed + live-sync its own column filters — so this
- * view's totals always agree with the Ledger view's, and a Trade × Cost Type
- * matrix click here writes back to those same params (switching to Ledger
- * afterwards shows the matching rows).
+ * Filters are read straight off the route's URL search params through the
+ * purchase filter manifest — the SAME specs `purchaselist.tsx`'s ledger table
+ * syncs its column filters through — so this view's totals always agree with
+ * the Ledger view's, and a Trade × Cost Type matrix click here writes back to
+ * those same params (switching to Ledger afterwards shows the matching rows).
  */
 export function PurchaseAnalyticsView() {
   const api = useTRPC();
@@ -40,15 +44,31 @@ export function PurchaseAnalyticsView() {
   const navigate = route.useNavigate();
   const [selectedCostType, setSelectedCostType] = useState<string | null>(null);
 
-  const filters = purchaseFiltersFromSearch(search);
+  // The SAME manifest the ledger table's filters go through, decoded from the
+  // same URL params — so `purchase.analytics` is always called with the exact
+  // filter set the Ledger view shows (the invariant the two share an input
+  // schema for).
+  const filters = useMemo(() => {
+    const specs = getEntityFilters("purchase");
+    const decoded = new Map(
+      decodeFilters(specs, search).map((f) => [f.id, f.value]),
+    );
+    return buildFiltersFromManifest(specs, (columnId) =>
+      decoded.get(columnId),
+    ) as PurchaseFilters;
+  }, [search]);
 
   const { data, isLoading } = useQuery({
     ...api.purchase.analytics.queryOptions(filters),
     staleTime: 60 * 1000,
   });
 
-  const activeCell: AggregateMatrixCell | null = filters.trade
-    ? { trade: filters.trade, costType: filters.costType ?? null }
+  // A matrix cell is one (trade, costType) pair, so it can only mirror a
+  // single-valued filter. With several trades selected nothing is highlighted
+  // — deliberately, rather than arbitrarily lighting up the first one.
+  const soleTrade = soleValue(filters.trade);
+  const activeCell: AggregateMatrixCell | null = soleTrade
+    ? { trade: soleTrade, costType: soleValue(filters.costType) ?? null }
     : null;
 
   const handleCellClick = useCallback(

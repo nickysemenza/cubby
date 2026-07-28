@@ -5,8 +5,7 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
-import type { ColumnFiltersState, Row } from "@tanstack/react-table";
+import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import {
   ArrowRightLeft,
@@ -15,7 +14,7 @@ import {
   Tag,
   Wrench,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   purchaseCostColumn,
   purchaseCostTypeColumn,
@@ -51,8 +50,6 @@ import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dial
 import { SetFieldDialog } from "../_components/tracker/set-field-dialog";
 import { costTypeOptions } from "./purchase-options";
 import { SettlePurchaseDialog } from "./settle-purchase-dialog";
-
-const route = getRouteApi("/_authenticated/purchases/");
 
 interface PurchaseListProps {
   /**
@@ -302,40 +299,13 @@ export function PurchaseList({
   // `future` is fixed for the planned preset, `trade` is fixed for the
   // unclassified preset — dropping their filter dropdowns (the columns stay,
   // still inline-editable) avoids a filter control that can never do anything.
-  // Ledger-only: seed initial column filters from the URL (mount-only, mirrors
-  // useSeededFilter) so a chart-driven trade/costType click, or a bookmarked/
-  // shared link, restores the same rows. `planned`/`unclassified` stay on the
-  // simpler single-field `initialSearch` seed — their trade/future dimensions
-  // are pinned by `presetFilters`, not user-filterable via the URL.
-  const urlSearch = route.useSearch();
-  const navigate = route.useNavigate();
-  const [ledgerInitialFilter] = useState<ColumnFiltersState>(() => {
-    if (mode !== "ledger") return [];
-    const entries: Array<[string, string | undefined]> = [
-      ["name", urlSearch.q],
-      ["trade", urlSearch.trade],
-      ["costType", urlSearch.costType],
-      ["project", urlSearch.project],
-      ["future", urlSearch.future],
-      ["date", urlSearch.date],
-      ["productId", urlSearch.productId],
-      ["product", urlSearch.product],
-    ];
-    return entries
-      .filter((e): e is [string, string] => e[1] !== undefined)
-      .map(([id, value]) => ({ id, value }));
-  });
+  // `planned`/`unclassified` keep the single-field `initialSearch` seed; the
+  // ledger's full filter set now round-trips through the generic URL sync in
+  // `useTableState` (driven by the purchase filter manifest), which replaced a
+  // hand-rolled seed + write-back pair here.
   const seededFilter = useSeededFilter(
     "name",
     mode === "ledger" ? undefined : initialSearch,
-  );
-  // Stable reference — useEntityList/useTableState treat this as hook config,
-  // not render-time data (see the CLAUDE.md rule against inline objects on
-  // hooks with dependencies).
-  const tableStateOptions = useMemo(
-    () =>
-      mode === "ledger" ? { initialFilter: ledgerInitialFilter } : seededFilter,
-    [mode, ledgerInitialFilter, seededFilter],
   );
 
   const presetFilters = useMemo((): Partial<PurchaseFilters> => {
@@ -367,7 +337,7 @@ export function PurchaseList({
     bulkActions,
     extraActions,
     infinite: true,
-    tableStateOptions,
+    tableStateOptions: seededFilter,
   });
   usePageCount(totalCount);
 
@@ -441,34 +411,6 @@ export function PurchaseList({
     }),
     [columnFilters, presetFilters],
   );
-
-  // Ledger-only: push the trade/costType/project/future/date/name column
-  // filters back into the URL as they change, so the Analytics view's
-  // matrix-cell click (which writes these same params) and this table always
-  // agree on "the current filters" in both directions.
-  const lastWrittenFilters = useRef<string | null>(null);
-  useEffect(() => {
-    if (mode !== "ledger") return;
-    const get = (id: string) =>
-      columnFilters.find((f) => f.id === id)?.value as string | undefined;
-    const next = {
-      q: get("name"),
-      trade: get("trade") as Trade | undefined,
-      costType: get("costType") as CostType | undefined,
-      project: get("project"),
-      future: get("future") as "true" | "false" | undefined,
-      date: get("date"),
-      productId: get("productId"),
-      product: get("product") as "has" | "none" | undefined,
-    };
-    const serialized = JSON.stringify(next);
-    if (lastWrittenFilters.current === serialized) return;
-    lastWrittenFilters.current = serialized;
-    void navigate({
-      search: (prev) => ({ ...prev, ...next }),
-      replace: true,
-    });
-  }, [mode, columnFilters, navigate]);
 
   const analyticsQuery = useQuery({
     ...api.purchase.analytics.queryOptions(currentFilters),

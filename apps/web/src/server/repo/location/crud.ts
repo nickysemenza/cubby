@@ -40,6 +40,7 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -380,9 +381,7 @@ export const locationList = async (
     location,
     [{ column: location.name, term: filters.nameFilter }],
     [
-      filters.itemTypeFilter
-        ? eq(location.type, filters.itemTypeFilter)
-        : undefined,
+      eqAny(location.type, filters.itemTypeFilter),
       filters.parentPresenceFilter === "none"
         ? isNull(location.parentId)
         : undefined,

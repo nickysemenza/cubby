@@ -14,12 +14,14 @@ import {
   lte,
   type SQL,
 } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -43,21 +45,24 @@ export const buildPurchaseWhereClause = async (
   db: Database,
   filters: PurchaseFilters,
 ): Promise<SQL | undefined> => {
-  // When scoped to a project subtree, resolve the project + every live
-  // descendant id and match on the whole set; otherwise a plain project match.
-  let projectCondition = filters.projectId
-    ? eq(purchase.projectId, filters.projectId)
-    : undefined;
-  if (filters.projectId && filters.includeSubProjects) {
-    const parentRows = await allProjectParentRows(db);
-    const descendantIds = collectDescendantIds(
-      buildChildrenMap(parentRows),
-      filters.projectId,
+  // When scoped to a project subtree, resolve each selected project + every
+  // live descendant and match on the whole set; otherwise a plain match on the
+  // selection (one project or several — see `eqAny`).
+  const selectedProjectIds = filters.projectId
+    ? [filters.projectId].flat()
+    : [];
+  let projectCondition = eqAny(purchase.projectId, filters.projectId);
+  if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
+    const childrenMap = buildChildrenMap(await allProjectParentRows(db));
+    projectCondition = inArray(
+      purchase.projectId,
+      uniq(
+        selectedProjectIds.flatMap((id) => [
+          id,
+          ...collectDescendantIds(childrenMap, id),
+        ]),
+      ),
     );
-    projectCondition = inArray(purchase.projectId, [
-      filters.projectId,
-      ...descendantIds,
-    ]);
   }
 
   // `search` stays a single-column term: buildSearchConditions ANDs its
@@ -69,10 +74,10 @@ export const buildPurchaseWhereClause = async (
     purchase,
     [{ column: purchase.name, term: filters.search }],
     [
-      filters.costType ? eq(purchase.costType, filters.costType) : undefined,
-      filters.trade ? eq(purchase.trade, filters.trade) : undefined,
+      eqAny(purchase.costType, filters.costType),
+      eqAny(purchase.trade, filters.trade),
       projectCondition,
-      filters.productId ? eq(purchase.productId, filters.productId) : undefined,
+      eqAny(purchase.productId, filters.productId),
       // "linked" means productId IS NOT NULL — this deliberately includes
       // purchases whose product was later soft-deleted (those read back with
       // productId still set and productName null; see dbPurchaseToAPI).
