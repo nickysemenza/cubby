@@ -7,14 +7,15 @@
  */
 import {
   LIVE_PROJECT_STATUSES,
+  type ProjectKind,
   type ProjectStatus,
   projectStatusValues,
 } from "@cubby/schemas/project";
 import { format, startOfYear, subMonths } from "date-fns";
 
 export type Filters = {
-  statuses: Set<string>;
-  kinds: Set<string>;
+  statuses: Set<ProjectStatus>;
+  kinds: Set<ProjectKind>;
   locations: Set<string>;
   /** Preset key ("3m" | "12m" | "ytd") or a 4-digit year; null = all time. */
   dateRange: string | null;
@@ -26,8 +27,8 @@ export type Filters = {
  * this filter bar owns.
  */
 export type FilterSearchParams = {
-  statuses?: string[];
-  kinds?: string[];
+  statuses?: ProjectStatus[];
+  kinds?: ProjectKind[];
   locations?: string[];
   date?: string;
 };
@@ -35,8 +36,8 @@ export type FilterSearchParams = {
 /** The search-param serialization of a `Filters` value — same shape as
  * `FilterSearchParams`, produced by `filtersToSearch`. */
 export type FilterSearchOutput = {
-  statuses: string[] | undefined;
-  kinds: string[] | undefined;
+  statuses: ProjectStatus[] | undefined;
+  kinds: ProjectKind[] | undefined;
   locations: string[] | undefined;
   date: string | undefined;
 };
@@ -156,7 +157,7 @@ export function filtersToSearch(filters: Filters): FilterSearchOutput {
  * in `@cubby/schemas/project`). */
 export type ScopeInput = {
   statusScope: ProjectStatus[];
-  kinds: string[] | undefined;
+  kinds: ProjectKind[] | undefined;
   locations: string[] | undefined;
   dateFrom: string | undefined;
   dateTo: string | undefined;
@@ -181,7 +182,7 @@ export function filtersToScopeInput(
     ? dateRangeBounds(filters.dateRange, today)
     : null;
   return {
-    statusScope: [...filters.statuses] as ProjectStatus[],
+    statusScope: [...filters.statuses],
     kinds: filters.kinds.size > 0 ? [...filters.kinds] : undefined,
     locations: filters.locations.size > 0 ? [...filters.locations] : undefined,
     dateFrom: bounds?.from,

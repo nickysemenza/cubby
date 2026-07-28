@@ -1,13 +1,10 @@
 import type {
   ProjectDashboardSummaryOut,
-  ProjectKind,
   ProjectOut,
   ProjectPortfolioAnalyticsOut,
-  ProjectStatus,
   PurchaseOut,
   TaskOut,
 } from "@cubby/schemas/project";
-import { projectStatusValues } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
@@ -52,11 +49,13 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 
 import {
-  DashboardFilters,
-  dateRangeBounds,
-  emptyFilters,
   type Filters,
-} from "./dashboard-filters";
+  filtersFromSearch,
+  filtersToScopeInput,
+  filtersToSearch,
+} from "./dashboard-filter-state";
+import { DashboardFilters } from "./dashboard-filters";
+import { SingleSelectChipGroup } from "./filter-chips";
 import { NeedsAttention } from "./needs-attention";
 import { ProjectActions } from "./project-actions";
 import {
@@ -123,6 +122,9 @@ const NO_PROJECT_IDS: string[] = [];
 const NO_PROJECTS: ProjectOut[] = [];
 const NO_TASKS: TaskOut[] = [];
 const NO_PURCHASES: PurchaseOut[] = [];
+const NO_KINDS: string[] = [];
+const NO_LOCATIONS: string[] = [];
+const NO_YEARS: string[] = [];
 
 const route = getRouteApi("/_authenticated/projects/");
 
@@ -140,7 +142,7 @@ export function ProjectsDashboard() {
   // its own top-level branch rather than one more `view === ...` block deep
   // inside MainDashboard.
   if (view === "history") {
-    return <HistoryView view={view} onViewChange={onViewChange} />;
+    return <HistoryView onViewChange={onViewChange} />;
   }
 
   return <MainDashboard view={view} onViewChange={onViewChange} />;
@@ -223,62 +225,37 @@ function MainDashboard({
   const locationsKey = search.locations?.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives above, not the array references, on purpose
   const filters = useMemo<Filters>(
-    () => ({
-      statuses: new Set(search.statuses ?? emptyFilters.statuses),
-      kinds: new Set(search.kinds ?? emptyFilters.kinds),
-      locations: new Set(search.locations ?? emptyFilters.locations),
-      dateRange: search.date ?? null,
-    }),
+    () => filtersFromSearch(search),
     [statusesKey, kindsKey, locationsKey, search.date],
   );
 
   const handleFiltersChange = (next: Filters) => {
+    const nextSearch = filtersToSearch(next);
     navigate({
-      search: (prev) => ({
-        ...prev,
-        statuses: next.statuses.size > 0 ? [...next.statuses] : undefined,
-        kinds: next.kinds.size > 0 ? [...next.kinds] : undefined,
-        locations: next.locations.size > 0 ? [...next.locations] : undefined,
-        date: next.dateRange ?? undefined,
-      }),
+      // `filtersToSearch` types `statuses`/`kinds` generically as `string[]`
+      // — `dashboard-filter-state.ts` treats `Filters` values generically
+      // throughout, deliberately not coupled to the branded schema enums.
+      search: (prev) => ({ ...prev, ...nextSearch }),
       replace: true,
     });
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives, not the Set references
   const scopeInput = useMemo(
-    () => ({
-      statusScope:
-        filters.statuses.size > 0
-          ? ([...filters.statuses] as ProjectStatus[])
-          : undefined,
-      kinds:
-        filters.kinds.size > 0
-          ? ([...filters.kinds] as ProjectKind[])
-          : undefined,
-      locations:
-        filters.locations.size > 0 ? [...filters.locations] : undefined,
-    }),
-    [statusesKey, kindsKey, locationsKey],
+    () => filtersToScopeInput(filters),
+    [statusesKey, kindsKey, locationsKey, search.date],
   );
-
-  const dateBounds = filters.dateRange
-    ? dateRangeBounds(filters.dateRange)
-    : null;
-
   const dashboardQuery = useQuery({
     ...api.project.dashboardSummary.queryOptions(scopeInput),
     staleTime: 5 * 60 * 1000,
   });
 
   // Chart aggregates are ONLY fetched once the Analytics tab is actually
-  // selected — the whole point of splitting `project.dashboard` in two.
+  // selected — the whole point of splitting `project.dashboard` in two. Date
+  // bounds now live in `scopeInput` itself (via `filtersToScopeInput`), so
+  // there's no separate dateFrom/dateTo spread here anymore.
   const analyticsQuery = useQuery({
-    ...api.project.portfolioAnalytics.queryOptions({
-      ...scopeInput,
-      dateFrom: dateBounds?.from,
-      dateTo: dateBounds?.to,
-    }),
+    ...api.project.portfolioAnalytics.queryOptions(scopeInput),
     staleTime: 5 * 60 * 1000,
     enabled: view === "analytics",
   });
@@ -291,15 +268,15 @@ function MainDashboard({
   const dataViewActive = view === "data";
   const { data: allTasks = NO_TASKS } = useQuery({
     ...api.task.chartData.queryOptions({
-      dueFrom: dateBounds?.from,
-      dueTo: dateBounds?.to,
+      dueFrom: scopeInput.dateFrom,
+      dueTo: scopeInput.dateTo,
     }),
     enabled: dataViewActive,
   });
   const { data: allPurchases = NO_PURCHASES } = useQuery({
     ...api.purchase.chartData.queryOptions({
-      dateFrom: dateBounds?.from,
-      dateTo: dateBounds?.to,
+      dateFrom: scopeInput.dateFrom,
+      dateTo: scopeInput.dateTo,
     }),
     enabled: dataViewActive,
   });
@@ -338,22 +315,6 @@ function MainDashboard({
     enabled: imageProjectIds.length > 0,
   });
 
-  // Distinct purchase/task years, for the shared filter bar's "Date" chip —
-  // only populated once the Data view's fetch-alls have loaded at least once
-  // this session (no dedicated server endpoint for "distinct years" exists,
-  // and the two relative presets (3m/12m) still work everywhere regardless).
-  const availableYears = useMemo(
-    () =>
-      uniq(
-        [...allTasks.map((t) => t.dueDate), ...allPurchases.map((p) => p.date)]
-          .filter((d): d is string => d != null)
-          .map((d) => d.slice(0, 4)),
-      )
-        .sort()
-        .reverse(),
-    [allTasks, allPurchases],
-  );
-
   if (dashboardQuery.isError) {
     return (
       <DashboardErrorState
@@ -363,12 +324,12 @@ function MainDashboard({
     );
   }
 
-  if (dashboardQuery.isLoading || !dashboardQuery.data) {
-    return <DashboardSkeleton />;
-  }
-
   const data = dashboardQuery.data;
 
+  // <DashboardFilters> is hoisted above the loading gate below — it reflects
+  // URL state that's already known before the query resolves, so it
+  // shouldn't pop in after the rest of the page. `filterOptions` falls back
+  // to the stable empty arrays while `data` is still undefined.
   return (
     <Stack>
       <DashboardToolbar view={view} onViewChange={onViewChange} />
@@ -376,36 +337,45 @@ function MainDashboard({
       <DashboardFilters
         filters={filters}
         onFiltersChange={handleFiltersChange}
-        availableStatuses={[...projectStatusValues]}
-        availableKinds={data.filterOptions.kinds}
-        availableLocations={data.filterOptions.locations}
-        availableYears={availableYears}
+        availableKinds={data?.filterOptions.kinds ?? NO_KINDS}
+        availableLocations={data?.filterOptions.locations ?? NO_LOCATIONS}
+        availableYears={data?.filterOptions.years ?? NO_YEARS}
       />
 
-      {view === "overview" && (
-        <OverviewView data={data} coverImages={coverImages} />
-      )}
+      {dashboardQuery.isLoading || !data ? (
+        <DashboardSkeleton />
+      ) : (
+        <>
+          {view === "overview" && (
+            <OverviewView data={data} coverImages={coverImages} />
+          )}
 
-      {view === "analytics" && (
-        <AnalyticsView
-          data={analyticsQuery.data}
-          isLoading={analyticsQuery.isLoading}
-        />
-      )}
+          {view === "analytics" && (
+            <AnalyticsView
+              data={analyticsQuery.data}
+              isLoading={analyticsQuery.isLoading}
+            />
+          )}
 
-      {view === "data" && (
-        <DataViewContent
-          projects={projects}
-          tasks={scopedTasks}
-          purchases={scopedPurchases}
-          projectPreview={projectPreview}
-        />
-      )}
+          {view === "data" && (
+            <DataViewContent
+              projects={projects}
+              tasks={scopedTasks}
+              purchases={scopedPurchases}
+              projectPreview={projectPreview}
+              hiddenByDate={data.hiddenByDate}
+              onClearDate={() =>
+                handleFiltersChange({ ...filters, dateRange: null })
+              }
+            />
+          )}
 
-      {view === "gallery" && (
-        <div className="pt-4">
-          <ProjectCards projects={projects} coverImages={coverImages} />
-        </div>
+          {view === "gallery" && (
+            <div className="pt-4">
+              <ProjectCards projects={projects} coverImages={coverImages} />
+            </div>
+          )}
+        </>
       )}
     </Stack>
   );
@@ -595,11 +565,15 @@ function DataViewContent({
   tasks,
   purchases,
   projectPreview,
+  hiddenByDate,
+  onClearDate,
 }: {
   projects: ProjectOut[];
   tasks: TaskOut[];
   purchases: PurchaseOut[];
   projectPreview: ReturnType<typeof useEntityPreview>;
+  hiddenByDate: ProjectDashboardSummaryOut["hiddenByDate"];
+  onClearDate: () => void;
 }) {
   return (
     <Stack className="pt-4">
@@ -611,18 +585,67 @@ function DataViewContent({
           onRowHover={projectPreview.onRowHover}
           PreviewSheet={projectPreview.PreviewSheet}
         />
+        <HiddenByDateNote
+          count={hiddenByDate.projects}
+          label="projects"
+          onClear={onClearDate}
+        />
       </Stack>
 
       <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Tasks</h2>
         <TaskList tasks={tasks} />
+        <HiddenByDateNote
+          count={hiddenByDate.tasks}
+          label="tasks"
+          onClear={onClearDate}
+        />
       </Stack>
 
       <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Purchases</h2>
         <PurchaseList purchases={purchases} />
+        <HiddenByDateNote
+          count={hiddenByDate.purchases}
+          label="purchases"
+          onClear={onClearDate}
+        />
       </Stack>
     </Stack>
+  );
+}
+
+/**
+ * Honesty footnote for the Data view: the active date window
+ * (`dateFrom`/`dateTo`) silently drops rows with no date at all, per entity
+ * (see `ProjectDashboardSummaryOut.hiddenByDate`). Renders nothing at count
+ * 0 — most loads have no date filter applied. Same dotted-underline
+ * "click to reveal more" idiom as `BoardColumn`'s hidden-done-tasks note
+ * (`~/app/tasks/board/BoardColumn.tsx`), but clicking here clears the Date
+ * chip instead of expanding a list, since there's no "show them anyway"
+ * short of dropping the filter.
+ */
+function HiddenByDateNote({
+  count,
+  label,
+  onClear,
+}: {
+  count: number;
+  /** Plural entity noun, e.g. "tasks", "purchases", "projects". */
+  label: string;
+  onClear: () => void;
+}) {
+  if (count === 0) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      className="w-full px-1 text-left text-2xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+    >
+      {count} {label} without dates hidden by the date filter — clear it to show
+      them
+    </button>
   );
 }
 
@@ -645,10 +668,8 @@ function completionYear(project: ProjectOut): string {
  * component the Data view uses) for the actual browsing surface.
  */
 function HistoryView({
-  view,
   onViewChange,
 }: {
-  view: DashboardView;
   onViewChange: (v: DashboardView) => void;
 }) {
   const api = useTRPC();
@@ -667,19 +688,10 @@ function HistoryView({
     [data],
   );
 
-  const availableKinds = useMemo(
-    () =>
-      uniq(
-        topLevelDone
-          .map((p) => p.kind)
-          .filter((k): k is NonNullable<typeof k> => k != null),
-      ),
-    [topLevelDone],
-  );
-  const availableLocations = useMemo(
-    () => uniq(topLevelDone.flatMap((p) => p.locations)),
-    [topLevelDone],
-  );
+  // Kind/location rosters come from the server's `filterOptions` (already
+  // scoped to `statusScope: ["done"]`) rather than being re-derived from the
+  // fetched rows here — the server is the single source of truth for what
+  // options exist, per `dashboardSummary`.
   const availableCompletionYears = useMemo(
     () => uniq(topLevelDone.map(completionYear)).sort().reverse(),
     [topLevelDone],
@@ -706,23 +718,23 @@ function HistoryView({
 
   return (
     <Stack>
-      <DashboardToolbar view={view} onViewChange={onViewChange} />
+      <DashboardToolbar view="history" onViewChange={onViewChange} />
 
       <Row wrap gap="lg">
-        <SingleSelectFilterGroup
+        <SingleSelectChipGroup
           label="Kind"
-          options={availableKinds}
+          options={data.filterOptions.kinds}
           value={kind}
           onChange={setKind}
           formatLabel={capitalize}
         />
-        <SingleSelectFilterGroup
+        <SingleSelectChipGroup
           label="Location"
-          options={availableLocations}
+          options={data.filterOptions.locations}
           value={location}
           onChange={setLocation}
         />
-        <SingleSelectFilterGroup
+        <SingleSelectChipGroup
           label="Completed"
           options={availableCompletionYears}
           value={year}
@@ -751,46 +763,6 @@ function HistoryView({
         />
       )}
     </Stack>
-  );
-}
-
-function SingleSelectFilterGroup({
-  label,
-  options,
-  value,
-  onChange,
-  formatLabel = (v) => v,
-}: {
-  label: string;
-  options: string[];
-  value: string | null;
-  onChange: (value: string | null) => void;
-  formatLabel?: (value: string) => string;
-}) {
-  if (options.length === 0) return null;
-
-  return (
-    <Row align="center" wrap gap="sm">
-      <span className="font-medium text-muted-foreground text-xs">
-        {label}:
-      </span>
-      {options.map((option) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => onChange(value === option ? null : option)}
-          aria-pressed={value === option}
-          aria-label={`${label}: ${formatLabel(option)}${value === option ? " (active)" : ""}`}
-        >
-          <Badge
-            variant={value === option ? "default" : "outline"}
-            className="cursor-pointer"
-          >
-            {formatLabel(option)}
-          </Badge>
-        </button>
-      ))}
-    </Row>
   );
 }
 
