@@ -1,8 +1,8 @@
-import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
+import type { ActorContext } from "@cubby/schemas/context";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { and, eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { recipe } from "~/server/db/schema";
@@ -27,10 +27,11 @@ import {
   makeRecipeInput,
 } from "./repo.fixtures";
 
+// This suite imports from cookbooks — stamp the actor as an epub import.
 describe("upsertCookbookRecipe", () => {
+  const ctx = withTestDb("epub_import");
   let db: Database;
   let actor: ActorContext;
-  let teardown: () => Promise<void>;
   let ingredientId: string;
   let bookA: CookbookRef;
   let bookB: CookbookRef;
@@ -47,11 +48,8 @@ describe("upsertCookbookRecipe", () => {
   };
 
   beforeEach(async () => {
-    const tdb = await buildTestDB();
-    db = tdb.db;
-    teardown = tdb.teardown;
-    // This suite imports from cookbooks — stamp the actor as an epub import.
-    actor = buildActorContext(tdb.actor.userId, "epub_import");
+    db = ctx.db;
+    actor = ctx.actor;
 
     const ing = await createIngredient(
       db,
@@ -61,7 +59,6 @@ describe("upsertCookbookRecipe", () => {
     ingredientId = ing.id;
     bookA = await mkCookbook("Book A");
     bookB = await mkCookbook("Book B");
-    return teardown;
   });
 
   const recipeInput = (name: string, instruction = "Mix"): RecipeCreateInput =>

@@ -1,8 +1,6 @@
-import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import { eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { recipe } from "~/server/db/schema";
 import {
   getCookbookByName,
@@ -15,28 +13,19 @@ import { getDb } from "./database-helpers";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { cookbookRecipe } from "./repo.fixtures";
 
+// EPUB importer suite — actor audits as an epub import, not the UI.
 describe("cookbook repository", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-
-  beforeEach(async () => {
-    const tdb = await buildTestDB();
-    db = tdb.db;
-    teardown = tdb.teardown;
-    actor = buildActorContext(tdb.actor.userId, "epub_import");
-    return teardown;
-  });
+  const ctx = withTestDb("epub_import");
 
   it("upsertCookbook creates then updates by name (no duplicate)", async () => {
     const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
     const first = await upsertCookbook(
-      db,
+      ctx.db,
       { name: "Book A", rawJson: raw, author: ["Ada"], sourceLabel: "a.epub" },
-      actor,
+      ctx.actor,
     );
     const second = await upsertCookbook(
-      db,
+      ctx.db,
       {
         name: "Book A",
         rawJson: raw,
@@ -44,11 +33,11 @@ describe("cookbook repository", () => {
         subjects: ["Baking"],
         sourceLabel: "a.epub",
       },
-      actor,
+      ctx.actor,
     );
 
     expect(second.id).toBe(first.id);
-    const cb = await getCookbookByName(db, "Book A");
+    const cb = await getCookbookByName(ctx.db, "Book A");
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
     expect(cb?.rawJson).toHaveLength(1);
@@ -60,14 +49,14 @@ describe("cookbook repository", () => {
       cookbookRecipe("Waffles", ["1 cup flour"]),
     ];
     const { id } = await upsertCookbook(
-      db,
+      ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      actor,
+      ctx.actor,
     );
     const ref = { id, name: "Book A" };
-    await upsertCookbookRecipeFromCookbook(raw[0]!, ref, db, actor);
+    await upsertCookbookRecipeFromCookbook(raw[0]!, ref, ctx.db, ctx.actor);
 
-    const list = await listCookbooks(db);
+    const list = await listCookbooks(ctx.db);
     const entry = list.find((c) => c.id === id);
     expect(entry).toBeDefined();
     // Only one of the two raw recipes was actually imported.
@@ -84,12 +73,12 @@ describe("cookbook repository", () => {
       cookbookRecipe("Waffles", ["1 cup flour"]),
     ];
     const { id } = await upsertCookbook(
-      db,
+      ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      actor,
+      ctx.actor,
     );
 
-    const src = await getCookbookSource(db, id);
+    const src = await getCookbookSource(ctx.db, id);
     expect(src.id).toBe(id);
     expect(src.name).toBe("Book A");
     expect(src.recipes.map((r) => r.meta.title)).toEqual([
@@ -104,9 +93,9 @@ describe("cookbook repository", () => {
       cookbookRecipe("Waffles", ["1 cup flour"]),
     ];
     const { id } = await upsertCookbook(
-      db,
+      ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      actor,
+      ctx.actor,
     );
     const ref = { id, name: "Book A" };
 
@@ -114,12 +103,12 @@ describe("cookbook repository", () => {
     const imported = await upsertCookbookRecipeFromCookbook(
       raw[0]!,
       ref,
-      db,
-      actor,
+      ctx.db,
+      ctx.actor,
     );
 
     // Drain the streaming generator: collect progress events, read the summary.
-    const gen = reprocessCookbookStream(db, id, actor);
+    const gen = reprocessCookbookStream(ctx.db, id, ctx.actor);
     const events: { done: number; total: number }[] = [];
     let next = await gen.next();
     while (!next.done) {
@@ -136,7 +125,7 @@ describe("cookbook repository", () => {
     expect(result.importableExtras).toEqual(["Waffles"]);
 
     // Reprocess upserts in place — no duplicate, same id.
-    const pancakes = await getDb(db).query.recipe.findMany({
+    const pancakes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Pancakes"),
     });
     expect(pancakes).toHaveLength(1);
@@ -144,7 +133,7 @@ describe("cookbook repository", () => {
     expect(pancakes[0]!.cookbookId).toBe(id);
 
     // Waffles stayed unimported.
-    const waffles = await getDb(db).query.recipe.findMany({
+    const waffles = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Waffles"),
     });
     expect(waffles).toHaveLength(0);

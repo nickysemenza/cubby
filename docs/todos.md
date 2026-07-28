@@ -455,32 +455,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 
-### Integration suite — provision the test DB per file, not per test
-
-`withTestDb()` (apps/web/tooling/test-setup.ts) registers a **`beforeEach`** that calls
-`buildTestDB()`, so every one of the ~294 integration tests pays a full
-`CREATE DATABASE ... TEMPLATE` round-trip through IntegreSQL. Measured on an 8-core
-NVMe box: `getTestDatabase` is ~43ms running a single file alone, but **mean 788ms /
-p99 1.9s** across the parallel full suite. On CI's slower disk the tail crossed the
-10s hook timeout and failed ~8% of runs (both shards, every branch) with
-"Hook timed out in 10000ms" on an arbitrary scatter of tests.
-
-Mitigated 2026-07-27 by raising `hookTimeout` to 30s (apps/web/vitest.config.ts) —
-that stops the flake but not the cost: provisioning is a large share of the suite's
-work (292 × ~790ms against a 62s wall-clock).
-
-The structural fix is a per-**file** database (`beforeAll`) with truncation between
-tests, taking 294 provisions down to 35. Deferred because it changes the isolation
-contract every test currently relies on (a pristine DB per test), so it needs a
-deliberate pass over all 35 files rather than a mechanical swap — several seed
-their own fixtures and would need the truncation order to respect FK cascades.
-
-Measured and **rejected**: raising IntegreSQL's pool size. With
-`INTEGRESQL_TEST_INITIAL_POOL_SIZE` 8 → 32 the pool grew from 8 to 64 databases and
-the distribution was unchanged (mean 777ms vs 788ms) — the wait is the per-database
-CREATE cost, not queueing for a free slot. Memoizing the template hash is likewise
-not worth it: `hashFiles` measures 1.4ms mean against a ~790ms hook.
-
 ### Background work — where it stands
 
 The **queue is shipped**, not pending: `BACKGROUND_QUEUE` → `cubby-background` with a
