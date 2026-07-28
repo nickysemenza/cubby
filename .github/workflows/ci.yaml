@@ -40,7 +40,7 @@ jobs:
     name: Build WASM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # ingredient-parser is tracked via `branch = "main"` (not a pinned rev), so
       # resolve its live HEAD SHA and fold it into the cache key below. The key
       # then changes the instant upstream main moves, forcing a rebuild — without
@@ -92,7 +92,7 @@ jobs:
     # because it forces a second, instrumented rebuild (~2m) that used to sit on
     # this critical path for no gating benefit — codecov is a soft gate.
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           cache: true
@@ -122,7 +122,7 @@ jobs:
     # its own instrumented build (separate RUSTFLAGS → can't reuse test-rust's
     # artifacts), which is exactly why it lives off the critical path.
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           cache: true
@@ -153,7 +153,7 @@ jobs:
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -172,7 +172,7 @@ jobs:
     # gate. The test step keeps step-level continue-on-error so coverage still
     # uploads on failure; the final "Fail if tests failed" step then fails honestly.
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -258,7 +258,7 @@ jobs:
           PGPASSWORD: password
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -338,7 +338,7 @@ jobs:
             path: packages/worker-tracing
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "false"
@@ -441,7 +441,7 @@ jobs:
           PGPASSWORD: password
 
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -532,7 +532,7 @@ jobs:
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -559,7 +559,7 @@ jobs:
       name: cloudflare
       url: https://cubby.nickysemenza.com
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Download CF build artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -609,7 +609,7 @@ jobs:
       name: preview
       url: ${{ steps.preview.outputs.url }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Download CF build artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -677,7 +677,7 @@ jobs:
     environment:
       name: cloudflare
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
