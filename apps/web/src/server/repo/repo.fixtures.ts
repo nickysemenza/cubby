@@ -60,6 +60,7 @@ export const makePurchaseInput = (
   projectId: null,
   productId: null,
   vendor: null,
+  orderId: null,
   ...overrides,
 });
 
