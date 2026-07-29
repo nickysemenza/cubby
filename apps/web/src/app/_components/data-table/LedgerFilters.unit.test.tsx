@@ -16,22 +16,57 @@ vi.mock("~/components/reui/filters", () => ({
     filters: Filter<string>[];
     onChange: (filters: Filter<string>[]) => void;
   }) => (
-    <button
-      type="button"
-      data-testid="ledger-filters"
-      onClick={() =>
-        onChange([
-          {
-            id: "ledger-trade",
-            field: "trade",
-            operator: "is_any_of",
-            values: ["electrical"],
-          },
-        ])
-      }
-    >
-      {JSON.stringify(filters)}
-    </button>
+    <div>
+      <output data-testid="ledger-filters">{JSON.stringify(filters)}</output>
+      <button
+        type="button"
+        data-testid="set-trade"
+        onClick={() =>
+          onChange([
+            {
+              id: "ledger-trade",
+              field: "trade",
+              operator: "is_any_of",
+              values: ["electrical"],
+            },
+          ])
+        }
+      >
+        Set trade
+      </button>
+      <button
+        type="button"
+        data-testid="add-name"
+        onClick={() =>
+          onChange([
+            ...filters,
+            {
+              id: "ledger-name",
+              field: "name",
+              operator: "contains",
+              values: [""],
+            },
+          ])
+        }
+      >
+        Add name
+      </button>
+      <button
+        type="button"
+        data-testid="type-name"
+        onClick={() =>
+          onChange(
+            filters.map((filter) =>
+              filter.field === "name"
+                ? { ...filter, values: ["lemon"] }
+                : filter,
+            ),
+          )
+        }
+      >
+        Type name
+      </button>
+    </div>
   ),
 }));
 
@@ -57,7 +92,19 @@ function makeTable() {
       },
     },
   };
-  const columns = [tradeColumn];
+  const nameColumn = {
+    id: "name",
+    columnDef: {
+      header: "Name",
+      meta: {
+        filterConfig: {
+          filterType: "text",
+          placeholder: "Filter by name...",
+        },
+      },
+    },
+  };
+  const columns = [nameColumn, tradeColumn];
   const table = {
     options: { columns },
     getAllLeafColumns: () => columns,
@@ -105,7 +152,7 @@ describe("LedgerFilters synchronization", () => {
     const { table, setColumnFilters } = makeTable();
     const { rerender } = render(<LedgerFilters table={table} />);
 
-    fireEvent.click(screen.getByTestId("ledger-filters"));
+    fireEvent.click(screen.getByTestId("set-trade"));
 
     expect(setColumnFilters).toHaveBeenCalledTimes(1);
     expect(setColumnFilters).toHaveBeenLastCalledWith([
@@ -122,5 +169,40 @@ describe("LedgerFilters synchronization", () => {
     });
 
     expect(setColumnFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a new empty text filter mounted until the user types", () => {
+    vi.useFakeTimers();
+    const { table, setColumnFilters } = makeTable();
+    const { rerender } = render(<LedgerFilters table={table} />);
+
+    fireEvent.click(screen.getByTestId("add-name"));
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"field":"name"',
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(setColumnFilters).not.toHaveBeenCalled();
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"field":"name"',
+    );
+
+    fireEvent.click(screen.getByTestId("type-name"));
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(setColumnFilters).toHaveBeenCalledTimes(1);
+    expect(setColumnFilters).toHaveBeenLastCalledWith([
+      { id: "name", value: "lemon" },
+    ]);
+
+    rerender(<LedgerFilters table={table} />);
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"values":["lemon"]',
+    );
   });
 });

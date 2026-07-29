@@ -149,13 +149,24 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
     // table while this hook's debounced value still represents its previous
     // draft. Only a debounce that has caught up to the latest local draft may
     // write back; otherwise it would immediately undo the external change.
-    if (debouncedDraftKey !== draftKey || debouncedDraftKey === externalKey) {
-      return;
-    }
-    lastExternalKeyRef.current = debouncedDraftKey;
-    table.setColumnFilters(
-      ledgerFiltersToColumnFilters(debouncedDraftFilters, fields),
+    if (debouncedDraftKey !== draftKey) return;
+
+    // ReUI creates text filters with an empty value so their focused input can
+    // exist before the user types. That placeholder is real draft UI state but
+    // intentionally normalizes to no TanStack filter. Compare the normalized
+    // state to the table so an empty input stays mounted instead of being
+    // written as `[]` and then removed by the external-state sync.
+    const nextColumnFilters = ledgerFiltersToColumnFilters(
+      debouncedDraftFilters,
+      fields,
     );
+    const nextExternalKey = filterStateKey(
+      columnFiltersToLedgerFilters(nextColumnFilters, fields),
+    );
+    if (nextExternalKey === externalKey) return;
+
+    lastExternalKeyRef.current = nextExternalKey;
+    table.setColumnFilters(nextColumnFilters);
   }, [
     debouncedDraftFilters,
     debouncedDraftKey,
