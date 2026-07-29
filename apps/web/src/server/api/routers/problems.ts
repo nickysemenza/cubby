@@ -4,6 +4,7 @@ import {
   backfillOrderVendorOut,
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
+  coverageTotalsSchema,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
   dryRunPruneAliasesOut,
@@ -26,6 +27,7 @@ import {
   dryRunPruneAliases,
   dryRunReparse,
   findCoverageProblems,
+  findCoverageTotals,
   findFastProblems,
   findMaintenanceCounts,
   findTrackerProblems,
@@ -68,6 +70,13 @@ const getUpc = protectedProcedure
 const getTracker = protectedProcedure
   .output(problemsTrackerSchema)
   .query(async ({ ctx }) => findTrackerProblems(ctx.db));
+
+// Population denominators for the Problems page's coverage meters. Cheap
+// count(*)s, and page-only — so unlike the four groups above it stays on the
+// BATCHED link (it is absent from PROBLEMS_HOT_PATH_PROCEDURES on purpose).
+const getCoverageTotals = protectedProcedure
+  .output(coverageTotalsSchema)
+  .query(async ({ ctx }) => findCoverageTotals(ctx.db));
 
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
 // of detectors (no USDA/UPC network); badge/count consumers instead derive
@@ -196,6 +205,7 @@ export const problemsRouter = createTRPCRouter({
   getCoverage,
   getUpc,
   getTracker,
+  getCoverageTotals,
   getMaintenanceCounts,
   reparseStale,
   reparseStaleSync,

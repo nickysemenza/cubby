@@ -1034,6 +1034,7 @@ describe("project repository — date windows (derivation)", () => {
       costEstimate: null,
       startDate: null,
       endDate: null,
+      status: "in_progress",
     };
     const b: ProjectParentRow = {
       id: unsafeProjectId("cycle-b"),
@@ -1042,6 +1043,7 @@ describe("project repository — date windows (derivation)", () => {
       costEstimate: null,
       startDate: null,
       endDate: null,
+      status: "in_progress",
     };
     const ownDates = new Map([
       [a.id, { contentStart: "2024-01-05", contentEnd: "2024-01-05" }],

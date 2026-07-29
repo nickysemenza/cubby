@@ -23,15 +23,17 @@ import {
 import { isGlobalUnknownLocation } from "~/server/repo/location";
 
 /**
- * Display cap for the never-verified list. `verifiedAt` only started being
- * stamped when audit sessions landed, so the honest population is "most of the
- * inventory" — an uncapped section would be a wall of rows and would swamp the
- * navbar badge. The oldest entries lead (they've gone longest unconfirmed), and
- * the count shown always equals the rows listed, like every other detector.
+ * Live entries that have never been confirmed by a recount (oldest first).
+ *
+ * Deliberately UNCAPPED. This used to `.limit(25)` so the section wouldn't swamp
+ * the navbar badge — but `verifiedAt` only started being stamped when audit
+ * sessions landed, so the honest population is most of the inventory (178 of 212
+ * live entries when the cap was removed). A cap that reports 25 for a real 178
+ * makes the badge both wrong and unfixable, so the fix is to stop counting this
+ * as a defect at all: it's classed `coverage` in `PROBLEM_CLASS`, renders as an
+ * "N of M verified" meter rather than a red count, and is excluded from
+ * `totalProblems`. Rendering stays bounded by `SectionGroup`'s show-all toggle.
  */
-const NEVER_VERIFIED_SAMPLE_LIMIT = 25;
-
-/** Live entries that have never been confirmed by a recount (oldest first). */
 export const findNeverVerifiedInventory = async (
   db: Database,
 ): Promise<NeverVerifiedInventory[]> => {
@@ -55,8 +57,7 @@ export const findNeverVerifiedInventory = async (
       and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
     )
     .where(and(notDeleted(inventoryEntry), isNull(inventoryEntry.verifiedAt)))
-    .orderBy(asc(inventoryEntry.createdAt))
-    .limit(NEVER_VERIFIED_SAMPLE_LIMIT);
+    .orderBy(asc(inventoryEntry.createdAt));
 
   return rows.map((r) => ({
     id: r.id,

@@ -1,5 +1,5 @@
+import { sumProblemSections } from "@cubby/schemas/problems";
 import { useQueries } from "@tanstack/react-query";
-import { sum } from "es-toolkit";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
 
@@ -13,7 +13,10 @@ import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
  *
  * The four group results are merged back into the same `AllProblems` shape the
  * section renderers expect (missing groups default to empty arrays while they
- * load), with `totalProblems` re-derived as the sum of section lengths. Uses
+ * load), with `totalProblems` re-derived via the shared `sumProblemSections` —
+ * DEFECT sections only, matching `assembleAllProblems`. Coverage sections (see
+ * `PROBLEM_CLASS`) are summed separately into `coverageTotal`; folding them into
+ * one number is what made the badge permanently red and unactionable. Uses
  * `useQueries` + `combine` for a referentially-stable result (per the repo's
  * hook-stability rule — a raw `useQueries` array is a new ref every render).
  */
@@ -93,10 +96,11 @@ export function useProblemsData(opts?: {
       return {
         problems: {
           ...sections,
-          totalProblems: sum(
-            Object.values(sections).map((items) => items.length),
-          ),
+          // Defect sections only — must match `assembleAllProblems`, hence the
+          // shared helper rather than a second local sum.
+          totalProblems: sumProblemSections(sections, "defect"),
         },
+        coverageTotal: sumProblemSections(sections, "coverage"),
         isLoading: results.some((r) => r.isLoading),
         error: results.find((r) => r.error)?.error ?? null,
       };

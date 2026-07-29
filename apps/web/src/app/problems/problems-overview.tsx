@@ -1,11 +1,11 @@
-import type { AllProblems } from "@cubby/schemas/problems";
+import type { AllProblems, CoverageTotals } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { CheckCircle, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Row, Stack } from "~/components/layout";
+import { Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -46,6 +46,18 @@ const MAIN_SECTIONS = PROBLEM_SECTIONS.filter((s) => s.group == null);
 const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
   (s) => s.group === "autoFixable",
 );
+const COVERAGE_SECTIONS = PROBLEM_SECTIONS.filter(
+  (s) => s.group === "coverage",
+);
+
+/** Denominators default to 0 while the (separate, cheap) query is in flight. */
+const NO_COVERAGE_TOTALS: CoverageTotals = {
+  productsWithNoImages: 0,
+  emptyLocations: 0,
+  staleLocations: 0,
+  neverVerifiedInventory: 0,
+  ingredientsWithoutProduct: 0,
+};
 
 export function ProblemsOverview() {
   const api = useTRPC();
@@ -91,6 +103,12 @@ export function ProblemsOverview() {
     api.problems.recipeUsageByProduct.queryOptions({ productIds }),
   );
 
+  // Denominators for the coverage meters. Its own cheap batched query — the
+  // meters are page-only, so this stays off the four unbatched hot-path groups.
+  const { data: coverageTotals = NO_COVERAGE_TOTALS } = useQuery(
+    api.problems.getCoverageTotals.queryOptions(),
+  );
+
   if (isLoading) {
     return <SimpleLoading text="Analyzing data consistency..." />;
   }
@@ -127,7 +145,7 @@ export function ProblemsOverview() {
         }
       }}
     >
-      {section.node(problems)}
+      {section.node(problems, coverageTotals)}
     </div>
   );
 
@@ -147,6 +165,17 @@ export function ProblemsOverview() {
         >
           {AUTO_FIXABLE_SECTIONS.map(renderSection)}
         </AutoFixableGroup>
+
+        {/* Backlog, not defects. Kept on this page (it's the same housekeeping
+            headspace) but below the issues and visually distinct: these never
+            reach zero, so counting them as problems is what made the badge
+            permanently red and taught everyone to ignore it. */}
+        <Section
+          title="Coverage"
+          description="How much of the house has been itemized, photographed and counted. These don't reach zero — new things arrive faster than they get filed — so they're progress, not problems."
+        >
+          {COVERAGE_SECTIONS.map(renderSection)}
+        </Section>
 
         {/* Force-run batch fixes — surfaced here (not just buried in Settings)
             so the "fix it" tools live right next to the issues. Same shared card
@@ -191,12 +220,19 @@ function ProblemsSummary({
 
   // Both the summary chips and the section list derive from PROBLEM_SECTIONS,
   // so each check is declared exactly once (see ./components/problem-sections).
-  const chips = PROBLEM_SECTIONS.map((section) => ({
-    id: section.id,
-    label: section.label,
-    count: section.count(problems),
-    grouped: section.group != null,
-  })).filter((cat) => cat.count > 0);
+  // Coverage sections are excluded: this card counts issues, and their rows
+  // aren't issues (they'd also swamp the chip row — they're the bulk of the
+  // page). `grouped` means "inside the collapsed auto-fix panel", which is what
+  // decides whether jumping to it has to open that panel first — so it tracks
+  // that one group specifically, not merely "has a group".
+  const chips = PROBLEM_SECTIONS.filter((s) => s.group !== "coverage")
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      count: section.count(problems),
+      grouped: section.group === "autoFixable",
+    }))
+    .filter((cat) => cat.count > 0);
 
   return (
     <Card>

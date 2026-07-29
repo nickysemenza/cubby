@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
+  type CoverageTotals,
   type LabelVariant,
   type ProductMissingPrice,
   TRACKER_PROBLEM_KEY_BY_TYPE,
@@ -47,6 +48,7 @@ import { BackfillButton } from "./problem-backfill-action";
 import {
   type IconProp,
   ProblemSection,
+  type ProblemSectionMeter,
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
@@ -60,12 +62,18 @@ import {
 } from "./unit-coverage-fix";
 
 /**
- * Sections tagged `autoFixable` are the ones the top-of-page Fix button fully
- * clears. They render inside a collapsed group at the bottom instead of the main
- * list: one click empties them, so they'd otherwise be prime real estate holding
- * rows nobody has to read. Untagged sections stay in the main list.
+ * Which of the three lists a section renders in. Untagged sections are defects
+ * and stay in the main list.
+ *
+ *  - `autoFixable` — the top-of-page Fix button fully clears these, so they sit
+ *    in a collapsed group at the bottom rather than holding prime real estate
+ *    with rows nobody has to read. Still defects: one click drives them to zero.
+ *  - `coverage` — backlog, not defects (see `PROBLEM_CLASS` in
+ *    @cubby/schemas/problems). These render in their own group with progress
+ *    meters and are excluded from `totalProblems` / the navbar badge, because
+ *    they never reach zero and a permanently-red badge is one nobody reads.
  */
-type ProblemSectionGroup = "autoFixable";
+type ProblemSectionGroup = "autoFixable" | "coverage";
 
 /** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
 type ProblemSectionEntry = {
@@ -75,9 +83,12 @@ type ProblemSectionEntry = {
   label: string;
   /** Issue count, used to show/hide the summary chip. */
   count: (problems: AllProblems) => number;
-  /** The section card. */
-  node: (problems: AllProblems) => ReactNode;
-  /** Collapsed-group membership; absent ⇒ the main list. */
+  /**
+   * The section card. `totals` carries the coverage denominators (loaded by a
+   * separate cheap query); defect sections ignore it.
+   */
+  node: (problems: AllProblems, totals: CoverageTotals) => ReactNode;
+  /** Group membership; absent ⇒ the main defect list. */
   group?: ProblemSectionGroup;
 };
 
@@ -101,6 +112,11 @@ function section<T>(config: {
   /** A static "fix all" node, or one built from the current items (for bulk delete). */
   headerAction?: ReactNode | ((items: T[]) => ReactNode);
   group?: ProblemSectionGroup;
+  /**
+   * Denominator for a coverage meter. Only meaningful with `group: "coverage"`;
+   * picks this section's population out of the coverage-totals payload.
+   */
+  meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
 }): ProblemSectionEntry {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -110,7 +126,7 @@ function section<T>(config: {
     label: config.label,
     group: config.group,
     count: (problems) => config.select(problems).length,
-    node: (problems) => {
+    node: (problems, totals) => {
       const items = [...config.select(problems)];
       return (
         <ProblemSection
@@ -121,6 +137,12 @@ function section<T>(config: {
           items={items}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
+          meter={
+            config.meter && {
+              total: config.meter.total(totals),
+              doneLabel: config.meter.doneLabel,
+            }
+          }
           headerAction={
             typeof config.headerAction === "function"
               ? config.headerAction(items)
@@ -137,13 +159,23 @@ function customSection<T>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
-  render: (items: T[]) => ReactNode;
+  render: (items: T[], meter: ProblemSectionMeter | undefined) => ReactNode;
+  group?: ProblemSectionGroup;
+  meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
 }): ProblemSectionEntry {
   return {
     id: def.id,
     label: def.label,
+    group: def.group,
     count: (problems) => def.select(problems).length,
-    node: (problems) => def.render([...def.select(problems)]),
+    node: (problems, totals) =>
+      def.render(
+        [...def.select(problems)],
+        def.meter && {
+          total: def.meter.total(totals),
+          doneLabel: def.meter.doneLabel,
+        },
+      ),
   };
 }
 
@@ -631,6 +663,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "unvalued-buckets",
     label: "Unvalued buckets",
     select: (p) => p.unvaluedBucketProducts,
+    // Coverage, but with no meter: a misc bucket isn't a fraction of any
+    // population, so there's nothing honest to put in a denominator.
+    group: "coverage",
     entity: "product",
     title: "Unvalued Bucket Products",
     description:
@@ -667,6 +702,11 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "no-product-ingredients",
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
+    group: "coverage",
+    meter: {
+      total: (t) => t.ingredientsWithoutProduct,
+      doneLabel: "linked to a product",
+    },
     entity: "ingredient",
     title: "Ingredients without a product",
     description:
@@ -759,12 +799,18 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "locations",
     label: "Locations",
     select: (p) => p.emptyLocations,
-    render: (items) => <EmptyLocationsList locations={items} />,
+    group: "coverage",
+    meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
+    render: (items, meter) => (
+      <EmptyLocationsList locations={items} meter={meter} />
+    ),
   }),
   section({
     id: "stale-recounts",
     label: "Stale recounts",
     select: (p) => p.staleLocations,
+    group: "coverage",
+    meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
     entity: "location",
     title: "Locations overdue for a recount",
     description:
@@ -797,10 +843,12 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "never-verified",
     label: "Never verified",
     select: (p) => p.neverVerifiedInventory,
+    group: "coverage",
+    meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
     entity: "inventory",
     title: "Inventory never confirmed by a recount",
     description:
-      "Entries whose count has never been checked against the shelf (oldest first — a sample, not the full backlog). Recount the location they live in to clear them.",
+      "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
     emptyMessage: "Every inventory entry has been verified at least once.",
     renderItem: (item) => ({
       title: item.product.name,
@@ -886,6 +934,8 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "images",
     label: "Images",
     select: (p) => p.productsWithNoImages,
+    group: "coverage",
+    meter: { total: (t) => t.productsWithNoImages, doneLabel: "photographed" },
     icon: ImageOff,
     title: "Missing Images",
     description: "Products that don't have any images.",

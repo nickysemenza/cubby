@@ -1,4 +1,9 @@
-import { countProblems, type ProblemsCount } from "@cubby/schemas/problems";
+import {
+  countProblems,
+  PROBLEM_CLASS,
+  type ProblemKey,
+  type ProblemsCount,
+} from "@cubby/schemas/problems";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
 import { useProblemsData } from "~/app/problems/use-problems-data";
@@ -18,8 +23,9 @@ const pl = (n: number, sing: string, plur = `${sing}s`) =>
 
 // One tooltip phrase per `byType` key, in Problems-page section order. A Record
 // (not a list) so adding a category to the count schema is a *compile error*
-// here until its phrase is added — the breakdown always sums to `total`. Object
-// insertion order drives the tooltip order.
+// here until its phrase is added. Object insertion order drives the tooltip
+// order. Coverage-classed keys keep a phrase (the Record must stay exhaustive)
+// but are filtered out at render, so the breakdown still sums to `total`.
 const PROBLEM_LABELS: Record<
   keyof ProblemsCount["byType"],
   (n: number) => string
@@ -96,6 +102,10 @@ export const ProblemsBadge = () => {
   // sums to `total` (every byType key is listed — no silent omissions).
   const tooltipParts = Object.entries(PROBLEM_LABELS).flatMap(
     ([key, phrase]) => {
+      // Coverage keys are in `byType` (per-detector consumers still want them)
+      // but NOT in `total`, so listing them here would break the "breakdown sums
+      // to the badge" contract the Record above exists to guarantee.
+      if (PROBLEM_CLASS[key as ProblemKey] !== "defect") return [];
       const n = count.byType[key as keyof ProblemsCount["byType"]];
       return n > 0 ? [phrase(n)] : [];
     },
