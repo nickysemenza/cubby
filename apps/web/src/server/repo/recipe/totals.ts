@@ -190,6 +190,22 @@ export const selectAllActiveRecipeIds = async (
   });
 
 /**
+ * All active recipe ids whose totals are stale — the id-returning sibling of
+ * {@link countStaleRecipeTotals} (same predicate: `totalsComputedAt IS NULL`
+ * AND not deleted). Used to seed a stale-only recompute pass. Backed by the
+ * partial index `Recipe_totals_stale_idx`.
+ */
+export const selectAllStaleRecipeIds = async (
+  db: Database,
+): Promise<RecipeId[]> => {
+  const rows = await getDb(db)
+    .select({ id: recipe.id })
+    .from(recipe)
+    .where(and(sql`${recipe.totalsComputedAt} IS NULL`, notDeleted(recipe)));
+  return rows.map((r) => r.id);
+};
+
+/**
  * Recipes that reference ANY of the given ingredients (via any section), as a
  * flat deduped list. Used to invalidate when a product's price/USDA
  * link/ingredient changes (a product feeds recipe cost via its linked
