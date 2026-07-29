@@ -483,7 +483,6 @@ export function RecipeList({
     },
     deletable: deletableConfig,
     nameEditable,
-    infinite: true,
   });
   usePageCount(totalCount);
 

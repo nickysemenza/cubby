@@ -32,12 +32,11 @@ import {
   relations,
 } from "~/server/repo/database-helpers";
 import {
-  allProjectParentRows,
-  buildChildrenMap,
   collectDescendantIds,
+  loadProjectTree,
 } from "~/server/repo/project/subtree";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
-import { dbTaskToAPI } from "./helpers";
+import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 
 /**
  * The `task.projectId` WHERE condition for a `projectId` + `includeSubProjects`
@@ -65,14 +64,14 @@ export async function buildTaskProjectCondition(
   if (!includeSubProjects)
     return or(eqAny(task.projectId, projectId), presenceCond);
 
-  const childrenMap = buildChildrenMap(await allProjectParentRows(db));
+  const { childrenByParent } = await loadProjectTree(db);
   return or(
     inArray(
       task.projectId,
       uniq(
         selected.flatMap((id) => [
           id,
-          ...collectDescendantIds(childrenMap, id),
+          ...collectDescendantIds(childrenByParent, id),
         ]),
       ),
     ),
@@ -135,14 +134,9 @@ export const taskList = async (
       // `buildPurchaseWhereClause`). The dashboard surfaces the count of rows
       // hidden this way as `hiddenByDate.tasks`.
       filters.dueFrom
-        ? gte(
-            sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
-            filters.dueFrom,
-          )
+        ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
         : undefined,
-      filters.dueTo
-        ? lte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, filters.dueTo)
-        : undefined,
+      filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
       // Completion scope: undefined/"all" adds no condition (today's default,
       // unchanged) — see taskCompletionSchema.
       filters.completion === "open"

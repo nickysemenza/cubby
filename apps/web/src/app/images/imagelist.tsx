@@ -173,7 +173,6 @@ export default function ImageList() {
     queryOptions: (params) => api.image.list.queryOptions(params),
     columns,
     deletable: deletableConfig,
-    infinite: true,
   });
   usePageCount(totalCount);
 

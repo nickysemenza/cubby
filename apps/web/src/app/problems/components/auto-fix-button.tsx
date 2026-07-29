@@ -20,7 +20,7 @@ import {
   invalidateTRPCQueries,
   problemsMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { AUTO_FIX_TASKS, type AutoFixTask } from "./auto-fix-registry";
+import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
 /**
  * What a run would do right now.
@@ -41,27 +41,7 @@ export function useAutoFixPlan(problems: AllProblems) {
     }),
   );
 
-  const counted = AUTO_FIX_TASKS.map((task) => ({
-    task,
-    count: task.count(problems, counts),
-  }));
-  const actionable = counted.filter((t) => (t.count ?? 0) > 0);
-  const items = actionable.reduce((n, t) => n + (t.count ?? 0), 0);
-  const listedItems = actionable.reduce(
-    (n, t) => n + t.task.listedCount(problems, counts),
-    0,
-  );
-
-  return {
-    items,
-    listedItems,
-    // Tail steps ride along, but only when something else justified the run.
-    tasks: actionable.length
-      ? counted
-          .filter((t) => (t.count ?? 0) > 0 || t.task.alwaysRun)
-          .map((t) => t.task)
-      : [],
-  };
+  return buildAutoFixPlan(problems, counts);
 }
 
 /**

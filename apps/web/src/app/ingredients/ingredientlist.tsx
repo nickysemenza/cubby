@@ -316,7 +316,6 @@ export function IngredientList() {
       ],
     },
     deletable: deletableConfig,
-    infinite: true,
   });
   usePageCount(totalCount);
 

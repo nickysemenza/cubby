@@ -9,7 +9,6 @@ import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
-import { CellLinkFence } from "../_components/data-table/cell-edit-trigger";
 import {
   createCreatedAtColumn,
   createCurrencyColumn,
@@ -147,11 +146,9 @@ export function InventoryItemList() {
         // including the click fence, without which this click would also open
         // the amount editor).
         renderDisplay: (content, row) => (
-          <CellLinkFence>
-            <Link to="/inventory/$id" params={{ id: row.id }}>
-              {content}
-            </Link>
-          </CellLinkFence>
+          <Link to="/inventory/$id" params={{ id: row.id }}>
+            {content}
+          </Link>
         ),
       }),
       createCurrencyColumn(columnHelper, "valuation", {
@@ -236,7 +233,6 @@ export function InventoryItemList() {
     deletable: deletableConfig,
     extraActions,
     bulkActions,
-    infinite: true,
     // "Created" is low-signal when browsing inventory — hidden by default,
     // still toggleable via the View menu.
     initialColumnVisibility: {

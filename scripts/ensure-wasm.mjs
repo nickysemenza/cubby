@@ -15,9 +15,10 @@
 // or a branch switch, rebuilds too).
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extremeMtime } from "./mtime.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ART = join(ROOT, "packages/wasm/recipebridge_bg.wasm");
@@ -55,30 +56,13 @@ const sourceRoots = () => {
   return [...roots];
 };
 
-// Newest mtime (ms) of a watched source file under `dir`, pruning build/vcs dirs.
-const newestMtime = (dir) => {
-  let newest = 0;
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return newest;
-  }
-  for (const e of entries) {
-    if (e.isDirectory()) {
-      if (!PRUNE.has(e.name)) {
-        newest = Math.max(newest, newestMtime(join(dir, e.name)));
-      }
-    } else if (WATCH_EXT.some((ext) => e.name.endsWith(ext))) {
-      try {
-        newest = Math.max(newest, statSync(join(dir, e.name)).mtimeMs);
-      } catch {
-        /* unreadable entry — ignore */
-      }
-    }
-  }
-  return newest;
-};
+const newestMtime = (dir) =>
+  extremeMtime(dir, {
+    pick: Math.max,
+    seed: 0,
+    prune: PRUNE,
+    extensions: WATCH_EXT,
+  });
 
 if (!existsSync(ART)) {
   log("no WASM build — building…");

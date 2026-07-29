@@ -43,6 +43,11 @@ interface TableStateOptions {
    * page (the active data hook) — see useEntityList.
    */
   urlSync?: boolean;
+  /**
+   * Include pagination in URL sync. Infinite lists set this false because
+   * their page index is an internal fetch cursor, not a user-visible page.
+   */
+  syncPaginationToUrl?: boolean;
 }
 
 /** Stable empty default (a fresh `[]` per render would churn the memos). */
@@ -111,6 +116,7 @@ export function useTableState(
     initialPagination = defaultPagination,
     filterSpecs = NO_SPECS,
     urlSync = false,
+    syncPaginationToUrl = true,
   } = options;
 
   const [, startTransition] = useTransition();
@@ -139,8 +145,8 @@ export function useTableState(
     },
   );
   const [pagination, setPaginationRaw] = useState<PaginationState>(() => {
-    const page = Number(search[PAGE_KEY]);
-    const size = Number(search[SIZE_KEY]);
+    const page = syncPaginationToUrl ? Number(search[PAGE_KEY]) : Number.NaN;
+    const size = syncPaginationToUrl ? Number(search[SIZE_KEY]) : Number.NaN;
     return {
       pageIndex:
         Number.isFinite(page) && page > 0
@@ -270,13 +276,23 @@ export function useTableState(
       ),
       [SORT_KEY]: sortP === defaultSortParam ? undefined : sortP,
       [PAGE_KEY]:
-        pagination.pageIndex > 0 ? pagination.pageIndex + 1 : undefined,
+        syncPaginationToUrl && pagination.pageIndex > 0
+          ? pagination.pageIndex + 1
+          : undefined,
       [SIZE_KEY]:
+        syncPaginationToUrl &&
         pagination.pageSize !== defaultPagination.pageSize
           ? pagination.pageSize
           : undefined,
     });
-  }, [sorting, pagination, columnFilters, filterSpecs, defaultSortParam]);
+  }, [
+    sorting,
+    pagination,
+    columnFilters,
+    filterSpecs,
+    defaultSortParam,
+    syncPaginationToUrl,
+  ]);
 
   // Every key this hook owns. Enumerated rather than derived from `next`'s
   // own keys: JSON.stringify drops undefined, so a cleared filter is ABSENT

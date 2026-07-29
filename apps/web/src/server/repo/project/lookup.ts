@@ -21,12 +21,7 @@ import {
   notDeleted,
 } from "~/server/repo/database-helpers";
 import { projectContentDates, projectDependencyIds } from "./analytics";
-import {
-  dbProjectToAPI,
-  EMPTY_PROJECT_DATE_WINDOW,
-  EMPTY_PROJECT_OWN_ROLLUP,
-  EMPTY_PROJECT_SUBTREE_ROLLUP,
-} from "./helpers";
+import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
   aggregateSubtreeDates,
   collectDescendantIds,
@@ -89,7 +84,7 @@ export const projectList = async (
   // clause, which has to be built before this page's ids exist; it is then
   // handed back in so the tree is never queried twice.
   const tree = await loadProjectTree(db);
-  const { childrenByParent, nameById } = tree;
+  const { childrenByParent } = tree;
 
   // When scoped to a parent's subtree, resolve every live descendant id and
   // match on that set (excluding the parent itself — same shape as the plain
@@ -185,24 +180,12 @@ export const projectList = async (
 
   const ids = rows.map((r) => r.id);
 
-  const [{ ownRollups, subtreeRollups, dateWindows }, deps] = await Promise.all(
-    [loadProjectSubtreeRollups(db, ids, tree), projectDependencyIds(db, ids)],
-  );
+  const [projectContext, deps] = await Promise.all([
+    loadProjectSubtreeRollups(db, ids, tree),
+    projectDependencyIds(db, ids),
+  ]);
 
-  const data = rows.map((row) =>
-    dbProjectToAPI({
-      row,
-      ownRollup: ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
-      subtreeRollup: subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
-      dates: dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
-      blockedByIds: deps.blockedBy.get(row.id) ?? [],
-      blockingIds: deps.blocking.get(row.id) ?? [],
-      parentProjectName: row.parentProjectId
-        ? (nameById.get(row.parentProjectId) ?? null)
-        : null,
-      childProjectIds: childrenByParent.get(row.id) ?? [],
-    }),
-  );
+  const data = rows.map((row) => hydrateProjectRow(row, projectContext, deps));
 
   return { data, count };
 };

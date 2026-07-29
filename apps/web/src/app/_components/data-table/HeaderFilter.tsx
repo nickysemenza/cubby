@@ -89,9 +89,8 @@ export function HeaderFilter<TData>({
   const inputClassName =
     "h-5 text-2xs px-1.5 border shadow-none bg-background border-border placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40"; /* tight */
 
-  // Enrich select options with faceted counts (opt-in — see FilterConfig).
   // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API
-  const facetedOptions = useMemo(() => {
+  const selectOptions = useMemo(() => {
     const isSelectLike =
       filterConfig.filterType === "select" ||
       filterConfig.filterType === "multiselect";
@@ -129,7 +128,7 @@ export function HeaderFilter<TData>({
     if (isMulti) {
       return (
         <MultiFilterableCombobox
-          items={facetedOptions}
+          items={selectOptions}
           value={Array.isArray(value) ? value : value ? [value] : NO_SELECTION}
           onValueChange={setValue}
           placeholder={shortPlaceholder}
@@ -140,7 +139,7 @@ export function HeaderFilter<TData>({
 
     return (
       <FilterableCombobox
-        items={facetedOptions}
+        items={selectOptions}
         value={typeof value === "string" && value ? value : null}
         onValueChange={(v) => setValue(v ?? "")}
         placeholder={shortPlaceholder}

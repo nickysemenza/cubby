@@ -1,5 +1,8 @@
 import * as Sentry from "@sentry/cloudflare";
-import { registerSentryErrorCapture } from "@cubby/worker-tracing";
+import {
+  CUBBY_SENTRY_DSN,
+  registerSentryErrorCapture,
+} from "@cubby/worker-tracing";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { setCookie, deleteCookie } from "hono/cookie";
@@ -187,8 +190,8 @@ const handler = { fetch: app.fetch } satisfies ExportedHandler<Env>;
 
 export default Sentry.withSentry(
   () => ({
-    // Public DSN — canonical copy in apps/web/src/lib/sentry-dsn.ts.
-    dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+    dsn: CUBBY_SENTRY_DSN,
+    environment: import.meta.env.DEV ? "development" : "production",
     tracesSampleRate: 0,
     initialScope: { tags: { service: "upc-lookup" } },
   }),

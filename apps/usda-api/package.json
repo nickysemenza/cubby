@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.1",
   "scripts": {
-    "dev": "wrangler dev --port 8787 --persist-to .wrangler/state",
+    "dev": "wrangler dev --port 8787 --persist-to .wrangler/state --var SENTRY_ENVIRONMENT:development",
     "build": "wrangler deploy --dry-run --outdir dist",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
