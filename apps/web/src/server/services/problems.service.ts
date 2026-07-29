@@ -56,9 +56,11 @@ import {
 } from "~/server/repo/ingredient";
 import {
   applyReparsedStaleLines,
+  countEntitiesMissingEmbeddings,
   countReparseableLines,
   findDuplicateUniqueProducts,
   findEmptyLocations,
+  findEntitiesMissingEmbeddings,
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   findLinkedProductIds,
@@ -85,8 +87,29 @@ import {
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { computeAttentionItems } from "~/server/repo/project";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
+import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
+import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
+
+// The embedding-coverage detector is gated HERE rather than in the repo, so the
+// repo stays pure data access and the env read stays in the service layer.
+//
+// The gate itself is load-bearing: with no AI_GATEWAY_API_KEY every live row in
+// all ten searchable tables reads as "missing an embedding", and nothing can
+// ever clear it — `enqueueEntityEmbeddingBackfill` doesn't check configuration
+// either, so it would cheerfully enqueue thousands of jobs that all throw at
+// `embedTexts`. Report nothing rather than an unfixable wall. Mirrors the
+// degradation the semantic read paths already do.
+const findMissingEmbeddings = async (db: Database) =>
+  semanticEmbeddingsConfigured()
+    ? findEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig())
+    : [];
+
+const countMissingEmbeddings = async (db: Database) =>
+  semanticEmbeddingsConfigured()
+    ? countEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig())
+    : 0;
 
 // Detect both coverage problems in one pass: ingredient products that are
 // *under-covered* and products whose mappings *island*. Both detectors fetch
@@ -335,6 +358,7 @@ export const findMaintenanceCounts = async (
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
+    entitiesMissingEmbeddings: () => countMissingEmbeddings(db),
   });
 
   return {
@@ -346,6 +370,9 @@ export const findMaintenanceCounts = async (
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
+    // Uncapped, unlike the Problems section's sampled item rows — this is what
+    // the auto-fix button counts.
+    entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
   };
 };
 
@@ -430,6 +457,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       locationsWithoutAiDescription: () =>
         findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
+      entitiesMissingEmbeddings: () => findMissingEmbeddings(scoped),
       staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
       staleLocations: () => findStaleLocations(scoped),
       neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
@@ -449,6 +477,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     productsWithNoImages: r.productsWithNoImages,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
+    entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
     staleParentRecipes: r.staleParentRecipes,
     staleLocations: r.staleLocations,
     neverVerifiedInventory: r.neverVerifiedInventory,

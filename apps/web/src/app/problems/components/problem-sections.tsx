@@ -57,6 +57,14 @@ import {
   unitCoverageGroup,
 } from "./unit-coverage-fix";
 
+/**
+ * Sections tagged `autoFixable` are the ones the top-of-page Fix button fully
+ * clears. They render inside a collapsed group at the bottom instead of the main
+ * list: one click empties them, so they'd otherwise be prime real estate holding
+ * rows nobody has to read. Untagged sections stay in the main list.
+ */
+type ProblemSectionGroup = "autoFixable";
+
 /** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
 type ProblemSectionEntry = {
   /** Scroll-anchor id; also the summary-chip key. */
@@ -67,6 +75,8 @@ type ProblemSectionEntry = {
   count: (problems: AllProblems) => number;
   /** The section card. */
   node: (problems: AllProblems) => ReactNode;
+  /** Collapsed-group membership; absent ⇒ the main list. */
+  group?: ProblemSectionGroup;
 };
 
 /**
@@ -88,6 +98,7 @@ function section<T>(config: {
   groupBy?: (items: T[]) => Record<string, T[]>;
   /** A static "fix all" node, or one built from the current items (for bulk delete). */
   headerAction?: ReactNode | ((items: T[]) => ReactNode);
+  group?: ProblemSectionGroup;
 }): ProblemSectionEntry {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -95,6 +106,7 @@ function section<T>(config: {
   return {
     id: config.id,
     label: config.label,
+    group: config.group,
     count: (problems) => config.select(problems).length,
     node: (problems) => {
       const items = [...config.select(problems)];
@@ -187,7 +199,33 @@ function OrphanedEmbeddingCleanupFix({
   );
 }
 
-function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
+/**
+ * "Backfill all" for entities semantic search can't see yet. A plain mutation
+ * (it only enqueues), so it uses the card-mutation hook rather than the
+ * BackfillButton stream — but the work itself is durable, hence the link out to
+ * the queue.
+ */
+function MissingEmbeddingsBackfillAction() {
+  const api = useTRPC();
+  const backfill = useProblemCardMutation({
+    mutationFn: api.search.enqueueEmbeddingBackfill.mutationOptions,
+    success: (data) =>
+      data.totalJobs > 0
+        ? `Queued ${data.totalJobs} for embedding.`
+        : "Nothing to embed.",
+  });
+  return (
+    <Button
+      size="sm"
+      onClick={() => backfill.mutate({})}
+      disabled={backfill.isPending}
+    >
+      {backfill.isPending ? "Queuing…" : "Backfill all"}
+    </Button>
+  );
+}
+
+function searchableEntityRoute(entityRef: SearchableEntityRef) {
   return match(entityRef)
     .with({ entityType: "product" }, (e) => ({
       to: "/products/$id" as const,
@@ -778,6 +816,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
     emptyMessage: "All locations with photos have AI descriptions.",
     headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
+    group: "autoFixable",
     renderItem: (location) => ({
       title: location.name,
       badges: [
@@ -800,17 +839,34 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     description:
       "Semantic search rows whose entity no longer exists. These are safe to clean up.",
     emptyMessage: "No orphaned search embeddings.",
+    group: "autoFixable",
     renderItem: (embedding) => ({
       title: `${embedding.entityType} · ${embedding.entityId.slice(0, 8)}`,
       subtitle: embedding.model,
       details: [createdAgoDetail(embedding.createdAt)],
-      route: orphanedEmbeddingRoute(embedding),
+      route: searchableEntityRoute(embedding),
       inlineFix: {
         label: "Clean up",
         render: (close) => (
           <OrphanedEmbeddingCleanupFix id={embedding.id} close={close} />
         ),
       },
+    }),
+  }),
+  section({
+    id: "missing-embeddings",
+    label: "Unindexed",
+    select: (p) => p.entitiesMissingEmbeddings,
+    icon: Wrench,
+    title: "Missing search embeddings",
+    description:
+      "Live records semantic search can't see — no embedding under the current model. The list is a sample; the true figure is on the Fix button and in Maintenance.",
+    emptyMessage: "Everything is indexed for semantic search.",
+    group: "autoFixable",
+    headerAction: <MissingEmbeddingsBackfillAction />,
+    renderItem: (entity) => ({
+      title: `${entity.entityType} · ${entity.entityId.slice(0, 8)}`,
+      route: searchableEntityRoute(entity),
     }),
   }),
   section({

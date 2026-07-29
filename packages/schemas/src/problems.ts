@@ -90,6 +90,14 @@ export const ingredientWithPartialCoverageSchema = z.object({
   ingredientId,
 });
 
+/**
+ * An ingredient a recipe uses but no product backs, so it can't be costed.
+ *
+ * Cookbook-imported recipes (`Recipe.cookbookId` set) don't count as usage —
+ * an EPUB import contributes hundreds of ingredients nobody has committed to
+ * cooking, and counting them buried the handful that actually block costing
+ * something. `recipeCount` is therefore "how many of my own recipes need this".
+ */
 export const ingredientWithoutProductSchema = z.object({
   id: ingredientId,
   name: z.string(),
@@ -205,6 +213,19 @@ export const orphanedEntityEmbeddingSchema = z.object({
   createdAt: z.date(),
 });
 
+/**
+ * A live entity with no embedding row under the current provider/model/dimensions
+ * — invisible to semantic search until backfilled. The mirror image of
+ * {@link orphanedEntityEmbeddingSchema}, and carries no id/model of its own
+ * because there is no row yet.
+ *
+ * These rows are a SAMPLE (the detector caps them); `MaintenanceCounts.
+ * entitiesMissingEmbeddings` carries the true figure.
+ */
+export const entityMissingEmbeddingSchema = z.object({
+  ...searchableEntityRefFields,
+});
+
 // A live parent recipe whose persisted totals are marked fresh
 // (`totalsComputedAt IS NOT NULL`) yet still reference — via a live section →
 // link → sub-recipe ingredient — a soft-deleted sub-recipe. The escaped state
@@ -267,6 +288,7 @@ const problemsFastShape = {
   productsWithNoImages: z.array(productWithNoImagesSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
+  entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
   staleLocations: z.array(staleLocationSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
@@ -449,6 +471,10 @@ export const maintenanceCountsSchema = z.object({
   // Unassociated PENDING image rows older than the cull threshold (24h) — the
   // abandoned-upload backlog the "Cull pending images" tool clears.
   cullablePendingImages: z.number().int(),
+  // Live entities with no embedding under the current model. The TRUE figure —
+  // the matching Problems section only carries a capped sample, so this is what
+  // the auto-fix button counts. 0 when embeddings aren't configured.
+  entitiesMissingEmbeddings: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
 

@@ -50,6 +50,7 @@ import {
   markRecipesStaleReturningTransitioned,
   markRecipeTotalsFresh,
   selectAllActiveRecipeIds,
+  selectAllStaleRecipeIds,
   selectStaleRecipeIds,
   updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
@@ -714,5 +715,32 @@ export class RecipeCostingService {
     });
     yield { done: total, total };
     return { enqueued: total, total, batchId: batch?.id ?? null };
+  }
+
+  /**
+   * DURABLE recompute-STALE: same queue-backed shape as {@link recomputeAllQueued},
+   * but seeded from {@link selectAllStaleRecipeIds} instead of every active recipe,
+   * and calling {@link enqueueTargetedChunks} directly instead of
+   * {@link dispatchRecompute}. `dispatchRecompute` starts by marking its ids stale
+   * ({@link markRecipesStale}) — a no-op here since these ids are already stale by
+   * construction (that's the selection predicate), but a wasted extra `UPDATE` and,
+   * more importantly, the wrong doc: `dispatchRecompute` is the "something changed,
+   * invalidate + enqueue" entry point, and calling it would misrepresent this as a
+   * fresh invalidation instead of a drain of an already-known backlog. So this
+   * enqueues the targeted chunks straight from the stale-id selection.
+   */
+  async *recomputeStaleQueued(): AsyncGenerator<
+    { done: number; total: number },
+    { enqueued: number; total: number; batchId: string | null }
+  > {
+    const ids = await selectAllStaleRecipeIds(this.db);
+    const total = ids.length;
+    yield { done: 0, total };
+    if (total === 0) return { enqueued: 0, total: 0, batchId: null };
+    const batch = await this.enqueueTargetedChunks(ids, undefined, {
+      source: "maintenance.recompute-stale",
+    });
+    yield { done: total, total };
+    return { enqueued: total, total, batchId: batch.id };
   }
 }

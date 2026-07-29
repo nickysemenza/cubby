@@ -104,6 +104,22 @@ const recomputeAllDurable = protectedProcedure.mutation(async function* ({
   );
 });
 
+// DURABLE recompute-STALE for the maintenance UI: same durable queue-backed
+// shape as `recomputeAllDurable`, but scoped to only the recipes that are
+// currently stale (`totalsComputedAt IS NULL`) instead of the whole library —
+// the everyday "drain the backlog" action, cheaper than a full recompute-all
+// when most of the library is already fresh. Backed by
+// `recipeCosting.recomputeStaleQueued`, which enqueues directly (it does not
+// re-mark-stale first — see that method's comment for why).
+const recomputeStaleDurable = protectedProcedure.mutation(async function* ({
+  ctx,
+}) {
+  yield* streamProgress(
+    ctx.services.recipeCosting.recomputeStaleQueued(),
+    (r) => r,
+  );
+});
+
 // Recompute + persist one recipe's totals inline, right now. The manual escape
 // hatch for a recipe stuck with null totals in the list (the background drain
 // never ran or failed for it) — a single recipe is cheap, so it runs on the
@@ -236,6 +252,7 @@ export const recipeAnalysisProcedures = {
   recomputeAll,
   recomputeAllStream,
   recomputeAllDurable,
+  recomputeStaleDurable,
   recomputeOne,
   dryRunRecomputeTotals,
   explainCosting,

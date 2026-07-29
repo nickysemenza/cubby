@@ -34,6 +34,26 @@ export async function* streamProgress<R, Out>(
 }
 
 /**
+ * Client-side: drain a streamed bulk mutation to its final summary, ignoring the
+ * progress ticks.
+ *
+ * `useBulkStream` is the right tool when ONE stream drives a progress bar; it
+ * holds single-run React state, so it can't sequence several runs. This is the
+ * headless counterpart for a caller that runs streamed mutations back-to-back
+ * and tracks progress at the task level instead (see the Problems auto-fix
+ * runner). Rejects if the stream ends without a `done` event, so a truncated
+ * stream can't read as a silent success.
+ */
+export async function collectBulkStream<Result>(
+  iterable: AsyncIterable<BulkProgressEvent<unknown, Result>>,
+): Promise<Result> {
+  for await (const event of iterable) {
+    if (event.type === "done") return event.result;
+  }
+  throw new Error("Bulk stream ended without a result");
+}
+
+/**
  * Drive a per-item loop as a `BulkProgressEvent` stream from a tRPC
  * `.mutation(async function*)`. Owns the boilerplate every streamed bulk loop
  * shares: an initial `{done:0,total}` tick, a per-item `progress` event, the

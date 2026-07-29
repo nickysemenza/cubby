@@ -36,6 +36,17 @@ import { TraceNames, withTrace } from "~/server/tracing";
 // detectors above (findProductsWithoutMappings / findIngredientsWithPartialCoverage
 // both require a product row to exist). Sub-recipe ingredients (recipeId set) are
 // costed by their recipe, never a product, so they're excluded.
+//
+// Recipes imported from a cookbook (`cookbookId` set) are ALSO excluded — and
+// that exclusion is load-bearing, not a tuning knob. An EPUB import lands
+// hundreds of books' worth of ingredients nobody has committed to cooking; on
+// this database that was 992 of 1016 rows (98%), which drowned the 24 that
+// actually block costing a recipe of my own. An ingredient a cookbook alone
+// mentions isn't a data problem, it's a shopping list I never wrote. Because the
+// `recipe` join is INNER and pre-aggregation, filtering here keeps any
+// ingredient that has *at least one* live non-cookbook recipe (the 14 used in
+// both still qualify) and makes `recipeCount` mean "how many of my own recipes
+// need this" — the number that decides whether it's worth mapping.
 export const findIngredientsWithoutProduct = async (
   db: Database,
 ): Promise<IngredientWithoutProduct[]> => {
@@ -64,7 +75,12 @@ export const findIngredientsWithoutProduct = async (
     )
     .innerJoin(
       recipe,
-      and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
+      and(
+        eq(recipe.id, recipeSection.recipeId),
+        notDeleted(recipe),
+        // Cookbook-imported recipes don't count as usage here — see the note above.
+        isNull(recipe.cookbookId),
+      ),
     )
     .where(
       and(

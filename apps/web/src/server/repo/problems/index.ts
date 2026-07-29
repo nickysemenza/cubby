@@ -20,6 +20,8 @@
  *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
  *                                            sub-recipe while marked fresh —
  *                                            derived-data-on-removal guardrail)
+ *   EMBEDDING   → `detectors-embedding.ts`  (live entities with no embedding row
+ *                                            — invisible to semantic search)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
  *
  * Every problem item type is the canonical Zod-derived shape from
@@ -29,6 +31,11 @@
  * package.
  */
 
+// Embedding-coverage detector (mirror of the orphaned-embedding sweep)
+export {
+  countEntitiesMissingEmbeddings,
+  findEntitiesMissingEmbeddings,
+} from "./detectors-embedding";
 // Ingredient-centric detectors
 export {
   findIngredientsWithoutProduct,
