@@ -34,6 +34,27 @@ This file is weighted toward **failure modes** — the happy path is easy, the t
    twin produced a false match; $0 lines are free replacements, not purchases.
 5. **Parse money defensively** — amounts ≥ $1,000 contain commas (`1,099.77`); a naive `float()`
    silently yields 0.0 and excludes every expensive line.
+6. **Establish the source's date coverage before treating absence as evidence.** "No email for it, so
+   it didn't happen" is only valid inside the window the source actually covers. Facebook Marketplace
+   sends nothing from `facebookmail.com` (that domain is login codes only); commerce mail comes from
+   `noreply@marketplace.facebook.com` and `commerce-no-reply@support.facebook.com`, and in this
+   mailbox the earliest is **2026-05**. A "no Marketplace sale email exists" inference about a 2025-11
+   order is therefore worthless, while the same inference about 2026-07 is solid. State the window
+   explicitly whenever you argue from silence.
+
+**Source hierarchy — prefer settlement figures over anything else.** Ranked by trustworthiness:
+
+| Source | Gives you | Trust |
+| --- | --- | --- |
+| eBay **seller** `OrdersReport` CSV | `Sold For`, `Total Price`, sale date, buyer | settlement — best |
+| eBay "You got paid" email | confirmed payment amount | settlement |
+| Vendor order confirmation email | order total, per-line prices | ordered, not settled |
+| ui.com-style confirmation | *no prices at all* — invoice is a separate download | needs the status page |
+| **Marketplace/listing exports** | **asking prices and a "Sold" flag** | **weakest — see Phase 4** |
+
+`~/Documents/personal/backups/random data dumps/` holds both the Amazon takeout and
+`eBay-OrdersReport-*.csv`. Check for a seller report before doing any Gmail sweep for disposals: it
+is one grep versus twenty subagent minutes, and it carries real numbers.
 
 ## Phase 2 — match, strongest key first
 
@@ -51,6 +72,16 @@ the whole `url` value (`home depot`, `lowes`, `tol nirvana`, `wwe`) or as a shor
 in the name itself (`woodworker express`, `supplyhouse return`). A 2026-07 sweep lifted 268 + 23
 such rows into the column. Note `url` is rendered as `<a href={url}>` — a marker left there paints a
 broken link, so clear it once `vendor` carries the information.
+
+**A shorthand marker may name the BRAND, not the seller.** `action machining` looked like a vendor;
+the unions were Action Machining *brand*, bought from **Buy Action Products**. Confirm the marker
+against the actual receipt before promoting it to `vendor`. Some markers resolve to nothing at all —
+`central` ($100, pipes) survived every search and was left null rather than guessed into
+`Central Builders`, an unrelated vendor already in the ledger. Leaving it null is the right answer.
+
+**Order dates can disagree by timezone.** An Acme confirmation email headed "Order Date: Nov 27" was
+sent at 03:59 UTC — 19:59 PT on the 27th — while Acme's own record and its shipping mail both say
+Nov 28. Not a conflict worth resolving twice: prefer the vendor's own order record and note why.
 
 **Tolerances must be relative, not absolute.** ±$0.25 is sensible at $200 and meaningless at $1: a
 $0.93 order (wood screws, net of two returns) matched a $1.00 `5 yd nursery mix` row on amount+date
@@ -95,6 +126,28 @@ their own (a 4-line combo once "explained" a ZipWall as a book).
 
 Also confirm the row's own notes don't name a different vendor — one row reading
 `home depot WN22422541` was set to Amazon on an amount+one-token match.
+
+**The mirror trap: the ledger may hold the SPLIT while you search for the AGGREGATE.** Phase 3 above
+guards against adding components when a combined row exists. The reverse also happens and defeats the
+amount+date check completely, because the total you are searching for *appears nowhere*. B&H order
+`1121197219` was already booked as two sibling rows ($203.36 AP + $102.91 switch); an amount+date
+search for its $306.27 order total found nothing, so a duplicate aggregate was created and had to be
+deleted. **Whenever the export line has an order id, query `orderId` first** — it catches both
+directions in one shot, and amount+date catches neither reliably.
+
+**Check the refund file before adding ANY purchase — not just when reconciling.** This is the single
+most expensive omission found so far. A 2026-07-28 pass added purchases whose notes read *"order had
+no ledger row at all"*, having read `Order History.csv` and never opened `Refund Details.csv`. Eight
+of those orders had been refunded and the refunds were never booked: Level Lock+ $357.38 and a Huepar
+rotary laser $339.14 **refunded in full**, a Schlage deadbolt $344.21, a Rollo printer $193.98, a
+UAP-AC-PRO $150.43 ("Accidental order"), plus partials — **$1,413.96 of phantom spend, three of them
+for items never actually owned.** Two tells that should have prompted the check: the product had no
+inventory entry, and the "purchase" was for something the operator had no memory of.
+
+Distinguish `Reversal Reason` when you find one: `Customer return` means the item is gone (expect no
+inventory); `Account adjustment` is a price credit on an item **kept** (reduces basis only, do not
+treat as a disposal). And a refund needs **no row at all** when it offsets a line that was never
+booked — an Eagle gas can, a disco spotlight — because buy and refund net to zero.
 
 **"Explained" means *nothing to add* — not *nothing to do*.** This is a second, subtler failure of
 the same phase. A row identified as an aggregate match is correctly excluded from the *missing*
@@ -148,6 +201,43 @@ worklist, not a dead end.
   a semantic fit. Check project windows first; a project's last activity date tells you if it's live.
 - Non-tool/household items stay out of the project ledger unless the operator says otherwise. Ask
   per item; never bulk-add books, clothing, or consumables.
+- **`projectId` differs between a sale and a refund.** A sale recovers value from an asset and must
+  NOT reduce project spend → `projectId: null`. A refund means the money was never spent → keep the
+  original `projectId` so the project's total falls.
+
+### Disposals: sales, and why listing exports lie
+
+Every buy/sell pair links through a **Product**, even for something long gone — zero inventory, the
+two rows, and the net basis is a `GROUP BY productId` away. There are 25+ such history-only products.
+A sale row with `productId: null` is a bug; it silently drops out of every net-basis rollup.
+
+A **Facebook Marketplace listing export is not a sales record**, and it misleads in three separate
+ways. All three were caught in one 13-item batch:
+
+1. **Prices are asking prices.** `48-22-8349` listed $31, settled **$11.50**. `48-22-8330` lot $35 →
+   **$15.00**. `48-22-8329` $11 → **$3.00**. Battery holders $15 each → **$10 each**. Where
+   settlement figures exist, items went for roughly two-thirds of asking, and often far less.
+2. **"Sold" includes CANCELLED orders.** Of the four listings recent enough to verify, **two had been
+   cancelled by Facebook** ("buyer won't be charged") — one of them was relisted a week later and is
+   still active. A 50% false-positive rate on the one signal the export exists to provide.
+3. **Cross-listed items sell once but show "Sold" in both places.** A Ryobi P235A ran on eBay and
+   Marketplace simultaneously; it settled on eBay for $5.50 and the Marketplace listing was delisted
+   by hand. Booking the Marketplace $25 as well would have double-counted. Same for four Packout
+   accessories.
+
+So: **never book a Marketplace figure without first sweeping eBay for the same item.** The eBay sweep
+is conclusive in the other direction — a complete pass over "You got paid" / "You made the sale"
+emails genuinely rules out an eBay sale. If a Marketplace figure survives that and still can't be
+confirmed, book it if the operator wants, but write the uncertainty into the note: that the amount is
+a *listing* price, that the date is a *listing* date, and what the observed cancellation rate is.
+
+Two more disposal notes:
+- **Listing dates are not sale dates.** The export gives you the former. Say so in the note rather
+  than implying a precision you don't have.
+- **Equal allocation across a kit invents gains and losses.** An 8-tool kit split 1/8 each gave a bare
+  LED light a $48.03 basis; it sold for **$5.50**. That "$42.53 loss" is an artifact of the split, and
+  the other seven tools are understated by the same distortion. Label it in the note, or a later
+  reader will treat it as a real result.
 
 ## Phase 5 — reconcile
 
