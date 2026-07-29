@@ -163,6 +163,37 @@ describe("useTableState — URL-only filter specs", () => {
     expect(result.current.allFilters).toBe(result.current.columnFilters);
   });
 
+  it("holds allFilters stable across a fresh search object with the same values", () => {
+    // The router reparses and hands back a NEW `search` object on every
+    // navigation — including this hook's own write-through on any sort / page /
+    // filter change. Keying the scope memo on that reference would churn
+    // `allFilters` → the returned tableState → every memo downstream of it.
+    mockSearch = { productId: "prod-1" };
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: SPECS }),
+    );
+    const first = result.current.allFilters;
+
+    mockSearch = { productId: "prod-1" };
+    rerender();
+
+    expect(result.current.allFilters).toBe(first);
+  });
+
+  it("still follows the URL when a scope's value actually changes", () => {
+    mockSearch = { productId: "prod-1" };
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: SPECS }),
+    );
+
+    mockSearch = { productId: "prod-2" };
+    rerender();
+
+    expect(result.current.allFilters).toEqual([
+      { id: "productId", value: "prod-2" },
+    ]);
+  });
+
   it("leaves the URL-only param alone on write-through", () => {
     // No column state can produce `productId`, so the sync must not claim (and
     // therefore delete) its key — the ScopeChip's clear is the only writer.

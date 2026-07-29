@@ -167,9 +167,21 @@ export function useTableState(
   // URL-only scopes are read from the LIVE url rather than seeded into state:
   // the only way to change one is to navigate (the ScopeChip's clear), and the
   // list query has to follow that.
+  //
+  // Keyed on the scope VALUES, never on `search` itself: the router hands back
+  // a fresh `search` object on every navigation — including this hook's own
+  // write-through, which fires on any sort/page/filter change — and depending
+  // on that reference would churn `allFilters`, this hook's returned object,
+  // and every memo downstream of it (`useEntityList`'s `currentFilters`,
+  // `usePaginatedTableCore`'s `filters`). Same reason `projects-dashboard`
+  // keys its filters memo off joined primitives.
+  const urlOnlyKey = JSON.stringify(
+    urlOnlySpecs.map((spec) => search[spec.urlKey ?? spec.columnId] ?? null),
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialized values above, not `search`'s reference, on purpose
   const urlOnlyFilters = useMemo(
     () => decodeFilters(urlOnlySpecs, search),
-    [urlOnlySpecs, search],
+    [urlOnlySpecs, urlOnlyKey],
   );
   const allFilters = useMemo(
     () =>
