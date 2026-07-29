@@ -1425,7 +1425,12 @@ export const auditLog = pgTable(
       .notNull()
       .$type<UserId>()
       .references(() => user.id),
-    source: text("source").notNull().default("ui"), // 'ui', 'csv_import', 'sheets_import', 'api'
+    // Deliberately plain text, not a pg enum: see `auditSourceSchema`, which
+    // allows the application sources plus an open-ended `script:<slug>` for
+    // one-off maintenance scripts. A DB-level enum would have made those writes
+    // fail instead of the reads, which is worse — losing the row loses the
+    // provenance this column exists to record.
+    source: text("source").notNull().default("ui"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [

@@ -326,10 +326,22 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
             <TruncatedList
               items={tags}
               maxItems={2}
+              // Each chip filters the list to its own tag — the fastest way to
+              // get from "this thing is tagged" to "everything it fits".
+              // `stopPropagation` because this table's rows carry
+              // `useEntityPreview`'s onRowClick, and TanStack's Link
+              // preventDefaults without stopping propagation — so without it the
+              // chip would navigate AND open the row's preview sheet. Same guard
+              // as the purchases link below.
               renderItem={(tag) => (
-                <Badge key={tag} variant="outline">
-                  {tag}
-                </Badge>
+                <Link
+                  key={tag}
+                  to="/products"
+                  search={{ tags: tag }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Badge variant="outline">{tag}</Badge>
+                </Link>
               )}
             />
           );

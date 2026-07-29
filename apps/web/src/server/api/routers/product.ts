@@ -31,6 +31,7 @@ import {
   productSummariesInput,
   productSummariesOut,
   productTagOptionsOut,
+  productTagSiblingsOut,
   productTopLevelOut,
   productUpdateData,
   productUpdateInput,
@@ -46,6 +47,7 @@ import {
   getProductByShortcode,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
+  getProductsSharingTags,
   getProductTagOptions,
   productList as productListRepo,
   productSearch,
@@ -360,6 +362,18 @@ const tagOptions = protectedProcedure
     return await getProductTagOptions(ctx.db);
   });
 
+/**
+ * "Fits with this" — every other product sharing a tag. Separate from
+ * `getByID` so the detail page's main payload doesn't grow a join that only
+ * one section reads, and so it re-fetches on its own when tags change.
+ */
+const tagSiblings = protectedProcedure
+  .input(productId)
+  .output(productTagSiblingsOut)
+  .query(async ({ ctx, input }) => {
+    return await getProductsSharingTags(ctx.db, input);
+  });
+
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(productShortcodesInput)
@@ -487,4 +501,5 @@ export const productRouter = createTRPCRouter({
   backfillUPCImages,
   categoryDistribution,
   tagOptions,
+  tagSiblings,
 });
