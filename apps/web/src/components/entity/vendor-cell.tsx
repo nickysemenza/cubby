@@ -37,15 +37,21 @@ function VendorMark({
   vendor: string;
   className?: string;
 }) {
-  const [failed, setFailed] = useState(false);
+  // The failure is remembered per-slug rather than as a bare boolean: this node
+  // is not remounted when a vendor is edited inline (same component instance,
+  // new `vendor` prop), so a boolean set by the *previous* vendor's broken logo
+  // would survive the swap and pin the new vendor to a monogram forever. Keying
+  // the state to the slug it describes self-corrects on every change, with no
+  // effect and no extra render pass.
+  const [failedSlug, setFailedSlug] = useState<string | null>(null);
   const slug = vendorSlug(vendor);
 
   const shared = cn("size-4 shrink-0", className);
 
-  // `failed` covers the offline PWA and a manifest that has drifted ahead of the
-  // bucket; the manifest lookup is what keeps the common logo-less vendor from
-  // costing a failed request in the first place.
-  if (!VENDOR_LOGO_SLUGS.has(slug) || failed) {
+  // The `failedSlug` half covers the offline PWA and a manifest that has drifted
+  // ahead of the bucket; the manifest lookup is what keeps the common logo-less
+  // vendor from costing a failed request in the first place.
+  if (!VENDOR_LOGO_SLUGS.has(slug) || failedSlug === slug) {
     return (
       <span
         aria-hidden
@@ -70,7 +76,7 @@ function VendorMark({
       srcSet={transformedSrcSet(url, MARK_PX)}
       alt=""
       loading="lazy"
-      onError={() => setFailed(true)}
+      onError={() => setFailedSlug(slug)}
       className={cn(
         shared,
         "object-contain grayscale transition-[filter] group-hover/row:grayscale-0 max-sm:grayscale-0",
@@ -88,6 +94,13 @@ function VendorMark({
  * make ~100 rows of local trades anonymous, so those drop the tile and keep the
  * name instead. Detail surfaces leave it off: there the vendor is a labeled
  * field whose value is the name.
+ *
+ * The compact case hides the name with `sr-only`, not `hidden`. The mark is a
+ * decorative `<img alt="">`, so `hidden` would leave the cell with no accessible
+ * name at all below `sm` — visually compact, silent to a screen reader. Keeping
+ * the text in the a11y tree means the name has exactly one source at every
+ * breakpoint, rather than moving into an `alt` that would double-announce on
+ * desktop where the name is already visible.
  */
 export function VendorCell({
   vendor,
@@ -101,7 +114,7 @@ export function VendorCell({
     <Row gap="sm" align="center" className="min-w-0">
       {(!compactOnMobile || logo) && <VendorMark vendor={vendor} />}
       <span
-        className={cn("truncate", compactOnMobile && logo && "max-sm:hidden")}
+        className={cn("truncate", compactOnMobile && logo && "max-sm:sr-only")}
       >
         {vendor}
       </span>
