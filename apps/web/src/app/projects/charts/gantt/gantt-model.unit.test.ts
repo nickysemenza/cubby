@@ -38,6 +38,19 @@ function project(params: {
     endDate: params.endDate ?? null,
     icon: null,
     notes: null,
+    // The Gantt reads `dates.effectiveStart/End` (see gantt-model.ts's
+    // `ownStartDay`/`ownEndDay`), not the raw override columns above — these
+    // fixtures only ever exercise an explicit override, so `effective*`
+    // mirrors `startDate`/`endDate` directly and there's no derived content
+    // to fold in.
+    dates: {
+      derivedStart: params.startDate ?? null,
+      derivedEnd: params.endDate ?? null,
+      effectiveStart: params.startDate ?? null,
+      effectiveEnd: params.endDate ?? null,
+      startSource: params.startDate != null ? "explicit" : "none",
+      endSource: params.endDate != null ? "explicit" : "none",
+    },
     parentProjectName: null,
     childProjectIds: [],
     blockedByIds: [],

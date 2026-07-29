@@ -234,8 +234,8 @@ function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
 
 /**
  * Household-tracker rules in display order (most actionable first) with each
- * rule's subsection title. The section merges the six per-rule slices in this
- * order, then groups the merged list back by title — so the counts stay
+ * rule's subsection title. The section merges the seven per-rule slices in
+ * this order, then groups the merged list back by title — so the counts stay
  * first-class per detector (badge tooltip, MCP `type`) while the page shows one
  * "Tracker" card with a subsection per rule, like the unit-coverage merge.
  */
@@ -246,6 +246,7 @@ const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
   { type: "past_due_planned_purchase", title: "Planned purchases past due" },
   { type: "missing_budget", title: "Missing a cost estimate" },
   { type: "unclassified_purchase", title: "Unclassified purchases" },
+  { type: "date_window_drift", title: "Date window drift" },
 ];
 
 const TRACKER_GROUP_TITLE = Object.fromEntries(
@@ -830,7 +831,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
   section({
     id: "tracker",
     label: "Tracker",
-    // Merge the six household-tracker attention rules (the same items
+    // Merge the seven household-tracker attention rules (the same items
     // /projects?view=overview shows) into one section with a subsection per
     // rule; the per-rule counts stay separate in the schema/badge.
     select: (p) =>
@@ -838,7 +839,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     icon: AlertTriangle,
     title: "Projects, tasks & purchases needing attention",
     description:
-      "Household-tracker items that need a decision: overdue tasks, blocked or stalled projects, planned purchases past their date, and spend with no budget or trade recorded.",
+      "Household-tracker items that need a decision: overdue tasks, blocked or stalled projects, planned purchases past their date, spend with no budget or trade recorded, and a manual date override narrower than the work it hides.",
     emptyMessage: "Nothing in the tracker needs attention.",
     groupBy: (items) => groupBy(items, (i) => TRACKER_GROUP_TITLE[i.type]),
     renderItem: renderTrackerItem,

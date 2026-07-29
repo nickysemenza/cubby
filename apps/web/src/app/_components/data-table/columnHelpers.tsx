@@ -1489,10 +1489,27 @@ export function createPlainDateColumn<
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
     };
+    /**
+     * Render a value DERIVED from the row instead of the raw `row[accessor]`
+     * — e.g. a computed effective date where `accessor` is a manual override
+     * column. The inline editor (when `editable` is set) still opens on and
+     * saves to the raw `row[accessor]`; only the closed-cell display is
+     * overridden, so editing never silently freezes a computed value into a
+     * permanent override. `muted` renders the value as `text-muted-foreground`
+     * (e.g. to mark a value as computed rather than explicitly set) — the repo's
+     * 3-level text hierarchy, not a new opacity tier.
+     */
+    displayValue?: (row: T) => { value: string | null; muted?: boolean };
   },
 ) {
-  const renderValue = (value: string | null) =>
-    value ? format(parsePlainDate(value), "MMM d, yyyy") : <NoneValue />;
+  const renderValue = (value: string | null, muted?: boolean) =>
+    value ? (
+      <span className={muted ? "text-muted-foreground" : undefined}>
+        {format(parsePlainDate(value), "MMM d, yyyy")}
+      </span>
+    ) : (
+      <NoneValue />
+    );
 
   // Copy the raw "YYYY-MM-DD" string; paste only when editable (kind "date").
   const cellData = textCellData<T>(
@@ -1515,22 +1532,37 @@ export function createPlainDateColumn<
     },
     cell: (info) => {
       const value = info.getValue();
+      const row = info.row.original;
+      const display = options?.displayValue?.(row);
 
       if (options?.editable) {
         return (
           <EditableCell
             value={value}
-            onSave={(newVal) =>
-              options.editable!.onSave(newVal, info.row.original)
-            }
-            clipboard={specFromCellData(cellData, info.row.original)}
+            onSave={(newVal) => options.editable!.onSave(newVal, row)}
+            clipboard={specFromCellData(cellData, row)}
             config={{ type: "date" }}
-            renderValue={renderValue}
+            // EditableCell only calls renderValue in closed/display mode (never
+            // while the editor is open), so substituting the row-derived
+            // `display` for its passed-through arg is safe — the editor widget
+            // still gets the raw `value`/`onSave` and is unaffected.
+            //
+            // The arg IS the optimistic post-save value though, so prefer it
+            // when non-null: saving an override shows the new date immediately
+            // instead of waiting for the refetch that recomputes `display`.
+            // Clearing an override yields null, which correctly falls through
+            // to the derived value the row will settle on.
+            renderValue={(optimistic) =>
+              renderValue(
+                optimistic ?? display?.value ?? value,
+                optimistic == null && display?.muted,
+              )
+            }
           />
         );
       }
 
-      return renderValue(value);
+      return renderValue(display?.value ?? value, display?.muted);
     },
   });
 }

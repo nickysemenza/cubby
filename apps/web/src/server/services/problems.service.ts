@@ -528,10 +528,11 @@ const findProductsWithBetterUpcData = async (
   return problems;
 };
 
-// Household-tracker group — the six attention rules the /projects overview
+// Household-tracker group — the seven attention rules the /projects overview
 // already computes (overdue tasks, stalled projects, missing budgets, past-due
-// planned purchases, unclassified purchases, blocked work), promoted to
-// first-class Problems so the navbar badge / homepage banner / MCP see them.
+// planned purchases, unclassified purchases, blocked work, date-window
+// drift), promoted to first-class Problems so the navbar badge / homepage
+// banner / MCP see them.
 // The detection itself stays in the repo (computeAttentionItems); this only
 // splits the flat item list into the per-rule slices, keyed by the shared
 // TRACKER_PROBLEM_KEY_BY_TYPE map so the two can't drift.
@@ -546,6 +547,7 @@ export const findTrackerProblems = async (
     pastDuePlannedPurchases: [],
     unclassifiedPurchases: [],
     blockedWorkProjects: [],
+    projectsWithDateDrift: [],
   };
   for (const item of items) {
     tracker[TRACKER_PROBLEM_KEY_BY_TYPE[item.type]].push(item);

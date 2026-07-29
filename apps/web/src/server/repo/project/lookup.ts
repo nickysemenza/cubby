@@ -20,37 +20,62 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { projectDependencyIds } from "./analytics";
+import { projectContentDates, projectDependencyIds } from "./analytics";
 import {
   dbProjectToAPI,
+  EMPTY_PROJECT_DATE_WINDOW,
   EMPTY_PROJECT_OWN_ROLLUP,
   EMPTY_PROJECT_SUBTREE_ROLLUP,
 } from "./helpers";
 import {
+  aggregateSubtreeDates,
   collectDescendantIds,
   loadProjectSubtreeRollups,
   loadProjectTree,
 } from "./subtree";
 
 /**
- * Lightweight `{id, name}` options for pickers/filter selects — a single
- * indexed query with no rollup/dependency joins. Feeds `project.options`
- * (see `useProjectOptions`), which used to page through the full `list`
- * (rollups + deps) at pageSize 500 just to get names.
+ * Lightweight `{id, name}` options for pickers/filter selects — no
+ * rollup/dependency joins. Feeds `project.options` (see `useProjectOptions`),
+ * which used to page through the full `list` (rollups + deps) at pageSize 500
+ * just to get names.
+ *
+ * Two queries, not one: the dates it carries are the EFFECTIVE window, so it
+ * pays for `projectContentDates` on top of the project scan. That cost buys
+ * correct purchase→project suggestions (`rankProjectSuggestions` ranks by
+ * "was this project running on that date?", and a stale hand-typed window is
+ * exactly what made it miss); the fold itself is pure TS over rows already in
+ * hand. Still nowhere near the `list` call it replaced.
  */
 export const projectNameOptions = async (
   db: Database,
-): Promise<ProjectOptionsOut[]> =>
-  getDb(db)
-    .select({
-      id: project.id,
-      name: project.name,
-      startDate: project.startDate,
-      endDate: project.endDate,
-    })
-    .from(project)
-    .where(notDeleted(project))
-    .orderBy(asc(project.name));
+): Promise<ProjectOptionsOut[]> => {
+  const [rows, contentDates] = await Promise.all([
+    getDb(db)
+      .select({
+        id: project.id,
+        name: project.name,
+        parentProjectId: project.parentProjectId,
+        startDate: project.startDate,
+        endDate: project.endDate,
+      })
+      .from(project)
+      .where(notDeleted(project))
+      .orderBy(asc(project.name)),
+    projectContentDates(db),
+  ]);
+
+  const windows = aggregateSubtreeDates(rows, contentDates);
+  return rows.map((row) => {
+    const window = windows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW;
+    return {
+      id: row.id,
+      name: row.name,
+      effectiveStart: window.effectiveStart,
+      effectiveEnd: window.effectiveEnd,
+    };
+  });
+};
 
 export const projectList = async (
   db: Database,
@@ -95,7 +120,57 @@ export const projectList = async (
     ],
   );
 
-  const orderByArray = buildOrderBy(project, sorts, [...projectSortableFields]);
+  // `startDate` is an override that is usually null now that the window is
+  // derived, so sorting on the raw column would sink most of the table into a
+  // null bucket. Sort on the effective start instead: the override when set,
+  // else the project's own earliest dated task/purchase.
+  //
+  // APPROXIMATION: non-recursive. A parent with no override and no own content
+  // still sorts as null even when its children are dated — matching the true
+  // recursive fold would need a recursive CTE, and at this scale (75 projects,
+  // 15 of them children) it moves nothing. Everything *displayed* comes from
+  // `dates.effectiveStart`, which is fully recursive; this only orders rows.
+  //
+  // `sql.raw` with the alias spelled out by hand, NOT a `sql` template over
+  // Drizzle column refs — same pattern as `resolveProductSort`
+  // (product/crud.ts) and location/crud.ts's "parent" resolver, for the same
+  // reason `buildDashboardProjectWhere` had to drop correlated `EXISTS`
+  // (dashboard-shared.ts). This is fed to `query.project.findMany`, whose
+  // alias mapper rewrites EVERY column ref inside the clause — including ones
+  // belonging to Task/Purchase — to the root alias, emitting
+  // `min("project"."dueDate") from "Task"` and a self-referential
+  // `"project"."projectId" = "project"."id"`. That is not a subtle ordering
+  // bug: the query throws, and `startDate` is this table's DEFAULT sort.
+  // Exercised by project.integration.test.ts's "sorts by effective start".
+  //
+  // The `deletedAt IS NULL` guards below are hand-written for the same reason
+  // and are load-bearing — `check-soft-delete-filters.mjs` only scans
+  // `exists`/`notExists` bodies, so it cannot see them.
+  //
+  // The two content sources are combined with LEAST, not chained into the
+  // coalesce: a project with both tasks and purchases must sort by the
+  // EARLIER of the two, and `coalesce(taskMin, purchaseMin)` would take the
+  // task min whenever any task exists — silently ignoring an earlier purchase
+  // and disagreeing with the `dates.effectiveStart` the row displays.
+  // (LEAST ignores NULL args and is NULL only when all of them are.)
+  const effectiveStartSortSql = (direction: SortParams["direction"]) =>
+    sql.raw(
+      `coalesce("project"."startDate", LEAST(` +
+        `(SELECT min(t."dueDate") FROM "Task" t ` +
+        `WHERE t."projectId" = "project"."id" AND t."deletedAt" IS NULL), ` +
+        `(SELECT min(pu."date") FROM "Purchase" pu ` +
+        `WHERE pu."projectId" = "project"."id" AND pu."deletedAt" IS NULL))) ` +
+        `${direction === "asc" ? "asc" : "desc"} nulls last`,
+    );
+  const orderByArray = buildOrderBy(
+    project,
+    sorts,
+    [...projectSortableFields],
+    {
+      resolve: (s) =>
+        s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
+    },
+  );
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount(
@@ -110,21 +185,23 @@ export const projectList = async (
 
   const ids = rows.map((r) => r.id);
 
-  const [{ ownRollups, subtreeRollups }, deps] = await Promise.all([
-    loadProjectSubtreeRollups(db, ids, tree),
-    projectDependencyIds(db, ids),
-  ]);
+  const [{ ownRollups, subtreeRollups, dateWindows }, deps] = await Promise.all(
+    [loadProjectSubtreeRollups(db, ids, tree), projectDependencyIds(db, ids)],
+  );
 
   const data = rows.map((row) =>
-    dbProjectToAPI(
+    dbProjectToAPI({
       row,
-      ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
-      subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
-      deps.blockedBy.get(row.id) ?? [],
-      deps.blocking.get(row.id) ?? [],
-      row.parentProjectId ? (nameById.get(row.parentProjectId) ?? null) : null,
-      childrenByParent.get(row.id) ?? [],
-    ),
+      ownRollup: ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+      subtreeRollup: subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
+      dates: dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
+      blockedByIds: deps.blockedBy.get(row.id) ?? [],
+      blockingIds: deps.blocking.get(row.id) ?? [],
+      parentProjectName: row.parentProjectId
+        ? (nameById.get(row.parentProjectId) ?? null)
+        : null,
+      childProjectIds: childrenByParent.get(row.id) ?? [],
+    }),
   );
 
   return { data, count };

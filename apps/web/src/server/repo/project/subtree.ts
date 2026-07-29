@@ -18,14 +18,19 @@
  * `computeAttentionItems` re-derived the same thing independently).
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectDateWindow } from "@cubby/schemas/project";
 import { asc } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { projectRollups } from "./analytics";
+import { projectContentDates, projectRollups } from "./analytics";
 import {
+  EMPTY_PROJECT_CONTENT_DATES,
   EMPTY_PROJECT_OWN_ROLLUP,
+  maxPlainDate,
+  minPlainDate,
+  type ProjectContentDates,
   type ProjectOwnRollup,
   type ProjectSubtreeRollup,
 } from "./helpers";
@@ -35,6 +40,9 @@ export type ProjectParentRow = {
   name: string;
   parentProjectId: ProjectId | null;
   costEstimate: number | null;
+  /** Manual overrides on the derived window — see `aggregateSubtreeDates`. */
+  startDate: string | null;
+  endDate: string | null;
 };
 
 /** Depth cap for tree walks (children-map traversal, ancestor walks) —
@@ -55,6 +63,8 @@ export async function allProjectParentRows(
       name: project.name,
       parentProjectId: project.parentProjectId,
       costEstimate: project.costEstimate,
+      startDate: project.startDate,
+      endDate: project.endDate,
     })
     .from(project)
     .where(notDeleted(project))
@@ -189,6 +199,91 @@ function aggregateSubtreeRollups(
   return out;
 }
 
+/**
+ * Post-order date fold, the mirror of {@link aggregateSubtreeRollups}:
+ *
+ *   derived(node)   = content(node) ∪ effective(child) for every live child
+ *   effective(node) = the node's explicit `startDate`/`endDate` override when
+ *                     set, else derived(node) — resolved per side, so an
+ *                     explicit start can pair with a derived end
+ *
+ * Children contribute their **effective** window, not their content: an
+ * override on a sub-project is a statement about that sub-project's real span,
+ * so it must propagate up rather than being bypassed by the raw task dates
+ * underneath it.
+ *
+ * A node's own override deliberately does NOT widen to cover its descendants —
+ * a too-narrow override stays visible as-is and is reported by the
+ * `date_window_drift` attention rule instead. Silently widening it would erase
+ * the only signal that the stored value is stale.
+ *
+ * Memoized and depth-capped exactly like the rollup fold, so a corrupt cyclic
+ * parent chain terminates at `MAX_PROJECT_TREE_DEPTH` rather than recursing
+ * forever. `ownDates` need only cover the ids the caller fetched; anything
+ * outside it folds as "no content", which is harmless for the same reason it is
+ * there — callers only read ids whose full descendant set was loaded.
+ */
+export function aggregateSubtreeDates(
+  projects: ReadonlyArray<
+    Pick<ProjectParentRow, "id" | "parentProjectId" | "startDate" | "endDate">
+  >,
+  ownDates: Map<ProjectId, ProjectContentDates>,
+): Map<ProjectId, ProjectDateWindow> {
+  const childrenByParent = buildChildrenMap(projects);
+  const rowById = new Map(projects.map((p) => [p.id, p]));
+  const memo = new Map<ProjectId, ProjectDateWindow>();
+
+  function computeFor(id: ProjectId, depth: number): ProjectDateWindow {
+    const cached = memo.get(id);
+    if (cached) return cached;
+
+    const own = ownDates.get(id) ?? EMPTY_PROJECT_CONTENT_DATES;
+    let derivedStart = own.contentStart;
+    let derivedEnd = own.contentEnd;
+
+    if (depth < MAX_PROJECT_TREE_DEPTH) {
+      for (const childId of childrenByParent.get(id) ?? []) {
+        const child = computeFor(childId, depth + 1);
+        derivedStart = minPlainDate(derivedStart, child.effectiveStart);
+        derivedEnd = maxPlainDate(derivedEnd, child.effectiveEnd);
+      }
+    }
+
+    const row = rowById.get(id);
+    const explicitStart = row?.startDate ?? null;
+    const explicitEnd = row?.endDate ?? null;
+    const effectiveStart = explicitStart ?? derivedStart;
+    const effectiveEnd = explicitEnd ?? derivedEnd;
+
+    const result: ProjectDateWindow = {
+      derivedStart,
+      derivedEnd,
+      effectiveStart,
+      effectiveEnd,
+      startSource:
+        explicitStart != null
+          ? "explicit"
+          : derivedStart != null
+            ? "derived"
+            : "none",
+      endSource:
+        explicitEnd != null
+          ? "explicit"
+          : derivedEnd != null
+            ? "derived"
+            : "none",
+    };
+    memo.set(id, result);
+    return result;
+  }
+
+  const out = new Map<ProjectId, ProjectDateWindow>();
+  for (const p of projects) {
+    out.set(p.id, computeFor(p.id, 0));
+  }
+  return out;
+}
+
 /** The whole live project tree in the three shapes callers read it in. */
 export type ProjectTree = {
   allRows: ProjectParentRow[];
@@ -196,10 +291,15 @@ export type ProjectTree = {
   nameById: Map<ProjectId, string>;
 };
 
-/** {@link ProjectTree} plus the OWN and SUBTREE rollups for the loaded ids. */
+/**
+ * {@link ProjectTree} plus the OWN and SUBTREE rollups for the loaded ids, and
+ * the folded date window ({@link aggregateSubtreeDates}) for every project in
+ * the tree.
+ */
 export type ProjectSubtreeRollups = ProjectTree & {
   ownRollups: Map<ProjectId, ProjectOwnRollup>;
   subtreeRollups: Map<ProjectId, ProjectSubtreeRollup>;
+  dateWindows: Map<ProjectId, ProjectDateWindow>;
 };
 
 /**
@@ -220,8 +320,9 @@ export async function loadProjectTree(db: Database): Promise<ProjectTree> {
 
 /**
  * The whole load pattern in one call: tree → descendant ids → batched OWN
- * rollups → subtree aggregation. Three queries total (one for the tree, two
- * inside `projectRollups`), regardless of how many projects are involved.
+ * rollups + content dates → subtree aggregation. Four queries total (one for
+ * the tree, two inside `projectRollups`, one for `projectContentDates`),
+ * regardless of how many projects are involved.
  *
  * `ids` scopes the (relatively expensive) OWN-rollup fetch to those projects
  * plus every live descendant — the minimum set whose subtree totals are then
@@ -252,10 +353,18 @@ export async function loadProjectSubtreeRollups(
           ),
         ]);
 
-  const ownRollups = await projectRollups(db, rollupIds);
+  const [ownRollups, contentDates] = await Promise.all([
+    projectRollups(db, rollupIds),
+    // Unscoped, unlike the rollups: `aggregateSubtreeDates` emits a window for
+    // every row in `allRows`, so scoping the content scan to `rollupIds` would
+    // leave the rest of the tree looking undated. It is one grouped query
+    // either way — the date columns are indexed and the tables are small.
+    projectContentDates(db),
+  ]);
   return {
     ...loaded,
     ownRollups,
     subtreeRollups: aggregateSubtreeRollups(loaded.allRows, ownRollups),
+    dateWindows: aggregateSubtreeDates(loaded.allRows, contentDates),
   };
 }

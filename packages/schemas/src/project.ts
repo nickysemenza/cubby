@@ -156,8 +156,16 @@ const projectFields = {
   // existing `projectId`. Cycle/self-parent guards live in
   // repo/project/crud.ts (depth is otherwise unrestricted).
   parentProjectId: projectId.nullable(),
-  startDate: plainDate.nullable(),
-  endDate: plainDate.nullable(),
+  // Manual OVERRIDES on the derived window, not the window itself. A project's
+  // dates are normally rolled up from its own tasks/purchases plus every live
+  // sub-project's effective window (see `projectDateWindow`); these two columns
+  // only take over when explicitly set — for a project with no content yet, or
+  // a deliberate plan wider than what's been recorded. Read
+  // `dates.effectiveStart` / `dates.effectiveEnd`, never these, when rendering.
+  startDate: plainDate
+    .nullable()
+    .describe("Manual start override; usually null"),
+  endDate: plainDate.nullable().describe("Manual end override; usually null"),
   icon: z.string().nullable().describe("Emoji shown next to the name"),
   notes: z.string().nullable().describe("Freeform markdown"),
 };
@@ -205,9 +213,12 @@ export const projectOptionsOut = z.object({
   id: projectId,
   name: z.string(),
   // Carried so a picker can rank by "was this project running on that date?"
-  // without a second round trip — see rankProjectSuggestions.
-  startDate: plainDate.nullable(),
-  endDate: plainDate.nullable(),
+  // without a second round trip — see rankProjectSuggestions. These are the
+  // EFFECTIVE bounds (override when set, else derived from tasks/purchases/
+  // sub-projects), deliberately not the raw override columns: ranking a
+  // purchase against a stale hand-typed window is what made suggestions miss.
+  effectiveStart: plainDate.nullable(),
+  effectiveEnd: plainDate.nullable(),
 });
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
@@ -247,6 +258,35 @@ export type ProjectSortField = (typeof projectSortableFields)[number];
  *     leaf, so a leaf's `subtree` always equals its own numbers). Computed
  *     in TS at read time, never denormalized onto the row.
  */
+/**
+ * A project's date window, resolved at read time (see repo/project/subtree.ts's
+ * `aggregateSubtreeDates`) and never denormalized — same contract as
+ * `projectRollup` below.
+ *
+ *   content(node)   = min/max over the node's OWN live tasks
+ *                     (`dueDate` … `dueEndDate ?? dueDate`) and purchases (`date`)
+ *   derived(node)   = content(node) ∪ effective(child) for every live child
+ *   effective(node) = the explicit `startDate`/`endDate` override when set,
+ *                     otherwise derived(node)
+ *
+ * Start and end resolve **independently**: a project may carry an explicit start
+ * and a derived end, hence the two separate `*Source` discriminators. Note that
+ * an override wins even when it's *narrower* than the derived window — that
+ * disagreement is surfaced as a `date_window_drift` attention item rather than
+ * silently widened, so the stored intent stays visible.
+ *
+ * Every rendering surface reads `effectiveStart`/`effectiveEnd`.
+ */
+export const projectDateWindow = z.object({
+  derivedStart: plainDate.nullable(),
+  derivedEnd: plainDate.nullable(),
+  effectiveStart: plainDate.nullable(),
+  effectiveEnd: plainDate.nullable(),
+  startSource: z.enum(["explicit", "derived", "none"]),
+  endSource: z.enum(["explicit", "derived", "none"]),
+});
+export type ProjectDateWindow = z.infer<typeof projectDateWindow>;
+
 export const projectRollup = z.object({
   spent: z
     .number()
@@ -300,6 +340,7 @@ export const projectOut = z.object({
   blockingIds: z.array(projectId),
   ...timestampedFields,
   rollup: projectRollup,
+  dates: projectDateWindow,
 });
 export type ProjectOut = z.infer<typeof projectOut>;
 
@@ -921,8 +962,15 @@ export const purchaseMcpListOut = createPaginatedResponseSchema(purchaseOut);
 /**
  * Shared scope filters for both dashboard endpoints. Empty/omitted
  * `statusScope` means **no status condition** — all four statuses, not just
- * the live ones. While a date window (`dateFrom`/`dateTo`) is set, projects
- * with both `startDate` and `endDate` null are dropped.
+ * the live ones.
+ *
+ * A date window (`dateFrom`/`dateTo`) matches a project whose explicit
+ * `startDate`/`endDate` override overlaps it **or** which owns a dated task or
+ * purchase inside it — so a project with both override columns null is no
+ * longer dropped on that basis alone. Only a project with neither an override
+ * nor any dated content of its own falls out, and exactly those are counted as
+ * `hiddenByDate.projects`. Non-recursive: a parent matches on its own content,
+ * not its children's (see repo/project/dashboard-shared.ts).
  */
 const projectDashboardFilterFields = {
   statusScope: z.array(projectStatusSchema).optional(),
@@ -961,6 +1009,10 @@ export const projectAttentionTypeValues = [
   "past_due_planned_purchase",
   "unclassified_purchase",
   "blocked_work",
+  // A manual startDate/endDate override that now hides real work — the derived
+  // window (tasks, purchases, sub-projects) falls OUTSIDE it. Only fires when
+  // the override is too narrow; a deliberately wider one is intent, not drift.
+  "date_window_drift",
 ] as const;
 export const projectAttentionTypeSchema = z.enum(projectAttentionTypeValues);
 export type ProjectAttentionType = z.infer<typeof projectAttentionTypeSchema>;

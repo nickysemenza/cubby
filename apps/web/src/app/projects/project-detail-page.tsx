@@ -245,6 +245,65 @@ function EditableLocations({
 }
 
 /**
+ * Start/End date spec-plate field: displays the EFFECTIVE bound (derived
+ * rollup or override, whichever wins), but the inline editor opens on and
+ * saves to the raw override column (`rawOverride`) — editing a derived value
+ * and hitting save would silently freeze a computed date into a permanent
+ * override, which is the exact bug the effective/override split exists to
+ * prevent. A "derived" effective value renders muted; when the override is
+ * explicit AND disagrees with what the content would otherwise derive to, the
+ * derived bound is surfaced underneath as secondary text so the divergence
+ * (a `date_window_drift` attention candidate) stays visible instead of
+ * silently shadowed.
+ */
+function ProjectDateField({
+  rawOverride,
+  effective,
+  derived,
+  source,
+  onSave,
+}: {
+  rawOverride: string | null;
+  effective: string | null;
+  derived: string | null;
+  source: "explicit" | "derived" | "none";
+  onSave: (value: string | null) => Promise<void>;
+}) {
+  const drifted =
+    source === "explicit" && derived != null && derived !== effective;
+
+  return (
+    <Stack gap="tight">
+      <EditableCell
+        value={rawOverride}
+        config={{ type: "date" }}
+        onSave={onSave}
+        // `renderValue`'s arg is the optimistic post-save override, so prefer
+        // it when non-null — the new date shows immediately rather than
+        // waiting for the refetch that recomputes `effective`. Clearing yields
+        // null, which correctly falls through to the derived value.
+        renderValue={(optimistic) => (
+          <span
+            className={
+              optimistic == null && source === "derived"
+                ? "text-muted-foreground"
+                : undefined
+            }
+          >
+            {optimistic ?? effective ?? <NoneValue />}
+          </span>
+        )}
+      />
+      {drifted && (
+        <span className="text-2xs text-muted-foreground">
+          derived: {derived}
+        </span>
+      )}
+    </Stack>
+  );
+}
+
+/**
  * Direct children (arbitrary-depth sub-projects, but this section only lists
  * one level down — a child's own children show on ITS detail page) — name
  * link, status badge, own spent vs costEstimate. Always rendered (even with
@@ -682,34 +741,41 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       ),
     },
     {
+      // Displays the EFFECTIVE start (rolled up from tasks/purchases/live
+      // sub-projects, or the override when set); the editor still opens on
+      // and saves to the raw `startDate` override column, never the derived
+      // value — see `projectDateWindow`'s doc comment in
+      // packages/schemas/src/project.ts.
       label: "Start date",
       value: (
-        <EditableCell
-          value={project.startDate}
-          config={{ type: "date" }}
+        <ProjectDateField
+          rawOverride={project.startDate}
+          effective={project.dates.effectiveStart}
+          derived={project.dates.derivedStart}
+          source={project.dates.startSource}
           onSave={async (startDate) => {
             await updateMutation.mutateAsync({
               id: project.id,
               data: { startDate },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
         />
       ),
     },
     {
       label: "End date",
       value: (
-        <EditableCell
-          value={project.endDate}
-          config={{ type: "date" }}
+        <ProjectDateField
+          rawOverride={project.endDate}
+          effective={project.dates.effectiveEnd}
+          derived={project.dates.derivedEnd}
+          source={project.dates.endSource}
           onSave={async (endDate) => {
             await updateMutation.mutateAsync({
               id: project.id,
               data: { endDate },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
         />
       ),
     },

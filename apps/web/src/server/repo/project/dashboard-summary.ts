@@ -47,6 +47,7 @@ import {
 } from "./dashboard-shared";
 import {
   dbProjectToAPI,
+  EMPTY_PROJECT_DATE_WINDOW,
   EMPTY_PROJECT_OWN_ROLLUP,
   EMPTY_PROJECT_SUBTREE_ROLLUP,
 } from "./helpers";
@@ -83,8 +84,13 @@ export async function projectDashboardSummary(
   // page-scoped is free here for the same reason: attention already needed
   // every id, and a superset never changes a page row's subtree numbers.
   const subtreeLoad = await loadProjectSubtreeRollups(db);
-  const { childrenByParent, nameById, ownRollups, subtreeRollups } =
-    subtreeLoad;
+  const {
+    childrenByParent,
+    nameById,
+    ownRollups,
+    subtreeRollups,
+    dateWindows,
+  } = subtreeLoad;
 
   // Carries status + kind/location + the date window (see dashboard-shared.ts).
   const scopedWhere = buildDashboardProjectWhere(filters);
@@ -268,15 +274,18 @@ export async function projectDashboardSummary(
   ]);
 
   const projects = projectRows.map((row) =>
-    dbProjectToAPI(
+    dbProjectToAPI({
       row,
-      ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
-      subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
-      deps.blockedBy.get(row.id) ?? [],
-      deps.blocking.get(row.id) ?? [],
-      row.parentProjectId ? (nameById.get(row.parentProjectId) ?? null) : null,
-      childrenByParent.get(row.id) ?? [],
-    ),
+      ownRollup: ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+      subtreeRollup: subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
+      dates: dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
+      blockedByIds: deps.blockedBy.get(row.id) ?? [],
+      blockingIds: deps.blocking.get(row.id) ?? [],
+      parentProjectName: row.parentProjectId
+        ? (nameById.get(row.parentProjectId) ?? null)
+        : null,
+      childProjectIds: childrenByParent.get(row.id) ?? [],
+    }),
   );
 
   // Every non-done top-level task on a scoped project — exactly

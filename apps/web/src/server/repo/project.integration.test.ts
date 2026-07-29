@@ -21,6 +21,11 @@ import {
   projectPortfolioAnalytics,
   updateProject,
 } from "./project";
+import { EMPTY_PROJECT_CONTENT_DATES } from "./project/helpers";
+import {
+  aggregateSubtreeDates,
+  type ProjectParentRow,
+} from "./project/subtree";
 import { createPurchase, purchaseList } from "./purchase";
 import { createTask, updateTask } from "./task";
 
@@ -895,6 +900,278 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 });
 
+describe("project repository — date windows (derivation)", () => {
+  const ctx = withTestDb();
+
+  it("derives dates purely from own content when no override is set", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "dates content only" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "dates content task",
+        projectId: project.id,
+        dueDate: "2024-02-01",
+        dueEndDate: "2024-02-03",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "dates content purchase",
+        projectId: project.id,
+        cost: 10,
+        date: "2024-01-15",
+      }),
+      ctx.actor,
+    );
+
+    const after = await getProjectByID(ctx.db, project.id);
+    expect(after.dates).toEqual({
+      derivedStart: "2024-01-15",
+      derivedEnd: "2024-02-03",
+      effectiveStart: "2024-01-15",
+      effectiveEnd: "2024-02-03",
+      startSource: "derived",
+      endSource: "derived",
+    });
+  });
+
+  it("resolves start and end independently: an explicit start overrides while a null end still derives", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "dates per-side override",
+        startDate: "2024-01-01",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "per-side task",
+        projectId: project.id,
+        dueDate: "2024-03-01",
+      }),
+      ctx.actor,
+    );
+
+    const after = await getProjectByID(ctx.db, project.id);
+    expect(after.dates.startSource).toBe("explicit");
+    expect(after.dates.effectiveStart).toBe("2024-01-01");
+    expect(after.dates.endSource).toBe("derived");
+    expect(after.dates.effectiveEnd).toBe("2024-03-01");
+  });
+
+  it("propagates a child's OVERRIDE into the parent's derived window, not the child's raw content dates", async () => {
+    const parent = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "dates parent propagation" }),
+      ctx.actor,
+    );
+    const child = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "dates child propagation",
+        parentProjectId: parent.id,
+        // A deliberate forward override, wider than the child's own dated
+        // work below — the parent should see THIS, not the narrower raw date.
+        endDate: "2025-12-31",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "child narrow task",
+        projectId: child.id,
+        dueDate: "2024-01-05",
+      }),
+      ctx.actor,
+    );
+
+    const parentAfter = await getProjectByID(ctx.db, parent.id);
+    expect(parentAfter.dates.derivedEnd).toBe("2025-12-31");
+    expect(parentAfter.dates.endSource).toBe("derived");
+  });
+
+  it("returns an all-null date window with 'none' sources for a project with no content and no override", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "dates empty" }),
+      ctx.actor,
+    );
+    const after = await getProjectByID(ctx.db, project.id);
+    expect(after.dates).toEqual({
+      derivedStart: null,
+      derivedEnd: null,
+      effectiveStart: null,
+      effectiveEnd: null,
+      startSource: "none",
+      endSource: "none",
+    });
+  });
+
+  // The create/update cycle guard (crud.ts's `wouldCreateProjectCycle`) means
+  // a cyclic parent chain can never actually be persisted through the repo —
+  // so this exercises `aggregateSubtreeDates` directly with a hand-built
+  // cyclic row pair, the same white-box approach gantt-model.unit.test.ts and
+  // project-tree.unit.test.ts use for their own cycle-termination tests.
+  it("does not hang on a cyclic parent chain — depth-capped at MAX_PROJECT_TREE_DEPTH", () => {
+    const a: ProjectParentRow = {
+      id: unsafeProjectId("cycle-a"),
+      name: "cycle a",
+      parentProjectId: unsafeProjectId("cycle-b"),
+      costEstimate: null,
+      startDate: null,
+      endDate: null,
+    };
+    const b: ProjectParentRow = {
+      id: unsafeProjectId("cycle-b"),
+      name: "cycle b",
+      parentProjectId: unsafeProjectId("cycle-a"),
+      costEstimate: null,
+      startDate: null,
+      endDate: null,
+    };
+    const ownDates = new Map([
+      [a.id, { contentStart: "2024-01-05", contentEnd: "2024-01-05" }],
+      [b.id, EMPTY_PROJECT_CONTENT_DATES],
+    ]);
+
+    const result = aggregateSubtreeDates([a, b], ownDates);
+
+    // The depth cap still lets the fold see all the way around the 2-cycle
+    // (well under 100 hops), so both nodes converge on the same union of
+    // reachable content — min/max folding is idempotent, so the eventual
+    // truncation at the cap doesn't lose either side's real date.
+    const expected = {
+      derivedStart: "2024-01-05",
+      derivedEnd: "2024-01-05",
+      effectiveStart: "2024-01-05",
+      effectiveEnd: "2024-01-05",
+      startSource: "derived",
+      endSource: "derived",
+    };
+    expect(result.get(a.id)).toEqual(expected);
+    expect(result.get(b.id)).toEqual(expected);
+  });
+
+  /**
+   * Regression: the `startDate` sort resolver is a correlated sub-select fed
+   * to `query.project.findMany`, whose alias mapper rewrites every column ref
+   * inside the clause to the root alias — a `sql` template over Drizzle column
+   * refs emitted `min("project"."dueDate") from "Task"` and threw at runtime.
+   * It shipped broken because nothing exercised this sort, and `startDate` is
+   * the projects table's DEFAULT sort. It must also sort by the EARLIER of the
+   * task and purchase mins (LEAST, not a coalesce chain) so the ordering
+   * agrees with the `dates.effectiveStart` each row displays.
+   */
+  it("sorts by effective start, folding override and both content sources", async () => {
+    // Override far in the past — must sort first ascending even though its
+    // own content is much later.
+    const overridden = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sort override early",
+        startDate: "2001-01-01",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "sort override task",
+        projectId: overridden.id,
+        dueDate: "2024-09-01",
+      }),
+      ctx.actor,
+    );
+
+    // No override, and its PURCHASE predates its task — the coalesce-chain bug
+    // sorted this by the task min (2024-08-01) instead of 2024-03-01.
+    const derived = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "sort derived middle" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "sort derived task",
+        projectId: derived.id,
+        dueDate: "2024-08-01",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "sort derived purchase",
+        projectId: derived.id,
+        cost: 5,
+        date: "2024-03-01",
+      }),
+      ctx.actor,
+    );
+
+    // Neither override nor content — sorts last in BOTH directions (the
+    // house-wide nulls-last convention).
+    const undated = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "sort undated" }),
+      ctx.actor,
+    );
+
+    const page = { pageIndex: 0, pageSize: 100 };
+    const asc = await projectList(
+      ctx.db,
+      {},
+      [{ orderBy: "startDate", direction: "asc" }],
+      page,
+    );
+    const desc = await projectList(
+      ctx.db,
+      {},
+      [{ orderBy: "startDate", direction: "desc" }],
+      page,
+    );
+
+    const positions = (rows: { id: string }[]) => ({
+      overridden: rows.findIndex((r) => r.id === overridden.id),
+      derived: rows.findIndex((r) => r.id === derived.id),
+      undated: rows.findIndex((r) => r.id === undated.id),
+    });
+
+    const ascPos = positions(asc.data);
+    expect(ascPos.overridden).toBeLessThan(ascPos.derived);
+    expect(ascPos.derived).toBeLessThan(ascPos.undated);
+
+    const descPos = positions(desc.data);
+    expect(descPos.derived).toBeLessThan(descPos.overridden);
+    expect(descPos.overridden).toBeLessThan(descPos.undated);
+
+    // The sort key and the displayed window agree: the derived row's start is
+    // the purchase date, not the later task date.
+    expect(
+      asc.data.find((r) => r.id === derived.id)?.dates.effectiveStart,
+    ).toBe("2024-03-01");
+  });
+});
+
 describe("project dashboard — attention detector + summary", () => {
   const ctx = withTestDb();
 
@@ -992,6 +1269,114 @@ describe("project dashboard — attention detector + summary", () => {
       .map((i) => i.entityId);
     expect(blockedWorkIds).toContain(blockedProject.id);
     expect(blockedWorkIds).not.toContain(unblockedProject.id);
+  });
+
+  it("flags date_window_drift on both a too-late start and a too-early end", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention drift both",
+        startDate: "2024-06-01", // after the earliest dated work below
+        endDate: "2024-06-10", // before the latest dated work below
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "drift early task",
+        projectId: project.id,
+        dueDate: "2024-01-01",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "drift late purchase",
+        projectId: project.id,
+        cost: 10,
+        date: "2024-12-31",
+      }),
+      ctx.actor,
+    );
+
+    const items = await computeAttentionItems(ctx.db);
+    const drift = items.filter(
+      (i) => i.type === "date_window_drift" && i.entityId === project.id,
+    );
+    expect(drift).toHaveLength(2);
+    expect(drift.map((d) => d.date).sort()).toEqual([
+      "2024-01-01",
+      "2024-12-31",
+    ]);
+    expect(drift.map((d) => d.severity)).toEqual(["info", "info"]);
+    expect(drift.map((d) => d.href)).toEqual([
+      `/projects/${project.id}`,
+      `/projects/${project.id}`,
+    ]);
+    const startItem = drift.find((d) => d.date === "2024-01-01");
+    expect(startItem?.description).toBe(
+      "Start date 2024-06-01 is after the earliest dated work (2024-01-01)",
+    );
+    const endItem = drift.find((d) => d.date === "2024-12-31");
+    expect(endItem?.description).toBe(
+      "End date 2024-06-10 is before the latest dated work (2024-12-31)",
+    );
+  });
+
+  it("does not flag date_window_drift when the override is wider than derived, or exactly equal to it", async () => {
+    const wider = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention drift wider",
+        // Deliberate forward/backward intent — wider than any dated work, not
+        // drift. (Mirrors the real "Wedding" project's forward endDate.)
+        startDate: "2020-01-01",
+        endDate: "2030-01-01",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "drift wider task",
+        projectId: wider.id,
+        dueDate: "2024-05-01",
+      }),
+      ctx.actor,
+    );
+
+    const exact = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "attention drift exact",
+        startDate: "2024-05-01",
+        endDate: "2024-05-01",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "drift exact task",
+        projectId: exact.id,
+        dueDate: "2024-05-01",
+      }),
+      ctx.actor,
+    );
+
+    const items = await computeAttentionItems(ctx.db);
+    const driftIds = items
+      .filter((i) => i.type === "date_window_drift")
+      .map((i) => i.entityId);
+    expect(driftIds).not.toContain(wider.id);
+    expect(driftIds).not.toContain(exact.id);
   });
 
   it("an omitted statusScope includes `done` projects in the list and in actualSpend/committedSpend", async () => {
