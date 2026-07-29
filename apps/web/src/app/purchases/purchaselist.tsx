@@ -1,4 +1,4 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -19,11 +19,6 @@ import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
-import { getEntityFilters } from "~/entities/filter-manifest";
-import {
-  buildFiltersFromManifest,
-  filterGetterFromColumnFilters,
-} from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -342,8 +337,13 @@ export function PurchaseList() {
 
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 
+  // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
+  // whose input is a union with tRPC's `skipToken` symbol, so it would land on
+  // `unknown` — and `currentFilters` goes straight to `purchase.analytics`,
+  // which wants the real shape.
   const {
     table,
+    currentFilters,
     isLoading,
     error,
     timing,
@@ -352,7 +352,7 @@ export function PurchaseList() {
     infiniteScroll,
     refreshControls,
     totalCount,
-  } = useEntityList({
+  } = useEntityList<PurchaseOut, PurchaseFilters>({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
     filterOptions: projectFilterOptions,
@@ -369,18 +369,10 @@ export function PurchaseList() {
   });
   usePageCount(totalCount);
 
-  // Mirror the table's active filters into `PurchaseFilters` — drives the
-  // ledger's compact totals row (`purchase.analytics`) below.
-  const columnFilters = table.getState().columnFilters;
-  const currentFilters = useMemo(
-    () =>
-      buildFiltersFromManifest(
-        getEntityFilters("purchase"),
-        filterGetterFromColumnFilters(columnFilters),
-      ),
-    [columnFilters],
-  );
-
+  // `currentFilters` is the ledger query's own filter object — including the
+  // URL-only `?productId=` / `?order=` scopes, which never enter the table's
+  // column filters. Reusing it (rather than rebuilding from table state) is
+  // what keeps this compact totals row reporting on exactly the rows below it.
   const analyticsQuery = useQuery({
     ...api.purchase.analytics.queryOptions(currentFilters),
     placeholderData: keepPreviousData,

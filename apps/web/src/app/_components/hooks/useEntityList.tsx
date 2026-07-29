@@ -9,7 +9,10 @@ import { toast } from "sonner";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { buildFiltersFromManifest } from "~/entities/filters";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+} from "~/entities/filters";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { GroupConfig } from "../data-table/useGroupedList";
@@ -120,9 +123,16 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   };
 }
 
-export interface UseEntityListReturn<TData> {
+export interface UseEntityListReturn<TData, TFilters = unknown> {
   /** Configured table instance */
   table: Table<TData>;
+  /**
+   * The filter object the list query is running with (manifest-derived state
+   * plus `extraFilters`). For a page that must call a second procedure over
+   * the SAME filtered set — the purchases ledger's totals row — so it can't
+   * drift from the table's own.
+   */
+  currentFilters: TFilters;
   /** Loaded unit mappings map (id -> mappings) */
   mappingsMap: Record<string, UnitMapping[]>;
   /** Raw data array (for edge cases like card view) */
@@ -191,7 +201,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   nameSuffix,
   hiddenFilterColumns,
   groupConfig,
-}: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
+}: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<
+  TData,
+  TFilters
+> {
   const [grouped, setGrouped] = useState(false);
 
   const onGroupedChange = useCallback((value: boolean) => {
@@ -258,14 +271,12 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       ({
         ...buildFiltersFromManifest(
           getEntityFilters(entity),
+          // `allFilters`, not `columnFilters` — a URL-only scope (`?productId=`)
+          // never enters the table's state, but still has to reach the server.
           // Reads raw state rather than `getColumnFilter`, which deliberately
           // throws on an array — the builder is the one caller that handles
           // both shapes, per each spec's `kind`.
-          (columnId) =>
-            ts.columnFilters.find((f) => f.id === columnId)?.value as
-              | string
-              | string[]
-              | undefined,
+          filterGetterFromColumnFilters(ts.allFilters),
         ),
         ...extraFilters,
       }) as TFilters,
@@ -273,6 +284,16 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   );
 
   const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;
+
+  // The exact filter object the list query runs with. Returned so a page
+  // needing the same set (the purchases ledger's totals row calls
+  // `purchase.analytics` with it) reads it rather than rebuilding it from
+  // table state — two builds that disagree by so much as a scalar-vs-array
+  // shape open a second React Query cache entry for identical results.
+  const currentFilters = useMemo(
+    () => effectiveBuildFilters(tableState),
+    [effectiveBuildFilters, tableState],
+  );
 
   const infiniteResult = useInfiniteTableList<TFilters, TData>({
     queryOptions,
@@ -402,6 +423,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
   return {
     table,
+    currentFilters,
     mappingsMap,
     data,
     isLoading,

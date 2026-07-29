@@ -17,6 +17,7 @@ import {
   decodeFilters,
   encodeFilters,
   type FilterSpecCore,
+  partitionFilterSpecs,
 } from "~/entities/filters";
 import {
   buildSortParams,
@@ -88,7 +89,18 @@ export interface TableStateReturn {
   setSorting: (
     value: SortingState | ((old: SortingState) => SortingState),
   ) => void;
+  /**
+   * The table's own filter state — column-backed specs only, so every entry
+   * resolves to a real column. Feed this to TanStack.
+   */
   columnFilters: ColumnFiltersState;
+  /**
+   * `columnFilters` plus the URL-only scopes (see `urlOnly` in
+   * `entities/filters`). This — not `columnFilters` — is what the server
+   * filters are built from; the two are the same array when the entity
+   * declares no URL-only spec.
+   */
+  allFilters: ColumnFiltersState;
   setColumnFilters: (
     value:
       | ColumnFiltersState
@@ -121,6 +133,14 @@ export function useTableState(
 
   const [, startTransition] = useTransition();
 
+  // A URL-only spec has no column to hold its value, so it's excluded from
+  // every columnFilters-shaped path below (seed, encode, managed URL keys) —
+  // the page that deep-links it owns that param and clears it by navigating.
+  const [columnSpecs, urlOnlySpecs] = useMemo(
+    () => partitionFilterSpecs(filterSpecs),
+    [filterSpecs],
+  );
+
   // Router hooks are called unconditionally (Rules of Hooks); their results are
   // only consumed when urlSync is on. useSearch(strict:false) works on any route.
   const search = useSearch({ strict: false }) as Record<string, unknown>;
@@ -140,9 +160,35 @@ export function useTableState(
   // restores the same rows before first paint.
   const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>(
     () => {
-      const fromUrl = decodeFilters(filterSpecs, search);
+      const fromUrl = decodeFilters(columnSpecs, search);
       return fromUrl.length ? fromUrl : initialFilter;
     },
+  );
+  // URL-only scopes are read from the LIVE url rather than seeded into state:
+  // the only way to change one is to navigate (the ScopeChip's clear), and the
+  // list query has to follow that.
+  //
+  // Keyed on the scope VALUES, never on `search` itself: the router hands back
+  // a fresh `search` object on every navigation — including this hook's own
+  // write-through, which fires on any sort/page/filter change — and depending
+  // on that reference would churn `allFilters`, this hook's returned object,
+  // and every memo downstream of it (`useEntityList`'s `currentFilters`,
+  // `usePaginatedTableCore`'s `filters`). Same reason `projects-dashboard`
+  // keys its filters memo off joined primitives.
+  const urlOnlyKey = JSON.stringify(
+    urlOnlySpecs.map((spec) => search[spec.urlKey ?? spec.columnId] ?? null),
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialized values above, not `search`'s reference, on purpose
+  const urlOnlyFilters = useMemo(
+    () => decodeFilters(urlOnlySpecs, search),
+    [urlOnlySpecs, urlOnlyKey],
+  );
+  const allFilters = useMemo(
+    () =>
+      urlOnlyFilters.length
+        ? [...columnFilters, ...urlOnlyFilters]
+        : columnFilters,
+    [columnFilters, urlOnlyFilters],
   );
   const [pagination, setPaginationRaw] = useState<PaginationState>(() => {
     const page = syncPaginationToUrl ? Number(search[PAGE_KEY]) : Number.NaN;
@@ -267,7 +313,7 @@ export function useTableState(
     const sortP = sortToParam(sorting);
     return JSON.stringify({
       ...encodeFilters(
-        filterSpecs,
+        columnSpecs,
         (columnId) =>
           columnFilters.find((f) => f.id === columnId)?.value as
             | string
@@ -289,7 +335,7 @@ export function useTableState(
     sorting,
     pagination,
     columnFilters,
-    filterSpecs,
+    columnSpecs,
     defaultSortParam,
     syncPaginationToUrl,
   ]);
@@ -297,15 +343,16 @@ export function useTableState(
   // Every key this hook owns. Enumerated rather than derived from `next`'s
   // own keys: JSON.stringify drops undefined, so a cleared filter is ABSENT
   // from `next` — iterating its keys could set and update a param but never
-  // delete one.
+  // delete one. A URL-only key is deliberately absent: no column state can
+  // produce it, so listing it here would delete it on the first write-through.
   const managedKeys = useMemo(
     () => [
       SORT_KEY,
       PAGE_KEY,
       SIZE_KEY,
-      ...filterSpecs.map((spec) => spec.urlKey ?? spec.columnId),
+      ...columnSpecs.map((spec) => spec.urlKey ?? spec.columnId),
     ],
-    [filterSpecs],
+    [columnSpecs],
   );
 
   const lastWrittenUrlState = useRef<string | null>(null);
@@ -334,6 +381,7 @@ export function useTableState(
       sorting,
       setSorting,
       columnFilters,
+      allFilters,
       setColumnFilters,
       pagination,
       setPagination,
@@ -346,6 +394,7 @@ export function useTableState(
       sorting,
       setSorting,
       columnFilters,
+      allFilters,
       setColumnFilters,
       pagination,
       setPagination,

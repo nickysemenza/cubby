@@ -53,6 +53,21 @@ export interface FilterSpecCore {
   /** Expands a preset key into multiple server fields (`range` only). */
   expand?: (value: string) => Record<string, unknown>;
   /**
+   * No table column renders this spec — it's URL state only: a deep link's
+   * scope (purchases' `?productId=` and `?order=`), surfaced as a `ScopeChip`
+   * and cleared by the page that owns the param.
+   *
+   * Such a spec is kept OUT of `columnFilters`. TanStack resolves every entry
+   * there to a column and `console.error`s
+   * `[Table] Column with id '<x>' does not exist.` for the ones it can't — on
+   * every render, loud enough to bury real errors. It still reaches the server
+   * filters: `useTableState` exposes it via `allFilters` (table pages) and
+   * `filterGetterFromSearch` reads it straight from the URL (the table-less
+   * analytics view). It's likewise excluded from `encodeFilters` and from the
+   * keys `useTableState` writes through, since no column state can produce it.
+   */
+  urlOnly?: boolean;
+  /**
    * Marks a picklist as covering a NULLABLE column: the control gains the two
    * sentinel options below, and the builder routes them to `field` (a
    * `presenceFilter`) instead of into the value list. `multiselect` / `idMulti`
@@ -282,6 +297,18 @@ export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
 // encoding differently.
 
 const LIST_SEPARATOR = ",";
+
+/**
+ * `[column-backed, url-only]`.
+ *
+ * The first list is everything a table's `columnFilters` may hold — the only
+ * specs `useTableState` decodes into state, encodes back out, or claims a URL
+ * key for. See `urlOnly` on the spec for why the second list is held apart.
+ */
+export const partitionFilterSpecs = (
+  specs: readonly FilterSpecCore[],
+): [FilterSpecCore[], FilterSpecCore[]] =>
+  partition(specs, (spec) => !spec.urlOnly);
 
 /** Column-filter state → search params. Absent keys mean "not filtered". */
 export function encodeFilters(

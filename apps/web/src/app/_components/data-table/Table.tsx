@@ -40,6 +40,7 @@ import {
   EntityEmptyState,
   FilteredEmptyState,
   hasActiveFilters,
+  isNarrowed,
 } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
 import { MobileListScreen } from "./MobileListScreen";
@@ -220,8 +221,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
     if (!rows.length) {
       const state = table.getState();
-      const isFiltered = hasActiveFilters(state.columnFilters);
-      const clearFilters = isFiltered
+      // Narrowed-ness and clearability part ways when a URL-only scope is on:
+      // the copy must say "no matches", but only column filters are resettable
+      // from here (see `isNarrowed`).
+      const isFiltered = isNarrowed(table);
+      const clearFilters = hasActiveFilters(state.columnFilters)
         ? () => {
             table.resetColumnFilters();
           }
