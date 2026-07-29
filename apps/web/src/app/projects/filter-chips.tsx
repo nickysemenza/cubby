@@ -8,9 +8,8 @@ import { Badge } from "~/components/ui/badge";
  * (single-select). These are *toggle* chips (click to add/remove a filter
  * condition), not *removable* chips (an already-applied filter with a
  * dismiss affordance) — don't unify this with `ScopeChip` in
- * `data-table/ActiveFilterChips.tsx`, which is the removable-chip
- * abstraction for a different surface. The only primitive the two share is
- * `~/components/ui/badge`.
+ * `data-table/ScopeChip.tsx`, which is the removable-chip abstraction for a
+ * different surface. The only primitive the two share is `~/components/ui/badge`.
  */
 
 interface ChipProps {

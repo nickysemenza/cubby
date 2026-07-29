@@ -67,7 +67,7 @@ export function MobileListScreen<TItem>({
     ) : null;
 
   // The desktop filter row lives in the table header, which the card view
-  // doesn't render — the sheet is how a phone reaches the same filters.
+  // doesn't render — this toolbar gives phones the same filter builder.
   const toolbarContent = (
     <div className="flex items-center gap-2">
       {additionalToolbarContent}

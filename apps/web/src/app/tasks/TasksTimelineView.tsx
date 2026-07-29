@@ -91,7 +91,7 @@ function paddedWindow(extent: DayRange | null): DayRange {
 
 /** A cross-project, flat Gantt over every dated task — the range-aware
  * counterpart to the day-bucketed heatmap above it. Reuses the shared
- * `GanttChart` renderer (see `ProjectGantt`/`PortfolioGantt`) with a local,
+ * `CubbyGantt` renderer (see `ProjectGantt`/`PortfolioGantt`) with a local,
  * hierarchy-free row builder instead of `gantt-model`'s project-coupled ones. */
 function TasksGanttTimeline({ tasks }: { tasks: TaskOut[] }) {
   const { rows, extent } = useMemo(() => buildFlatTaskRows(tasks), [tasks]);

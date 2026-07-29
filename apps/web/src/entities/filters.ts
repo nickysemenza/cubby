@@ -82,7 +82,7 @@ const isSentinel = (value: string): boolean =>
  *
  * `meta` renders them in the eyebrow register (mono/uppercase/slate, with a
  * rule beneath) so a predicate about the data doesn't read as a row of it.
- * `label` stays a plain string — `ActiveFilterChips` and the collapsed
+ * `label` stays a plain string — `LedgerFilters` and the collapsed
  * multi-combobox summary interpolate it into `"(none) +2"`.
  */
 export const nullableSentinelOptions = (

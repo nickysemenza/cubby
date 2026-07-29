@@ -4,7 +4,7 @@
  * Presentational: the detail page owns the fetching (the whole live subtree's
  * projects + tasks) and hands the arrays down. Everything here is row-model
  * assembly (`buildProjectRows`), critical-chain math (`longestChains`), and
- * window/expand state; the drawing lives in the shared `GanttChart`.
+ * window/expand state; the drawing lives in the shared `CubbyGantt`.
  *
  * The chain stat is computed over the *visible* rows, so it tracks what the
  * viewer is actually looking at as sub-projects expand and collapse. It's
