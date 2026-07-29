@@ -1,20 +1,25 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import type { ImageWithEntity } from "@cubby/schemas/image";
-import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import prettyBytes from "pretty-bytes";
 import { useMemo } from "react";
-import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
+import {
+  createImageColumn,
+  createNameColumn,
+} from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { queryKeys } from "~/lib/query-keys";
+import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
+import { UploadImageDialog } from "./upload-image-dialog";
 
 /** Module-level so the deletable config keeps a stable identity. */
 const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
@@ -43,40 +48,37 @@ export default function ImageList() {
   const columnHelper = useMemo(() => createColumnHelper<ImageWithEntity>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("image");
 
-  // Images are hard-deleted (no `deletedAt` column) — the row and its R2 object
-  // go away, and any owning entity simply loses the picture.
+  // Images DO have a `deletedAt` column (like every other entity), but
+  // `deleteImages` intentionally hard-deletes anyway — see its doc comment in
+  // server/repo/image.ts. Restore was never implemented for any entity, and
+  // an orphaned image (no owning product/location/recipe/project) has no use
+  // once removed, so there's no reason to carry the soft-delete indirection.
   const deletableConfig = useDeletableConfig({
     mutationFn: api.image.delete.mutationOptions,
     entityLabel: "Image",
     invalidateKeys: IMAGE_INVALIDATE_KEYS,
   });
 
+  const updateImageMutation = useUpdateMutation({
+    mutationFn: api.image.update.mutationOptions,
+    entity: "image",
+    invalidateKeys: imageMutationInvalidateKeys,
+  });
+  // Images use `filename`, not `name` — see useNameEditable's `field` param.
+  const nameEditable = useNameEditable<ImageWithEntity, "filename">(
+    updateImageMutation.mutateAsync,
+    "filename",
+  );
+
   // Memoize columns to prevent recreating on every render (feeds the
   // useStandardColumns columns memo, which now re-runs on identity change).
   const columns = useMemo(
     () => [
-      // Filename column (links to detail page)
-      columnHelper.accessor("filename", {
+      // Filename column: links to the detail page, inline-editable.
+      createNameColumn(columnHelper, "image", "filename", {
         header: "Filename",
-        cell: ({ row, getValue }) => {
-          const filename = getValue();
-          return (
-            <Link
-              to="/images/$id"
-              params={{ id: row.original.id }}
-              className="font-medium text-primary hover:underline"
-            >
-              {filename || <NoneValue />}
-            </Link>
-          );
-        },
-        meta: {
-          className: "min-w-0 w-64 truncate",
-          mobile: { slot: "title", priority: 0 },
-          filterConfig: {
-            placeholder: "Filter by filename...",
-          },
-        },
+        editable: nameEditable,
+        filterConfig: { placeholder: "Filter by filename..." },
       }),
       // Preview column
       createImageColumn(columnHelper, {
@@ -153,7 +155,7 @@ export default function ImageList() {
         },
       ),
     ],
-    [columnHelper],
+    [columnHelper, nameEditable],
   );
 
   const {
@@ -186,6 +188,7 @@ export default function ImageList() {
         entity="image"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
+        actions={<UploadImageDialog />}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}

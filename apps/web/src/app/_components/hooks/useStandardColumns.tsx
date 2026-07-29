@@ -34,7 +34,7 @@ type AnyColumnDef<TData> = ColumnDef<TData, any>;
 /** Base interface for entities in list views */
 interface BaseListRow {
   id: string;
-  name?: string;
+  name?: string | null;
   createdAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
 }

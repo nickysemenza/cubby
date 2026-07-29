@@ -195,9 +195,12 @@ const entityDefinitions = {
       list: "/meals",
     },
     detail: { commonSections: ["history"] },
+    // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
+    // `emptyLabel`, which useStandardColumns's automatic "name" column
+    // doesn't support. `createdAt` is the one standard column left to append.
     list: {
       defaultSort: "date",
-      standardColumns: [],
+      standardColumns: ["createdAt"],
       sortableFields: mealSortableFields,
     },
   },

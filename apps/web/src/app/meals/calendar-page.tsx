@@ -1,7 +1,7 @@
 import type { MealOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { addDays, addWeeks, format, isSameDay, parseISO } from "date-fns";
+import { addDays, addWeeks, format, isSameDay } from "date-fns";
 import {
   CalendarDays,
   ChevronLeft,
@@ -14,20 +14,6 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyTitle,
-} from "~/components/ui/empty";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatMealCost } from "./meal-format";
@@ -36,6 +22,7 @@ import {
   type MealCalendarView,
   parseWeekStart,
 } from "./meal-search";
+import { MealTable } from "./meal-table";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 interface MealCalendarPageProps {
@@ -90,7 +77,7 @@ export function MealCalendarPage({
       {view === "calendar" ? (
         <CalendarView weekStart={weekStart} onWeekChange={onWeekChange} />
       ) : (
-        <TableView onViewChange={onViewChange} />
+        <MealTable />
       )}
     </Stack>
   );
@@ -213,98 +200,6 @@ function CalendarView({
           })}
         </div>
       )}
-    </Stack>
-  );
-}
-
-function TableView({
-  onViewChange,
-}: {
-  onViewChange: (view: MealCalendarView) => void;
-}) {
-  const api = useTRPC();
-  const { data, isLoading } = useQuery(
-    api.meal.list.queryOptions({
-      filters: {},
-      sort: { orderBy: "date", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 200 },
-    }),
-  );
-
-  if (isLoading) return <SimpleLoading text="Loading meals..." />;
-  const meals = data?.items ?? [];
-  const total = data?.meta.totalCount ?? meals.length;
-  if (meals.length === 0) {
-    return (
-      <Empty variant="minimal" className="py-6">
-        <EmptyTitle>No meals planned</EmptyTitle>
-        <EmptyDescription>
-          Plan recipes onto your calendar to see costs add up and build a
-          shopping list.
-        </EmptyDescription>
-        <EmptyActions>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => onViewChange("calendar")}
-          >
-            <CalendarDays className="size-4" />
-            Go to calendar
-          </Button>
-        </EmptyActions>
-      </Empty>
-    );
-  }
-
-  return (
-    <Stack gap="sm">
-      {total > meals.length && (
-        <Description size="xs">
-          Showing the {meals.length} most recent of {total} meals.
-        </Description>
-      )}
-      <Table
-        className="table-auto"
-        containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
-      >
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Meal</TableHead>
-            <TableHead>Recipes</TableHead>
-            <TableHead className="text-right">Cost</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {meals.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell className="tabular-nums">
-                <Link
-                  to="/meals/$id"
-                  params={{ id: m.id }}
-                  className="hover:underline"
-                >
-                  {format(parseISO(m.date), "EEE, MMM d, yyyy")}
-                </Link>
-              </TableCell>
-              <TableCell>{m.name || "—"}</TableCell>
-              <TableCell className="whitespace-normal text-muted-foreground">
-                {m.recipes.length === 0
-                  ? "—"
-                  : m.recipes
-                      .map(
-                        (r) =>
-                          `${r.scale !== 1 ? `${r.scale}× ` : ""}${r.recipe.name}`,
-                      )
-                      .join(", ")}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {formatMealCost(m.totals)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
     </Stack>
   );
 }

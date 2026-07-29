@@ -70,10 +70,12 @@ export const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 // Shared fields for upload initiation (image + document variants). Private
 // field map spread into both schemas — the sanctioned pattern (no .extend).
+// `entityType` is optional: every entity-form caller still passes it, but a
+// standalone `/images` upload has no owning entity yet at initiate time.
 const initiateUploadFields = {
   filename: z.string(),
   size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
-  entityType: entityImage,
+  entityType: entityImage.optional(),
 };
 
 // Schema for initiating an image upload without entity ID (for pending uploads)
@@ -105,6 +107,14 @@ export const getImageByIdSchema = z.object({
   id: id,
 });
 
+// Input for renaming an image. `filename` is the only safely user-editable
+// column — key/url/size/contentType/status are all derived (see the repo
+// comment on `updateImage`).
+export const imageUpdateInput = z.object({
+  filename: z.string().trim().min(1).max(255),
+});
+export type ImageUpdateInput = z.infer<typeof imageUpdateInput>;
+
 // Filters accepted by the image list endpoint (filters-only, matching every
 // other *FiltersSchema — the crud factory owns sort/pagination).
 export const imageFilterFields = {
@@ -113,10 +123,12 @@ export const imageFilterFields = {
 
 export const imageListFiltersSchema = z.object(imageFilterFields);
 
-// Schema for importing an image from a URL
+// Schema for importing an image from a URL. `entityType` is optional for the
+// same reason as `initiateUploadFields.entityType` above — a standalone
+// `/images` URL import has no owning entity.
 export const importImageFromUrlSchema = z.object({
   url: z.url(),
-  entityType: entityImage,
+  entityType: entityImage.optional(),
 });
 
 // --- MCP attach_file ---------------------------------------------------------

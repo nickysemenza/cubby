@@ -2,14 +2,12 @@ import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, RefreshCw, Trash } from "lucide-react";
-import { useState } from "react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
+import { useCookbookDelete } from "~/app/cookbooks/use-cookbook-delete";
 import { RecipeList } from "~/app/recipes/recipelist";
-import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -21,10 +19,8 @@ import { entityFilterSearchFields } from "~/entities/filter-manifest";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   invalidateTRPCQueries,
-  recipeCookbookMutationInvalidateKeys,
   recipeMutationInvalidateKeys,
 } from "~/lib/query-keys";
 
@@ -57,7 +53,6 @@ function CookbookDetailPage() {
   const { tab } = Route.useSearch();
   const api = useTRPC();
   const navigate = useNavigate();
-  const [showDelete, setShowDelete] = useState(false);
 
   const tabs = useTabParam(tab, "recipes", (next) =>
     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
@@ -103,15 +98,8 @@ function CookbookDetailPage() {
       },
     );
 
-  const deleteMutation = useActionMutation({
-    mutationFn: api.recipe.deleteCookbook.mutationOptions,
-    success: ({ deletedRecipes }) =>
-      `Deleted ${name} and ${deletedRecipes} recipe${deletedRecipes === 1 ? "" : "s"}`,
-    invalidateKeys: recipeCookbookMutationInvalidateKeys,
-    onSuccess: () => {
-      void navigate({ to: "/cookbooks" });
-    },
-    error: (err) => getErrorMessage(err) || "Failed to delete cookbook",
+  const { requestDelete, dialog: deleteDialog } = useCookbookDelete({
+    onDeleted: () => void navigate({ to: "/cookbooks" }),
   });
 
   // Author + recipe count read as the spec-plate ledger stats; the cover plate
@@ -170,7 +158,7 @@ function CookbookDetailPage() {
           <Button
             variant="destructive"
             size="sm"
-            onClick={() => setShowDelete(true)}
+            onClick={() => requestDelete({ id: cookbookId, name, recipeCount })}
           >
             <Trash className="mr-2 size-4" />
             Delete cookbook
@@ -216,26 +204,7 @@ function CookbookDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <BulkActionDialog
-        open={showDelete}
-        onOpenChange={setShowDelete}
-        items={[{ id: cookbookId, name }]}
-        itemNoun="cookbook"
-        action="Delete"
-        variant="destructive"
-        pendingLabel="Deleting..."
-        description="This removes the cookbook and every recipe imported from it. Its stored extraction is deleted too, so re-importing means re-uploading the EPUB. This action cannot be undone."
-        onSubmit={async () => {
-          await deleteMutation.mutateAsync({ cookbookId });
-          setShowDelete(false);
-        }}
-        isPending={deleteMutation.isPending}
-        renderItem={() =>
-          recipeCount === undefined
-            ? `"${name}" and its imported recipes`
-            : `"${name}" and its ${recipeCount} imported recipe${recipeCount === 1 ? "" : "s"}`
-        }
-      />
+      {deleteDialog}
     </Page>
   );
 }
