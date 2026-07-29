@@ -2,9 +2,8 @@ import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { lazy, type ReactNode, Suspense, useCallback, useMemo } from "react";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
-import { GanttChart } from "~/app/projects/charts/gantt/GanttChart";
 import { toDayIndex, todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import type {
   DayRange,
@@ -24,6 +23,11 @@ const WINDOW_PAD_DAYS = 7;
  * mirroring `ProjectGantt`'s fallback. */
 const FALLBACK_LEAD_DAYS = 14;
 const FALLBACK_TRAIL_DAYS = 75;
+const LazyCubbyGantt = lazy(() =>
+  import("~/app/projects/charts/gantt/CubbyGantt").then(({ CubbyGantt }) => ({
+    default: CubbyGantt,
+  })),
+);
 
 function hasDueDate(t: TaskOut): t is TaskOut & { dueDate: string } {
   return t.dueDate != null;
@@ -85,9 +89,6 @@ function paddedWindow(extent: DayRange | null): DayRange {
   };
 }
 
-/** No expand/collapse on a flat row list — every row is a leaf task. */
-function noopToggleExpand(): void {}
-
 /** A cross-project, flat Gantt over every dated task — the range-aware
  * counterpart to the day-bucketed heatmap above it. Reuses the shared
  * `GanttChart` renderer (see `ProjectGantt`/`PortfolioGantt`) with a local,
@@ -95,8 +96,6 @@ function noopToggleExpand(): void {}
 function TasksGanttTimeline({ tasks }: { tasks: TaskOut[] }) {
   const { rows, extent } = useMemo(() => buildFlatTaskRows(tasks), [tasks]);
   const defaultWindow = useMemo(() => paddedWindow(extent), [extent]);
-  const [windowOverride, setWindowOverride] = useState<DayRange | null>(null);
-  const viewWindow = windowOverride ?? defaultWindow;
 
   const renderName = useCallback((row: GanttRow): ReactNode => {
     if (row.kind !== "task") return null;
@@ -108,16 +107,14 @@ function TasksGanttTimeline({ tasks }: { tasks: TaskOut[] }) {
   }, []);
 
   return (
-    <GanttChart
-      rows={rows}
-      window={viewWindow}
-      onWindowChange={setWindowOverride}
-      extent={extent}
-      defaultWindow={defaultWindow}
-      onToggleExpand={noopToggleExpand}
-      renderName={renderName}
-      emptyMessage="No tasks with due dates yet."
-    />
+    <Suspense fallback={<Skeleton className="h-[34rem] w-full" />}>
+      <LazyCubbyGantt
+        rows={rows}
+        window={defaultWindow}
+        renderName={renderName}
+        emptyMessage="No tasks with due dates yet."
+      />
+    </Suspense>
   );
 }
 

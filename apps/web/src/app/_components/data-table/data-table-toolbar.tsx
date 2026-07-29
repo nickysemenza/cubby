@@ -1,13 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { Table } from "@tanstack/react-table";
-import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { ActiveFilterChips } from "./ActiveFilterChips";
 import { DataTableViews } from "./DataTableViews";
 import { DataTableViewOptions } from "./data-table-view-options";
+import { LedgerFilters } from "./LedgerFilters";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -35,8 +33,6 @@ export function DataTableToolbar<TData>({
   showViewOptions = true,
   className,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered = table.getState().columnFilters.length > 0;
-
   return (
     <Row align="center" justify="between" gap="sm" className={className}>
       <Row align="center" gap="sm">
@@ -56,25 +52,9 @@ export function DataTableToolbar<TData>({
       >
         {additionalContent}
 
-        {/* Chips take their own line on narrow screens rather than squeezing
-            the actions off the right edge. */}
         <div className="order-last w-full min-w-0 lg:order-none lg:w-auto">
-          <ActiveFilterChips table={table} />
+          <LedgerFilters table={table} />
         </div>
-
-        {isFiltered && (
-          <Button
-            variant="ghost"
-            size="default"
-            onClick={() => {
-              table.resetColumnFilters();
-            }}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-3" />
-            Reset
-          </Button>
-        )}
 
         {actions}
       </Row>

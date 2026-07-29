@@ -9,7 +9,6 @@ import { PullToRefresh } from "~/components/ui/pull-to-refresh";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
-import { MobileFilterSheet } from "./MobileFilterSheet";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListShape } from "./useMobileListModel";
 
@@ -72,7 +71,6 @@ export function MobileListScreen<TItem>({
   const toolbarContent = (
     <div className="flex items-center gap-2">
       {additionalToolbarContent}
-      <MobileFilterSheet table={table} />
       {groupToggle}
     </div>
   );

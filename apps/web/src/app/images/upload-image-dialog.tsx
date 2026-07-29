@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link as LinkIcon, Upload } from "lucide-react";
-import { type ChangeEvent, useId, useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -32,7 +33,6 @@ import { useImageUpload } from "./use-image-upload";
 export function UploadImageDialog() {
   const api = useTRPC();
   const queryClient = useQueryClient();
-  const fileInputId = useId();
   const urlInputId = useId();
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -47,11 +47,7 @@ export function UploadImageDialog() {
     onSuccess: () => setUrl(""),
   });
 
-  const handleFilesSelected = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (files.length === 0) return;
-
+  const handleFilesSelected = async (files: File[]) => {
     const uploaded = await uploadFiles(files);
     if (uploaded.length > 0) {
       invalidateTRPCQueries(queryClient, imageMutationInvalidateKeys);
@@ -88,13 +84,14 @@ export function UploadImageDialog() {
         </DialogHeader>
         <Stack gap="md">
           <Stack gap="xs">
-            <Label htmlFor={fileInputId}>From your device</Label>
-            <Input
-              id={fileInputId}
-              type="file"
+            <Label>From your device</Label>
+            <FileDropField
               accept="image/*"
+              label="Choose images"
+              description="JPEG, PNG, GIF, WebP, or HEIC"
+              mode="compact"
               multiple
-              onChange={handleFilesSelected}
+              onFilesAdded={(files) => void handleFilesSelected(files)}
               disabled={busy}
             />
           </Stack>

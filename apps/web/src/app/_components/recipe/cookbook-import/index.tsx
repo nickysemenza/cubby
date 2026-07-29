@@ -97,7 +97,6 @@ export function CookbookImport({
   const uploadImageMut = useMutation(api.image.uploadImage.mutationOptions());
 
   const [books, setBooks] = useState<Book[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   // Raw EPUB bytes by source, cached so a book can re-run extraction (retry after
   // failed chunks) without re-dropping the file. Kept in a ref, not state — the
   // bytes are large and never drive a render. JSON / from-source books have no
@@ -547,15 +546,6 @@ export function CookbookImport({
     ]);
   }, []);
 
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      void addEpubFiles([...e.dataTransfer.files]);
-    },
-    [addEpubFiles],
-  );
-
   // Import one book's selected recipes. First create/refresh the Cookbook row
   // (stores the full raw extraction + OPF metadata, and is the FK target), then
   // send the selected recipes — in topological order (a referenced recipe before
@@ -734,9 +724,6 @@ export function CookbookImport({
       )}
 
       <CookbookDropzone
-        isDragging={isDragging}
-        onDragStateChange={setIsDragging}
-        onDrop={onDrop}
         onEpubFiles={(files) => void addEpubFiles(files)}
         onJsonFile={(file) => void loadJson(file)}
       />

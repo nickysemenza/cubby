@@ -15,9 +15,16 @@
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { CalendarOff } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
 import { Row, Stack } from "~/components/layout";
-import { GanttChart } from "./GanttChart";
+import { Skeleton } from "~/components/ui/skeleton";
 import { type ChainNode, longestChains } from "./gantt-chain";
 import { toDayIndex, todayPlain } from "./gantt-date";
 import { buildProjectRows, type DayRange, type GanttRow } from "./gantt-model";
@@ -30,6 +37,11 @@ const FALLBACK_TRAIL_DAYS = 75;
 /** Row budget for auto-expanding sub-projects on first paint — roughly a
  * tall-but-scannable chart (~2000px at ROW_HEIGHT 32). */
 const MAX_AUTO_EXPAND_ROWS = 60;
+const LazyCubbyGantt = lazy(() =>
+  import("./CubbyGantt").then(({ CubbyGantt }) => ({
+    default: CubbyGantt,
+  })),
+);
 
 function paddedWindow(extent: DayRange | null): DayRange {
   if (extent == null) {
@@ -80,30 +92,42 @@ export function ProjectGantt({
   // bars — the envelope whisker still shows each one's span — and let the
   // viewer drill in. `null` means "untouched"; the first toggle switches to
   // an explicit set.
+  const allExpanded = useMemo(
+    () => new Set(subtreeProjects.map((project) => project.id)),
+    [subtreeProjects],
+  );
+  const allRowsResult = useMemo(
+    () => buildProjectRows(projectId, subtreeProjects, tasks, allExpanded),
+    [allExpanded, projectId, subtreeProjects, tasks],
+  );
+  const expandableIds = useMemo(
+    () =>
+      allRowsResult.rows.flatMap((row) =>
+        row.kind === "project" && row.expandable ? [row.id] : [],
+      ),
+    [allRowsResult.rows],
+  );
   const defaultExpanded = useMemo(() => {
-    const all = new Set(subtreeProjects.map((p) => p.id));
-    const expandedRowCount = buildProjectRows(
-      projectId,
-      subtreeProjects,
-      tasks,
-      all,
-    ).rows.length;
-    return expandedRowCount <= MAX_AUTO_EXPAND_ROWS ? all : new Set<string>();
-  }, [projectId, subtreeProjects, tasks]);
+    return allRowsResult.rows.length <= MAX_AUTO_EXPAND_ROWS
+      ? new Set(expandableIds)
+      : new Set<string>();
+  }, [allRowsResult.rows.length, expandableIds]);
   const [expandedOverride, setExpandedOverride] =
     useState<ReadonlySet<string> | null>(null);
   const expanded = expandedOverride ?? defaultExpanded;
 
-  const onToggleExpand = useCallback(
-    (id: string) => {
-      setExpandedOverride((prev) => {
-        const next = new Set(prev ?? defaultExpanded);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
+  const collapsedGroups = useMemo(
+    () => expandableIds.filter((id) => !expanded.has(id)),
+    [expandableIds, expanded],
+  );
+  const onCollapsedGroupsChange = useCallback(
+    (collapsed: string[]) => {
+      const collapsedSet = new Set(collapsed);
+      setExpandedOverride(
+        new Set(expandableIds.filter((id) => !collapsedSet.has(id))),
+      );
     },
-    [defaultExpanded],
+    [expandableIds],
   );
 
   const { rows, unscheduled, extent } = useMemo(
@@ -112,8 +136,6 @@ export function ProjectGantt({
   );
 
   const defaultWindow = useMemo(() => paddedWindow(extent), [extent]);
-  const [windowOverride, setWindowOverride] = useState<DayRange | null>(null);
-  const viewWindow = windowOverride ?? defaultWindow;
 
   const chain = useMemo(() => longestChains(chainNodesOf(rows))[0], [rows]);
   const chainIds = useMemo(
@@ -147,18 +169,18 @@ export function ProjectGantt({
         </Row>
       )}
 
-      <GanttChart
-        rows={rows}
-        window={viewWindow}
-        onWindowChange={setWindowOverride}
-        extent={extent}
-        defaultWindow={defaultWindow}
-        onToggleExpand={onToggleExpand}
-        renderName={renderName}
-        chainIds={chainIds}
-        edges={chain?.edges}
-        emptyMessage="No dated tasks or sub-projects yet."
-      />
+      <Suspense fallback={<Skeleton className="h-[34rem] w-full" />}>
+        <LazyCubbyGantt
+          rows={allRowsResult.rows}
+          window={defaultWindow}
+          collapsedGroups={collapsedGroups}
+          onCollapsedGroupsChange={onCollapsedGroupsChange}
+          renderName={renderName}
+          chainIds={chainIds}
+          edges={chain?.edges}
+          emptyMessage="No dated tasks or sub-projects yet."
+        />
+      </Suspense>
 
       {unscheduled.length > 0 && (
         <Stack gap="xs">

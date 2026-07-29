@@ -2,6 +2,7 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
 import { Row } from "~/components/layout";
+import { Timeline } from "~/components/reui/timeline";
 import { Button } from "~/components/ui/button";
 import {
   Empty,
@@ -80,16 +81,17 @@ export function AuditLogList({
 
   return (
     <div>
-      <div className="divide-y">
-        {entries.map((entry) => (
+      <Timeline mode="chronological">
+        {entries.map((entry, index) => (
           <AuditLogEntryComponent
             key={entry.id}
             entry={entry}
+            step={index + 1}
             showEntityLink={showEntityLink}
             variant={variant}
           />
         ))}
-      </div>
+      </Timeline>
 
       {hasNextPage && (
         <Row justify="center" className="pt-4">
