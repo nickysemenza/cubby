@@ -1,8 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { recipe } from "~/server/db/schema";
 import {
+  cookbook,
+  entityEmbedding,
+  recipe,
+  recipeSection,
+} from "~/server/db/schema";
+import {
+  deleteCookbook,
   getCookbookByName,
   getCookbookSource,
   listCookbooks,
@@ -10,6 +16,7 @@ import {
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
+import { findOrphanedEntityEmbeddings } from "./entity-embedding-cleanup";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { cookbookRecipe } from "./repo.fixtures";
 
@@ -137,5 +144,115 @@ describe("cookbook repository", () => {
       where: eq(recipe.name, "Waffles"),
     });
     expect(waffles).toHaveLength(0);
+  });
+
+  // deleteCookbook is UNGUARDED (lockAndValidateForDelete only locks + checks
+  // existence — no assertNoDependents call for sub-recipe usage or meal-plan
+  // membership), so it cascades to every imported recipe unconditionally. This
+  // guards the removal-path invariant from root CLAUDE.md: the cascade must
+  // reach sections/ingredients AND leave no live EntityEmbedding row for
+  // either the cookbook or its recipes (mirrors
+  // embedding-cascade-invariant.integration.test.ts's per-entity coverage,
+  // which only asserts the Cookbook row's own embedding — this exercises the
+  // recipe cascade underneath it too).
+  it("deleteCookbook soft-deletes the book, its recipes, sections, ingredients, and leaves no embedding orphans", async () => {
+    const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
+    const { id: cookbookId } = await upsertCookbook(
+      ctx.db,
+      { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
+      ctx.actor,
+    );
+    const ref = { id: cookbookId, name: "Book A" };
+    const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
+      raw[0]!,
+      ref,
+      ctx.db,
+      ctx.actor,
+    );
+
+    const sectionsBefore = await getDb(ctx.db).query.recipeSection.findMany({
+      where: eq(recipeSection.recipeId, recipeId),
+    });
+    expect(sectionsBefore.length).toBeGreaterThan(0);
+    const sectionIds = sectionsBefore.map((s) => s.id);
+    const ingredientsBefore = await getDb(
+      ctx.db,
+    ).query.recipeSectionIngredient.findMany({
+      where: (t, { inArray }) => inArray(t.recipeSectionId, sectionIds),
+    });
+    expect(ingredientsBefore.length).toBeGreaterThan(0);
+
+    // Seed a live search-embedding row for both the cookbook and its recipe —
+    // a minimal 3-dim vector inserts fine (the HNSW index is partial on
+    // dimensions=1536).
+    const seedEmbedding = (
+      entityType: "cookbook" | "recipe",
+      entityId: string,
+    ) =>
+      getDb(ctx.db)
+        .insert(entityEmbedding)
+        .values({
+          entityType,
+          entityId,
+          embeddingText: `${entityType} ${entityId}`,
+          embeddingHash: `hash-${entityId}`,
+          provider: "test",
+          model: "test",
+          dimensions: 3,
+          embedding: [0, 0, 0],
+        });
+    await seedEmbedding("cookbook", cookbookId);
+    await seedEmbedding("recipe", recipeId);
+
+    const { deletedRecipeIds } = await deleteCookbook(
+      ctx.db,
+      cookbookId,
+      ctx.actor,
+    );
+    expect(deletedRecipeIds).toEqual([recipeId]);
+
+    const cookbookRow = await getDb(ctx.db).query.cookbook.findFirst({
+      where: eq(cookbook.id, cookbookId),
+    });
+    expect(cookbookRow?.deletedAt).not.toBeNull();
+
+    const recipeRow = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.id, recipeId),
+    });
+    expect(recipeRow?.deletedAt).not.toBeNull();
+
+    const sectionsAfter = await getDb(ctx.db).query.recipeSection.findMany({
+      where: eq(recipeSection.recipeId, recipeId),
+    });
+    expect(sectionsAfter.every((s) => s.deletedAt !== null)).toBe(true);
+
+    const ingredientsAfter = await getDb(
+      ctx.db,
+    ).query.recipeSectionIngredient.findMany({
+      where: (t, { inArray }) => inArray(t.recipeSectionId, sectionIds),
+    });
+    expect(ingredientsAfter.every((i) => i.deletedAt !== null)).toBe(true);
+
+    const cookbookEmbedding = await getDb(
+      ctx.db,
+    ).query.entityEmbedding.findFirst({
+      where: and(
+        eq(entityEmbedding.entityType, "cookbook"),
+        eq(entityEmbedding.entityId, cookbookId),
+      ),
+    });
+    expect(cookbookEmbedding?.deletedAt).not.toBeNull();
+
+    const recipeEmbedding = await getDb(ctx.db).query.entityEmbedding.findFirst(
+      {
+        where: and(
+          eq(entityEmbedding.entityType, "recipe"),
+          eq(entityEmbedding.entityId, recipeId),
+        ),
+      },
+    );
+    expect(recipeEmbedding?.deletedAt).not.toBeNull();
+
+    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

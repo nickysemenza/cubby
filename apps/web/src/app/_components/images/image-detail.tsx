@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { useTRPC } from "~/integrations/trpc/react";
-import { queryKeys } from "~/lib/query-keys";
+import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
+import { EditableCell } from "../data-table/editable-cell";
 import { useEntityDelete } from "../hooks/useEntityDelete";
+import { useUpdateMutation } from "../hooks/useUpdateMutation";
 
 /** Module-level so the delete hook's key list keeps a stable identity. */
 const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
@@ -23,8 +25,19 @@ interface ImageDetailProps {
 
 export function ImageDetail({ image }: ImageDetailProps) {
   const api = useTRPC();
-  // Hard delete — images have no `deletedAt`, so this removes the row and its
-  // R2 object; any owning entity just loses the picture.
+
+  const updateMutation = useUpdateMutation({
+    mutationFn: api.image.update.mutationOptions,
+    entity: "image",
+    invalidateKeys: imageMutationInvalidateKeys,
+  });
+
+  // Images DO have a `deletedAt` column (like every other entity), but
+  // `deleteImages` intentionally hard-deletes anyway — see its doc comment in
+  // server/repo/image.ts. Restore was never implemented for any entity, and an
+  // orphaned image (no owning product/location/recipe/project) has no use
+  // once removed, so this really removes the row and its R2 object; any
+  // owning entity just loses the picture.
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: image.id,
     name: image.filename,
@@ -132,7 +145,18 @@ export function ImageDetail({ image }: ImageDetailProps) {
         <CardContent className="space-y-4 text-sm">
           <div>
             <span className="text-muted-foreground">Filename:</span>{" "}
-            {image.filename}
+            <EditableCell
+              value={image.filename}
+              config={{ type: "text" }}
+              onSave={async (filename) => {
+                if (!filename) return;
+                await updateMutation.mutateAsync({
+                  id: image.id,
+                  data: { filename },
+                });
+              }}
+              renderValue={(v) => v}
+            />
           </div>
           <div>
             <span className="text-muted-foreground">Type:</span>{" "}

@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router";
 // Meal planning calendar (week view).
 import { MealCalendarPage } from "~/app/meals/calendar-page";
+import { MealActions } from "~/app/meals/meal-actions";
 import {
   mealCalendarSearchDefaults,
   mealCalendarSearchSchema,
@@ -20,29 +21,31 @@ export const Route = createFileRoute("/_authenticated/meals/")({
 
 function MealsIndexRoute() {
   const { view, week } = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: Route.fullPath });
   const routeView = view ?? "calendar";
-  const normalizedView = routeView === "calendar" ? undefined : routeView;
 
   return (
-    <Page variant="list" title="Meals" fullWidth>
+    <Page variant="list" title="Meals" fullWidth actions={<MealActions />}>
       <MealCalendarPage
         view={routeView}
         week={week}
         onViewChange={(nextView) =>
+          // Merge, don't replace — a plain object here would drop the Table
+          // view's sort/page/filter search params (and any other in-flight
+          // search state) on every view switch. See tasks.index.tsx.
           void navigate({
             to: "/meals",
-            search: {
+            search: (prev) => ({
+              ...prev,
               view: nextView === "calendar" ? undefined : nextView,
-              week,
-            },
+            }),
             replace: true,
           })
         }
         onWeekChange={(nextWeek) =>
           void navigate({
             to: "/meals",
-            search: { view: normalizedView, week: nextWeek },
+            search: (prev) => ({ ...prev, week: nextWeek }),
             replace: true,
           })
         }

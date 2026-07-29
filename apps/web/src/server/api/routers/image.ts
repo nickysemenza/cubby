@@ -6,6 +6,7 @@ import {
   getImageByIdSchema,
   imageListFiltersSchema,
   imageSortableFields,
+  imageUpdateInput,
   imageWithEntitySchema,
   importImageFromUrlResponseSchema,
   importImageFromUrlSchema,
@@ -26,6 +27,8 @@ import {
   getImageById,
   getImagesByProjectIds,
   imageList,
+  markImageUploaded,
+  updateImage,
 } from "~/server/repo/image";
 import {
   attachFileToEntity,
@@ -67,9 +70,10 @@ const { list } = createEntityListProcedure({
 /**
  * Hard-delete images (rows + associations + R2 objects).
  *
- * Images have no `deletedAt` column — they're the one gallery entity outside the
- * soft-delete convention (see the entity manifest), so this really removes them.
- * Shaped by `createDeleteProcedure` like every other entity delete, so the list
+ * `Image` has a `deletedAt` column like every other entity; it's just never set.
+ * Images are deleted for real rather than tombstoned — an image with no owning
+ * entity has no use once removed — so this really removes the row and its R2
+ * object. Shaped by `createDeleteProcedure` like every other entity delete, so the list
  * page's `deletable` config and bulk selection work unchanged; there are no
  * mutation side-effects to run (images carry no embedding / derived data).
  */
@@ -81,6 +85,39 @@ const deleteItem = createDeleteProcedure(async (services, ids) => {
 export const imageRouter = createTRPCRouter({
   list,
   delete: deleteItem,
+
+  /**
+   * Rename an image. `filename` is the only safely user-editable column — see
+   * `imageUpdateInput`. Hand-written rather than `createUpdateProcedure`
+   * (private to crud-factory), but matches its input/output shape exactly so
+   * `useUpdateMutation`/`createNameColumn`'s editable wiring works unchanged.
+   *
+   * No try/catch wrapper: `updateImage`'s repo query can throw IMAGE_NOT_FOUND
+   * for a stale/deleted id (via the re-read in `getImageById`), which should
+   * propagate as a 4xx rather than be rewrapped into a 500 — same reasoning as
+   * `getByID` above.
+   */
+  update: protectedProcedure
+    .input(z.object({ id: z.string(), data: imageUpdateInput }))
+    .output(imageWithEntitySchema)
+    .mutation(async ({ ctx, input }) => {
+      return await updateImage(ctx.db, input.id, input.data);
+    }),
+
+  /**
+   * Flip a PENDING image to UPLOADED once the browser's presigned PUT to R2
+   * succeeds. Required for the standalone `/images` upload dialog: unlike
+   * entity-form uploads (finalized by `associatePendingImages` on save) or the
+   * cookbook cover path, a standalone upload has no entity save step to flip
+   * status — without this call it stays PENDING forever and is later culled
+   * (see `markImageUploaded`'s doc comment in repo/image.ts).
+   */
+  markUploaded: protectedProcedure
+    .input(getImageByIdSchema)
+    .output(imageWithEntitySchema)
+    .mutation(async ({ ctx, input }) => {
+      return await markImageUploaded(ctx.db, input.id);
+    }),
 
   /**
    * Initiate an image upload
@@ -144,7 +181,7 @@ export const imageRouter = createTRPCRouter({
     .output(importImageFromUrlResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const filenamePrefix = `${input.entityType}-url-import`;
+        const filenamePrefix = `${input.entityType ?? "image"}-url-import`;
         const result = await importImageFromUrl(ctx.db, {
           sourceUrl: input.url,
           filenamePrefix,
