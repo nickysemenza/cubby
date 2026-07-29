@@ -3,11 +3,14 @@ import {
   projectCreateInput,
   purchaseCreateInput,
 } from "@cubby/schemas/project";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { purchaseRouter } from "~/server/api/routers/purchase";
 import { createTestCaller } from "~/server/api/trpc";
+import { product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
+import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
@@ -1255,8 +1258,18 @@ describe("purchase repository — product bridge", () => {
     expect(data.reduce((sum, p) => sum + (p.cost ?? 0), 0)).toBe(30);
   });
 
-  it("keeps productId but nulls productName once the product is soft-deleted", async () => {
-    const product = await createProduct(
+  it("deleteProducts rejects a product still referenced by a live purchase", async () => {
+    // This used to be permitted deliberately — a product referenced only by
+    // purchases deleted fine, and the dangling link degraded to a null
+    // display name via resolveLiveJoinName. That was reversed
+    // (PRODUCT_HAS_PURCHASES, mirroring PRODUCT_HAS_INVENTORY): the ledger's
+    // net cost and owned/sold window are derived from these rows, and a
+    // nameless product would silently corrupt that derivation with no
+    // restore path. See purchase repository — productPresenceFilter's "has"
+    // still counts a purchase whose linked product was later soft-deleted"
+    // below for the (still-real) dangling-link read path, produced by writing
+    // deletedAt directly rather than through this now-blocked guard.
+    const bridgeDoomedDrill = await createProduct(
       ctx.db,
       makeProductInput({ name: "bridge doomed drill" }),
       ctx.actor,
@@ -1267,19 +1280,21 @@ describe("purchase repository — product bridge", () => {
         trade: "other",
         costType: "tools",
         name: "doomed drill",
-        productId: product.id,
+        productId: bridgeDoomedDrill.id,
       }),
       ctx.actor,
     );
 
-    // Deliberately asymmetric with project deletion, which a live purchase
-    // blocks: a product referenced only by purchases deletes fine, and the
-    // dangling link degrades to a null display name via resolveLiveJoinName.
-    await deleteProducts(ctx.db, [product.id], ctx.actor);
+    await expect(
+      deleteProducts(ctx.db, [bridgeDoomedDrill.id], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "PRODUCT_HAS_PURCHASES" },
+    });
 
     const read = await getPurchaseByID(ctx.db, created.id);
-    expect(read.productId).toBe(product.id);
-    expect(read.productName).toBeNull();
+    expect(read.productId).toBe(bridgeDoomedDrill.id);
+    expect(read.productName).toBe("bridge doomed drill");
   });
 
   it("still matches name search when vendor is null", async () => {
@@ -1418,7 +1433,15 @@ describe("purchase repository — productPresenceFilter", () => {
     // repo/purchase/lookup.ts): "linked" means productId IS NOT NULL, which
     // deliberately includes rows whose product was soft-deleted afterward —
     // those read back with productId set and productName null.
-    const product = await createProduct(
+    //
+    // The state is written directly (mirrors location.integration.test.ts's
+    // "a shelf holding only a soft-deleted product counts as empty") because
+    // `deleteProducts` now refuses a product with a live purchase
+    // (PRODUCT_HAS_PURCHASES), so the single-delete path can't produce this
+    // dangling link anymore. It's still a real state worth covering — a
+    // sync/import path or a future admin tool could soft-delete a product out
+    // from under its purchases — so the read-side degradation stays pinned.
+    const doomedRouter = await createProduct(
       ctx.db,
       makeProductInput({ name: "presence doomed router" }),
       ctx.actor,
@@ -1429,12 +1452,15 @@ describe("purchase repository — productPresenceFilter", () => {
         trade: "other",
         costType: "tools",
         name: "doomed router purchase",
-        productId: product.id,
+        productId: doomedRouter.id,
       }),
       ctx.actor,
     );
 
-    await deleteProducts(ctx.db, [product.id], ctx.actor);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, doomedRouter.id));
 
     const hasFiltered = await purchaseList(
       ctx.db,
@@ -1444,7 +1470,7 @@ describe("purchase repository — productPresenceFilter", () => {
     );
     expect(hasFiltered.data.map((p) => p.id)).toContain(purchase.id);
     const stillLinked = hasFiltered.data.find((p) => p.id === purchase.id);
-    expect(stillLinked?.productId).toBe(product.id);
+    expect(stillLinked?.productId).toBe(doomedRouter.id);
     expect(stillLinked?.productName).toBeNull();
 
     const noneFiltered = await purchaseList(

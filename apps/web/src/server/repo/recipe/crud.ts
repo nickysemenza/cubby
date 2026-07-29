@@ -819,6 +819,21 @@ const deleteRecipesTx = async (
     columns: { recipeId: true },
   });
 
+  // Meal-plan membership. This is a cascade, not a guard, for two reasons: the
+  // removal-path invariant says a delete cleans up its dependents in the same
+  // transaction, and a guard here would make deleteCookbook's unconditional
+  // recipe cascade throw mid-transaction. Without this the MealRecipe row
+  // outlives its recipe and the meal keeps counting it.
+  //
+  // The other incoming edge, `ingredient.recipeId` (the sub-recipe pointer), is
+  // deliberately NOT touched: the router resolves parents and calls
+  // dispatchRecompute, with findParentRecipesWithDeletedSubRecipes as the
+  // backstop detector. Cascading or guarding it would break sub-recipe deletion.
+  const cascadedMealRecipes = await tx.query.mealRecipe.findMany({
+    where: and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)),
+    columns: { recipeId: true },
+  });
+
   let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
   if (sectionIds.length > 0) {
     cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
@@ -834,6 +849,7 @@ const deleteRecipesTx = async (
   const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
   const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
   const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
+  const mealRecipesByRecipe = countBy(cascadedMealRecipes, (mr) => mr.recipeId);
   const ingredientsByRecipe = countBy(
     cascadedIngredients
       .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
@@ -868,6 +884,12 @@ const deleteRecipesTx = async (
     .set({ deletedAt: now })
     .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
 
+  // Soft delete meal-plan memberships
+  await tx
+    .update(mealRecipe)
+    .set({ deletedAt: now })
+    .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
+
   // Soft delete recipes
   await tx
     .update(recipe)
@@ -882,6 +904,7 @@ const deleteRecipesTx = async (
     cascadedSections: sectionsByRecipe,
     cascadedIngredients: ingredientsByRecipe,
     cascadedImages: imagesByRecipe,
+    cascadedMealRecipes: mealRecipesByRecipe,
   });
 
   await logAuditEntries(tx, actor, auditEntries);

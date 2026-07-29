@@ -962,6 +962,31 @@ export const deleteProducts = async (
         `Cannot delete ${count} product(s): ${names} have inventory entries. Remove inventory items first.`,
     });
 
+    // Safety check: don't delete if any product is referenced by a purchase.
+    //
+    // This used to be permitted deliberately — the dangling link degraded to a
+    // null display name via resolveLiveJoinName. That was reversed: the ledger's
+    // net cost and owned/sold window are derived from these rows, and a
+    // nameless product silently degrades that derivation with no restore path.
+    // Inventory and purchases are Product's two acquisition edges, so
+    // findOrphanedProducts and this guard must agree on both — checking only
+    // inventory here is what made that detector's false positives executable.
+    const withPurchases = await tx.query.purchase.findMany({
+      where: and(inArray(purchase.productId, ids), notDeleted(purchase)),
+      columns: { productId: true },
+    });
+    await assertNoDependents({
+      offendingParentIds: withPurchases.map((p) => p.productId),
+      fetchNames: (failedIds) =>
+        tx.query.product.findMany({
+          where: inArray(product.id, failedIds),
+          columns: { name: true },
+        }),
+      reason: "PRODUCT_HAS_PURCHASES",
+      message: (count, names) =>
+        `Cannot delete ${count} product(s): ${names} have purchases. Unlink the purchases first.`,
+    });
+
     const now = new Date();
 
     // Get counts of cascaded items (per product) for the audit trail.

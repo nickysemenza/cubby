@@ -1,5 +1,9 @@
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { cookbook } from "~/server/db/schema";
+import { deleteCookbook, upsertCookbook } from "./cookbook";
+import { getDb } from "./database-helpers";
 import {
   createPendingImageRecord,
   createUploadedImageRecord,
@@ -83,5 +87,79 @@ describe("image repository", () => {
     });
 
     await expect(markImageUploaded(ctx.db, uploaded.id)).rejects.toThrow();
+  });
+
+  // findCullablePendingImages enumerates four join tables (product/location/
+  // recipe/project image) PLUS cookbook.coverImageId, which is a direct FK, not
+  // a join row. Missing it meant a cookbook cover with no other association was
+  // exactly what the cull selected — and the cull is a HARD delete, so the R2
+  // object would go too.
+  //
+  // upsertCookbook flips a cover to UPLOADED in the same transaction that writes
+  // coverImageId, so a live cookbook can never normally point its coverImageId at
+  // a still-PENDING image — this combination is currently unreachable through the
+  // normal write path. We write it directly via the db to pin the guard against
+  // that invariant ever slipping (a future write path that sets coverImageId
+  // without flipping status would otherwise silently reintroduce the bug this
+  // regression covers).
+  it("a PENDING image referenced only by a live cookbook's coverImageId survives the pending cull", async () => {
+    const pending = await makePendingImage();
+    const { id: cookbookId } = await upsertCookbook(
+      ctx.db,
+      { name: "Cover Test Book", rawJson: [], sourceLabel: "Cover Test Book" },
+      ctx.actor,
+    );
+    // Bypass upsertCookbook's normal coverImageId path (which would flip the
+    // image to UPLOADED) to reconstruct the PENDING+cover state directly.
+    await getDb(ctx.db)
+      .update(cookbook)
+      .set({ coverImageId: pending.id })
+      .where(eq(cookbook.id, cookbookId));
+
+    const culled = await cullPendingImages(ctx.db, 0);
+    expect(culled.deletedIds).not.toContain(pending.id);
+
+    const stillThere = await getImageById(ctx.db, pending.id);
+    expect(stillThere.status).toEqual("PENDING");
+  });
+
+  // The non-obvious half of the guard above: deleteCookbook tombstones the
+  // Cookbook row (deletedAt set) WITHOUT nulling coverImageId, so a soft-deleted
+  // cookbook still holds a live FK to the image. findCullablePendingImages is
+  // deliberately NOT filtered by notDeleted(cookbook) — filtering it would cull
+  // exactly the images that then blow up the hard-delete on
+  // Cookbook_coverImageId_fkey.
+  it("a PENDING image referenced by a SOFT-DELETED cookbook's coverImageId also survives the pending cull", async () => {
+    const pending = await makePendingImage();
+    const { id: cookbookId } = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Deleted Cover Test Book",
+        rawJson: [],
+        sourceLabel: "Deleted Cover Test Book",
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(cookbook)
+      .set({ coverImageId: pending.id })
+      .where(eq(cookbook.id, cookbookId));
+
+    await deleteCookbook(ctx.db, cookbookId, ctx.actor);
+    const [row] = await getDb(ctx.db)
+      .select({
+        deletedAt: cookbook.deletedAt,
+        coverImageId: cookbook.coverImageId,
+      })
+      .from(cookbook)
+      .where(eq(cookbook.id, cookbookId));
+    expect(row?.deletedAt).not.toBeNull();
+    expect(row?.coverImageId).toBe(pending.id);
+
+    const culled = await cullPendingImages(ctx.db, 0);
+    expect(culled.deletedIds).not.toContain(pending.id);
+
+    const stillThere = await getImageById(ctx.db, pending.id);
+    expect(stillThere.status).toEqual("PENDING");
   });
 });

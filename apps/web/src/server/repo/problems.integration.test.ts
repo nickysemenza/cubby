@@ -1,4 +1,5 @@
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   projectCreateInput,
   purchaseCreateInput,
@@ -272,6 +273,49 @@ describe("problems repo", () => {
         false,
       );
     });
+
+    it("does not flag a product with no inventory but a live purchase, and flags it once the purchase is soft-deleted", async () => {
+      // The regression this guards: omitting the `purchase` subquery made 32 of
+      // 40 flagged "orphans" false positives — a tool bought and logged in the
+      // ledger, then never inventoried, looks exactly like one that was never
+      // real. Inventory and purchase are Product's two acquisition edges, so
+      // both must be checked before calling something orphaned.
+      const bought = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Bought Not Yet Stocked" }),
+        ctx.actor,
+      );
+      const purchase = await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade: "other",
+          costType: "tools",
+          name: "orphan-guard purchase",
+          productId: bought.id,
+        }),
+        ctx.actor,
+      );
+
+      // A live purchase disqualifies it — not orphaned yet.
+      const before = await findAllProblems(
+        ctx.db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(before.orphanedProducts.some((p) => p.id === bought.id)).toBe(
+        false,
+      );
+
+      await deletePurchases(ctx.db, [purchase.id], ctx.actor);
+
+      // With the purchase gone (and still no inventory), it's orphaned.
+      const after = await findAllProblems(
+        ctx.db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(after.orphanedProducts.some((p) => p.id === bought.id)).toBe(true);
+    });
   });
 
   describe("findProductsMissingPrice", () => {
@@ -508,6 +552,22 @@ describe("problems repo", () => {
         .values({ productId, imageId: img!.id });
     };
 
+    const attachPdf = async (productId: ProductId) => {
+      const [img] = await getDb(ctx.db)
+        .insert(image)
+        .values({
+          url: "https://example.com/manual.pdf",
+          key: `pdf-key-${productId}`,
+          filename: "manual.pdf",
+          size: 1,
+          contentType: PDF_CONTENT_TYPE,
+        })
+        .returning();
+      await getDb(ctx.db)
+        .insert(productImage)
+        .values({ productId, imageId: img!.id });
+    };
+
     it("flags each fillable gap and skips fully-populated products without a lookup", async () => {
       // (a) Unspecified manufacturer, but priced + imaged → only the manufacturer gap.
       const noManu = await createProduct(
@@ -628,6 +688,47 @@ describe("problems repo", () => {
       expect(productsWithBetterUpcData.some((p) => p.id === noPrice.id)).toBe(
         false,
       );
+    });
+
+    it("treats a PDF-only attachment as no real image, so it still surfaces as an image-gap candidate", async () => {
+      // Regression: `hasImage` used to read true off ProductImage alone, so a
+      // product whose only attachment was a PDF (an owner's manual, a spec
+      // sheet) looked fully imaged and silently dropped out of the UPC-lookup
+      // candidate list — it never got the chance to have a real photo filled
+      // in. `hasImage` now inner-joins Image and excludes PDF_CONTENT_TYPE,
+      // matching `productIdsWithImages` in product/crud.ts.
+      const pdfOnly = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Manual Only Product", upc: UPC_IMAGE }),
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(product)
+        .set({ price: 9 })
+        .where(eq(product.id, pdfOnly.id));
+      await attachPdf(pdfOnly.id);
+
+      const { client } = fakeUpcClient({
+        [UPC_IMAGE]: upcResponse(UPC_IMAGE, {
+          imageUrl: "https://example.com/real-photo.jpg",
+        }),
+      });
+
+      const { productsWithBetterUpcData } = await findAllProblems(
+        ctx.db,
+        client,
+        fakeUsdaClient(),
+      );
+
+      const flagged = productsWithBetterUpcData.find(
+        (p) => p.id === pdfOnly.id,
+      );
+      expect(flagged).toBeDefined();
+      expect(flagged?.proposed).toEqual({
+        manufacturer: null,
+        price: null,
+        imageUrl: "https://example.com/real-photo.jpg",
+      });
     });
   });
 });

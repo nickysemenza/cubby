@@ -382,6 +382,11 @@ export const relations = {
                 servings: true,
                 yield: true,
                 totals: true,
+                // Read by dbMealToAPI: the LINK's deletedAt says the recipe was
+                // unplanned, the RECIPE's says it no longer exists. Filtering
+                // only the former kept a deleted recipe in the meal and summed
+                // its stale totals into the rollup with pending:false.
+                deletedAt: true,
               },
             },
           },
