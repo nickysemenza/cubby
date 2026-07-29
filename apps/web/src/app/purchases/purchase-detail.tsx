@@ -1,5 +1,5 @@
 import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
-import { ExternalLink, Info, PackagePlus } from "lucide-react";
+import { ExternalLink, Info, PackagePlus, Receipt } from "lucide-react";
 import { type FC, useState } from "react";
 import {
   WithProductSearch,
@@ -34,6 +34,7 @@ import {
   costTypeOptions,
   futureFilterOptions,
 } from "./purchase-options";
+import { PurchaseOrderSiblings } from "./purchase-order-siblings";
 import { ReceivePurchaseDialog } from "./receive-purchase-dialog";
 
 interface PurchaseDetailProps {
@@ -396,6 +397,17 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
         </Button>
       ) : undefined,
     },
+    // Tags-style sibling hop, gated on having an order id at all — most of the
+    // ledger has none, and an unconditional panel would be permanently empty.
+    ...(purchase.orderId
+      ? [
+          {
+            title: "Same Order",
+            icon: Receipt,
+            content: <PurchaseOrderSiblings purchase={purchase} />,
+          },
+        ]
+      : []),
     ...commonSections,
   ];
 

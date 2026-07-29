@@ -2,15 +2,16 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import NewRecipe from "~/app/_components/recipe/new-recipe";
 import { Page } from "~/components/page/Page";
+import { urlStringParam } from "~/lib/search-params";
 
 // Accepts the iOS/Android Web Share Target payload (see manifest.json
 // `share_target`): a shared recipe link lands here. Safari puts the URL in
 // `text` for some flows and `url` for others, so we accept both; `scrape=1`
 // (from the in-app "Import from URL" entry point) auto-runs the scrape.
 const searchSchema = z.object({
-  url: z.string().optional().catch(undefined),
-  text: z.string().optional().catch(undefined),
-  title: z.string().optional().catch(undefined),
+  url: urlStringParam,
+  text: urlStringParam,
+  title: urlStringParam,
   scrape: z.coerce.boolean().optional().catch(undefined),
 });
 

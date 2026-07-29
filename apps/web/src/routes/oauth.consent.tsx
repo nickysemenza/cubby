@@ -15,14 +15,15 @@ import {
 import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
+import { urlStringParam } from "~/lib/search-params";
 
 // Only the two params this screen renders from. The rest of the signed
 // authorize query stays in the address bar untouched — the oauthProviderClient
 // fetch hook reads it from `window.location.search` when consent is submitted.
 // See auth.$authView for why widening this is the wrong move.
 const searchSchema = z.object({
-  client_id: z.string().optional().catch(undefined),
-  scope: z.string().optional().catch(undefined),
+  client_id: urlStringParam,
+  scope: urlStringParam,
 });
 
 export const Route = createFileRoute("/oauth/consent")({

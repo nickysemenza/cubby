@@ -67,6 +67,7 @@ import {
   findLocationsWithoutAiDescription,
   findManufacturerSpellingVariants,
   findNeverVerifiedInventory,
+  findOrdersWithPartialVendor,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findProductsMissingPrice,
@@ -80,6 +81,7 @@ import {
   loadProductsForCoverage,
   pruneUnusedAliases,
   type ReparsedStaleLineWrite,
+  resolveOrderVendorBackfill,
   synthesizeEffectiveMappings,
 } from "~/server/repo/problems";
 import {
@@ -88,6 +90,7 @@ import {
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { computeAttentionItems } from "~/server/repo/project";
+import { setPurchasesVendor } from "~/server/repo/purchase";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
@@ -464,6 +467,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       staleLocations: () => findStaleLocations(scoped),
       neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
+      ordersWithPartialVendor: () => findOrdersWithPartialVendor(scoped),
       vendorSpellingVariants: () => findVendorSpellingVariants(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
@@ -487,9 +491,36 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     staleLocations: r.staleLocations,
     neverVerifiedInventory: r.neverVerifiedInventory,
     unknownParkedItems: r.unknownParkedItems,
+    ordersWithPartialVendor: r.ordersWithPartialVendor,
     vendorSpellingVariants: r.vendorSpellingVariants,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
   };
+};
+
+/**
+ * Backfill the missing vendor on an order whose rows disagree about it.
+ *
+ * Takes only the order id and re-derives the vendor from the order's own rows
+ * (`resolveOrderVendorBackfill`), which is what makes it safe to expose as a
+ * one-click fix: a stale client can't name a vendor, so it can't write a wrong
+ * one, and re-running it after it's already applied is a no-op rather than a
+ * second write. Refuses the ambiguous case — an order id genuinely shared by
+ * two retailers has no correct answer.
+ */
+export const backfillOrderVendor = async (
+  db: Database,
+  orderId: string,
+  actorContext: ActorContext,
+): Promise<{ vendor: string | null; updated: number }> => {
+  const resolved = await resolveOrderVendorBackfill(db, orderId);
+  if (!resolved) return { vendor: null, updated: 0 };
+
+  const items = await setPurchasesVendor(
+    db,
+    { ids: resolved.purchaseIds, vendor: resolved.vendor },
+    actorContext,
+  );
+  return { vendor: resolved.vendor, updated: items.length };
 };
 
 export const cleanupOrphanedEntityEmbeddings = async (

@@ -18,6 +18,7 @@ import {
   createPurchase,
   deletePurchases,
   getPurchaseByID,
+  getPurchaseOrderSiblings,
   movePurchases,
   purchaseAnalytics,
   purchaseList,
@@ -1586,5 +1587,122 @@ describe("purchase repository — productPresenceFilter", () => {
       pagination,
     );
     expect(noneFiltered.data.map((p) => p.id)).not.toContain(purchase.id);
+  });
+});
+
+describe("purchase repository — getPurchaseOrderSiblings", () => {
+  const ctx = withTestDb();
+
+  // Every row here shares one order id; what varies is the vendor, which is
+  // the half of the group key that makes or breaks the match.
+  const orderRow = (name: string, vendor: string | null, orderId: string) =>
+    purchaseCreateInput.parse({
+      trade: "other",
+      costType: "materials",
+      name,
+      cost: 10,
+      vendor,
+      orderId,
+    });
+
+  it("matches on vendor AND order id together, and excludes the source row", async () => {
+    const orderId = "111-siblings-0000001";
+    const first = await createPurchase(
+      ctx.db,
+      orderRow("order line one", "Amazon", orderId),
+      ctx.actor,
+    );
+    const second = await createPurchase(
+      ctx.db,
+      orderRow("order line two", "Amazon", orderId),
+      ctx.actor,
+    );
+    // Same order id, different vendor — the collision the strict rule exists
+    // to prevent. Must NOT come back as a sibling.
+    const collision = await createPurchase(
+      ctx.db,
+      orderRow("same id, other retailer", "Home Depot", orderId),
+      ctx.actor,
+    );
+    // Same vendor, different order — the other axis.
+    const otherOrder = await createPurchase(
+      ctx.db,
+      orderRow("different order", "Amazon", "111-siblings-0000002"),
+      ctx.actor,
+    );
+
+    const siblings = await getPurchaseOrderSiblings(ctx.db, first.id);
+    const ids = siblings.map((p) => p.id);
+
+    expect(ids).toEqual([second.id]);
+    expect(ids).not.toContain(first.id);
+    expect(ids).not.toContain(collision.id);
+    expect(ids).not.toContain(otherOrder.id);
+  });
+
+  it("groups vendorless rows with each other, not with the vendored half", async () => {
+    const orderId = "WN-siblings-null-vendor";
+    const nullA = await createPurchase(
+      ctx.db,
+      orderRow("no vendor a", null, orderId),
+      ctx.actor,
+    );
+    const nullB = await createPurchase(
+      ctx.db,
+      orderRow("no vendor b", null, orderId),
+      ctx.actor,
+    );
+    const vendored = await createPurchase(
+      ctx.db,
+      orderRow("has vendor", "Home Depot", orderId),
+      ctx.actor,
+    );
+
+    // A null vendor is its own group — this is the split the
+    // half-filled-vendor sweep reports, asserted from the matching side.
+    expect(
+      (await getPurchaseOrderSiblings(ctx.db, nullA.id)).map((p) => p.id),
+    ).toEqual([nullB.id]);
+    expect(
+      (await getPurchaseOrderSiblings(ctx.db, vendored.id)).map((p) => p.id),
+    ).toEqual([]);
+  });
+
+  it("returns nothing for a purchase with no order id", async () => {
+    const loose = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "no order id",
+        vendor: "Amazon",
+      }),
+      ctx.actor,
+    );
+    // Not "every other vendorless-order Amazon row" — a null order id is not a
+    // group, so an empty result is the only correct answer.
+    expect(await getPurchaseOrderSiblings(ctx.db, loose.id)).toEqual([]);
+  });
+
+  it("excludes a soft-deleted order-mate", async () => {
+    const orderId = "111-siblings-deleted";
+    const keep = await createPurchase(
+      ctx.db,
+      orderRow("surviving line", "Amazon", orderId),
+      ctx.actor,
+    );
+    const doomed = await createPurchase(
+      ctx.db,
+      orderRow("deleted line", "Amazon", orderId),
+      ctx.actor,
+    );
+
+    expect(
+      (await getPurchaseOrderSiblings(ctx.db, keep.id)).map((p) => p.id),
+    ).toEqual([doomed.id]);
+
+    await deletePurchases(ctx.db, [doomed.id], ctx.actor);
+
+    expect(await getPurchaseOrderSiblings(ctx.db, keep.id)).toEqual([]);
   });
 });

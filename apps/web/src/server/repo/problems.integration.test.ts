@@ -22,6 +22,7 @@ import {
   productImage,
 } from "~/server/db/schema";
 import {
+  backfillOrderVendor,
   findAllProblems,
   findFastProblems,
   findTrackerProblems,
@@ -34,7 +35,12 @@ import { createLocation, ensureGlobalUnknownLocation } from "./location";
 import { findStaleIngredientParses } from "./problems";
 import { createProduct, deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
-import { createPurchase, deletePurchases } from "./purchase";
+import {
+  createPurchase,
+  deletePurchases,
+  getPurchaseByID,
+  getPurchaseOrderSiblings,
+} from "./purchase";
 import { createRecipe } from "./recipe";
 import {
   ingredientRef,
@@ -985,6 +991,123 @@ describe("problems service — recount staleness", () => {
     await deleteInventoryEntries(ctx.db, [parked.id], ctx.actor);
     const after = await findFastProblems(ctx.db);
     expect(after.unknownParkedItems.map((i) => i.id)).not.toContain(parked.id);
+  });
+});
+
+describe("problems service — orders split by a missing vendor", () => {
+  const ctx = withTestDb();
+
+  const orderRow = (name: string, vendor: string | null, orderId: string) =>
+    purchaseCreateInput.parse({
+      trade: "other",
+      costType: "materials",
+      name,
+      cost: 10,
+      vendor,
+      orderId,
+    });
+
+  const findOrder = async (orderId: string) =>
+    (await findFastProblems(ctx.db)).ordersWithPartialVendor.find(
+      (o) => o.orderId === orderId,
+    );
+
+  it("flags an order whose rows disagree about the vendor, and the backfill clears it", async () => {
+    const orderId = "111-partial-vendor-0001";
+    const vendored = await createPurchase(
+      ctx.db,
+      orderRow("has the vendor", "Amazon", orderId),
+      ctx.actor,
+    );
+    const missing = await createPurchase(
+      ctx.db,
+      orderRow("missing the vendor", null, orderId),
+      ctx.actor,
+    );
+
+    const flagged = await findOrder(orderId);
+    expect(flagged).toMatchObject({
+      orderId,
+      vendors: ["Amazon"],
+      rowCount: 2,
+      missingCount: 1,
+    });
+    // Only the vendorless rows are backfill targets.
+    expect(flagged?.purchaseIds).toEqual([missing.id]);
+
+    const result = await backfillOrderVendor(ctx.db, orderId, ctx.actor);
+    expect(result).toEqual({ vendor: "Amazon", updated: 1 });
+
+    // The order is whole again — both by the detector and by the group key the
+    // detector exists to protect.
+    expect(await findOrder(orderId)).toBeUndefined();
+    expect(
+      (await getPurchaseOrderSiblings(ctx.db, vendored.id)).map((p) => p.id),
+    ).toEqual([missing.id]);
+  });
+
+  it("ignores orders that are internally consistent", async () => {
+    const allVendored = "111-consistent-vendored";
+    await createPurchase(
+      ctx.db,
+      orderRow("both vendored a", "Amazon", allVendored),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      orderRow("both vendored b", "Amazon", allVendored),
+      ctx.actor,
+    );
+
+    // An entirely vendorless order is a coherent group, not drift: it resolves
+    // via `vendorPresenceFilter: "none"` and finds all of its own rows.
+    const allNull = "111-consistent-vendorless";
+    await createPurchase(
+      ctx.db,
+      orderRow("both null a", null, allNull),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      orderRow("both null b", null, allNull),
+      ctx.actor,
+    );
+
+    expect(await findOrder(allVendored)).toBeUndefined();
+    expect(await findOrder(allNull)).toBeUndefined();
+  });
+
+  it("reports a two-vendor collision but refuses to backfill it", async () => {
+    const orderId = "#11325";
+    await createPurchase(
+      ctx.db,
+      orderRow("retailer one", "Tool Nirvana", orderId),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      orderRow("retailer two", "Home Depot", orderId),
+      ctx.actor,
+    );
+    const missing = await createPurchase(
+      ctx.db,
+      orderRow("no vendor at all", null, orderId),
+      ctx.actor,
+    );
+
+    const flagged = await findOrder(orderId);
+    expect([...(flagged?.vendors ?? [])].sort()).toEqual([
+      "Home Depot",
+      "Tool Nirvana",
+    ]);
+    expect(flagged?.missingCount).toBe(1);
+
+    // No correct answer exists, so the server writes nothing rather than
+    // guessing — the UI correspondingly offers no fix button.
+    const result = await backfillOrderVendor(ctx.db, orderId, ctx.actor);
+    expect(result).toEqual({ vendor: null, updated: 0 });
+    const after = await getPurchaseByID(ctx.db, missing.id);
+    expect(after?.vendor).toBeNull();
   });
 });
 

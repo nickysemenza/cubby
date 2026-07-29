@@ -10,6 +10,7 @@ import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
   // Absent `statuses` means the three "live" statuses (everything but
@@ -20,7 +21,7 @@ const searchSchema = z.object({
   statuses: z.array(projectStatusSchema).optional().catch(undefined),
   kinds: z.array(projectKindSchema).optional().catch(undefined),
   locations: z.array(z.string()).optional().catch(undefined),
-  date: z.string().optional().catch(undefined),
+  date: urlStringParam,
   view: z
     .enum(["overview", "analytics", "data", "gallery", "history"])
     .optional()

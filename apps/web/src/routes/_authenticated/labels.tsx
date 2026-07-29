@@ -25,9 +25,10 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { generateLabelCsv } from "~/lib/label-generator";
+import { urlStringParam } from "~/lib/search-params";
 
 const searchParamsSchema = z.object({
-  codes: z.string().optional().catch(undefined),
+  codes: urlStringParam,
   format: z.enum(["pls134", "pls763", "ptouch"]).optional().catch(undefined),
   skip: z.coerce.number().int().min(0).optional().catch(undefined),
   copies: z.coerce.number().int().min(1).optional().catch(undefined),

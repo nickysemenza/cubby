@@ -1,7 +1,7 @@
 import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import type { Row } from "@tanstack/react-table";
+import type { Row as TableRow } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import {
   ArrowRightLeft,
@@ -22,7 +22,7 @@ import {
   tradeOptions,
 } from "~/app/projects/shared";
 import { VendorMark } from "~/components/entity/vendor-cell";
-import { Grid } from "~/components/layout";
+import { Grid, Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
@@ -160,7 +160,7 @@ export function PurchaseList() {
           label: "Move to project...",
           icon: <ArrowRightLeft className="size-4" />,
           minSelection: 1,
-          onExecute: async (rows: Row<PurchaseOut>[]) => {
+          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
             setBulkMoveItems(rows.map((r) => r.original));
             return { success: true };
           },
@@ -170,7 +170,7 @@ export function PurchaseList() {
           label: "Set trade...",
           icon: <Wrench className="size-4" />,
           minSelection: 1,
-          onExecute: async (rows: Row<PurchaseOut>[]) => {
+          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
             setBulkTradeItems(rows.map((r) => r.original));
             return { success: true };
           },
@@ -180,7 +180,7 @@ export function PurchaseList() {
           label: "Set cost type...",
           icon: <Tag className="size-4" />,
           minSelection: 1,
-          onExecute: async (rows: Row<PurchaseOut>[]) => {
+          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
             setBulkCostTypeItems(rows.map((r) => r.original));
             return { success: true };
           },
@@ -363,6 +363,32 @@ export function PurchaseList() {
       />
     ) : undefined;
 
+  // `?order=` (the "Same Order" section and the Order # cell) is the same
+  // invisible-filter situation as `?productId=` above — `orderIdExact` has no
+  // column, so it needs its own visible surface. No lookup query: the order id
+  // IS the display value. Clearing drops only `order`; the `vendor` it always
+  // arrives paired with is a real column filter that shows its own chip, so
+  // clearing it here would clobber a selection the user may have made
+  // independently.
+  const scopedOrderId = purchasesSearch.order;
+  const clearOrderScope = useCallback(() => {
+    void purchasesNavigate({
+      search: (prev) => ({ ...prev, order: undefined }),
+      replace: true,
+    });
+  }, [purchasesNavigate]);
+  const orderScopeChip = scopedOrderId ? (
+    <ScopeChip name="Order" value={scopedOrderId} onClear={clearOrderScope} />
+  ) : undefined;
+
+  const scopeChips =
+    productScopeChip || orderScopeChip ? (
+      <Row align="center" gap="xs">
+        {productScopeChip}
+        {orderScopeChip}
+      </Row>
+    ) : undefined;
+
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("purchase");
 
   const {
@@ -470,7 +496,7 @@ export function PurchaseList() {
       </Grid>
       <RTable
         table={table}
-        additionalToolbarContent={productScopeChip}
+        additionalToolbarContent={scopeChips}
         isLoading={isLoading}
         error={error}
         ariaLabel="Purchases Table"

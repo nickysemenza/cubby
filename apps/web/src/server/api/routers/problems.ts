@@ -1,5 +1,7 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
+  backfillOrderVendorInput,
+  backfillOrderVendorOut,
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
   deleteUnusedIngredientsInput,
@@ -18,6 +20,7 @@ import {
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
+  backfillOrderVendor,
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
   dryRunPruneAliases,
@@ -172,6 +175,22 @@ const cleanupOrphanedEmbeddings = protectedProcedure
     return await cleanupOrphanedEntityEmbeddings(ctx.db, input?.ids);
   });
 
+// Writes stored data, so it stays a per-card fix rather than joining the
+// top-level auto-fix run (see auto-fix-registry's membership rule). Idempotent:
+// once applied the order is consistent, so the detector no longer reports it
+// and a re-run resolves to nothing.
+const backfillOrderVendorProc = protectedProcedure
+  .input(backfillOrderVendorInput)
+  .output(backfillOrderVendorOut)
+  .mutation(async ({ ctx, input }) => {
+    const result = await backfillOrderVendor(
+      ctx.db,
+      input.orderId,
+      ctx.actorContext,
+    );
+    return result;
+  });
+
 export const problemsRouter = createTRPCRouter({
   getFast,
   getCoverage,
@@ -186,4 +205,5 @@ export const problemsRouter = createTRPCRouter({
   recipeUsageByProduct,
   deleteUnused,
   cleanupOrphanedEmbeddings,
+  backfillOrderVendor: backfillOrderVendorProc,
 });
