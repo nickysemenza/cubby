@@ -25,9 +25,10 @@ on:
         type: boolean
         default: false
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Cancel superseded runs on branches/PRs, but never on main — cancelling there
-  # could abort an in-flight production deploy.
+  # PRs keep one cancellable run per ref. Main verification runs are intentionally
+  # independent: only the deployment jobs below serialize, so a burst of merges
+  # never queues lint/tests behind an older production deploy.
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: read
@@ -36,6 +37,37 @@ permissions:
   checks: write
   pull-requests: read
 jobs:
+  rust-coverage-changes:
+    name: Detect Rust coverage changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.changes.outputs.rust }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 1
+
+      - name: Detect Rust and WASM input changes
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            recipebridge rust-toolchain.toml .github/workflows/ci.yaml; then
+            echo "rust=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
@@ -116,11 +148,12 @@ jobs:
 
   coverage-rust:
     name: Rust Coverage - recipebridge
+    needs: [rust-coverage-changes]
+    if: needs.rust-coverage-changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    # Soft gate: NOT in check-tests `needs`, so a coverage hiccup never blocks the
-    # deploy. Runs in parallel with the gating test-rust job. cargo llvm-cov does
-    # its own instrumented build (separate RUSTFLAGS → can't reuse test-rust's
-    # artifacts), which is exactly why it lives off the critical path.
+    # Soft deploy gate: report-coverage waits for this artifact, but check-tests
+    # and deploy-cf do not. PRs run it only when Rust/WASM inputs changed; main
+    # always refreshes it. cargo llvm-cov uses a separate instrumented build.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
@@ -137,14 +170,12 @@ jobs:
           tool: cargo-llvm-cov
       - name: Run recipebridge tests (with coverage)
         run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
-      - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+      - name: Save Rust coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/cubby
-          files: recipebridge/lcov.info
-          flags: recipebridge
-          name: recipebridge-coverage
+          name: coverage-rust
+          path: recipebridge/lcov.info
+          retention-days: 1
 
   lint-format:
     name: Lint and Format
@@ -199,14 +230,12 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+      - name: Save web unit coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/cubby
-          working-directory: apps/web
-          flags: web
-          name: web-unit-coverage
+          name: coverage-web-unit
+          path: apps/web/coverage/coverage-final.json
+          retention-days: 1
 
       - name: Fail if tests failed
         if: steps.test.outcome != 'success'
@@ -289,17 +318,12 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+      - name: Save web integration coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/cubby
-          working-directory: apps/web
-          flags: web
-          # Shard-specific upload name so the two shards' partial coverage reports
-          # don't collide on codecov (it merges by `flags`, but a shared name can
-          # dedup an upload). Matches the per-leg pattern in test-unit-aux.
-          name: web-integration-coverage-shard-${{ matrix.shard }}
+          name: coverage-web-integration-${{ matrix.shard }}
+          path: apps/web/coverage/coverage-final.json
+          retention-days: 1
 
       - name: Fail if tests failed
         if: steps.test.outcome != 'success'
@@ -308,73 +332,91 @@ jobs:
           exit 1
 
   test-unit-aux:
-    name: Unit Tests - ${{ matrix.package.name }}
+    name: Unit Tests - auxiliary packages
     needs: [build-wasm]
     runs-on: ubuntu-latest
-    # Always runs (no change-detection gate). The legs are ~30s, run in parallel,
-    # and finish well before the long-pole jobs, so they cost no critical-path
-    # time — and always uploading their codecov flags keeps `codecov/project`
-    # from dropping ~586 lines whenever a PR doesn't touch these packages.
-    # NOTE: no job-level `continue-on-error` (see test-unit-web). result must stay
-    # honest so the check-tests gate can catch a failing matrix leg.
-    strategy:
-      matrix:
-        package:
-          - name: schemas
-            path: packages/schemas
-          - name: shared
-            path: packages/shared
-          - name: upc-contract
-            path: packages/upc-contract
-          - name: usda-api
-            path: apps/usda-api
-          - name: usda-contract
-            path: packages/usda-contract
-          - name: usda-schemas
-            path: packages/usda-schemas
-          - name: upc-lookup
-            path: apps/upc-lookup
-          - name: worker-tracing
-            path: packages/worker-tracing
-
+    # The old eight-leg matrix spent eight runners checking out and installing
+    # the same workspace for tests that usually execute in 1-2 seconds apiece.
+    # One runner keeps the tests parallel while leaving capacity for E2E,
+    # integration, CodeQL, and review jobs during bursty pushes.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "false"
 
-      - name: Create test results directory
-        run: mkdir -p ${{ matrix.package.path }}/test-results
-
-      - name: Run tests for ${{ matrix.package.name }}
+      - name: Run auxiliary tests in parallel
         id: test
         continue-on-error: true
+        shell: bash
         run: |
-          cd ${{ matrix.package.path }}
-          pnpm test --run --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
+          paths=(
+            packages/schemas
+            packages/shared
+            packages/upc-contract
+            apps/usda-api
+            packages/usda-contract
+            packages/usda-schemas
+            apps/upc-lookup
+            packages/worker-tracing
+          )
+          pids=()
+
+          for package_path in "${paths[@]}"; do
+            mkdir -p "$package_path/test-results"
+            (
+              cd "$package_path"
+              pnpm test --run --coverage \
+                --reporter=default \
+                --reporter=github-actions \
+                --reporter=junit \
+                --outputFile=test-results/vitest-junit.xml
+            ) &
+            pids+=("$!")
+          done
+
+          failed=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || failed=1
+          done
+          exit "$failed"
 
       - name: Publish Test Results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
-          name: Unit Tests - ${{ matrix.package.name }}
-          path: ${{ matrix.package.path }}/test-results/vitest-junit.xml
+          name: Unit Tests - auxiliary packages
+          path: |
+            packages/schemas/test-results/vitest-junit.xml
+            packages/shared/test-results/vitest-junit.xml
+            packages/upc-contract/test-results/vitest-junit.xml
+            apps/usda-api/test-results/vitest-junit.xml
+            packages/usda-contract/test-results/vitest-junit.xml
+            packages/usda-schemas/test-results/vitest-junit.xml
+            apps/upc-lookup/test-results/vitest-junit.xml
+            packages/worker-tracing/test-results/vitest-junit.xml
           reporter: java-junit
           fail-on-error: false
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+      - name: Save auxiliary coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/cubby
-          working-directory: ${{ matrix.package.path }}
-          flags: ${{ matrix.package.name }}
-          name: ${{ matrix.package.name }}-coverage
+          name: coverage-aux
+          path: |
+            packages/schemas/coverage/coverage-final.json
+            packages/shared/coverage/coverage-final.json
+            packages/upc-contract/coverage/coverage-final.json
+            apps/usda-api/coverage/coverage-final.json
+            packages/usda-contract/coverage/coverage-final.json
+            packages/usda-schemas/coverage/coverage-final.json
+            apps/upc-lookup/coverage/coverage-final.json
+            packages/worker-tracing/coverage/coverage-final.json
+          retention-days: 1
 
       - name: Fail if tests failed
         if: steps.test.outcome != 'success'
         run: |
-          echo "::error::Unit tests failed for ${{ matrix.package.name }} — see the 'Run tests' step above"
+          echo "::error::Auxiliary unit tests failed — see the parallel test step above"
           exit 1
 
   test-e2e:
@@ -390,6 +432,12 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e) }}
     needs: [build-wasm]
     runs-on: ubuntu-latest
+    # Pin the image to the exact @playwright/test version in pnpm-lock.yaml.
+    # Browsers + Linux system dependencies are baked in, removing the apt mirror
+    # download that has ranged from ~20 seconds to more than 20 minutes.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --user 1001
     # Shard the spec suite across parallel jobs to cut wall-clock. Each shard is
     # a *separate* job with its own postgres/integresql services + IntegreSQL DB
     # and its own wrangler dev server, so within-process worker contention (the
@@ -406,13 +454,9 @@ jobs:
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      # Do NOT set PLAYWRIGHT_BROWSERS_PATH to `~/.cache/ms-playwright`: a literal
-      # `~` in a YAML env value is NOT shell-expanded, so Playwright installs into
-      # a folder literally named `~` under apps/web, while actions/cache expands
-      # `~` to /home/runner — the two never align, so the browser cache silently
-      # never hit and Chromium (~175MB) was re-downloaded every run. Leaving this
-      # unset lets Playwright default to os.homedir()/.cache/ms-playwright, which
-      # matches the cache step's `~/.cache/ms-playwright` (action-expanded).
+      # A container job reaches service containers by label, not localhost.
+      INTEGRESQL_URL: http://integresql:5000
+      INTEGRESQL_DATABASE_HOST: postgres
     services:
       postgres:
         # pgvector image: integration/E2E setup runs `CREATE EXTENSION vector`
@@ -451,17 +495,6 @@ jobs:
       # nothing reads it. e2e-global-setup.ts provisions its own IntegreSQL
       # template entirely in-process (CREATE EXTENSION pg_trgm + drizzle-kit
       # pushSchema), exactly like test-integration-web above.
-      - name: Cache Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-webkit
-
-      - name: Install Playwright Browsers (Chromium and WebKit)
-        # Always reconcile the requested browsers. A cache can be valid for the
-        # Playwright version while predating a newly added browser project.
-        run: pnpm --filter @cubby/web run test:e2e:install
       - name: Build web app for E2E
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
@@ -485,7 +518,13 @@ jobs:
   check-tests:
     name: Check All Tests Passed
     needs:
-      [test-unit-web, test-integration-web, test-unit-aux, test-e2e, test-rust]
+      [
+        test-unit-web,
+        test-integration-web,
+        test-unit-aux,
+        test-e2e,
+        test-rust,
+      ]
     runs-on: ubuntu-latest
     if: always()
     outputs:
@@ -513,20 +552,68 @@ jobs:
                 "$unit_aux_result" == "success" && \
                 "$rust_result" == "success" && \
                 ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
-            echo "all-passed=true" >> $GITHUB_OUTPUT
+            echo "all-passed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "all-passed=false" >> $GITHUB_OUTPUT
+            echo "all-passed=false" >> "$GITHUB_OUTPUT"
           fi
+
+  report-coverage:
+    name: Report complete coverage
+    needs:
+      [test-unit-web, test-integration-web, test-unit-aux, coverage-rust]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      needs.test-unit-web.result == 'success' &&
+      needs.test-integration-web.result == 'success' &&
+      needs.test-unit-aux.result == 'success' &&
+      (needs.coverage-rust.result == 'success' ||
+       needs.coverage-rust.result == 'skipped')
+    # Soft gate: deployment does not need this job. Coverage is uploaded once
+    # after all report-producing tests, so Codecov never computes a status from
+    # partial uploads and test runners make no independent network calls.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: coverage-*
+          path: coverage-reports
+
+      - name: Collect coverage report paths
+        id: coverage-files
+        shell: bash
+        run: |
+          files="$(
+            find coverage-reports -type f \
+              \( -name lcov.info -o -name coverage-final.json \) \
+              -print | sort | paste -sd, -
+          )"
+          if [[ -z "$files" ]]; then
+            echo "::error::No coverage reports were downloaded"
+            exit 1
+          fi
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+      - name: Upload complete coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/cubby
+          files: ${{ steps.coverage-files.outputs.files }}
+          disable_search: true
+          flags: complete
+          name: complete-coverage
 
   build-cf:
     name: Build for Cloudflare Workers
     # Only needs the WASM artifact + source — lint passing is orthogonal to
     # whether the bundle builds. Decoupled from lint-format so it runs in
-    # parallel (starts after build-wasm, not after lint), which lands the PR
-    # preview-cf ~43s sooner and keeps build-cf off the deploy critical path
-    # (check-tests is the pole). The real deploy still gates on lint-format
-    # (deploy-cf `needs`), so a lint failure never ships — build-cf just may
-    # run on a lint-broken PR (cheap; minutes are free on the public repo).
+    # parallel (starts after build-wasm, not after lint), keeping it off the
+    # deploy critical path (check-tests is the pole). The real deploy still
+    # gates on lint-format (deploy-cf `needs`), so a lint failure never ships —
+    # build-cf just may run on a lint-broken PR (cheap on the public repo).
     needs: [build-wasm]
     runs-on: ubuntu-latest
     env:
@@ -549,6 +636,9 @@ jobs:
     name: Deploy to Cloudflare Workers
     needs: [lint-format, check-tests, build-cf]
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-cubby-production
+      cancel-in-progress: false
     if: |
       always() &&
       needs.lint-format.result == 'success' &&
@@ -560,12 +650,19 @@ jobs:
       url: https://cubby.nickysemenza.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check whether this is still current main
+        id: main
+        uses: ./.github/actions/check-current-main
+
       - name: Download CF build artifact
+        if: steps.main.outputs.current == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: cf-build
           path: apps/web/dist
       - name: Install wrangler
+        if: steps.main.outputs.current == 'true'
         # Pin to the repo's wrangler version (apps/web/package.json): build:cf
         # dumps the RESOLVED config from that version, and a newer wrangler can
         # reject resolved-only fields (4.112 started erroring on `legacy_env`,
@@ -579,74 +676,13 @@ jobs:
           version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
           npm install -g "wrangler@${version}"
       - name: Deploy to Cloudflare Workers
+        if: steps.main.outputs.current == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9f10f078d35d86c78dedece2300a6b88
           command: deploy --config dist/server/wrangler.json
           workingDirectory: apps/web
-
-  preview-cf:
-    name: Preview Deploy (Cloudflare)
-    # Per-PR preview via `wrangler versions upload`: uploads a new VERSION of the
-    # cubby worker (prod Hyperdrive + secrets) WITHOUT routing the custom domain
-    # to it, served at https://<prefix>-cubby.nicky.workers.dev. Prod stays on the
-    # deployed version. Writes hit prod data; passkeys break on the preview URL
-    # (rpID is bound to cubby.nickysemenza.com) — auth.ts trusts *.nicky.workers.dev
-    # so email/password login still works.
-    #
-    # The preview URL is surfaced as a native GitHub Deployment (environment.url
-    # below) — it shows in the repo Deployments UI and as a "View deployment"
-    # button on the PR, same treatment as prod. Requires Preview URLs (workers.dev
-    # subdomain) enabled on the cubby worker; until then the URL is empty.
-    needs: [build-cf]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      deployments: write
-    environment:
-      name: preview
-      url: ${{ steps.preview.outputs.url }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Download CF build artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: cf-build
-          path: apps/web/dist
-      - name: Install wrangler
-        # Pin to the repo's wrangler version: build:cf dumps the RESOLVED
-        # config from that version, and a newer global wrangler can reject
-        # resolved-only fields (4.112 started erroring on `legacy_env`,
-        # failing every preview upload).
-        run: |
-          version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
-          npm install -g "wrangler@${version}"
-      - name: Upload preview version
-        id: preview
-        working-directory: apps/web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
-        run: |
-          set -o pipefail
-          # --message carries the PR URL so it links back from the CF Versions UI
-          # (deploys are by a service token, so CF shows "by Unknown" — full
-          # GitHub linking would need Cloudflare Workers Builds).
-          # COOKIE_DOMAIN scopes the better-auth session cookie to the whole
-          # account subdomain (not the unique per-version host), so one login on
-          # any preview carries to every preview. Prod never sets this var, so it
-          # keeps a host-only cookie on cubby.nickysemenza.com. See auth.ts.
-          wrangler versions upload --config dist/server/wrangler.json \
-            --var "COOKIE_DOMAIN:.nicky.workers.dev" \
-            --tag "pr-${{ github.event.number }}" \
-            --message "${{ github.event.pull_request.html_url }} @ ${{ github.sha }}" 2>&1 | tee upload.log
-          # The <prefix>-cubby host is specific to this worker's preview URLs, so
-          # it won't match the USDA/UPC vars in the bindings dump.
-          url=$(grep -oE 'https://[a-z0-9-]+-cubby\.nicky\.workers\.dev' upload.log | head -1)
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          [ -n "$url" ] || echo "::warning::No preview URL — enable Preview URLs (workers.dev) for the cubby worker."
 
   # The two aux (leaf) workers deploy identically — same gate, same shape — so
   # they share one matrix job, and both redeploy on every main push (like the
@@ -674,16 +710,26 @@ jobs:
     strategy:
       matrix:
         pkg: [usda-api, upc-lookup]
+    concurrency:
+      group: deploy-${{ matrix.pkg }}-production
+      cancel-in-progress: false
     environment:
       name: cloudflare
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check whether this is still current main
+        id: main
+        uses: ./.github/actions/check-current-main
+
       - uses: ./.github/actions/setup-node-with-deps
+        if: steps.main.outputs.current == 'true'
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
           # workspace imports each worker bundles (no prebuilt artifact).
           download-wasm: "false"
       - name: Deploy ${{ matrix.pkg }}
+        if: steps.main.outputs.current == 'true'
         run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

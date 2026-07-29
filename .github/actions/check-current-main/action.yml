@@ -1,0 +1,22 @@
+name: "Check current main SHA"
+description: "Reports whether this workflow still targets the current main commit"
+
+outputs:
+  current:
+    description: "true when GITHUB_SHA is still refs/heads/main"
+    value: ${{ steps.check.outputs.current }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Compare workflow SHA with main
+      id: check
+      shell: bash
+      run: |
+        current_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+        if [[ "$current_sha" == "$GITHUB_SHA" ]]; then
+          echo "current=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "current=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Skipping stale deployment for $GITHUB_SHA; main is $current_sha"
+        fi

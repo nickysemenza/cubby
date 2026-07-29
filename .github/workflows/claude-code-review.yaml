@@ -6,6 +6,12 @@ on:
     # Optionally scope to certain paths:
     # paths: ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts"]
 
+# A fresh push supersedes the review of the old SHA. Keeping this independent
+# from CI means a slow remote cancellation cannot hold verification in pending.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     # Skip draft PRs and any bot-initiated run. claude-code-action hard-fails on
