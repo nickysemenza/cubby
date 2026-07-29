@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // useTableState calls useSearch({ strict: false }) unconditionally (even when
@@ -100,5 +100,23 @@ describe("useTableState — pageIndex reset on filter change", () => {
     mockSearch = { page: "3" };
     const { result } = renderHook(() => useTableState());
     expect(result.current.pagination.pageIndex).toBe(2); // page=3 -> index 2
+  });
+
+  it("ignores and removes pagination URL state for infinite lists", async () => {
+    mockSearch = { page: "4", pageSize: "100", keep: "yes" };
+    const { result } = renderHook(() =>
+      useTableState({
+        urlSync: true,
+        syncPaginationToUrl: false,
+        initialPagination: { pageIndex: 0, pageSize: 25 },
+      }),
+    );
+
+    expect(result.current.pagination).toEqual({ pageIndex: 0, pageSize: 25 });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    const navigateOptions = mockNavigate.mock.calls.at(-1)?.[0] as {
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(navigateOptions.search(mockSearch)).toEqual({ keep: "yes" });
   });
 });

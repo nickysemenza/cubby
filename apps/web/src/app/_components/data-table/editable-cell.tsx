@@ -2,7 +2,7 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { Check, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -71,6 +71,8 @@ interface EditableCellProps<T> {
   renderValue: (value: T | null) => React.ReactNode;
   /** Enable cmd-C / cmd-V on the focused display trigger. */
   clipboard?: CellClipboardSpec;
+  /** Keep rich content outside the button and edit through a sibling pencil. */
+  trigger?: "wrap" | "pencil";
 }
 
 /**
@@ -86,6 +88,7 @@ export function EditableCell<T>({
   config,
   renderValue,
   clipboard,
+  trigger = "wrap",
 }: EditableCellProps<T>) {
   // Select type has its own specialized implementation
   if (config.type === "select") {
@@ -97,6 +100,7 @@ export function EditableCell<T>({
         placeholder={config.placeholder}
         renderValue={renderValue as (value: string | null) => React.ReactNode}
         clipboard={clipboard}
+        trigger={trigger}
       />
     );
   }
@@ -110,6 +114,7 @@ export function EditableCell<T>({
         placeholder={config.placeholder}
         renderValue={renderValue as (value: string | null) => React.ReactNode}
         clipboard={clipboard}
+        trigger={trigger}
       />
     );
   }
@@ -122,6 +127,7 @@ export function EditableCell<T>({
       config={config}
       renderValue={renderValue}
       clipboard={clipboard}
+      trigger={trigger}
     />
   );
 }
@@ -142,7 +148,7 @@ export function useCellEditState(
   // open and cleared on cancel/commit. Held here — the ONE place — so every
   // editor reads it the same way instead of re-plumbing the CustomEvent.
   const [seedText, setSeedText] = useState<string | null>(null);
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const isEditingRef = useRef(false);
   isEditingRef.current = isEditing;
 
@@ -192,6 +198,50 @@ export function useCellEditState(
 }
 
 const referenceEquals = <T,>(a: T | null, b: T | null) => a === b;
+
+type EditTriggerMode = "wrap" | "pencil";
+
+function EditableDisplay({
+  mode,
+  triggerRef,
+  onStartEdit,
+  clipboard,
+  children,
+}: {
+  mode: EditTriggerMode;
+  triggerRef: React.Ref<HTMLButtonElement>;
+  onStartEdit: (seedText?: string) => void;
+  clipboard?: CellClipboardSpec;
+  children: React.ReactNode;
+}) {
+  if (mode === "pencil") {
+    return (
+      <span className="group/editable inline-flex min-w-0 items-center gap-1">
+        <span className="min-w-0">{children}</span>
+        <CellEditTrigger
+          ref={triggerRef}
+          onStartEdit={onStartEdit}
+          clipboard={clipboard}
+          hidePencilIcon
+          aria-label="Edit value"
+          className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/editable:opacity-100"
+        >
+          <Pencil className="size-3 text-muted-foreground" />
+        </CellEditTrigger>
+      </span>
+    );
+  }
+
+  return (
+    <CellEditTrigger
+      ref={triggerRef}
+      onStartEdit={onStartEdit}
+      clipboard={clipboard}
+    >
+      {children}
+    </CellEditTrigger>
+  );
+}
 
 /**
  * Optimistic display value for editable cells: after a successful save the new
@@ -280,12 +330,14 @@ function EditableInputCellInternal<T>({
   config,
   renderValue,
   clipboard,
+  trigger,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
   config: EditableInputConfig | EditableCurrencyConfig;
   renderValue: (value: T | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
+  trigger: EditTriggerMode;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
   const edit = useCellEditState(clipboard, (saved) =>
@@ -294,13 +346,14 @@ function EditableInputCellInternal<T>({
 
   return (
     <>
-      <CellEditTrigger
-        ref={edit.triggerRef}
+      <EditableDisplay
+        mode={trigger}
+        triggerRef={edit.triggerRef}
         onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
-      </CellEditTrigger>
+      </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
@@ -486,6 +539,7 @@ function EditableSelectCellInternal({
   placeholder = "Select...",
   renderValue,
   clipboard,
+  trigger,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
@@ -493,6 +547,7 @@ function EditableSelectCellInternal({
   placeholder?: string;
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
+  trigger: EditTriggerMode;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
   const edit = useCellEditState(clipboard, (saved) =>
@@ -501,13 +556,14 @@ function EditableSelectCellInternal({
 
   return (
     <>
-      <CellEditTrigger
-        ref={edit.triggerRef}
+      <EditableDisplay
+        mode={trigger}
+        triggerRef={edit.triggerRef}
         onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
-      </CellEditTrigger>
+      </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
@@ -598,12 +654,14 @@ function EditableDateCellInternal({
   placeholder,
   renderValue,
   clipboard,
+  trigger,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
   placeholder?: string;
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
+  trigger: EditTriggerMode;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
   const edit = useCellEditState(clipboard, (saved) =>
@@ -612,13 +670,14 @@ function EditableDateCellInternal({
 
   return (
     <>
-      <CellEditTrigger
-        ref={edit.triggerRef}
+      <EditableDisplay
+        mode={trigger}
+        triggerRef={edit.triggerRef}
         onStartEdit={edit.open}
         clipboard={edit.clipboard}
       >
         {renderValue(displayValue)}
-      </CellEditTrigger>
+      </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
@@ -702,6 +761,8 @@ interface EditableAmountCellProps {
    * createNameColumn's editable renderValue). Edit mode is unaffected.
    */
   renderDisplay?: (content: React.ReactNode) => React.ReactNode;
+  /** Rich displays (links/popovers) use a sibling pencil button. */
+  trigger?: EditTriggerMode;
   /** Enable cmd-C / cmd-V on the focused display trigger. */
   clipboard?: CellClipboardSpec;
 }
@@ -716,6 +777,7 @@ export function EditableAmountCell({
   unitMappings,
   onSave,
   renderDisplay,
+  trigger = "wrap",
   clipboard,
 }: EditableAmountCellProps) {
   const [editingValue, setEditingValue] = useState(amount.value);
@@ -785,8 +847,9 @@ export function EditableAmountCell({
 
   return (
     <>
-      <CellEditTrigger
-        ref={edit.triggerRef}
+      <EditableDisplay
+        mode={trigger}
+        triggerRef={edit.triggerRef}
         onStartEdit={startEditing}
         clipboard={edit.clipboard}
       >
@@ -795,7 +858,7 @@ export function EditableAmountCell({
             ? tryFormatAmount(displayAmount)
             : showAmountAndPrice(displayAmount, unitMappings),
         )}
-      </CellEditTrigger>
+      </EditableDisplay>
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}

@@ -28,7 +28,6 @@ import {
   notInArray,
   or,
   type SQL,
-  sql,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { project, purchase, task } from "~/server/db/schema";
@@ -36,6 +35,7 @@ import {
   buildSearchConditions,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 
 /**
  * `kinds`/`locations` conditions only (no status, no search, no date) —
@@ -133,9 +133,7 @@ function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
         isNotNull(task.projectId),
         isNotNull(task.dueDate),
         dateTo ? lte(task.dueDate, dateTo) : undefined,
-        dateFrom
-          ? gte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, dateFrom)
-          : undefined,
+        dateFrom ? gte(effectiveTaskDueDateSql(), dateFrom) : undefined,
       ),
     );
 }

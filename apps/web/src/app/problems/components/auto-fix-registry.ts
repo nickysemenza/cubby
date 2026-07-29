@@ -19,6 +19,8 @@ type AutoFixOutcome = {
 export type AutoFixTask = {
   key: string;
   label: string;
+  /** Problems-page section this task fully clears, when it has one. */
+  sectionId?: string;
   /**
    * How many items this task would act on right now. `null` means "not
    * countable" — such a task never contributes to the headline figure and only
@@ -80,10 +82,11 @@ export type AutoFixTask = {
  * one server procedure would rebuild exactly the monolith that blew the 30s
  * Worker CPU limit and forced the Problems page into cost-grouped queries.
  */
-export const AUTO_FIX_TASKS: AutoFixTask[] = [
+const AUTO_FIX_TASKS: AutoFixTask[] = [
   {
     key: "orphanedEmbeddings",
     label: "Clean orphaned embeddings",
+    sectionId: "orphaned-embeddings",
     count: (problems) => problems.orphanedEntityEmbeddings.length,
     // Its own section, uncapped — every item is on the page.
     listedCount: (problems) => problems.orphanedEntityEmbeddings.length,
@@ -120,6 +123,7 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
   {
     key: "locationDescriptions",
     label: "Analyze location photos",
+    sectionId: "ai-descriptions",
     count: (problems) => problems.locationsWithoutAiDescription.length,
     // Its own section, uncapped.
     listedCount: (problems) => problems.locationsWithoutAiDescription.length,
@@ -139,6 +143,7 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
   {
     key: "missingEmbeddings",
     label: "Backfill search embeddings",
+    sectionId: "missing-embeddings",
     // The Problems section only carries a sampled list, so the true figure comes
     // from the maintenance counts.
     count: (_problems, counts) => counts?.entitiesMissingEmbeddings ?? null,
@@ -200,3 +205,39 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     },
   },
 ];
+
+export const AUTO_FIX_SECTION_IDS = new Set(
+  AUTO_FIX_TASKS.flatMap((task) => (task.sectionId ? [task.sectionId] : [])),
+);
+
+/**
+ * Pure plan calculation shared by the button and summary. Keeping counting
+ * separate from React/query state makes sampled-vs-maintenance totals testable.
+ */
+export function buildAutoFixPlan(
+  problems: AllProblems,
+  counts: MaintenanceCounts | undefined,
+): {
+  items: number;
+  listedItems: number;
+  tasks: AutoFixTask[];
+} {
+  const counted = AUTO_FIX_TASKS.map((task) => ({
+    task,
+    count: task.count(problems, counts),
+  }));
+  const actionable = counted.filter((entry) => (entry.count ?? 0) > 0);
+  return {
+    items: actionable.reduce((total, entry) => total + (entry.count ?? 0), 0),
+    listedItems: actionable.reduce(
+      (total, entry) => total + entry.task.listedCount(problems, counts),
+      0,
+    ),
+    // Tail steps ride along, but only when something else justified the run.
+    tasks: actionable.length
+      ? counted
+          .filter((entry) => (entry.count ?? 0) > 0 || entry.task.alwaysRun)
+          .map((entry) => entry.task)
+      : [],
+  };
+}

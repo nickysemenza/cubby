@@ -46,6 +46,7 @@
   ],
 
   "vars": {
-    "API_BASE_URL": "http://localhost:8787"
+    "API_BASE_URL": "http://localhost:8787",
+    "SENTRY_ENVIRONMENT": "production"
   }
 }

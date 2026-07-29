@@ -7,13 +7,11 @@
  * hides real derived work). See `projectAttentionTypeSchema` in
  * packages/schemas/src/project.ts for the full rule enum.
  *
- * Computed GLOBALLY (not scoped to the dashboard's current filter set) — the
- * old `project.dashboard` this replaces had no filters at all, and scoping
- * `missing_budget` to an arbitrary partial project set would require
- * re-deriving subtree totals against a filter-inconsistent tree (a matched
- * parent's unmatched child still needs to count toward its subtree spend).
- * Simpler and more correct to always compute over every live project/task/
- * purchase; `dashboard-summary.ts` calls this once, unfiltered.
+ * The Problems page computes this globally. The dashboard passes its matched
+ * project ids so project-owned results match the visible portfolio while
+ * unassigned task/purchase results remain visible like the dashboard Data
+ * view. Rollups still load the whole tree: filtering the output must not make
+ * a matched parent's unmatched child disappear from its subtree spend.
  *
  * Because that scope is the WHOLE tree, the caller's own whole-tree load is
  * the identical query set — hence the optional `preloaded` argument (see
@@ -26,8 +24,20 @@ import {
   type ProjectAttentionItem,
   type ProjectAttentionType,
 } from "@cubby/schemas/project";
-import { and, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { householdDaysAgo, householdLocalDate } from "~/lib/household-date";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { project, purchase, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -61,12 +71,29 @@ const attentionKey = (
 
 export async function computeAttentionItems(
   db: Database,
-  /** A whole-tree `loadProjectSubtreeRollups(db)` the caller already has. */
-  preloaded?: ProjectSubtreeRollups,
+  options?: {
+    /** A whole-tree load the caller already has. */
+    preloaded?: ProjectSubtreeRollups;
+    /** Matched dashboard projects; omitted means global Problems-page scope. */
+    projectIds?: ProjectId[];
+  },
 ): Promise<ProjectAttentionItem[]> {
   const today = householdLocalDate();
   const activityCutoff = householdDaysAgo(STALE_ACTIVITY_DAYS);
   const items: ProjectAttentionItem[] = [];
+  const scopedProjectIds = options?.projectIds;
+  const scopedOrInbox = (column: AnyColumn) =>
+    scopedProjectIds === undefined
+      ? undefined
+      : scopedProjectIds.length > 0
+        ? or(inArray(column, scopedProjectIds), isNull(column))
+        : isNull(column);
+  const inProjectScope = (projectId: ProjectId | null) =>
+    scopedProjectIds === undefined ||
+    projectId === null ||
+    scopedProjectIds.includes(projectId);
+  const projectInScope = (projectId: ProjectId) =>
+    scopedProjectIds === undefined || scopedProjectIds.includes(projectId);
 
   const [
     overdueTaskRows,
@@ -80,6 +107,7 @@ export async function computeAttentionItems(
       .select({
         id: task.id,
         name: task.name,
+        projectId: task.projectId,
         dueDate: task.dueDate,
         dueEndDate: task.dueEndDate,
       })
@@ -89,19 +117,35 @@ export async function computeAttentionItems(
           notDeleted(task),
           ne(task.status, "done"),
           isNull(task.parentTaskId),
+          scopedOrInbox(task.projectId),
         ),
       ),
+    scopedProjectIds?.length === 0
+      ? Promise.resolve([])
+      : getDb(db)
+          .select({
+            id: project.id,
+            name: project.name,
+            updatedAt: project.updatedAt,
+          })
+          .from(project)
+          .where(
+            and(
+              notDeleted(project),
+              eq(project.status, "in_progress"),
+              scopedProjectIds
+                ? inArray(project.id, scopedProjectIds)
+                : undefined,
+            ),
+          ),
+    options?.preloaded ?? loadProjectSubtreeRollups(db),
     getDb(db)
       .select({
-        id: project.id,
-        name: project.name,
-        updatedAt: project.updatedAt,
+        id: purchase.id,
+        name: purchase.name,
+        projectId: purchase.projectId,
+        date: purchase.date,
       })
-      .from(project)
-      .where(and(notDeleted(project), eq(project.status, "in_progress"))),
-    preloaded ?? loadProjectSubtreeRollups(db),
-    getDb(db)
-      .select({ id: purchase.id, name: purchase.name, date: purchase.date })
       .from(purchase)
       .where(
         and(
@@ -109,16 +153,23 @@ export async function computeAttentionItems(
           eq(purchase.future, true),
           isNotNull(purchase.date),
           lt(purchase.date, today),
+          scopedOrInbox(purchase.projectId),
         ),
       ),
     getDb(db)
-      .select({ id: purchase.id, name: purchase.name, date: purchase.date })
+      .select({
+        id: purchase.id,
+        name: purchase.name,
+        projectId: purchase.projectId,
+        date: purchase.date,
+      })
       .from(purchase)
       .where(
         and(
           notDeleted(purchase),
           eq(purchase.trade, "other"),
           isNull(purchase.cost),
+          scopedOrInbox(purchase.projectId),
         ),
       ),
     listActionableTasks(db),
@@ -128,7 +179,7 @@ export async function computeAttentionItems(
   // due date (`dueEndDate ?? dueDate`), matching needs-attention.tsx's
   // per-task granularity (not aggregated per project).
   for (const row of overdueTaskRows) {
-    const effectiveDue = row.dueEndDate ?? row.dueDate;
+    const effectiveDue = effectiveTaskDueDate(row);
     if (!effectiveDue || effectiveDue >= today) continue;
     items.push({
       key: attentionKey("overdue_task", row.id),
@@ -220,6 +271,7 @@ export async function computeAttentionItems(
   // were finished projects like a completed wedding and a replaced furnace).
   // Rule 2 above already scopes itself this way; this rule simply didn't.
   for (const row of allProjectRows) {
+    if (!projectInScope(row.id)) continue;
     if (!isLiveProjectStatus(row.status)) continue;
     const subtree = subtreeRollups.get(row.id);
     if (!subtree) continue;
@@ -275,11 +327,13 @@ export async function computeAttentionItems(
   // unblocked `next` tasks (no available next action).
   const projectsWithNext = new Set<ProjectId>();
   for (const t of actionable.next) {
-    if (t.projectId) projectsWithNext.add(t.projectId);
+    if (t.projectId && inProjectScope(t.projectId))
+      projectsWithNext.add(t.projectId);
   }
   const projectsWithBlocked = new Set<ProjectId>();
   for (const b of actionable.blocked) {
-    if (b.task.projectId) projectsWithBlocked.add(b.task.projectId);
+    if (b.task.projectId && inProjectScope(b.task.projectId))
+      projectsWithBlocked.add(b.task.projectId);
   }
   for (const row of inProgressProjectRows) {
     if (projectsWithBlocked.has(row.id) && !projectsWithNext.has(row.id)) {
@@ -307,6 +361,7 @@ export async function computeAttentionItems(
   // fires — and an override that exactly equals the derived bound doesn't
   // either.
   for (const row of allProjectRows) {
+    if (!projectInScope(row.id)) continue;
     const window = dateWindows.get(row.id);
     if (!window) continue;
     if (

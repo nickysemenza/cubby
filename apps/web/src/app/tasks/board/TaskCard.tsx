@@ -26,6 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "../task-options";
 import type {
@@ -117,10 +118,12 @@ export function TaskCard({
   // A ranged task (dueDate + dueEndDate) is overdue only once its *end* passes
   // — a dueDate in the past with a dueEndDate still ahead means it's currently
   // in-window, not late.
+  const effectiveDue = effectiveTaskDueDate(task);
   const overdue =
     task.dueDate != null &&
     task.status !== "done" &&
-    (task.dueEndDate ?? task.dueDate) < todayPlain();
+    effectiveDue != null &&
+    effectiveDue < todayPlain();
 
   // Blocker names resolve best-effort from the board's loaded dataset — a
   // blocker that's a subtask or outside the current scope stays unnamed, so

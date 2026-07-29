@@ -10,7 +10,6 @@ import type { TRPCQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTab
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
-import { CellLinkFence } from "../data-table/cell-edit-trigger";
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
@@ -156,11 +155,9 @@ export function LocationInventoryTable({
         // here points at the product or location. Same treatment as the
         // /inventory index list.
         renderDisplay: (content, row) => (
-          <CellLinkFence>
-            <Link to="/inventory/$id" params={{ id: row.id }}>
-              {content}
-            </Link>
-          </CellLinkFence>
+          <Link to="/inventory/$id" params={{ id: row.id }}>
+            {content}
+          </Link>
         ),
       }),
     ],

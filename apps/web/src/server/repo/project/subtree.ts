@@ -60,9 +60,7 @@ export const MAX_PROJECT_TREE_DEPTH = 100;
  * All live projects' `{id, name, parentProjectId}` — the single query every
  * subtree/ancestor computation in this module is built on top of.
  */
-export async function allProjectParentRows(
-  db: Database,
-): Promise<ProjectParentRow[]> {
+async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
   return getDb(db)
     .select({
       id: project.id,
@@ -79,7 +77,7 @@ export async function allProjectParentRows(
 }
 
 /** parentId -> direct child ids, built from a set of `{id, parentProjectId}` rows. */
-export function buildChildrenMap(
+function buildChildrenMap(
   rows: ReadonlyArray<Pick<ProjectParentRow, "id" | "parentProjectId">>,
 ): Map<ProjectId, ProjectId[]> {
   const map = new Map<ProjectId, ProjectId[]>();

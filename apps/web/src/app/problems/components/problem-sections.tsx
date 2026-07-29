@@ -62,18 +62,22 @@ import {
 } from "./unit-coverage-fix";
 
 /**
- * Which of the three lists a section renders in. Untagged sections are defects
- * and stay in the main list.
+ * Marks a section as COVERAGE rather than defects (see `PROBLEM_CLASS` in
+ * @cubby/schemas/problems). Coverage sections render in their own group with a
+ * neutral progress meter and are excluded from `totalProblems` / the navbar
+ * badge: they never reach zero — new things arrive faster than they get filed —
+ * so counting them as problems is what made the badge permanently red.
  *
- *  - `autoFixable` — the top-of-page Fix button fully clears these, so they sit
- *    in a collapsed group at the bottom rather than holding prime real estate
- *    with rows nobody has to read. Still defects: one click drives them to zero.
- *  - `coverage` — backlog, not defects (see `PROBLEM_CLASS` in
- *    @cubby/schemas/problems). These render in their own group with progress
- *    meters and are excluded from `totalProblems` / the navbar badge, because
- *    they never reach zero and a permanently-red badge is one nobody reads.
+ * Presence is the marker, so membership and the meter are one declaration and
+ * can't drift. `meter` is optional because `unvalued-buckets` is coverage with
+ * no meaningful denominator (a misc bucket isn't a fraction of anything).
+ *
+ * Auto-fixable membership is NOT expressed here — it's derived from
+ * `AUTO_FIX_SECTION_IDS` so it can't drift from what the Fix button clears.
  */
-type ProblemSectionGroup = "autoFixable" | "coverage";
+type ProblemSectionCoverage = {
+  meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
+};
 
 /** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
 type ProblemSectionEntry = {
@@ -88,8 +92,8 @@ type ProblemSectionEntry = {
    * separate cheap query); defect sections ignore it.
    */
   node: (problems: AllProblems, totals: CoverageTotals) => ReactNode;
-  /** Group membership; absent ⇒ the main defect list. */
-  group?: ProblemSectionGroup;
+  /** Present ⇒ coverage, not a defect; absent ⇒ the main defect list. */
+  coverage?: ProblemSectionCoverage;
 };
 
 /**
@@ -111,12 +115,7 @@ function section<T>(config: {
   groupBy?: (items: T[]) => Record<string, T[]>;
   /** A static "fix all" node, or one built from the current items (for bulk delete). */
   headerAction?: ReactNode | ((items: T[]) => ReactNode);
-  group?: ProblemSectionGroup;
-  /**
-   * Denominator for a coverage meter. Only meaningful with `group: "coverage"`;
-   * picks this section's population out of the coverage-totals payload.
-   */
-  meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
+  coverage?: ProblemSectionCoverage;
 }): ProblemSectionEntry {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -124,7 +123,11 @@ function section<T>(config: {
   return {
     id: config.id,
     label: config.label,
-    group: config.group,
+    // Must be forwarded, not just closed over by `node` below: the page groups
+    // sections by reading THIS field. Omitting it still rendered a correct
+    // meter (node reads `config` directly) while the section itself sat in the
+    // defect list — a mismatch the meter hides rather than reveals.
+    coverage: config.coverage,
     count: (problems) => config.select(problems).length,
     node: (problems, totals) => {
       const items = [...config.select(problems)];
@@ -138,9 +141,9 @@ function section<T>(config: {
           renderItem={config.renderItem}
           groupBy={config.groupBy}
           meter={
-            config.meter && {
-              total: config.meter.total(totals),
-              doneLabel: config.meter.doneLabel,
+            config.coverage?.meter && {
+              total: config.coverage.meter.total(totals),
+              doneLabel: config.coverage.meter.doneLabel,
             }
           }
           headerAction={
@@ -160,20 +163,19 @@ function customSection<T>(def: {
   label: string;
   select: (problems: AllProblems) => readonly T[];
   render: (items: T[], meter: ProblemSectionMeter | undefined) => ReactNode;
-  group?: ProblemSectionGroup;
-  meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
+  coverage?: ProblemSectionCoverage;
 }): ProblemSectionEntry {
   return {
     id: def.id,
     label: def.label,
-    group: def.group,
+    coverage: def.coverage,
     count: (problems) => def.select(problems).length,
     node: (problems, totals) =>
       def.render(
         [...def.select(problems)],
-        def.meter && {
-          total: def.meter.total(totals),
-          doneLabel: def.meter.doneLabel,
+        def.coverage?.meter && {
+          total: def.coverage.meter.total(totals),
+          doneLabel: def.coverage.meter.doneLabel,
         },
       ),
   };
@@ -665,7 +667,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     select: (p) => p.unvaluedBucketProducts,
     // Coverage, but with no meter: a misc bucket isn't a fraction of any
     // population, so there's nothing honest to put in a denominator.
-    group: "coverage",
+    coverage: {},
     entity: "product",
     title: "Unvalued Bucket Products",
     description:
@@ -702,10 +704,11 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "no-product-ingredients",
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
-    group: "coverage",
-    meter: {
-      total: (t) => t.ingredientsWithoutProduct,
-      doneLabel: "linked to a product",
+    coverage: {
+      meter: {
+        total: (t) => t.ingredientsWithoutProduct,
+        doneLabel: "linked to a product",
+      },
     },
     entity: "ingredient",
     title: "Ingredients without a product",
@@ -799,8 +802,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "locations",
     label: "Locations",
     select: (p) => p.emptyLocations,
-    group: "coverage",
-    meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
+    coverage: {
+      meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
+    },
     render: (items, meter) => (
       <EmptyLocationsList locations={items} meter={meter} />
     ),
@@ -809,8 +813,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "stale-recounts",
     label: "Stale recounts",
     select: (p) => p.staleLocations,
-    group: "coverage",
-    meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
+    coverage: {
+      meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
+    },
     entity: "location",
     title: "Locations overdue for a recount",
     description:
@@ -843,8 +848,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "never-verified",
     label: "Never verified",
     select: (p) => p.neverVerifiedInventory,
-    group: "coverage",
-    meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
+    coverage: {
+      meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
+    },
     entity: "inventory",
     title: "Inventory never confirmed by a recount",
     description:
@@ -934,8 +940,12 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "images",
     label: "Images",
     select: (p) => p.productsWithNoImages,
-    group: "coverage",
-    meter: { total: (t) => t.productsWithNoImages, doneLabel: "photographed" },
+    coverage: {
+      meter: {
+        total: (t) => t.productsWithNoImages,
+        doneLabel: "photographed",
+      },
+    },
     icon: ImageOff,
     title: "Missing Images",
     description: "Products that don't have any images.",
@@ -958,7 +968,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
     emptyMessage: "All locations with photos have AI descriptions.",
     headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
-    group: "autoFixable",
     renderItem: (location) => ({
       title: location.name,
       badges: [
@@ -981,7 +990,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     description:
       "Semantic search rows whose entity no longer exists. These are safe to clean up.",
     emptyMessage: "No orphaned search embeddings.",
-    group: "autoFixable",
     renderItem: (embedding) => ({
       title: `${embedding.entityType} · ${embedding.entityId.slice(0, 8)}`,
       subtitle: embedding.model,
@@ -1004,7 +1012,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     description:
       "Live records semantic search can't see — no embedding under the current model. The list is a sample; the true figure is on the Fix button and in Maintenance.",
     emptyMessage: "Everything is indexed for semantic search.",
-    group: "autoFixable",
     headerAction: <MissingEmbeddingsBackfillAction />,
     renderItem: (entity) => ({
       title: `${entity.entityType} · ${entity.entityId.slice(0, 8)}`,

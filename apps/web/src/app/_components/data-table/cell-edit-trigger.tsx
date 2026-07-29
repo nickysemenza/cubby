@@ -13,9 +13,10 @@ import {
   CellSelectionContext,
 } from "./cell-selection-context";
 
-interface CellEditTriggerProps extends React.HTMLAttributes<HTMLSpanElement> {
+interface CellEditTriggerProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** React 19 ref-as-prop (forwardRef is deprecated). */
-  ref?: React.Ref<HTMLSpanElement>;
+  ref?: React.Ref<HTMLButtonElement>;
   /**
    * Open the editor. `seedText` (type-to-edit) is threaded from
    * {@link CELL_EDIT_EVENT}'s detail; click/double-click open with no seed.
@@ -28,31 +29,6 @@ interface CellEditTriggerProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * Fences a link rendered INSIDE a {@link CellEditTrigger} from the trigger's
- * own click, so clicking the text navigates only.
- *
- * TanStack's `<Link>` calls `preventDefault` but not `stopPropagation`, so
- * without this the click also reaches the trigger button — which outside
- * cell-selection mode opens the editor on the very click that swaps the route
- * (the editor unmounts mid-edit; this failed CI E2E once already, see
- * `createNameColumn`), and inside cell-selection mode makes the cell
- * impossible to double-click-edit at all, since click #1 navigates away.
- *
- * Only `click` is stopped — selection is driven by `mousedown`, which must
- * keep bubbling for the range engine to see it.
- *
- * (`createNameColumn` inlines this same guard rather than using this
- * component: its span carries a width/truncate class and is consumed as a
- * `TooltipTrigger` render target, so it can't be a wrapper.)
- */
-export function CellLinkFence({ children }: { children: React.ReactNode }) {
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
-    <span onClick={(e) => e.stopPropagation()}>{children}</span>
-  );
-}
-
-/**
  * The shared display-mode trigger for editable cells: click (or focus) to
  * edit, hover-revealed pencil, focus ring (the raw buttons it replaced had
  * none, which made keyboard focus — and therefore cell copy/paste —
@@ -60,18 +36,8 @@ export function CellLinkFence({ children }: { children: React.ReactNode }) {
  * on click matters: Safari/Firefox don't focus buttons on click, and the
  * clipboard listeners key off document.activeElement.
  *
- * A `<span role="button">`, NOT a `<button>`. Cells legitimately render rich
- * content inside this trigger — links, badges, a `TruncatedList` overflow
- * popover — and `<button>`/`<a>` inside `<button>` is invalid HTML. The tags
- * cell on /recipes hit the parser rule React actually warns about ("<button>
- * cannot be a descendant of <button>"), which cost the whole subtree its SSR
- * markup; eight more sites nest an `<a>`, equally invalid but unwarned.
- * `useCellSelection` already assumes this ("buttons/links inside the cell
- * still need their click"), so the element was the thing in the wrong.
- *
- * A span, not a div: this renders inside `InfoRow`'s value `<span>` on every
- * detail page, where a div would be flow content inside phrasing content —
- * the same class of invalid nesting, just one React doesn't flag.
+ * This is a real button. Callers with links or popovers render that rich
+ * content beside a pencil-only trigger instead of nesting controls.
  */
 export function CellEditTrigger({
   ref: forwardedRef,
@@ -82,8 +48,8 @@ export function CellEditTrigger({
   children,
   ...rest
 }: CellEditTriggerProps) {
-  const localRef = React.useRef<HTMLSpanElement | null>(null);
-  const setRef = (node: HTMLSpanElement | null) => {
+  const localRef = React.useRef<HTMLButtonElement | null>(null);
+  const setRef = (node: HTMLButtonElement | null) => {
     localRef.current = node;
     if (typeof forwardedRef === "function") forwardedRef(node);
     else if (forwardedRef) forwardedRef.current = node;
@@ -137,13 +103,8 @@ export function CellEditTrigger({
   }, [hasClipboard, cellSelectionMode]);
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: must not be a <button> — cells render links/popovers inside it (see the doc comment)
-    <span
-      role="button"
-      // Load-bearing, not cosmetic: useCellSelection focuses this element
-      // before dispatching CELL_EDIT_EVENT, and the editor refocuses it on
-      // cancel. A span without tabIndex silently swallows both.
-      tabIndex={0}
+    <button
+      type="button"
       ref={setRef}
       data-cell-edit-trigger=""
       className={cn(
@@ -166,13 +127,7 @@ export function CellEditTrigger({
         if (!cellSelectionMode) onStartEdit();
       }}
       onDoubleClick={cellSelectionMode ? () => onStartEdit() : undefined}
-      // Keyboard activation, which <button> used to provide. Gated exactly
-      // like onClick: in cell-selection mode the CONTAINER owns Enter and
-      // every printable key (Space included, seeding " "), and since React
-      // bubbles target→container this handler would run FIRST — the
-      // container's preventDefault can't retract it, so it would open the
-      // editor twice. preventDefault on Space also stops the page scroll a
-      // <button> used to suppress.
+      // In cell-selection mode the container owns Enter and printable keys.
       onKeyDown={
         cellSelectionMode
           ? undefined
@@ -188,6 +143,6 @@ export function CellEditTrigger({
       {!hidePencilIcon && (
         <Pencil className="ml-1 size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       )}
-    </span>
+    </button>
   );
 }

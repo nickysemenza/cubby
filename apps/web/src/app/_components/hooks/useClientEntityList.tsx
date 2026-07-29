@@ -3,9 +3,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
-import { useBulkActions } from "../data-table/useBulkActions";
 import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -15,6 +13,7 @@ import type {
   UseEntityListOptions,
   UseEntityListReturn,
 } from "./useEntityList";
+import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 
@@ -125,37 +124,10 @@ export function useClientEntityList<TData extends BaseListRow>({
     requestDelete,
   } = useOptimisticDelete<TData>({ deletable, emptyLabel: deleteEmptyLabel });
 
-  // Combine the caller's bulk actions with the delete bulk action (if any) —
-  // mirrors `useEntityList`'s equivalent merge.
-  const effectiveBulkActions = useMemo(():
-    | BulkActionsConfig<TData>
-    | undefined => {
-    if (!deleteBulkAction && !bulkActions) return undefined;
-
-    const userActions = bulkActions?.actions ?? [];
-    const combinedActions = deleteBulkAction
-      ? [...userActions, deleteBulkAction]
-      : userActions;
-
-    return { ...bulkActions, actions: combinedActions };
-  }, [deleteBulkAction, bulkActions]);
-
-  // Always call useBulkActions unconditionally (Rules of Hooks).
-  const EMPTY_BULK_CONFIG = useMemo(
-    (): BulkActionsConfig<TData> => ({ actions: [] }),
-    [],
-  );
-  const bulkActionsState = useBulkActions({
-    config: effectiveBulkActions ?? EMPTY_BULK_CONFIG,
+  const listBulkActions = useListBulkActions({
+    bulkActions,
+    deleteBulkAction,
   });
-
-  const effectiveEnableRowSelection = !!effectiveBulkActions;
-  const effectiveRowSelection = effectiveBulkActions
-    ? bulkActionsState.rowSelection
-    : {};
-  const effectiveOnRowSelectionChange = effectiveBulkActions
-    ? bulkActionsState.onRowSelectionChange
-    : undefined;
 
   // Entity default sort (mirrors useEntityList).
   const defaultSort = useMemo(
@@ -185,7 +157,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     columnHelper,
     customColumns,
     filters: filters ?? NO_FILTERS,
-    enableRowSelection: effectiveEnableRowSelection,
+    enableRowSelection: listBulkActions.enableRowSelection,
     combinedExtraActions,
     mappingsMap: null,
     hasUnitMappings: false,
@@ -195,8 +167,9 @@ export function useClientEntityList<TData extends BaseListRow>({
   });
 
   const getRowId = useMemo(
-    () => (effectiveEnableRowSelection ? (row: TData) => row.id : undefined),
-    [effectiveEnableRowSelection],
+    () =>
+      listBulkActions.enableRowSelection ? (row: TData) => row.id : undefined,
+    [listBulkActions.enableRowSelection],
   );
 
   // Persisted per-entity column visibility + widths (same stores as useEntityList).
@@ -216,9 +189,9 @@ export function useClientEntityList<TData extends BaseListRow>({
     manualSorting: false,
     manualFiltering: false,
     getRowId,
-    enableRowSelection: effectiveEnableRowSelection,
-    rowSelection: effectiveRowSelection,
-    onRowSelectionChange: effectiveOnRowSelectionChange,
+    enableRowSelection: listBulkActions.enableRowSelection,
+    rowSelection: listBulkActions.rowSelection,
+    onRowSelectionChange: listBulkActions.onRowSelectionChange,
     columnVisibility,
     onColumnVisibilityChange,
     columnSizing,
@@ -230,23 +203,13 @@ export function useClientEntityList<TData extends BaseListRow>({
     autoResetExpanded: tree?.autoResetExpanded,
   });
 
-  const bulkActionBar = useMemo(
-    () =>
-      effectiveBulkActions ? (
-        <BulkActionBar
-          selectedCount={bulkActionsState.selectedCount}
-          selectedRows={table.getFilteredSelectedRowModel().rows}
-          actions={bulkActionsState.getAvailableActions(
-            table.getFilteredSelectedRowModel().rows,
-          )}
-          onExecute={bulkActionsState.executeAction}
-          onClearSelection={bulkActionsState.clearSelection}
-          isExecuting={bulkActionsState.isExecuting}
-          currentAction={bulkActionsState.currentAction}
-        />
-      ) : null,
-    [bulkActionsState, effectiveBulkActions, table],
-  );
+  const bulkActionBar = listBulkActions.config ? (
+    <ListBulkActionBar
+      table={table}
+      config={listBulkActions.config}
+      state={listBulkActions.state}
+    />
+  ) : null;
 
   return {
     table,

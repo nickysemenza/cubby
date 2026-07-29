@@ -89,10 +89,8 @@ export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select" | "multiselect";
   options?: FilterableComboboxItem[];
-  // Append a `(count)` of matching rows to each select option. Off by default:
-  // the count comes from TanStack's client-side faceting, which only sees the
-  // current page — meaningless (and misleading) on server-paginated tables.
-  // Opt in only for tables that load their full dataset client-side.
+  // Add matching-row hints from TanStack's client-side faceting. Off by
+  // default because server-backed tables only hold their loaded pages.
   facetCount?: boolean;
 }
 
@@ -380,25 +378,11 @@ export function createNameColumn<T extends BaseRow>(
             }
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text" }}
+            trigger="pencil"
             renderValue={(v) =>
               wrapWithSuffix(
                 <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      // The link lives INSIDE the CellEditTrigger button, so
-                      // without this a click on the name text would both
-                      // navigate AND open the inline editor — a race that
-                      // resolves nondeterministically on slow machines (the
-                      // route swap can unmount the editor mid-edit; this
-                      // failed CI E2E). Text click = navigate only; the
-                      // pencil / button padding remains the edit affordance.
-                      // biome-ignore lint/a11y/noStaticElementInteractions: not interactive itself — only fences the inner link's click from the edit trigger
-                      <span
-                        className="block truncate"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    }
-                  >
+                  <TooltipTrigger render={<span className="block truncate" />}>
                     <TableLink
                       to={entities[entity].routes.detail}
                       params={{ id: String(info.row.original.id) }}
@@ -831,6 +815,8 @@ export function createTextColumn<
      * order id is only unique within a vendor.
      */
     renderValue?: (value: string | null, row: T) => ReactNode;
+    /** Keep rich display content beside a dedicated pencil edit button. */
+    trigger?: "wrap" | "pencil";
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
@@ -876,6 +862,7 @@ export function createTextColumn<
             }
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text", placeholder: options?.placeholder }}
+            trigger={options?.trigger}
             renderValue={(v) => renderRow(v, info.row.original)}
           />
         );
@@ -1149,6 +1136,7 @@ export function createSingleEntityInlineLinkColumn<
               value={current}
               label={entity}
               clearable={editable.clearable}
+              trigger="pencil"
               filterItems={
                 editable.filterItems
                   ? (ci) => editable.filterItems!(ci, row)
@@ -1346,6 +1334,7 @@ export function createExternalLinkColumn<
               }
               clipboard={specFromCellData(cellData, info.row.original)}
               config={{ type: "text" }}
+              trigger="pencil"
               renderValue={(v) => {
                 if (v === null || v === undefined || v === "") {
                   return <NoneValue />;
@@ -1460,6 +1449,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
           unitMappings={unitMappings}
           onSave={(newAmount) => options.onSave(newAmount, row)}
           clipboard={specFromCellData(cellData, row)}
+          trigger={options.renderDisplay ? "pencil" : "wrap"}
           renderDisplay={
             options.renderDisplay
               ? (content) => options.renderDisplay!(content, row)

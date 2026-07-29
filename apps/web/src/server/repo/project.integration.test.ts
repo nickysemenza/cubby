@@ -1273,6 +1273,59 @@ describe("project dashboard — attention detector + summary", () => {
     expect(blockedWorkIds).not.toContain(unblockedProject.id);
   });
 
+  it("scopes dashboard attention to matched projects while retaining unassigned work", async () => {
+    const includedProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "attention included" }),
+      ctx.actor,
+    );
+    const excludedProject = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "attention excluded" }),
+      ctx.actor,
+    );
+    const included = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "included overdue",
+        projectId: includedProject.id,
+        dueDate: "2020-01-01",
+      }),
+      ctx.actor,
+    );
+    const excluded = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "excluded overdue",
+        projectId: excludedProject.id,
+        dueDate: "2020-01-01",
+      }),
+      ctx.actor,
+    );
+    const unassigned = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "unassigned overdue",
+        dueDate: "2020-01-01",
+      }),
+      ctx.actor,
+    );
+
+    const scoped = await computeAttentionItems(ctx.db, {
+      projectIds: [includedProject.id],
+    });
+    const overdueIds = scoped
+      .filter((item) => item.type === "overdue_task")
+      .map((item) => item.entityId);
+
+    expect(overdueIds).toContain(included.id);
+    expect(overdueIds).toContain(unassigned.id);
+    expect(overdueIds).not.toContain(excluded.id);
+  });
+
   it("flags date_window_drift on both a too-late start and a too-early end", async () => {
     const project = await createProject(
       ctx.db,

@@ -20,6 +20,7 @@ import {
 } from "~/components/ui/collapsible";
 import { useTRPC } from "~/integrations/trpc/react";
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
+import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
 import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
@@ -42,12 +43,16 @@ function scrollWhenLaidOut(el: HTMLElement, framesLeft = 20) {
   requestAnimationFrame(() => scrollWhenLaidOut(el, framesLeft - 1));
 }
 
-const MAIN_SECTIONS = PROBLEM_SECTIONS.filter((s) => s.group == null);
-const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
-  (s) => s.group === "autoFixable",
+// Three disjoint lists. Coverage is checked FIRST so a coverage section can't
+// also fall into the main list (`images` is coverage and has a fix-all button,
+// but isn't one of the Fix button's auto-fix tasks).
+const COVERAGE_SECTIONS = PROBLEM_SECTIONS.filter((s) => s.coverage != null);
+const MAIN_SECTIONS = PROBLEM_SECTIONS.filter(
+  (section) =>
+    section.coverage == null && !AUTO_FIX_SECTION_IDS.has(section.id),
 );
-const COVERAGE_SECTIONS = PROBLEM_SECTIONS.filter(
-  (s) => s.group === "coverage",
+const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
+  (section) => section.coverage == null && AUTO_FIX_SECTION_IDS.has(section.id),
 );
 
 /** Denominators default to 0 while the (separate, cheap) query is in flight. */
@@ -221,16 +226,13 @@ function ProblemsSummary({
   // Both the summary chips and the section list derive from PROBLEM_SECTIONS,
   // so each check is declared exactly once (see ./components/problem-sections).
   // Coverage sections are excluded: this card counts issues, and their rows
-  // aren't issues (they'd also swamp the chip row — they're the bulk of the
-  // page). `grouped` means "inside the collapsed auto-fix panel", which is what
-  // decides whether jumping to it has to open that panel first — so it tracks
-  // that one group specifically, not merely "has a group".
-  const chips = PROBLEM_SECTIONS.filter((s) => s.group !== "coverage")
+  // aren't issues — they'd also swamp the chip row, being the bulk of the page.
+  const chips = PROBLEM_SECTIONS.filter((s) => s.coverage == null)
     .map((section) => ({
       id: section.id,
       label: section.label,
       count: section.count(problems),
-      grouped: section.group === "autoFixable",
+      grouped: AUTO_FIX_SECTION_IDS.has(section.id),
     }))
     .filter((cat) => cat.count > 0);
 
