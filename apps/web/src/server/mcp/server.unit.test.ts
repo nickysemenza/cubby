@@ -736,6 +736,7 @@ describe("household tracker synthesis + bulk tools", () => {
         nextTasks: [task],
         attention: [
           {
+            key: `overdue_task:${TASK_A}`,
             type: "overdue_task",
             severity: "critical",
             description: "Order countertop is 4 days overdue",
