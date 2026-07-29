@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Clock,
   Coffee,
+  GitBranch,
   ImageIcon,
   ListChecks,
   Printer,
@@ -38,6 +39,7 @@ import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { NutritionLabel } from "../nutrition/NutritionLabel";
 import { RecipeTotalsCoverageButton } from "./RecipeCostingCoverage";
+import { type RecipeFlowLayoutMode, RecipeFlowView } from "./RecipeFlowView";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipePrepSheetView } from "./RecipePrepSheetView";
 import {
@@ -65,16 +67,17 @@ const RecipeCostTreemap = lazy(
   () => import("~/app/_components/visualizations/recipe-cost-treemap"),
 );
 
-/** The four top-level recipe views. Data stacks its charts above the table and
+/** The five top-level recipe views. Data stacks its charts above the table and
  * Prep folds its ingredient × component grid in as a disclosure, so there are no
  * sub-modes — one flat row of tabs. */
-export type RecipeViewMode = "read" | "spec" | "data" | "prep";
+export type RecipeViewMode = "read" | "spec" | "data" | "prep" | "flow";
 
 const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "read", label: "Read", icon: BookOpen },
   { value: "spec", label: "Spec", icon: ClipboardList },
   { value: "data", label: "Data", icon: Table2 },
   { value: "prep", label: "Prep", icon: ListChecks },
+  { value: "flow", label: "Flow", icon: GitBranch },
 ];
 
 /**
@@ -85,7 +88,7 @@ const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
  */
 export function remapLegacyView(view: string | undefined): RecipeViewMode {
   return match(view)
-    .with("read", "spec", "data", "prep", (v) => v)
+    .with("read", "spec", "data", "prep", "flow", (v) => v)
     .with("magazine", () => "read" as const)
     .with("table", "charts", () => "data" as const)
     .with("nested", () => "spec" as const)
@@ -101,12 +104,16 @@ const RecipeDetailInner: React.FC<{
   /** Controlled scale factor (URL-driven on the detail route); 1 = unscaled. */
   scale?: number;
   onScaleChange?: (factor: number) => void;
+  flowLayout?: RecipeFlowLayoutMode;
+  onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
 }> = ({
   recipe,
   view: controlledView,
   onViewChange,
   scale: controlledScale,
   onScaleChange,
+  flowLayout,
+  onFlowLayoutChange,
 }) => {
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
@@ -221,7 +228,12 @@ const RecipeDetailInner: React.FC<{
 
   // Export format: spec ⇒ the "nested" markdown flavor; everything else uses the
   // export sheet's own format picker (which still offers prep / nested / matrix).
-  const exportFormat = viewMode === "spec" ? ("nested" as const) : undefined;
+  const exportFormat =
+    viewMode === "spec"
+      ? ("nested" as const)
+      : viewMode === "flow"
+        ? ("flow" as const)
+        : undefined;
 
   return (
     <Stack gap="lg">
@@ -319,6 +331,14 @@ const RecipeDetailInner: React.FC<{
             <SimpleLoading />
           </div>
         ))}
+      {viewMode === "flow" && (
+        <RecipeFlowView
+          recipe={recipe}
+          scaledRecipe={scaledRecipe}
+          layout={flowLayout}
+          onLayoutChange={onFlowLayoutChange}
+        />
+      )}
       {viewMode === "data" && (
         <Stack gap="lg">
           {/* Recipe Summary — rendered once here; the table below omits its own. */}

@@ -76,6 +76,7 @@ export const queryKeys = {
   recipe: {
     list: procedureKey("recipe", "list"),
     getByID: procedureKey("recipe", "getByID"),
+    flow: procedureKey("recipe", "getFlow"),
     // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
     // so its key mirrors that tRPC path.
     listCookbooks: procedureKey("recipe", "listCookbooks"),

@@ -31,6 +31,7 @@
     "./mcp": "./src/mcp.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",
+    "./recipe-flow": "./src/recipe-flow.ts",
     "./usda": "./src/usda.ts",
     "./search": "./src/search.ts",
     "./suggestions": "./src/suggestions.ts",

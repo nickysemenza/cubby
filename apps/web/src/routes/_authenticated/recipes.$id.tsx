@@ -15,6 +15,7 @@ import RecipeDetail, {
   type RecipeViewMode,
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
+import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -39,6 +40,7 @@ const searchSchema = z.object({
       "spec",
       "data",
       "prep",
+      "flow",
       "magazine",
       "table",
       "charts",
@@ -47,6 +49,7 @@ const searchSchema = z.object({
     ])
     .optional()
     .catch(undefined),
+  flowLayout: z.enum(["map", "table"]).optional().catch(undefined),
   // Scaling is purely derived/display state, kept in the URL so a scaled view is
   // shareable and printable. `scale` is the resolved factor (absent = 1×).
   scale: z.number().positive().optional().catch(undefined),
@@ -55,6 +58,7 @@ const searchSchema = z.object({
 const searchDefaults = {
   edit: undefined,
   view: undefined,
+  flowLayout: undefined,
   scale: undefined,
 } as const;
 
@@ -83,7 +87,7 @@ export const Route = createFileRoute("/_authenticated/recipes/$id")({
 
 function RecipeDetailPage() {
   const { id } = Route.useParams();
-  const { edit: isEditing, view, scale } = Route.useSearch();
+  const { edit: isEditing, view, flowLayout, scale } = Route.useSearch();
   const navigate = useNavigate();
 
   // Normalize the (possibly legacy) URL view into a current view.
@@ -105,6 +109,12 @@ function RecipeDetailPage() {
     navigate({
       to: ".",
       search: (prev) => ({ ...prev, scale: factor === 1 ? undefined : factor }),
+    });
+  };
+  const setFlowLayout = (next: RecipeFlowLayoutMode) => {
+    navigate({
+      to: ".",
+      search: (prev) => ({ ...prev, flowLayout: next }),
     });
   };
   const api = useTRPC();
@@ -196,6 +206,8 @@ function RecipeDetailPage() {
             onViewChange={setRecipeView}
             scale={scale}
             onScaleChange={setScale}
+            flowLayout={flowLayout}
+            onFlowLayoutChange={setFlowLayout}
           />
         </Stack>
       )}

@@ -4,6 +4,10 @@ import {
   type LocationDescription,
   locationDescriptionSchema,
 } from "@cubby/schemas/ai";
+import {
+  type RecipeFlowArtifact,
+  recipeFlowArtifactSchema,
+} from "@cubby/schemas/recipe-flow";
 import type { z } from "zod";
 import {
   DEFAULT_CHAT_MODEL,
@@ -30,6 +34,20 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = {
   promptVersion: "2026-06-28.2",
   schema: detectedInventoryAiResultSchema,
 } satisfies AiFeature<DetectedInventoryAiResult>;
+
+export const RECIPE_FLOW_PRIMARY_FEATURE = {
+  feature: "recipe-flow",
+  model: "claude-haiku-4-5",
+  promptVersion: "2026-07-29.1",
+  schema: recipeFlowArtifactSchema,
+} satisfies AiFeature<RecipeFlowArtifact>;
+
+export const RECIPE_FLOW_FALLBACK_FEATURE = {
+  feature: "recipe-flow",
+  model: "claude-sonnet-4-6",
+  promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
+  schema: recipeFlowArtifactSchema,
+} satisfies AiFeature<RecipeFlowArtifact>;
 
 interface LocationAnalysisImageInput {
   id: string;
