@@ -9,6 +9,10 @@ inputs:
     description: "Optional pnpm workspace filter for a narrower install"
     required: false
     default: ""
+  cache-pnpm-store:
+    description: "Whether actions/setup-node should restore and save the pnpm store"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -22,7 +26,10 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: "24"
-        cache: "pnpm"
+        # An empty cache input avoids registering setup-node's post-job cache
+        # save hook. This matters for container jobs, where compressing the pnpm
+        # store can take longer than the filtered install it is meant to save.
+        cache: ${{ inputs.cache-pnpm-store == 'true' && 'pnpm' || '' }}
 
     # NB: caching node_modules directly was tried and REVERTED — on a warm cache
     # hit, actions/cache restoring the linked node_modules tree (tens of

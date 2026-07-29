@@ -37,36 +37,38 @@ permissions:
   checks: write
   pull-requests: read
 jobs:
-  rust-coverage-changes:
-    name: Detect Rust coverage changes
+  change-scope:
+    name: Detect affected test suites
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.changes.outputs.rust }}
+      # Main/manual runs always exercise the full required suite. Pull requests
+      # may skip only tests proven unrelated by the conservative filters below.
+      rust: ${{ github.event_name != 'pull_request' || steps.changes.outputs.rust == 'true' }}
+      e2e: ${{ github.event_name != 'pull_request' || steps.changes.outputs.e2e == 'true' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: github.event_name == 'pull_request'
-        with:
-          fetch-depth: 1
-
-      - name: Detect Rust and WASM input changes
+      - name: Detect pull request paths
         id: changes
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
-            echo "rust=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA"
-          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
-            recipebridge rust-toolchain.toml .github/workflows/ci.yaml; then
-            echo "rust=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "rust=true" >> "$GITHUB_OUTPUT"
-          fi
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+        with:
+          filters: |
+            rust:
+              - "recipebridge/**"
+              - "rust-toolchain.toml"
+              - ".github/actions/**"
+              - ".github/workflows/ci.yaml"
+            e2e:
+              - "apps/web/**"
+              - "apps/mcp-apps/**"
+              - "packages/**"
+              - "recipebridge/**"
+              - "scripts/**"
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "rust-toolchain.toml"
+              - ".github/actions/**"
+              - ".github/workflows/ci.yaml"
 
   build-wasm:
     name: Build WASM
@@ -118,6 +120,8 @@ jobs:
 
   test-rust:
     name: Rust Tests - recipebridge
+    needs: [change-scope]
+    if: needs.change-scope.outputs.rust == 'true'
     runs-on: ubuntu-latest
     # Gating job on the deploy critical path: fmt + clippy + a plain `cargo test`.
     # Coverage instrumentation (cargo llvm-cov) is a *separate* job (coverage-rust)
@@ -148,12 +152,11 @@ jobs:
 
   coverage-rust:
     name: Rust Coverage - recipebridge
-    needs: [rust-coverage-changes]
-    if: needs.rust-coverage-changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     # Soft deploy gate: report-coverage waits for this artifact, but check-tests
-    # and deploy-cf do not. PRs run it only when Rust/WASM inputs changed; main
-    # always refreshes it. cargo llvm-cov uses a separate instrumented build.
+    # and deploy-cf do not. Keep this unconditional so the combined Codecov
+    # upload always contains recipebridge; cargo llvm-cov uses a separate,
+    # instrumented build.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
@@ -337,8 +340,8 @@ jobs:
     runs-on: ubuntu-latest
     # The old eight-leg matrix spent eight runners checking out and installing
     # the same workspace for tests that usually execute in 1-2 seconds apiece.
-    # One runner keeps the tests parallel while leaving capacity for E2E,
-    # integration, CodeQL, and review jobs during bursty pushes.
+    # One runner keeps up to four single-worker test processes in parallel while
+    # leaving CPU and runner capacity for E2E, integration, CodeQL, and review.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -360,25 +363,39 @@ jobs:
             apps/upc-lookup
             packages/worker-tracing
           )
-          pids=()
-
-          for package_path in "${paths[@]}"; do
-            mkdir -p "$package_path/test-results"
-            (
-              cd "$package_path"
-              pnpm test --run --coverage \
-                --reporter=default \
-                --reporter=github-actions \
-                --reporter=junit \
-                --outputFile=test-results/vitest-junit.xml
-            ) &
-            pids+=("$!")
-          done
-
           failed=0
-          for pid in "${pids[@]}"; do
-            wait "$pid" || failed=1
-          done
+
+          run_batch() {
+            local pids=()
+            local batch_paths=("$@")
+
+            for package_path in "${batch_paths[@]}"; do
+              mkdir -p "$package_path/test-results"
+              log_file="$RUNNER_TEMP/${package_path//\//-}.log"
+              (
+                cd "$package_path"
+                pnpm test --run --coverage --maxWorkers=1 \
+                  --reporter=default \
+                  --reporter=github-actions \
+                  --reporter=junit \
+                  --outputFile=test-results/vitest-junit.xml
+              ) > "$log_file" 2>&1 &
+              pids+=("$!")
+            done
+
+            for index in "${!pids[@]}"; do
+              package_path="${batch_paths[$index]}"
+              log_file="$RUNNER_TEMP/${package_path//\//-}.log"
+              if ! wait "${pids[$index]}"; then
+                echo "::error::Auxiliary tests failed for $package_path"
+                cat "$log_file"
+                failed=1
+              fi
+            done
+          }
+
+          run_batch "${paths[@]:0:4}"
+          run_batch "${paths[@]:4:4}"
           exit "$failed"
 
       - name: Publish Test Results
@@ -408,21 +425,23 @@ jobs:
       - name: Fail if tests failed
         if: steps.test.outcome != 'success'
         run: |
-          echo "::error::Auxiliary unit tests failed — see the parallel test step above"
+          echo "::error::Auxiliary unit tests failed — see the named package log above"
           exit 1
 
   test-e2e:
     name: E2E Tests (shard ${{ matrix.shard }})
-    # Run on every PR (incl. Renovate — a dep bump is exactly what E2E should
-    # catch; the repo is public so Actions minutes are free). Only skip when
-    # manually bypassing E2E to force a deploy; check-tests treats a skipped E2E
-    # as a pass, so bypass flows through the existing gate. NOTE: no job-level
+    # Run for every web-impacting PR (including dependency bumps), every main
+    # push, and every manual run. Isolated auxiliary-worker PRs skip this long
+    # pole. The manual bypass remains the known-flaky deployment escape hatch.
+    # check-tests treats an intentional skip as a pass. NOTE: no job-level
     # `continue-on-error` — that would force needs.test-e2e.result to 'success'
     # and let a red E2E ship to prod (same footgun documented on the unit jobs).
     # A real failure now blocks the deploy honestly; post-test steps below stay
     # on if:always()/if:failure().
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e) }}
-    needs: [build-wasm]
+    if: |
+      needs.change-scope.outputs.e2e == 'true' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
+    needs: [build-wasm, change-scope]
     runs-on: ubuntu-latest
     # Pin the image to the exact @playwright/test version in pnpm-lock.yaml.
     # Browsers + Linux system dependencies are baked in, removing the apt mirror
@@ -443,6 +462,7 @@ jobs:
         shard: [1, 2]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
+      PLAYWRIGHT_IMAGE_VERSION: "1.61.1"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
@@ -485,6 +505,18 @@ jobs:
           # Restrict the install to web + its workspace dependencies so the
           # unrelated USDA API's better-sqlite3 native build is never invoked.
           workspace-filter: "@cubby/web..."
+          # The clean PR run spent 41-49 seconds per shard compressing and
+          # racing to upload the same 318 MB pnpm cache. The filtered install
+          # itself takes only ~25 seconds, so E2E deliberately does not save it.
+          cache-pnpm-store: "false"
+      - name: Assert Playwright package matches the container
+        shell: bash
+        run: |
+          actual="$(pnpm --filter @cubby/web exec playwright --version | awk '{print $2}')"
+          if [[ "$actual" != "$PLAYWRIGHT_IMAGE_VERSION" ]]; then
+            echo "::error::@playwright/test is $actual; update the CI container and PLAYWRIGHT_IMAGE_VERSION together"
+            exit 1
+          fi
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
       # NOTE: no manual `pg_trgm` / `db:push` against the `cubby` service DB —
@@ -520,6 +552,7 @@ jobs:
         test-unit-aux,
         test-e2e,
         test-rust,
+        change-scope,
       ]
     runs-on: ubuntu-latest
     if: always()
@@ -534,19 +567,23 @@ jobs:
           unit_aux_result="${{ needs.test-unit-aux.result }}"
           e2e_result="${{ needs.test-e2e.result }}"
           rust_result="${{ needs.test-rust.result }}"
+          change_scope_result="${{ needs.change-scope.result }}"
 
           echo "Unit tests (web) result: $unit_web_result"
           echo "Integration tests (web) result: $integration_web_result"
           echo "Unit tests (aux) result: $unit_aux_result"
           echo "E2E tests result: $e2e_result"
           echo "Rust tests result: $rust_result"
+          echo "Change scope result: $change_scope_result"
 
-          # e2e may be skipped (bypass_e2e escape hatch / Renovate); everything else
-          # must pass. aux now always runs, so it must succeed (no skipped allowance).
+          # E2E may be skipped by the manual escape hatch or when a PR cannot
+          # affect the web app. Rust may be skipped on PRs without Rust/WASM
+          # changes. The path classifier itself and all unconditional gates must pass.
           if [[ "$unit_web_result" == "success" && \
                 "$integration_web_result" == "success" && \
                 "$unit_aux_result" == "success" && \
-                "$rust_result" == "success" && \
+                "$change_scope_result" == "success" && \
+                ("$rust_result" == "success" || "$rust_result" == "skipped") && \
                 ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
             echo "all-passed=true" >> "$GITHUB_OUTPUT"
           else
@@ -558,16 +595,11 @@ jobs:
     needs:
       [test-unit-web, test-integration-web, test-unit-aux, coverage-rust]
     runs-on: ubuntu-latest
-    if: |
-      always() &&
-      needs.test-unit-web.result == 'success' &&
-      needs.test-integration-web.result == 'success' &&
-      needs.test-unit-aux.result == 'success' &&
-      (needs.coverage-rust.result == 'success' ||
-       needs.coverage-rust.result == 'skipped')
+    if: always()
     # Soft gate: deployment does not need this job. Coverage is uploaded once
     # after all report-producing tests, so Codecov never computes a status from
-    # partial uploads and test runners make no independent network calls.
+    # partial uploads on green runs. On red runs, upload every artifact that was
+    # still produced rather than suppressing coverage altogether.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -628,37 +660,44 @@ jobs:
           path: apps/web/dist
           retention-days: 1
 
-  deploy-cf:
-    name: Deploy to Cloudflare Workers
+  deploy-cf-gate:
+    name: Check current main for web deploy
     needs: [lint-format, check-tests, build-cf]
     runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-cubby-production
-      cancel-in-progress: false
     if: |
       always() &&
       needs.lint-format.result == 'success' &&
       needs.check-tests.outputs.all-passed == 'true' &&
       needs.build-cf.result == 'success' &&
       github.ref == 'refs/heads/main'
+    outputs:
+      current: ${{ steps.main.outputs.current }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check whether this is still current main
+        id: main
+        uses: ./.github/actions/check-current-main
+
+  deploy-cf:
+    name: Deploy to Cloudflare Workers
+    needs: [deploy-cf-gate]
+    runs-on: ubuntu-latest
+    if: needs.deploy-cf-gate.outputs.current == 'true'
+    concurrency:
+      group: deploy-cubby-production
+      cancel-in-progress: false
     environment:
       name: cloudflare
       url: https://cubby.nickysemenza.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Check whether this is still current main
-        id: main
-        uses: ./.github/actions/check-current-main
-
       - name: Download CF build artifact
-        if: steps.main.outputs.current == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: cf-build
           path: apps/web/dist
       - name: Install wrangler
-        if: steps.main.outputs.current == 'true'
         # Pin to the repo's wrangler version (apps/web/package.json): build:cf
         # dumps the RESOLVED config from that version, and a newer wrangler can
         # reject resolved-only fields (4.112 started erroring on `legacy_env`,
@@ -672,7 +711,6 @@ jobs:
           version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
           npm install -g "wrangler@${version}"
       - name: Deploy to Cloudflare Workers
-        if: steps.main.outputs.current == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -698,11 +736,24 @@ jobs:
   # (edge:d1:migrate:remote + edge:seed:remote); upc-lookup owns its D1 directly —
   # run `pnpm --filter @cubby/upc-lookup db:migrate:remote` by hand before merging
   # code that depends on a new schema.
-  deploy-worker:
-    name: Deploy ${{ matrix.pkg }} Worker
+  deploy-worker-gate:
+    name: Check current main for auxiliary deploys
     needs: [lint-format, test-unit-aux]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    outputs:
+      current: ${{ steps.main.outputs.current }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check whether this is still current main
+        id: main
+        uses: ./.github/actions/check-current-main
+
+  deploy-worker:
+    name: Deploy ${{ matrix.pkg }} Worker
+    needs: [deploy-worker-gate]
+    runs-on: ubuntu-latest
+    if: needs.deploy-worker-gate.outputs.current == 'true'
     strategy:
       matrix:
         pkg: [usda-api, upc-lookup]
@@ -714,18 +765,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Check whether this is still current main
-        id: main
-        uses: ./.github/actions/check-current-main
-
       - uses: ./.github/actions/setup-node-with-deps
-        if: steps.main.outputs.current == 'true'
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
           # workspace imports each worker bundles (no prebuilt artifact).
           download-wasm: "false"
       - name: Deploy ${{ matrix.pkg }}
-        if: steps.main.outputs.current == 'true'
         run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

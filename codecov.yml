@@ -15,4 +15,4 @@ coverage:
         threshold: 2%
 
 comment:
-  after_n_builds: 12
+  after_n_builds: 1
