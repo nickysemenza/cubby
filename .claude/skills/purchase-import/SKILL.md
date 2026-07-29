@@ -45,6 +45,18 @@ This file is weighted toward **failure modes** — the happy path is easy, the t
 | Exact tax-inclusive amount + date | strong *with* a name check | The workhorse; see traps below. |
 | Embedding / fuzzy name similarity | hint only | Never auto-apply. |
 
+**Vendor identity hides in four fields, not one.** Before concluding a row has no vendor, check
+`vendor`, `url`, `notes` *and* `name`. Pre-`vendor`-column rows routinely carry a bare store name as
+the whole `url` value (`home depot`, `lowes`, `tol nirvana`, `wwe`) or as a short `notes` string or
+in the name itself (`woodworker express`, `supplyhouse return`). A 2026-07 sweep lifted 268 + 23
+such rows into the column. Note `url` is rendered as `<a href={url}>` — a marker left there paints a
+broken link, so clear it once `vendor` carries the information.
+
+**Tolerances must be relative, not absolute.** ±$0.25 is sensible at $200 and meaningless at $1: a
+$0.93 order (wood screws, net of two returns) matched a $1.00 `5 yd nursery mix` row on amount+date
+and had to be reverted. Scale the tolerance to the amount, and **read the line descriptions** before
+accepting any match under ~$20.
+
 **Grade every amount+date match by name-token overlap** (drop stopwords, require ≥2 shared tokens).
 Validation signal: genuine matches cluster at **0–1 day** delta. If candidates scatter across a ±14d
 window, they're coincidences. In the 2026-07 pass, 209 amount matches graded down to 97 real ones.
@@ -58,6 +70,16 @@ and hand-rounded variants (a $599.00 row for a $599.99 unit price). Pre-tax entr
 bug class — 24 rows in one pass, found four different ways because each hypothesis was tested alone.
 
 ## Phase 3 — before proposing any *add*, rule out an existing row
+
+**Keyword search cannot do this. The ledger names the *thing*, not the product.** Searching
+`festool`/`vacuum`/`vac` for a "Festool Vacuum" product found nothing, so a purchase was added — but
+a `dust extractor` row for the identical amount and date had existed since 2024. Zero shared tokens.
+The same trap hid a Bosch miter saw booked as `chop saw`. **The only filter that works is amount +
+date across the whole ledger, ignoring names entirely** — run it before every add, and again as a
+post-hoc check over each newly created row (same amount, ±30 days) to catch what slipped through.
+`find_similar_entities` (`purchase_to_product`) is the right *candidate generator*, but its own docs
+warn the scores rank without verifying — never auto-link.
+
 
 This is the trap that survives every automated filter. A ledger row often **aggregates several
 export lines** at an amount that reconciles to nothing:
@@ -128,6 +150,14 @@ worklist, not a dead end.
   per item; never bulk-add books, clothing, or consumables.
 
 ## Phase 5 — reconcile
+
+**This check does not model refunds — read the row's notes before "correcting" anything it flags.**
+A row whose cost was deliberately reduced to the kept items after a partial refund will fail it
+forever. In the 2026-07-28 pass it produced 5 mismatches and **all 5 were false**: four carried notes
+documenting the refund, one was an explicit operator decision. A buy-and-return pair (a `$X` row plus
+a `-$X` row on the same order) also nets to zero and trips a naive per-order sum. Group the export's
+lines by order *and check their dates* — a return line booked weeks later will drag a naive
+`min(date)`/`first(date)` off by a month and fake a "wrong order id" finding.
 
 Once `orderId` is populated, run the exact check: join every row on `(vendor, orderId)` and compare
 its cost against that order's total and its individual lines. In the 2026-07 pass this flagged
