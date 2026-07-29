@@ -8,6 +8,7 @@ import {
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import { VendorCell } from "~/components/entity/vendor-cell";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -249,7 +250,7 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
               data: { vendor },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
+          renderValue={(v) => (v ? <VendorCell vendor={v} /> : <NoneValue />)}
         />
       ),
     },
