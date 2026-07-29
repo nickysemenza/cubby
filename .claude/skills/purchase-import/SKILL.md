@@ -201,9 +201,28 @@ worklist, not a dead end.
   a semantic fit. Check project windows first; a project's last activity date tells you if it's live.
 - Non-tool/household items stay out of the project ledger unless the operator says otherwise. Ask
   per item; never bulk-add books, clothing, or consumables.
-- **`projectId` differs between a sale and a refund.** A sale recovers value from an asset and must
-  NOT reduce project spend → `projectId: null`. A refund means the money was never spent → keep the
-  original `projectId` so the project's total falls.
+- **A sale or refund carries the same `projectId` as the purchase it offsets — but ONLY if its date
+  falls inside that project's window.** The project's true cost is net of what the tool later sold
+  for, so attach it where you can. The constraint is that **`Project` dates are DERIVED** (see
+  [[project-dates-derived-window]]): with `startDate`/`endDate` null the window rolls up from the
+  project's purchases and tasks, so attaching a disposal dated after the project ended silently drags
+  its end date forward. A Festool accessory bought 2024-05 for *Kitchen: Cabinetry* and sold 2025-12
+  would have extended that finished project by thirteen months.
+
+  So: compute the project's effective window first (override columns if set, otherwise
+  min/max over its purchases and tasks). Inside the window → attach. Outside → leave `projectId`
+  null and say why in the note. Applying this to 16 detached rows in 2026-07, 6 attached ($1,095.43)
+  and 10 correctly stayed null ($1,015.30).
+
+  ⚠️ There is a **fabricated convention** loose in this ledger's row notes reading *"a sale must not
+  reduce project spend"* / *"a negative cost on a project would reduce its spend and inflate
+  budgetRemaining"*. **It is not the operator's convention and never was.** The operator's own
+  hand-entered sale rows — `fake plant (sold)` → *misc move in and cleaning*, `sold network
+  equipment` → *better internet*, `old walking pad` → *gym* — all carry a `projectId`. A 2026-07
+  agent pass invented the rule, stripped `projectId` from existing rows citing it, and wrote the
+  justification into their notes, where a later pass read it back as established fact and spread it
+  further. Do not trust a convention that exists only in notes an agent wrote: check what the
+  operator's own oldest rows actually do.
 
 ### Disposals: sales, and why listing exports lie
 
