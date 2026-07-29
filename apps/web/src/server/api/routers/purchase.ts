@@ -23,6 +23,7 @@ import {
   createPurchase,
   deletePurchases,
   getPurchaseByID,
+  getPurchaseOrderSiblings,
   movePurchases,
   purchaseAnalytics,
   purchaseList,
@@ -114,6 +115,18 @@ const vendorOptions = protectedProcedure
   .query(({ ctx }) => purchaseVendorOptions(ctx.db));
 
 /**
+ * The rest of this purchase's order — the "Same Order" detail section.
+ *
+ * Separate from `getByID` so the detail page's main payload doesn't grow a
+ * lookup only one section reads, and so it re-fetches on its own when the
+ * order id or vendor is edited.
+ */
+const orderSiblings = protectedProcedure
+  .input(purchaseId)
+  .output(z.array(purchaseOut))
+  .query(({ ctx, input }) => getPurchaseOrderSiblings(ctx.db, input));
+
+/**
  * The project x trade purchase-count matrix behind project suggestions. One
  * grouped aggregate for the whole ledger, fetched once and ranked against
  * client-side for many purchases — see rankProjectSuggestions.
@@ -187,6 +200,7 @@ export const purchaseRouter = createTRPCRouter({
   analytics,
   tradeAffinity,
   vendorOptions,
+  orderSiblings,
   bulkMove,
   bulkSetTrade,
   bulkSetCostType,

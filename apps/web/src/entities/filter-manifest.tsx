@@ -5,7 +5,6 @@ import {
   unsafeProductId,
   unsafeProjectId,
 } from "@cubby/schemas/identifiers";
-import { z } from "zod";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
@@ -22,6 +21,7 @@ import {
   taskStatusOptions,
 } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { urlStringParam } from "~/lib/search-params";
 import {
   type FilterKind,
   type FilterSpecCore,
@@ -150,6 +150,19 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "presence",
       placeholder: "Filter by order id...",
       options: presenceFilterOptions("order id"),
+    },
+    {
+      // URL-only, like `productId` above — seeded by the "Same Order" section's
+      // header badge and the ledger's Order # cell, surfaced as a ScopeChip.
+      // Its `columnId` can't be `orderId`: that one is the presence control,
+      // and a second spec on the same id would read the same filter slot.
+      // Always paired with `vendor` (or `vendor=(none)`) by its callers, since
+      // an order id is only unique within a vendor.
+      columnId: "orderIdExact",
+      field: "orderId",
+      urlKey: "order",
+      kind: "id",
+      placeholder: "Filter by order id...",
     },
   ],
 
@@ -481,20 +494,19 @@ export function manifestFilterConfig(
  * removes it again before anything can read it back. Derived from the manifest
  * rather than hand-listed per route, so a new spec can't be forgotten here.
  *
- * Values stay `z.string()`: sets are comma-joined, and the enums are validated
- * where they're consumed (`decodeFilters` → `buildFiltersFromManifest` → the
- * tRPC input schema). `.catch(undefined)` keeps a malformed value from
- * throwing the whole route.
+ * Every value is a {@link urlStringParam}: sets are comma-joined, and the enums
+ * are validated where they're consumed (`decodeFilters` →
+ * `buildFiltersFromManifest` → the tRPC input schema). Routes that ALSO
+ * re-declare a key by name (for `<Link search>` literal key types) must use it
+ * there too — a bare `z.string()` reinstates the silently-dropped-value hole
+ * that schema exists to close.
  */
 export function entityFilterSearchFields(
   entity: Entity,
-): Record<string, z.ZodType<string | undefined>> {
-  const fields: Record<string, z.ZodType<string | undefined>> = {};
+): Record<string, typeof urlStringParam> {
+  const fields: Record<string, typeof urlStringParam> = {};
   for (const spec of getEntityFilters(entity)) {
-    fields[spec.urlKey ?? spec.columnId] = z
-      .string()
-      .optional()
-      .catch(undefined);
+    fields[spec.urlKey ?? spec.columnId] = urlStringParam;
   }
   return fields;
 }

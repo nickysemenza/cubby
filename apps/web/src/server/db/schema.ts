@@ -991,6 +991,15 @@ export const purchase = pgTable(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
+    // The grouping the `orderId` comment above describes, finally indexed.
+    // `orderId` leads (not `vendor`): both columns are equality-constrained in
+    // the sibling lookup so either order serves it, but orderId-first also
+    // serves the half-filled-vendor sweep's `GROUP BY orderId`. Partial —
+    // ~75% of rows carry no order id, and `orderId = $1` implies NOT NULL, so
+    // the planner can still use it.
+    index("Purchase_orderId_vendor_idx")
+      .on(table.orderId, table.vendor)
+      .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
   ],
 );
 

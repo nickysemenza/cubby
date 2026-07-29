@@ -17,6 +17,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { urlStringParam } from "~/lib/search-params";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
 // selected — lazy so the chart stack stays out of the default Ledger view.
@@ -66,21 +67,33 @@ const searchSchema = z
     // Deliberately `string`, not `z.enum(viewOptions)`: a legacy `?view=planned`
     // must survive validation long enough for the transform below to translate
     // it. The transform is what narrows this to `ViewOption | undefined`.
-    view: z.string().optional().catch(undefined),
+    view: urlStringParam,
     // Spread first so ANY manifest spec survives this strict schema — a new
     // filter can't be silently stripped by being forgotten here. The keys read
     // by name in TS are then declared explicitly below, because a computed
     // Record has no literal key types for `Route.useSearch()` to expose.
     ...entityFilterSearchFields("purchase"),
-    q: z.string().optional().catch(undefined),
-    trade: z.string().optional().catch(undefined),
-    costType: z.string().optional().catch(undefined),
-    cost: z.string().optional().catch(undefined),
-    project: z.string().optional().catch(undefined),
-    future: z.string().optional().catch(undefined),
-    date: z.string().optional().catch(undefined),
-    productId: z.string().optional().catch(undefined),
-    product: z.string().optional().catch(undefined),
+    // `urlStringParam`, NOT a bare `z.string()`: these sit AFTER the spread
+    // and override it, so a plain string schema here would reinstate the
+    // silently-dropped-value hole that schema exists to close (see its doc
+    // comment). Three of these keys hit it in practice — `?q=486242` and
+    // `?order=11334` parse as numbers, `?future=true` as a boolean.
+    q: urlStringParam,
+    trade: urlStringParam,
+    costType: urlStringParam,
+    cost: urlStringParam,
+    project: urlStringParam,
+    future: urlStringParam,
+    date: urlStringParam,
+    productId: urlStringParam,
+    product: urlStringParam,
+    // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
+    // together as a pair by the "Same Order" section and the ledger's Order #
+    // cell — an order id only identifies an order within one vendor. Declared
+    // by name so those `<Link search={{ order, vendor }}>` calls typecheck.
+    order: urlStringParam,
+    vendor: urlStringParam,
+    orderId: urlStringParam,
     // Quick-capture deep link (navbar "+" / command palette) — there is no
     // /purchases/new route, so the create dialog is opened by this param.
     create: z.boolean().optional().catch(undefined),
@@ -108,6 +121,9 @@ const searchDefaults = {
   date: undefined,
   productId: undefined,
   product: undefined,
+  order: undefined,
+  vendor: undefined,
+  orderId: undefined,
   create: undefined,
 } as const;
 

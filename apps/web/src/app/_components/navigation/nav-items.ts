@@ -123,6 +123,7 @@ export const desktopNav: NavNode[] = [
     label: "Plan",
     icon: CalendarRange,
     children: [
+      { to: "/calendar", label: "Calendar", icon: CalendarRange },
       { to: "/meals", label: "Meals", icon: Utensils },
       {
         to: "/meals/shopping-list",

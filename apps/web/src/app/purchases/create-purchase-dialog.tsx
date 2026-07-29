@@ -56,6 +56,8 @@ interface CreatePurchaseDialogProps {
    * field on the purchase detail page.
    */
   presetProductId?: ProductId | null;
+  presetDate?: string;
+  presetFuture?: boolean;
   /**
    * `"disposition"` records a product leaving the collection rather than
    * arriving: a sale (negative cost), a return (negative full price), or a
@@ -70,6 +72,8 @@ export function CreatePurchaseDialog({
   onOpenChange,
   presetProjectId,
   presetProductId,
+  presetDate,
+  presetFuture,
   intent = "purchase",
 }: CreatePurchaseDialogProps) {
   const api = useTRPC();
@@ -80,7 +84,7 @@ export function CreatePurchaseDialog({
     () => ({
       name: "",
       cost: null,
-      date: today(),
+      date: presetDate ?? today(),
       // A disposition deliberately defaults to no project: a negative cost
       // attached to a project reduces its spend and inflates budgetRemaining,
       // so attaching one has to be a deliberate act.
@@ -90,11 +94,11 @@ export function CreatePurchaseDialog({
       // both are one click to correct via the row's inline-editable columns.
       costType: isDisposition ? "tools" : "materials",
       trade: "other",
-      future: false,
+      future: presetFuture ?? false,
       vendor: "",
       orderId: "",
     }),
-    [presetProjectId, isDisposition],
+    [presetDate, presetFuture, presetProjectId, isDisposition],
   );
 
   return (

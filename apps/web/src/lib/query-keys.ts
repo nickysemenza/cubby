@@ -63,6 +63,9 @@ export const queryKeys = {
   dashboard: {
     counts: procedureKey("dashboard", "counts"),
   },
+  calendar: {
+    all: entityKey("calendar"),
+  },
   oauth: {
     connectedApps: procedureKey("oauth", "listConnectedApps"),
     orphaned: procedureKey("oauth", "countOrphanedClients"),
@@ -208,24 +211,28 @@ export const problemsMutationInvalidateKeys = [
 
 export const mealMutationInvalidateKeys = [
   queryKeys.meal.all,
+  queryKeys.calendar.all,
 ] as const satisfies readonly QueryKey[];
 
 // Task/purchase mutations also invalidate `project.all`: the dashboard and
 // project rollups (spent/progress) aggregate over them.
 export const projectMutationInvalidateKeys = [
   queryKeys.project.all,
+  queryKeys.calendar.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const taskMutationInvalidateKeys = [
   queryKeys.task.all,
   queryKeys.project.all,
+  queryKeys.calendar.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const purchaseMutationInvalidateKeys = [
   queryKeys.purchase.all,
   queryKeys.project.all,
+  queryKeys.calendar.all,
   queryKeys.dashboard.counts,
   // A purchase can link to a product (cost basis / disposition) — recording
   // one from the product page should refresh that product's hero/stamp too.

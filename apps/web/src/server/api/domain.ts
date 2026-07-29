@@ -2,6 +2,7 @@ import { createTRPCRouter } from "~/server/api/trpc";
 import { aiRouter } from "./routers/ai";
 import { auditLogRouter } from "./routers/audit-log";
 import { backgroundJobsRouter } from "./routers/background-jobs";
+import { calendarRouter } from "./routers/calendar";
 import { dashboardRouter } from "./routers/dashboard";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
@@ -25,6 +26,7 @@ import { usdaRouter } from "./routers/usda";
 export const domainRouterRecord = {
   ai: aiRouter,
   backgroundJobs: backgroundJobsRouter,
+  calendar: calendarRouter,
   dashboard: dashboardRouter,
   recipe: recipeRouter,
   ingredient: ingredientRouter,

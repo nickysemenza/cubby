@@ -6,12 +6,13 @@ import { ProblemsOverview } from "~/app/problems/problems-overview";
 import { Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
+import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
   // Deep-link target for the phone-at-the-shelf location-validate flow (folded
   // in from the retired /locations/validate route). When set, the validate card
   // renders prominently at the top of the page.
-  validateParent: z.string().optional().catch(undefined),
+  validateParent: urlStringParam,
 });
 
 const searchDefaults = { validateParent: undefined } as const;

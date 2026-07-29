@@ -808,8 +808,15 @@ export function createTextColumn<
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
-    /** Override the default display (e.g. muted/truncated notes). */
-    renderValue?: (value: string | null) => ReactNode;
+    /**
+     * Override the default display (e.g. muted/truncated notes). `row` is
+     * there for displays that need a sibling field — the Order # cell pairs
+     * its id with the row's vendor to build the "same order" link, since an
+     * order id is only unique within a vendor.
+     */
+    renderValue?: (value: string | null, row: T) => ReactNode;
+    /** Keep rich display content beside a dedicated pencil edit button. */
+    trigger?: "wrap" | "pencil";
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
@@ -818,6 +825,7 @@ export function createTextColumn<
 ) {
   const renderValue =
     options?.renderValue ?? ((v: string | null) => (v ? v : <NoneValue />));
+  const renderRow = (value: string | null, row: T) => renderValue(value, row);
 
   const cellData = textCellData<T>(
     "text",
@@ -854,12 +862,13 @@ export function createTextColumn<
             }
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text", placeholder: options?.placeholder }}
-            renderValue={renderValue}
+            trigger={options?.trigger}
+            renderValue={(v) => renderRow(v, info.row.original)}
           />
         );
       }
 
-      return renderValue(value);
+      return renderRow(value, info.row.original);
     },
   });
 }

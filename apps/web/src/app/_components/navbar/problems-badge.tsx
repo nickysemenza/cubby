@@ -38,6 +38,8 @@ const PROBLEM_LABELS: Record<
   staleLocations: (n) => `${n} overdue for a recount`,
   neverVerifiedInventory: (n) => pl(n, "never-verified item"),
   unknownParkedItems: (n) => `${n} parked in Unknown`,
+  vendorSpellingVariants: (n) => pl(n, "vendor spelling"),
+  manufacturerSpellingVariants: (n) => pl(n, "manufacturer spelling"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
   orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),
@@ -51,6 +53,7 @@ const PROBLEM_LABELS: Record<
   projectsMissingBudget: (n) => `${n} missing a cost estimate`,
   unclassifiedPurchases: (n) => pl(n, "unclassified purchase"),
   projectsWithDateDrift: (n) => pl(n, "date window drift"),
+  ordersWithPartialVendor: (n) => `${n} split by a missing vendor`,
 };
 
 export const ProblemsBadge = () => {

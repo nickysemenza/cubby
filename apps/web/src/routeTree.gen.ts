@@ -22,6 +22,7 @@ import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
+import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
@@ -154,6 +155,11 @@ const AuthenticatedBackgroundJobsRoute =
     path: '/background-jobs',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
   id: '/entities',
   path: '/entities',
@@ -515,6 +521,7 @@ export interface FileRoutesByFullPath {
   '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
+  '/calendar': typeof AuthenticatedCalendarRoute
   '/entities': typeof AuthenticatedEntitiesRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -590,6 +597,7 @@ export interface FileRoutesByTo {
   '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
+  '/calendar': typeof AuthenticatedCalendarRoute
   '/entities': typeof AuthenticatedEntitiesRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -668,6 +676,7 @@ export interface FileRoutesById {
   '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
+  '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
@@ -746,6 +755,7 @@ export interface FileRouteTypes {
     | '/ai-usage'
     | '/ask'
     | '/background-jobs'
+    | '/calendar'
     | '/entities'
     | '/labels'
     | '/mcp'
@@ -821,6 +831,7 @@ export interface FileRouteTypes {
     | '/ai-usage'
     | '/ask'
     | '/background-jobs'
+    | '/calendar'
     | '/entities'
     | '/labels'
     | '/mcp'
@@ -898,6 +909,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-usage'
     | '/_authenticated/ask'
     | '/_authenticated/background-jobs'
+    | '/_authenticated/calendar'
     | '/_authenticated/entities'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
@@ -1069,6 +1081,13 @@ declare module '@tanstack/react-router' {
       path: '/background-jobs'
       fullPath: '/background-jobs'
       preLoaderRoute: typeof AuthenticatedBackgroundJobsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/calendar': {
+      id: '/_authenticated/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AuthenticatedCalendarRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/entities': {
@@ -1515,6 +1534,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
+  AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
@@ -1576,6 +1596,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
   AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
+  AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,

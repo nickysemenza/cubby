@@ -1,3 +1,4 @@
+import type { PurchaseId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -122,6 +123,11 @@ export const buildPurchaseWhereClause = async (
       filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
       presenceCondition(purchase.cost, filters.costPresenceFilter),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
+      // Exact, like vendor above — an order id is an identifier, not a search
+      // term. ANDs with the vendor condition rather than ORing, which is what
+      // makes `(vendor, orderId)` the strict group key `getPurchaseOrderSiblings`
+      // relies on.
+      eqAny(purchase.orderId, filters.orderId),
     ],
   );
 };
@@ -148,6 +154,53 @@ export const purchaseVendorOptions = async (
   return rows.flatMap((row) =>
     row.vendor ? [{ vendor: row.vendor, count: row.count }] : [],
   );
+};
+
+/**
+ * The other purchases from this purchase's order — the "Same Order" section.
+ *
+ * Deliberately routed through `purchaseList` rather than its own SELECT: this
+ * section and the `?order=…&vendor=…` ledger link its header points at must
+ * show the same rows, and they do so by construction when both resolve through
+ * `buildPurchaseWhereClause`. It also inherits `dbPurchaseToAPI` and the live
+ * project/product name resolution for free.
+ *
+ * Strict `(vendor, orderId)`: a null vendor forms its own group, expressed as
+ * `vendorPresenceFilter: "none"` so it runs through `eqAnyOrPresence` like
+ * every other vendor predicate rather than a bespoke IS NULL. An order whose
+ * rows disagree on vendor therefore splits in two — that drift is real (vendor
+ * was backfilled separately from orderId), which is what
+ * `findOrdersWithPartialVendor` sweeps for.
+ *
+ * The 100 cap is not pagination: the largest real order is a handful of rows
+ * (a 6-line Amazon order, a buy/return pair), so a page-2 affordance would be
+ * dead UI. The ledger link is the escape hatch if that ever stops holding.
+ */
+export const getPurchaseOrderSiblings = async (
+  db: Database,
+  id: PurchaseId,
+): Promise<PurchaseOut[]> => {
+  const [source] = await getDb(db)
+    .select({ vendor: purchase.vendor, orderId: purchase.orderId })
+    .from(purchase)
+    .where(and(eq(purchase.id, id), notDeleted(purchase)))
+    .limit(1);
+
+  if (!source?.orderId) return [];
+
+  const { data } = await purchaseList(
+    db,
+    {
+      orderId: source.orderId,
+      ...(source.vendor
+        ? { vendor: source.vendor }
+        : { vendorPresenceFilter: "none" as const }),
+    },
+    [{ orderBy: "date", direction: "asc" }],
+    { pageIndex: 0, pageSize: 100 },
+  );
+
+  return data.filter((row) => row.id !== id);
 };
 
 /**

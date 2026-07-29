@@ -741,6 +741,18 @@ export type PurchaseBulkCostTypeInput = z.infer<
   typeof purchaseBulkCostTypeInput
 >;
 
+/**
+ * Bulk vendor write — same free text as a single `purchaseUpdateData.vendor`.
+ *
+ * Written by the half-filled-vendor backfill, which derives the value from the
+ * order's own rows rather than accepting one from a caller.
+ */
+export const purchaseBulkVendorInput = z.object({
+  ids: z.array(purchaseId).min(1),
+  vendor: z.string().nullable(),
+});
+export type PurchaseBulkVendorInput = z.infer<typeof purchaseBulkVendorInput>;
+
 export const purchaseFilterFields = {
   // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
   // stay valid. Resolved with `eqAny` in the repo.
@@ -801,6 +813,20 @@ export const purchaseFilterFields = {
    * only distinguishes reconciled-to-an-order vs. not.
    */
   orderIdPresenceFilter: presenceFilter,
+  /**
+   * Exact match on the vendor's own order id — the "show me the rest of this
+   * order" scope behind `/purchases?order=…`.
+   *
+   * Exact (`eqAny`) for the same reason `vendor` is: an order id is an
+   * identifier, not a search term, and a substring match would let
+   * "111-1234567-1234567" also drag in a longer id that contains it.
+   *
+   * Every link that sets this ALSO sets `vendor` (or
+   * `vendorPresenceFilter: "none"`), because an order id is only unique within
+   * a vendor — short ones like Tool Nirvana's "#11325" would otherwise collide.
+   * The two together are the group key.
+   */
+  orderId: oneOrMany(z.string()).optional(),
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;

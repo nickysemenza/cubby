@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
+  type LabelVariant,
   type ProductMissingPrice,
   TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
@@ -17,6 +18,7 @@ import {
   AlertTriangle,
   Download,
   ImageOff,
+  ListFilter,
   type LucideIcon,
   Network,
   ScanBarcode,
@@ -48,7 +50,7 @@ import {
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
-import { OrphanedDeleteFix } from "./tier2-fixes";
+import { OrderVendorBackfillFix, OrphanedDeleteFix } from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
   CoverageChips,
@@ -351,6 +353,57 @@ function RecountLink({ locationId }: { locationId: string }) {
     </Button>
   );
 }
+
+/**
+ * "Show every row spelled this way" — the list page filtered to the variant.
+ *
+ * The card's own `route` can only be an entity DETAIL route, so it links to one
+ * sample record; this is the affordance for seeing the whole set. On purchases
+ * the vendor filter is an exact match, so the link isolates the variant
+ * precisely; on products `manufacturer` is a substring filter, which lands you
+ * on both spellings side by side — arguably the more useful view when you're
+ * about to reconcile them.
+ */
+function VendorVariantLink({ vendor }: { vendor: string }) {
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      render={<Link to="/purchases" search={{ vendor }} />}
+      nativeButton={false}
+    >
+      <ListFilter className="mr-1 size-3" />
+      Show purchases
+    </Button>
+  );
+}
+
+function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      render={<Link to="/products" search={{ manufacturer }} />}
+      nativeButton={false}
+    >
+      <ListFilter className="mr-1 size-3" />
+      Show products
+    </Button>
+  );
+}
+
+/**
+ * `1 product — "Ryobi" has 12`. Shared by both spelling-variant sections, which
+ * differ only in the noun and the routes.
+ *
+ * Phrased around the canonical rather than a verb ("12 use …") so the tie case
+ * reads properly: with no majority the counts are 1 and 1, and "1 uses" is
+ * correct English that still scans as a typo.
+ */
+const variantSubtitle = (v: LabelVariant, noun: string) =>
+  `${v.count} ${noun}${v.count === 1 ? "" : "s"} — "${v.canonical}" has ${
+    v.canonicalCount
+  }`;
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
 /**
@@ -759,6 +812,45 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
+    id: "vendor-spellings",
+    label: "Vendor spellings",
+    select: (p) => p.vendorSpellingVariants,
+    entity: "purchase",
+    title: "One vendor, two spellings",
+    description:
+      "Vendor is free text, so the same store can be entered two ways — and the ledger's filter matches exactly, which splits it into two picklist rows and two sets of totals. Rename the odd one out to the spelling already in use.",
+    emptyMessage: "Every vendor on the ledger is spelled one way.",
+    renderItem: (v) => ({
+      // The default title-plus-id key would collide when one canonical name has
+      // several variants: they'd share a title only by accident, but the sample
+      // id is the discriminator and the spelling is the real identity.
+      key: v.value,
+      title: v.value,
+      subtitle: variantSubtitle(v, "purchase"),
+      route: { to: "/purchases/$id", params: { id: v.sampleId } },
+      editLabel: "Open purchase",
+      customActions: <VendorVariantLink vendor={v.value} />,
+    }),
+  }),
+  section({
+    id: "manufacturer-spellings",
+    label: "Manufacturer spellings",
+    select: (p) => p.manufacturerSpellingVariants,
+    entity: "product",
+    title: "One manufacturer, two spellings",
+    description:
+      "The same brand entered two ways splits it across grouping, filters and the manufacturer picklist. Rename the odd one out to the spelling already in use.",
+    emptyMessage: "Every manufacturer is spelled one way.",
+    renderItem: (v) => ({
+      key: v.value,
+      title: v.value,
+      subtitle: variantSubtitle(v, "product"),
+      route: { to: "/products/$id", params: { id: v.sampleId } },
+      editLabel: "Open product",
+      customActions: <ManufacturerVariantLink manufacturer={v.value} />,
+    }),
+  }),
+  section({
     id: "unknown-parked",
     label: "Parked in Unknown",
     select: (p) => p.unknownParkedItems,
@@ -946,6 +1038,58 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         route: { to: "/products/$id", params: { id: product.id } },
         editLabel: "Open product",
         customActions: <UpcApplyAction product={product} />,
+      };
+    },
+  }),
+  section({
+    id: "partial-vendor-orders",
+    label: "Split orders",
+    select: (p) => p.ordersWithPartialVendor,
+    entity: "purchase",
+    title: "Orders Split by a Missing Vendor",
+    description:
+      "An order is grouped by vendor AND order id together, so when only some of its rows record a vendor the order silently splits in two and each half looks complete. Backfilling the vendor rejoins them.",
+    emptyMessage:
+      "No orders are split by a missing vendor. Every order id agrees with itself on the vendor.",
+    renderItem: (order) => {
+      // One card per order id, and `route` points at one of its member rows —
+      // so the default `title`-`route.params.id` key would collide across two
+      // orders that happen to lead with the same purchase. The order id is the
+      // card's real identity.
+      const soleVendor = order.vendors.length === 1 ? order.vendors[0] : null;
+      return {
+        key: `partial-vendor:${order.orderId}`,
+        title: order.orderId,
+        subtitle: soleVendor
+          ? `${order.missingCount} of ${order.rowCount} rows missing "${soleVendor}"`
+          : `${order.rowCount} rows across conflicting vendors: ${order.vendors.join(", ")}`,
+        badges: [
+          <Badge key="rows" variant="outline">
+            {order.rowCount} rows
+          </Badge>,
+        ],
+        // Lands on one of the vendorless rows, whose "Same Order" section shows
+        // exactly the truncated half this card is reporting.
+        route: {
+          to: "/purchases/$id" as const,
+          params: { id: order.purchaseIds[0] ?? "" },
+        },
+        editLabel: "Open purchase",
+        // No fix for the ambiguous case: two real retailers sharing an id
+        // format is not something a backfill can adjudicate.
+        inlineFix: soleVendor
+          ? {
+              label: "Backfill vendor",
+              render: (close) => (
+                <OrderVendorBackfillFix
+                  orderId={order.orderId}
+                  vendor={soleVendor}
+                  missingCount={order.missingCount}
+                  close={close}
+                />
+              ),
+            }
+          : undefined,
       };
     },
   }),

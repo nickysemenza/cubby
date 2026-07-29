@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { urlStringParam } from "~/lib/search-params";
 
 /**
  * Search-param keys that useTableState mirrors to the URL (urlSync). A list
@@ -8,9 +9,12 @@ import { z } from "zod";
  * pass arbitrary search params through, so they need nothing.
  *
  * `.catch(undefined)` keeps a malformed value from throwing the whole route.
+ * `sort` is a {@link urlStringParam} rather than a bare `z.string()` for the
+ * reason documented there — `page`/`pageSize` are genuinely numeric and stay
+ * `z.coerce.number()`.
  */
 export const tableSearchFields = {
-  sort: z.string().optional().catch(undefined),
+  sort: urlStringParam,
   page: z.coerce.number().int().positive().optional().catch(undefined),
   pageSize: z.coerce.number().int().positive().optional().catch(undefined),
 };

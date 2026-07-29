@@ -8,6 +8,7 @@ import type {
   TaskStatus,
   Trade,
 } from "@cubby/schemas/project";
+import { Link } from "@tanstack/react-router";
 import {
   type ColumnHelper,
   createColumnHelper,
@@ -22,7 +23,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { partition, uniq } from "es-toolkit";
-import { ExternalLink, ListTodo, ShoppingCart } from "lucide-react";
+import { ExternalLink, ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import {
   type ComponentType,
   type ReactNode,
@@ -88,6 +89,7 @@ import {
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+import { FILTER_NONE } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   projectMutationInvalidateKeys,
@@ -709,6 +711,11 @@ export function purchaseVendorColumn(
  * Rendered `font-mono` (house convention for identifiers). Hidden by default on
  * the /purchases ledger; see `purchaseVendorColumn`. Its filter is presence-only
  * ("has order id" / "(none)") — the "(none)" side is the unreconciled worklist.
+ *
+ * The trailing icon scopes the ledger to the rest of that order. It carries the
+ * row's `vendor` alongside the id because an order id is only unique within a
+ * vendor. Rich display mode keeps that link beside a dedicated pencil trigger,
+ * so navigation never also opens the inline editor.
  */
 export function purchaseOrderIdColumn(
   helper: ColumnHelper<PurchaseOut>,
@@ -721,8 +728,23 @@ export function purchaseOrderIdColumn(
     className: "w-32",
     mobile: opts?.mobile,
     filterConfig: manifestFilterConfig("purchase", "orderId"),
-    renderValue: (v) =>
-      v ? <span className="font-mono">{v}</span> : <NoneValue />,
+    trigger: "pencil",
+    renderValue: (v, row) =>
+      v ? (
+        <>
+          <span className="font-mono">{v}</span>
+          <Link
+            to="/purchases"
+            search={{ order: v, vendor: row.vendor ?? FILTER_NONE }}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={`Show the rest of order ${v}`}
+          >
+            <ListFilter className="size-3.5" />
+          </Link>
+        </>
+      ) : (
+        <NoneValue />
+      ),
     editable: {
       onSave: async (newOrderId, purchase) => {
         await save(newOrderId, purchase);

@@ -100,7 +100,11 @@
       "ignoreDependencies": ["cloudflare"]
     }
   },
-  "ignore": [".claude/workflows/**"],
+  "ignore": [
+    ".claude/workflows/**",
+    // Copy-owned ReUI source intentionally retains its public component API.
+    "apps/web/src/components/reui/**"
+  ],
   "ignoreDependencies": ["zod"],
   "ignoreBinaries": ["wasm-pack"],
   "ignoreWorkspaces": ["packages/wasm"],

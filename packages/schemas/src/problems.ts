@@ -5,6 +5,7 @@ import {
   inventoryId,
   locationId,
   productId,
+  purchaseId,
   recipeId,
 } from "./identifiers";
 import {
@@ -182,6 +183,30 @@ export const unknownParkedItemSchema = z.object({
   location: z.object({ id: locationId, name: z.string() }),
 });
 
+/**
+ * One spelling of a brand name that collides with a more-used spelling of the
+ * same name — `RYOBI` where 12 other products say `Ryobi`.
+ *
+ * Shared by the two free-text brand columns (`Purchase.vendor`,
+ * `Product.manufacturer`), which are the same namespace in practice: 8 names
+ * appear in both. The row is per VARIANT, not per record, so one card covers
+ * however many rows carry the misspelling.
+ */
+export const labelVariantSchema = z.object({
+  /** The minority spelling, exactly as stored. */
+  value: z.string(),
+  count: z.number().int(),
+  /** The most-used spelling sharing this canonical form. */
+  canonical: z.string(),
+  canonicalCount: z.number().int(),
+  /**
+   * One record bearing `value`, so the card can link somewhere. Deliberately a
+   * plain string: it's a purchase id for one detector and a product id for the
+   * other, and the section supplies the route.
+   */
+  sampleId: z.string(),
+});
+
 export const productWithNoImagesSchema = z.object({
   ...productProblemFields,
   upc: z.string().nullable(),
@@ -235,6 +260,31 @@ export const entityMissingEmbeddingSchema = z.object({
 export const staleParentRecipeSchema = z.object({
   id: recipeId,
   name: z.string(),
+});
+
+/**
+ * An order whose rows disagree about their vendor — some carry one, some are
+ * null.
+ *
+ * `(vendor, orderId)` is the group key for "the rest of this order" (see
+ * `getPurchaseOrderSiblings`), which makes a half-filled vendor a *silent*
+ * fault: the order splits into two groups and each half looks complete. Real
+ * drift, not hypothetical — `orderId` and `vendor` were backfilled by separate
+ * passes over the ledger.
+ *
+ * `vendors` holds the distinct non-null vendors found. Exactly one is the
+ * fixable case (backfill it onto the null rows); two or more is a genuine
+ * collision between different retailers reusing an id format, which no
+ * automatic fix can adjudicate.
+ */
+export const orderWithPartialVendorSchema = z.object({
+  orderId: z.string(),
+  vendors: z.array(z.string()),
+  rowCount: z.number(),
+  missingCount: z.number(),
+  // The rows with a null vendor — what a backfill would write to, and what the
+  // card links into.
+  purchaseIds: z.array(purchaseId),
 });
 
 export const staleIngredientParseSchema = z.object({
@@ -293,6 +343,9 @@ const problemsFastShape = {
   staleLocations: z.array(staleLocationSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
+  ordersWithPartialVendor: z.array(orderWithPartialVendorSchema),
+  vendorSpellingVariants: z.array(labelVariantSchema),
+  manufacturerSpellingVariants: z.array(labelVariantSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -444,6 +497,7 @@ export type NeverVerifiedInventory = z.infer<
   typeof neverVerifiedInventorySchema
 >;
 export type UnknownParkedItem = z.infer<typeof unknownParkedItemSchema>;
+export type LabelVariant = z.infer<typeof labelVariantSchema>;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
 >;
@@ -452,6 +506,9 @@ export type LocationWithoutAiDescription = z.infer<
 >;
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
 export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
+export type OrderWithPartialVendor = z.infer<
+  typeof orderWithPartialVendorSchema
+>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;
@@ -502,6 +559,21 @@ export const cleanupOrphanedEntityEmbeddingsInput = z
 export const cleanupOrphanedEntityEmbeddingsOut = z.object({
   found: z.number().int().nonnegative(),
   deleted: z.number().int().nonnegative(),
+});
+
+/**
+ * Backfill the vendor on one half-filled order. Takes only the order id — the
+ * vendor is re-derived server-side from the order's own rows, so the fix can't
+ * be pointed at a wrong value by a stale client.
+ */
+export const backfillOrderVendorInput = z.object({
+  orderId: z.string().min(1),
+});
+
+/** `vendor: null` means the order was already consistent or is ambiguous. */
+export const backfillOrderVendorOut = z.object({
+  vendor: z.string().nullable(),
+  updated: z.number().int().nonnegative(),
 });
 
 export const recipeUsageByProductInput = z.object({
