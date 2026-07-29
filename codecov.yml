@@ -1,19 +1,13 @@
-# CI produces 12 coverage uploads per commit: recipebridge (rust) + web unit +
-# 2 web integration shards + 8 aux packages (test-unit-aux matrix). Without
-# after_n_builds, codecov recomputes `codecov/project` after EVERY partial
-# upload, so early shards briefly read as a project-coverage drop and flap the
-# status red mid-CI (observed on PR #412 pushes). Compute status/comment once,
-# after all uploads arrive. Keep this count in sync with ci.yaml's
-# codecov-action steps (shard/matrix changes included).
+# Test jobs publish coverage as workflow artifacts. report-coverage downloads
+# every report and sends one complete upload to Codecov, so status/comment
+# calculation never sees a partial commit (the old mid-CI red flapping source).
 codecov:
   notify:
-    after_n_builds: 12
+    after_n_builds: 1
     wait_for_ci: true
 
-# after_n_builds alone does not reliably gate STATUS posts (observed: statuses
-# still computed from partial upload sets mid-CI, briefly reading ~0.5% lower
-# than final). The threshold makes those transient dips non-failing; the patch
-# status stays strict and is the gate that matters.
+# The threshold absorbs small legitimate project-wide drift; patch coverage
+# remains the strict signal for changed code.
 coverage:
   status:
     project:
@@ -21,4 +15,4 @@ coverage:
         threshold: 2%
 
 comment:
-  after_n_builds: 12
+  after_n_builds: 1

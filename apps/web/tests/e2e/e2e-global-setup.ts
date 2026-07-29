@@ -21,12 +21,16 @@ const webkitAuthFile = path.join(
   "../../playwright/.auth/user-webkit.json",
 );
 
-const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
+const integreSQL = new IntegreSQLClient({
+  url: process.env.INTEGRESQL_URL ?? "http://localhost:5000",
+});
+const integreSQLDatabaseHost =
+  process.env.INTEGRESQL_DATABASE_HOST ?? "localhost";
 
 const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
-  databaseConfig.host = "localhost";
+  databaseConfig.host = integreSQLDatabaseHost;
   databaseConfig.port = 5432;
   return databaseConfig;
 };

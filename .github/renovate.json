@@ -4,6 +4,18 @@
   "schedule": ["every weekend"],
   "prHourlyLimit": 2,
   "prConcurrentLimit": 1,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Keep the Playwright container assertion aligned with @playwright/test",
+      "managerFilePatterns": ["/^\\.github\\/workflows\\/ci\\.yaml$/"],
+      "matchStrings": [
+        "PLAYWRIGHT_IMAGE_VERSION:\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "@playwright/test",
+      "datasourceTemplate": "npm"
+    }
+  ],
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "pin"],
@@ -18,6 +30,14 @@
     {
       "matchPackageNames": ["@opentelemetry/*"],
       "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "@playwright/test",
+        "mcr.microsoft.com/playwright"
+      ],
+      "groupName": "Playwright runtime",
+      "groupSlug": "playwright-runtime"
     }
   ]
 }
