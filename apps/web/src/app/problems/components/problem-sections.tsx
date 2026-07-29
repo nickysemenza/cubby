@@ -48,7 +48,7 @@ import { BackfillButton } from "./problem-backfill-action";
 import {
   type IconProp,
   ProblemSection,
-  type ProblemSectionMeter,
+  type ProblemSectionCoverage,
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
@@ -75,8 +75,32 @@ import {
  * Auto-fixable membership is NOT expressed here — it's derived from
  * `AUTO_FIX_SECTION_IDS` so it can't drift from what the Fix button clears.
  */
-type ProblemSectionCoverage = {
+type ProblemSectionDeclaredCoverage = {
   meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
+};
+
+/**
+ * Bind a declared coverage config to the loaded denominators.
+ *
+ * `totals` is undefined until its own query resolves, which happens AFTER the
+ * four cost-grouped detector queries the page gates on — so coverage sections
+ * render with rows but no denominators for a beat. Returning `{}` there (rather
+ * than substituting 0) keeps the section styled as coverage while simply
+ * omitting the meter; a zero denominator isn't a loading state, it's a wrong
+ * number, and it rendered as "-178 / 0".
+ */
+const resolveCoverage = (
+  declared: ProblemSectionDeclaredCoverage | undefined,
+  totals: CoverageTotals | undefined,
+): ProblemSectionCoverage | undefined => {
+  if (!declared) return undefined;
+  if (!declared.meter || !totals) return {};
+  return {
+    meter: {
+      total: declared.meter.total(totals),
+      doneLabel: declared.meter.doneLabel,
+    },
+  };
 };
 
 /** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
@@ -91,9 +115,12 @@ type ProblemSectionEntry = {
    * The section card. `totals` carries the coverage denominators (loaded by a
    * separate cheap query); defect sections ignore it.
    */
-  node: (problems: AllProblems, totals: CoverageTotals) => ReactNode;
+  node: (
+    problems: AllProblems,
+    totals: CoverageTotals | undefined,
+  ) => ReactNode;
   /** Present ⇒ coverage, not a defect; absent ⇒ the main defect list. */
-  coverage?: ProblemSectionCoverage;
+  coverage?: ProblemSectionDeclaredCoverage;
 };
 
 /**
@@ -115,7 +142,7 @@ function section<T>(config: {
   groupBy?: (items: T[]) => Record<string, T[]>;
   /** A static "fix all" node, or one built from the current items (for bulk delete). */
   headerAction?: ReactNode | ((items: T[]) => ReactNode);
-  coverage?: ProblemSectionCoverage;
+  coverage?: ProblemSectionDeclaredCoverage;
 }): ProblemSectionEntry {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -140,12 +167,7 @@ function section<T>(config: {
           items={items}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
-          meter={
-            config.coverage?.meter && {
-              total: config.coverage.meter.total(totals),
-              doneLabel: config.coverage.meter.doneLabel,
-            }
-          }
+          coverage={resolveCoverage(config.coverage, totals)}
           headerAction={
             typeof config.headerAction === "function"
               ? config.headerAction(items)
@@ -162,8 +184,11 @@ function customSection<T>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
-  render: (items: T[], meter: ProblemSectionMeter | undefined) => ReactNode;
-  coverage?: ProblemSectionCoverage;
+  render: (
+    items: T[],
+    coverage: ProblemSectionCoverage | undefined,
+  ) => ReactNode;
+  coverage?: ProblemSectionDeclaredCoverage;
 }): ProblemSectionEntry {
   return {
     id: def.id,
@@ -173,10 +198,7 @@ function customSection<T>(def: {
     node: (problems, totals) =>
       def.render(
         [...def.select(problems)],
-        def.coverage?.meter && {
-          total: def.coverage.meter.total(totals),
-          doneLabel: def.coverage.meter.doneLabel,
-        },
+        resolveCoverage(def.coverage, totals),
       ),
   };
 }
@@ -805,8 +827,8 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     coverage: {
       meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
     },
-    render: (items, meter) => (
-      <EmptyLocationsList locations={items} meter={meter} />
+    render: (items, coverage) => (
+      <EmptyLocationsList locations={items} coverage={coverage} />
     ),
   }),
   section({

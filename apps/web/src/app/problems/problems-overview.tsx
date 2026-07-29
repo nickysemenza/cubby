@@ -1,4 +1,4 @@
-import type { AllProblems, CoverageTotals } from "@cubby/schemas/problems";
+import type { AllProblems } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { CheckCircle, ChevronRight } from "lucide-react";
@@ -55,15 +55,6 @@ const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
   (section) => section.coverage == null && AUTO_FIX_SECTION_IDS.has(section.id),
 );
 
-/** Denominators default to 0 while the (separate, cheap) query is in flight. */
-const NO_COVERAGE_TOTALS: CoverageTotals = {
-  productsWithNoImages: 0,
-  emptyLocations: 0,
-  staleLocations: 0,
-  neverVerifiedInventory: 0,
-  ingredientsWithoutProduct: 0,
-};
-
 export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -110,7 +101,13 @@ export function ProblemsOverview() {
 
   // Denominators for the coverage meters. Its own cheap batched query — the
   // meters are page-only, so this stays off the four unbatched hot-path groups.
-  const { data: coverageTotals = NO_COVERAGE_TOTALS } = useQuery(
+  //
+  // Deliberately NOT folded into the `isLoading` gate below, and deliberately
+  // left `undefined` rather than defaulted to zeros: the page shouldn't hold the
+  // whole defect list behind a query only the coverage meters need, and a
+  // section whose denominators haven't landed simply renders without its meter
+  // (see `resolveCoverage`) instead of briefly showing "-178 / 0".
+  const { data: coverageTotals } = useQuery(
     api.problems.getCoverageTotals.queryOptions(),
   );
 
