@@ -51,9 +51,14 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Recipes keep a `recipeSource` pointer back to the cookbook they came from
 
 **Meals**
-- Plan recipes onto a calendar (week + table views), scaled per meal
+- Plan recipes onto a shared month calendar (plus a table view), scaled per meal
 - Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown (display-only; see [Tenets](#tenets))
 - Suggestions — *"what can I make tonight?"* from what's on hand
+
+**Planning calendar**
+- One month view for meals, due tasks, purchases, and multi-day project spans
+- Source and project-kind filters, date drawers with daily totals, and quick-add flows
+- Drag-to-reschedule for meals, tasks, and planned purchases; actual purchases and project spans stay read-only
 
 **USDA**
 - Full USDA FoodData Central database loaded into a sibling service
@@ -447,7 +452,8 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 ### Recently shipped
 
 - **Project tracker migration + maturation** — the household projects/tasks/purchases databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/purchases`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
-- **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
+- **Unified planning calendar** — meals, task ranges, planned/actual purchases, and project spans share a filterable month view with a day drawer, quick-add flows, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
+- **Meal planning v1** — plan recipes onto a calendar (month + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
 - **Location arrange** — drag-drop reparenting of locations and items across a tree view and a Miller-column board, with an Unknown dock for unplaced items.
 
 ### Now

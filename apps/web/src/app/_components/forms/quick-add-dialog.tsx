@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { QueryKey } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect } from "react";
 import {
   type DefaultValues,
   type FieldValues,
@@ -73,10 +73,13 @@ export function QuickAddDialog<
   /** Render the form fields; receives the `useForm` instance for `Controller`-based fields. */
   children: (form: UseFormReturn<TFieldValues>) => ReactNode;
 }) {
-  const resolveDefaults = (): TFieldValues =>
-    typeof defaultValues === "function"
-      ? (defaultValues as () => TFieldValues)()
-      : defaultValues;
+  const resolveDefaults = useCallback(
+    (): TFieldValues =>
+      typeof defaultValues === "function"
+        ? (defaultValues as () => TFieldValues)()
+        : defaultValues,
+    [defaultValues],
+  );
 
   const form = useForm<TFieldValues>({
     resolver: zodResolver(schema),
@@ -85,6 +88,9 @@ export function QuickAddDialog<
     // values themselves are already a complete, validated `TFieldValues`.
     defaultValues: resolveDefaults() as DefaultValues<TFieldValues>,
   });
+  useEffect(() => {
+    if (open) form.reset(resolveDefaults());
+  }, [form, open, resolveDefaults]);
 
   const createMutation = useActionMutation({
     mutationFn,

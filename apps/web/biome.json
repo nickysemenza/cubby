@@ -11,6 +11,7 @@
       "!wasm",
       "!drizzle",
       "!src/components/ui",
+      "!src/components/reui",
       "!src/routeTree.gen.ts"
     ]
   },

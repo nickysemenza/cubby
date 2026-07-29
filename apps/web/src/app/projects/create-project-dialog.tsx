@@ -4,6 +4,7 @@ import {
   projectKindSchema,
   projectStatusSchema,
 } from "@cubby/schemas/project";
+import { useMemo } from "react";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -26,28 +27,32 @@ const quickAddProjectSchema = z.object({
 });
 type QuickAddProjectValues = z.infer<typeof quickAddProjectSchema>;
 
-const defaultValues: QuickAddProjectValues = {
-  name: "",
-  status: "planning",
-  kind: null,
-  costEstimate: null,
-  startDate: null,
-};
-
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Pre-set `parentProjectId` on the created project — the detail page's
    * "New sub-project" button opens this dialog with the current project. */
   defaultParentProjectId?: ProjectId;
+  presetDate?: string;
 }
 
 export function CreateProjectDialog({
   open,
   onOpenChange,
   defaultParentProjectId,
+  presetDate,
 }: CreateProjectDialogProps) {
   const api = useTRPC();
+  const defaultValues = useMemo<QuickAddProjectValues>(
+    () => ({
+      name: "",
+      status: "planning",
+      kind: null,
+      costEstimate: null,
+      startDate: presetDate ?? null,
+    }),
+    [presetDate],
+  );
 
   return (
     <QuickAddDialog
