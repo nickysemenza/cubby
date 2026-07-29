@@ -206,10 +206,13 @@ test.describe("Project tracker", () => {
     //
     // Sheets-style select-then-edit: inside the cell-selection grid a single
     // click only SELECTS the cell; the editor opens on double-click (or Enter).
-    // Double-click the pencil (an svg inside the trigger), not the name text —
-    // the name is a detail-page link, so a center click would navigate away.
+    // Scope through the cell's name link, then double-click its separate edit
+    // button. The name itself navigates to the detail page.
     const editedName = `${name} (edited)`;
-    await page.getByRole("button", { name }).locator("svg").dblclick();
+    const nameCell = page.getByRole("cell").filter({
+      has: page.getByRole("link", { name, exact: true }),
+    });
+    await nameCell.getByRole("button", { name: "Edit value" }).dblclick();
     const nameInput = page.locator("input:focus");
     await expect(nameInput).toBeVisible({ timeout: 5000 });
     await nameInput.fill(editedName);
