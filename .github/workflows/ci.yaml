@@ -49,26 +49,49 @@ jobs:
       - name: Detect pull request paths
         id: changes
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
-          filters: |
-            rust:
-              - "recipebridge/**"
-              - "rust-toolchain.toml"
-              - ".github/actions/**"
-              - ".github/workflows/ci.yaml"
-            e2e:
-              - "apps/web/**"
-              - "apps/mcp-apps/**"
-              - "packages/**"
-              - "recipebridge/**"
-              - "scripts/**"
-              - "package.json"
-              - "pnpm-lock.yaml"
-              - "pnpm-workspace.yaml"
-              - "rust-toolchain.toml"
-              - ".github/actions/**"
-              - ".github/workflows/ci.yaml"
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            const paths = files.map(({ filename }) => filename);
+            const matches = (path, prefixes, exact = []) =>
+              exact.includes(path) ||
+              prefixes.some((prefix) => path.startsWith(prefix));
+
+            const rust = paths.some((path) =>
+              matches(
+                path,
+                ["recipebridge/", ".github/actions/"],
+                ["rust-toolchain.toml", ".github/workflows/ci.yaml"],
+              ),
+            );
+            const e2e = paths.some((path) =>
+              matches(
+                path,
+                [
+                  "apps/web/",
+                  "apps/mcp-apps/",
+                  "packages/",
+                  "recipebridge/",
+                  "scripts/",
+                  ".github/actions/",
+                ],
+                [
+                  "package.json",
+                  "pnpm-lock.yaml",
+                  "pnpm-workspace.yaml",
+                  "rust-toolchain.toml",
+                  ".github/workflows/ci.yaml",
+                ],
+              ),
+            );
+
+            core.setOutput("rust", rust);
+            core.setOutput("e2e", e2e);
 
   build-wasm:
     name: Build WASM
