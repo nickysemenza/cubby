@@ -1,13 +1,18 @@
 import * as Sentry from "@sentry/cloudflare";
-import { registerSentryErrorCapture, withSpan } from "@cubby/worker-tracing";
+import {
+  CUBBY_SENTRY_DSN,
+  registerSentryErrorCapture,
+  withSpan,
+} from "@cubby/worker-tracing";
 import { createUsdaApp } from "./app.js";
 import { createEdgeUsdaDataSource } from "./data/edge.js";
 import type { EdgeBindings } from "./data/cloudflare-types.js";
 
 let app: ReturnType<typeof createUsdaApp> | undefined;
+type WorkerBindings = EdgeBindings & { SENTRY_ENVIRONMENT: string };
 
 const handler = {
-  fetch(request: Request, env: EdgeBindings, executionContext: unknown) {
+  fetch(request: Request, env: WorkerBindings, executionContext: unknown) {
     if (!app) {
       app = createUsdaApp(createEdgeUsdaDataSource(env), {
         logRequests: true,
@@ -43,9 +48,9 @@ const handler = {
 // swallows route throws into a 500 response instead, so the
 // `registerSentryErrorCapture` call above is what actually reports those.
 export default Sentry.withSentry(
-  () => ({
-    // Public DSN — canonical copy in apps/web/src/lib/sentry-dsn.ts.
-    dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+  (env: WorkerBindings) => ({
+    dsn: CUBBY_SENTRY_DSN,
+    environment: env.SENTRY_ENVIRONMENT,
     tracesSampleRate: 0,
     initialScope: { tags: { service: "usda-api" } },
   }),

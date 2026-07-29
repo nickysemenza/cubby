@@ -17,6 +17,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 import {
   EMPTY_PROJECT_CONTENT_DATES,
   EMPTY_PROJECT_OWN_ROLLUP,
@@ -129,9 +130,7 @@ export async function projectContentDates(
       .select({
         projectId: task.projectId,
         contentStart: sql<string | null>`min(${task.dueDate})`,
-        contentEnd: sql<
-          string | null
-        >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
+        contentEnd: sql<string | null>`max(${effectiveTaskDueDateSql()})`,
       })
       .from(task)
       .where(and(scope(task.projectId), notDeleted(task)))

@@ -518,41 +518,16 @@ Still not convertible, and this is by design: **Analytics, the task Board, and t
 `completion: "done"`, a schema enum with no column and no manifest spec). The switcher
 has to keep those arms.
 
-### Deferred from the filter-honesty PR
+### Remaining from the filter-honesty audit
 
-Found while auditing the table/dashboard layer; each is real but out of that PR's blast
-radius.
+The semantic cleanup shipped: dashboard-scoped attention, shared task/purchase bulk
+workflows, honest infinite-list URL state, one server-list query path, dead facet-count
+removal, and shared project-tree expansion. The old ingredient `presenceCondition`
+item was stale; that implementation now uses `idSetPresence`.
 
-- [ ] **`computeAttentionItems(db)` takes no filters.** Needs Attention ignores every
-      dashboard chip, and now that the rest of the dashboard filters honestly, the panel
-      *looks* more scoped than it is.
-- [ ] **~260 lines of byte-identical bulk-action machinery** duplicated between
-      `app/projects/shared.tsx` and `tasks/tasklist.tsx` / `purchases/purchaselist.tsx`
-      (three `useActionMutation`s + three dialogs + a `bulkActions` memo, twice). A
-      `useTaskBulkActions()` / `usePurchaseBulkActions()` pair returning
-      `{bulkActions, dialogs}` cuts it roughly in half.
-- [ ] **`useTableState` emits a meaningless `?page=`** on the 8 infinite-scroll lists —
-      `useInfiniteTableList` hardcodes `pageIndex: 0`, so a shared link carries a page
-      number that restores into state and does nothing. Needs an `infinite?: boolean` on
-      `TableStateOptions`, threaded from `useEntityList`, gating `PAGE_KEY` out of
-      `serializedUrlState`.
-- [ ] **`facetCount`** is declared on `FilterSpec` and plumbed through to
-      `HeaderFilter.tsx`, but no spec sets it — the faceting branch is unreachable. Wire
-      it on the one client-side table (`project`) or delete it.
-- [ ] **The always-call-both-hooks pagination path** (`useEntityList`): `useTableList`
-      has zero direct callers and exists only as the `enabled: false` arm.
-- [ ] **`task/lookup.ts` and `purchase/lookup.ts` still hand-roll the project-tree half**
-      (`allProjectParentRows` + `buildChildrenMap` + `collectDescendantIds`). They don't
-      run the rollup pipeline, so the `loadProjectSubtreeRollups` consolidation skipped
-      them; each is a ~3-line `loadProjectTree` collapse.
-- [ ] **`repo/ingredient/search.ts` declares a local `presenceCondition`** that shadows
-      the imported helper of the same name. It's a left-join null check, not column
-      presence, so the helper doesn't apply — but the shadowing is a trap. Rename.
-- [ ] **Splits worth doing eventually:** `app/projects/shared.tsx` (1345 lines) and
-      `data-table/columnHelpers.tsx` (1702 lines). Also `HistoryView`'s local `useState`
-      filters, which are unshareable unlike every other view on that page, and its
-      over-fetch (it reads only `data.projects` from a payload that includes the
-      expensive `computeAttentionItems`).
+- [ ] **History view filtering/over-fetch.** `HistoryView` still owns local `useState`
+      filters, which are unshareable unlike every other view on that page, and reads only
+      `data.projects` from a payload that includes the attention computation.
 
 ### Background work — where it stands
 

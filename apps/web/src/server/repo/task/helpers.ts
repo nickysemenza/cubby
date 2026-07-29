@@ -1,6 +1,12 @@
 import type { TaskId } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
+import { sql } from "drizzle-orm";
+import { task } from "~/server/db/schema";
 import { resolveLiveJoinName } from "~/server/repo/database-helpers";
+
+/** SQL counterpart of `effectiveTaskDueDate` for repository predicates. */
+export const effectiveTaskDueDateSql = () =>
+  sql`coalesce(${task.dueEndDate}, ${task.dueDate})`;
 
 /**
  * Shape of a `task` row loaded with its (nullable) parent `project` name and

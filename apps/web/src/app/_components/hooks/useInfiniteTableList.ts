@@ -15,8 +15,6 @@ interface UseInfiniteTableListOptions<TFilters> {
   tableState: TableStateReturn;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
-  /** Disable the query (hook still called but query doesn't fire) */
-  enabled?: boolean;
 }
 
 export interface InfiniteScrollControls<TData = unknown> {
@@ -52,14 +50,13 @@ interface UseInfiniteTableListReturn<TData = unknown> {
  * Hook for managing infinite-scrolling table list queries with tRPC.
  *
  * Uses useInfiniteQuery to accumulate pages client-side.
- * Same interface as useTableList but adds infiniteScroll controls.
+ * This is the sole server-backed entity-list data path.
  */
 export function useInfiniteTableList<TFilters, TData = unknown>({
   queryOptions,
   buildFilters,
   tableState,
   groupBy,
-  enabled = true,
 }: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
   const { filters, sortParams, pagination } = usePaginatedTableCore({
     queryOptions,
@@ -102,7 +99,6 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     isRefetching,
     refetch,
   } = useInfiniteQuery({
-    enabled,
     // Filter/sort changes swap the queryKey; without this the accumulated
     // pages vanish for the refetch window, blanking rows AND the header
     // count (useEntityList withholds totalCount while isLoading).

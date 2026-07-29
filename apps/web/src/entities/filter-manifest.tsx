@@ -52,12 +52,6 @@ export interface FilterSpec extends FilterSpecCore {
    * universe) and so can't be static module data.
    */
   optionsKey?: string;
-  /**
-   * Append a `(count)` of matching rows to each option. Only meaningful on
-   * tables that load their full dataset client-side — TanStack's faceting
-   * sees the current page only, so it's misleading on server-paginated ones.
-   */
-  facetCount?: boolean;
 }
 
 /** The control a kind renders as. */
@@ -471,7 +465,6 @@ export function manifestFilterConfig(
     placeholder: spec.placeholder,
     filterType: filterTypeForKind(spec.kind),
     options,
-    facetCount: spec.facetCount,
   };
 }
 

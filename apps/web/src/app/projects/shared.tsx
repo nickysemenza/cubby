@@ -19,24 +19,14 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
-import {
-  ArrowRightLeft,
-  ExternalLink,
-  ListChecks,
-  ListTodo,
-  ShoppingCart,
-  Tag,
-  Wrench,
-} from "lucide-react";
+import { ExternalLink, ListTodo, ShoppingCart } from "lucide-react";
 import {
   type ComponentType,
   type ReactNode,
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
-import { BulkActionBar } from "~/app/_components/data-table/BulkActionBar";
 import {
   selectCellData,
   specFromCellData,
@@ -56,15 +46,20 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
+import { ListBulkActionBar } from "~/app/_components/hooks/useListBulkActions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { MoveToProjectDialog } from "~/app/_components/tracker/move-to-project-dialog";
-import { SetFieldDialog } from "~/app/_components/tracker/set-field-dialog";
-import { SetTaskStatusDialog } from "~/app/_components/tracker/set-task-status-dialog";
+import {
+  PurchaseBulkActionDialogs,
+  usePurchaseBulkActions,
+} from "~/app/_components/tracker/purchase-bulk-actions";
+import {
+  TaskBulkActionDialogs,
+  useTaskBulkActions,
+} from "~/app/_components/tracker/task-bulk-actions";
 import {
   costTypeBadgeVariant,
   costTypeLabels,
@@ -93,7 +88,6 @@ import {
   purchaseMutationInvalidateKeys,
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
@@ -273,9 +267,6 @@ export function TaskList({
   const api = useTRPC();
   const lastSelectedIdRef = useRef<string | null>(null);
   const shiftKeyRef = useRef(false);
-  const [bulkMoveItems, setBulkMoveItems] = useState<TaskOut[]>([]);
-  const [bulkStatusItems, setBulkStatusItems] = useState<TaskOut[]>([]);
-  const [bulkTradeItems, setBulkTradeItems] = useState<TaskOut[]>([]);
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -297,46 +288,16 @@ export function TaskList({
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
 
-  const bulkActions = useMemo(
-    () => ({
-      actions: [
-        {
-          id: "move",
-          label: "Move to project...",
-          icon: <ArrowRightLeft className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: TableRow<TaskOut>[]) => {
-            setBulkMoveItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        },
-        {
-          id: "set-status",
-          label: "Set status...",
-          icon: <ListChecks className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: TableRow<TaskOut>[]) => {
-            setBulkStatusItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        },
-        {
-          id: "set-trade",
-          label: "Set trade...",
-          icon: <Wrench className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: TableRow<TaskOut>[]) => {
-            setBulkTradeItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        },
-        ...(deleteBulkAction ? [deleteBulkAction] : []),
-      ],
-      clearSelectionOnComplete: false,
-    }),
+  const taskDeleteActions = useMemo(
+    () => (deleteBulkAction ? [deleteBulkAction] : []),
     [deleteBulkAction],
   );
-  const bulkActionsState = useBulkActions({ config: bulkActions });
+  const taskBulkActions = useTaskBulkActions({
+    extraActions: taskDeleteActions,
+  });
+  const bulkActionsState = useBulkActions({
+    config: taskBulkActions.config,
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo(
@@ -427,48 +388,6 @@ export function TaskList({
     },
   });
 
-  const bulkMoveMutation = useActionMutation({
-    mutationFn: api.task.bulkMove.mutationOptions,
-    invalidateKeys: taskMutationInvalidateKeys,
-    success: (data) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `Moved ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
-      ),
-    onSuccess: () => {
-      setBulkMoveItems([]);
-      table.resetRowSelection();
-    },
-  });
-
-  const bulkStatusMutation = useActionMutation({
-    mutationFn: api.task.bulkSetStatus.mutationOptions,
-    invalidateKeys: taskMutationInvalidateKeys,
-    success: (data) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
-      ),
-    onSuccess: () => {
-      setBulkStatusItems([]);
-      table.resetRowSelection();
-    },
-  });
-
-  const bulkTradeMutation = useActionMutation({
-    mutationFn: api.task.bulkSetTrade.mutationOptions,
-    invalidateKeys: taskMutationInvalidateKeys,
-    success: (data) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `Updated ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
-      ),
-    onSuccess: () => {
-      setBulkTradeItems([]);
-      table.resetRowSelection();
-    },
-  });
-
   if (tasks.length === 0) {
     return (
       <Empty variant="minimal" className="py-6">
@@ -482,16 +401,10 @@ export function TaskList({
 
   const bulkActionBar =
     bulkActionsState.selectedCount > 0 ? (
-      <BulkActionBar
-        selectedCount={bulkActionsState.selectedCount}
-        selectedRows={table.getFilteredSelectedRowModel().rows}
-        actions={bulkActionsState.getAvailableActions(
-          table.getFilteredSelectedRowModel().rows,
-        )}
-        onExecute={bulkActionsState.executeAction}
-        onClearSelection={bulkActionsState.clearSelection}
-        isExecuting={bulkActionsState.isExecuting}
-        currentAction={bulkActionsState.currentAction}
+      <ListBulkActionBar
+        table={table}
+        config={taskBulkActions.config}
+        state={bulkActionsState}
       />
     ) : null;
 
@@ -499,58 +412,10 @@ export function TaskList({
     <>
       <RTable table={table} embedded bulkActionBar={bulkActionBar} />
       {deleteDialog}
-      {bulkMoveItems.length > 0 && (
-        <MoveToProjectDialog
-          open={bulkMoveItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkMoveItems([]);
-          }}
-          items={bulkMoveItems}
-          entityLabel="Task"
-          isPending={bulkMoveMutation.isPending}
-          onConfirm={async (projectId) => {
-            await bulkMoveMutation.mutateAsync({
-              ids: bulkMoveItems.map((t) => t.id),
-              projectId,
-            });
-          }}
-        />
-      )}
-      {bulkStatusItems.length > 0 && (
-        <SetTaskStatusDialog
-          open={bulkStatusItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkStatusItems([]);
-          }}
-          items={bulkStatusItems}
-          isPending={bulkStatusMutation.isPending}
-          onConfirm={async (status) => {
-            await bulkStatusMutation.mutateAsync({
-              ids: bulkStatusItems.map((t) => t.id),
-              status,
-            });
-          }}
-        />
-      )}
-      {bulkTradeItems.length > 0 && (
-        <SetFieldDialog
-          open={bulkTradeItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkTradeItems([]);
-          }}
-          items={bulkTradeItems}
-          isPending={bulkTradeMutation.isPending}
-          options={tradeOptions}
-          fieldLabel="Trade"
-          itemNoun="Task"
-          onConfirm={async (trade) => {
-            await bulkTradeMutation.mutateAsync({
-              ids: bulkTradeItems.map((t) => t.id),
-              trade: trade as Trade,
-            });
-          }}
-        />
-      )}
+      <TaskBulkActionDialogs
+        controller={taskBulkActions}
+        onComplete={() => table.resetRowSelection()}
+      />
     </>
   );
 }
@@ -844,9 +709,6 @@ export function PurchaseList({
   const api = useTRPC();
   const lastSelectedIdRef = useRef<string | null>(null);
   const shiftKeyRef = useRef(false);
-  const [bulkMoveItems, setBulkMoveItems] = useState<PurchaseOut[]>([]);
-  const [bulkTradeItems, setBulkTradeItems] = useState<PurchaseOut[]>([]);
-  const [bulkCostTypeItems, setBulkCostTypeItems] = useState<PurchaseOut[]>([]);
 
   const updatePurchaseMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -868,46 +730,16 @@ export function PurchaseList({
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<PurchaseOut>({ deletable: deletableConfig });
 
-  const bulkActions = useMemo(
-    () => ({
-      actions: [
-        {
-          id: "move",
-          label: "Move to project...",
-          icon: <ArrowRightLeft className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
-            setBulkMoveItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        },
-        {
-          id: "set-trade",
-          label: "Set trade...",
-          icon: <Wrench className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
-            setBulkTradeItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        },
-        {
-          id: "set-cost-type",
-          label: "Set cost type...",
-          icon: <Tag className="size-4" />,
-          minSelection: 1,
-          onExecute: async (rows: TableRow<PurchaseOut>[]) => {
-            setBulkCostTypeItems(rows.map((r) => r.original));
-            return { success: true };
-          },
-        },
-        ...(deleteBulkAction ? [deleteBulkAction] : []),
-      ],
-      clearSelectionOnComplete: false,
-    }),
+  const purchaseDeleteActions = useMemo(
+    () => (deleteBulkAction ? [deleteBulkAction] : []),
     [deleteBulkAction],
   );
-  const bulkActionsState = useBulkActions({ config: bulkActions });
+  const purchaseBulkActions = usePurchaseBulkActions({
+    extraActions: purchaseDeleteActions,
+  });
+  const bulkActionsState = useBulkActions({
+    config: purchaseBulkActions.config,
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
   const columns = useMemo(
@@ -1054,48 +886,6 @@ export function PurchaseList({
       ?.setFilterValue(costTypeFilter ? [costTypeFilter] : undefined);
   }, [table, tradeFilter, costTypeFilter]);
 
-  const bulkMoveMutation = useActionMutation({
-    mutationFn: api.purchase.bulkMove.mutationOptions,
-    invalidateKeys: purchaseMutationInvalidateKeys,
-    success: (data) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `Moved ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
-      ),
-    onSuccess: () => {
-      setBulkMoveItems([]);
-      table.resetRowSelection();
-    },
-  });
-
-  const bulkTradeMutation = useActionMutation({
-    mutationFn: api.purchase.bulkSetTrade.mutationOptions,
-    invalidateKeys: purchaseMutationInvalidateKeys,
-    success: (data) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
-      ),
-    onSuccess: () => {
-      setBulkTradeItems([]);
-      table.resetRowSelection();
-    },
-  });
-
-  const bulkCostTypeMutation = useActionMutation({
-    mutationFn: api.purchase.bulkSetCostType.mutationOptions,
-    invalidateKeys: purchaseMutationInvalidateKeys,
-    success: (data) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `Updated ${data.items.length} purchase${data.items.length !== 1 ? "s" : ""}`,
-      ),
-    onSuccess: () => {
-      setBulkCostTypeItems([]);
-      table.resetRowSelection();
-    },
-  });
-
   if (purchases.length === 0) {
     return (
       <Empty variant="minimal" className="py-6">
@@ -1109,16 +899,10 @@ export function PurchaseList({
 
   const bulkActionBar =
     bulkActionsState.selectedCount > 0 ? (
-      <BulkActionBar
-        selectedCount={bulkActionsState.selectedCount}
-        selectedRows={table.getFilteredSelectedRowModel().rows}
-        actions={bulkActionsState.getAvailableActions(
-          table.getFilteredSelectedRowModel().rows,
-        )}
-        onExecute={bulkActionsState.executeAction}
-        onClearSelection={bulkActionsState.clearSelection}
-        isExecuting={bulkActionsState.isExecuting}
-        currentAction={bulkActionsState.currentAction}
+      <ListBulkActionBar
+        table={table}
+        config={purchaseBulkActions.config}
+        state={bulkActionsState}
       />
     ) : null;
 
@@ -1126,61 +910,10 @@ export function PurchaseList({
     <>
       <RTable table={table} embedded bulkActionBar={bulkActionBar} />
       {deleteDialog}
-      {bulkMoveItems.length > 0 && (
-        <MoveToProjectDialog
-          open={bulkMoveItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkMoveItems([]);
-          }}
-          items={bulkMoveItems}
-          entityLabel="Purchase"
-          isPending={bulkMoveMutation.isPending}
-          onConfirm={async (projectId) => {
-            await bulkMoveMutation.mutateAsync({
-              ids: bulkMoveItems.map((p) => p.id),
-              projectId,
-            });
-          }}
-        />
-      )}
-      {bulkTradeItems.length > 0 && (
-        <SetFieldDialog
-          open={bulkTradeItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkTradeItems([]);
-          }}
-          items={bulkTradeItems}
-          isPending={bulkTradeMutation.isPending}
-          options={tradeOptions}
-          fieldLabel="Trade"
-          itemNoun="Purchase"
-          onConfirm={async (trade) => {
-            await bulkTradeMutation.mutateAsync({
-              ids: bulkTradeItems.map((p) => p.id),
-              trade: trade as Trade,
-            });
-          }}
-        />
-      )}
-      {bulkCostTypeItems.length > 0 && (
-        <SetFieldDialog
-          open={bulkCostTypeItems.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setBulkCostTypeItems([]);
-          }}
-          items={bulkCostTypeItems}
-          isPending={bulkCostTypeMutation.isPending}
-          options={costTypeOptions}
-          fieldLabel="Cost Type"
-          itemNoun="Purchase"
-          onConfirm={async (costType) => {
-            await bulkCostTypeMutation.mutateAsync({
-              ids: bulkCostTypeItems.map((p) => p.id),
-              costType: costType as CostType,
-            });
-          }}
-        />
-      )}
+      <PurchaseBulkActionDialogs
+        controller={purchaseBulkActions}
+        onComplete={() => table.resetRowSelection()}
+      />
     </>
   );
 }

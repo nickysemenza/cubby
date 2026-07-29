@@ -37,7 +37,10 @@ import {
   relations,
 } from "~/server/repo/database-helpers";
 import { taskDependencyIds, taskSubtaskCounts } from "~/server/repo/task/crud";
-import { dbTaskToAPI } from "~/server/repo/task/helpers";
+import {
+  dbTaskToAPI,
+  effectiveTaskDueDateSql,
+} from "~/server/repo/task/helpers";
 import { projectDependencyIds } from "./analytics";
 import { computeAttentionItems } from "./attention";
 import {
@@ -45,12 +48,7 @@ import {
   buildUndatedProjectWhere,
   dashboardKindLocationConditions,
 } from "./dashboard-shared";
-import {
-  dbProjectToAPI,
-  EMPTY_PROJECT_DATE_WINDOW,
-  EMPTY_PROJECT_OWN_ROLLUP,
-  EMPTY_PROJECT_SUBTREE_ROLLUP,
-} from "./helpers";
+import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups } from "./subtree";
 
 /** Cap on `nextTasks` — a preview strip, not a full list (see `task.board`/`task.listActionable` for those). */
@@ -84,13 +82,7 @@ export async function projectDashboardSummary(
   // page-scoped is free here for the same reason: attention already needed
   // every id, and a superset never changes a page row's subtree numbers.
   const subtreeLoad = await loadProjectSubtreeRollups(db);
-  const {
-    childrenByParent,
-    nameById,
-    ownRollups,
-    subtreeRollups,
-    dateWindows,
-  } = subtreeLoad;
+  const { subtreeRollups } = subtreeLoad;
 
   // Carries status + kind/location + the date window (see dashboard-shared.ts).
   const scopedWhere = buildDashboardProjectWhere(filters);
@@ -108,7 +100,6 @@ export async function projectDashboardSummary(
     purchaseYearRows,
     taskYearRows,
     projectYearRows,
-    attention,
   ] = await Promise.all([
     getDb(db).query.project.findMany({
       where: scopedWhere,
@@ -162,7 +153,7 @@ export async function projectDashboardSummary(
     // the same expression task/lookup.ts filters due windows on.
     getDb(db)
       .selectDistinct({
-        year: sql<string>`to_char(coalesce(${task.dueEndDate}, ${task.dueDate}), 'YYYY')`,
+        year: sql<string>`to_char(${effectiveTaskDueDateSql()}, 'YYYY')`,
       })
       .from(task)
       .where(
@@ -184,7 +175,6 @@ export async function projectDashboardSummary(
           or(isNotNull(project.startDate), isNotNull(project.endDate)),
         ),
       ),
-    computeAttentionItems(db, subtreeLoad),
   ]);
 
   const ids = projectRows.map((r) => r.id);
@@ -203,6 +193,7 @@ export async function projectDashboardSummary(
     nextTaskRows,
     undatedTaskCount,
     undatedPurchaseCount,
+    attention,
   ] = await Promise.all([
     projectDependencyIds(db, ids),
     ids.length > 0
@@ -235,8 +226,8 @@ export async function projectDashboardSummary(
           // `next` ordering (it also excludes dependency-blocked tasks,
           // which this skips to stay a single query for a 10-row preview).
           orderBy: [
-            sql`(coalesce(${task.dueEndDate}, ${task.dueDate}) < ${today}) desc`,
-            sql`coalesce(${task.dueEndDate}, ${task.dueDate}) asc nulls last`,
+            sql`(${effectiveTaskDueDateSql()} < ${today}) desc`,
+            sql`${effectiveTaskDueDateSql()} asc nulls last`,
             asc(task.name),
           ],
           limit: NEXT_TASKS_CAP,
@@ -271,21 +262,11 @@ export async function projectDashboardSummary(
           ),
         )
       : Promise.resolve(0),
+    computeAttentionItems(db, { preloaded: subtreeLoad, projectIds: ids }),
   ]);
 
   const projects = projectRows.map((row) =>
-    dbProjectToAPI({
-      row,
-      ownRollup: ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
-      subtreeRollup: subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
-      dates: dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
-      blockedByIds: deps.blockedBy.get(row.id) ?? [],
-      blockingIds: deps.blocking.get(row.id) ?? [],
-      parentProjectName: row.parentProjectId
-        ? (nameById.get(row.parentProjectId) ?? null)
-        : null,
-      childProjectIds: childrenByParent.get(row.id) ?? [],
-    }),
+    hydrateProjectRow(row, subtreeLoad, deps),
   );
 
   // Every non-done top-level task on a scoped project — exactly

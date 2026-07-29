@@ -46,12 +46,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { projectDependencyIds } from "./analytics";
-import {
-  dbProjectToAPI,
-  EMPTY_PROJECT_DATE_WINDOW,
-  EMPTY_PROJECT_OWN_ROLLUP,
-  EMPTY_PROJECT_SUBTREE_ROLLUP,
-} from "./helpers";
+import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
@@ -69,26 +64,12 @@ const projectReader = createEntityReader({
     // Whole-tree parent/child map + this project's subtree rollup — see
     // subtree.ts's doc comment for why the tree is loaded in full rather than
     // walked with per-row queries.
-    const [
-      { childrenByParent, nameById, ownRollups, subtreeRollups, dateWindows },
-      deps,
-    ] = await Promise.all([
+    const [projectContext, deps] = await Promise.all([
       loadProjectSubtreeRollups(db, [row.id]),
       projectDependencyIds(db, [row.id]),
     ]);
 
-    return dbProjectToAPI({
-      row,
-      ownRollup: ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
-      subtreeRollup: subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
-      dates: dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
-      blockedByIds: deps.blockedBy.get(row.id) ?? [],
-      blockingIds: deps.blocking.get(row.id) ?? [],
-      parentProjectName: row.parentProjectId
-        ? (nameById.get(row.parentProjectId) ?? null)
-        : null,
-      childProjectIds: childrenByParent.get(row.id) ?? [],
-    });
+    return hydrateProjectRow(row, projectContext, deps);
   },
   notFoundReason: "PROJECT_NOT_FOUND",
 });

@@ -20,6 +20,7 @@ import {
 } from "~/components/ui/collapsible";
 import { useTRPC } from "~/integrations/trpc/react";
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
+import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
 import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
@@ -42,9 +43,11 @@ function scrollWhenLaidOut(el: HTMLElement, framesLeft = 20) {
   requestAnimationFrame(() => scrollWhenLaidOut(el, framesLeft - 1));
 }
 
-const MAIN_SECTIONS = PROBLEM_SECTIONS.filter((s) => s.group == null);
-const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
-  (s) => s.group === "autoFixable",
+const MAIN_SECTIONS = PROBLEM_SECTIONS.filter(
+  (section) => !AUTO_FIX_SECTION_IDS.has(section.id),
+);
+const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter((section) =>
+  AUTO_FIX_SECTION_IDS.has(section.id),
 );
 
 export function ProblemsOverview() {
@@ -195,7 +198,7 @@ function ProblemsSummary({
     id: section.id,
     label: section.label,
     count: section.count(problems),
-    grouped: section.group != null,
+    grouped: AUTO_FIX_SECTION_IDS.has(section.id),
   })).filter((cat) => cat.count > 0);
 
   return (

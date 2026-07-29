@@ -16,7 +16,7 @@ import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import type { BulkAction } from "./bulk-actions.types";
 
-interface BulkActionBarProps<TData> {
+export interface BulkActionBarProps<TData> {
   selectedCount: number;
   selectedRows: Row<TData>[];
   actions: BulkAction<TData>[];

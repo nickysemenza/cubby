@@ -89,28 +89,13 @@ export function HeaderFilter<TData>({
   const inputClassName =
     "h-5 text-2xs px-1.5 border shadow-none bg-background border-border placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40"; /* tight */
 
-  // Enrich select options with faceted counts (opt-in — see FilterConfig).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API
-  const facetedOptions = useMemo(() => {
+  const selectOptions = useMemo(() => {
     const isSelectLike =
       filterConfig.filterType === "select" ||
       filterConfig.filterType === "multiselect";
     if (!isSelectLike || !filterConfig.options) return [];
-    if (!filterConfig.facetCount) return filterConfig.options;
-    let facetMap: Map<string, number>;
-    try {
-      facetMap = column.getFacetedUniqueValues();
-    } catch {
-      return filterConfig.options;
-    }
-    if (!facetMap.size) return filterConfig.options;
-    return filterConfig.options.map((opt) => {
-      const count = facetMap.get(opt.value);
-      return count !== undefined
-        ? { ...opt, label: `${opt.label} (${count})` }
-        : opt;
-    });
-  }, [filterConfig.options, filterConfig.filterType, filterConfig.facetCount]);
+    return filterConfig.options;
+  }, [filterConfig.options, filterConfig.filterType]);
 
   if (filterConfig.filterType === "select" || isMulti) {
     // A select filter lives in a narrow column behind a chevron, and the
@@ -129,7 +114,7 @@ export function HeaderFilter<TData>({
     if (isMulti) {
       return (
         <MultiFilterableCombobox
-          items={facetedOptions}
+          items={selectOptions}
           value={Array.isArray(value) ? value : value ? [value] : NO_SELECTION}
           onValueChange={setValue}
           placeholder={shortPlaceholder}
@@ -140,7 +125,7 @@ export function HeaderFilter<TData>({
 
     return (
       <FilterableCombobox
-        items={facetedOptions}
+        items={selectOptions}
         value={typeof value === "string" && value ? value : null}
         onValueChange={(v) => setValue(v ?? "")}
         placeholder={shortPlaceholder}

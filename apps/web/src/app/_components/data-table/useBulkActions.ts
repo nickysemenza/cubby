@@ -6,7 +6,7 @@ interface UseBulkActionsOptions<TData> {
   config: BulkActionsConfig<TData>;
 }
 
-interface UseBulkActionsReturn<TData> {
+export interface UseBulkActionsReturn<TData> {
   /** Current row selection state (for useTableConfig) */
   rowSelection: RowSelectionState;
   /** Selection change handler (for useTableConfig) */
