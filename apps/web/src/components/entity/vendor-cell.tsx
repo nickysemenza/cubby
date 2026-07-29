@@ -30,7 +30,7 @@ const hasVendorLogo = (vendor: string): boolean =>
  * arrives on the row you're actually reading. Touch has no hover to resolve it,
  * so below `sm` the mark is simply always in color.
  */
-function VendorMark({
+export function VendorMark({
   vendor,
   className,
 }: {

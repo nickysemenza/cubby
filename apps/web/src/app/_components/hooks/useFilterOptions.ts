@@ -12,13 +12,31 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
  *
  * Callers may pass a fresh object literal each render — like
  * `useStandardColumns`' `filters` prop, this hashes the VALUES (not the
- * argument's own identity) via `JSON.stringify`, so the returned reference
- * only changes when an option list's actual content does.
+ * argument's own identity), so the returned reference only changes when an
+ * option list's actual content does.
+ *
+ * The hash covers the DATA fields only. `icon` is a React element, and
+ * `JSON.stringify` on one throws "Converting circular structure to JSON" (a
+ * fiber node points back at its DOM node) — which took the whole purchases
+ * ledger down the moment the vendor roster started carrying brand marks.
+ * Skipping it is also correct, not just safe: an option's icon is derived from
+ * its value, so it can't change while every field below stays put.
  */
 export function useFilterOptions(
   map: Record<string, FilterableComboboxItem[]>,
 ): Record<string, FilterableComboboxItem[]> {
-  const key = JSON.stringify(map);
+  const key = JSON.stringify(
+    Object.entries(map).map(([optionsKey, items]) => [
+      optionsKey,
+      items.map((item) => [
+        item.value,
+        item.label,
+        item.hint,
+        item.color,
+        item.meta,
+      ]),
+    ]),
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using the serialized key for deep comparison, mirrors useStandardColumns' `stableFilters`
   return useMemo(() => map, [key]);
 }

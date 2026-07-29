@@ -118,6 +118,14 @@ interface TTableProps<TItem> {
    * a one-page pager.
    */
   embedded?: boolean;
+  /**
+   * Keep the column-visibility menu (and therefore the toolbar) on an
+   * `embedded` table. Opt-in: it only earns its row of chrome when the table
+   * actually carries optional columns, which is the difference between "the
+   * View menu holds nothing" and "these columns are unreachable without it".
+   * Ignored when not embedded — the full toolbar already shows the menu.
+   */
+  showColumnMenu?: boolean;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -141,6 +149,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     getRowClassName,
     verticalAlign = "middle",
     embedded = false,
+    showColumnMenu = false,
   } = props;
 
   const {
@@ -179,8 +188,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Embedded tables drop chrome that would carry no information: a toolbar
   // holding only the View menu + page-size control, and a pager for a list that
   // fits on one page (the rule mobile already applies to its inline pager).
+  // `showColumnMenu` is the opt-out: a table with optional columns needs the
+  // View menu at rest, not only once rows are selected (`bulkActionBar` is null
+  // until then, which is what made those columns unreachable).
   const showToolbar =
     !embedded ||
+    showColumnMenu ||
     Boolean(
       actions ?? bulkActionBar ?? additionalToolbarContent ?? groupConfig,
     );

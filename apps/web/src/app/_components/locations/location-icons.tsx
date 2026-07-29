@@ -53,11 +53,12 @@ export function LocationIconWithLabel({
 }
 
 /** Location type options with colored icons for dropdowns */
+// No `color`: the combobox paints that as a swatch next to the icon, which is
+// already tinted with the same value — see productCategoryOptionsWithTheme.
 export const locationTypeOptionsWithTheme = locationType.options.map(
   (type) => ({
     value: type,
     label: type,
     icon: <LocationIcon type={type} size={14} colored />,
-    color: getLocationTypeColor(type),
   }),
 );

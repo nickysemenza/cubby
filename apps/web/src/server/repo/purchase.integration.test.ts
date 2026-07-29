@@ -1329,11 +1329,117 @@ describe("purchase repository — product bridge", () => {
 
     const { data } = await purchaseList(
       ctx.db,
-      { vendor: "ganahl" },
+      { vendor: "Ganahl Lumber" },
       [],
       pagination,
     );
     expect(data.map((p) => p.name)).toEqual(["lumber run"]);
+  });
+
+  it("matches a vendor exactly, not as a substring", async () => {
+    // The control is a picklist over the real `vendorOptions` roster, so a
+    // substring match let an option's own count disagree with the rows it
+    // returned — "Amazon (254)" would also drag in an "Amazon Business".
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "prime order",
+        vendor: "Amazon",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "bulk order",
+        vendor: "Amazon Business",
+      }),
+      ctx.actor,
+    );
+
+    const { data } = await purchaseList(
+      ctx.db,
+      { vendor: "Amazon" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.name)).toEqual(["prime order"]);
+  });
+
+  it("matches any of a set of vendors", async () => {
+    for (const [name, vendor] of [
+      ["socket set", "eBay"],
+      ["deck screws", "Home Depot"],
+      ["paint", "Lowe's"],
+    ] as const) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          vendor,
+        }),
+        ctx.actor,
+      );
+    }
+
+    const { data } = await purchaseList(
+      ctx.db,
+      { vendor: ["eBay", "Home Depot"] },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.name).sort()).toEqual([
+      "deck screws",
+      "socket set",
+    ]);
+  });
+
+  it("finds vendorless rows via vendorPresenceFilter, and ORs with a selection", async () => {
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "cash at the yard",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "tile saw",
+        vendor: "Tool Nirvana",
+      }),
+      ctx.actor,
+    );
+
+    const none = await purchaseList(
+      ctx.db,
+      { vendorPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(none.data.map((p) => p.name)).toEqual(["cash at the yard"]);
+
+    // OR, not AND — "Tool Nirvana or nothing recorded" is one filter.
+    const both = await purchaseList(
+      ctx.db,
+      { vendor: "Tool Nirvana", vendorPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(both.data.map((p) => p.name).sort()).toEqual([
+      "cash at the yard",
+      "tile saw",
+    ]);
   });
 });
 
