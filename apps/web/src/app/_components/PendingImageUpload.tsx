@@ -5,8 +5,9 @@ import {
 } from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
 import { Camera, ChevronLeft, ChevronRight, Link, Star, X } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
@@ -24,6 +25,7 @@ export interface PendingImage {
 }
 
 const EMPTY_IMAGES: PendingImage[] = [];
+const ACCEPTED_IMAGE_TYPES = ALLOWED_IMAGE_TYPES.join(",");
 
 interface PendingImageUploadProps {
   entityType: EntityImage;
@@ -48,7 +50,6 @@ export function PendingImageUpload({
   className = "",
   autoImportUrl,
 }: PendingImageUploadProps) {
-  const imageInputId = useId();
   const [uploading, setUploading] = useState(false);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   // Must seed from the prop: the sync guard below also starts at the prop, so
@@ -63,7 +64,6 @@ export function PendingImageUpload({
   const [imageUrl, setImageUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const api = useTRPC();
 
@@ -271,13 +271,17 @@ export function PendingImageUpload({
 
       await uploadFile(file);
 
-      // Reset the file inputs
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
       if (cameraInputRef.current) {
         cameraInputRef.current.value = "";
       }
+    },
+    [uploadFile],
+  );
+
+  const handleSelectedImages = useCallback(
+    (files: File[]) => {
+      const file = files[0];
+      if (file) void uploadFile(file);
     },
     [uploadFile],
   );
@@ -341,17 +345,17 @@ export function PendingImageUpload({
   return (
     <div className={cn("space-y-4", className)}>
       <div className="space-y-2">
-        <Label htmlFor={imageInputId}>Upload images</Label>
         <div className="flex gap-2">
-          <Input
-            ref={fileInputRef}
-            id={imageInputId}
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            disabled={uploading}
-            className="flex-1"
-          />
+          <div className="min-w-0 flex-1">
+            <FileDropField
+              accept={ACCEPTED_IMAGE_TYPES}
+              label="Choose image"
+              description="or drop it here"
+              mode="compact"
+              onFilesAdded={handleSelectedImages}
+              disabled={uploading || importing}
+            />
+          </div>
           {/* Hidden input for native camera capture (opens Camera app on mobile, file picker on desktop) */}
           <input
             ref={cameraInputRef}

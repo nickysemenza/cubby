@@ -14,13 +14,7 @@
 
 import type { Trade } from "@cubby/schemas/project";
 
-export type Phase =
-  | "planning"
-  | "structure"
-  | "mep"
-  | "surfaces"
-  | "finish"
-  | "site";
+type Phase = "planning" | "structure" | "mep" | "surfaces" | "finish" | "site";
 
 /** Which build phase each trade belongs to. */
 const TRADE_PHASE: Record<Trade, Phase> = {
@@ -46,7 +40,7 @@ const TRADE_PHASE: Record<Trade, Phase> = {
 };
 
 /** Phase -> its muted `--phase-*` colour token. */
-export const PHASE_COLOR: Record<Phase, string> = {
+const PHASE_COLOR: Record<Phase, string> = {
   planning: "var(--phase-planning)",
   structure: "var(--phase-structure)",
   mep: "var(--phase-mep)",
@@ -54,26 +48,6 @@ export const PHASE_COLOR: Record<Phase, string> = {
   finish: "var(--phase-finish)",
   site: "var(--phase-site)",
 };
-
-/** Human label for each phase family — for the legend. */
-export const PHASE_LABEL: Record<Phase, string> = {
-  planning: "Planning",
-  structure: "Structure",
-  mep: "Mechanical / Electrical / Plumbing",
-  surfaces: "Surfaces",
-  finish: "Finish",
-  site: "Site & specialty",
-};
-
-/** Canonical phase order — legend + any phase iteration. */
-const PHASE_ORDER: readonly Phase[] = [
-  "planning",
-  "structure",
-  "mep",
-  "surfaces",
-  "finish",
-  "site",
-];
 
 /** The phase a trade rolls up to, or null for an unknown/absent trade. */
 function tradePhase(trade: string | null | undefined): Phase | null {
@@ -85,19 +59,4 @@ function tradePhase(trade: string | null | undefined): Phase | null {
 export function getTradeColor(trade: string | null | undefined): string {
   const phase = tradePhase(trade);
   return phase == null ? "var(--chart-neutral)" : PHASE_COLOR[phase];
-}
-
-/**
- * The distinct phases present across `trades`, in canonical order — for a
- * legend that only lists phases actually on the chart.
- */
-export function presentPhases(
-  trades: Iterable<string | null | undefined>,
-): Phase[] {
-  const seen = new Set<Phase>();
-  for (const t of trades) {
-    const phase = tradePhase(t);
-    if (phase != null) seen.add(phase);
-  }
-  return PHASE_ORDER.filter((p) => seen.has(p));
 }

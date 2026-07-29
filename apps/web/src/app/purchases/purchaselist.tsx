@@ -22,11 +22,11 @@ import { StatTile } from "~/components/ui/stat-tile";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { ScopeChip } from "../_components/data-table/ActiveFilterChips";
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "../_components/data-table/columnHelpers";
+import { ScopeChip } from "../_components/data-table/ScopeChip";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";

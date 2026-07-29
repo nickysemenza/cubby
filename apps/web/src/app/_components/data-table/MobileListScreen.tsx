@@ -9,7 +9,6 @@ import { PullToRefresh } from "~/components/ui/pull-to-refresh";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
-import { MobileFilterSheet } from "./MobileFilterSheet";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListShape } from "./useMobileListModel";
 
@@ -68,11 +67,10 @@ export function MobileListScreen<TItem>({
     ) : null;
 
   // The desktop filter row lives in the table header, which the card view
-  // doesn't render — the sheet is how a phone reaches the same filters.
+  // doesn't render — this toolbar gives phones the same filter builder.
   const toolbarContent = (
     <div className="flex items-center gap-2">
       {additionalToolbarContent}
-      <MobileFilterSheet table={table} />
       {groupToggle}
     </div>
   );

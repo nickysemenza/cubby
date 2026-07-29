@@ -3,11 +3,11 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
 import { FileText, X } from "lucide-react";
 import prettyBytes from "pretty-bytes";
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -81,7 +81,6 @@ export function PendingDocumentUpload({
   existingDocuments = EMPTY_DOCUMENTS,
   onExistingDocumentsRemove,
 }: PendingDocumentUploadProps) {
-  const documentInputId = useId();
   const [uploading, setUploading] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>(
     [],
@@ -93,7 +92,6 @@ export function PendingDocumentUpload({
   const [removedExistingDocumentIds, setRemovedExistingDocumentIds] = useState<
     string[]
   >([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const api = useTRPC();
 
   const [prevExistingDocuments, setPrevExistingDocuments] =
@@ -112,11 +110,8 @@ export function PendingDocumentUpload({
     }),
   );
 
-  const handleFileUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
+  const uploadFile = useCallback(
+    async (file: File) => {
       if (file.type !== PDF_CONTENT_TYPE) {
         toast.error(`Unsupported file type: ${file.type}. PDF only.`);
         return;
@@ -161,9 +156,6 @@ export function PendingDocumentUpload({
         toast.error(`Upload failed: ${getErrorMessage(error)}`);
       } finally {
         setUploading(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
       }
     },
     [
@@ -173,6 +165,14 @@ export function PendingDocumentUpload({
       pendingDocuments,
       onDocumentsChange,
     ],
+  );
+
+  const handleFilesAdded = useCallback(
+    (files: File[]) => {
+      const file = files[0];
+      if (file) void uploadFile(file);
+    },
+    [uploadFile],
   );
 
   const removePendingDocument = useCallback(
@@ -202,13 +202,12 @@ export function PendingDocumentUpload({
 
   return (
     <Stack gap="sm">
-      <Label htmlFor={documentInputId}>Manuals (PDF)</Label>
-      <Input
-        ref={fileInputRef}
-        id={documentInputId}
-        type="file"
-        accept="application/pdf"
-        onChange={handleFileUpload}
+      <Label>Manuals (PDF)</Label>
+      <FileDropField
+        accept={PDF_CONTENT_TYPE}
+        label="Drop a PDF manual here"
+        description="or choose a file"
+        onFilesAdded={handleFilesAdded}
         disabled={uploading}
       />
       {uploading && <p className="text-muted-foreground text-xs">Uploading…</p>}

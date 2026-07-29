@@ -17,7 +17,7 @@ export interface FilterableComboboxItem {
   /**
    * Trailing micro-annotation ABOUT the option — today, how many rows carry it
    * ("254"). Deliberately its own field rather than baked into `label`: the
-   * label is interpolated verbatim into `ActiveFilterChips` and the collapsed
+   * label is interpolated verbatim into `LedgerFilters` and the collapsed
    * multi-select summary (`"Amazon (254) +1"` reads as nonsense), and the local
    * type-ahead matches on `label`, so a count in there means typing digits
    * filters the roster by its counts.
@@ -27,7 +27,7 @@ export interface FilterableComboboxItem {
    * A meta option is a predicate ABOUT the data (e.g. "Has project" / "(none)"
    * nullable-filter sentinels), not a value drawn FROM it — it renders in the
    * eyebrow register instead of alongside the roster it sits above. `label`
-   * still MUST stay a plain string even for meta items: `ActiveFilterChips` and
+   * still MUST stay a plain string even for meta items: `LedgerFilters` and
    * the collapsed multi-combobox summary interpolate it into `${label} +${n}`.
    */
   meta?: boolean;
