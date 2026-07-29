@@ -6,7 +6,7 @@
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { ProductCategory } from "@cubby/schemas/product";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, arrayOverlaps, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -120,6 +120,58 @@ export const getProductTagOptions = async (
     .orderBy(sql`count(*) DESC, tag ASC`);
 
   return rows;
+};
+
+/**
+ * Every other product sharing at least one tag with `id` — the "fits with this"
+ * roster on the product detail page.
+ *
+ * Returns each sibling's full `tags` so the caller can group by the shared tag
+ * without a second round trip. Intersecting in the component rather than
+ * pivoting in SQL keeps this a single flat query, and the sets are tiny (the
+ * largest tag group is 7 products).
+ *
+ * Empty tags short-circuits: `arrayOverlaps` against `'{}'` matches nothing, so
+ * the query would be a guaranteed-empty scan.
+ */
+export const getProductsSharingTags = async (
+  db: Database,
+  id: ProductId,
+): Promise<
+  Array<{
+    id: ProductId;
+    name: string;
+    manufacturer: string;
+    category: ProductCategory | null;
+    tags: string[];
+  }>
+> => {
+  const source = await getDb(db)
+    .select({ tags: product.tags })
+    .from(product)
+    .where(and(eq(product.id, id), notDeleted(product)))
+    .limit(1);
+
+  const tags = source[0]?.tags ?? [];
+  if (tags.length === 0) return [];
+
+  return await getDb(db)
+    .select({
+      id: product.id,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      category: product.category,
+      tags: product.tags,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        ne(product.id, id),
+        arrayOverlaps(product.tags, tags),
+      ),
+    )
+    .orderBy(product.name);
 };
 
 /**

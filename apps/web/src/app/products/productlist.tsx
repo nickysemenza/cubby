@@ -326,10 +326,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
             <TruncatedList
               items={tags}
               maxItems={2}
+              // Each chip filters the list to its own tag — the fastest way to
+              // get from "this thing is tagged" to "everything it fits".
               renderItem={(tag) => (
-                <Badge key={tag} variant="outline">
-                  {tag}
-                </Badge>
+                <Link key={tag} to="/products" search={{ tags: tag }}>
+                  <Badge variant="outline">{tag}</Badge>
+                </Link>
               )}
             />
           );

@@ -12,6 +12,7 @@ import {
   FileText,
   HandCoins,
   Info,
+  Link2,
   MapPin,
   Package,
   Receipt,
@@ -43,6 +44,7 @@ import { ProductForm } from "./product-form";
 import { type ManualViewTarget, ProductManuals } from "./product-manuals";
 import { ProductPurchaseHistory } from "./product-purchase-history";
 import { ProductStockedAt } from "./product-stocked-at";
+import { ProductTagSiblings } from "./product-tag-siblings";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -153,6 +155,18 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductPurchaseHistory product={product} />,
     },
+    // Custom section: Fits With — the other products sharing a tag. Sidebar
+    // zone and tags-only: on an untagged product it would be a permanently
+    // empty panel, and most of the catalog is untagged food.
+    ...(product.tags.length > 0
+      ? [
+          {
+            title: "Fits With",
+            icon: Link2,
+            content: <ProductTagSiblings product={product} />,
+          },
+        ]
+      : []),
     // Custom section: Manuals — attached PDF instruction manuals (only if any)
     ...(documents.length > 0
       ? [

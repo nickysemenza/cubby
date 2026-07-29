@@ -192,9 +192,9 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             value: (
               <Row gap="xs" wrap justify="end">
                 {product.tags.map((tag) => (
-                  <Badge key={tag} variant="outline">
-                    {tag}
-                  </Badge>
+                  <Link key={tag} to="/products" search={{ tags: tag }}>
+                    <Badge variant="outline">{tag}</Badge>
+                  </Link>
                 ))}
               </Row>
             ),
