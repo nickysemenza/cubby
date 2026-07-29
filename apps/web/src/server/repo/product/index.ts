@@ -24,6 +24,7 @@ export {
   findProductsWithNoImages,
   getCategoryDistribution,
   getProductSummaryForAudit,
+  getProductsSharingTags,
   getProductTagOptions,
 } from "./analytics";
 // CRUD operations

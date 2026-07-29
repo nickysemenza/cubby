@@ -471,6 +471,23 @@ export const productTagOptionsOut = z.array(
 );
 export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
 
+/**
+ * Products sharing a tag with the one being viewed. Each row carries its own
+ * full `tags` so the client can group by the shared tag — `category` is what
+ * tells you which side of the pairing a sibling is on (the tool or the
+ * consumable), which is why the tag itself needs no direction.
+ */
+export const productTagSiblingsOut = z.array(
+  z.object({
+    id: productId,
+    name: z.string(),
+    manufacturer: z.string(),
+    category: productCategory.nullable(),
+    tags: z.array(z.string()),
+  }),
+);
+export type ProductTagSiblingsOut = z.infer<typeof productTagSiblingsOut>;
+
 export const productCategoryDistributionOut = z.array(
   z.object({
     category: productCategory.nullable(),
