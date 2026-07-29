@@ -13,7 +13,15 @@ runs:
       id: check
       shell: bash
       run: |
-        current_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+        set -euo pipefail
+        if ! current_sha="$(git ls-remote origin refs/heads/main | cut -f1)"; then
+          echo "::error::Could not resolve refs/heads/main"
+          exit 1
+        fi
+        if [[ -z "$current_sha" ]]; then
+          echo "::error::Could not resolve refs/heads/main"
+          exit 1
+        fi
         if [[ "$current_sha" == "$GITHUB_SHA" ]]; then
           echo "current=true" >> "$GITHUB_OUTPUT"
         else

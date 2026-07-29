@@ -43,7 +43,6 @@ jobs:
     outputs:
       # Main/manual runs always exercise the full required suite. Pull requests
       # may skip only tests proven unrelated by the conservative filters below.
-      rust: ${{ github.event_name != 'pull_request' || steps.changes.outputs.rust == 'true' }}
       e2e: ${{ github.event_name != 'pull_request' || steps.changes.outputs.e2e == 'true' }}
     steps:
       - name: Detect pull request paths
@@ -58,39 +57,20 @@ jobs:
               per_page: 100,
             });
             const paths = files.map(({ filename }) => filename);
-            const matches = (path, prefixes, exact = []) =>
-              exact.includes(path) ||
-              prefixes.some((prefix) => path.startsWith(prefix));
+            // Only known-inert paths may skip E2E. A new directory or root
+            // config therefore fails safe toward running the suite.
+            const inertPrefixes = [
+              "docs/",
+              ".vscode/",
+              "apps/usda-api/",
+              "apps/upc-lookup/",
+            ];
+            const isInert = (path) =>
+              path.endsWith(".md") ||
+              path === "LICENSE" ||
+              inertPrefixes.some((prefix) => path.startsWith(prefix));
+            const e2e = !paths.every(isInert);
 
-            const rust = paths.some((path) =>
-              matches(
-                path,
-                ["recipebridge/", ".github/actions/"],
-                ["rust-toolchain.toml", ".github/workflows/ci.yaml"],
-              ),
-            );
-            const e2e = paths.some((path) =>
-              matches(
-                path,
-                [
-                  "apps/web/",
-                  "apps/mcp-apps/",
-                  "packages/",
-                  "recipebridge/",
-                  "scripts/",
-                  ".github/actions/",
-                ],
-                [
-                  "package.json",
-                  "pnpm-lock.yaml",
-                  "pnpm-workspace.yaml",
-                  "rust-toolchain.toml",
-                  ".github/workflows/ci.yaml",
-                ],
-              ),
-            );
-
-            core.setOutput("rust", rust);
             core.setOutput("e2e", e2e);
 
   build-wasm:
@@ -143,16 +123,72 @@ jobs:
 
   test-rust:
     name: Rust Tests - recipebridge
-    needs: [change-scope]
-    if: needs.change-scope.outputs.rust == 'true'
     runs-on: ubuntu-latest
     # Gating job on the deploy critical path: fmt + clippy + a plain `cargo test`.
+    # It owns its PR path classifier so it can acquire a runner at t=0 instead
+    # of waiting for change-scope. Only enumerated, known-non-Rust paths skip it;
+    # a novel path fails safe toward running the suite.
     # Coverage instrumentation (cargo llvm-cov) is a *separate* job (coverage-rust)
     # because it forces a second, instrumented rebuild (~2m) that used to sit on
     # this critical path for no gating benefit — codecov is a soft gate.
     steps:
+      - name: Detect Rust impact
+        id: scope
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            const paths = files.map(({ filename }) => filename);
+            const inertPrefixes = [
+              "apps/mcp-apps/",
+              "apps/upc-lookup/",
+              "apps/usda-api/",
+              "apps/web/",
+              "docs/",
+              ".vscode/",
+              "packages/design-tokens/",
+              "packages/schemas/",
+              "packages/shared/",
+              "packages/upc-contract/",
+              "packages/usda-contract/",
+              "packages/usda-schemas/",
+              "packages/worker-tracing/",
+            ];
+            const inertFiles = new Set([
+              ".gitignore",
+              ".mcp.json.example",
+              ".nvmrc",
+              ".worktreeinclude",
+              "LICENSE",
+              "biome.json",
+              "codecov.yml",
+              "cubby.code-workspace",
+              "docker-compose.yml",
+              "knip.json",
+              "package.json",
+              "pnpm-lock.yaml",
+              "pnpm-workspace.yaml",
+              "security-audit-allowlist.json",
+            ]);
+            const isInert = (path) =>
+              path.endsWith(".md") ||
+              inertFiles.has(path) ||
+              inertPrefixes.some((prefix) => path.startsWith(prefix));
+            core.setOutput("rust", !paths.every(isInert));
+
+      - name: Report intentional Rust skip
+        if: github.event_name == 'pull_request' && steps.scope.outputs.rust != 'true'
+        run: echo "::notice::Skipping Rust tests because every changed path is known to be Rust-inert"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         with:
           cache: true
           # recipebridge builds via `--manifest-path recipebridge/Cargo.toml`, so
@@ -161,8 +197,10 @@ jobs:
           # and clippy recompiled every dep cold (~1:47) on every run.
           cache-workspaces: "recipebridge -> target"
       - name: Format check
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
       - name: Lint (clippy)
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
       # Native-target tests: the costing + food-mapping modules are pure
       # serde/ingredient code, so the parity suite runs without a wasm runtime.
@@ -171,6 +209,7 @@ jobs:
       # executable only inside a wasm runtime; the logic lives in the
       # costing/food_mappings modules (see coverage-rust).
       - name: Run recipebridge tests
+        if: github.event_name != 'pull_request' || steps.scope.outputs.rust == 'true'
         run: cargo test --manifest-path recipebridge/Cargo.toml
 
   coverage-rust:
@@ -396,7 +435,7 @@ jobs:
               mkdir -p "$package_path/test-results"
               log_file="$RUNNER_TEMP/${package_path//\//-}.log"
               (
-                cd "$package_path"
+                cd "$package_path" || exit 1
                 pnpm test --run --coverage --maxWorkers=1 \
                   --reporter=default \
                   --reporter=github-actions \
@@ -469,6 +508,9 @@ jobs:
     # Pin the image to the exact @playwright/test version in pnpm-lock.yaml.
     # Browsers + Linux system dependencies are baked in, removing the apt mirror
     # download that has ranged from ~20 seconds to more than 20 minutes.
+    # If this job ever leaves the container, restore an explicit browser
+    # path/cache without using a literal `~`; the browsers currently come from
+    # the image and need no separate install or cache.
     container:
       image: mcr.microsoft.com/playwright:v1.61.1-noble
       options: --user 1001
@@ -527,6 +569,8 @@ jobs:
           # The Playwright image intentionally omits a compiler toolchain.
           # Restrict the install to web + its workspace dependencies so the
           # unrelated USDA API's better-sqlite3 native build is never invoked.
+          # scripts/ensure-mcp-apps.mjs is dependency-free; if that root script
+          # gains imports, include their package in this filter explicitly.
           workspace-filter: "@cubby/web..."
           # The clean PR run spent 41-49 seconds per shard compressing and
           # racing to upload the same 318 MB pnpm cache. The filtered install
@@ -600,13 +644,14 @@ jobs:
           echo "Change scope result: $change_scope_result"
 
           # E2E may be skipped by the manual escape hatch or when a PR cannot
-          # affect the web app. Rust may be skipped on PRs without Rust/WASM
-          # changes. The path classifier itself and all unconditional gates must pass.
+          # affect the web app. test-rust stays successful when its internal
+          # classifier intentionally skips its test steps. The shared classifier
+          # itself and all unconditional gates must pass.
           if [[ "$unit_web_result" == "success" && \
                 "$integration_web_result" == "success" && \
                 "$unit_aux_result" == "success" && \
                 "$change_scope_result" == "success" && \
-                ("$rust_result" == "success" || "$rust_result" == "skipped") && \
+                "$rust_result" == "success" && \
                 ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
             echo "all-passed=true" >> "$GITHUB_OUTPUT"
           else
@@ -631,6 +676,47 @@ jobs:
         with:
           pattern: coverage-*
           path: coverage-reports
+
+      - name: Verify expected coverage artifacts
+        shell: bash
+        env:
+          ALL_PRODUCERS_SUCCEEDED: ${{ needs.test-unit-web.result == 'success' && needs.test-integration-web.result == 'success' && needs.test-unit-aux.result == 'success' && needs.coverage-rust.result == 'success' }}
+        run: |
+          set -euo pipefail
+          artifacts=(
+            coverage-rust
+            coverage-web-unit
+            coverage-web-integration-1
+            coverage-web-integration-2
+            coverage-aux
+          )
+          minimum_reports=(1 1 1 1 8)
+          missing=()
+
+          for index in "${!artifacts[@]}"; do
+            artifact="${artifacts[$index]}"
+            expected="${minimum_reports[$index]}"
+            count=0
+            if [[ -d "coverage-reports/$artifact" ]]; then
+              count="$(
+                find "coverage-reports/$artifact" -type f \
+                  \( -name lcov.info -o -name coverage-final.json \) \
+                  -print | wc -l | tr -d ' '
+              )"
+            fi
+            if (( count < expected )); then
+              missing+=("$artifact ($count/$expected reports)")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            message="Missing coverage output: ${missing[*]}"
+            if [[ "$ALL_PRODUCERS_SUCCEEDED" == "true" ]]; then
+              echo "::error::$message"
+              exit 1
+            fi
+            echo "::warning::$message; uploading the reports produced before the test failure"
+          fi
 
       - name: Collect coverage report paths
         id: coverage-files
@@ -715,12 +801,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Re-check after acquiring deploy-cubby-production to close the gap
+      # between the gate job's lookup and this serialized deployment.
+      - name: Re-check whether this is still current main
+        id: current_main
+        uses: ./.github/actions/check-current-main
+
       - name: Download CF build artifact
+        if: steps.current_main.outputs.current == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: cf-build
           path: apps/web/dist
       - name: Install wrangler
+        if: steps.current_main.outputs.current == 'true'
         # Pin to the repo's wrangler version (apps/web/package.json): build:cf
         # dumps the RESOLVED config from that version, and a newer wrangler can
         # reject resolved-only fields (4.112 started erroring on `legacy_env`,
@@ -734,6 +828,7 @@ jobs:
           version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
           npm install -g "wrangler@${version}"
       - name: Deploy to Cloudflare Workers
+        if: steps.current_main.outputs.current == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -788,12 +883,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Re-check after acquiring this worker's production concurrency slot.
+      - name: Re-check whether this is still current main
+        id: current_main
+        uses: ./.github/actions/check-current-main
+
       - uses: ./.github/actions/setup-node-with-deps
+        if: steps.current_main.outputs.current == 'true'
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
           # workspace imports each worker bundles (no prebuilt artifact).
           download-wasm: "false"
       - name: Deploy ${{ matrix.pkg }}
+        if: steps.current_main.outputs.current == 'true'
         run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
