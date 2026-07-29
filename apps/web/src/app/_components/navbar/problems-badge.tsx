@@ -38,6 +38,8 @@ const PROBLEM_LABELS: Record<
   staleLocations: (n) => `${n} overdue for a recount`,
   neverVerifiedInventory: (n) => pl(n, "never-verified item"),
   unknownParkedItems: (n) => `${n} parked in Unknown`,
+  vendorSpellingVariants: (n) => pl(n, "vendor spelling"),
+  manufacturerSpellingVariants: (n) => pl(n, "manufacturer spelling"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
   orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),

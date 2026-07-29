@@ -17,10 +17,14 @@ const searchSchema = z.object({
   ...tableSearchFields,
   ...entityFilterSearchFields("product"),
   // `entityFilterSearchFields` returns a `Record<string, …>`, so its keys are
-  // not statically known to `<Link search={…}>`. Re-declaring the one key we
-  // navigate to programmatically (the "Fits With" tag chips) with the identical
-  // shape makes those links type-safe without duplicating the manifest.
+  // not statically known to `<Link search={…}>`. Re-declaring the keys we
+  // navigate to programmatically (the "Fits With" tag chips; the Problems
+  // page's manufacturer-spelling cards) with the identical shape makes those
+  // links type-safe without duplicating the manifest. `urlStringParam`, not a
+  // bare `z.string()` — these sit after the spread and override it, so a plain
+  // string schema would reinstate the silently-dropped-value hole.
   tags: urlStringParam,
+  manufacturer: urlStringParam,
 });
 
 const searchDefaults = { category: undefined } as const;

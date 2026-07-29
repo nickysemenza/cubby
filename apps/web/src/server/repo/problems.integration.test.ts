@@ -33,7 +33,7 @@ import { createIngredient, getIngredientByName } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import { createLocation, ensureGlobalUnknownLocation } from "./location";
 import { findStaleIngredientParses } from "./problems";
-import { createProduct } from "./product";
+import { createProduct, deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
 import {
   createPurchase,
@@ -1108,5 +1108,142 @@ describe("problems service — orders split by a missing vendor", () => {
     expect(result).toEqual({ vendor: null, updated: 0 });
     const after = await getPurchaseByID(ctx.db, missing.id);
     expect(after?.vendor).toBeNull();
+  });
+});
+
+describe("problems — brand-label spelling variants", () => {
+  const ctx = withTestDb();
+
+  const seedPurchase = (name: string, vendor: string | null) =>
+    createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name,
+        ...(vendor === null ? {} : { vendor }),
+      }),
+      ctx.actor,
+    );
+
+  const seedProduct = (name: string, manufacturer: string) =>
+    createProduct(ctx.db, makeProductInput({ name, manufacturer }), ctx.actor);
+
+  it("flags the minority spelling of a manufacturer, pointing at the majority", async () => {
+    await seedProduct("Ryobi drill", "Ryobi");
+    await seedProduct("Ryobi saw", "Ryobi");
+    const odd = await seedProduct("Ryobi sander", "RYOBI");
+
+    const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
+    expect(manufacturerSpellingVariants).toEqual([
+      {
+        value: "RYOBI",
+        count: 1,
+        canonical: "Ryobi",
+        canonicalCount: 2,
+        sampleId: odd.id,
+      },
+    ]);
+  });
+
+  it("collapses case, whitespace, punctuation, a trailing .com and a leading The", async () => {
+    // Each pair is one name typed two ways — the systematic drift class this
+    // detector exists for, and the class an exact-match filter splits in two.
+    await seedPurchase("prime a", "Amazon");
+    await seedPurchase("prime b", "Amazon");
+    await seedPurchase("prime c", "Amazon.com");
+    await seedPurchase("hardware a", "Home Depot");
+    await seedPurchase("hardware b", "The Home Depot");
+    await seedPurchase("paint a", "Lowe's");
+    await seedPurchase("paint b", "Lowes");
+
+    const { vendorSpellingVariants } = await findFastProblems(ctx.db);
+    const flagged = Object.fromEntries(
+      vendorSpellingVariants.map((v) => [v.value, v.canonical]),
+    );
+    expect(flagged["Amazon.com"]).toBe("Amazon");
+    expect(flagged["The Home Depot"]).toBe("Home Depot");
+
+    // The apostrophe pair is a 1-vs-1 tie, so there's no majority to point at.
+    // Exactly one of the two is reported, the other is named as its canonical,
+    // and `canonicalCount: 1` is what tells the card to show the tie rather
+    // than implying a winner.
+    const lowes = vendorSpellingVariants.filter((v) =>
+      ["Lowe's", "Lowes"].includes(v.value),
+    );
+    expect(lowes).toHaveLength(1);
+    expect(lowes[0]?.canonical).toBe(
+      lowes[0]?.value === "Lowes" ? "Lowe's" : "Lowes",
+    );
+    expect(lowes[0]?.canonicalCount).toBe(1);
+  });
+
+  it("does not flag distinct brands that merely share an industry noun", async () => {
+    // The regression that shaped the design: trigram similarity flags every one
+    // of these pairs (0.33–0.56 on the real ledger) because brand names share
+    // nouns — "Hardware", "Depot", "Tool", "Plumbing". A canonical key must
+    // return NOTHING here. Do not "improve" this into a fuzzy match.
+    for (const vendor of [
+      "Ace Hardware",
+      "DK Hardware",
+      "Center Hardware",
+      "Home Depot",
+      "Office Depot",
+      "Tool Nirvana",
+      "Tool Nut",
+      "Northern Tool",
+      "Flow Form Plumbing",
+      "Lutz Plumbing",
+      "Festool",
+      "Festool Recon",
+    ]) {
+      await seedPurchase(`buy from ${vendor}`, vendor);
+    }
+
+    const { vendorSpellingVariants } = await findFastProblems(ctx.db);
+    expect(vendorSpellingVariants).toEqual([]);
+  });
+
+  it("ignores vendorless purchases and the (unspecified) manufacturer sentinel", async () => {
+    await seedPurchase("cash at the yard", null);
+    await seedPurchase("also cash", null);
+    // The sentinel is carried by ~40% of products; it is not a brand, so two
+    // products sharing it must never read as a spelling collision.
+    await seedProduct("mystery a", UNSPECIFIED_MANUFACTURER);
+    await seedProduct("mystery b", UNSPECIFIED_MANUFACTURER);
+
+    const { vendorSpellingVariants, manufacturerSpellingVariants } =
+      await findFastProblems(ctx.db);
+    expect(vendorSpellingVariants).toEqual([]);
+    expect(manufacturerSpellingVariants).toEqual([]);
+  });
+
+  it("excludes the sentinel however it is cased or spaced", async () => {
+    // A case-sensitive `<>` would let these through the exclusion, and then
+    // canonicalKey would fold them onto the same `unspecified` key as the
+    // correctly-cased rows — reporting the not-a-brand sentinel as a brand
+    // spelling variant, the exact false positive this detector avoids. The
+    // exclusion compares canonical keys, so casing and spacing can't matter.
+    await seedProduct("mystery a", UNSPECIFIED_MANUFACTURER);
+    await seedProduct("mystery b", UNSPECIFIED_MANUFACTURER);
+    await seedProduct("mystery c", "(Unspecified)");
+    await seedProduct("mystery d", "(UNSPECIFIED)");
+    await seedProduct("mystery e", " (unspecified) ");
+
+    const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
+    expect(manufacturerSpellingVariants).toEqual([]);
+  });
+
+  it("clears once the odd spelling is soft-deleted", async () => {
+    await seedProduct("Milwaukee drill", "Milwaukee");
+    const odd = await seedProduct("Milwaukee saw", "MILWAUKEE");
+
+    const before = await findFastProblems(ctx.db);
+    expect(before.manufacturerSpellingVariants).toHaveLength(1);
+
+    await deleteProducts(ctx.db, [odd.id], ctx.actor);
+
+    const after = await findFastProblems(ctx.db);
+    expect(after.manufacturerSpellingVariants).toEqual([]);
   });
 });

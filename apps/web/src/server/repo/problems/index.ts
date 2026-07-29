@@ -23,6 +23,10 @@
  *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
  *                                            sub-recipe while marked fresh —
  *                                            derived-data-on-removal guardrail)
+ *   LABELS      → `detectors-label-variants.ts`
+ *                                           (one brand spelled two ways in a
+ *                                            free-text column — vendor,
+ *                                            manufacturer)
  *   EMBEDDING   → `detectors-embedding.ts`  (live entities with no embedding row
  *                                            — invisible to semantic search)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
@@ -51,6 +55,11 @@ export {
   findNeverVerifiedInventory,
   findUnknownParkedItems,
 } from "./detectors-inventory";
+// Free-text brand-label drift (one name, two spellings)
+export {
+  findManufacturerSpellingVariants,
+  findVendorSpellingVariants,
+} from "./detectors-label-variants";
 // Location-centric detectors (+ EmptyLocation type re-export)
 export {
   type EmptyLocation,

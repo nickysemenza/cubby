@@ -73,6 +73,9 @@ export function useProblemsData(opts?: {
         neverVerifiedInventory: fast.data?.neverVerifiedInventory ?? [],
         unknownParkedItems: fast.data?.unknownParkedItems ?? [],
         ordersWithPartialVendor: fast.data?.ordersWithPartialVendor ?? [],
+        vendorSpellingVariants: fast.data?.vendorSpellingVariants ?? [],
+        manufacturerSpellingVariants:
+          fast.data?.manufacturerSpellingVariants ?? [],
         ingredientsWithPartialCoverage:
           coverage.data?.ingredientsWithPartialCoverage ?? [],
         productsWithIslandedMappings:
