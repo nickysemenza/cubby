@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
+import type { Table } from "@tanstack/react-table";
 import { IconPattern } from "~/components/common/icon-pattern";
 import { Button } from "~/components/ui/button";
 import {
@@ -181,4 +182,21 @@ export function FilteredEmptyState({
 /** Check if a table has active (column) filters. */
 export function hasActiveFilters(columnFilters: unknown[]): boolean {
   return columnFilters.length > 0;
+}
+
+/**
+ * Is the row set narrowed by ANYTHING the user can see — a column filter, or a
+ * URL-only scope (`/purchases?productId=…`) that by design never enters
+ * `columnFilters`?
+ *
+ * Only the empty-state COPY keys off this. `resetColumnFilters` can't clear a
+ * scope (the page owns that param, and its ScopeChip has the X), so the "Clear
+ * filters" button still keys off column filters alone rather than offering a
+ * button that wouldn't change anything.
+ */
+export function isNarrowed<TData>(table: Table<TData>): boolean {
+  return (
+    hasActiveFilters(table.getState().columnFilters) ||
+    (table.options.meta?.urlScopeCount ?? 0) > 0
+  );
 }

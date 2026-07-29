@@ -125,6 +125,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       // No column renders this — it's seeded from the URL only (a deep link
       // from a product's detail page). Declared so the builder still maps it.
       columnId: "productId",
+      urlOnly: true,
       kind: "id",
       brand: unsafeProductId,
       placeholder: "Filter by product id...",
@@ -165,6 +166,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       // Always paired with `vendor` (or `vendor=(none)`) by its callers, since
       // an order id is only unique within a vendor.
       columnId: "orderIdExact",
+      urlOnly: true,
       field: "orderId",
       urlKey: "order",
       kind: "id",

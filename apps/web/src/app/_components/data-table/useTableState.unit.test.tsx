@@ -13,6 +13,7 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mockNavigate,
 }));
 
+import type { FilterSpecCore } from "~/entities/filters";
 import { useTableState } from "./useTableState";
 
 describe("useTableState — pageIndex reset on filter change", () => {
@@ -100,5 +101,61 @@ describe("useTableState — pageIndex reset on filter change", () => {
     mockSearch = { page: "3" };
     const { result } = renderHook(() => useTableState());
     expect(result.current.pagination.pageIndex).toBe(2); // page=3 -> index 2
+  });
+});
+
+/**
+ * A `urlOnly` spec (purchases' `?productId=` / `?order=`) has no table column.
+ * Letting it into `columnFilters` made TanStack log
+ * `[Table] Column with id 'productId' does not exist.` on every render, so it
+ * is held apart — but it must still reach the server filters, and its URL param
+ * must survive the write-through that owns the column-backed keys.
+ */
+describe("useTableState — URL-only filter specs", () => {
+  // Module-level (stable reference): `filterSpecs` identity drives the memos.
+  const SPECS: readonly FilterSpecCore[] = [
+    { columnId: "vendor", kind: "multiselect" },
+    { columnId: "productId", kind: "id", urlOnly: true },
+  ];
+
+  beforeEach(() => {
+    mockSearch = {};
+    mockNavigate.mockClear();
+  });
+
+  it("keeps a URL-only scope out of columnFilters but in allFilters", () => {
+    mockSearch = { vendor: "Home Depot", productId: "prod-1" };
+    const { result } = renderHook(() => useTableState({ filterSpecs: SPECS }));
+
+    expect(result.current.columnFilters).toEqual([
+      { id: "vendor", value: ["Home Depot"] },
+    ]);
+    expect(result.current.allFilters).toEqual([
+      { id: "vendor", value: ["Home Depot"] },
+      { id: "productId", value: "prod-1" },
+    ]);
+  });
+
+  it("hands back columnFilters itself when no URL-only scope is set", () => {
+    mockSearch = { vendor: "Home Depot" };
+    const { result } = renderHook(() => useTableState({ filterSpecs: SPECS }));
+
+    // Same reference, not just equal — a fresh array each render would churn
+    // every memo keyed on the built filters.
+    expect(result.current.allFilters).toBe(result.current.columnFilters);
+  });
+
+  it("leaves the URL-only param alone on write-through", () => {
+    // No column state can produce `productId`, so the sync must not claim (and
+    // therefore delete) its key — the ScopeChip's clear is the only writer.
+    mockSearch = { productId: "prod-1" };
+    renderHook(() => useTableState({ filterSpecs: SPECS, urlSync: true }));
+
+    const call = mockNavigate.mock.calls[0]?.[0] as {
+      search: (prev: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(call.search({ productId: "prod-1" })).toMatchObject({
+      productId: "prod-1",
+    });
   });
 });

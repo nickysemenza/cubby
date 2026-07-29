@@ -11,6 +11,7 @@ import {
   FILTER_ANY,
   FILTER_NONE,
   filterGetterFromSearch,
+  partitionFilterSpecs,
 } from "./filters";
 
 /**
@@ -206,6 +207,45 @@ describe("purchase order-id filters", () => {
       orderId: "#11325",
       orderIdPresenceFilter: FILTER_ANY,
     });
+  });
+});
+
+/**
+ * The purchases ledger's two column-less scopes. `urlOnly` keeps them out of
+ * `columnFilters` (a TanStack column has to exist for every entry there, or it
+ * logs `[Table] Column with id '<x>' does not exist.` on every render) WITHOUT
+ * taking them off the wire — they're still ordinary manifest specs everywhere
+ * else.
+ */
+describe("purchase URL-only scopes", () => {
+  it("marks exactly the specs no column renders", () => {
+    const [columnBacked, urlOnly] = partitionFilterSpecs(
+      getEntityFilters("purchase"),
+    );
+    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "productId",
+      "orderIdExact",
+    ]);
+    expect(columnBacked.some((spec) => spec.urlOnly)).toBe(false);
+  });
+
+  it("still routes ?productId= to the server filter", () => {
+    const specs = getEntityFilters("purchase");
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { productId: "prod-1" }),
+      ),
+    ).toMatchObject({ productId: "prod-1" });
+  });
+
+  it("still declares a search field for every URL-only key", () => {
+    // Without these the route's strict schema strips the params before
+    // anything can read them back.
+    const fields = entityFilterSearchFields("purchase");
+    expect(Object.keys(fields)).toEqual(
+      expect.arrayContaining(["productId", "order"]),
+    );
   });
 });
 
