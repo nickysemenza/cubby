@@ -5,6 +5,8 @@
  * Public API (consumed by routers + services; keep these signatures stable):
  * - {@link imageList}                         — paginated/sorted/filtered list with entity associations
  * - {@link getImageById}                      — fetch one image with its entity association
+ * - {@link updateImage}                       — rename an image (the one safely user-editable column)
+ * - {@link markImageUploaded}                 — flip a PENDING row to UPLOADED once the R2 PUT succeeds
  * - {@link cullPendingImages}                 — delete stale unassociated PENDING rows and return their keys
  * - {@link countCullablePendingImages}        — how many rows that cull would remove
  * - {@link deleteImages}                      — hard-delete image rows (+ their associations) and return their keys
@@ -23,6 +25,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type {
   AttachableImageEntity,
+  ImageUpdateInput,
   ImageWithEntity,
 } from "@cubby/schemas/image";
 import { imageSortableFields } from "@cubby/schemas/image";
@@ -51,6 +54,7 @@ import {
   insertAndReturn,
   isNotDeleted,
   notDeleted,
+  updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 
@@ -334,6 +338,53 @@ export const getImageById = async (
   }
 
   return imageWithRelationsToAPI(imageRecord);
+};
+
+/**
+ * Rename an image. `filename` is the only safely user-editable column — `key`/
+ * `url`/`size`/`contentType`/`status` are all derived from the upload itself,
+ * so this is intentionally the entire update surface (see `imageUpdateInput`).
+ * Re-reads via {@link getImageById} so the output matches `getByID`'s shape
+ * (including the resolved entity association) rather than a bare row.
+ */
+export const updateImage = async (
+  db: Database,
+  imageId: string,
+  data: ImageUpdateInput,
+): Promise<ImageWithEntity> => {
+  await updateAndReturn(
+    db,
+    image,
+    { filename: data.filename },
+    and(eq(image.id, imageId), notDeleted(image)),
+  );
+  return getImageById(db, imageId);
+};
+
+/**
+ * Flip a PENDING image row to UPLOADED once the browser's presigned PUT to R2
+ * succeeds. Without this, a standalone `/images` upload (no owning entity to
+ * call `associatePendingImages`) stays PENDING forever — rendering "Upload
+ * pending…" indefinitely and then getting deleted, R2 object included, by
+ * {@link findCullablePendingImages} (PENDING + no association is exactly its
+ * selection).
+ *
+ * Predicated on `status = "PENDING"` (not just `id`) so the transition is
+ * forward-only and safe: it can never resurrect a FAILED row back to
+ * UPLOADED, and a duplicate call on a row that already flipped throws rather
+ * than silently re-writing state that something else may have changed since.
+ */
+export const markImageUploaded = async (
+  db: Database,
+  imageId: string,
+): Promise<ImageWithEntity> => {
+  await updateAndReturn(
+    db,
+    image,
+    { status: "UPLOADED" },
+    and(eq(image.id, imageId), eq(image.status, "PENDING"), notDeleted(image)),
+  );
+  return getImageById(db, imageId);
 };
 
 /**

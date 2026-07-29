@@ -19,6 +19,7 @@ export const queryKeys = {
   image: {
     all: entityKey("image"),
     list: procedureKey("image", "list"),
+    getByID: procedureKey("image", "getByID"),
   },
   usda: {
     all: entityKey("usda"),
@@ -140,6 +141,13 @@ export const productLookupMutationInvalidateKeys = [
 
 export const locationMutationInvalidateKeys = [
   queryKeys.location.list,
+] as const satisfies readonly QueryKey[];
+
+// Covers the detail query too — the list-only key (imagelist.tsx's
+// IMAGE_INVALIDATE_KEYS) doesn't refresh the image detail page after a rename.
+export const imageMutationInvalidateKeys = [
+  queryKeys.image.list,
+  queryKeys.image.getByID,
 ] as const satisfies readonly QueryKey[];
 
 export const ingredientMutationInvalidateKeys = [
