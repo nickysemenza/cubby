@@ -1023,6 +1023,18 @@ export type ProjectAttentionType = z.infer<typeof projectAttentionTypeSchema>;
  * overdue task's due date, or a missing-budget project's spend-to-date).
  */
 export const projectAttentionItemSchema = z.object({
+  /**
+   * Stable unique identity for this row — the React key both renderers use.
+   *
+   * `(type, entityId)` is NOT unique and can't be: `date_window_drift` checks
+   * the start and end overrides independently, so a project narrowed on both
+   * sides legitimately produces two rows for the same project under the same
+   * rule. Keying on type+entityId collided there, and React's duplicate-key
+   * behavior is explicitly unsupported — rows could be dropped, so the section
+   * badge stopped matching what rendered. Rules that can emit more than one row
+   * per entity append a discriminator (see `attentionKey`).
+   */
+  key: z.string(),
   type: projectAttentionTypeSchema,
   severity: z.enum(["info", "warning", "critical"]),
   description: z.string(),

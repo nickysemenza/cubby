@@ -104,12 +104,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
             title={title(group.length)}
           >
             {group.map((item) => (
-              <Row
-                key={`${item.entityType}-${item.entityId}`}
-                align="center"
-                gap="sm"
-                className="text-xs"
-              >
+              <Row key={item.key} align="center" gap="sm" className="text-xs">
                 <Link
                   to={item.href}
                   className="truncate hover:underline"

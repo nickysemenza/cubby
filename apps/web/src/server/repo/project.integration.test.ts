@@ -1326,6 +1326,16 @@ describe("project dashboard — attention detector + summary", () => {
     expect(endItem?.description).toBe(
       "End date 2024-06-10 is before the latest dated work (2024-12-31)",
     );
+
+    // These two rows are the reason `key` exists: same type, same entityId, so
+    // a type+entityId React key collided and the list could silently drop one.
+    expect(startItem?.key).toBe(`date_window_drift:${project.id}:start`);
+    expect(endItem?.key).toBe(`date_window_drift:${project.id}:end`);
+
+    // The invariant the renderers depend on, asserted over EVERY rule — a new
+    // rule that can fire twice for one entity must add its own discriminator.
+    const keys = items.map((i) => i.key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("does not flag date_window_drift when the override is wider than derived, or exactly equal to it", async () => {

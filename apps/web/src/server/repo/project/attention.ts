@@ -21,7 +21,10 @@
  * in; `problems.service.ts` calls this standalone and lets it load its own.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type { ProjectAttentionItem } from "@cubby/schemas/project";
+import type {
+  ProjectAttentionItem,
+  ProjectAttentionType,
+} from "@cubby/schemas/project";
 import { and, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { householdDaysAgo, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
@@ -35,6 +38,25 @@ import {
 
 /** `stalled_project`'s no-activity window. */
 const STALE_ACTIVITY_DAYS = 30;
+
+/**
+ * Build an item's stable `key`.
+ *
+ * Most rules emit at most one row per entity, so `type:entityId` identifies
+ * them. `date_window_drift` is the exception — it tests the start and end
+ * overrides independently, so a project narrowed on both sides emits two rows
+ * with the same type and entityId. Those pass a `discriminator`; without one
+ * the two rows collided as React keys and the list could silently drop a row.
+ * Any future rule that can fire twice for one entity must do the same.
+ */
+const attentionKey = (
+  type: ProjectAttentionType,
+  entityId: string,
+  discriminator?: string,
+): string =>
+  discriminator
+    ? `${type}:${entityId}:${discriminator}`
+    : `${type}:${entityId}`;
 
 export async function computeAttentionItems(
   db: Database,
@@ -108,6 +130,7 @@ export async function computeAttentionItems(
     const effectiveDue = row.dueEndDate ?? row.dueDate;
     if (!effectiveDue || effectiveDue >= today) continue;
     items.push({
+      key: attentionKey("overdue_task", row.id),
       type: "overdue_task",
       severity: "critical",
       description: `"${row.name}" was due ${effectiveDue} and is still open`,
@@ -174,6 +197,7 @@ export async function computeAttentionItems(
     const lastActivityDate = householdLocalDate(lastActivity);
     if (lastActivityDate >= activityCutoff) continue;
     items.push({
+      key: attentionKey("stalled_project", row.id),
       type: "stalled_project",
       severity: "warning",
       description: `"${row.name}" has had no project, task, or purchase activity in ${STALE_ACTIVITY_DAYS}+ days`,
@@ -194,6 +218,7 @@ export async function computeAttentionItems(
     const spend = subtree.actualSpent + subtree.committedSpent;
     if (spend > 0 && subtree.costEstimate === null) {
       items.push({
+        key: attentionKey("missing_budget", row.id),
         type: "missing_budget",
         severity: "info",
         description: `"${row.name}" has $${spend.toFixed(0)} in spend but no budget estimate`,
@@ -209,6 +234,7 @@ export async function computeAttentionItems(
   // 4. past_due_planned_purchase
   for (const row of pastDuePurchaseRows) {
     items.push({
+      key: attentionKey("past_due_planned_purchase", row.id),
       type: "past_due_planned_purchase",
       severity: "warning",
       description: `"${row.name}" was planned for ${row.date} but hasn't been logged as spent`,
@@ -225,6 +251,7 @@ export async function computeAttentionItems(
   // "uncategorized" value added there).
   for (const row of unclassifiedPurchaseRows) {
     items.push({
+      key: attentionKey("unclassified_purchase", row.id),
       type: "unclassified_purchase",
       severity: "info",
       description: `"${row.name}" has no trade or cost recorded`,
@@ -249,6 +276,7 @@ export async function computeAttentionItems(
   for (const row of inProgressProjectRows) {
     if (projectsWithBlocked.has(row.id) && !projectsWithNext.has(row.id)) {
       items.push({
+        key: attentionKey("blocked_work", row.id),
         type: "blocked_work",
         severity: "warning",
         description: `"${row.name}" has blocked tasks and no unblocked next action`,
@@ -279,6 +307,7 @@ export async function computeAttentionItems(
       row.startDate > window.derivedStart
     ) {
       items.push({
+        key: attentionKey("date_window_drift", row.id, "start"),
         type: "date_window_drift",
         severity: "info",
         description: `Start date ${row.startDate} is after the earliest dated work (${window.derivedStart})`,
@@ -295,6 +324,7 @@ export async function computeAttentionItems(
       row.endDate < window.derivedEnd
     ) {
       items.push({
+        key: attentionKey("date_window_drift", row.id, "end"),
         type: "date_window_drift",
         severity: "info",
         description: `End date ${row.endDate} is before the latest dated work (${window.derivedEnd})`,

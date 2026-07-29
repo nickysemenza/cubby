@@ -278,7 +278,7 @@ const trackerSeverityVariant = (severity: ProjectAttentionItem["severity"]) =>
 
 function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
   return {
-    key: `${item.type}-${item.entityId}`,
+    key: item.key,
     title: item.description,
     badges: [
       <Badge key="severity" variant={trackerSeverityVariant(item.severity)}>
