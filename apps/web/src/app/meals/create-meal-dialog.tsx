@@ -1,5 +1,6 @@
 import { mealDate } from "@cubby/schemas/meal";
 import { format, parseISO } from "date-fns";
+import { useMemo } from "react";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -27,20 +28,29 @@ const defaultValues = (): QuickAddMealValues => ({
 interface CreateMealDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  presetDate?: string;
 }
 
 export function CreateMealDialog({
   open,
   onOpenChange,
+  presetDate,
 }: CreateMealDialogProps) {
   const api = useTRPC();
+  const initialValues = useMemo(
+    () => () => {
+      const values = defaultValues();
+      return { ...values, date: presetDate ?? values.date };
+    },
+    [presetDate],
+  );
 
   return (
     <QuickAddDialog
       open={open}
       onOpenChange={onOpenChange}
       schema={quickAddMealSchema}
-      defaultValues={defaultValues}
+      defaultValues={initialValues}
       title="New Meal"
       description="Plan a meal onto the calendar — add recipes once it's created."
       mutationFn={api.meal.create.mutationOptions}

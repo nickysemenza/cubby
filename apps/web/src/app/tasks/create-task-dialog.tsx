@@ -41,13 +41,13 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   /**
    * Pre-fill fields from a board quick-add click (status/project/trade axis,
-   * or a swimlane cell carrying both). The board hoists one dialog instance
-   * and conditionally mounts it per click, so these are only read once, on
-   * mount — a fresh mount per preset (see `TaskBoard`'s `pendingPreset`).
+   * a swimlane cell carrying both, or a calendar day). QuickAddDialog
+   * re-resolves these defaults whenever it opens.
    */
   presetStatus?: TaskStatus;
   presetProjectId?: ProjectId | null;
   presetTrade?: Trade;
+  presetDate?: string;
 }
 
 export function CreateTaskDialog({
@@ -56,6 +56,7 @@ export function CreateTaskDialog({
   presetStatus,
   presetProjectId,
   presetTrade,
+  presetDate,
 }: CreateTaskDialogProps) {
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
@@ -65,10 +66,10 @@ export function CreateTaskDialog({
       name: "",
       projectId: presetProjectId ?? null,
       status: presetStatus ?? "not_started",
-      dueDate: null,
+      dueDate: presetDate ?? null,
       trade: presetTrade ?? null,
     }),
-    [presetProjectId, presetStatus, presetTrade],
+    [presetDate, presetProjectId, presetStatus, presetTrade],
   );
 
   return (

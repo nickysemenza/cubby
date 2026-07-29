@@ -191,11 +191,12 @@ const RESPONSE_FIELD_MAP_RE =
 
 const LOOSE_SORT_PAGINATION_RE = /\.\.\.sortPaginationFields\b/;
 
-// components/ui holds the shadcn-derived primitives whose internal padding (px-3,
-// p-6, ...) IS the design system's defined component spacing — exempt from the
-// app-level {1,2,4,6} scale.
+// components/ui and components/reui hold copied third-party primitives whose
+// internal layout/accessibility implementation is maintained as vendored source.
 function isUiPrimitive(path) {
-  return path.includes("/components/ui/");
+  return (
+    path.includes("/components/ui/") || path.includes("/components/reui/")
+  );
 }
 
 function isCommentLine(line) {
@@ -366,6 +367,7 @@ function scan(files) {
   const violations = [];
 
   for (const file of files) {
+    if (file.includes("/components/reui/")) continue;
     const isTsx = file.endsWith(".tsx");
     const base = basename(file);
     let content;
