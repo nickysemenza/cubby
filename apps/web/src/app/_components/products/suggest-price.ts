@@ -1,8 +1,8 @@
 /**
- * Derive a suggested unit `price` for a product from its linked purchases.
+ * Derive a suggested unit `price` for a product from its linked expenses.
  *
  * `price` is a *unit* value — inventory valuation is `amount.value * price` —
- * but `Purchase` has no quantity column, so `cost` is the whole-order total.
+ * but `Expense` has no quantity column, so `cost` is the whole-order total.
  * A single row can therefore cover several units (a real example: four Ryobi
  * LINK boxes bought as one $238.94 line), and copying that straight across
  * would overstate the product by the quantity. When the product holds more
@@ -11,14 +11,14 @@
  *
  * `price` is otherwise list/replacement value in this codebase, not spend, so
  * this is deliberately a *suggestion* the user accepts — never an auto-write.
- * Cost basis stays derived from the purchase rows themselves.
+ * Cost basis stays derived from the expense rows themselves.
  *
  * Pure and dependency-free, in a plain `.ts`: the unit-test project can't
  * import `~/`-aliased `.tsx`.
  */
 
-/** The fields of a purchase this needs — a structural subset of `PurchaseOut`. */
-export interface PriceSourcePurchase {
+/** The fields of an expense this needs — a structural subset of `ExpenseOut`. */
+export interface PriceSourceExpense {
   cost: number | null;
   date: string | null;
   vendor: string | null;
@@ -28,7 +28,7 @@ export interface PriceSourcePurchase {
 export interface PriceSuggestion {
   /** What to write into `price`. */
   unitPrice: number;
-  /** The purchase total this came from, before any division. */
+  /** The expense total this came from, before any division. */
   paid: number;
   date: string | null;
   vendor: string | null;
@@ -37,17 +37,17 @@ export interface PriceSuggestion {
 }
 
 /**
- * @param purchases every purchase linked to the product, any order
+ * @param expenses every expense linked to the product, any order
  * @param inventoryQuantity total live units on hand, used only as the divisor
  */
-export function suggestPriceFromPurchases(
-  purchases: readonly PriceSourcePurchase[],
+export function suggestPriceFromExpenses(
+  expenses: readonly PriceSourceExpense[],
   inventoryQuantity: number,
 ): PriceSuggestion | null {
   // Only real money already spent. A negative cost is a disposition (sale,
   // return, write-off) and `future` is planned spend that hasn't happened —
   // neither says anything about what a unit is worth.
-  const spent = purchases.filter(
+  const spent = expenses.filter(
     (p) => !p.future && p.cost !== null && p.cost > 0,
   );
   if (spent.length === 0) return null;

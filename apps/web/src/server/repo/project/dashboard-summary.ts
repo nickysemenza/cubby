@@ -29,7 +29,7 @@ import {
 import { sumBy, uniq } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { project, purchase, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import {
   countWhere,
   getDb,
@@ -97,7 +97,7 @@ export async function projectDashboardSummary(
     undatedProjectCount,
     kindRows,
     locationRows,
-    purchaseYearRows,
+    expenseYearRows,
     taskYearRows,
     projectYearRows,
   ] = await Promise.all([
@@ -146,9 +146,9 @@ export async function projectDashboardSummary(
     // are `enabled: view === "data"`, so a fresh Overview/Analytics load
     // showed only the relative presets.
     getDb(db)
-      .selectDistinct({ year: sql<string>`to_char(${purchase.date}, 'YYYY')` })
-      .from(purchase)
-      .where(and(notDeleted(purchase), isNotNull(purchase.date))),
+      .selectDistinct({ year: sql<string>`to_char(${expense.date}, 'YYYY')` })
+      .from(expense)
+      .where(and(notDeleted(expense), isNotNull(expense.date))),
     // Tasks contribute their EFFECTIVE due date (`dueEndDate ?? dueDate`) —
     // the same expression task/lookup.ts filters due windows on.
     getDb(db)
@@ -192,7 +192,7 @@ export async function projectDashboardSummary(
     taskStatusRows,
     nextTaskRows,
     undatedTaskCount,
-    undatedPurchaseCount,
+    undatedExpenseCount,
     attention,
   ] = await Promise.all([
     projectDependencyIds(db, ids),
@@ -254,11 +254,11 @@ export async function projectDashboardSummary(
     dateFilterActive
       ? countWhere(
           db,
-          purchase,
+          expense,
           and(
-            notDeleted(purchase),
-            scopedOrInbox(purchase.projectId),
-            isNull(purchase.date),
+            notDeleted(expense),
+            scopedOrInbox(expense.projectId),
+            isNull(expense.date),
           ),
         )
       : Promise.resolve(0),
@@ -329,7 +329,7 @@ export async function projectDashboardSummary(
   const locations = uniq(locationRows.map((r) => r.location)).sort();
   // Newest year first — the chip row reads most-recent-first.
   const years = uniq([
-    ...purchaseYearRows.map((r) => r.year),
+    ...expenseYearRows.map((r) => r.year),
     ...taskYearRows.map((r) => r.year),
     ...projectYearRows.map((r) => r.year),
   ])
@@ -346,7 +346,7 @@ export async function projectDashboardSummary(
     hiddenByDate: {
       projects: undatedProjectCount,
       tasks: undatedTaskCount,
-      purchases: undatedPurchaseCount,
+      expenses: undatedExpenseCount,
     },
     completedCount,
   };

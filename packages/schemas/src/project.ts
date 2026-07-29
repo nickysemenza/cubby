@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
-import { productId, projectId, purchaseId, taskId } from "./identifiers";
+import {
+  expenseId,
+  productId,
+  projectId,
+  purchaseId,
+  taskId,
+  vendorId,
+} from "./identifiers";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -10,10 +17,10 @@ import {
 
 /**
  * Home-project tracker schemas: `project` (a household undertaking), `task`
- * (a step inside one), and `purchase` (a spend, usually attached to one).
+ * (a step inside one), and `expense` (a spend, usually attached to one).
  * Migrated from the retired Notion databases; option sets are carried over
  * verbatim (emoji stripped). Cost/progress rollups are SQL aggregates over
- * live purchases/tasks — never denormalized onto the project row.
+ * live expenses/tasks — never denormalized onto the project row.
  *
  * `locations` is deliberately a free-form string array (house names live in
  * the DB, not in committed code); filter options derive from the data.
@@ -94,9 +101,9 @@ export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
 
 /**
- * The trade/discipline a task or purchase belongs to (a phase of household
+ * The trade/discipline a task or expense belongs to (a phase of household
  * work — "plumbing", "electrical", etc.) — shared between `task.trade` and
- * `purchase.trade`. Human labels in `TRADE_LABELS` below.
+ * `expense.trade`. Human labels in `TRADE_LABELS` below.
  */
 export const tradeValues = [
   "planning",
@@ -160,12 +167,12 @@ const projectFields = {
   locations: z.array(z.string()).describe("House/site names, free-form"),
   costEstimate: z.number().nullable().describe("Budget estimate in dollars"),
   // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
-  // is its budget envelope; purchases/tasks attribute to it via their
+  // is its budget envelope; expenses/tasks attribute to it via their
   // existing `projectId`. Cycle/self-parent guards live in
   // repo/project/crud.ts (depth is otherwise unrestricted).
   parentProjectId: projectId.nullable(),
   // Manual OVERRIDES on the derived window, not the window itself. A project's
-  // dates are normally rolled up from its own tasks/purchases plus every live
+  // dates are normally rolled up from its own tasks/expenses plus every live
   // sub-project's effective window (see `projectDateWindow`); these two columns
   // only take over when explicitly set — for a project with no content yet, or
   // a deliberate plan wider than what's been recorded. Read
@@ -222,9 +229,9 @@ export const projectOptionsOut = z.object({
   name: z.string(),
   // Carried so a picker can rank by "was this project running on that date?"
   // without a second round trip — see rankProjectSuggestions. These are the
-  // EFFECTIVE bounds (override when set, else derived from tasks/purchases/
+  // EFFECTIVE bounds (override when set, else derived from tasks/expenses/
   // sub-projects), deliberately not the raw override columns: ranking a
-  // purchase against a stale hand-typed window is what made suggestions miss.
+  // expense against a stale hand-typed window is what made suggestions miss.
   effectiveStart: plainDate.nullable(),
   effectiveEnd: plainDate.nullable(),
 });
@@ -257,7 +264,7 @@ export const projectSortableFields = [
 export type ProjectSortField = (typeof projectSortableFields)[number];
 
 /**
- * SUM/COUNT rollup over live tasks/purchases, at two scopes (see
+ * SUM/COUNT rollup over live tasks/expenses, at two scopes (see
  * repo/project/analytics.ts + repo/project/subtree.ts):
  *   - the top-level fields are this project's OWN aggregate (unchanged
  *     since before sub-projects existed);
@@ -272,7 +279,7 @@ export type ProjectSortField = (typeof projectSortableFields)[number];
  * `projectRollup` below.
  *
  *   content(node)   = min/max over the node's OWN live tasks
- *                     (`dueDate` … `dueEndDate ?? dueDate`) and purchases (`date`)
+ *                     (`dueDate` … `dueEndDate ?? dueDate`) and expenses (`date`)
  *   derived(node)   = content(node) ∪ effective(child) for every live child
  *   effective(node) = the explicit `startDate`/`endDate` override when set,
  *                     otherwise derived(node)
@@ -299,7 +306,7 @@ export const projectRollup = z.object({
   spent: z
     .number()
     .describe(
-      "SUM(cost) of live purchases — the blended net (actualSpent + committedSpent − contributions), including planned + offsets",
+      "SUM(cost) of live expenses — the blended net (actualSpent + committedSpent − contributions), including planned + offsets",
     ),
   // The `spent` figure above blends three economically distinct quantities;
   // these split it so callers can show a true money-out "Actual" that matches
@@ -315,7 +322,7 @@ export const projectRollup = z.object({
     .describe(
       "SUM(-cost) where cost < 0 — offsets/credits, positive magnitude",
     ),
-  purchaseCount: z.number().int(),
+  expenseCount: z.number().int(),
   taskCount: z.number().int(),
   doneTaskCount: z.number().int(),
   subtree: z.object({
@@ -323,7 +330,7 @@ export const projectRollup = z.object({
     actualSpent: z.number(),
     committedSpent: z.number(),
     contributions: z.number(),
-    purchaseCount: z.number().int(),
+    expenseCount: z.number().int(),
     taskCount: z.number().int(),
     doneTaskCount: z.number().int(),
     projectCount: z.number().int().describe("Live descendant project count"),
@@ -669,10 +676,10 @@ export const taskBoardOut = z.object({
 export type TaskBoardOut = z.infer<typeof taskBoardOut>;
 
 // ---------------------------------------------------------------------------
-// Purchase
+// Expense
 // ---------------------------------------------------------------------------
 
-const purchaseFields = {
+const expenseFields = {
   name: z.string().min(1),
   cost: z.number().nullable().describe("Dollars"),
   date: plainDate.nullable(),
@@ -680,24 +687,40 @@ const purchaseFields = {
   trade: tradeSchema,
   url: z.string().nullable(),
   notes: z.string().nullable(),
-  future: z.boolean().describe("Planned/not-yet-made purchase"),
+  future: z.boolean().describe("Planned/not-yet-made expense"),
   projectId: projectId.nullable(),
   productId: productId
     .nullable()
     .describe(
-      "Optional link to the product this purchase bought. A negative-cost purchase on the same product records an exit (sale, return, or a 0-cost disposal).",
+      "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
     ),
+  /**
+   * Where it was bought. **No longer a column** — resolved through
+   * `expense.purchaseId → Purchase → Vendor` (see `dbExpenseToAPI`). Still
+   * accepted by name on create/update, where the repo resolves it via
+   * `findOrCreateVendor` + `findOrCreatePurchase` inside the existing
+   * transaction; that's what keeps MCP, quick-add and the purchase-import skill
+   * unchanged across the split.
+   */
   vendor: z.string().nullable().describe("Where it was bought"),
   orderId: z
     .string()
     .nullable()
     .describe(
-      'The vendor\'s order/receipt id, scoped by `vendor` — e.g. Amazon "111-1234567-1234567", Home Depot "WN63446464". Free text; formats differ per retailer. Rows sharing one orderId came from the same order.',
+      'The vendor\'s order/receipt id — e.g. Amazon "111-1234567-1234567", Home Depot "WN63446464". Free text; formats differ per retailer. Rows sharing one orderId belong to the same charge, which is now a real `Purchase` row rather than a two-column string match.',
     ),
 };
 
-const purchaseCreateShape = {
-  ...purchaseFields,
+const expenseCreateShape = {
+  ...expenseFields,
+  /**
+   * Attach directly to a known charge, bypassing the `{vendor, orderId}`
+   * name-resolution path. The precise form, for callers that already hold a
+   * purchase id (the purchase detail page's "add a line"); `vendor`/`orderId`
+   * stay the ergonomic form for importers and quick-add. When both are given,
+   * this wins — an explicit id is never a guess.
+   */
+  purchaseId: purchaseId.nullable().default(null),
   cost: z.number().nullable().default(null),
   date: plainDate.nullable().default(null),
   url: z.string().nullable().default(null),
@@ -709,59 +732,45 @@ const purchaseCreateShape = {
   orderId: z.string().nullable().default(null),
 };
 
-export const purchaseCreateInput = z.object(purchaseCreateShape);
-export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
+export const expenseCreateInput = z.object(expenseCreateShape);
+export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 
 // Every create field optional, with the create-time `.default(...)` stripped
 // (see deriveUpdateData).
-export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape);
-export type PurchaseUpdateData = z.infer<typeof purchaseUpdateData>;
-export const purchaseUpdateInput = z.object({
-  id: purchaseId,
-  data: purchaseUpdateData,
+export const expenseUpdateData = deriveUpdateData(expenseCreateShape);
+export type ExpenseUpdateData = z.infer<typeof expenseUpdateData>;
+export const expenseUpdateInput = z.object({
+  id: expenseId,
+  data: expenseUpdateData,
 });
-export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
+export type ExpenseUpdateInput = z.infer<typeof expenseUpdateInput>;
 
 /**
- * Bulk "move to project" — `projectId: null` moves every listed purchase to
+ * Bulk "move to project" — `projectId: null` moves every listed expense to
  * the inbox (no project). Same nullable-projectId semantics as a single
- * `purchaseUpdateData.projectId` write, batched over `ids`.
+ * `expenseUpdateData.projectId` write, batched over `ids`.
  */
-export const purchaseBulkMoveInput = z.object({
-  ids: z.array(purchaseId).min(1),
+export const expenseBulkMoveInput = z.object({
+  ids: z.array(expenseId).min(1),
   projectId: projectId.nullable(),
 });
-export type PurchaseBulkMoveInput = z.infer<typeof purchaseBulkMoveInput>;
+export type ExpenseBulkMoveInput = z.infer<typeof expenseBulkMoveInput>;
 
-/** Bulk trade write — same enum as a single `purchaseUpdateData.trade` write. */
-export const purchaseBulkTradeInput = z.object({
-  ids: z.array(purchaseId).min(1),
+/** Bulk trade write — same enum as a single `expenseUpdateData.trade` write. */
+export const expenseBulkTradeInput = z.object({
+  ids: z.array(expenseId).min(1),
   trade: tradeSchema,
 });
-export type PurchaseBulkTradeInput = z.infer<typeof purchaseBulkTradeInput>;
+export type ExpenseBulkTradeInput = z.infer<typeof expenseBulkTradeInput>;
 
-/** Bulk cost-type write — same enum as a single `purchaseUpdateData.costType`. */
-export const purchaseBulkCostTypeInput = z.object({
-  ids: z.array(purchaseId).min(1),
+/** Bulk cost-type write — same enum as a single `expenseUpdateData.costType`. */
+export const expenseBulkCostTypeInput = z.object({
+  ids: z.array(expenseId).min(1),
   costType: costTypeSchema,
 });
-export type PurchaseBulkCostTypeInput = z.infer<
-  typeof purchaseBulkCostTypeInput
->;
+export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
-/**
- * Bulk vendor write — same free text as a single `purchaseUpdateData.vendor`.
- *
- * Written by the half-filled-vendor backfill, which derives the value from the
- * order's own rows rather than accepting one from a caller.
- */
-export const purchaseBulkVendorInput = z.object({
-  ids: z.array(purchaseId).min(1),
-  vendor: z.string().nullable(),
-});
-export type PurchaseBulkVendorInput = z.infer<typeof purchaseBulkVendorInput>;
-
-export const purchaseFilterFields = {
+export const expenseFilterFields = {
   // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
   // stay valid. Resolved with `eqAny` in the repo.
   costType: oneOrMany(costTypeSchema).optional(),
@@ -771,7 +780,7 @@ export const purchaseFilterFields = {
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
   /**
-   * `"none"` matches purchases with `projectId IS NULL` — the unassigned-spend
+   * `"none"` matches expenses with `projectId IS NULL` — the unassigned-spend
    * worklist. Mirrors `taskFilterFields.projectPresenceFilter`, including the
    * OR-with-`projectId` semantics documented there.
    */
@@ -779,51 +788,53 @@ export const purchaseFilterFields = {
   productId: productId.optional(),
   productPresenceFilter: presenceFilter,
   /**
-   * Its own filter, deliberately NOT folded into `search`:
-   * `buildSearchConditions` ANDs its entries, so a second column sharing the
-   * `search` term would mean `name ILIKE q AND vendor ILIKE q` — and vendor is
-   * null on most rows, which would silently zero out purchase search.
+   * Vendor **ids**, resolved through `expense.purchaseId → Purchase.vendorId`.
    *
-   * Matched EXACTLY (`eqAny`), not as a substring. The header control is a
-   * picklist over the real `vendorOptions` roster, so a substring match made
-   * the option's own count disagree with the rows it returned — picking
-   * "Amazon (254)" would also drag in an "Amazon Business". `oneOrMany` keeps
-   * scalar MCP callers schema-valid, but they must now pass the exact stored
-   * string ("Home Depot", not "home depot").
+   * Ids rather than the old exact-match-on-free-text: `Vendor` is a real roster
+   * now, so the picklist has a primary key to filter on and the class of bug the
+   * exact match existed to prevent ("Amazon (254)" also dragging in "Amazon
+   * Business") is gone by construction rather than by discipline.
+   *
+   * Still its own filter, deliberately NOT folded into `search`:
+   * `buildSearchConditions` ANDs its entries, so a second predicate sharing the
+   * `search` term would mean `name ILIKE q AND vendor matches q` — and most rows
+   * have no vendor, which would silently zero out expense search.
    */
-  vendor: oneOrMany(z.string()).optional(),
+  vendorId: oneOrMany(vendorId).optional(),
   /**
-   * `"none"` matches purchases with `vendor IS NULL` — the where-did-this-come-
-   * from worklist. ORs with `vendor` per `eqAnyOrPresence`, so "Amazon or no
-   * vendor recorded" is one filter.
+   * `"none"` matches expenses with no charge attached — the
+   * where-did-this-come-from worklist. Since `purchase.vendorId` is NOT NULL,
+   * "no vendor" and "no charge" are the same predicate: `purchaseId IS NULL`.
+   * ORs with `vendorId` rather than ANDing, so "Amazon or no vendor recorded" is
+   * one filter.
    */
   vendorPresenceFilter: presenceFilter,
   future: z.boolean().optional(),
   search: z.string().optional(),
   dateFrom: plainDate
     .optional()
-    .describe("Inclusive lower bound on purchase date"),
+    .describe("Inclusive lower bound on expense date"),
   dateTo: plainDate
     .optional()
-    .describe("Inclusive upper bound on purchase date"),
+    .describe("Inclusive upper bound on expense date"),
   /**
-   * `"none"` matches purchases with a null `cost`; `"has"` matches purchases
+   * `"none"` matches expenses with a null `cost`; `"has"` matches expenses
    * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
-   * Unclassified-purchase predicate (`trade='other' AND cost IS NULL`) —
+   * Unclassified-expense predicate (`trade='other' AND cost IS NULL`) —
    * deliberately NOT a `costType` value, since `costType` stays a clean
    * 3-value enum.
    */
   costPresenceFilter: presenceFilter,
   /**
-   * `"none"` matches purchases with a null `orderId`; `"has"` matches
-   * purchases that carry one. Same shape as `costPresenceFilter` — there's no
+   * `"none"` matches expenses with a null `orderId`; `"has"` matches
+   * expenses that carry one. Same shape as `costPresenceFilter` — there's no
    * bounded order-id picklist (free text, one per retailer's format), so this
    * only distinguishes reconciled-to-an-order vs. not.
    */
   orderIdPresenceFilter: presenceFilter,
   /**
    * Exact match on the vendor's own order id — the "show me the rest of this
-   * order" scope behind `/purchases?order=…`.
+   * order" scope behind `/expenses?order=…`.
    *
    * Exact (`eqAny`) for the same reason `vendor` is: an order id is an
    * identifier, not a search term, and a substring match would let
@@ -836,16 +847,16 @@ export const purchaseFilterFields = {
    */
   orderId: oneOrMany(z.string()).optional(),
 };
-export const purchaseFiltersSchema = z.object(purchaseFilterFields);
-export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
+export const expenseFiltersSchema = z.object(expenseFilterFields);
+export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
 
-export const purchaseSortableFields = [
+export const expenseSortableFields = [
   "name",
   "cost",
   "date",
   "costType",
   // `trade` is a plain text column (alphabetical). `project`/`product` are
-  // joined names, resolved by correlated subqueries in repo/purchase/lookup.ts.
+  // joined names, resolved by correlated subqueries in repo/expense/lookup.ts.
   "trade",
   "project",
   "product",
@@ -853,62 +864,55 @@ export const purchaseSortableFields = [
   "orderId",
   "createdAt",
 ] as const;
-export type PurchaseSortField = (typeof purchaseSortableFields)[number];
+export type ExpenseSortField = (typeof expenseSortableFields)[number];
 
-export const purchaseOut = z.object({
-  id: purchaseId,
-  ...purchaseFields,
+export const expenseOut = z.object({
+  id: expenseId,
+  ...expenseFields,
+  /**
+   * The charge this line belongs to. Null for the rows with no vendor recorded —
+   * there's no transaction to attach them to, and inventing one would fabricate
+   * a charge that never happened.
+   */
+  purchaseId: purchaseId.nullable(),
+  /** The charge's vendor, denormalized onto the line so tables can link it. */
+  vendorId: vendorId.nullable(),
   projectName: z.string().nullable(),
   // Null when unlinked *or* when the linked product has been soft-deleted —
-  // product deletion deliberately does not block on referencing purchases
+  // product deletion deliberately does not block on referencing expenses
   // (unlike project deletion), so this null branch is routinely reachable.
   productName: z.string().nullable(),
   ...timestampedFields,
 });
-export type PurchaseOut = z.infer<typeof purchaseOut>;
+export type ExpenseOut = z.infer<typeof expenseOut>;
 
 /**
- * Bulk purchase write output — the updated rows plus any background work the
+ * Bulk expense write output — the updated rows plus any background work the
  * write enqueued (embedding refresh), mirroring inventory's
  * `*ListAndSideEffectsOut` shape.
  */
-export const purchaseListAndSideEffectsOut = z.object({
-  items: z.array(purchaseOut),
+export const expenseListAndSideEffectsOut = z.object({
+  items: z.array(expenseOut),
   sideEffects: mutationSideEffectsSchema,
 });
-export type PurchaseListAndSideEffectsOut = z.infer<
-  typeof purchaseListAndSideEffectsOut
+export type ExpenseListAndSideEffectsOut = z.infer<
+  typeof expenseListAndSideEffectsOut
 >;
 
-/**
- * `purchase.vendorOptions`'s output — the distinct vendor roster feeding the
- * ledger's Vendor filter picklist, ranked by how many rows carry each vendor
- * (see `purchaseVendorOptions` in repo/purchase/lookup.ts). No `{id, name}`
- * shape like `projectOptionsOut`: vendor is a free-text column on `purchase`
- * itself, not a joined entity.
- */
-export const purchaseVendorOptionsOut = z.array(
-  z.object({
-    vendor: z.string(),
-    count: z.number().int(),
-  }),
-);
-export type PurchaseVendorOptionsOut = z.infer<typeof purchaseVendorOptionsOut>;
-
 // ---------------------------------------------------------------------------
-// Purchase analytics (server-side chart aggregates — see
-// repo/purchase/analytics.ts for the SQL)
+// Expense analytics (server-side chart aggregates — see
+// repo/expense/analytics.ts for the SQL)
 // ---------------------------------------------------------------------------
 
 /**
- * `purchase.analytics`'s input is `purchaseFiltersSchema` directly — the SAME
+ * `expense.analytics`'s input is `expenseFiltersSchema` directly — the SAME
  * shape as the ledger's filters — so ledger totals and analytics totals
  * always agree under the same filter set. No separate alias: a value-level
  * re-export of the identical schema is a duplicate export, not a real type.
  */
 
 /** actual+committed+credits+net+count, the shared shape every aggregate row carries. */
-const purchaseAggregateFields = {
+const expenseAggregateFields = {
   actual: z.number(),
   committed: z.number(),
   credits: z.number(),
@@ -916,83 +920,81 @@ const purchaseAggregateFields = {
   count: z.number().int(),
 };
 
-export const purchaseAnalyticsSummary = z.object({
-  ...purchaseAggregateFields,
+export const expenseAnalyticsSummary = z.object({
+  ...expenseAggregateFields,
   actualCount: z.number().int(),
   plannedCount: z.number().int(),
 });
-export type PurchaseAnalyticsSummary = z.infer<typeof purchaseAnalyticsSummary>;
+export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 
-export const purchaseCostTypeAggregate = z.object({
+export const expenseCostTypeAggregate = z.object({
   costType: costTypeSchema,
-  ...purchaseAggregateFields,
+  ...expenseAggregateFields,
 });
-export type PurchaseCostTypeAggregate = z.infer<
-  typeof purchaseCostTypeAggregate
->;
+export type ExpenseCostTypeAggregate = z.infer<typeof expenseCostTypeAggregate>;
 
-export const purchaseTradeAggregate = z.object({
+export const expenseTradeAggregate = z.object({
   trade: tradeSchema,
-  ...purchaseAggregateFields,
+  ...expenseAggregateFields,
 });
-export type PurchaseTradeAggregate = z.infer<typeof purchaseTradeAggregate>;
+export type ExpenseTradeAggregate = z.infer<typeof expenseTradeAggregate>;
 
-export const purchaseTradeCostAggregate = z.object({
+export const expenseTradeCostAggregate = z.object({
   trade: tradeSchema,
   costType: costTypeSchema,
-  ...purchaseAggregateFields,
+  ...expenseAggregateFields,
 });
-export type PurchaseTradeCostAggregate = z.infer<
-  typeof purchaseTradeCostAggregate
+export type ExpenseTradeCostAggregate = z.infer<
+  typeof expenseTradeCostAggregate
 >;
 
-export const purchaseMonthlyAggregate = z.object({
+export const expenseMonthlyAggregate = z.object({
   month: z.string().describe('"yyyy-MM"'),
-  ...purchaseAggregateFields,
+  ...expenseAggregateFields,
 });
-export type PurchaseMonthlyAggregate = z.infer<typeof purchaseMonthlyAggregate>;
+export type ExpenseMonthlyAggregate = z.infer<typeof expenseMonthlyAggregate>;
 
-export const purchaseCumulativePoint = z.object({
+export const expenseCumulativePoint = z.object({
   month: z.string().describe('"yyyy-MM"'),
   cumulativeNet: z.number(),
 });
-export type PurchaseCumulativePoint = z.infer<typeof purchaseCumulativePoint>;
+export type ExpenseCumulativePoint = z.infer<typeof expenseCumulativePoint>;
 
-export const purchaseProjectAggregate = z.object({
+export const expenseProjectAggregate = z.object({
   projectId,
   projectName: z.string(),
-  ...purchaseAggregateFields,
+  ...expenseAggregateFields,
 });
-export type PurchaseProjectAggregate = z.infer<typeof purchaseProjectAggregate>;
+export type ExpenseProjectAggregate = z.infer<typeof expenseProjectAggregate>;
 
 /**
- * `purchase.analytics`'s output — chart-ready aggregates computed server-side
+ * `expense.analytics`'s output — chart-ready aggregates computed server-side
  * (SQL GROUP BYs), replacing client-side computation over the full
- * `purchase.chartData` fetch-all. Empty categories are omitted from each
+ * `expense.chartData` fetch-all. Empty categories are omitted from each
  * array; the UI owns presentation ordering from the shared enum definitions.
  */
-export const purchaseAnalyticsOut = z.object({
-  summary: purchaseAnalyticsSummary,
-  byCostType: z.array(purchaseCostTypeAggregate),
-  byTrade: z.array(purchaseTradeAggregate),
-  tradeCostMatrix: z.array(purchaseTradeCostAggregate),
-  monthly: z.array(purchaseMonthlyAggregate),
-  cumulative: z.array(purchaseCumulativePoint),
-  byProject: z.array(purchaseProjectAggregate),
+export const expenseAnalyticsOut = z.object({
+  summary: expenseAnalyticsSummary,
+  byCostType: z.array(expenseCostTypeAggregate),
+  byTrade: z.array(expenseTradeAggregate),
+  tradeCostMatrix: z.array(expenseTradeCostAggregate),
+  monthly: z.array(expenseMonthlyAggregate),
+  cumulative: z.array(expenseCumulativePoint),
+  byProject: z.array(expenseProjectAggregate),
 });
-export type PurchaseAnalyticsOut = z.infer<typeof purchaseAnalyticsOut>;
+export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 
 /**
- * One cell of the project x trade purchase-count matrix — how many purchases of
+ * One cell of the project x trade expense-count matrix — how many expenses of
  * a given trade a project has already absorbed. Ranks project suggestions for
- * an unassigned purchase; see repo/purchase/analytics.ts.
+ * an unassigned expense; see repo/expense/analytics.ts.
  */
-export const purchaseTradeAffinityOut = z.object({
+export const expenseTradeAffinityOut = z.object({
   projectId,
   trade: tradeSchema,
   count: z.number(),
 });
-export type PurchaseTradeAffinityOut = z.infer<typeof purchaseTradeAffinityOut>;
+export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 
 // ---------------------------------------------------------------------------
 // MCP / dashboard projections
@@ -1000,7 +1002,7 @@ export type PurchaseTradeAffinityOut = z.infer<typeof purchaseTradeAffinityOut>;
 
 export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
 export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
-export const purchaseMcpListOut = createPaginatedResponseSchema(purchaseOut);
+export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
 
 // ---------------------------------------------------------------------------
 // Project dashboard: bounded Overview summary + on-demand portfolio
@@ -1015,7 +1017,7 @@ export const purchaseMcpListOut = createPaginatedResponseSchema(purchaseOut);
  *
  * A date window (`dateFrom`/`dateTo`) matches a project whose explicit
  * `startDate`/`endDate` override overlaps it **or** which owns a dated task or
- * purchase inside it — so a project with both override columns null is no
+ * expense inside it — so a project with both override columns null is no
  * longer dropped on that basis alone. Only a project with neither an override
  * nor any dated content of its own falls out, and exactly those are counted as
  * `hiddenByDate.projects`. Non-recursive: a parent matches on its own content,
@@ -1055,11 +1057,11 @@ export const projectAttentionTypeValues = [
   "overdue_task",
   "stalled_project",
   "missing_budget",
-  "past_due_planned_purchase",
-  "unclassified_purchase",
+  "past_due_planned_expense",
+  "unclassified_expense",
   "blocked_work",
   // A manual startDate/endDate override that now hides real work — the derived
-  // window (tasks, purchases, sub-projects) falls OUTSIDE it. Only fires when
+  // window (tasks, expenses, sub-projects) falls OUTSIDE it. Only fires when
   // the override is too narrow; a deliberately wider one is intent, not drift.
   "date_window_drift",
 ] as const;
@@ -1087,7 +1089,7 @@ export const projectAttentionItemSchema = z.object({
   type: projectAttentionTypeSchema,
   severity: z.enum(["info", "warning", "critical"]),
   description: z.string(),
-  entityType: z.enum(["project", "task", "purchase"]),
+  entityType: z.enum(["project", "task", "expense"]),
   entityId: z.string(),
   date: plainDate.nullable(),
   amount: z.number().nullable(),
@@ -1112,7 +1114,7 @@ export const projectFilterOptionsOut = z.object({
   locations: z.array(z.string()),
   /**
    * Every calendar year (`"YYYY"`) the portfolio has data in — the union of
-   * purchase dates, task effective due dates, and project start/end dates —
+   * expense dates, task effective due dates, and project start/end dates —
    * newest first. Computed server-side (three `selectDistinct`s) so the Date
    * filter row offers the same year chips on every tab; deriving it
    * client-side from the Data view's fetch-alls made the chips disappear on a
@@ -1144,14 +1146,14 @@ export const projectDashboardSummaryOut = z.object({
   /**
    * How many rows the active date window (`dateFrom`/`dateTo`) removed for
    * having NO date at all, per entity — the honest footnote under the date
-   * chips ("12 undated purchases hidden"). All three are 0 when no window is
+   * chips ("12 undated expenses hidden"). All three are 0 when no window is
    * set. A row that has a date but falls outside the window is NOT counted:
    * it's excluded on its own merits, which the chip already says.
    */
   hiddenByDate: z.object({
     projects: z.number().int(),
     tasks: z.number().int(),
-    purchases: z.number().int(),
+    expenses: z.number().int(),
   }),
   completedCount: z.number().int(),
 });
@@ -1161,7 +1163,7 @@ export type ProjectDashboardSummaryOut = z.infer<
 
 /**
  * `project.portfolioAnalytics`'s output — the chart aggregates that used to
- * ride along in `project.dashboard`'s full task/purchase arrays, now computed
+ * ride along in `project.dashboard`'s full task/expense arrays, now computed
  * server-side and loaded only when `view=analytics` is selected.
  */
 export const projectPortfolioAnalyticsOut = z.object({
@@ -1177,11 +1179,11 @@ export const projectPortfolioAnalyticsOut = z.object({
   spendingByProject: z.array(
     z.object({ projectId, projectName: z.string(), spend: z.number() }),
   ),
-  monthlySpend: z.array(purchaseMonthlyAggregate),
+  monthlySpend: z.array(expenseMonthlyAggregate),
   plannedVsActual: z.array(
     z.object({ month: z.string(), planned: z.number(), actual: z.number() }),
   ),
-  tradeActivity: z.array(purchaseTradeAggregate),
+  tradeActivity: z.array(expenseTradeAggregate),
   taskHeatmap: z.array(
     z.object({
       projectId,

@@ -55,5 +55,5 @@ export type ProductListDB = ProductSelect & {
   }>;
   // Scalar extras from `relations.product.list.extras` — count() returns
   // bigint, which comes back as a string over the wire, hence the union.
-  purchaseCount: number | string;
+  expenseCount: number | string;
 };

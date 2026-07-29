@@ -44,7 +44,6 @@ const PROBLEM_LABELS: Record<
   staleLocations: (n) => `${n} overdue for a recount`,
   neverVerifiedInventory: (n) => pl(n, "never-verified item"),
   unknownParkedItems: (n) => `${n} parked in Unknown`,
-  vendorSpellingVariants: (n) => pl(n, "vendor spelling"),
   manufacturerSpellingVariants: (n) => pl(n, "manufacturer spelling"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
@@ -55,11 +54,10 @@ const PROBLEM_LABELS: Record<
   overdueTasks: (n) => pl(n, "overdue task"),
   blockedWorkProjects: (n) => `${n} blocked with no next action`,
   stalledProjects: (n) => pl(n, "stalled project"),
-  pastDuePlannedPurchases: (n) => `${n} planned purchase past due`,
+  pastDuePlannedExpenses: (n) => `${n} planned expense past due`,
   projectsMissingBudget: (n) => `${n} missing a cost estimate`,
-  unclassifiedPurchases: (n) => pl(n, "unclassified purchase"),
+  unclassifiedExpenses: (n) => pl(n, "unclassified expense"),
   projectsWithDateDrift: (n) => pl(n, "date window drift"),
-  ordersWithPartialVendor: (n) => `${n} split by a missing vendor`,
 };
 
 export const ProblemsBadge = () => {

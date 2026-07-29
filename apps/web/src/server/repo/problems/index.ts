@@ -20,16 +20,12 @@
  *   COVERAGE    → `detectors-coverage.ts`   (population denominators for the
  *                                            coverage meters — the only module
  *                                            here that counts *healthy* rows)
- *   PURCHASE    → `detectors-purchase.ts`   (orders whose rows disagree about
- *                                            their vendor — the (vendor,
- *                                            orderId) group-key guardrail)
  *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
  *                                            sub-recipe while marked fresh —
  *                                            derived-data-on-removal guardrail)
  *   LABELS      → `detectors-label-variants.ts`
- *                                           (one brand spelled two ways in a
- *                                            free-text column — vendor,
- *                                            manufacturer)
+ *                                           (one brand spelled two ways in the
+ *                                            free-text manufacturer column)
  *   EMBEDDING   → `detectors-embedding.ts`  (live entities with no embedding row
  *                                            — invisible to semantic search)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
@@ -61,10 +57,7 @@ export {
   findUnknownParkedItems,
 } from "./detectors-inventory";
 // Free-text brand-label drift (one name, two spellings)
-export {
-  findManufacturerSpellingVariants,
-  findVendorSpellingVariants,
-} from "./detectors-label-variants";
+export { findManufacturerSpellingVariants } from "./detectors-label-variants";
 // Location-centric detectors (+ EmptyLocation type re-export)
 export {
   type EmptyLocation,
@@ -85,11 +78,6 @@ export {
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
-// Purchase-centric detectors (the (vendor, orderId) group-key guardrail)
-export {
-  findOrdersWithPartialVendor,
-  resolveOrderVendorBackfill,
-} from "./detectors-purchase";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,

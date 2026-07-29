@@ -69,7 +69,6 @@ import {
   findLocationsWithoutAiDescription,
   findManufacturerSpellingVariants,
   findNeverVerifiedInventory,
-  findOrdersWithPartialVendor,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
   findProductsMissingPrice,
@@ -79,11 +78,9 @@ import {
   findStaleLocations,
   findUnknownParkedItems,
   findUnusedIngredients,
-  findVendorSpellingVariants,
   loadProductsForCoverage,
   pruneUnusedAliases,
   type ReparsedStaleLineWrite,
-  resolveOrderVendorBackfill,
   synthesizeEffectiveMappings,
 } from "~/server/repo/problems";
 import {
@@ -92,7 +89,6 @@ import {
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { computeAttentionItems } from "~/server/repo/project";
-import { setPurchasesVendor } from "~/server/repo/purchase";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
@@ -321,7 +317,7 @@ export async function* reparseStaleIngredientParses(
 // ingredient's non-deleted products are deleted FIRST so deleteIngredients'
 // linked-product guard passes. Processed per ingredient so one failure (a
 // product with inventory → PRODUCT_HAS_INVENTORY, or with a ledger row →
-// PRODUCT_HAS_PURCHASES) is reported, not fatal to the batch.
+// PRODUCT_HAS_EXPENSES) is reported, not fatal to the batch.
 export const deleteUnusedIngredients = async (
   db: Database,
   ingredientIds: IngredientId[],
@@ -469,8 +465,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       staleLocations: () => findStaleLocations(scoped),
       neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
-      ordersWithPartialVendor: () => findOrdersWithPartialVendor(scoped),
-      vendorSpellingVariants: () => findVendorSpellingVariants(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
     }),
@@ -493,36 +487,8 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     staleLocations: r.staleLocations,
     neverVerifiedInventory: r.neverVerifiedInventory,
     unknownParkedItems: r.unknownParkedItems,
-    ordersWithPartialVendor: r.ordersWithPartialVendor,
-    vendorSpellingVariants: r.vendorSpellingVariants,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
   };
-};
-
-/**
- * Backfill the missing vendor on an order whose rows disagree about it.
- *
- * Takes only the order id and re-derives the vendor from the order's own rows
- * (`resolveOrderVendorBackfill`), which is what makes it safe to expose as a
- * one-click fix: a stale client can't name a vendor, so it can't write a wrong
- * one, and re-running it after it's already applied is a no-op rather than a
- * second write. Refuses the ambiguous case — an order id genuinely shared by
- * two retailers has no correct answer.
- */
-export const backfillOrderVendor = async (
-  db: Database,
-  orderId: string,
-  actorContext: ActorContext,
-): Promise<{ vendor: string | null; updated: number }> => {
-  const resolved = await resolveOrderVendorBackfill(db, orderId);
-  if (!resolved) return { vendor: null, updated: 0 };
-
-  const items = await setPurchasesVendor(
-    db,
-    { ids: resolved.purchaseIds, vendor: resolved.vendor },
-    actorContext,
-  );
-  return { vendor: resolved.vendor, updated: items.length };
 };
 
 export const cleanupOrphanedEntityEmbeddings = async (
@@ -606,7 +572,7 @@ const findProductsWithBetterUpcData = async (
 
 // Household-tracker group — the seven attention rules the /projects overview
 // already computes (overdue tasks, stalled projects, missing budgets, past-due
-// planned purchases, unclassified purchases, blocked work, date-window
+// planned expenses, unclassified expenses, blocked work, date-window
 // drift), promoted to first-class Problems so the navbar badge / homepage
 // banner / MCP see them.
 // The detection itself stays in the repo (computeAttentionItems); this only
@@ -620,8 +586,8 @@ export const findTrackerProblems = async (
     overdueTasks: [],
     stalledProjects: [],
     projectsMissingBudget: [],
-    pastDuePlannedPurchases: [],
-    unclassifiedPurchases: [],
+    pastDuePlannedExpenses: [],
+    unclassifiedExpenses: [],
     blockedWorkProjects: [],
     projectsWithDateDrift: [],
   };

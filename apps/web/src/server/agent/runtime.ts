@@ -34,7 +34,7 @@ function inferEntityType(toolName: string): SearchableEntity | null {
   // but keep the more specific matches first.
   if (toolName.includes("project")) return "project";
   if (toolName.includes("task")) return "task";
-  if (toolName.includes("purchase")) return "purchase";
+  if (toolName.includes("expense")) return "expense";
   return null;
 }
 

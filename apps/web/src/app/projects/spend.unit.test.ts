@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { budgetRemaining, splitPurchaseSpend } from "./spend";
+import { budgetRemaining, splitExpenseSpend } from "./spend";
 
-describe("splitPurchaseSpend", () => {
+describe("splitExpenseSpend", () => {
   it("returns all zeroes for an empty list", () => {
-    expect(splitPurchaseSpend([])).toEqual({
+    expect(splitExpenseSpend([])).toEqual({
       actual: 0,
       committed: 0,
       contributions: 0,
@@ -12,7 +12,7 @@ describe("splitPurchaseSpend", () => {
   });
 
   it("classifies actual (positive, not future)", () => {
-    const split = splitPurchaseSpend([
+    const split = splitExpenseSpend([
       { cost: 100, future: false },
       { cost: 250, future: false },
     ]);
@@ -25,7 +25,7 @@ describe("splitPurchaseSpend", () => {
   });
 
   it("classifies committed (positive, future)", () => {
-    const split = splitPurchaseSpend([
+    const split = splitExpenseSpend([
       { cost: 100, future: false },
       { cost: 400, future: true },
     ]);
@@ -37,9 +37,9 @@ describe("splitPurchaseSpend", () => {
     });
   });
 
-  it("treats negative purchases as contributions (positive magnitude) that offset net", () => {
+  it("treats negative expenses as contributions (positive magnitude) that offset net", () => {
     // Mirrors the Wedding project: family contributions are negative, future rows.
-    const split = splitPurchaseSpend([
+    const split = splitExpenseSpend([
       { cost: 60_000, future: false },
       { cost: 46_600, future: true },
       { cost: -50_000, future: true },
@@ -52,7 +52,7 @@ describe("splitPurchaseSpend", () => {
   });
 
   it("ignores null and zero costs", () => {
-    const split = splitPurchaseSpend([
+    const split = splitExpenseSpend([
       { cost: null, future: false },
       { cost: 0, future: true },
       { cost: 42, future: false },
@@ -66,14 +66,14 @@ describe("splitPurchaseSpend", () => {
   });
 
   it("net always equals actual + committed − contributions (matches rollup.spent)", () => {
-    const purchases = [
+    const expenses = [
       { cost: 10, future: false },
       { cost: 20, future: true },
       { cost: -5, future: false },
       { cost: null, future: false },
     ];
-    const split = splitPurchaseSpend(purchases);
-    const rawSum = purchases.reduce((t, p) => t + (p.cost ?? 0), 0);
+    const split = splitExpenseSpend(expenses);
+    const rawSum = expenses.reduce((t, p) => t + (p.cost ?? 0), 0);
     expect(split.net).toBe(rawSum);
     expect(split.net).toBe(
       split.actual + split.committed - split.contributions,
@@ -82,7 +82,7 @@ describe("splitPurchaseSpend", () => {
 });
 
 describe("budgetRemaining", () => {
-  const split = splitPurchaseSpend([
+  const split = splitExpenseSpend([
     { cost: 60_000, future: false },
     { cost: 46_600, future: true },
     { cost: -75_000, future: true },
@@ -97,17 +97,17 @@ describe("budgetRemaining", () => {
   });
 
   it("can go negative when net exceeds the estimate", () => {
-    const over = splitPurchaseSpend([{ cost: 200, future: false }]);
+    const over = splitExpenseSpend([{ cost: 200, future: false }]);
     expect(budgetRemaining(150, over)).toBe(-50);
   });
 });
 
-// A product's net cost basis (ProductPurchaseHistory) reuses this split rather
+// A product's net cost basis (ProductExpenseHistory) reuses this split rather
 // than summing costs directly: a bare sum would blend planned rows into money
 // actually spent, and NaN out on the null costs the ledger genuinely carries.
-describe("net cost basis over a product's linked purchases", () => {
-  const netCost = (purchases: Parameters<typeof splitPurchaseSpend>[0]) => {
-    const split = splitPurchaseSpend(purchases);
+describe("net cost basis over a product's linked expenses", () => {
+  const netCost = (expenses: Parameters<typeof splitExpenseSpend>[0]) => {
+    const split = splitExpenseSpend(expenses);
     return split.actual - split.contributions;
   };
 

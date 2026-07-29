@@ -1,4 +1,16 @@
 import type { ImageOut } from "@cubby/schemas/image";
+
+/**
+ * The minimum a PDF viewer actually needs. Deliberately NOT the full `ImageOut`:
+ * a purchase's `images` are a `{id,url,filename,contentType}` summary (a charge's
+ * filed invoice), and demanding `key`/`size`/`status`/timestamps here forced that
+ * caller into a per-document `image.getByID` round-trip just to satisfy the type.
+ * `size` stays optional and the byte chip hides when it's absent.
+ */
+export type ViewableDocument = Pick<ImageOut, "id" | "url" | "filename"> & {
+  size?: number;
+};
+
 import { ExternalLink } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { type FC, useEffect, useRef } from "react";
@@ -19,7 +31,7 @@ export interface ManualViewTarget {
 const BASE_VIEWER_PARAMS = "toolbar=0&navpanes=0&view=FitH&zoom=page-width";
 
 const ManualViewer: FC<{
-  doc: ImageOut;
+  doc: ViewableDocument;
   target: ManualViewTarget | null;
 }> = ({ doc, target }) => {
   const containerRef = useRef<HTMLElement>(null);
@@ -55,7 +67,7 @@ const ManualViewer: FC<{
         <span className="min-w-0 flex-1 truncate font-medium text-sm">
           {doc.filename}
         </span>
-        {doc.size > 0 && (
+        {doc.size !== undefined && doc.size > 0 && (
           <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
             {prettyBytes(doc.size)}
           </span>
@@ -99,7 +111,7 @@ const ManualViewer: FC<{
  * bar, which would strand the user).
  */
 export const ProductManuals: FC<{
-  documents: ImageOut[];
+  documents: ViewableDocument[];
   target?: ManualViewTarget | null;
 }> = ({ documents, target = null }) => {
   return (

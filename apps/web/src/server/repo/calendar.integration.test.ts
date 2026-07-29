@@ -1,15 +1,15 @@
 import { mealCreateInput } from "@cubby/schemas/meal";
 import {
+  expenseCreateInput,
   projectCreateInput,
-  purchaseCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { getCalendarRange } from "./calendar";
+import { createExpense } from "./expense";
 import { createMeal } from "./meal";
 import { createProject } from "./project";
-import { createPurchase } from "./purchase";
 import { createTask } from "./task";
 
 describe("calendar repository", () => {
@@ -46,9 +46,9 @@ describe("calendar repository", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         name: "Cabinet paint",
         trade: "finishes",
         costType: "materials",
@@ -59,9 +59,9 @@ describe("calendar repository", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         name: "New handles",
         trade: "cabinetry",
         costType: "materials",
@@ -90,8 +90,8 @@ describe("calendar repository", () => {
       "project",
       "task",
       "meal",
-      "purchase",
-      "purchase",
+      "expense",
+      "expense",
     ]);
     expect(result.items.find((item) => item.kind === "project")).toMatchObject({
       title: "Kitchen refresh",
@@ -101,14 +101,14 @@ describe("calendar repository", () => {
       projectKind: "renovation",
     });
     expect(
-      result.items.find((item) => item.kind === "purchase" && item.future),
+      result.items.find((item) => item.kind === "expense" && item.future),
     ).toMatchObject({ interaction: "move", cost: 120 });
     expect(result.days["2026-07-10"]).toMatchObject({
       actualSpend: 75,
       plannedSpend: 120,
       mealCount: 1,
       taskCount: 1,
-      purchaseCount: 2,
+      expenseCount: 2,
       projectCount: 1,
     });
     expect(result.items.some((item) => item.title === "Outside range")).toBe(

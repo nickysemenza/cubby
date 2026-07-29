@@ -1,12 +1,78 @@
 ---
 name: purchase-import
-description: Reconcile a vendor purchase/order export (Amazon takeout, eBay CSV, Home Depot, Direct Tools Outlet, Gmail receipts) against cubby's Purchase ledger — matching rows, correcting costs, booking refunds, and capturing vendor identifiers. Use whenever the user supplies an order-history export, receipts, or a vendor account dump and wants it matched to the ledger, or asks about missing/duplicate/understated purchases.
+description: Reconcile a vendor purchase/order export (Amazon takeout, eBay CSV, Home Depot, Direct Tools Outlet, Gmail receipts) against cubby's expense ledger — matching rows, correcting costs, booking refunds, capturing vendor identifiers, and reconciling a charge against its stated total. Use whenever the user supplies an order-history export, receipts, or a vendor account dump and wants it matched to the ledger, or asks about missing/duplicate/understated purchases or expenses.
 ---
 
 # Importing a vendor purchase export
 
-Goal: link export lines to `Purchase` rows, correct costs, book refunds, capture identifiers.
+Goal: link export lines to `Expense` rows, correct costs, book refunds, capture identifiers.
 This file is weighted toward **failure modes** — the happy path is easy, the traps are what cost hours.
+
+## ⚠️ `Purchase` changed meaning — read this before your first write
+
+The flat ledger was split into three entities:
+
+```
+Vendor ──< Purchase ──< Expense
+             │  └── documents (PurchaseImage → Image)
+             └── orderId?, date, statedTotal?
+```
+
+- **A ledger line is now an `Expense`.** Everything this skill used to call "a purchase row" — name,
+  cost, date, trade, costType, projectId, productId — is an `Expense`. **All money lives on
+  `Expense`**; every `SUM(cost)` reads that table alone.
+- **`Purchase` now means ONE vendor transaction** (a charge): `vendorId` (NOT NULL), optional
+  `orderId`, `date`, optional `statedTotal`, notes, and its documents. It holds **no** money.
+- **`Vendor`** is a real roster (`name` unique, `kind`, `website`, `notes`), not a text column.
+
+**`create_purchase` does not exist any more.** Neither do `get_purchase`, `list_purchases`,
+`update_purchase`, `delete_purchases`, `bulk_move_purchases`, `bulk_set_purchase_trade`,
+`bulk_set_purchase_cost_type`, or `get_purchase_analytics`. The stale instinct here writes the wrong
+entity, so the rename is the guardrail: a call to an old name **hard-errors as an unknown tool** — it
+does not silently create a charge where you meant a line. If you see that error, you reached for the
+old model; re-read this block.
+
+| Old tool | New tool |
+| --- | --- |
+| `create_purchase` | `create_expense` |
+| `get_purchase` | `get_expense` |
+| `list_purchases` | `list_expenses` |
+| `update_purchase` | `update_expense` |
+| `delete_purchases` | `delete_expenses` |
+| `bulk_move_purchases` | `bulk_move_expenses` |
+| `bulk_set_purchase_trade` | `bulk_set_expense_trade` |
+| `bulk_set_purchase_cost_type` | `bulk_set_expense_cost_type` |
+| `get_purchase_analytics` | `get_expense_analytics` |
+
+**Your calls otherwise do not change.** `create_expense` / `update_expense` still accept **`vendor`
+(a plain name string)** and **`orderId`**, exactly as when they were columns; the repo resolves them
+to a `Vendor` + `Purchase`, creating both on first sight. There is no "create the vendor first" step
+and no id to look up. `expenseOut` still returns `vendor` and `orderId` (through the join) and now
+also returns `purchaseId` + `vendorId`.
+
+Four consequences that bite:
+
+- **`vendor` and `orderId` travel together.** An order id with no vendor is **silently dropped** — an
+  order id is only unique *within* a vendor, so alone it can't name a transaction. An
+  `update_expense` carrying `orderId` but no `vendor` changes nothing about the row's charge (other
+  fields in the same call still write, so this fails quietly). `vendor: null` is different again — an
+  explicit *detach* from the charge.
+- **`orderId: null` always mints a NEW charge.** So does a `vendor` write with no order id. Re-writing
+  `vendor` on a row that already sits on a no-order-id charge therefore moves it to a fresh empty
+  charge and orphans the old one (which then reads "stated $X, lines $0"). Set vendor+order once, on
+  purpose; don't re-touch it idempotently.
+- **To put several lines on ONE no-order-id charge**, create the first line with `vendor`, read
+  `purchaseId` off the response, and pass **`purchaseId`** (a `create_expense` field) on the rest. An
+  explicit id short-circuits name resolution and is never a guess. With a real `orderId` you don't
+  need this — the partial-unique `(vendorId, orderId)` index makes every line of that order land on
+  the same charge automatically.
+- **Vendor names are matched EXACTLY** (trimmed, not case-folded) and **there is no vendor-merge
+  operation in v1**. `Amazon` / `amazon` / `Amazon.com` become three roster rows. Spell a vendor the
+  way the ledger already spells it — check the roster before inventing a spelling.
+
+`Vendor` and `Purchase` have **no MCP tools** (`mcp: []`). Read them with SQL; write them through the
+web UI or ask the operator. `attach_file` is the one exception — it takes
+`entityType: "purchase"`.
 
 ## Ground rules
 
@@ -60,28 +126,37 @@ is one grep versus twenty subagent minutes, and it carries real numbers.
 
 | Key | Strength | Notes |
 | --- | --- | --- |
-| `Purchase.orderId` (+ `vendor`) | exact | Best. Reconcile cost vs that order directly. |
-| Order id in `notes` prose | exact, legacy | Pre-`orderId` rows. Lift it into the column as you touch the row. |
+| `orderId` (+ `vendor`) | exact | Best. One order is one charge; reconcile cost against it directly. |
+| Order id in `notes` prose | exact, legacy | Pre-`orderId` rows. Lift it out as you touch the row — with the vendor in the same call. |
 | ASIN / SKU / model in `url` or `model` | proof-grade | Model appearing verbatim in the vendor title is proof. |
 | Exact tax-inclusive amount + date | strong *with* a name check | The workhorse; see traps below. |
 | Embedding / fuzzy name similarity | hint only | Never auto-apply. |
 
-**Vendor identity hides in four fields, not one.** Before concluding a row has no vendor, check
-`vendor`, `url`, `notes` *and* `name`. Pre-`vendor`-column rows routinely carry a bare store name as
-the whole `url` value (`home depot`, `lowes`, `tol nirvana`, `wwe`) or as a short `notes` string or
-in the name itself (`woodworker express`, `supplyhouse return`). A 2026-07 sweep lifted 268 + 23
-such rows into the column. Note `url` is rendered as `<a href={url}>` — a marker left there paints a
-broken link, so clear it once `vendor` carries the information.
+**Vendor identity hides in four fields, not one.** Before concluding a row has no vendor, check its
+resolved `vendor`, plus `url`, `notes` *and* `name`. Pre-roster rows routinely carry a bare store name
+as the whole `url` value (`home depot`, `lowes`, `tol nirvana`, `wwe`) or as a short `notes` string or
+in the name itself (`woodworker express`, `supplyhouse return`). A 2026-07 sweep lifted 268 + 23 such
+rows into the vendor field. Note `url` is rendered as `<a href={url}>` — a marker left there paints a
+broken link, so clear it once the vendor is recorded.
+
+An expense with no charge attached (`purchaseId IS NULL`) is exactly "no vendor recorded" —
+`purchase.vendorId` is NOT NULL, so the two can't disagree. That's the
+`vendorPresenceFilter: "none"` worklist.
 
 **A shorthand marker may name the BRAND, not the seller.** `action machining` looked like a vendor;
 the unions were Action Machining *brand*, bought from **Buy Action Products**. Confirm the marker
-against the actual receipt before promoting it to `vendor`. Some markers resolve to nothing at all —
-`central` ($100, pipes) survived every search and was left null rather than guessed into
-`Central Builders`, an unrelated vendor already in the ledger. Leaving it null is the right answer.
+against the actual receipt before promoting it to a vendor — and remember that promoting it *creates
+a roster row* with that exact spelling, which nothing in v1 can merge away. Some markers resolve to
+nothing at all — `central` ($100, pipes) survived every search and was left null rather than guessed
+into `Central Builders`, an unrelated vendor already in the ledger. Leaving it null is the right
+answer.
 
 **Order dates can disagree by timezone.** An Acme confirmation email headed "Order Date: Nov 27" was
 sent at 03:59 UTC — 19:59 PT on the 27th — while Acme's own record and its shipping mail both say
 Nov 28. Not a conflict worth resolving twice: prefer the vendor's own order record and note why.
+(`purchase.date` is the charge date and `expense.date` is the **ledger** date that drives monthly
+buckets and project windows — an invoice dated the 3rd can clear on the 8th, and they're allowed to
+differ.)
 
 **Tolerances must be relative, not absolute.** ±$0.25 is sensible at $200 and meaningless at $1: a
 $0.93 order (wood screws, net of two returns) matched a $1.00 `5 yd nursery mix` row on amount+date
@@ -103,12 +178,12 @@ bug class — 24 rows in one pass, found four different ways because each hypoth
 ## Phase 3 — before proposing any *add*, rule out an existing row
 
 **Keyword search cannot do this. The ledger names the *thing*, not the product.** Searching
-`festool`/`vacuum`/`vac` for a "Festool Vacuum" product found nothing, so a purchase was added — but
-a `dust extractor` row for the identical amount and date had existed since 2024. Zero shared tokens.
+`festool`/`vacuum`/`vac` for a "Festool Vacuum" product found nothing, so a row was added — but a
+`dust extractor` row for the identical amount and date had existed since 2024. Zero shared tokens.
 The same trap hid a Bosch miter saw booked as `chop saw`. **The only filter that works is amount +
 date across the whole ledger, ignoring names entirely** — run it before every add, and again as a
 post-hoc check over each newly created row (same amount, ±30 days) to catch what slipped through.
-`find_similar_entities` (`purchase_to_product`) is the right *candidate generator*, but its own docs
+`find_similar_entities` (`expense_to_product`) is the right *candidate generator*, but its own docs
 warn the scores rank without verifying — never auto-link.
 
 
@@ -119,10 +194,10 @@ export lines** at an amount that reconciles to nothing:
 - `umbrella and stand` $301.19 = order total ÷ 1.08625 (pre-tax)
 - `string lights & wire & eyebolt` $103.20 vs a $120.21 order — **no formula at all**
 
-Only the *name* matched that last one, and it reached a written proposal as two new purchases before
-being caught. So: for each candidate add, look for a same-window ledger row whose **name plausibly
-covers the item**, independent of amount. Subset-sum checks help but generate false positives of
-their own (a 4-line combo once "explained" a ZipWall as a book).
+Only the *name* matched that last one, and it reached a written proposal as two new rows before being
+caught. So: for each candidate add, look for a same-window ledger row whose **name plausibly covers
+the item**, independent of amount. Subset-sum checks help but generate false positives of their own (a
+4-line combo once "explained" a ZipWall as a book).
 
 Also confirm the row's own notes don't name a different vendor — one row reading
 `home depot WN22422541` was set to Amazon on an amount+one-token match.
@@ -133,12 +208,14 @@ amount+date check completely, because the total you are searching for *appears n
 `1121197219` was already booked as two sibling rows ($203.36 AP + $102.91 switch); an amount+date
 search for its $306.27 order total found nothing, so a duplicate aggregate was created and had to be
 deleted. **Whenever the export line has an order id, query `orderId` first** — it catches both
-directions in one shot, and amount+date catches neither reliably.
+directions in one shot, and amount+date catches neither reliably. Post-split this is stronger, not
+weaker: both sibling lines hang off one `Purchase`, so the group is a parent link rather than a
+two-column string match, and `statedTotal` can hold the $306.27 the search was looking for.
 
-**Check the refund file before adding ANY purchase — not just when reconciling.** This is the single
-most expensive omission found so far. A 2026-07-28 pass added purchases whose notes read *"order had
-no ledger row at all"*, having read `Order History.csv` and never opened `Refund Details.csv`. Eight
-of those orders had been refunded and the refunds were never booked: Level Lock+ $357.38 and a Huepar
+**Check the refund file before adding ANY expense — not just when reconciling.** This is the single
+most expensive omission found so far. A 2026-07-28 pass added rows whose notes read *"order had no
+ledger row at all"*, having read `Order History.csv` and never opened `Refund Details.csv`. Eight of
+those orders had been refunded and the refunds were never booked: Level Lock+ $357.38 and a Huepar
 rotary laser $339.14 **refunded in full**, a Schlage deadbolt $344.21, a Rollo printer $193.98, a
 UAP-AC-PRO $150.43 ("Accidental order"), plus partials — **$1,413.96 of phantom spend, three of them
 for items never actually owned.** Two tells that should have prompted the check: the product had no
@@ -153,64 +230,108 @@ booked — an Eagle gas can, a disco spotlight — because buy and refund net to
 the same phase. A row identified as an aggregate match is correctly excluded from the *missing*
 list, and then routinely forgotten. It still needs:
 
-1. **`vendor` + `orderId`**, like any other matched row. Skipping this is self-defeating: the
-   Phase 5 reconciliation and the `GROUP BY vendor, "orderId"` queries only see rows whose id is in
-   the column, so the very rows most likely to hide an error stay invisible to both.
+1. **`vendor` + `orderId`**, like any other matched row (in the same call — see the split warning
+   above). Skipping this is self-defeating: the row never gets a `Purchase`, so the Phase 5
+   reconciliation and every per-charge query are blind to exactly the rows most likely to hide an
+   error.
 2. **A line itemization in `notes`**, so the next pass recognises it as an aggregate instead of
    re-deriving it (or re-proposing its components as missing).
-3. **Splitting into sibling rows** where the components are separately tracked products — one row
-   per product, summing to the original total, sharing date/trade/project/vendor/orderId.
+3. **Splitting into sibling lines** where the components are separately tracked products — one
+   expense per product, summing to the original total, all hanging off the same charge.
    `productId` is single-valued, so an unsplit aggregate can never link more than one product, and
-   any product in inventory whose only purchase is inside an aggregate has **no cost basis at all**.
+   any product in inventory whose only expense is inside an aggregate has **no cost basis at all**.
+   This is `splitExpense` now (below) — not a row-naming convention.
 
 Real case: `scaffolding` $434.47 was correctly identified as covering a 2-line MetalTech order and
 then dropped. Months later both MetalTech products still sat in inventory with zero purchases, and
-**11 of 14** aggregate rows had neither `vendor` nor `orderId`. Treat the aggregate bucket as a
+**11 of 14** aggregate rows had neither a vendor nor an `orderId`. Treat the aggregate bucket as a
 worklist, not a dead end.
 
 ## Phase 4 — writing
 
-- Set `vendor` **and `orderId`** on every row you touch. `orderId` is the vendor's own order/receipt
-  id, free text, scoped by `vendor` — `111-1234567-1234567`, `WN63446464`, `DT640921`, `#11334`.
-  This is the field the reconciliation in Phase 5 and the duplicate/aggregate queries below read;
-  putting the id only in `notes` leaves them blind to everything you import.
+- Set `vendor` **and `orderId`** on every row you touch, in one call. `orderId` is the vendor's own
+  order/receipt id, free text, unique per vendor — `111-1234567-1234567`, `WN63446464`, `DT640921`,
+  `#11334`. This is what resolves the row onto a `Purchase`; putting the id only in `notes` leaves
+  Phase 5 and every per-charge query blind to everything you import.
 - `notes` carries the *human-readable* provenance, not the identifier: itemize the lines for
   aggregate rows so the row is never re-flagged as missing, and note anything odd (a cancelled twin
   order, a line deliberately left unbooked). Append to substantive notes; replace bare markers like
-  `"amazon"`. Legacy rows store the id as `"<Vendor> order <ID>"` prose — lift it into `orderId`
-  when you touch them.
-- With `orderId` set, these become one-liners rather than heuristics:
+  `"amazon"`. Legacy rows store the id as `"<Vendor> order <ID>"` prose — lift it out (with the
+  vendor) when you touch them.
+- **Record the charge's `statedTotal` and attach its invoice.** These are the two things the charge
+  exists for, and they turn "do the three lines sum to $431.24?" from a reconstructed `GROUP BY` into
+  a single-row comparison:
+  - `statedTotal` is what the paperwork *claims*, in dollars. It is **never summed into spend** —
+    spend is always `SUM(expense.cost)` — and a mismatch is frequently correct (a partial refund
+    reduces a line without changing what the charge stated). Nothing rejects a write over it and
+    nothing back-computes a cost from it. There is no MCP tool for it in v1: set it in the web UI, or
+    hand the operator the list.
+  - The PDF invoice / receipt photo now has a home: `attach_file` with
+    `entityType: "purchase"`, `entityId: <purchaseId from the expense row>`, `contentType:
+    "application/pdf"`. One `Image` can be filed against several charges (a statement covering both).
+- Per-charge queries are one row each now — no reconstructing groups from `(vendor, orderId)` strings:
   ```sql
-  -- every multi-row order (aggregate rows, split siblings, buy/return pairs)
-  SELECT vendor, "orderId", count(*), sum(cost) FROM "Purchase"
-  WHERE "deletedAt" IS NULL AND "orderId" IS NOT NULL
-  GROUP BY vendor, "orderId" HAVING count(*) > 1;
+  -- charges whose lines don't add up to what the charge said it was
+  SELECT v.name, p."orderId", p.date, p."statedTotal",
+         count(e.id) AS lines, coalesce(sum(e.cost), 0) AS lines_total
+  FROM "Purchase" p
+  JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
+  LEFT JOIN "Expense" e ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
+  WHERE p."deletedAt" IS NULL AND p."statedTotal" IS NOT NULL
+  GROUP BY v.name, p.id, p."orderId", p.date, p."statedTotal"
+  HAVING abs(p."statedTotal" - coalesce(sum(e.cost), 0)) > 0.01;
+
+  -- every multi-line charge (aggregates, split siblings, buy/return pairs):
+  -- same query, HAVING count(e.id) > 1 and no statedTotal predicate.
   ```
+  The same worklist exists server-side as `purchase.notReconciling` (a soft flag — a read, never a
+  write path).
 - Canonical product link: `https://www.amazon.com/dp/<ASIN>`.
-- Vendor identifiers go in **`ProductExternalId`** (`source`/`externalId`/`url`) — never a new
-  column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces the whole
-  set**, so read-then-merge. Partial unique index on `(productId, source)` = one id per source.
-- **Refund handling**, by shape:
-  - Full return → negative row at full price, same `trade`, `projectId: null`.
-  - Partial refund on a multi-item order → **reduce the purchase cost** to the kept items. (Operator
+- Vendor identifiers for a *product* go in **`ProductExternalId`** (`source`/`externalId`/`url`) —
+  never a new column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces
+  the whole set**, so read-then-merge. Partial unique index on `(productId, source)` = one id per
+  source.
+- **Splitting a line** is `splitExpense` (tRPC `purchase.split`): pass the `expenseId` and ≥2 parts,
+  each with its own `name`/`cost`/`costType`/`trade`/`projectId`/`productId`. The parts land on the
+  same charge, the original is soft-deleted, and the charge's `statedTotal` is **seeded from the
+  original cost** when it had none — so the parts have something to reconcile against. A deliberately
+  mismatched sum is displayed, never rejected. This **replaces the `(combo, saw portion)` row-naming
+  convention** that used to encode splits in row names; don't write those names any more. It refuses
+  on an expense with no charge attached — record the vendor first. There's no MCP tool for it: via
+  MCP the equivalent is `create_expense` for each part with the shared `purchaseId`, then
+  `delete_expenses` the original.
+- **One invoice spanning trades** (Flow Form Plumbing's $2,516 covering rough-in *and* fixtures) is
+  `linkExpensesToPurchase` — attach existing expenses to one charge. Explicitly **not** for payment
+  schedules: separate charges stay separate purchases, so a contractor's 11 progress payments are
+  **11 charges**, not one. The contract-level rollup is `Project`.
+- **Merging charges** is `mergePurchases`, for the ~364 order-less singletons no key could have
+  grouped. It refuses across vendors (that would rewrite who was paid) and refuses when both sides
+  carry a non-null order id (two real order ids are two real transactions). A user action, never a
+  guess — and note there is deliberately **no `splitPurchase`**: one order is one charge by
+  construction.
+- **Refund handling** is unchanged, by shape:
+  - Full return → negative expense at full price, same `trade`, `projectId: null`.
+  - Partial refund on a multi-item order → **reduce the expense cost** to the kept items. (Operator
     chose this 11/11 in 2026-07; it fits materials orders better than the tool-lifecycle negative-row
-    convention, which is for a tool leaving the collection.)
+    convention, which is for a tool leaving the collection.) The charge's `statedTotal` stays at what
+    the vendor stated — do **not** adjust it to match, and do not read the resulting mismatch as an
+    error.
   - Buy-and-return where **neither** side is in the ledger → nets to zero, do nothing. This is most
     of any refund file (85 of 115 orders in one pass).
-- Only add a purchase when the **project is known** — date inside a project's purchase window *and*
-  a semantic fit. Check project windows first; a project's last activity date tells you if it's live.
+- Only add an expense when the **project is known** — date inside a project's window *and* a semantic
+  fit. Check project windows first; a project's last activity date tells you if it's live.
 - Non-tool/household items stay out of the project ledger unless the operator says otherwise. Ask
   per item; never bulk-add books, clothing, or consumables.
-- **A sale or refund carries the same `projectId` as the purchase it offsets — but ONLY if its date
+- **A sale or refund carries the same `projectId` as the expense it offsets — but ONLY if its date
   falls inside that project's window.** The project's true cost is net of what the tool later sold
   for, so attach it where you can. The constraint is that **`Project` dates are DERIVED** (see
   [[project-dates-derived-window]]): with `startDate`/`endDate` null the window rolls up from the
-  project's purchases and tasks, so attaching a disposal dated after the project ended silently drags
+  project's expenses and tasks, so attaching a disposal dated after the project ended silently drags
   its end date forward. A Festool accessory bought 2024-05 for *Kitchen: Cabinetry* and sold 2025-12
   would have extended that finished project by thirteen months.
 
   So: compute the project's effective window first (override columns if set, otherwise
-  min/max over its purchases and tasks). Inside the window → attach. Outside → leave `projectId`
+  min/max over its expenses and tasks). Inside the window → attach. Outside → leave `projectId`
   null and say why in the note. Applying this to 16 detached rows in 2026-07, 6 attached ($1,095.43)
   and 10 correctly stayed null ($1,015.30).
 
@@ -261,22 +382,27 @@ Two more disposal notes:
 ## Phase 5 — reconcile
 
 **This check does not model refunds — read the row's notes before "correcting" anything it flags.**
-A row whose cost was deliberately reduced to the kept items after a partial refund will fail it
+An expense whose cost was deliberately reduced to the kept items after a partial refund will fail it
 forever. In the 2026-07-28 pass it produced 5 mismatches and **all 5 were false**: four carried notes
-documenting the refund, one was an explicit operator decision. A buy-and-return pair (a `$X` row plus
-a `-$X` row on the same order) also nets to zero and trips a naive per-order sum. Group the export's
-lines by order *and check their dates* — a return line booked weeks later will drag a naive
+documenting the refund, one was an explicit operator decision. A buy-and-return pair (a `$X` line
+plus a `-$X` line on the same charge) also nets to zero and trips a naive per-charge sum. Group the
+export's lines by order *and check their dates* — a return line booked weeks later will drag a naive
 `min(date)`/`first(date)` off by a month and fake a "wrong order id" finding.
 
-Once `orderId` is populated, run the exact check: join every row on `(vendor, orderId)` and compare
-its cost against that order's total and its individual lines. In the 2026-07 pass this flagged
-**3 mismatches out of 162** — and caught a purchase recorded at $49.51 that was really $123.51, whose
-derived net had been reported as a $4.51 gain when it was a $78.51 loss. This check is worth far more
-than any further fuzzy sweeping, and it only works on rows whose id is in the **column** — a row
-whose id lives only in `notes` prose is invisible to it.
+Two checks, in order:
+
+1. **Charge vs. its lines** — `statedTotal` against `SUM(expense.cost)`, per the SQL in Phase 4. This
+   is now a single-row comparison for every charge that has a stated total, which is the reason to
+   record one while you're importing. It is a **soft** flag: a worklist, not an error list.
+2. **Charge vs. the export** — for each charge with an `orderId`, compare its lines against that
+   order's total and its individual lines in the export. In the 2026-07 pass this flagged
+   **3 mismatches out of 162** — and caught a row recorded at $49.51 that was really $123.51, whose
+   derived net had been reported as a $4.51 gain when it was a $78.51 loss. Worth far more than any
+   further fuzzy sweeping, and it only reaches rows that actually got a `vendor` + `orderId` written
+   — a row whose id lives only in `notes` prose is invisible to it.
 
 ## Diminishing returns
 
 High-yield findings come first: the pre-tax class, duplicates, mis-recorded aggregates, missing
-purchases. What remains is a long tail of sub-$50 corrections on closed projects. Check materiality
+expenses. What remains is a long tail of sub-$50 corrections on closed projects. Check materiality
 against total ledger spend before spending more time — and say so plainly rather than grinding on.

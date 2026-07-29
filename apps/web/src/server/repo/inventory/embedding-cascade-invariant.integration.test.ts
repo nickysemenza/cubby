@@ -1,6 +1,6 @@
 import {
+  expenseCreateInput,
   projectCreateInput,
-  purchaseCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
@@ -12,6 +12,7 @@ import { entityEmbedding, task, taskDependency } from "~/server/db/schema";
 import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
+import { createExpense, deleteExpenses } from "~/server/repo/expense";
 import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
@@ -23,7 +24,6 @@ import { createLocation } from "~/server/repo/location";
 import { createMeal, deleteMeals } from "~/server/repo/meal";
 import { createProduct } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
-import { createPurchase, deletePurchases } from "~/server/repo/purchase";
 import {
   makeLocationInput,
   makeProductInput,
@@ -176,7 +176,7 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
 });
 
 // Same F1 regression guard as above, extended to the tracker entities
-// (project/task/purchase) — their delete paths cascade
+// (project/task/expense) — their delete paths cascade
 // softDeleteEntityEmbeddingsTx exactly like inventory's.
 describe("tracker removal cascades entity embeddings (no orphans)", () => {
   const ctx = withTestDb();
@@ -331,19 +331,19 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
-  it("deletePurchases leaves no orphan", async () => {
-    const purchase = await createPurchase(
+  it("deleteExpenses leaves no orphan", async () => {
+    const expense = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
-        overrides: { name: "Embedding Cascade Purchase" },
+      mock(expenseCreateInput, {
+        overrides: { name: "Embedding Cascade Expense" },
       }),
       TEST_ACTOR,
     );
-    await seedEmbedding("purchase", purchase.id);
+    await seedEmbedding("expense", expense.id);
 
-    await deletePurchases(ctx.db, [purchase.id], TEST_ACTOR);
+    await deleteExpenses(ctx.db, [expense.id], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt("purchase", purchase.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("expense", expense.id)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

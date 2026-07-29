@@ -1,13 +1,11 @@
 /**
- * Spelling-variant detectors for the two free-text brand columns —
- * `Purchase.vendor` and `Product.manufacturer`.
+ * Spelling-variant detector for the free-text `Product.manufacturer` column.
  *
- * Neither column is an enum, and neither should be: the vendor tail is
- * genuinely open (51 of 101 vendors appear exactly once — a hauler, a wedding
- * venue), so typing it would put "create an entity first" in front of a one-off
- * spend. The cost of leaving them free text is that the same name can be
- * entered two ways, which an exact-match filter then splits into two picklist
- * rows. This catches that drift rather than preventing it.
+ * The column is not an enum, and shouldn't be: typing it would put "create an
+ * entity first" in front of a one-off brand. The cost of leaving it free text
+ * is that the same name can be entered two ways, which an exact-match filter
+ * then splits into two picklist rows. This catches that drift rather than
+ * preventing it.
  *
  * **Why a canonical key and not fuzzy matching.** Trigram similarity is
  * unusable here: at `similarity > 0.3` it flags 13 pairs on the live ledger and
@@ -20,18 +18,17 @@
  * run teaches you to ignore the page.
  *
  * The key below is exact instead: two spellings collide only if they are the
- * same name typed differently. It found 0 vendor collisions and 2 real
- * manufacturer bugs (`Ryobi`/`RYOBI`, `Bob's Red Mill`/`Bob s Red Mill`) on the
- * live DB. It cannot catch a hand typo (`Harbor Frieght`) — that needs an edit
- * distance, which needs `fuzzystrmatch`, and which the exact-match vendor
- * picklist already exposes on its own as a stray 1-count row.
+ * same name typed differently. It found 2 real manufacturer bugs
+ * (`Ryobi`/`RYOBI`, `Bob's Red Mill`/`Bob s Red Mill`) on the live DB. It
+ * cannot catch a hand typo (`Harbor Frieght`) — that needs an edit distance,
+ * which needs `fuzzystrmatch`.
  */
 
 import type { LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQLWrapper, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { product, purchase } from "~/server/db/schema";
+import { product } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 /**
@@ -66,10 +63,16 @@ const canonicalKey = (value: SQLWrapper) => sql`
  * `sampleId` is one record bearing the variant, so the Problems card can link
  * somewhere; `min(id)` makes it stable across runs rather than picking a
  * different row each scan.
+ *
+ * Only `findManufacturerSpellingVariants` calls this today — the sibling
+ * `Expense.vendor` detector was removed once vendor became a real `Vendor` FK
+ * with a partial-unique index, which makes that drift unrepresentable. Kept as
+ * its own function (rather than inlined) so a second free-text brand column
+ * can reuse it the same way without re-deriving the SQL.
  */
 const findSpellingVariants = async (
   db: Database,
-  table: typeof purchase | typeof product,
+  table: typeof product,
   column: Column,
   extraWhere = sql`TRUE`,
 ): Promise<LabelVariant[]> => {
@@ -106,12 +109,6 @@ const findSpellingVariants = async (
   `);
   return res.rows;
 };
-
-/** Vendors on the purchase ledger spelled more than one way. */
-export const findVendorSpellingVariants = (
-  db: Database,
-): Promise<LabelVariant[]> =>
-  findSpellingVariants(db, purchase, purchase.vendor);
 
 /**
  * Product manufacturers spelled more than one way.

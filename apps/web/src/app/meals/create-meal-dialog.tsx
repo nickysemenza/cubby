@@ -10,7 +10,7 @@ import { PlainDateField, UnifiedTextField } from "../_components/form-utils";
 // `name` stays a plain (non-nullable) string here — quick capture allows an
 // unnamed meal (identified by its date, same as everywhere else in the meal
 // UI); the empty-string → null normalization happens in buildPayload, not
-// the schema, matching quickAddPurchaseSchema's `vendor` field.
+// the schema, matching quickAddExpenseSchema's `vendor` field.
 const quickAddMealSchema = z.object({
   date: mealDate,
   name: z.string(),

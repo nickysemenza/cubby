@@ -40,7 +40,9 @@
     "./background-jobs": "./src/background-jobs.ts",
     "./calendar": "./src/calendar.ts",
     "./dashboard": "./src/dashboard.ts",
-    "./project": "./src/project.ts"
+    "./project": "./src/project.ts",
+    "./vendor": "./src/vendor.ts",
+    "./purchase": "./src/purchase.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

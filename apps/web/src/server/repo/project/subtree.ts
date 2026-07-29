@@ -154,7 +154,7 @@ function aggregateSubtreeRollups(
     let actualSpent = own.actualSpent;
     let committedSpent = own.committedSpent;
     let contributions = own.contributions;
-    let purchaseCount = own.purchaseCount;
+    let expenseCount = own.expenseCount;
     let taskCount = own.taskCount;
     let doneTaskCount = own.doneTaskCount;
     let projectCount = 0;
@@ -171,7 +171,7 @@ function aggregateSubtreeRollups(
         actualSpent += child.actualSpent;
         committedSpent += child.committedSpent;
         contributions += child.contributions;
-        purchaseCount += child.purchaseCount;
+        expenseCount += child.expenseCount;
         taskCount += child.taskCount;
         doneTaskCount += child.doneTaskCount;
         projectCount += 1 + child.projectCount;
@@ -187,7 +187,7 @@ function aggregateSubtreeRollups(
       actualSpent,
       committedSpent,
       contributions,
-      purchaseCount,
+      expenseCount,
       taskCount,
       doneTaskCount,
       projectCount,

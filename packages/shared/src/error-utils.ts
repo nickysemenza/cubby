@@ -35,6 +35,8 @@ export const AppErrors = {
   BACKGROUND_BATCH_NOT_FOUND: "NOT_FOUND",
   PROJECT_NOT_FOUND: "NOT_FOUND",
   TASK_NOT_FOUND: "NOT_FOUND",
+  EXPENSE_NOT_FOUND: "NOT_FOUND",
+  VENDOR_NOT_FOUND: "NOT_FOUND",
   PURCHASE_NOT_FOUND: "NOT_FOUND",
 
   // Constraint violations
@@ -42,12 +44,21 @@ export const AppErrors = {
   LOCATION_HAS_INVENTORY: "PRECONDITION_FAILED",
   LOCATION_HAS_CHILDREN: "PRECONDITION_FAILED",
   PRODUCT_HAS_INVENTORY: "PRECONDITION_FAILED",
-  PRODUCT_HAS_PURCHASES: "PRECONDITION_FAILED",
+  PRODUCT_HAS_EXPENSES: "PRECONDITION_FAILED",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
   INGREDIENT_MERGE_INVALID: "BAD_REQUEST",
   PROJECT_HAS_TASKS: "PRECONDITION_FAILED",
-  PROJECT_HAS_PURCHASES: "PRECONDITION_FAILED",
+  PROJECT_HAS_EXPENSES: "PRECONDITION_FAILED",
+  // A vendor can't be deleted while charges still point at it — same rule as
+  // PROJECT_HAS_EXPENSES, one level up the Vendor ──< Purchase ──< Expense chain.
+  VENDOR_HAS_PURCHASES: "PRECONDITION_FAILED",
+  // Two charges can't both survive a merge while both carry a non-null orderId:
+  // the partial-unique (vendorId, orderId) index makes that a no-op, not a merge.
+  PURCHASE_MERGE_ORDER_COLLISION: "BAD_REQUEST",
+  // A merge must stay within one vendor — re-pointing a charge across vendors
+  // would silently rewrite who was paid.
+  PURCHASE_MERGE_VENDOR_MISMATCH: "BAD_REQUEST",
   // project.parentProjectId: arbitrary-depth sub-projects (WBS) — a project
   // can't become its own descendant.
   PROJECT_HAS_CHILDREN: "PRECONDITION_FAILED",

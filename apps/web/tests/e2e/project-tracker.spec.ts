@@ -2,14 +2,14 @@ import { expect, test } from "@playwright/test";
 
 /**
  * Coverage for the new (DB-backed) project-tracker surfaces: /projects
- * (dashboard), /tasks and /purchases (RTable list pages with quick-add
+ * (dashboard), /tasks and /expenses (RTable list pages with quick-add
  * dialogs). The E2E suite runs against a fresh IntegresQL database, so these
  * pages render with no seed data — the dashboard's empty state and the two
  * list pages' empty tables are all we can assert on load; the interesting
  * coverage is the quick-add → row-appears round trip.
  *
  * Projects are also reachable via the project SelectField in the
- * task/purchase quick-add dialogs, which is left at its default "None" in
+ * task/expense quick-add dialogs, which is left at its default "None" in
  * those two tests to avoid the FilterableCombobox-inside-Dialog combination
  * form-utils.tsx flags as untested for nested-dialog use (it's built for
  * page-level forms, not `DialogCompatibleCombobox`). The project-inline-link
@@ -111,22 +111,22 @@ test.describe("Project tracker", () => {
     });
   });
 
-  test("purchases: quick-add creates a purchase and cost renders as currency", async ({
+  test("expenses: quick-add creates an expense and cost renders as currency", async ({
     page,
   }) => {
-    const name = `e2e purchase ${Date.now()}`;
+    const name = `e2e expense ${Date.now()}`;
 
-    await page.goto("/purchases");
+    await page.goto("/expenses");
     await page.waitForLoadState("networkidle");
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Purchases" }),
+      page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
 
     await page.getByRole("button", { name: "New" }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("New Purchase")).toBeVisible({
+    await expect(dialog.getByText("New Expense")).toBeVisible({
       timeout: 10000,
     });
 
@@ -150,14 +150,12 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
 
-    // Command-palette deep link: /purchases?q=<name> seeds the "name" filter
-    // so the matched purchase is visible immediately.
-    await page.goto(`/purchases?q=${encodeURIComponent(name)}`);
+    // Command-palette deep link: /expenses?q=<name> seeds the "name" filter
+    // so the matched expense is visible immediately.
+    await page.goto(`/expenses?q=${encodeURIComponent(name)}`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByPlaceholder("Search purchases...")).toHaveValue(
-      name,
-    );
+    await expect(page.getByPlaceholder("Search expenses...")).toHaveValue(name);
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
@@ -190,7 +188,7 @@ test.describe("Project tracker", () => {
 
     // Switch to the Data tab, where the project table renders names directly
     // (the default Overview tab is charts-only) to confirm the row landed. A
-    // brand-new "planning"-status project with no purchases/estimate also
+    // brand-new "planning"-status project with no expenses/estimate also
     // matches "Needs Attention"'s stalled/missing-estimate `ProjectPill`s,
     // which render earlier in the DOM but stay inside collapsed `<details>`
     // (hidden) — use `.last()` to land on the always-visible table row.
@@ -201,7 +199,7 @@ test.describe("Project tracker", () => {
 
     // The Data tab's project table (`shared.tsx`'s `ProjectTable`, migrated
     // onto `useEntityList`) has an inline-editable name column, same as
-    // tasks/purchases. `ProjectPill` (Needs Attention) renders a Link, not a
+    // tasks/expenses. `ProjectPill` (Needs Attention) renders a Link, not a
     // button, so this is unambiguous even before the edit.
     //
     // Sheets-style select-then-edit: inside the cell-selection grid a single
@@ -336,17 +334,17 @@ test.describe("Project tracker", () => {
     );
   });
 
-  test("mobile viewport: purchase quick-add renders as a bottom sheet and still submits", async ({
+  test("mobile viewport: expense quick-add renders as a bottom sheet and still submits", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 812 });
 
-    const name = `e2e mobile purchase ${Date.now()}`;
+    const name = `e2e mobile expense ${Date.now()}`;
 
-    await page.goto("/purchases");
+    await page.goto("/expenses");
     await page.waitForLoadState("networkidle");
     await expect(
-      page.getByRole("heading", { level: 1, name: "Purchases" }),
+      page.getByRole("heading", { level: 1, name: "Expenses" }),
     ).toBeVisible({ timeout: 15000 });
 
     await page.getByRole("button", { name: "New" }).click();
@@ -360,13 +358,13 @@ test.describe("Project tracker", () => {
     await expect(sheet).toBeVisible({ timeout: 10000 });
     await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
 
-    await expect(sheet.getByText("New Purchase")).toBeVisible({
+    await expect(sheet.getByText("New Expense")).toBeVisible({
       timeout: 10000,
     });
     await sheet.getByLabel("Name").fill(name);
     // spinbutton role disambiguates from the "Open Select cost type" trigger,
     // whose accessible name also contains "Cost" (same fix as the desktop
-    // purchases quick-add test above).
+    // expenses quick-add test above).
     await sheet.getByRole("spinbutton", { name: "Cost" }).fill("12.34");
     // costType + trade are required (NOT NULL).
     await sheet.getByPlaceholder("Select cost type").click();
@@ -376,7 +374,7 @@ test.describe("Project tracker", () => {
     await sheet.getByRole("button", { name: /^Create$/ }).click();
 
     // Sheet closes and the row lands, same round trip as the desktop
-    // purchases quick-add test above.
+    // expenses quick-add test above.
     await expect(sheet).not.toBeVisible({ timeout: 10000 });
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,

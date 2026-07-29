@@ -259,17 +259,18 @@ deliberate recount, never a running balance:
 
 ## Household tracker / ERP
 
-The tracker module (projects / tasks / purchases) is feature-complete standalone —
+The tracker module (projects / tasks / expenses) is feature-complete standalone —
 including actionable-task reads, one-level checklist subtasks, and arbitrary-depth
 sub-projects (a sub-project's `costEstimate` is the budget envelope for a
 trade/phase, with subtree rollups on parents). The open work below connects it to
 the rest of cubby. Schema affordances already in place for it: `task.projectId` is
-nullable (inbox tasks) and `purchase.future` marks planned-not-yet-actual spend.
+nullable (inbox tasks) and `expense.future` marks planned-not-yet-actual spend.
 Roughly priority order.
 
-- [x] **Purchases ↔ inventory bridge** — v1 shipped 2026-07 (`purchase.productId` +
-  `purchase.vendor`, zero new tables); deferred phases + triggers in the subsection
-  below. Foundation for the BOM.
+- [x] **Expenses ↔ inventory bridge** — v1 shipped 2026-07 (`expense.productId` +
+  vendor capture, zero new tables at the time); deferred phases + triggers in the
+  subsection below. Foundation for the BOM. Vendor has since become its own entity
+  (`Vendor ──< Purchase ──< Expense`) — see the `Receipt`-phase note below.
 - [ ] **Recurring maintenance tasks**: simple every-N-weeks/months interval on a
   template — not RRULE; next instance generated on completion; surfaces in
   needs-attention. (The rest of the old maintenance+budgeting bundle shipped
@@ -278,16 +279,17 @@ Roughly priority order.
 - [ ] **Surface the tracker to the rest of the app** (2026-07 audit): register
   the 6 attention detectors as a Problems group (the navbar badge, `/problems`,
   homepage banner, and `list_problems` MCP are tracker-blind today); quick-capture
-  Add Task/Project/Purchase in the navbar-create + palette registry (House is the
+  Add Task/Project/Expense in the navbar-create + palette registry (House is the
   only domain with no quick-add path); a House tile on the home dashboard over
   the currently-unused `task.summary`; MCP synthesis tools (`get_house_status`
-  over `project.dashboardSummary`, task/purchase analytics + bulk tools — the
+  over `project.dashboardSummary`, task/expense analytics + bulk tools — the
   tracker has CRUD-only MCP while the food domain has nine specialized tools).
+  `Vendor` and `Purchase` have **no** MCP surface at all (`mcp: []`), so an
+  agent-driven import can write lines but can't read the roster or set a charge's
+  `statedTotal`.
 - [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
   "year in the house" + de-noises the stalled-project detector — `updatedAt`
-  resets on any edit); ~~purchase `vendor`~~ shipped as a column in bridge v1
-  (spend-by-vendor analytics still open, see below) and the receipt **image** waits
-  on the `Receipt` phase; portfolio-level estimate
+  resets on any edit); portfolio-level estimate
   total + a forward committed-spend (next 30/60/90d) figure (per-project
   `BudgetStrip` exists, the portfolio equivalent doesn't; the `credits` value
   portfolio-analytics computes in SQL is dropped at the schema boundary); mobile
@@ -300,78 +302,93 @@ Roughly priority order.
   reservations, no auto-decrement — audits are the backstop, "mark consumed" is an
   optional explicit action.
 
-### Purchases ↔ inventory bridge (staged; v1 SHIPPED 2026-07)
+### Expenses ↔ inventory bridge (staged; v1 SHIPPED 2026-07)
 
 Ground truth that shaped the staging: tools **already are** products (74 `tools`
 products, 68 inventoried, 79/94 tool-ish products priced — the garage valuation
 rollup works today), and coarse multi-trade runs are **already split by hand** —
-201 of 369 dated days carry more than one purchase row, 151 span more than one
-trade. Only 33 of 268 `tools` purchases fuzzy-match an existing product name, so a
+201 of 369 dated days carry more than one ledger row, 151 span more than one
+trade. Only 33 of 268 `tools` rows fuzzy-match an existing product name, so a
 product link is sparse and stays opt-in. Hence v1 is two nullable columns and zero
 new tables; everything below it is additive, behind an explicit trigger.
 
-**v1 (shipped)** — `purchase.productId` + `purchase.vendor`. Link a purchase to a
+**v1 (shipped)** — `expense.productId` + vendor capture. Link a ledger row to a
 product (opt-in; services/materials stay unlinked), explicit
-**receive-into-inventory** from a linked purchase (never automatic — the mirror of
-the no-auto-decrement tenet), purchase history + derived net cost on the product
-page, vendor on the ledger. Linked purchases double as price observations —
+**receive-into-inventory** from a linked row (never automatic — the mirror of
+the no-auto-decrement tenet), buying history + derived net cost on the product
+page, vendor on the ledger. Linked rows double as price observations —
 read-only history first; promoting into `product.price` stays a later explicit step.
 
 **The lifecycle convention is the load-bearing part and costs zero schema**: every
-exit is a *terminal negative purchase carrying the same productId* — sale at sale
-price, return at full price, broken/gifted as a **$0 purchase** (never null: `cost
+exit is a *terminal negative expense carrying the same productId* — sale at sale
+price, return at full price, broken/gifted as a **$0 expense** (never null: `cost
 IS NULL` is the Unclassified predicate) — plus an explicit inventory decrement.
-Money is derived as `splitPurchaseSpend(rows).actual - .contributions` (NOT `.net`,
+Money is derived as `splitExpenseSpend(rows).actual - .contributions` (NOT `.net`,
 which folds in `future` rows); **owned/sold comes off `inventoryEntry`, never off
-purchase signs** (two buys + one sale nets positive — the sign is ambiguous). No
+expense signs** (two buys + one sale nets positive — the sign is ambiguous). No
 status column, no disposition enum, no `Sold` location.
 
-**Ledger surfacing shipped** (PR #421): Product column on `/purchases`, a
+**Ledger surfacing shipped** (PR #421): Product column on `/expenses`, a
 linked/not-linked presence filter, and `?productId=` deep-linking from the product
 page. "Linked" means `productId IS NOT NULL` — deliberately including rows whose
 product was later soft-deleted (they read back with `productId` set and
 `productName` null). Presence is Tier A (`isNull` on a real column), so the
 RQB correlated-EXISTS trap doesn't apply here.
 
-**Backfill: 26 of 897 purchases linked; ~242 `tools` purchases stay unlinked and
+**Backfill: 26 of 897 ledger rows linked; ~242 `tools` rows stay unlinked and
 that's correct.** How it was done, since the method generalizes: embedding
-nearest-neighbour (`find_similar_entities`, PR #422) **deduped to mutual-best
-pairs** — without that dedup one generic "m18 angle grinder" purchase was the top
-candidate for six different M18 products, and a purchase can only carry one
-`productId`. Ranking alone is not enough: a wrong `M18 Hackzall` match outscored a
-correct `TS 55 Track Saw` one, so every pair was confirmed by hand. The signals that
-actually disambiguated were **`purchase.url`** (a Home Depot link literally naming
-"14-Gallon" settled which shopvac; a boschtools SDS-plus link settled the rotary
-hammer) and **`stockCount`** (the 12 gal shopvac had zero on hand). Price agreement
-helps above ~$50 and is noise below it — a $10 tarp "matched" a $10.83 trowel.
+nearest-neighbour (`find_similar_entities`, `expense_to_product`, PR #422)
+**deduped to mutual-best pairs** — without that dedup one generic "m18 angle
+grinder" row was the top candidate for six different M18 products, and a row can
+only carry one `productId`. Ranking alone is not enough: a wrong `M18 Hackzall`
+match outscored a correct `TS 55 Track Saw` one, so every pair was confirmed by
+hand. The signals that actually disambiguated were **`expense.url`** (a Home Depot
+link literally naming "14-Gallon" settled which shopvac; a boschtools SDS-plus link
+settled the rotary hammer) and **`stockCount`** (the 12 gal shopvac had zero on
+hand). Price agreement helps above ~$50 and is noise below it — a $10 tarp
+"matched" a $10.83 trowel.
 
-**Bucket products do NOT get purchase links** (decided 2026-07). `assorted clamps`
+**Bucket products do NOT get product links** (decided 2026-07). `assorted clamps`
 ($5), `misc: kitchen project stuff`, `misc: plumbing, elec, small tools` and friends
 are an inventory convenience, not things with a cost basis or a lifecycle. Linking
 a $171 clamp run to a $5 bucket would make "net cost" mean two different things
-depending on the product. Those purchases stay unlinked — the designed default.
+depending on the product. Those rows stay unlinked — the designed default.
+
+**The `Receipt` phase SHIPPED as `Vendor ──< Purchase ──< Expense`** — the charge got
+its own table rather than a receipt hanging off the ledger row, so `Vendor` is a real
+roster and `Purchase` holds the order id, charge date, `statedTotal`, notes, and its
+documents (`PurchaseImage`, `attach_file` with `entityType: "purchase"`). The emailed
+PDF invoice finally has a home, and reconciling one charge against N rows is a
+single-row comparison (`statedTotal` vs `SUM(expense.cost)`, soft-flagged by
+`purchase.notReconciling`) instead of a reconstructed `GROUP BY (vendor, orderId)`.
+Also landed: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`, and the
+deletion of two now-unrepresentable Problems detectors
+(`findOrdersWithPartialVendor`, `findVendorSpellingVariants`). No `splitPurchase` and
+no `Payment` axis — see `packages/schemas/src/purchase.ts` for why.
 
 Deferred phases — each purely additive on top of v1, with its promotion trigger:
 
 - [ ] **`ProjectTool`** (`projectId`, `productId`) → cost-per-use = net basis ÷ usage
   count. **Trigger**: wanting a real cost-per-use number. Amortized tool cost is
-  informational ONLY and must never enter project actuals — the purchase already sits
+  informational ONLY and must never enter project actuals — the expense already sits
   in its buying project's ledger (double-count guard). Depends on nothing else.
-- [ ] **`Receipt`** (`vendor`, `date`, `imageId?`, `statedTotal?`) + nullable
-  `purchase.receiptId`, turning today's hand-split rows into a labelled group.
-  **Trigger**: a receipt photo with nowhere to live, or reconciling one card charge
-  against N rows. Additive — old purchases keep `receiptId` null and `vendor` migrates
-  off the v1 column onto the receipt.
-- [ ] **`ReceiptLine`** (`receiptId`, `name`, `sku?`, `quantity?`, `unitPrice?`,
-  `purchaseId?` soft-link) — optional SKU-level itemization, **pure annotation**:
-  rollups only ever read `Purchase`, lines need no product, and a sum mismatch is a
-  soft display-level flag, never enforced. **Trigger**: actually wanting store SKUs.
-- [ ] **`PurchaseProduct`** join + `quantity`, replacing `purchase.productId`.
-  **Trigger**: a purchase genuinely needing 2+ products (combo kit), or a correct
-  unit-price observation on a multi-quantity buy. Mechanical migration: insert-select
-  from the non-null column, drop it, update read sites.
-- [ ] **Spend-by-vendor** analytics — a `byVendor` aggregate mirroring `byProject` in
-  `repo/purchase/analytics.ts` + a chart. Cheap; deferred only for scope.
+- [ ] **`PurchaseLine`** (`purchaseId`, `name`, `sku?`, `quantity?`, `unitPrice?`,
+  `expenseId?` soft-link) — was `ReceiptLine`. Optional **SKU-level** itemization,
+  **pure annotation**: rollups only ever read `Expense`, lines need no product, and a
+  sum mismatch is a soft display-level flag, never enforced. Note `Expense` already
+  covers *categorized* splitting of a charge (that's what `splitExpense` is for), so
+  the only thing left here is store SKUs/quantities. **Trigger**: actually wanting
+  them.
+- [ ] **`ExpenseProduct`** join + `quantity`, replacing `expense.productId` (was
+  `PurchaseProduct`, renamed since `Purchase` now means the charge). **Trigger**: one
+  ledger row genuinely needing 2+ products (combo kit) that `splitExpense` can't
+  reasonably split, or a correct unit-price observation on a multi-quantity buy.
+  Mechanical migration: insert-select from the non-null column, drop it, update read
+  sites.
+- [ ] **Spend-by-vendor** analytics — `vendorOut` already carries a per-vendor `spend`
+  rollup and the roster sorts by it, so what's left is a `byVendor` aggregate
+  mirroring `byProject` in `repo/expense/analytics.ts` + a chart. Cheap; deferred only
+  for scope.
 - [ ] **Clear affordance for the `productId` deep link** — arriving via a product's
   "See all in ledger" scopes the ledger with no visible chip and no way out but
   editing the URL, because only the presence column has a header control. Raised in
@@ -379,18 +396,28 @@ Deferred phases — each purely additive on top of v1, with its promotion trigge
 
 Two traps this design already walked into once — don't re-introduce them:
 `buildSearchConditions` **ANDs** its `searchFilters`, so vendor must never share the
-`search` term (it would mean `name ILIKE q AND vendor ILIKE q`, and vendor is null on
-nearly every row → search silently returns nothing). And `InventoryEntry` has a
-partial unique index on `(productId, locationId)`, so the receive flow **must** branch
-(create / top-up existing / move a unique item) rather than blind-inserting.
+`search` term (it would mean `name ILIKE q AND vendor matches q`, and most rows have
+no vendor → search silently returns nothing). That's why `expenseFilterFields` keeps
+`vendorId` as its own filter even now that it's an id rather than free text. And
+`InventoryEntry` has a partial unique index on `(productId, locationId)`, so the
+receive flow **must** branch (create / top-up existing / move a unique item) rather
+than blind-inserting.
 
 Rejected within this design: **`Asset` entity** (a fixed-asset register would duplicate
 the live inventory layer for location/valuation/audits and guarantee sync drift; pooled
 cost basis on identical tools is consciously accepted; it layers on later without
 unwinding v1); **`Sold` virtual location** (pollutes valuation and audits — "former
-tools" is a query, not a place); **line items as financial truth** (a header/lines split
-when 95% of purchases are single-trade); **disposition status enum** (the $0-exit
-convention makes it derivable).
+tools" is a query, not a place); **disposition status enum** (the $0-exit convention
+makes it derivable); **line items as financial truth** — still rejected, and *not* what
+the `Vendor ──< Purchase ──< Expense` split did. The rejected shape puts a **new
+money-bearing level below** the ledger row, so a row's cost becomes a sum over its
+children and every row needs itemizing to be trusted — unwarranted when 95% of charges
+are single-trade. What shipped adds a header **above** the row that carries **no
+money**: the ledger row (now `Expense`) is still the money, untouched, and `Purchase`
+holds identity plus a `statedTotal` that is **never summed into spend**. Spend is
+`SUM(expense.cost)`, full stop. A proposal that derives spend from a header total, adds
+header and line totals together, or makes a line's cost a rollup of sub-lines is the
+rejected design.
 
 ### Longer-term (synthesis out, capture in)
 
@@ -441,12 +468,12 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ### Rejected (recorded so they don't resurface)
 
-- **Ranged estimate purchases** (`costLow`/`costHigh` + a one-click settle) — modeled
-  an estimate as a proto-purchase, but in practice an estimate ("electrical is
-  10–15k") is an *envelope* that dozens of real purchases accrue against; nothing
+- **Ranged estimate expenses** (`costLow`/`costHigh` + a one-click settle) — modeled
+  an estimate as a proto-expense, but in practice an estimate ("electrical is
+  10–15k") is an *envelope* that dozens of real expenses accrue against; nothing
   settles 1:1. The envelope home is a **sub-project** with the existing single-point
   `costEstimate`; actuals attribute via `projectId`. No ranges anywhere, for now.
-- **Monarch / finance sync** — purchases stay a hand-curated ledger.
+- **Monarch / finance sync** — the expense ledger stays hand-curated.
 - **Receipt-export importers** (Amazon / Home Depot) — hostile, unmaintained
   formats; MCP conversational capture + a one-off throwaway script for backfill.
 - **`project.locations` → Location FK** — free-text site names and the physical
@@ -471,9 +498,9 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   "this entity is unreferenced / safe to delete" predicates that each enumerated
   only *some* of the target's incoming FK edges, and every one of them had
   immaculate soft-delete hygiene *inside* an incomplete predicate:
-  `findOrphanedProducts` skipped `purchase` (32 of 40 flagged orphans were false
+  `findOrphanedProducts` skipped `expense` (32 of 40 flagged orphans were false
   positives, and the card offers one-click delete), `deleteProducts` guarded
-  inventory but not purchases, `findCullablePendingImages` checked four join
+  inventory but not expenses, `findCullablePendingImages` checked four join
   tables but not `cookbook.coverImageId`, and `deleteRecipesTx` guarded nothing
   at all while `mealRecipe` dangled. All four are fixed, but the *class* isn't:
   `scripts/check-soft-delete-filters.mjs` catches a missing `notDeleted` inside a
@@ -483,7 +510,9 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   `satisfies Record<SearchableEntity, …>` — the compiler enumerates for them.
   The real fix is the same trick for "incoming FK edges per entity", so adding a
   referencing table is a compile error in every deletability predicate until it's
-  wired. Worth doing before the next entity lands.
+  wired. Worth doing before the next entity lands — and three landed since it was
+  written (`Vendor`, `Purchase`, `Expense`, plus the `PurchaseImage` join), so the
+  new edges are exactly the case this would have covered.
 
 ### MCP Apps — further candidates
 
@@ -510,7 +539,7 @@ that clear it, in rough order:
   practice.
 
 **Rejected, don't re-litigate**: apps for `list_tasks` (kanban),
-`get_purchase_analytics` (charts), `list_problems` (triage), and the inventory
+`get_expense_analytics` (charts), `list_problems` (triage), and the inventory
 tables. The web app already does all four better, and `app.openLink()` back into
 it is the correct zero-maintenance answer. An iframe is not the place to
 reimplement `RTable`.
@@ -519,7 +548,7 @@ reimplement `RTable`.
 
 **Hardcoded views shipped.** `entities/view-manifest.ts` declares a view as filters +
 sort; applying one sets column-filter state and the existing `useTableState` write-back
-serializes it, so a view and a shared link are the same thing. The purchases preset tabs
+serializes it, so a view and a shared link are the same thing. The expense-ledger preset tabs
 (`planned` / `unassigned` / `unclassified`) are gone, with a legacy `?view=` normalizer
 for old bookmarks. `unclassified` stopped needing a special case once the Cost column
 got a real presence filter. The `productId` deep link now has a `ScopeChip`.
@@ -538,7 +567,7 @@ has to keep those arms.
 
 ### Remaining from the filter-honesty audit
 
-The semantic cleanup shipped: dashboard-scoped attention, shared task/purchase bulk
+The semantic cleanup shipped: dashboard-scoped attention, shared task/expense bulk
 workflows, honest infinite-list URL state, one server-list query path, and shared
 project-tree expansion. The old ingredient `presenceCondition` item was stale; that
 implementation now uses `idSetPresence`.

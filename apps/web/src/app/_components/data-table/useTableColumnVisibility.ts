@@ -28,8 +28,8 @@ const storageKey = (entity: string) => `table-columns:${entity}`;
 /**
  * The store key for one table. `scope` separates two tables listing the SAME
  * entity with different column sets — the project detail page's embedded
- * purchases table has no Product/URL/Created columns the ledger has, so sharing
- * `table-columns:purchase` would let hiding Vendor in one hide it in the other.
+ * expenses table has no Product/URL/Created columns the ledger has, so sharing
+ * `table-columns:expense` would let hiding Vendor in one hide it in the other.
  */
 const scopedKey = (entity: Entity, scope?: string) =>
   scope ? `${entity}:${scope}` : entity;

@@ -6,7 +6,7 @@
  * project list w/ rollups, task-status breakdown, upcoming tasks, Needs
  * Attention, filter options) and `portfolioAnalytics` (on-demand chart
  * aggregates for the Charts/Analytics tab). Both replace the old fetch-all
- * `project.dashboard` (every project/task/purchase in one round trip,
+ * `project.dashboard` (every project/task/expense in one round trip,
  * reduced client-side) — see repo/project/dashboard-summary.ts /
  * repo/project/portfolio-analytics.ts. Rollups/aggregates are SQL computed in
  * the repo — never client-side.

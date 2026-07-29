@@ -1,22 +1,22 @@
 import {
+  expenseCreateInput,
   projectCreateInput,
-  purchaseCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
+import { createExpense } from "~/server/repo/expense";
 import { createMeal, deleteMeals } from "~/server/repo/meal";
 import { createProject } from "~/server/repo/project";
-import { createPurchase } from "~/server/repo/purchase";
 import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
 import { createTask } from "~/server/repo/task";
 import { makeRecipeInput } from "./repo.fixtures";
 import { globalSearch, hydrateSearchResultsByRefs } from "./search";
 
 // Lexical-search + ref-hydration coverage for the tracker entities (project,
-// task, purchase), which mirror the pattern already exercised for
+// task, expense), which mirror the pattern already exercised for
 // product/recipe/ingredient/location/inventory in
 // soft-delete-recipe-consistency.integration.test.ts.
 
@@ -36,9 +36,9 @@ describe("globalSearch: tracker entities", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
+      mock(expenseCreateInput, {
         overrides: {
           name: "Manifest wire spool",
           cost: 42.5,
@@ -48,11 +48,11 @@ describe("globalSearch: tracker entities", () => {
       }),
       ctx.actor,
     );
-    // A second, planned purchase — spent sums ALL live purchases (including
+    // A second, planned expense — spent sums ALL live expenses (including
     // future ones), matching projectRollups' semantics.
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
+      mock(expenseCreateInput, {
         overrides: {
           name: "Manifest breaker panel",
           cost: 100,
@@ -147,17 +147,17 @@ describe("globalSearch: tracker entities", () => {
     ).toBe(true);
   });
 
-  it("finds a purchase by name and reports cost + projectName enrichment", async () => {
+  it("finds an expense by name and reports cost + projectName enrichment", async () => {
     const project = await createProject(
       ctx.db,
       mock(projectCreateInput, {
-        overrides: { name: "Manifest Purchase Project" },
+        overrides: { name: "Manifest Expense Project" },
       }),
       ctx.actor,
     );
-    const purchase = await createPurchase(
+    const expense = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
+      mock(expenseCreateInput, {
         overrides: {
           name: "Manifest Cordless Drill",
           cost: 129.99,
@@ -169,32 +169,32 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Manifest Cordless Drill");
     const hit = results.find(
-      (r) => r.entityType === "purchase" && r.id === purchase.id,
+      (r) => r.entityType === "expense" && r.id === expense.id,
     );
     expect(hit).toBeDefined();
-    if (hit?.entityType === "purchase") {
+    if (hit?.entityType === "expense") {
       expect(hit.cost).toBeCloseTo(129.99);
-      expect(hit.projectName).toBe("Manifest Purchase Project");
-      expect(hit.subtitle).toBe("Manifest Purchase Project");
+      expect(hit.projectName).toBe("Manifest Expense Project");
+      expect(hit.subtitle).toBe("Manifest Expense Project");
     }
   });
 
-  it("finds a purchase by trade or notes text", async () => {
-    const byTrade = await createPurchase(
+  it("finds an expense by trade or notes text", async () => {
+    const byTrade = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
+      mock(expenseCreateInput, {
         overrides: {
-          name: "Trade Search Purchase",
+          name: "Trade Search Expense",
           trade: "electrical",
         },
       }),
       ctx.actor,
     );
-    const byNotes = await createPurchase(
+    const byNotes = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
+      mock(expenseCreateInput, {
         overrides: {
-          name: "Notes Search Purchase",
+          name: "Notes Search Expense",
           notes: "manifest-notes-hardware-store-receipt",
         },
       }),
@@ -204,7 +204,7 @@ describe("globalSearch: tracker entities", () => {
     const tradeResults = await globalSearch(ctx.db, "electrical");
     expect(
       tradeResults.some(
-        (r) => r.entityType === "purchase" && r.id === byTrade.id,
+        (r) => r.entityType === "expense" && r.id === byTrade.id,
       ),
     ).toBe(true);
 
@@ -214,7 +214,7 @@ describe("globalSearch: tracker entities", () => {
     );
     expect(
       notesResults.some(
-        (r) => r.entityType === "purchase" && r.id === byNotes.id,
+        (r) => r.entityType === "expense" && r.id === byNotes.id,
       ),
     ).toBe(true);
   });
@@ -385,7 +385,7 @@ describe("globalSearch: cookbook and meal", () => {
 describe("hydrateSearchResultsByRefs: tracker entities", () => {
   const ctx = withTestDb();
 
-  it("round-trips project/task/purchase refs, preserving ref order", async () => {
+  it("round-trips project/task/expense refs, preserving ref order", async () => {
     const project = await createProject(
       ctx.db,
       mock(projectCreateInput, {
@@ -400,37 +400,33 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
       }),
       ctx.actor,
     );
-    const purchase = await createPurchase(
+    const expense = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
-        overrides: { name: "Hydrate Ref Purchase", projectId: project.id },
+      mock(expenseCreateInput, {
+        overrides: { name: "Hydrate Ref Expense", projectId: project.id },
       }),
       ctx.actor,
     );
 
     const results = await hydrateSearchResultsByRefs(ctx.db, [
-      { entityType: "purchase", entityId: purchase.id },
+      { entityType: "expense", entityId: expense.id },
       { entityType: "project", entityId: project.id },
       { entityType: "task", entityId: task.id },
     ]);
 
     expect(results.map((r) => r.entityType)).toEqual([
-      "purchase",
+      "expense",
       "project",
       "task",
     ]);
-    expect(results.map((r) => r.id)).toEqual([
-      purchase.id,
-      project.id,
-      task.id,
-    ]);
+    expect(results.map((r) => r.id)).toEqual([expense.id, project.id, task.id]);
     const taskHit = results.find((r) => r.entityType === "task");
     if (taskHit?.entityType === "task") {
       expect(taskHit.projectName).toBe("Hydrate Ref Project");
     }
-    const purchaseHit = results.find((r) => r.entityType === "purchase");
-    if (purchaseHit?.entityType === "purchase") {
-      expect(purchaseHit.projectName).toBe("Hydrate Ref Project");
+    const expenseHit = results.find((r) => r.entityType === "expense");
+    if (expenseHit?.entityType === "expense") {
+      expect(expenseHit.projectName).toBe("Hydrate Ref Project");
     }
   });
 

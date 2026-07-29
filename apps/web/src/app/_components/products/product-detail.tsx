@@ -19,7 +19,7 @@ import {
   Scale,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
-import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
+import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -40,9 +40,9 @@ import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
+import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { type ManualViewTarget, ProductManuals } from "./product-manuals";
-import { ProductPurchaseHistory } from "./product-purchase-history";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
 
@@ -136,11 +136,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductStockedAt product={product} />,
     },
-    // Custom section: Purchase History — every purchase linked to this
+    // Custom section: Expense History — every expense linked to this
     // product (arrivals and dispositions), the primary way cost basis gets
     // tracked over time.
     {
-      title: "Purchase History",
+      title: "Expense History",
       icon: Receipt,
       zone: "main" as const,
       headerAction: (
@@ -153,7 +153,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           Record sale
         </Button>
       ),
-      content: <ProductPurchaseHistory product={product} />,
+      content: <ProductExpenseHistory product={product} />,
     },
     // Custom section: Fits With — the other products sharing a tag. Sidebar
     // zone and tags-only: on an untagged product it would be a permanently
@@ -323,7 +323,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         onOpenChange={setAddToInventoryOpen}
         product={product}
       />
-      <CreatePurchaseDialog
+      <CreateExpenseDialog
         open={recordSaleOpen}
         onOpenChange={setRecordSaleOpen}
         presetProductId={product.id}

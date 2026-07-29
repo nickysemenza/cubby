@@ -240,7 +240,7 @@ export function createNameColumn<T extends BaseRow>(
      * Override the header label. Defaults to the field name (TanStack's
      * column-id fallback), which reads fine as "NAME" on an index page but not
      * in a table embedded under another entity — there the entity itself is the
-     * label ("Task", "Purchase").
+     * label ("Task", "Expense").
      */
     header?: string;
     /**
@@ -1463,7 +1463,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
 
 /**
  * Creates a column for a plain "YYYY-MM-DD" calendar date (task `dueDate`,
- * purchase `date`) — an absolute "MMM d, yyyy", not the relative "5m ago" of
+ * expense `date`) — an absolute "MMM d, yyyy", not the relative "5m ago" of
  * {@link createTimestampColumn} (which is for full timestamps and reads oddly
  * for a date that can be in the future). Read-only by default; pass
  * `editable` for an inline `EditableCell` date-picker.
@@ -1562,7 +1562,7 @@ export function createPlainDateColumn<
 }
 
 /** A row that carries a project reference as a flat id+name pair (not a
- * nested `{id,name}` object) — the task/purchase list shape. */
+ * nested `{id,name}` object) — the task/expense list shape. */
 interface ProjectRefRow {
   projectId: string | null;
   projectName: string | null;
@@ -1570,7 +1570,7 @@ interface ProjectRefRow {
 
 /**
  * Creates a column linking to a row's parent project (task
- * `projectId`/`projectName`, purchase `projectId`/`projectName`). Unlike
+ * `projectId`/`projectName`, expense `projectId`/`projectName`). Unlike
  * {@link createSingleEntityInlineLinkColumn}, the source data is a flat
  * id+name pair rather than a nested relation object — that pair doesn't fit
  * `createSingleEntityInlineLinkColumn`'s single-object accessor shape (it
@@ -1587,7 +1587,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     /** Enable inline editing via an async project picker. `clearable` always
-     * on — a task/purchase's project is optional. */
+     * on — a task/expense's project is optional. */
     editable?: {
       onSave: (newProjectId: ProjectId | null, row: T) => Promise<void>;
     };
@@ -1664,14 +1664,14 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 }
 
 /** A row that carries a product reference as a flat id+name pair (not a
- * nested `{id,name}` object) — the purchase list shape. */
+ * nested `{id,name}` object) — the expense list shape. */
 interface ProductRefRow {
   productId: string | null;
   productName: string | null;
 }
 
 /**
- * Creates a column linking to a row's associated product (purchase
+ * Creates a column linking to a row's associated product (expense
  * `productId`/`productName`). Mirrors {@link createProjectLinkColumn} — see
  * its doc comment for why this gets its own small `editable` option instead
  * of routing through the generic single-entity helper.
@@ -1686,7 +1686,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     /** Enable inline editing via an async product picker. `clearable` always
-     * on — a purchase's product is optional. */
+     * on — an expense's product is optional. */
     editable?: {
       onSave: (newProductId: ProductId | null, row: T) => Promise<void>;
     };

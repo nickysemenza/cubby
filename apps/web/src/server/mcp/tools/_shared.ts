@@ -22,10 +22,10 @@ import {
   productMcpOut,
 } from "@cubby/schemas/product";
 import {
+  type ExpenseOut,
+  expenseOut,
   type ProjectOut,
-  type PurchaseOut,
   projectOut,
-  purchaseOut,
   type TaskOut,
   taskOut,
 } from "@cubby/schemas/project";
@@ -530,7 +530,7 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   };
 });
 
-// Project/task/purchase rows already match their schema exactly (no relation
+// Project/task/expense rows already match their schema exactly (no relation
 // reshaping needed) — a typed passthrough is enough. structuredSuccess
 // re-validates via outputSchema.parse, so new schema fields flow through
 // automatically without an MCP-side edit.
@@ -541,9 +541,9 @@ export const slimProject = defineSlim(
 
 export const slimTask = defineSlim(taskOut, (row: Row) => row as TaskOut);
 
-export const slimPurchase = defineSlim(
-  purchaseOut,
-  (row: Row) => row as PurchaseOut,
+export const slimExpense = defineSlim(
+  expenseOut,
+  (row: Row) => row as ExpenseOut,
 );
 
 export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {

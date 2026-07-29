@@ -6,7 +6,7 @@ import {
   locationCreateInput,
 } from "@cubby/schemas/location";
 import type { ProductCreateInput } from "@cubby/schemas/product";
-import type { PurchaseCreateInput } from "@cubby/schemas/project";
+import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
@@ -45,12 +45,14 @@ export const makeProductInput = (
   ...overrides,
 });
 
-/** A purchase create input; every link (project/product) defaults to unset so a
- * test spells out only the relation it's asserting on. */
-export const makePurchaseInput = (
-  overrides: Partial<PurchaseCreateInput> = {},
-): PurchaseCreateInput => ({
-  name: "Test Purchase",
+/** An expense create input; every link (project/product/purchase) defaults to
+ * unset so a test spells out only the relation it's asserting on. Passing
+ * `vendor` still works and resolves into a real `Vendor` + `Purchase` — that
+ * unchanged input shape is the point of the split. */
+export const makeExpenseInput = (
+  overrides: Partial<ExpenseCreateInput> = {},
+): ExpenseCreateInput => ({
+  name: "Test Expense",
   cost: 100,
   date: null,
   costType: "materials",
@@ -60,6 +62,7 @@ export const makePurchaseInput = (
   future: false,
   projectId: null,
   productId: null,
+  purchaseId: null,
   vendor: null,
   orderId: null,
   ...overrides,

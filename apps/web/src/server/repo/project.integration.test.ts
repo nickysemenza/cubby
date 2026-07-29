@@ -1,9 +1,9 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { ProjectCreateInput } from "@cubby/schemas/project";
 import {
+  expenseCreateInput,
   LIVE_PROJECT_STATUSES,
   projectCreateInput,
-  purchaseCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
 import { eq, or } from "drizzle-orm";
@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { image, projectDependency, projectImage } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "./database-helpers";
+import { createExpense, expenseList } from "./expense";
 import {
   computeAttentionItems,
   createProject,
@@ -26,7 +27,6 @@ import {
   aggregateSubtreeDates,
   type ProjectParentRow,
 } from "./project/subtree";
-import { createPurchase, purchaseList } from "./purchase";
 import { createTask, updateTask } from "./task";
 
 describe("project repository", () => {
@@ -51,7 +51,7 @@ describe("project repository", () => {
       actualSpent: 0,
       committedSpent: 0,
       contributions: 0,
-      purchaseCount: 0,
+      expenseCount: 0,
       taskCount: 0,
       doneTaskCount: 0,
       subtree: {
@@ -59,7 +59,7 @@ describe("project repository", () => {
         actualSpent: 0,
         committedSpent: 0,
         contributions: 0,
-        purchaseCount: 0,
+        expenseCount: 0,
         taskCount: 0,
         doneTaskCount: 0,
         projectCount: 0,
@@ -100,31 +100,31 @@ describe("project repository", () => {
     expect(data.map((p) => p.name)).toEqual(["test project cabin"]);
   });
 
-  it("rolls up spend (including future purchases) and task counts", async () => {
+  it("rolls up spend (including future expenses) and task counts", async () => {
     const project = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project rollup" }),
       ctx.actor,
     );
 
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "test purchase made",
+        name: "test expense made",
         projectId: project.id,
         cost: 100,
         future: false,
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "test purchase future",
+        name: "test expense future",
         projectId: project.id,
         cost: 50,
         future: true,
@@ -163,7 +163,7 @@ describe("project repository", () => {
     );
 
     const result = await getProjectByID(ctx.db, project.id);
-    // spent includes the future purchase — matches the retired Notion rollup's
+    // spent includes the future expense — matches the retired Notion rollup's
     // semantics (a planned spend still counts toward the running total).
     // subtree equals own here — this project is a leaf (no sub-projects).
     expect(result.rollup).toEqual({
@@ -171,7 +171,7 @@ describe("project repository", () => {
       actualSpent: 100,
       committedSpent: 50,
       contributions: 0,
-      purchaseCount: 2,
+      expenseCount: 2,
       taskCount: 3,
       doneTaskCount: 1,
       subtree: {
@@ -179,7 +179,7 @@ describe("project repository", () => {
         actualSpent: 100,
         committedSpent: 50,
         contributions: 0,
-        purchaseCount: 2,
+        expenseCount: 2,
         taskCount: 3,
         doneTaskCount: 1,
         projectCount: 0,
@@ -320,7 +320,7 @@ describe("project repository", () => {
     expect(after?.deletedAt).not.toBeNull();
   });
 
-  it("blocks deletion while live tasks or purchases still reference the project", async () => {
+  it("blocks deletion while live tasks or expenses still reference the project", async () => {
     const projectWithTask = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project with task" }),
@@ -339,24 +339,24 @@ describe("project repository", () => {
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
     ).rejects.toThrow(/still have tasks/);
 
-    const projectWithPurchase = await createProject(
+    const projectWithExpense = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "test project with purchase" }),
+      projectCreateInput.parse({ name: "test project with expense" }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "test purchase blocking delete",
-        projectId: projectWithPurchase.id,
+        name: "test expense blocking delete",
+        projectId: projectWithExpense.id,
       }),
       ctx.actor,
     );
     await expect(
-      deleteProjects(ctx.db, [projectWithPurchase.id], ctx.actor),
-    ).rejects.toThrow(/still have purchases/);
+      deleteProjects(ctx.db, [projectWithExpense.id], ctx.actor),
+    ).rejects.toThrow(/still have expenses/);
   });
 
   it("hard-deletes dependency edges (both directions) when a project is deleted", async () => {
@@ -377,7 +377,7 @@ describe("project repository", () => {
       ctx.actor,
     );
 
-    // B has no tasks/purchases, so deleting it is allowed even though A still
+    // B has no tasks/expenses, so deleting it is allowed even though A still
     // references it — the dependency edge is hard-deleted, not a delete guard.
     await deleteProjects(ctx.db, [projectB.id], ctx.actor);
 
@@ -577,34 +577,34 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       ctx.actor,
     );
 
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "grandparent purchase",
+        name: "grandparent expense",
         projectId: grandparent.id,
         cost: 10,
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "parent purchase",
+        name: "parent expense",
         projectId: parent.id,
         cost: 20,
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "leaf purchase",
+        name: "leaf expense",
         projectId: leaf.id,
         cost: 40,
       }),
@@ -646,7 +646,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       actualSpent: leafAfter.rollup.actualSpent,
       committedSpent: leafAfter.rollup.committedSpent,
       contributions: leafAfter.rollup.contributions,
-      purchaseCount: leafAfter.rollup.purchaseCount,
+      expenseCount: leafAfter.rollup.expenseCount,
       taskCount: leafAfter.rollup.taskCount,
       doneTaskCount: leafAfter.rollup.doneTaskCount,
       projectCount: 0,
@@ -660,7 +660,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       actualSpent: 60, // all non-future, positive
       committedSpent: 0,
       contributions: 0,
-      purchaseCount: 2,
+      expenseCount: 2,
       taskCount: 3, // 1 own + 2 leaf
       doneTaskCount: 1,
       projectCount: 1, // leaf
@@ -673,7 +673,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       actualSpent: 70,
       committedSpent: 0,
       contributions: 0,
-      purchaseCount: 3,
+      expenseCount: 3,
       taskCount: 3,
       doneTaskCount: 1,
       projectCount: 2, // parent + leaf
@@ -747,9 +747,9 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       projectCreateInput.parse({ name: "invariant leaf", costEstimate: 42 }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
         name: "invariant actual",
@@ -758,9 +758,9 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
         name: "invariant committed",
@@ -833,7 +833,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(childrenOfParent.data.map((p) => p.id)).toEqual([child.id]);
   });
 
-  it("includeSubProjects expands the purchase filter to the whole subtree", async () => {
+  it("includeSubProjects expands the expense filter to the whole subtree", async () => {
     const parent = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "subtree filter parent" }),
@@ -857,13 +857,13 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     );
 
     for (const [project, name] of [
-      [parent, "parent purchase"],
-      [child, "child purchase"],
-      [grandchild, "grandchild purchase"],
+      [parent, "parent expense"],
+      [child, "child expense"],
+      [grandchild, "grandchild expense"],
     ] as const) {
-      await createPurchase(
+      await createExpense(
         ctx.db,
-        purchaseCreateInput.parse({
+        expenseCreateInput.parse({
           trade: "other",
           costType: "materials",
           name,
@@ -876,18 +876,18 @@ describe("project repository — sub-projects (parentProjectId)", () => {
 
     const pagination = { pageIndex: 0, pageSize: 50 };
 
-    // Direct-only (flag unset): just the parent's own purchase.
-    const directOnly = await purchaseList(
+    // Direct-only (flag unset): just the parent's own expense.
+    const directOnly = await expenseList(
       ctx.db,
       { projectId: parent.id },
       [],
       pagination,
     );
     expect(directOnly.count).toBe(1);
-    expect(directOnly.data.map((p) => p.name)).toEqual(["parent purchase"]);
+    expect(directOnly.data.map((p) => p.name)).toEqual(["parent expense"]);
 
     // Subtree: parent + child + grandchild.
-    const subtree = await purchaseList(
+    const subtree = await expenseList(
       ctx.db,
       { projectId: parent.id, includeSubProjects: true },
       [],
@@ -895,7 +895,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     );
     expect(subtree.count).toBe(3);
     expect(new Set(subtree.data.map((p) => p.name))).toEqual(
-      new Set(["parent purchase", "child purchase", "grandchild purchase"]),
+      new Set(["parent expense", "child expense", "grandchild expense"]),
     );
   });
 });
@@ -920,12 +920,12 @@ describe("project repository — date windows (derivation)", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "dates content purchase",
+        name: "dates content expense",
         projectId: project.id,
         cost: 10,
         date: "2024-01-15",
@@ -1075,7 +1075,7 @@ describe("project repository — date windows (derivation)", () => {
    * refs emitted `min("project"."dueDate") from "Task"` and threw at runtime.
    * It shipped broken because nothing exercised this sort, and `startDate` is
    * the projects table's DEFAULT sort. It must also sort by the EARLIER of the
-   * task and purchase mins (LEAST, not a coalesce chain) so the ordering
+   * task and expense mins (LEAST, not a coalesce chain) so the ordering
    * agrees with the `dates.effectiveStart` each row displays.
    */
   it("sorts by effective start, folding override and both content sources", async () => {
@@ -1100,7 +1100,7 @@ describe("project repository — date windows (derivation)", () => {
       ctx.actor,
     );
 
-    // No override, and its PURCHASE predates its task — the coalesce-chain bug
+    // No override, and its EXPENSE predates its task — the coalesce-chain bug
     // sorted this by the task min (2024-08-01) instead of 2024-03-01.
     const derived = await createProject(
       ctx.db,
@@ -1117,12 +1117,12 @@ describe("project repository — date windows (derivation)", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "sort derived purchase",
+        name: "sort derived expense",
         projectId: derived.id,
         cost: 5,
         date: "2024-03-01",
@@ -1167,7 +1167,7 @@ describe("project repository — date windows (derivation)", () => {
     expect(descPos.overridden).toBeLessThan(descPos.undated);
 
     // The sort key and the displayed window agree: the derived row's start is
-    // the purchase date, not the later task date.
+    // the expense date, not the later task date.
     expect(
       asc.data.find((r) => r.id === derived.id)?.dates.effectiveStart,
     ).toBe("2024-03-01");
@@ -1183,9 +1183,9 @@ describe("project dashboard — attention detector + summary", () => {
       projectCreateInput.parse({ name: "attention no estimate" }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
         name: "spend with no estimate",
@@ -1204,9 +1204,9 @@ describe("project dashboard — attention detector + summary", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
         name: "spend with estimate",
@@ -1346,12 +1346,12 @@ describe("project dashboard — attention detector + summary", () => {
       }),
       ctx.actor,
     );
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "drift late purchase",
+        name: "drift late expense",
         projectId: project.id,
         cost: 10,
         date: "2024-12-31",
@@ -1470,9 +1470,9 @@ describe("project dashboard — attention detector + summary", () => {
       [projectDone, "summary done actual", 90, false],
       [projectDone, "summary done committed", 10, true],
     ] as const) {
-      await createPurchase(
+      await createExpense(
         ctx.db,
-        purchaseCreateInput.parse({
+        expenseCreateInput.parse({
           trade: "other",
           costType: "materials",
           name,
@@ -1746,14 +1746,14 @@ describe("project dashboard — summary scope filters", () => {
     }
 
     for (const [name, projectId, date] of [
-      ["hidden scoped purchase", scoped.id, null],
-      ["hidden inbox purchase", null, null],
-      ["hidden other kind purchase", otherKind.id, null],
-      ["hidden dated purchase", scoped.id, "2025-03-15"],
+      ["hidden scoped expense", scoped.id, null],
+      ["hidden inbox expense", null, null],
+      ["hidden other kind expense", otherKind.id, null],
+      ["hidden dated expense", scoped.id, "2025-03-15"],
     ] as const) {
-      await createPurchase(
+      await createExpense(
         ctx.db,
-        purchaseCreateInput.parse({
+        expenseCreateInput.parse({
           trade: "other",
           costType: "materials",
           name,
@@ -1770,13 +1770,13 @@ describe("project dashboard — summary scope filters", () => {
       dateTo: "2025-12-31",
     });
     expect(scopedNames(summary)).toEqual(["hidden scoped"]);
-    // projects: the undated renovation project. tasks/purchases: the scoped
+    // projects: the undated renovation project. tasks/expenses: the scoped
     // row + the inbox row. The garden project's rows are NOT counted — they
     // are hidden by the kind filter, not by the date window.
     expect(summary.hiddenByDate).toEqual({
       projects: 1,
       tasks: 2,
-      purchases: 2,
+      expenses: 2,
     });
 
     // Nothing is "hidden by date" when no window is set.
@@ -1786,22 +1786,22 @@ describe("project dashboard — summary scope filters", () => {
     expect(unwindowed.hiddenByDate).toEqual({
       projects: 0,
       tasks: 0,
-      purchases: 0,
+      expenses: 0,
     });
   });
 
-  it("filterOptions.years unions purchase/task/project dates, newest first, using a task's EFFECTIVE due date", async () => {
+  it("filterOptions.years unions expense/task/project dates, newest first, using a task's EFFECTIVE due date", async () => {
     await mkProject({
       name: "years project",
       startDate: "2020-02-01",
       endDate: "2022-03-01",
     });
-    await createPurchase(
+    await createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: "other",
         costType: "materials",
-        name: "years purchase",
+        name: "years expense",
         date: "2021-05-01",
       }),
       ctx.actor,
@@ -1818,7 +1818,7 @@ describe("project dashboard — summary scope filters", () => {
     );
 
     const summary = await projectDashboardSummary(ctx.db, {});
-    // 2023 (task dueEndDate) > 2022 (project end) > 2021 (purchase) > 2020
+    // 2023 (task dueEndDate) > 2022 (project end) > 2021 (expense) > 2020
     // (project start); 2019 is absent because `dueEndDate` supersedes
     // `dueDate` — the same effective-due expression task/lookup.ts filters on.
     expect(summary.filterOptions.years).toEqual([
@@ -1837,8 +1837,8 @@ describe("project dashboard — summary scope filters", () => {
  * unit test (`mcp/server.unit.test.ts`). These pin the two aggregates whose
  * numbers come out of the subtree rollup — `costVsEstimate` and
  * `spendingByProject` — against a parent/child pair with spend on BOTH, plus
- * the deliberate asymmetry with the purchase-grouped aggregates (which are
- * scoped to a project's OWN purchases, never subtree-expanded).
+ * the deliberate asymmetry with the expense-grouped aggregates (which are
+ * scoped to a project's OWN expenses, never subtree-expanded).
  */
 describe("project dashboard — portfolio analytics", () => {
   const ctx = withTestDb();
@@ -1846,7 +1846,7 @@ describe("project dashboard — portfolio analytics", () => {
   const mkProject = (input: Partial<ProjectCreateInput> & { name: string }) =>
     createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
 
-  const mkPurchase = (
+  const mkExpense = (
     name: string,
     projectId: string | null,
     cost: number,
@@ -1856,9 +1856,9 @@ describe("project dashboard — portfolio analytics", () => {
       trade?: "other" | "plumbing";
     } = {},
   ) =>
-    createPurchase(
+    createExpense(
       ctx.db,
-      purchaseCreateInput.parse({
+      expenseCreateInput.parse({
         trade: extra.trade ?? "other",
         costType: "materials",
         name,
@@ -1895,11 +1895,11 @@ describe("project dashboard — portfolio analytics", () => {
       costEstimate: 10,
     });
 
-    await mkPurchase("parent actual", parent.id, 100);
-    await mkPurchase("parent committed", parent.id, 25, { future: true });
-    await mkPurchase("child actual", child.id, 40, { trade: "plumbing" });
-    await mkPurchase("child contribution", child.id, -15);
-    await mkPurchase("solo actual", solo.id, 200);
+    await mkExpense("parent actual", parent.id, 100);
+    await mkExpense("parent committed", parent.id, 25, { future: true });
+    await mkExpense("child actual", child.id, 40, { trade: "plumbing" });
+    await mkExpense("child contribution", child.id, -15);
+    await mkExpense("solo actual", solo.id, 200);
 
     return { parent, child, solo };
   };
@@ -1951,7 +1951,7 @@ describe("project dashboard — portfolio analytics", () => {
     ]);
   });
 
-  it("keeps subtree totals whole while the purchase-grouped aggregates stay own-only", async () => {
+  it("keeps subtree totals whole while the expense-grouped aggregates stay own-only", async () => {
     const { parent } = await seedPortfolio();
 
     // Scope to the parent alone — its child is NOT in the filtered id set.
@@ -1974,7 +1974,7 @@ describe("project dashboard — portfolio analytics", () => {
       { projectId: parent.id, projectName: "analytics parent", spend: 150 },
     ]);
 
-    // ...but the purchase-grouped aggregates count only purchases whose OWN
+    // ...but the expense-grouped aggregates count only expenses whose OWN
     // projectId matched, so the child's rows are absent.
     expect(analytics.tradeActivity).toEqual([
       {

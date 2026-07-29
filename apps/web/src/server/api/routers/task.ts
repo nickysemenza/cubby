@@ -90,7 +90,7 @@ const listActionable = protectedProcedure
 /**
  * Every task matching the filters, in one round trip — chart/Gantt aggregates
  * happen client-side, and `list`'s 500-row page cap would silently truncate a
- * big subtree (same fetch-all convention as purchase.chartData).
+ * big subtree (same fetch-all convention as expense.chartData).
  */
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
 const chartData = protectedProcedure

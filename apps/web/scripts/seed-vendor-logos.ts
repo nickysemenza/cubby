@@ -155,13 +155,18 @@ async function upload(key: string, buf: Buffer, dir: string) {
 }
 
 /**
- * Cross-check the hand-written map against the ledger it exists to serve.
+ * Cross-check the hand-written map against the vendor roster it exists to serve.
  *
- * `Purchase.vendor` is free text, so a map key is only useful if it matches a
- * stored string exactly — "Home depot" costs that vendor its logo silently, and
- * no type can catch it because the valid set lives in the database. This is the
- * check that does: it names keys matching zero rows (typos, renamed vendors) and
- * vendors carrying real row counts with no entry yet (worth adding).
+ * A map key is only useful if it matches a stored `Vendor.name` exactly — "Home
+ * depot" costs that vendor its logo silently, and no type can catch it because
+ * the valid set lives in the database. This is the check that does: it names keys
+ * matching no vendor (typos, renamed vendors) and vendors carrying real spend
+ * with no entry yet (worth adding).
+ *
+ * Reads `Vendor` rather than the old free-text `Expense.vendor` column, which no
+ * longer exists. The count is expense LINES reached through the vendor's charges,
+ * not charges — it's a "how much would this logo be seen" ranking, and the ledger
+ * is what gets looked at.
  */
 async function reconcileWithLedger() {
   const url = process.env.DATABASE_URL;
@@ -172,9 +177,12 @@ async function reconcileWithLedger() {
   const pool = new Pool({ connectionString: url });
   try {
     const { rows } = await pool.query<{ vendor: string; n: string }>(
-      `SELECT vendor, count(*) AS n FROM "Purchase"
-       WHERE "deletedAt" IS NULL AND vendor IS NOT NULL
-       GROUP BY vendor ORDER BY count(*) DESC`,
+      `SELECT v."name" AS vendor, count(e.id) AS n
+         FROM "Vendor" v
+         LEFT JOIN "Purchase" p ON p."vendorId" = v.id AND p."deletedAt" IS NULL
+         LEFT JOIN "Expense" e ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
+        WHERE v."deletedAt" IS NULL
+        GROUP BY v."name" ORDER BY count(e.id) DESC`,
     );
     const ledger = new Map(rows.map((r) => [r.vendor, Number(r.n)]));
 

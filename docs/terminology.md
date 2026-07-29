@@ -27,10 +27,12 @@ sometimes wears three different names across layers.
 | Meal | "Meal" | `Meal` / `meal` | `Meal` | A planned eating occasion on a calendar day; groups recipes. |
 | Meal recipe | (a recipe inside a meal) | `MealRecipe` / `mealRecipe` | `MealRecipe` | A recipe planned into a meal at a `scale` multiplier. |
 | Cookbook | "Cookbook" | `Cookbook` / `cookbook` | `Cookbook` | A first-class recipe *source* — the book an EPUB-extracted recipe set came from. |
-| Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Purchases; blocked-by edges to other Projects. |
+| Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects. |
 | Task | "Task" | `Task` / `task` | `Task` | A unit of work, optionally inside a Project; blocked-by edges to other Tasks. |
-| Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. |
-| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, or project. |
+| Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, `kind`, website, notes). Identity only — no money. |
+| Purchase | "Purchase" / "Charge" | `Purchase` / `purchase` | `Purchase` | **ONE vendor transaction.** Identity (`vendorId` + optional `orderId`), charge date, an optional never-summed `statedTotal`, and its documents. ⚠️ Renamed meaning — see below. |
+| Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
+| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (a charge's invoice). |
 
 ---
 
@@ -99,11 +101,11 @@ House  →  Room  →  Shelf  →  Bin
 
 ---
 
-## Project tracker (Project / Task / Purchase)
+## Project tracker (Project / Task / Expense)
 
 The household project tracker (migrated from Notion) is a self-contained module:
 
-- **Project** — groups Tasks and Purchases. `projectDependency` rows are
+- **Project** — groups Tasks and Expenses. `projectDependency` rows are
   blocked-by edges between projects ("blocking" is the reverse read).
   `project.locations` is deliberately a free-form `text[]` of house/site names —
   **not** an FK to the `Location` entity (that tree is physical storage).
@@ -115,10 +117,71 @@ The household project tracker (migrated from Notion) is a self-contained module:
   `task.trade` is the shared 19-slug trade/costType taxonomy (see
   `TRADE_LABELS`), not free-form text. `taskDependency` mirrors the project
   blocked-by structure.
-- **Purchase** — the spend ledger. `future = true` marks planned (not yet
-  actual) spend. A Purchase is free-text `name` + `cost` today — it does
-  **not** link to a Product or InventoryEntry (a known roadmap item, see
-  README Roadmap).
+- **Expense** — the spend ledger (route `/expenses`). `future = true` marks
+  planned (not yet actual) spend. Free-text `name` + `cost`, with an optional
+  `productId` link (bridge v1) and an optional `purchaseId` naming the charge it
+  came from.
+
+---
+
+## Vendor vs Purchase vs Expense
+
+> ⚠️ **`Purchase` changed meaning.** It used to *be* the ledger line — a name, a
+> cost, a date, a trade. That row is now **`Expense`**. Any older note, commit
+> message, or agent transcript saying "purchase" about a line of spend means
+> `Expense`. `Purchase` today is the *transaction* the line was part of.
+
+```
+Vendor ──< Purchase ──< Expense
+  │            │  └── documents (PurchaseImage → Image)
+  │            └── orderId?, date, statedTotal?
+  └── name (unique), kind, website, notes
+```
+
+- **Vendor** (`Vendor`) — the roster of places money goes. Name is uniquely
+  indexed (live rows), `kind` is `retailer|contractor|supplier|other` and
+  nullable (the backfill can't infer it; guessing is worse than blank). Holds
+  **identity only** — its `spend` and `purchaseCount` are correlated rollups, not
+  columns. Deliberately thin in v1: contractor metadata (license, COI) and
+  vendor-level documents (W-9, contracts) are the natural follow-ons.
+- **Purchase** (`Purchase`) — **ONE vendor transaction**, i.e. a charge.
+  `vendorId` is NOT NULL; `orderId` is the vendor's own free-text order/receipt
+  id, unique per vendor via a **partial-unique `(vendorId, orderId)` index where
+  `orderId IS NOT NULL`** — one order is one charge, which is why there is no
+  `splitPurchase`. About 40% of charges have no order id at all (a contractor's
+  progress payment, a farmers-market run).
+  - `purchase.date` is the **charge** date; `expense.date` stays the **ledger**
+    date that drives monthly buckets and project windows. An invoice dated the
+    3rd can clear on the 8th, and they may differ.
+  - `statedTotal` is what the paperwork *claimed*, in dollars. It is **never
+    summed into spend** — it is purely a reconciliation cue against the charge's
+    lines, and a mismatch is often correct (a partial refund reduces a line
+    without changing what the charge stated). `reconcilePurchase` returns
+    `unknown | match | mismatch` as a **soft** flag; nothing rejects a write and
+    nothing back-computes a cost from it.
+  - A charge is **not** a contract: 11 progress payments to one contractor are
+    **11 purchases**, not one. The contract-level rollup already exists and is
+    `Project`. Nor is it guaranteed 1:1 with a *card charge* — Amazon bills per
+    shipment; that's the deferred `Payment` axis.
+- **Expense** (`Expense`) — the categorized line of spend, and **the only place
+  money lives**. Every `SUM(cost)` in the codebase reads `Expense` alone.
+  `purchaseId` is nullable: a row with no charge attached is exactly "no vendor
+  recorded", since `purchase.vendorId` is NOT NULL.
+
+**API shape vs. columns.** `expense.vendor` and `expense.orderId` are no longer
+columns, but `expenseOut` still exposes both (resolved through
+`expense.purchaseId → Purchase → Vendor`) and adds `purchaseId` + `vendorId`.
+Create/update inputs still **accept `vendor` as a plain name string** plus
+`orderId`, and the repo resolves them via `findOrCreateVendor` +
+`findOrCreatePurchase` inside the caller's transaction — which is what keeps MCP,
+quick-add, and the purchase-import skill unchanged across the split. The ledger's
+vendor *filter*, by contrast, is now `vendorId`-based, not a free-text match.
+
+**Operations** (`repo/purchase.ts`): `linkExpensesToPurchase` (one invoice
+spanning trades), `splitExpense` (replaces the old `(combo, saw portion)` row-name
+convention), `mergePurchases` (groups the order-less singletons the backfill
+couldn't join; refuses across vendors and refuses when both sides carry a
+non-null order id).
 
 ---
 

@@ -25,7 +25,7 @@ const PageCountContext = createContext<
 
 /**
  * Report a list's true filtered record count up to the enclosing `<Page>`
- * header, rendered as "1,240 PURCHASES" at the end of the eyebrow line. Pass
+ * header, rendered as "1,240 EXPENSES" at the end of the eyebrow line. Pass
  * `useEntityList`'s `totalCount`.
  *
  * Effect-based and client-only by design: SSR/first paint renders with no

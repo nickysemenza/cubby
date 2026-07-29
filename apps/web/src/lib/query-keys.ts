@@ -101,6 +101,17 @@ export const queryKeys = {
     list: procedureKey("task", "list"),
     all: entityKey("task"),
   },
+  expense: {
+    list: procedureKey("expense", "list"),
+    all: entityKey("expense"),
+  },
+  vendor: {
+    list: procedureKey("vendor", "list"),
+    // Broad prefix — a rename or a new charge changes `list`, `getByID` AND the
+    // `options` picklist (which carries each vendor's charge count), so every
+    // vendor query has to re-read.
+    all: entityKey("vendor"),
+  },
   purchase: {
     list: procedureKey("purchase", "list"),
     all: entityKey("purchase"),
@@ -214,7 +225,7 @@ export const mealMutationInvalidateKeys = [
   queryKeys.calendar.all,
 ] as const satisfies readonly QueryKey[];
 
-// Task/purchase mutations also invalidate `project.all`: the dashboard and
+// Task/expense mutations also invalidate `project.all`: the dashboard and
 // project rollups (spent/progress) aggregate over them.
 export const projectMutationInvalidateKeys = [
   queryKeys.project.all,
@@ -229,14 +240,40 @@ export const taskMutationInvalidateKeys = [
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
-export const purchaseMutationInvalidateKeys = [
-  queryKeys.purchase.all,
+export const expenseMutationInvalidateKeys = [
+  queryKeys.expense.all,
   queryKeys.project.all,
   queryKeys.calendar.all,
   queryKeys.dashboard.counts,
-  // A purchase can link to a product (cost basis / disposition) — recording
+  // An expense can link to a product (cost basis / disposition) — recording
   // one from the product page should refresh that product's hero/stamp too.
   queryKeys.product.all,
+  // Writing an expense's `vendor`/`orderId` resolves a Vendor and a Purchase into
+  // existence, and EVERY expense write moves a charge's `expenseTotal` and its
+  // vendor's `spend`/`purchaseCount` — all three are rollups over this table.
+  // Without these, a charge's reconciliation cue keeps showing a stale total.
+  queryKeys.vendor.all,
+  queryKeys.purchase.all,
+] as const satisfies readonly QueryKey[];
+
+// A vendor's name is denormalized into `purchaseOut.vendorName`, so a rename has
+// to refresh the charge queries too — otherwise the ledger keeps showing the old
+// name until a hard reload. No expense/project keys: a vendor holds identity
+// only, and every dollar lives on `Expense`.
+export const vendorMutationInvalidateKeys = [
+  queryKeys.vendor.all,
+  queryKeys.purchase.all,
+] as const satisfies readonly QueryKey[];
+
+// Purchase mutations move MONEY-bearing rows around (`link` re-parents expenses,
+// `split` replaces one with several, `merge` re-points a charge), so the expense
+// and project rollups go stale alongside the vendor's own `purchaseCount`/`spend`.
+export const purchaseMutationInvalidateKeys = [
+  queryKeys.purchase.all,
+  queryKeys.vendor.all,
+  queryKeys.expense.all,
+  queryKeys.project.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {

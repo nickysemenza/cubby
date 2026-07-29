@@ -1,8 +1,8 @@
 import type {
+  ExpenseOut,
   ProjectKind,
   ProjectOut,
   ProjectStatus,
-  PurchaseOut,
   TaskOut,
   Trade,
 } from "@cubby/schemas/project";
@@ -35,7 +35,7 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
+import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -74,18 +74,18 @@ import { ProjectNotes } from "./project-notes";
 import { projectKindOptions } from "./project-options";
 import {
   projectGanttSubtreeQueryParams,
-  projectSubtreePurchasesFilters,
+  projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "./project-query-params";
 import {
   capitalize,
+  ExpenseList,
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_OPTIONS,
-  PurchaseList,
   StatusIcon,
   TaskList,
 } from "./shared";
-import { splitPurchaseSpend } from "./spend";
+import { splitExpenseSpend } from "./spend";
 
 // Charts are Nivo/d3-heavy (~590 KiB with @react-spring + d3) and every one of
 // them is gated on data existing, below the fold. Lazy-loading keeps that stack
@@ -123,7 +123,7 @@ const TASKS_VIEW_OPTIONS: ViewSwitcherOption<"list" | "board">[] = [
   { value: "list", label: "List" },
   { value: "board", label: "Board" },
 ];
-const NO_PURCHASES: PurchaseOut[] = [];
+const NO_EXPENSES: ExpenseOut[] = [];
 const NO_CHILD_PROJECTS: ProjectOut[] = [];
 
 /** Cap for the Tasks section's scoped open/history `task.list` queries —
@@ -131,13 +131,13 @@ const NO_CHILD_PROJECTS: ProjectOut[] = [];
  * `MAX_PAGE_SIZE`. */
 const TASKS_SECTION_PAGE_SIZE = 500;
 
-/** Cap for the Purchases section's scoped planned/history `purchase.list`
+/** Cap for the Expenses section's scoped planned/history `expense.list`
  * queries — same rationale as `TASKS_SECTION_PAGE_SIZE`. */
-const PURCHASES_SECTION_PAGE_SIZE = 500;
+const EXPENSES_SECTION_PAGE_SIZE = 500;
 
-/** The default "recent actual purchases" page is deliberately small — it's a
- * glance, not the ledger (History expands to the full purchase list). */
-const RECENT_PURCHASES_PAGE_SIZE = 15;
+/** The default "recent actual expenses" page is deliberately small — it's a
+ * glance, not the ledger (History expands to the full expense list). */
+const RECENT_EXPENSES_PAGE_SIZE = 15;
 
 interface ProjectDetailPageProps {
   project: ProjectOut;
@@ -447,21 +447,21 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     [doneTasks],
   );
 
-  // Full subtree purchase history — feeds the Budget card + the spend charts
-  // below, both of which need the complete picture. The Purchases section's
+  // Full subtree expense history — feeds the Budget card + the spend charts
+  // below, both of which need the complete picture. The Expenses section's
   // *list* view intentionally does NOT read from this (see the scoped
   // planned/recent/history queries further down) — a completed project's
-  // full purchase ledger shouldn't be fetched/rendered just to show the
+  // full expense ledger shouldn't be fetched/rendered just to show the
   // section's default (planned + recent) view.
-  const { data: chartPurchases = NO_PURCHASES } = useQuery(
-    api.purchase.chartData.queryOptions(
-      projectSubtreePurchasesFilters(project.id),
+  const { data: chartExpenses = NO_EXPENSES } = useQuery(
+    api.expense.chartData.queryOptions(
+      projectSubtreeExpensesFilters(project.id),
     ),
   );
 
-  // Purchases section (default view): planned purchases + a small recency-
+  // Expenses section (default view): planned expenses + a small recency-
   // capped page of already-made ones, rather than the full ledger above.
-  const plannedPurchaseFilters = useMemo(
+  const plannedExpenseFilters = useMemo(
     () => ({
       projectId: project.id,
       includeSubProjects: true,
@@ -469,15 +469,15 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     }),
     [project.id],
   );
-  const { data: plannedPurchasesPage } = useQuery(
-    api.purchase.list.queryOptions({
-      filters: plannedPurchaseFilters,
-      pagination: { pageIndex: 0, pageSize: PURCHASES_SECTION_PAGE_SIZE },
+  const { data: plannedExpensesPage } = useQuery(
+    api.expense.list.queryOptions({
+      filters: plannedExpenseFilters,
+      pagination: { pageIndex: 0, pageSize: EXPENSES_SECTION_PAGE_SIZE },
     }),
   );
-  const plannedPurchases = plannedPurchasesPage?.items ?? NO_PURCHASES;
+  const plannedExpenses = plannedExpensesPage?.items ?? NO_EXPENSES;
 
-  const recentActualPurchaseFilters = useMemo(
+  const recentActualExpenseFilters = useMemo(
     () => ({
       projectId: project.id,
       includeSubProjects: true,
@@ -485,41 +485,40 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     }),
     [project.id],
   );
-  // `purchase.list`'s default sort (date desc, nulls last) is exactly what's
+  // `expense.list`'s default sort (date desc, nulls last) is exactly what's
   // wanted here, so no explicit `sort` is passed.
-  const { data: recentActualPurchasesPage } = useQuery(
-    api.purchase.list.queryOptions({
-      filters: recentActualPurchaseFilters,
-      pagination: { pageIndex: 0, pageSize: RECENT_PURCHASES_PAGE_SIZE },
+  const { data: recentActualExpensesPage } = useQuery(
+    api.expense.list.queryOptions({
+      filters: recentActualExpenseFilters,
+      pagination: { pageIndex: 0, pageSize: RECENT_EXPENSES_PAGE_SIZE },
     }),
   );
-  const recentActualPurchases =
-    recentActualPurchasesPage?.items ?? NO_PURCHASES;
+  const recentActualExpenses = recentActualExpensesPage?.items ?? NO_EXPENSES;
 
   // Merge the two bounded pages for display — each page is independently
   // sorted, so the combined list needs its own newest-first, nulls-last pass.
-  const defaultSectionPurchases = useMemo(
+  const defaultSectionExpenses = useMemo(
     () =>
-      [...plannedPurchases, ...recentActualPurchases].sort((a, b) => {
+      [...plannedExpenses, ...recentActualExpenses].sort((a, b) => {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
         if (!b.date) return -1;
         return b.date.localeCompare(a.date);
       }),
-    [plannedPurchases, recentActualPurchases],
+    [plannedExpenses, recentActualExpenses],
   );
 
-  // History: the full purchase ledger, fetched only once the disclosure
+  // History: the full expense ledger, fetched only once the disclosure
   // below is opened — `enabled` keeps this off the initial page load.
-  const [isPurchaseHistoryOpen, setIsPurchaseHistoryOpen] = useState(false);
-  const { data: purchaseHistoryPage } = useQuery({
-    ...api.purchase.list.queryOptions({
-      filters: projectSubtreePurchasesFilters(project.id),
-      pagination: { pageIndex: 0, pageSize: PURCHASES_SECTION_PAGE_SIZE },
+  const [isExpenseHistoryOpen, setIsExpenseHistoryOpen] = useState(false);
+  const { data: expenseHistoryPage } = useQuery({
+    ...api.expense.list.queryOptions({
+      filters: projectSubtreeExpensesFilters(project.id),
+      pagination: { pageIndex: 0, pageSize: EXPENSES_SECTION_PAGE_SIZE },
     }),
-    enabled: isPurchaseHistoryOpen,
+    enabled: isExpenseHistoryOpen,
   });
-  const purchaseHistory = purchaseHistoryPage?.items ?? NO_PURCHASES;
+  const expenseHistory = expenseHistoryPage?.items ?? NO_EXPENSES;
 
   // Decompose spend into actual / committed / contributions rather than showing
   // one blended figure. Own-scope split feeds the hero; the whole-subtree split
@@ -527,18 +526,18 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // a leaf project, so both collapse there).
   const ownSpendSplit = useMemo(
     () =>
-      splitPurchaseSpend(
-        chartPurchases.filter((p) => p.projectId === project.id),
+      splitExpenseSpend(
+        chartExpenses.filter((p) => p.projectId === project.id),
       ),
-    [chartPurchases, project.id],
+    [chartExpenses, project.id],
   );
   const subtreeSpendSplit = useMemo(
-    () => splitPurchaseSpend(chartPurchases),
-    [chartPurchases],
+    () => splitExpenseSpend(chartExpenses),
+    [chartExpenses],
   );
   const budgetEstimate =
     project.rollup.subtree.costEstimate ?? project.costEstimate;
-  const showBudget = budgetEstimate != null || chartPurchases.length > 0;
+  const showBudget = budgetEstimate != null || chartExpenses.length > 0;
 
   const { data: imageMap } = useQuery({
     ...api.image.imagesByProjectIds.queryOptions({ projectIds: [project.id] }),
@@ -559,7 +558,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const childProjects = childProjectsPage?.items ?? NO_CHILD_PROJECTS;
   const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [isCreatingPurchase, setIsCreatingPurchase] = useState(false);
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
   // The Gantt's sub-project rows need the whole descendant project subtree
   // (separate from the direct-children query the Sub-projects section uses).
@@ -575,7 +574,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   });
 
   // `deleteProjects` refuses a project that still has sub-projects, tasks or
-  // purchases (assertNoDependents) — that error surfaces as the hook's toast,
+  // expenses (assertNoDependents) — that error surfaces as the hook's toast,
   // so the destructive case explains itself rather than needing a guard here.
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: project.id,
@@ -640,11 +639,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     }
   };
 
-  // Trade × Cost Type pivot → Purchases table filter + scroll-into-view.
+  // Trade × Cost Type pivot → Expenses table filter + scroll-into-view.
   // Clicking the same cell again clears the filter.
   const [activeMatrixCell, setActiveMatrixCell] =
     useState<TradeCostCell | null>(null);
-  const purchasesRef = useRef<HTMLDivElement>(null);
+  const expensesRef = useRef<HTMLDivElement>(null);
 
   const handleMatrixCellClick = (
     trade: Trade,
@@ -652,13 +651,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   ) => {
     setActiveMatrixCell((current) => {
       const clear = current?.trade === trade && current.costType === costType;
-      // The pivot is built from the full subtree ledger (`chartPurchases`) —
-      // a matched purchase may not be in the section's default bounded view,
+      // The pivot is built from the full subtree ledger (`chartExpenses`) —
+      // a matched expense may not be in the section's default bounded view,
       // so expand History to the full list rather than filtering to nothing.
-      if (!clear) setIsPurchaseHistoryOpen(true);
+      if (!clear) setIsExpenseHistoryOpen(true);
       return clear ? null : { trade, costType };
     });
-    purchasesRef.current?.scrollIntoView({
+    expensesRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
@@ -741,7 +740,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       ),
     },
     {
-      // Displays the EFFECTIVE start (rolled up from tasks/purchases/live
+      // Displays the EFFECTIVE start (rolled up from tasks/expenses/live
       // sub-projects, or the override when set); the editor still opens on
       // and saves to the raw `startDate` override column, never the derived
       // value — see `projectDateWindow`'s doc comment in
@@ -1062,53 +1061,53 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // show, so the main column would otherwise sit empty under a short Tasks card);
   // subtree projects keep the ledger as a full-width band and show the project
   // column since rows span multiple sub-projects.
-  const purchasesSection: DetailSection = {
-    title: "Purchases",
+  const expensesSection: DetailSection = {
+    title: "Expenses",
     icon: ShoppingCart,
     zone: hasSubtree ? "full" : "main",
     headerAction: (
       <Row align="center" gap="sm">
-        {defaultSectionPurchases.length > 0 && (
-          <Badge variant="outline">{defaultSectionPurchases.length}</Badge>
+        {defaultSectionExpenses.length > 0 && (
+          <Badge variant="outline">{defaultSectionExpenses.length}</Badge>
         )}
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setIsCreatingPurchase(true)}
+          onClick={() => setIsCreatingExpense(true)}
         >
           <Plus className="size-3.5" />
-          New purchase
+          New expense
         </Button>
       </Row>
     ),
     content: (
-      <div ref={purchasesRef}>
+      <div ref={expensesRef}>
         <Stack gap="sm">
-          <PurchaseList
-            purchases={defaultSectionPurchases}
+          <ExpenseList
+            expenses={defaultSectionExpenses}
             tradeFilter={activeMatrixCell?.trade ?? null}
             costTypeFilter={activeMatrixCell?.costType ?? null}
             showProjectColumn={hasSubtree}
           />
           <Collapsible
-            open={isPurchaseHistoryOpen}
-            onOpenChange={setIsPurchaseHistoryOpen}
+            open={isExpenseHistoryOpen}
+            onOpenChange={setIsExpenseHistoryOpen}
           >
             <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
-              {isPurchaseHistoryOpen ? (
+              {isExpenseHistoryOpen ? (
                 <ChevronDown className="size-3" />
               ) : (
                 <ChevronRight className="size-3" />
               )}
               History
-              {isPurchaseHistoryOpen &&
-                purchaseHistory.length > 0 &&
-                ` (${purchaseHistory.length})`}
+              {isExpenseHistoryOpen &&
+                expenseHistory.length > 0 &&
+                ` (${expenseHistory.length})`}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2">
-              <PurchaseList
-                purchases={purchaseHistory}
+              <ExpenseList
+                expenses={expenseHistory}
                 tradeFilter={activeMatrixCell?.trade ?? null}
                 costTypeFilter={activeMatrixCell?.costType ?? null}
                 showProjectColumn={hasSubtree}
@@ -1121,7 +1120,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   };
 
   // The manifest's `history` common section, rendered inline rather than via
-  // `useEntityDetail` (task-detail/purchase-detail's route): project also
+  // `useEntityDetail` (task-detail/expense-detail's route): project also
   // declares `images`, and that common section reads `data.images` — which
   // ProjectOut doesn't carry (images come from the separate
   // `imagesByProjectIds` query and already ride the hero), so it would render
@@ -1140,19 +1139,19 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
 
   const sections: DetailSection[] = [
     // Main column: Notes (when populated), Budget, Tasks, then — for a leaf —
-    // the purchase ledger.
+    // the expense ledger.
     ...(hasNotesContent ? [notesSection] : []),
     ...(showBudget ? [budgetSection] : []),
     tasksSection,
-    ...(hasSubtree ? [] : [purchasesSection]),
+    ...(hasSubtree ? [] : [expensesSection]),
     // Aside rail: metadata + (when empty) the slim Notes card.
     overviewSection,
     dependenciesSection,
     subProjectsSection,
     ...(hasNotesContent ? [] : [notesSection]),
     // Subtree projects show the ledger as a full-width band at the bottom.
-    ...(hasSubtree ? [purchasesSection] : []),
-    // Paper trail last, same position task/purchase detail give it.
+    ...(hasSubtree ? [expensesSection] : []),
+    // Paper trail last, same position task/expense detail give it.
     historySection,
   ];
 
@@ -1185,7 +1184,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           } satisfies DetailHeroStat,
         ]
       : []),
-    // Own Tasks/Purchases only when this is a leaf — a subtree project shows
+    // Own Tasks/Expenses only when this is a leaf — a subtree project shows
     // the fuller "(incl. sub-projects)" versions below instead, keeping the
     // spec-plate to ~6 stats so the mono values aren't truncated.
     ...(hasSubtree
@@ -1196,8 +1195,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,
           } satisfies DetailHeroStat,
           {
-            label: "Purchases",
-            value: project.rollup.purchaseCount,
+            label: "Expenses",
+            value: project.rollup.expenseCount,
           } satisfies DetailHeroStat,
         ]),
     ...(hasSubtree
@@ -1211,8 +1210,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             value: `${project.rollup.subtree.doneTaskCount}/${project.rollup.subtree.taskCount}`,
           } satisfies DetailHeroStat,
           {
-            label: "Purchases (incl. sub-projects)",
-            value: project.rollup.subtree.purchaseCount,
+            label: "Expenses (incl. sub-projects)",
+            value: project.rollup.subtree.expenseCount,
           } satisfies DetailHeroStat,
         ]
       : []),
@@ -1266,56 +1265,56 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         presetProjectId={project.id}
       />
 
-      <CreatePurchaseDialog
-        open={isCreatingPurchase}
-        onOpenChange={setIsCreatingPurchase}
+      <CreateExpenseDialog
+        open={isCreatingExpense}
+        onOpenChange={setIsCreatingExpense}
         presetProjectId={project.id}
       />
 
       {/* Spending/task charts scoped to this project PLUS its whole sub-project
           subtree — full-bleed, below the card grid (same treatment as the
-          /projects list page's own chart panels). Purchases-dependent charts
+          /projects list page's own chart panels). Expenses-dependent charts
           and the task timeline are gated independently — a project with tasks
-          but no purchases (or vice versa) must still see its own section. */}
-      {(chartPurchases.length > 0 ||
+          but no expenses (or vice versa) must still see its own section. */}
+      {(chartExpenses.length > 0 ||
         subtreeTasks.length > 0 ||
         ganttSubtreeProjects.length > 0) && (
         <Stack className="pt-4">
           {/* One boundary for the whole band — the charts load as a group, and
               a single skeleton reads better than five staggered ones. */}
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            {chartPurchases.length > 0 && (
+            {chartExpenses.length > 0 && (
               <>
                 <Section
                   title="Spending Over Time"
                   description={
                     hasSubtree
-                      ? "Cumulative spend against the estimate · includes sub-project purchases"
+                      ? "Cumulative spend against the estimate · includes sub-project expenses"
                       : "Cumulative spend against the estimate"
                   }
                 >
                   <SpendingOverTime
-                    purchases={chartPurchases}
+                    expenses={chartExpenses}
                     costEstimate={project.rollup.subtree.costEstimate}
                   />
                 </Section>
 
                 <CategoryBreakdown
-                  purchases={chartPurchases}
+                  expenses={chartExpenses}
                   donutHeight={350}
                   onMatrixCellClick={handleMatrixCellClick}
                   activeMatrixCell={activeMatrixCell}
                 />
 
-                {/* With zero future-flagged purchases this just restates the
+                {/* With zero future-flagged expenses this just restates the
                   pivot's column totals — only worth its own section when
                   something is actually planned. */}
-                {chartPurchases.some((p) => p.future) && (
+                {chartExpenses.some((p) => p.future) && (
                   <Section
                     title="Planned vs Actual"
-                    description="Committed spend vs future-flagged purchases"
+                    description="Committed spend vs future-flagged expenses"
                   >
-                    <PlannedVsActual purchases={chartPurchases} />
+                    <PlannedVsActual expenses={chartExpenses} />
                   </Section>
                 )}
               </>

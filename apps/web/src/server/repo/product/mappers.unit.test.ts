@@ -57,7 +57,7 @@ const baseProduct = {
   category: "food" as const,
   price: 4.5,
   usdaUnavailable: null,
-  purchaseCount: 0,
+  expenseCount: 0,
 };
 
 const baseImage = {

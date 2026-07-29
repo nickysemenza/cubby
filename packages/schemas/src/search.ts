@@ -36,12 +36,12 @@ export const globalSearchInputSchema = z.object({
  *
  * Deliberately a fixed set rather than an arbitrary source→target product:
  * every embedding lives in one shared space, so any pair is *technically*
- * queryable, but only these have a meaning worth surfacing (map a purchase to
+ * queryable, but only these have a meaning worth surfacing (map an expense to
  * the product it bought, find duplicate products/ingredients, find related
  * recipes). Callers pick a key; they can't compose their own combination.
  */
 export const similarEntityPairKeys = [
-  "purchase_to_product",
+  "expense_to_product",
   "product_to_product",
   "ingredient_to_ingredient",
   "recipe_to_recipe",
@@ -50,7 +50,7 @@ export const similarEntityPairSchema = z.enum(similarEntityPairKeys);
 export type SimilarEntityPair = z.infer<typeof similarEntityPairSchema>;
 
 export const similarEntityPairs = {
-  purchase_to_product: { source: "purchase", target: "product" },
+  expense_to_product: { source: "expense", target: "product" },
   product_to_product: { source: "product", target: "product" },
   ingredient_to_ingredient: { source: "ingredient", target: "ingredient" },
   recipe_to_recipe: { source: "recipe", target: "recipe" },
@@ -153,9 +153,9 @@ const taskResult = z.object({
   projectName: z.string().nullable(),
 });
 
-const purchaseResult = z.object({
+const expenseResult = z.object({
   ...searchResultBaseFields,
-  entityType: z.literal("purchase"),
+  entityType: z.literal("expense"),
   cost: z.number().nullable(),
   projectName: z.string().nullable(),
 });
@@ -170,7 +170,7 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   mealResult,
   projectResult,
   taskResult,
-  purchaseResult,
+  expenseResult,
 ]);
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
 
@@ -223,4 +223,4 @@ export type CookbookSearchResult = z.infer<typeof cookbookResult>;
 export type MealSearchResult = z.infer<typeof mealResult>;
 export type ProjectSearchResult = z.infer<typeof projectResult>;
 export type TaskSearchResult = z.infer<typeof taskResult>;
-export type PurchaseSearchResult = z.infer<typeof purchaseResult>;
+export type ExpenseSearchResult = z.infer<typeof expenseResult>;

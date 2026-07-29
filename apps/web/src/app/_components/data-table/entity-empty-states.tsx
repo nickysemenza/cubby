@@ -65,7 +65,7 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
   project: {
     title: "No projects yet",
     description:
-      "Track household projects from planning to done — budget, timeline, and every task and purchase along the way.",
+      "Track household projects from planning to done — budget, timeline, and every task and expense along the way.",
     actionLabel: "New Project",
   },
   task: {
@@ -74,11 +74,23 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Break a project down into steps, or jot down a one-off to get to later.",
     actionLabel: "New Task",
   },
+  vendor: {
+    title: "No vendors yet",
+    description:
+      "Track the places money goes — retailers, contractors, suppliers — so every purchase and expense can point at one.",
+    actionLabel: "Add Vendor",
+  },
   purchase: {
     title: "No purchases yet",
     description:
-      "Log what you've bought (or plan to) to keep a project's running cost honest.",
+      "A purchase is created automatically the first time an expense records a vendor. Add one directly to file its invoice ahead of time.",
     actionLabel: "New Purchase",
+  },
+  expense: {
+    title: "No expenses yet",
+    description:
+      "Log what you've bought (or plan to) to keep a project's running cost honest.",
+    actionLabel: "New Expense",
   },
   image: {
     title: "No photos yet",
@@ -186,7 +198,7 @@ export function hasActiveFilters(columnFilters: unknown[]): boolean {
 
 /**
  * Is the row set narrowed by ANYTHING the user can see — a column filter, or a
- * URL-only scope (`/purchases?productId=…`) that by design never enters
+ * URL-only scope (`/expenses?productId=…`) that by design never enters
  * `columnFilters`?
  *
  * Only the empty-state COPY keys off this. `resetColumnFilters` can't clear a

@@ -4,6 +4,8 @@ import type {
   ProjectStatus,
   TaskStatus,
 } from "@cubby/schemas/project";
+import type { VendorKind } from "@cubby/schemas/vendor";
+import { VENDOR_KIND_LABELS } from "@cubby/schemas/vendor";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
 import type { ReactNode } from "react";
@@ -14,6 +16,7 @@ import {
 } from "~/app/projects/project-formatting";
 import { EntityIcon } from "~/entities/entities";
 import { usdaRouteId } from "~/entities/entity-query";
+import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn, formatCurrency } from "~/lib/utils";
 import { EntityPreviewLink } from "./EntityPreviewLink";
@@ -67,11 +70,28 @@ type EntityInlineLinkProps = {
       };
     }
   | {
-      entity: "purchase";
+      entity: "expense";
       data: MinimalEntityData & {
         cost?: number | null;
         projectName?: string | null;
       };
+    }
+  // A purchase has NO `name` — its identity is (vendor, orderId, date), so the
+  // label comes from `purchaseLabel` rather than a column. Deliberately not
+  // `MinimalEntityData`: there is no name to pass, and accepting one would
+  // invite callers to invent one.
+  | {
+      entity: "purchase";
+      data: {
+        id: string;
+        orderId: string | null;
+        vendorName?: string | null;
+        date?: string | null;
+      };
+    }
+  | {
+      entity: "vendor";
+      data: MinimalEntityData & { kind?: VendorKind | null };
     }
 );
 
@@ -318,6 +338,23 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         truncate={truncate}
       />
     ))
+    .with({ entity: "expense" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="expense"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        icon={<EntityIcon entity="expense" size={12} colored />}
+        name={data.name}
+        metadata={
+          data.cost != null
+            ? formatCurrency(data.cost)
+            : (data.projectName ?? undefined)
+        }
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
     .with({ entity: "purchase" }, ({ data }) => (
       <PreviewEntityLink
         entity="purchase"
@@ -325,12 +362,27 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         openInNewTab={openInNewTab}
         className={wrapperClass}
         icon={<EntityIcon entity="purchase" size={12} colored />}
-        name={data.name}
+        name={purchaseLabel(data)}
+        // Only when the label is the order id — otherwise the fallback label
+        // already leads with the vendor and this would print it twice.
         metadata={
-          data.cost != null
-            ? formatCurrency(data.cost)
-            : (data.projectName ?? undefined)
+          purchaseLabelUsedVendor(data)
+            ? undefined
+            : (data.vendorName ?? undefined)
         }
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "vendor" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="vendor"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        icon={<EntityIcon entity="vendor" size={12} colored />}
+        name={data.name}
+        metadata={data.kind ? VENDOR_KIND_LABELS[data.kind] : undefined}
         compact={compact}
         truncate={truncate}
       />

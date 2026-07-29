@@ -26,20 +26,20 @@ export type ProjectRow = {
 export type ProjectOwnRollup = Omit<ProjectRollup, "subtree">;
 export type ProjectSubtreeRollup = ProjectRollup["subtree"];
 
-/** Own-rollup zeros — the per-project aggregate for a project with no purchases/tasks yet. */
+/** Own-rollup zeros — the per-project aggregate for a project with no expenses/tasks yet. */
 export const EMPTY_PROJECT_OWN_ROLLUP: ProjectOwnRollup = {
   spent: 0,
   actualSpent: 0,
   committedSpent: 0,
   contributions: 0,
-  purchaseCount: 0,
+  expenseCount: 0,
   taskCount: 0,
   doneTaskCount: 0,
 };
 
 /**
  * A project's OWN dated content bounds — min/max over its live tasks and
- * purchases, before any parent/child folding. See analytics.ts's
+ * expenses, before any parent/child folding. See analytics.ts's
  * `projectRollups` and subtree.ts's `aggregateSubtreeDates`.
  */
 export type ProjectContentDates = {
@@ -47,7 +47,7 @@ export type ProjectContentDates = {
   contentEnd: string | null;
 };
 
-/** Content-date zeros — a project with no dated tasks or purchases. */
+/** Content-date zeros — a project with no dated tasks or expenses. */
 export const EMPTY_PROJECT_CONTENT_DATES: ProjectContentDates = {
   contentStart: null,
   contentEnd: null,
@@ -86,7 +86,7 @@ export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
   actualSpent: 0,
   committedSpent: 0,
   contributions: 0,
-  purchaseCount: 0,
+  expenseCount: 0,
   taskCount: 0,
   doneTaskCount: 0,
   projectCount: 0,

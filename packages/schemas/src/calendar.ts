@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mealId, projectId, purchaseId, taskId } from "./identifiers";
+import { mealId, projectId, expenseId, taskId } from "./identifiers";
 import {
   plainDate,
   projectKindSchema,
@@ -22,7 +22,7 @@ function calendarRangeDays(value: {
   );
 }
 
-export const calendarItemKind = z.enum(["meal", "task", "purchase", "project"]);
+export const calendarItemKind = z.enum(["meal", "task", "expense", "project"]);
 export type CalendarItemKind = z.infer<typeof calendarItemKind>;
 
 export const calendarInteraction = z.enum(["move", "read-only"]);
@@ -56,9 +56,9 @@ export const calendarTaskItem = z.object({
   projectName: z.string().nullable(),
 });
 
-export const calendarPurchaseItem = z.object({
-  kind: z.literal("purchase"),
-  id: purchaseId,
+export const calendarExpenseItem = z.object({
+  kind: z.literal("expense"),
+  id: expenseId,
   title: z.string(),
   ...calendarItemDates,
   interaction: calendarInteraction,
@@ -82,7 +82,7 @@ export const calendarProjectItem = z.object({
 export const calendarItem = z.discriminatedUnion("kind", [
   calendarMealItem,
   calendarTaskItem,
-  calendarPurchaseItem,
+  calendarExpenseItem,
   calendarProjectItem,
 ]);
 export type CalendarItem = z.infer<typeof calendarItem>;
@@ -108,7 +108,7 @@ export const calendarDaySummary = z.object({
   calories: z.number(),
   nutritionPending: z.boolean(),
   taskCount: z.number().int(),
-  purchaseCount: z.number().int(),
+  expenseCount: z.number().int(),
   mealCount: z.number().int(),
   projectCount: z.number().int(),
 });

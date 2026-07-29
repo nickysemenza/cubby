@@ -44,10 +44,10 @@ describe("view manifest", () => {
   });
 });
 
-describe("purchase views produce the filters their old tabs pinned", () => {
-  const specs = getEntityFilters("purchase");
+describe("expense views produce the filters their old tabs pinned", () => {
+  const specs = getEntityFilters("expense");
   const build = (viewId: string) => {
-    const view = viewsForEntity("purchase").find((v) => v.id === viewId);
+    const view = viewsForEntity("expense").find((v) => v.id === viewId);
     if (!view) throw new Error(`no such view: ${viewId}`);
     const byId = new Map(view.filters.map((f) => [f.id, f.value]));
     return buildFiltersFromManifest(specs, (columnId) => byId.get(columnId));
@@ -77,7 +77,7 @@ describe("purchase views produce the filters their old tabs pinned", () => {
   });
 
   it("sends the sentinel through as a sentinel, never as an id", () => {
-    const view = viewsForEntity("purchase").find((v) => v.id === "unassigned");
+    const view = viewsForEntity("expense").find((v) => v.id === "unassigned");
     expect(view?.filters).toEqual([{ id: "project", value: [FILTER_NONE] }]);
   });
 });

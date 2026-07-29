@@ -1,12 +1,12 @@
 import {
   unsafeCookbookId,
+  unsafeExpenseId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
-  unsafePurchaseId,
   unsafeRecipeId,
   unsafeTaskId,
 } from "@cubby/schemas/identifiers";
@@ -17,6 +17,7 @@ import type { Database } from "~/server/db";
 import {
   cookbook,
   entityEmbedding,
+  expense,
   ingredient,
   inventoryEntry,
   location,
@@ -24,7 +25,6 @@ import {
   mealRecipe,
   product,
   project,
-  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -40,13 +40,13 @@ import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
 import { embeddingTextHash } from "~/server/semantic/hash";
 import {
   buildCookbookEmbeddingText,
+  buildExpenseEmbeddingText,
   buildIngredientEmbeddingText,
   buildInventoryEmbeddingText,
   buildLocationEmbeddingText,
   buildMealEmbeddingText,
   buildProductEmbeddingText,
   buildProjectEmbeddingText,
-  buildPurchaseEmbeddingText,
   buildRecipeEmbeddingText,
   buildTaskEmbeddingText,
   normalizeSearchText,
@@ -433,35 +433,35 @@ async function getTaskEmbeddingTexts(
   }));
 }
 
-async function getPurchaseEmbeddingTexts(
+async function getExpenseEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const query = getDb(db)
     .select({
-      id: purchase.id,
-      name: purchase.name,
-      costType: purchase.costType,
-      trade: purchase.trade,
-      notes: purchase.notes,
+      id: expense.id,
+      name: expense.name,
+      costType: expense.costType,
+      trade: expense.trade,
+      notes: expense.notes,
       projectName: project.name,
     })
-    .from(purchase)
-    .leftJoin(project, eq(purchase.projectId, project.id))
+    .from(expense)
+    .leftJoin(project, eq(expense.projectId, project.id))
     .where(
       and(
-        notDeleted(purchase),
+        notDeleted(expense),
         options.ids?.length
-          ? inArray(purchase.id, options.ids.map(unsafePurchaseId))
+          ? inArray(expense.id, options.ids.map(unsafeExpenseId))
           : undefined,
       ),
     );
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
   return rows.map((row) => ({
-    entityType: "purchase",
+    entityType: "expense",
     entityId: row.id,
-    embeddingText: buildPurchaseEmbeddingText(row),
+    embeddingText: buildExpenseEmbeddingText(row),
   }));
 }
 
@@ -475,7 +475,7 @@ const embeddingTextLoaders = {
   meal: getMealEmbeddingTexts,
   project: getProjectEmbeddingTexts,
   task: getTaskEmbeddingTexts,
-  purchase: getPurchaseEmbeddingTexts,
+  expense: getExpenseEmbeddingTexts,
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;
 
 export async function getEmbeddingTextsForEntityTypes(

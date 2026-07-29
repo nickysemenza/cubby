@@ -3,7 +3,7 @@
  *
  * Both `projectRollups` and `projectDependencyIds` take a *set* of project ids
  * and return a lookup keyed by id — one query per underlying relation (two for
- * the rollup: purchases + tasks; two for dependencies: blocked-by + blocking),
+ * the rollup: expenses + tasks; two for dependencies: blocked-by + blocking),
  * never one query per project. Callers (crud.ts's reader, lookup.ts's list)
  * always batch the ids of the page/row they're mapping, so a list of 50
  * projects costs 4 queries total, not 200.
@@ -11,7 +11,7 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import { and, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { projectDependency, purchase, task } from "~/server/db/schema";
+import { expense, projectDependency, task } from "~/server/db/schema";
 import {
   dependencyIdsFor,
   getDb,
@@ -28,11 +28,11 @@ import {
 } from "./helpers";
 
 /**
- * SUM/COUNT rollups over live purchases and tasks, per project — this
+ * SUM/COUNT rollups over live expenses and tasks, per project — this
  * project's OWN aggregate only (never recursive; see repo/project/subtree.ts
  * for the subtree total built on top of this).
  *
- * `spent` sums ALL live purchases including `future` (not-yet-made) ones —
+ * `spent` sums ALL live expenses including `future` (not-yet-made) ones —
  * this matches the retired Notion rollup's semantics (a planned spend still
  * counts toward the running total against the estimate). See
  * packages/schemas/src/project.ts's `projectRollup` doc comment.
@@ -45,22 +45,22 @@ export async function projectRollups(
   if (projectIds.length === 0) return out;
   for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_OWN_ROLLUP });
 
-  const [purchaseRows, taskRows] = await Promise.all([
+  const [expenseRows, taskRows] = await Promise.all([
     getDb(db)
       .select({
-        projectId: purchase.projectId,
-        spent: sql<number>`coalesce(sum(${purchase.cost}), 0)::float`,
+        projectId: expense.projectId,
+        spent: sql<number>`coalesce(sum(${expense.cost}), 0)::float`,
         // Split the blended `spent` into its three economically distinct parts
         // (see spend.ts / BudgetStrip). actualSpent + committedSpent −
         // contributions === spent.
-        actualSpent: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = false), 0)::float`,
-        committedSpent: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.cost} > 0 and ${purchase.future} = true), 0)::float`,
-        contributions: sql<number>`coalesce(-sum(${purchase.cost}) filter (where ${purchase.cost} < 0), 0)::float`,
-        purchaseCount: sql<number>`count(*)::int`,
+        actualSpent: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.cost} > 0 and ${expense.future} = false), 0)::float`,
+        committedSpent: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.cost} > 0 and ${expense.future} = true), 0)::float`,
+        contributions: sql<number>`coalesce(-sum(${expense.cost}) filter (where ${expense.cost} < 0), 0)::float`,
+        expenseCount: sql<number>`count(*)::int`,
       })
-      .from(purchase)
-      .where(and(inArray(purchase.projectId, projectIds), notDeleted(purchase)))
-      .groupBy(purchase.projectId),
+      .from(expense)
+      .where(and(inArray(expense.projectId, projectIds), notDeleted(expense)))
+      .groupBy(expense.projectId),
     getDb(db)
       .select({
         projectId: task.projectId,
@@ -72,7 +72,7 @@ export async function projectRollups(
       .groupBy(task.projectId),
   ]);
 
-  for (const row of purchaseRows) {
+  for (const row of expenseRows) {
     if (!row.projectId) continue;
     const existing = out.get(row.projectId) ?? { ...EMPTY_PROJECT_OWN_ROLLUP };
     out.set(row.projectId, {
@@ -81,7 +81,7 @@ export async function projectRollups(
       actualSpent: row.actualSpent,
       committedSpent: row.committedSpent,
       contributions: row.contributions,
-      purchaseCount: row.purchaseCount,
+      expenseCount: row.expenseCount,
     });
   }
   for (const row of taskRows) {
@@ -99,7 +99,7 @@ export async function projectRollups(
 /**
  * Each project's OWN dated-content bounds — `min`/`max` over its live tasks
  * (`dueDate` … `coalesce(dueEndDate, dueDate)`, since a task with no
- * `dueEndDate` is a one-day task) and its live purchases (`date`). This is the
+ * `dueEndDate` is a one-day task) and its live expenses (`date`). This is the
  * leaf input to subtree.ts's `aggregateSubtreeDates`, which folds it up the
  * WBS tree into each project's derived window.
  *
@@ -109,7 +109,7 @@ export async function projectRollups(
  * path (`projectNameOptions`) wants dates *without* the money aggregate, and
  * restating the one-day-task rule at a second call site is how it would drift.
  *
- * Negative purchases (refunds, family contributions) count: they are dated
+ * Negative expenses (refunds, family contributions) count: they are dated
  * project activity, and the tracker has no other place that filters them out
  * of a date range.
  *
@@ -122,10 +122,10 @@ export async function projectContentDates(
   const out = new Map<ProjectId, ProjectContentDates>();
   if (projectIds?.length === 0) return out;
 
-  const scope = (column: typeof task.projectId | typeof purchase.projectId) =>
+  const scope = (column: typeof task.projectId | typeof expense.projectId) =>
     projectIds ? inArray(column, projectIds) : isNotNull(column);
 
-  const [taskRows, purchaseRows] = await Promise.all([
+  const [taskRows, expenseRows] = await Promise.all([
     getDb(db)
       .select({
         projectId: task.projectId,
@@ -137,16 +137,16 @@ export async function projectContentDates(
       .groupBy(task.projectId),
     getDb(db)
       .select({
-        projectId: purchase.projectId,
-        contentStart: sql<string | null>`min(${purchase.date})`,
-        contentEnd: sql<string | null>`max(${purchase.date})`,
+        projectId: expense.projectId,
+        contentStart: sql<string | null>`min(${expense.date})`,
+        contentEnd: sql<string | null>`max(${expense.date})`,
       })
-      .from(purchase)
-      .where(and(scope(purchase.projectId), notDeleted(purchase)))
-      .groupBy(purchase.projectId),
+      .from(expense)
+      .where(and(scope(expense.projectId), notDeleted(expense)))
+      .groupBy(expense.projectId),
   ]);
 
-  for (const row of [...taskRows, ...purchaseRows]) {
+  for (const row of [...taskRows, ...expenseRows]) {
     if (!row.projectId) continue;
     const existing = out.get(row.projectId) ?? EMPTY_PROJECT_CONTENT_DATES;
     out.set(row.projectId, {

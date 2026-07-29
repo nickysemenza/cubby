@@ -1,14 +1,14 @@
 /**
  * Shared helpers for the app's "plain date" convention: a timezone-free
  * "YYYY-MM-DD" string (project `startDate`/`endDate`, task
- * `dueDate`/`dueEndDate`, purchase `date` — see `plainDate` in
+ * `dueDate`/`dueEndDate`, expense `date` — see `plainDate` in
  * `@cubby/schemas/project`). These convert to/from a local-midnight `Date`
  * for display and for date-picker UIs; nothing here should ever touch UTC.
  */
 
 /**
  * Parse a "YYYY-MM-DD" plain-date string (no time component — a task due
- * date, a purchase date) into a local `Date` at midnight via its components,
+ * date, an expense date) into a local `Date` at midnight via its components,
  * rather than `new Date(isoString)` (which parses as UTC midnight and can
  * shift a day back for negative UTC offsets, e.g. US timezones).
  */

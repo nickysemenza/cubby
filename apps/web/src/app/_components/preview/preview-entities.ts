@@ -9,4 +9,6 @@ export type HoverPreviewEntity =
   | "meal"
   | "project"
   | "task"
-  | "purchase";
+  | "expense"
+  | "purchase"
+  | "vendor";

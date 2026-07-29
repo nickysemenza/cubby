@@ -1,9 +1,9 @@
 import type {
   CostType,
+  ExpenseOut,
   ProjectKind,
   ProjectOut,
   ProjectStatus,
-  PurchaseOut,
   TaskOut,
   TaskStatus,
   Trade,
@@ -12,6 +12,7 @@ import { Link } from "@tanstack/react-router";
 import {
   type ColumnHelper,
   createColumnHelper,
+  type FilterFn,
   getCoreRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
@@ -22,7 +23,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { partition, uniq } from "es-toolkit";
+import { partition } from "es-toolkit";
 import { ExternalLink, ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import {
   type ComponentType,
@@ -60,9 +61,9 @@ import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
-  PurchaseBulkActionDialogs,
-  usePurchaseBulkActions,
-} from "~/app/_components/tracker/purchase-bulk-actions";
+  ExpenseBulkActionDialogs,
+  useExpenseBulkActions,
+} from "~/app/_components/tracker/expense-bulk-actions";
 import {
   TaskBulkActionDialogs,
   useTaskBulkActions,
@@ -71,7 +72,7 @@ import {
   costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
-} from "~/app/purchases/purchase-options";
+} from "~/app/expenses/expense-options";
 import {
   TASK_STATUS_LABELS,
   taskStatusBadgeVariant,
@@ -89,11 +90,11 @@ import {
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { FILTER_NONE } from "~/entities/filters";
+import { multiSelectFilterFnBy } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
+  expenseMutationInvalidateKeys,
   projectMutationInvalidateKeys,
-  purchaseMutationInvalidateKeys,
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
@@ -157,9 +158,9 @@ export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
 
 const taskHelper = createColumnHelper<TaskOut>();
 
-// --- Shared task/purchase column factories ---
+// --- Shared task/expense column factories ---
 // These bake the renderCell + select options + editable field-mapping shared by
-// the `/tasks` & `/purchases` index pages (tasklist.tsx / purchaselist.tsx, via
+// the `/tasks` & `/expenses` index pages (tasklist.tsx / expenselist.tsx, via
 // `useEntityList`) and the embedded tables below (raw `useReactTable` over a
 // caller-supplied array). Each returns ONE column def; callers pass their own
 // `mobile` / `filterConfig` / density knobs. The project column already has its
@@ -467,14 +468,14 @@ export function TaskList({
   );
 }
 
-// -- Purchase Table --
+// -- Expense Table --
 
-const purchaseHelper = createColumnHelper<PurchaseOut>();
+const expenseHelper = createColumnHelper<ExpenseOut>();
 
 /**
- * Editable-select options for the embedded purchases table's Future/Status
+ * Editable-select options for the embedded expenses table's Future/Status
  * column — same "true"/"false" values as the index page's `futureFilterOptions`
- * (~/app/purchases/purchase-options), but "Actual" rather than "Already made"
+ * (~/app/expenses/expense-options), but "Actual" rather than "Already made"
  * to match this column's tighter "Status" header. Module-level: a stable
  * reference for the column's `useMemo`.
  */
@@ -483,12 +484,12 @@ const futureEditOptions: FilterableComboboxItem[] = [
   { value: "true", label: "Planned" },
 ];
 
-// --- Shared purchase column factories (see the task factories above) ---
+// --- Shared expense column factories (see the task factories above) ---
 
 /** Cost-type column — label render + required `costType` write. */
-export function purchaseCostTypeColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (costType: CostType, purchase: PurchaseOut) => Promise<void>,
+export function expenseCostTypeColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (costType: CostType, expense: ExpenseOut) => Promise<void>,
   opts?: { mobile?: MobileColumnMeta },
 ) {
   return createFilterableSelectColumn(helper, "costType", {
@@ -496,7 +497,7 @@ export function purchaseCostTypeColumn(
     className: "w-28",
     placeholder: "Filter by cost type...",
     selectOptions: costTypeOptions,
-    filterConfig: manifestFilterConfig("purchase", "costType"),
+    filterConfig: manifestFilterConfig("expense", "costType"),
     renderCell: (costType: CostType | null) =>
       costType ? (
         <Badge variant={costTypeBadgeVariant[costType]}>
@@ -507,10 +508,10 @@ export function purchaseCostTypeColumn(
       ),
     mobile: opts?.mobile,
     editable: {
-      onSave: async (newCostType, purchase) => {
+      onSave: async (newCostType, expense) => {
         // Required field — a cleared select is a no-op, not a null write.
         if (!newCostType) return;
-        await save(newCostType, purchase);
+        await save(newCostType, expense);
       },
     },
   });
@@ -520,9 +521,9 @@ export function purchaseCostTypeColumn(
  * `filterFn: "equalsString"` (the pivot's controlled trade filter must select
  * one trade, not substring-match); `emptyAsNull` renders an empty cell instead
  * of the muted dash. */
-export function purchaseTradeColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (trade: Trade, purchase: PurchaseOut) => Promise<void>,
+export function expenseTradeColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (trade: Trade, expense: ExpenseOut) => Promise<void>,
   opts?: {
     mobile?: MobileColumnMeta;
     emptyAsNull?: boolean;
@@ -534,7 +535,7 @@ export function purchaseTradeColumn(
     className: "w-32",
     placeholder: "Filter by trade...",
     selectOptions: tradeOptions,
-    filterConfig: manifestFilterConfig("purchase", "trade"),
+    filterConfig: manifestFilterConfig("expense", "trade"),
     renderCell: (trade: Trade | null) =>
       trade ? (
         <TradeBadge trade={trade} />
@@ -543,10 +544,10 @@ export function purchaseTradeColumn(
       ),
     mobile: opts?.mobile,
     editable: {
-      onSave: async (newTrade, purchase) => {
+      onSave: async (newTrade, expense) => {
         // Required field — a cleared select is a no-op, not a null write.
         if (!newTrade) return;
-        await save(newTrade, purchase);
+        await save(newTrade, expense);
       },
     },
   });
@@ -560,9 +561,9 @@ export function purchaseTradeColumn(
 
 /** Cost column — `decimals`/`signedTone` tune the embedded whole-dollar,
  * sign-tinted look; the index page omits them for default cents + flat green. */
-export function purchaseCostColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (cost: number | null, purchase: PurchaseOut) => Promise<void>,
+export function expenseCostColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (cost: number | null, expense: ExpenseOut) => Promise<void>,
   opts?: {
     className?: string;
     mobile?: MobileColumnMeta;
@@ -577,17 +578,17 @@ export function purchaseCostColumn(
     decimals: opts?.decimals,
     signedTone: opts?.signedTone,
     editable: {
-      onSave: async (newCost, purchase) => {
-        await save(newCost, purchase);
+      onSave: async (newCost, expense) => {
+        await save(newCost, expense);
       },
     },
   });
 }
 
 /** Date column — inline date-picker + `date` write. */
-export function purchaseDateColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (date: string | null, purchase: PurchaseOut) => Promise<void>,
+export function expenseDateColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (date: string | null, expense: ExpenseOut) => Promise<void>,
   opts?: { mobile?: MobileColumnMeta; filterConfig?: FilterConfig },
 ) {
   return createPlainDateColumn(helper, "date", {
@@ -596,8 +597,8 @@ export function purchaseDateColumn(
     mobile: opts?.mobile,
     filterConfig: opts?.filterConfig,
     editable: {
-      onSave: async (newDate, purchase) => {
-        await save(newDate, purchase);
+      onSave: async (newDate, expense) => {
+        await save(newDate, expense);
       },
     },
   });
@@ -605,9 +606,9 @@ export function purchaseDateColumn(
 
 /** Future/Status column — the editable "Actual"/"Planned" select over the
  * boolean `future` field. */
-export function purchaseFutureColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (future: boolean, purchase: PurchaseOut) => Promise<void>,
+export function expenseFutureColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (future: boolean, expense: ExpenseOut) => Promise<void>,
   opts?: {
     className?: string;
     mobile?: MobileColumnMeta;
@@ -616,8 +617,8 @@ export function purchaseFutureColumn(
 ) {
   // Shared copy/paste descriptor: the boolean `future` field as a select of
   // "true"/"false". Wiring `meta.cellData` (like the column factories do) makes
-  // this the last inline-editable purchase column visible to range copy/paste.
-  const cellData = selectCellData<PurchaseOut>(
+  // this the last inline-editable expense column visible to range copy/paste.
+  const cellData = selectCellData<ExpenseOut>(
     (row) => (row.future ? "true" : "false"),
     futureEditOptions,
     (row, value) => save(value === "true", row),
@@ -633,14 +634,14 @@ export function purchaseFutureColumn(
       cellData,
     },
     cell: (info) => {
-      const purchase = info.row.original;
+      const expense = info.row.original;
       return (
         <EditableCell
           value={info.getValue()}
           onSave={async (newVal) => {
-            await save(newVal === "true", purchase);
+            await save(newVal === "true", expense);
           }}
-          clipboard={specFromCellData(cellData, purchase)}
+          clipboard={specFromCellData(cellData, expense)}
           config={{ type: "select", options: futureEditOptions }}
           renderValue={(v) =>
             v === "true" ? (
@@ -656,9 +657,31 @@ export function purchaseFutureColumn(
 }
 
 /**
- * Vendor column — free-text `vendor` write. Hidden by default wherever it
- * appears (see `initialColumnVisibility` in purchaselist.tsx, and the embedded
- * table's own visibility default) because vendor is set on only ~30% of rows.
+ * Client-side matching for the Vendor picklist, on the vendor ID.
+ *
+ * The cell shows the vendor's NAME, but the roster's option values are vendor
+ * ids (that's what the manifest's `vendorId` filter matches server-side), so the
+ * default `multiSelectFilterFn` — which reads the column's own cell value —
+ * would compare an id against a name and quietly match nothing. This reads
+ * `vendorId` off the row instead; sentinel handling (`(none)` / `Has vendor`)
+ * stays in `multiSelectFilterFnBy`, so the client table's OR semantics still
+ * mirror `eqAnyOrPresence`. Server-filtered tables (the /expenses ledger) never
+ * run it.
+ */
+const matchesVendorId = multiSelectFilterFnBy((v) => v as string | null);
+const vendorIdFilterFn: FilterFn<ExpenseOut> = (row, columnId, filterValue) =>
+  matchesVendorId(
+    { getValue: () => row.original.vendorId },
+    columnId,
+    filterValue,
+  );
+
+/**
+ * Vendor column — the charge's vendor, displayed by name and written by name
+ * (`expenseUpdateData.vendor` still resolves a name to a real `Vendor` +
+ * `Purchase` server-side). Hidden by default wherever it appears (see
+ * `initialColumnVisibility` in expenselist.tsx, and the embedded table's own
+ * visibility default) because a charge is attached to only ~30% of rows.
  *
  * Leads with the vendor's brand mark (`VendorCell`) so long runs of the same
  * vendor — 539 of the 737 vendor-bearing rows are Amazon/Home Depot/eBay/Lowe's
@@ -666,60 +689,60 @@ export function purchaseFutureColumn(
  * the mark costs ~24px and the narrower column already truncated "Direct Tools
  * Outlet".
  *
- * Its filter is a picklist, so a caller must supply the roster. The ledger
- * routes the global `purchase.vendorOptions` query in through `useEntityList`'s
- * `filterOptions` (which overrides this config wholesale); the embedded table
- * passes `vendorOptions` here, derived from the rows it was handed, plus
- * `facetCount` so the counts are that project's rather than the ledger's.
+ * Its filter is an id-based picklist, so a caller must supply the roster of
+ * `{value: vendorId, label: name}` options. The ledger routes the global
+ * `expense.vendorOptions` query in through `useEntityList`'s `filterOptions`
+ * (which overrides this config wholesale); the embedded table passes
+ * `vendorOptions` here, derived from the rows it was handed.
  */
-export function purchaseVendorColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (vendor: string | null, purchase: PurchaseOut) => Promise<void>,
+export function expenseVendorColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (vendor: string | null, expense: ExpenseOut) => Promise<void>,
   opts?: {
     mobile?: MobileColumnMeta;
     vendorOptions?: FilterableComboboxItem[];
-    /** Client-side tables only — counts come from TanStack faceting. */
-    facetCount?: boolean;
   },
 ) {
-  const filterConfig = manifestFilterConfig(
-    "purchase",
-    "vendor",
-    opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
-  );
-  return createTextColumn(helper, "vendor", {
+  const column = createTextColumn(helper, "vendor", {
     header: "Vendor",
     placeholder: "Where from?",
     className: "w-40",
     mobile: opts?.mobile,
-    filterConfig:
-      filterConfig && opts?.facetCount
-        ? { ...filterConfig, facetCount: true }
-        : filterConfig,
+    filterConfig: manifestFilterConfig(
+      "expense",
+      "vendor",
+      opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
+    ),
     renderValue: (v) =>
       v ? <VendorCell vendor={v} compactOnMobile /> : <NoneValue />,
     editable: {
-      onSave: async (newVendor, purchase) => {
-        await save(newVendor, purchase);
+      onSave: async (newVendor, expense) => {
+        await save(newVendor, expense);
       },
     },
   });
+  // Overrides the name-based `multiSelectFilterFn` `createTextColumn` attaches to
+  // any multiselect text column — see `vendorIdFilterFn` for why the two can't
+  // be the same function here.
+  return { ...column, filterFn: vendorIdFilterFn };
 }
 
 /**
- * Order # column — free-text `orderId` write, the vendor's own order/receipt id.
- * Rendered `font-mono` (house convention for identifiers). Hidden by default on
- * the /purchases ledger; see `purchaseVendorColumn`. Its filter is presence-only
- * ("has order id" / "(none)") — the "(none)" side is the unreconciled worklist.
+ * Order # column — the charge's own order/receipt id, written through the
+ * expense (`expenseUpdateData.orderId`). Rendered `font-mono` (house convention
+ * for identifiers). Hidden by default on the /expenses ledger; see
+ * `expenseVendorColumn`. Its filter is presence-only ("has order id" /
+ * "(none)") — the "(none)" side is the unreconciled worklist.
  *
- * The trailing icon scopes the ledger to the rest of that order. It carries the
- * row's `vendor` alongside the id because an order id is only unique within a
- * vendor. Rich display mode keeps that link beside a dedicated pencil trigger,
- * so navigation never also opens the inline editor.
+ * The trailing icon scopes the ledger to the rest of that order, by id alone: it
+ * resolves through `purchaseId` against a partial-unique `(vendorId, orderId)`,
+ * so it no longer has to carry the row's vendor to stay unambiguous. Rich
+ * display mode keeps that link beside a dedicated pencil trigger, so navigation
+ * never also opens the inline editor.
  */
-export function purchaseOrderIdColumn(
-  helper: ColumnHelper<PurchaseOut>,
-  save: (orderId: string | null, purchase: PurchaseOut) => Promise<void>,
+export function expenseOrderIdColumn(
+  helper: ColumnHelper<ExpenseOut>,
+  save: (orderId: string | null, expense: ExpenseOut) => Promise<void>,
   opts?: { mobile?: MobileColumnMeta },
 ) {
   return createTextColumn(helper, "orderId", {
@@ -727,15 +750,15 @@ export function purchaseOrderIdColumn(
     placeholder: "Vendor order #",
     className: "w-32",
     mobile: opts?.mobile,
-    filterConfig: manifestFilterConfig("purchase", "orderId"),
+    filterConfig: manifestFilterConfig("expense", "orderId"),
     trigger: "pencil",
-    renderValue: (v, row) =>
+    renderValue: (v) =>
       v ? (
         <>
           <span className="font-mono">{v}</span>
           <Link
-            to="/purchases"
-            search={{ order: v, vendor: row.vendor ?? FILTER_NONE }}
+            to="/expenses"
+            search={{ order: v }}
             className="text-muted-foreground hover:text-foreground"
             aria-label={`Show the rest of order ${v}`}
           >
@@ -746,20 +769,20 @@ export function purchaseOrderIdColumn(
         <NoneValue />
       ),
     editable: {
-      onSave: async (newOrderId, purchase) => {
-        await save(newOrderId, purchase);
+      onSave: async (newOrderId, expense) => {
+        await save(newOrderId, expense);
       },
     },
   });
 }
 
 /**
- * Columns off by default on the embedded purchase table. Vendor (~30% filled),
+ * Columns off by default on the embedded expense table. Vendor (~30% filled),
  * Order # (~25%) and Product are sparse enough that showing them by default
  * would cost more density than they return on a project page — but the column
  * menu makes them one click away.
  */
-const EMBEDDED_PURCHASE_COLUMNS: VisibilityState = {
+const EMBEDDED_EXPENSE_COLUMNS: VisibilityState = {
   vendor: false,
   orderId: false,
   product: false,
@@ -767,10 +790,10 @@ const EMBEDDED_PURCHASE_COLUMNS: VisibilityState = {
 };
 
 /**
- * The embedded purchase table: client-side filter/sort/pagination over a
+ * The embedded expense table: client-side filter/sort/pagination over a
  * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
  *
- * These are bounded sub-lists (one project's purchases, already server-scoped
+ * These are bounded sub-lists (one project's expenses, already server-scoped
  * and capped by the caller's query), so server pagination would buy nothing at
  * this data scale. More importantly, this component is also rendered by the
  * projects dashboard's Data view, which scopes rows to
@@ -781,18 +804,18 @@ const EMBEDDED_PURCHASE_COLUMNS: VisibilityState = {
  * trip.) Converting would mean two data paths in one component, which is how
  * these tables drifted from the index pages before.
  *
- * Columns come from the shared factories above — the same ones the /purchases
+ * Columns come from the shared factories above — the same ones the /expenses
  * index page feeds through `useEntityList` — and their filter controls come
  * from the filter manifest via `manifestFilterConfig`, so the embedded and
  * index tables can't diverge even though their data paths differ.
  */
-export function PurchaseList({
-  purchases,
+export function ExpenseList({
+  expenses,
   tradeFilter,
   costTypeFilter,
   showProjectColumn = true,
 }: {
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
   /** Controlled column filters, driven by the Trade × Cost Type pivot click. */
   tradeFilter?: Trade | null;
   costTypeFilter?: CostType | null;
@@ -807,69 +830,80 @@ export function PurchaseList({
   const lastSelectedIdRef = useRef<string | null>(null);
   const shiftKeyRef = useRef(false);
 
-  const updatePurchaseMutation = useUpdateMutation({
-    mutationFn: api.purchase.update.mutationOptions,
-    entity: "purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
+  const updateExpenseMutation = useUpdateMutation({
+    mutationFn: api.expense.update.mutationOptions,
+    entity: "expense",
+    invalidateKeys: expenseMutationInvalidateKeys,
   });
-  const nameEditable = useNameEditable<PurchaseOut>(
-    updatePurchaseMutation.mutateAsync,
+  const nameEditable = useNameEditable<ExpenseOut>(
+    updateExpenseMutation.mutateAsync,
   );
 
   // The Vendor picklist's roster, from the rows this table was handed rather
-  // than the ledger-wide `purchase.vendorOptions` query: on a project page the
+  // than the ledger-wide `expense.vendorOptions` query: on a project page the
   // useful question is "which vendors did THIS project use", and offering the
-  // other 70 would mostly be options that match nothing. Counts come from
-  // TanStack faceting (`facetCount`), so they track the other active filters.
-  const rowVendorOptions = useMemo<FilterableComboboxItem[]>(
-    () =>
-      uniq(purchases.flatMap((p) => (p.vendor ? [p.vendor] : [])))
-        .sort((a, b) => a.localeCompare(b))
-        .map((vendor) => ({
-          value: vendor,
-          label: vendor,
-          icon: <VendorMark vendor={vendor} />,
-        })),
-    [purchases],
-  );
+  // other 70 would mostly be options that match nothing.
+  //
+  // Same option SHAPE as the ledger's (`value` = vendor id, `label` = name), so
+  // both surfaces filter on the identity the server does — see
+  // `vendorIdFilterFn`. Counts are tallied off these rows rather than from
+  // TanStack faceting: faceting keys on the column's cell value, which is the
+  // NAME, so it can't hint an id-valued option.
+  const rowVendorOptions = useMemo<FilterableComboboxItem[]>(() => {
+    const byId = new Map<string, { name: string; count: number }>();
+    for (const row of expenses) {
+      if (!row.vendorId || !row.vendor) continue;
+      const seen = byId.get(row.vendorId);
+      if (seen) seen.count += 1;
+      else byId.set(row.vendorId, { name: row.vendor, count: 1 });
+    }
+    return [...byId]
+      .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+      .map(([id, { name, count }]) => ({
+        value: id,
+        label: name,
+        hint: String(count),
+        icon: <VendorMark vendor={name} />,
+      }));
+  }, [expenses]);
 
   // Hand-wired for the same reason as `TaskList` above — raw `useReactTable`,
   // and the pivot drives `trade`'s column filter imperatively, which
   // `useClientEntityList` would funnel into url state and a page reset.
   const deletableConfig = useDeletableConfig({
-    mutationFn: api.purchase.delete.mutationOptions,
-    entityLabel: "Purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
+    mutationFn: api.expense.delete.mutationOptions,
+    entityLabel: "Expense",
+    invalidateKeys: expenseMutationInvalidateKeys,
   });
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
-    useOptimisticDelete<PurchaseOut>({ deletable: deletableConfig });
+    useOptimisticDelete<ExpenseOut>({ deletable: deletableConfig });
 
-  const purchaseDeleteActions = useMemo(
+  const expenseDeleteActions = useMemo(
     () => (deleteBulkAction ? [deleteBulkAction] : []),
     [deleteBulkAction],
   );
-  const purchaseBulkActions = usePurchaseBulkActions({
-    extraActions: purchaseDeleteActions,
+  const expenseBulkActions = useExpenseBulkActions({
+    extraActions: expenseDeleteActions,
   });
   const bulkActionsState = useBulkActions({
-    config: purchaseBulkActions.config,
+    config: expenseBulkActions.config,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updatePurchaseMutation changes every render but is functionally stable
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      buildSelectColumn<PurchaseOut>(lastSelectedIdRef, shiftKeyRef),
-      createNameColumn(purchaseHelper, "purchase", "name", {
-        header: "Purchase",
+      buildSelectColumn<ExpenseOut>(lastSelectedIdRef, shiftKeyRef),
+      createNameColumn(expenseHelper, "expense", "name", {
+        header: "Expense",
         editable: nameEditable,
-        // The name itself goes to /purchases/$id; the vendor page keeps its own
+        // The name itself goes to /expenses/$id; the vendor page keeps its own
         // icon-only affordance beside it (same treatment as the index list's
         // dedicated url column, minus the column). stopPropagation so it opens
         // the vendor link instead of the cell's inline editor.
-        nameSuffix: (purchase) =>
-          purchase.url ? (
+        nameSuffix: (expense) =>
+          expense.url ? (
             <a
-              href={purchase.url}
+              href={expense.url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -884,13 +918,13 @@ export function PurchaseList({
       // where every row shares the one project (see `showProjectColumn`).
       ...(showProjectColumn
         ? [
-            createProjectLinkColumn(purchaseHelper, {
+            createProjectLinkColumn(expenseHelper, {
               className: "w-40",
               mobile: { slot: "meta", priority: 40, interactive: true },
               editable: {
-                onSave: async (newProjectId, purchase) => {
-                  await updatePurchaseMutation.mutateAsync({
-                    id: purchase.id,
+                onSave: async (newProjectId, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
                     data: { projectId: newProjectId },
                   });
                 },
@@ -898,11 +932,11 @@ export function PurchaseList({
             }),
           ]
         : []),
-      purchaseCostTypeColumn(
-        purchaseHelper,
-        async (costType, purchase) => {
-          await updatePurchaseMutation.mutateAsync({
-            id: purchase.id,
+      expenseCostTypeColumn(
+        expenseHelper,
+        async (costType, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
             data: { costType },
           });
         },
@@ -912,11 +946,11 @@ export function PurchaseList({
       // greens them so they don't read as spend; `decimals: 0` keeps the
       // embedded table's whole-dollar density. `exactFilter` keeps the pivot's
       // controlled trade filter to a single trade.
-      purchaseTradeColumn(
-        purchaseHelper,
-        async (trade, purchase) => {
-          await updatePurchaseMutation.mutateAsync({
-            id: purchase.id,
+      expenseTradeColumn(
+        expenseHelper,
+        async (trade, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
             data: { trade },
           });
         },
@@ -926,11 +960,11 @@ export function PurchaseList({
           mobile: { slot: "meta", priority: 60 },
         },
       ),
-      purchaseCostColumn(
-        purchaseHelper,
-        async (cost, purchase) => {
-          await updatePurchaseMutation.mutateAsync({
-            id: purchase.id,
+      expenseCostColumn(
+        expenseHelper,
+        async (cost, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
             data: { cost },
           });
         },
@@ -941,21 +975,21 @@ export function PurchaseList({
           mobile: { slot: "trailing", priority: 10, interactive: true },
         },
       ),
-      purchaseDateColumn(
-        purchaseHelper,
-        async (date, purchase) => {
-          await updatePurchaseMutation.mutateAsync({
-            id: purchase.id,
+      expenseDateColumn(
+        expenseHelper,
+        async (date, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
             data: { date },
           });
         },
         { mobile: { slot: "subtitle", priority: 15 } },
       ),
-      purchaseFutureColumn(
-        purchaseHelper,
-        async (future, purchase) => {
-          await updatePurchaseMutation.mutateAsync({
-            id: purchase.id,
+      expenseFutureColumn(
+        expenseHelper,
+        async (future, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
             data: { future },
           });
         },
@@ -965,52 +999,52 @@ export function PurchaseList({
       // they stay off by default — but they're reachable now, via the column
       // menu `showColumnMenu` keeps on screen. (They used to be omitted
       // outright: without that menu any column added here was permanent.)
-      createProductLinkColumn(purchaseHelper, {
+      createProductLinkColumn(expenseHelper, {
         className: "w-40",
-        filterConfig: manifestFilterConfig("purchase", "product"),
+        filterConfig: manifestFilterConfig("expense", "product"),
       }),
-      purchaseVendorColumn(
-        purchaseHelper,
-        async (vendor, purchase) => {
-          await updatePurchaseMutation.mutateAsync({
-            id: purchase.id,
+      expenseVendorColumn(
+        expenseHelper,
+        async (vendor, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
             data: { vendor },
           });
         },
-        // Roster from the rows on screen + faceted counts, so the picklist
-        // describes THIS project's spend rather than the whole ledger.
-        { vendorOptions: rowVendorOptions, facetCount: true },
+        // Roster (and counts) from the rows on screen, so the picklist describes
+        // THIS project's spend rather than the whole ledger.
+        { vendorOptions: rowVendorOptions },
       ),
-      purchaseOrderIdColumn(purchaseHelper, async (orderId, purchase) => {
-        await updatePurchaseMutation.mutateAsync({
-          id: purchase.id,
+      expenseOrderIdColumn(expenseHelper, async (orderId, expense) => {
+        await updateExpenseMutation.mutateAsync({
+          id: expense.id,
           data: { orderId },
         });
       }),
-      createCreatedAtColumn(purchaseHelper),
-      createActionsColumn(purchaseHelper, "purchase", {
+      createCreatedAtColumn(expenseHelper),
+      createActionsColumn(expenseHelper, "expense", {
         extraActions: combinedExtraActions,
       }),
     ],
     [showProjectColumn, nameEditable, combinedExtraActions, rowVendorOptions],
   );
 
-  // Own storage scope — this column set isn't the /purchases ledger's, so a
+  // Own storage scope — this column set isn't the /expenses ledger's, so a
   // toggle here must not move a column there.
   const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility("purchase", EMBEDDED_PURCHASE_COLUMNS, "embedded");
+    useTableColumnVisibility("expense", EMBEDDED_EXPENSE_COLUMNS, "embedded");
 
   const table = useReactTable({
-    data: purchases,
+    data: expenses,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    // Feeds the Vendor picklist's count hints. Honest here, unlike on a
-    // server-paginated ledger: this table holds the whole set it filters.
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
+    // No faceted row model: the only picklist here that showed counts was
+    // Vendor, and its counts are now tallied off `expenses` in
+    // `rowVendorOptions` — faceting keys on the cell value (the vendor NAME) and
+    // so can't hint an option whose value is a vendor id.
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: {
@@ -1036,12 +1070,12 @@ export function PurchaseList({
       ?.setFilterValue(costTypeFilter ? [costTypeFilter] : undefined);
   }, [table, tradeFilter, costTypeFilter]);
 
-  if (purchases.length === 0) {
+  if (expenses.length === 0) {
     return (
       <Empty variant="minimal" className="py-6">
         <EmptyHeader>
           <EmptyIcon icon={ShoppingCart} />
-          <EmptyTitle>No purchases found</EmptyTitle>
+          <EmptyTitle>No expenses found</EmptyTitle>
         </EmptyHeader>
       </Empty>
     );
@@ -1051,7 +1085,7 @@ export function PurchaseList({
     bulkActionsState.selectedCount > 0 ? (
       <ListBulkActionBar
         table={table}
-        config={purchaseBulkActions.config}
+        config={expenseBulkActions.config}
         state={bulkActionsState}
       />
     ) : null;
@@ -1065,8 +1099,8 @@ export function PurchaseList({
         bulkActionBar={bulkActionBar}
       />
       {deleteDialog}
-      <PurchaseBulkActionDialogs
-        controller={purchaseBulkActions}
+      <ExpenseBulkActionDialogs
+        controller={expenseBulkActions}
         onComplete={() => table.resetRowSelection()}
       />
     </>
@@ -1256,7 +1290,7 @@ export function ProjectTable({
           );
         },
       }),
-      // Display the EFFECTIVE window (rolled up from tasks/purchases/live
+      // Display the EFFECTIVE window (rolled up from tasks/expenses/live
       // sub-projects, or the override when set); the inline editor still
       // opens on and saves to the raw startDate/endDate override columns —
       // see `displayValue`'s doc comment on `createPlainDateColumn`. A

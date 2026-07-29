@@ -1,13 +1,13 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
   cookbookId,
+  expenseId,
   ingredientId,
   inventoryId,
   locationId,
   mealId,
   productId,
   projectId,
-  purchaseId,
   recipeId,
   taskId,
 } from "@cubby/schemas/identifiers";
@@ -40,7 +40,7 @@ const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
   z.object({ entityType: z.literal("meal"), entityId: mealId }),
   z.object({ entityType: z.literal("project"), entityId: projectId }),
   z.object({ entityType: z.literal("task"), entityId: taskId }),
-  z.object({ entityType: z.literal("purchase"), entityId: purchaseId }),
+  z.object({ entityType: z.literal("expense"), entityId: expenseId }),
   z.object({ entityType: z.literal("image"), entityId: z.uuid() }),
 ]);
 
@@ -218,7 +218,7 @@ async function refreshMealEmbeddingsForRecipe(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
-// Tasks/purchases embed their project's name, so a project update fans out.
+// Tasks/expenses embed their project's name, so a project update fans out.
 async function refreshTrackerEmbeddingsForProject(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
@@ -340,7 +340,7 @@ export const mutationSideEffectManifest = {
   },
   project: {
     onCreate: [refreshOwnEmbedding],
-    // Rename fan-out: task/purchase embeddings include the project name.
+    // Rename fan-out: task/expense embeddings include the project name.
     onUpdate: [refreshOwnEmbedding, refreshTrackerEmbeddingsForProject],
     onDelete: [],
   },
@@ -349,7 +349,7 @@ export const mutationSideEffectManifest = {
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],
   },
-  purchase: {
+  expense: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],

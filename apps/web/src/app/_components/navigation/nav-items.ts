@@ -139,9 +139,9 @@ export const desktopNav: NavNode[] = [
       { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
       { to: "/tasks", label: "Tasks", icon: entities.task.lucideIcon },
       {
-        to: "/purchases",
-        label: "Purchases",
-        icon: entities.purchase.lucideIcon,
+        to: "/expenses",
+        label: "Expenses",
+        icon: entities.expense.lucideIcon,
       },
     ],
   },

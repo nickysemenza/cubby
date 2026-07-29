@@ -1,7 +1,7 @@
 /**
- * Project-tracker MCP tools — projects / tasks / purchases, DB-backed.
+ * Project-tracker MCP tools — projects / tasks / expenses, DB-backed.
  * Successor of the retired Notion-proxy tools (notion.tools.ts): same
- * list_projects/list_tasks/list_purchases surface plus full CRUD. A project's
+ * list_projects/list_tasks/list_expenses surface plus full CRUD. A project's
  * former Notion page body now lives on `notes` (markdown), returned by
  * get_project.
  */
@@ -9,6 +9,15 @@
 import { projectId } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
+  expenseAnalyticsOut,
+  expenseBulkCostTypeInput,
+  expenseBulkMoveInput,
+  expenseBulkTradeInput,
+  expenseCreateInput,
+  expenseFilterFields,
+  expenseMcpListOut,
+  expenseOut,
+  expenseUpdateData,
   LIVE_PROJECT_STATUSES,
   projectCreateInput,
   projectDashboardFiltersSchema,
@@ -18,15 +27,6 @@ import {
   projectOut,
   projectPortfolioAnalyticsOut,
   projectUpdateData,
-  purchaseAnalyticsOut,
-  purchaseBulkCostTypeInput,
-  purchaseBulkMoveInput,
-  purchaseBulkTradeInput,
-  purchaseCreateInput,
-  purchaseFilterFields,
-  purchaseMcpListOut,
-  purchaseOut,
-  purchaseUpdateData,
   taskBulkDueDateInput,
   taskBulkMoveInput,
   taskBulkStatusInput,
@@ -44,8 +44,8 @@ import {
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
+  slimExpense,
   slimProject,
-  slimPurchase,
   slimTask,
   WRITE_CLOSED,
 } from "./_shared";
@@ -103,7 +103,7 @@ const projectBudgetRow = z.object({
     .nullable()
     .describe("Budget envelope in dollars (subtree sum); null when unbudgeted"),
   actual: z.number().describe("Money already spent (subtree)"),
-  committed: z.number().describe("Planned, not-yet-spent purchases (subtree)"),
+  committed: z.number().describe("Planned, not-yet-spent expenses (subtree)"),
   projected: z.number().describe("actual + committed"),
   remaining: z
     .number()
@@ -138,14 +138,14 @@ const taskBulkMcpOut = z.object({
   items: z.array(taskOut),
 });
 
-/** Same shape for the purchase bulk writes (bulkMove/bulkSetTrade/bulkSetCostType). */
-const purchaseBulkMcpOut = z.object({
+/** Same shape for the expense bulk writes (bulkMove/bulkSetTrade/bulkSetCostType). */
+const expenseBulkMcpOut = z.object({
   updated: z.number().int(),
-  items: z.array(purchaseOut),
+  items: z.array(expenseOut),
 });
 
 /** Drop `sideEffects` and add the count — entity-agnostic, shared by the task
- * and purchase bulk tools. */
+ * and expense bulk tools. */
 async function bulkEntityWrite<T>(run: Promise<{ items: T[] }>) {
   const { items } = await run;
   return { updated: items.length, items };
@@ -165,11 +165,11 @@ export function registerProjectTools(server: McpServer) {
       list: "List household projects with status, kind, dates, cost estimate, spend/progress rollups (own + subtree), parent/child project links, and dependency ids. Read dates from the `dates` object (derivedStart/derivedEnd, effectiveStart/effectiveEnd, startSource/endSource), NOT from the top-level startDate/endDate — those two are manual overrides and are usually null. Filter by status/kind/location/search/topLevelOnly/parentProjectId/includeSubProjects. Pass topLevelOnly=true to exclude sub-projects; pass includeSubProjects=true with parentProjectId to match the whole live subtree under that parent, not just direct children.",
       get: "Get a project by ID, including markdown notes (the former Notion page body), own + subtree rollups, parent/child project links, blocked-by/blocking project ids, and the `dates` object (derived vs effective window plus which source each side came from). Prefer dates.effectiveStart/dates.effectiveEnd over the raw startDate/endDate override columns.",
       create:
-        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden). Set parentProjectId to create it as a sub-project (arbitrary depth) — a phase/trade with its own costEstimate budget envelope; tasks/purchases still attribute to it via their own projectId. startDate/endDate are OVERRIDES on a derived window, not the window itself: a project's dates are normally rolled up from its own tasks and purchases plus every live sub-project, and writing either column PINS that side and suppresses the roll-up for it. Leave both unset unless you are recording a date the work itself doesn't imply (a contracted start, a hard deadline) — a stale override does not widen to cover later activity, it just goes wrong quietly.",
+        "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden). Set parentProjectId to create it as a sub-project (arbitrary depth) — a phase/trade with its own costEstimate budget envelope; tasks/expenses still attribute to it via their own projectId. startDate/endDate are OVERRIDES on a derived window, not the window itself: a project's dates are normally rolled up from its own tasks and expenses plus every live sub-project, and writing either column PINS that side and suppresses the roll-up for it. Leave both unset unless you are recording a date the work itself doesn't imply (a contracted start, a hard deadline) — a stale override does not widen to cover later activity, it just goes wrong quietly.",
       update:
-        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one. `parentProjectId` can be set/changed/cleared, subject to a cycle guard (a project can't become its own descendant). startDate/endDate are OVERRIDES on a derived window (see create): setting one pins that side and suppresses the roll-up from tasks/purchases/sub-projects; clearing it (null) hands that side back to the roll-up. Do not write today's derived value back into the column — that freezes a window which would otherwise keep tracking the work.",
+        "Update a project's fields; `blockedByIds` replaces the full set of projects blocking this one. `parentProjectId` can be set/changed/cleared, subject to a cycle guard (a project can't become its own descendant). startDate/endDate are OVERRIDES on a derived window (see create): setting one pins that side and suppresses the roll-up from tasks/expenses/sub-projects; clearing it (null) hands that side back to the roll-up. Do not write today's derived value back into the column — that freezes a window which would otherwise keep tracking the work.",
       delete:
-        "Soft-delete projects by IDs. Fails while live tasks, purchases, or sub-projects still reference a project.",
+        "Soft-delete projects by IDs. Fails while live tasks, expenses, or sub-projects still reference a project.",
     },
     create: (caller, params) => caller.project.create(params),
   });
@@ -177,7 +177,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_house_status",
     description:
-      'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned purchases, missing budgets, unclassified purchases and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with get_project / list_tasks. Optional filters scope it to a status set, project kinds, locations, a search term, or a date window (dateFrom/dateTo — a project matches when its startDate/endDate override overlaps the window OR it has a task or purchase of its own inside it; only projects with no override and no dated content at all are dropped, and that count comes back as hiddenByDate.projects). statusScope defaults to the live statuses (planning/not_started/in_progress) when omitted, so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
+      'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned expenses, missing budgets, unclassified expenses and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with get_project / list_tasks. Optional filters scope it to a status set, project kinds, locations, a search term, or a date window (dateFrom/dateTo — a project matches when its startDate/endDate override overlaps the window OR it has a task or expense of its own inside it; only projects with no override and no dated content at all are dropped, and that count comes back as hiddenByDate.projects). statusScope defaults to the live statuses (planning/not_started/in_progress) when omitted, so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
     inputSchema: projectDashboardFiltersSchema.shape,
     outputSchema: houseStatusOut,
     annotations: READ_ONLY_CLOSED,
@@ -197,7 +197,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "get_project_budget",
     description:
-      "Which projects are over budget: per project, the subtree budget estimate vs actual + committed spend, with remaining, percentUsed and an overBudget flag, sorted worst-overrun first (unbudgeted projects last). Also returns portfolio totals and planned-vs-actual spend by month. Same optional scope filters as get_house_status (status set, project kinds, locations, search, dateFrom/dateTo), but statusScope defaults to no condition (all four statuses, including done) — a budget tool silently omitting completed spend would be a bug, not a feature. dateFrom/dateTo scope the whole query, not just the monthly series: while a window is set, a project is kept when its startDate/endDate override overlaps it OR it owns a task or purchase inside it, and only projects with no dates from any source drop out of the per-project figures.",
+      "Which projects are over budget: per project, the subtree budget estimate vs actual + committed spend, with remaining, percentUsed and an overBudget flag, sorted worst-overrun first (unbudgeted projects last). Also returns portfolio totals and planned-vs-actual spend by month. Same optional scope filters as get_house_status (status set, project kinds, locations, search, dateFrom/dateTo), but statusScope defaults to no condition (all four statuses, including done) — a budget tool silently omitting completed spend would be a bug, not a feature. dateFrom/dateTo scope the whole query, not just the monthly series: while a window is set, a project is kept when its startDate/endDate override overlaps it OR it owns a task or expense inside it, and only projects with no dates from any source drop out of the per-project figures.",
     inputSchema: projectDashboardFiltersSchema.shape,
     outputSchema: projectBudgetOut,
     annotations: READ_ONLY_CLOSED,
@@ -317,64 +317,64 @@ export function registerProjectTools(server: McpServer) {
   });
 
   registerEntityCrudToolset(server, {
-    entity: "purchase",
-    createInput: purchaseCreateInput.shape,
-    updateShape: purchaseUpdateData.shape,
-    filterFields: purchaseFilterFields,
-    mcpListOut: purchaseMcpListOut,
-    out: purchaseOut,
-    slim: slimPurchase,
+    entity: "expense",
+    createInput: expenseCreateInput.shape,
+    updateShape: expenseUpdateData.shape,
+    filterFields: expenseFilterFields,
+    mcpListOut: expenseMcpListOut,
+    out: expenseOut,
+    slim: slimExpense,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
-      list: 'List purchases (project spend ledger) with cost, date, costType/trade, and project name. Filter by costType/trade/projectId/future/search/includeSubProjects/dateFrom/dateTo/projectPresenceFilter (dateFrom/dateTo are inclusive YYYY-MM-DD bounds on purchase date). Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own purchases. projectPresenceFilter="none" is the unassigned-spend worklist and "has" is attributed spend; combined with projectId it WIDENS rather than narrows — {projectId, projectPresenceFilter:"none"} means that project OR unassigned.',
-      get: "Get a purchase by ID.",
+      list: 'List expenses (project spend ledger) with cost, date, costType/trade, and project name. Filter by costType/trade/projectId/future/search/includeSubProjects/dateFrom/dateTo/projectPresenceFilter (dateFrom/dateTo are inclusive YYYY-MM-DD bounds on expense date). Pass includeSubProjects=true with projectId to match the whole live subtree under that project, not just its own expenses. projectPresenceFilter="none" is the unassigned-spend worklist and "has" is attributed spend; combined with projectId it WIDENS rather than narrows — {projectId, projectPresenceFilter:"none"} means that project OR unassigned.',
+      get: "Get an expense by ID.",
       create:
-        "Log a purchase (costType materials|tools|services; set future=true for planned spend), optionally attached to a project.",
-      update: "Update a purchase's fields.",
-      delete: "Soft-delete purchases by IDs.",
+        "Log an expense (costType materials|tools|services; set future=true for planned spend), optionally attached to a project.",
+      update: "Update an expense's fields.",
+      delete: "Soft-delete expenses by IDs.",
     },
-    create: (caller, params) => caller.purchase.create(params),
+    create: (caller, params) => caller.expense.create(params),
   });
 
   registerRouterTool(server, {
-    name: "get_purchase_analytics",
+    name: "get_expense_analytics",
     description:
-      'Spend aggregates over the purchase ledger, under the SAME filters as list_purchases (costType/trade/projectId/includeSubProjects/future/search/dateFrom/dateTo/costPresenceFilter/projectPresenceFilter), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, and byProject. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits.',
-    inputSchema: purchaseFilterFields,
-    outputSchema: purchaseAnalyticsOut,
+      'Spend aggregates over the expense ledger, under the SAME filters as list_expenses (costType/trade/projectId/includeSubProjects/future/search/dateFrom/dateTo/costPresenceFilter/projectPresenceFilter), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, and byProject. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits.',
+    inputSchema: expenseFilterFields,
+    outputSchema: expenseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.purchase.analytics(params),
+    call: (caller, params) => caller.expense.analytics(params),
   });
 
   registerRouterTool(server, {
-    name: "bulk_move_purchases",
+    name: "bulk_move_expenses",
     description:
-      "Move many purchases onto one project at once; pass projectId: null to move them back to the Inbox (no project). Use after list_purchases to file loose or mis-attributed spend. Returns the updated rows and a count.",
-    inputSchema: purchaseBulkMoveInput.shape,
-    outputSchema: purchaseBulkMcpOut,
+      "Move many expenses onto one project at once; pass projectId: null to move them back to the Inbox (no project). Use after list_expenses to file loose or mis-attributed spend. Returns the updated rows and a count.",
+    inputSchema: expenseBulkMoveInput.shape,
+    outputSchema: expenseBulkMcpOut,
     annotations: WRITE_CLOSED,
-    call: (caller, params) => bulkEntityWrite(caller.purchase.bulkMove(params)),
+    call: (caller, params) => bulkEntityWrite(caller.expense.bulkMove(params)),
   });
 
   registerRouterTool(server, {
-    name: "bulk_set_purchase_trade",
+    name: "bulk_set_expense_trade",
     description:
-      "Set the same trade on many purchases at once (the 19-slug trade taxonomy shared with tasks and sub-projects — electrical|plumbing|countertop|…|other). Trade is required, not nullable: pass `other` rather than clearing it. Use after list_purchases (filter trade to find unclassified spend). Returns the updated rows and a count.",
-    inputSchema: purchaseBulkTradeInput.shape,
-    outputSchema: purchaseBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) =>
-      bulkEntityWrite(caller.purchase.bulkSetTrade(params)),
-  });
-
-  registerRouterTool(server, {
-    name: "bulk_set_purchase_cost_type",
-    description:
-      "Set the same costType on many purchases at once (materials|tools|services). Required, not nullable. Use after list_purchases to reclassify a batch of ledger lines so get_purchase_analytics' byCostType split is right. Returns the updated rows and a count.",
-    inputSchema: purchaseBulkCostTypeInput.shape,
-    outputSchema: purchaseBulkMcpOut,
+      "Set the same trade on many expenses at once (the 19-slug trade taxonomy shared with tasks and sub-projects — electrical|plumbing|countertop|…|other). Trade is required, not nullable: pass `other` rather than clearing it. Use after list_expenses (filter trade to find unclassified spend). Returns the updated rows and a count.",
+    inputSchema: expenseBulkTradeInput.shape,
+    outputSchema: expenseBulkMcpOut,
     annotations: WRITE_CLOSED,
     call: (caller, params) =>
-      bulkEntityWrite(caller.purchase.bulkSetCostType(params)),
+      bulkEntityWrite(caller.expense.bulkSetTrade(params)),
+  });
+
+  registerRouterTool(server, {
+    name: "bulk_set_expense_cost_type",
+    description:
+      "Set the same costType on many expenses at once (materials|tools|services). Required, not nullable. Use after list_expenses to reclassify a batch of ledger lines so get_expense_analytics' byCostType split is right. Returns the updated rows and a count.",
+    inputSchema: expenseBulkCostTypeInput.shape,
+    outputSchema: expenseBulkMcpOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) =>
+      bulkEntityWrite(caller.expense.bulkSetCostType(params)),
   });
 }

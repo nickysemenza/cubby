@@ -69,7 +69,7 @@ const ENTITY_NAV_GROUP: Partial<Record<Entity, string>> = {
   image: "Dev",
   project: "House",
   task: "House",
-  purchase: "House",
+  expense: "House",
 };
 
 /** One eyebrow path segment. `to` is set only for the leading nav-group
@@ -222,7 +222,7 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
   className?: string;
   /**
    * True filtered record count, reported by a list via `usePageCount`.
-   * Rendered at the tail of the eyebrow line as e.g. "1,240 PURCHASES" (the
+   * Rendered at the tail of the eyebrow line as e.g. "1,240 EXPENSES" (the
    * string `title` uppercased by the eyebrow's own CSS). `undefined` renders
    * nothing — avoids a flash of "0" before the client-side report lands.
    */
@@ -254,7 +254,7 @@ export function PageHero({
   const hasPath = eyebrow !== undefined || segments.length > 0;
   const hasCount = count !== undefined;
   // Only a plain-string title reads sensibly appended after the number
-  // ("1,240 Purchases"); non-string titles (rare utility pages) just show
+  // ("1,240 Expenses"); non-string titles (rare utility pages) just show
   // the bare count.
   const countLabel =
     hasCount &&

@@ -190,7 +190,7 @@ describe("useTableState — URL-backed column filters", () => {
 });
 
 /**
- * A `urlOnly` spec (purchases' `?productId=` / `?order=`) has no table column.
+ * A `urlOnly` spec (expenses' `?productId=` / `?order=`) has no table column.
  * Letting it into `columnFilters` made TanStack log
  * `[Table] Column with id 'productId' does not exist.` on every render, so it
  * is held apart — but it must still reach the server filters, and its URL param

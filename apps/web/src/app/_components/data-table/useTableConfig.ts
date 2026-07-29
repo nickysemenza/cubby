@@ -91,7 +91,7 @@ declare module "@tanstack/react-table" {
      * narrowing the rows. They can't live in `columnFilters` — TanStack
      * resolves every entry there to a column — but the empty state still has
      * to know they're on, or a scoped deep link that matches nothing reads as
-     * "you have no purchases at all". See `isNarrowed`.
+     * "you have no expenses at all". See `isNarrowed`.
      */
     urlScopeCount?: number;
     /** User-resized column pixel widths, by column id (persisted per entity). */

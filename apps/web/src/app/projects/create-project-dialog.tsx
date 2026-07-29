@@ -61,7 +61,7 @@ export function CreateProjectDialog({
       schema={quickAddProjectSchema}
       defaultValues={defaultValues}
       title={defaultParentProjectId ? "New Sub-project" : "New Project"}
-      description="Start tracking a household undertaking — tasks and purchases attach to it afterward."
+      description="Start tracking a household undertaking — tasks and expenses attach to it afterward."
       mutationFn={api.project.create.mutationOptions}
       successMessage={(project) => `Added "${project.name}"`}
       invalidateKeys={projectMutationInvalidateKeys}

@@ -104,7 +104,7 @@ const OTHER_KIND_KEY = "other";
 
 // Named "own*Day" for historical reasons (pre-dating the derived date
 // window) — these now read the EFFECTIVE bound (override when set, else
-// rolled up from the project's own tasks/purchases + live sub-projects), not
+// rolled up from the project's own tasks/expenses + live sub-projects), not
 // the raw `startDate`/`endDate` override columns. `computeSubtreeExtents`
 // below still walks the client-side tree on top of this: the server's own
 // `dates.effectiveStart/End` already folds in live descendants, but the

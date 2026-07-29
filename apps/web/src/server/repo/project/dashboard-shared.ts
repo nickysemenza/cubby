@@ -12,7 +12,7 @@
  *     `LIVE_PROJECT_STATUSES` explicitly (see the MCP `get_house_status`
  *     tool and the Overview default);
  *   - a date window filters the PROJECT set too (interval overlap), not just
- *     the purchase/task aggregates hanging off it — and since `startDate`/
+ *     the expense/task aggregates hanging off it — and since `startDate`/
  *     `endDate` are now manual OVERRIDES on a derived window, that overlap
  *     tests the project's dated CONTENT as well, not only the two columns.
  */
@@ -30,7 +30,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
-import { project, purchase, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import {
   buildSearchConditions,
   notDeleted,
@@ -139,25 +139,25 @@ function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
 }
 
 /**
- * Project ids owning at least one live, dated purchase — the purchase half of
+ * Project ids owning at least one live, dated expense — the expense half of
  * {@link datedTaskProjectIds}, and uncorrelated / `notDeleted` / `isNotNull`
  * for the same three reasons documented there.
  *
- * Negative purchases (refunds, family contributions) count, matching
+ * Negative expenses (refunds, family contributions) count, matching
  * `projectContentDates`: they are dated project activity, and nowhere else in
  * the tracker filters them out of a date range.
  */
-function datedPurchaseProjectIds(dateFrom?: string, dateTo?: string) {
+function datedExpenseProjectIds(dateFrom?: string, dateTo?: string) {
   return qb
-    .select({ projectId: purchase.projectId })
-    .from(purchase)
+    .select({ projectId: expense.projectId })
+    .from(expense)
     .where(
       and(
-        notDeleted(purchase),
-        isNotNull(purchase.projectId),
-        isNotNull(purchase.date),
-        dateTo ? lte(purchase.date, dateTo) : undefined,
-        dateFrom ? gte(purchase.date, dateFrom) : undefined,
+        notDeleted(expense),
+        isNotNull(expense.projectId),
+        isNotNull(expense.date),
+        dateTo ? lte(expense.date, dateTo) : undefined,
+        dateFrom ? gte(expense.date, dateFrom) : undefined,
       ),
     );
 }
@@ -165,19 +165,19 @@ function datedPurchaseProjectIds(dateFrom?: string, dateTo?: string) {
 /**
  * Date-window condition for the dashboard scope: a project matches when its
  * EXPLICIT `[startDate, endDate]` interval overlaps `[dateFrom, dateTo]`, OR
- * when it owns dated content (a task or a purchase) inside that window.
+ * when it owns dated content (a task or an expense) inside that window.
  * `undefined` when neither bound is set.
  *
  *   (   (start IS NULL OR start <= dateTo)
  *   AND (end   IS NULL OR end   >= dateFrom)
  *   AND (start IS NOT NULL OR end IS NOT NULL) )
  *   OR id IN (live tasks overlapping the window)
- *   OR id IN (live purchases inside the window)
+ *   OR id IN (live expenses inside the window)
  *
  * The OR is the whole point now that `startDate`/`endDate` are manual
  * OVERRIDES on a DERIVED window (see subtree.ts's `aggregateSubtreeDates`):
  * most projects leave both null, so the explicit branch alone would drop a
- * project whose tasks and purchases sit squarely inside the chosen window. It
+ * project whose tasks and expenses sit squarely inside the chosen window. It
  * cuts the other way too — a project carrying a stale, too-narrow override
  * still matches on the activity that outgrew it.
  *
@@ -220,7 +220,7 @@ function dashboardProjectDateCondition(
       or(isNotNull(project.startDate), isNotNull(project.endDate)),
     ),
     inArray(project.id, datedTaskProjectIds(dateFrom, dateTo)),
-    inArray(project.id, datedPurchaseProjectIds(dateFrom, dateTo)),
+    inArray(project.id, datedExpenseProjectIds(dateFrom, dateTo)),
   );
 }
 
@@ -256,7 +256,7 @@ export function buildDashboardProjectWhere(
 /**
  * The same scope MINUS the date window, restricted to projects with no dates
  * from ANY source — no `startDate`/`endDate` override AND no dated task or
- * purchase of their own — i.e. exactly the rows
+ * expense of their own — i.e. exactly the rows
  * {@link buildDashboardProjectWhere} drops *purely* for lacking a date, and
  * nothing dropped on status/kind/location/search grounds. Feeds
  * `hiddenByDate.projects`. Only meaningful while a window is set; the caller
@@ -284,7 +284,7 @@ export function buildUndatedProjectWhere(
       isNull(project.startDate),
       isNull(project.endDate),
       notInArray(project.id, datedTaskProjectIds()),
-      notInArray(project.id, datedPurchaseProjectIds()),
+      notInArray(project.id, datedExpenseProjectIds()),
     ],
   );
 }

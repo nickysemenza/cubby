@@ -1,7 +1,7 @@
 // Vendor brand-logo identity: the pure string → asset-key mapping shared by the
 // render path (`VendorMark`) and the seeding script (`scripts/seed-vendor-logos.ts`).
 //
-// `Purchase.vendor` is free text, so there is no id to key an asset off — the
+// `Expense.vendor` is free text, so there is no id to key an asset off — the
 // vendor string itself is the key. Both sides MUST derive it the same way or the
 // generated manifest and the runtime lookup silently disagree, which is why this
 // lives in one alias-free module instead of being reimplemented per call site.

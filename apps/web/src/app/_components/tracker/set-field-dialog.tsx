@@ -21,15 +21,15 @@ interface SetFieldDialogProps {
   options: FilterableComboboxItem[];
   /** Field label shown above the picker (e.g. "Trade", "Cost Type"). */
   fieldLabel: string;
-  /** Entity noun for the dialog copy (e.g. "Task", "Purchase"). */
+  /** Entity noun for the dialog copy (e.g. "Task", "Expense"). */
   itemNoun: string;
 }
 
 /**
  * Generic bulk "set <field>" dialog — the same shell as
  * {@link SetTaskStatusDialog}/{@link MoveToProjectDialog}, parameterized by an
- * enum option set. Used for bulk trade (tasks + purchases) and bulk cost-type
- * (purchases). A required enum, so an empty selection is a no-op submit.
+ * enum option set. Used for bulk trade (tasks + expenses) and bulk cost-type
+ * (expenses). A required enum, so an empty selection is a no-op submit.
  */
 export function SetFieldDialog({
   open,

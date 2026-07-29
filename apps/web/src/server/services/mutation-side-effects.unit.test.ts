@@ -186,6 +186,7 @@ describe("mutation side effects manifest", () => {
   it("declares create update and delete hooks for every supported entity", () => {
     expect(Object.keys(mutationSideEffectManifest).sort()).toEqual([
       "cookbook",
+      "expense",
       "image",
       "ingredient",
       "inventory",
@@ -193,7 +194,6 @@ describe("mutation side effects manifest", () => {
       "meal",
       "product",
       "project",
-      "purchase",
       "recipe",
       "task",
     ]);

@@ -21,7 +21,11 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   meal: "var(--warning)",
   project: "var(--plum)",
   task: "var(--slate)",
+  // A quiet roster, not a live money surface — same neutral as location/task.
+  vendor: "var(--slate)",
+  // On the money path, same as expense.
   purchase: "var(--primary)",
+  expense: "var(--primary)",
   image: "var(--slate)",
   "usda-food": "var(--positive)",
 };

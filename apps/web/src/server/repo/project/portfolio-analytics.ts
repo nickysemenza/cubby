@@ -1,6 +1,6 @@
 /**
  * `project.portfolioAnalytics` — the chart aggregates that used to ride
- * along in `project.dashboard`'s full task/purchase arrays (client-side
+ * along in `project.dashboard`'s full task/expense arrays (client-side
  * reduced by projects-dashboard.tsx), now computed server-side and loaded
  * only when the Charts/Analytics tab is selected. Scoped by the same
  * `statusScope`/`kinds`/`locations`/`search`/`dateFrom`/`dateTo` filters as
@@ -15,7 +15,7 @@
  *     openTaskCount (the same subtree rollup shown on project cards, which has
  *     no date axis of its own): a project outside the window just doesn't
  *     appear in `ids` at all, rather than having its totals date-clipped;
- *   - it additionally bounds `purchase.date` directly for the purchase-grouped
+ *   - it additionally bounds `expense.date` directly for the expense-grouped
  *     aggregates (`monthlySpend`/`plannedVsActual`/`tradeActivity`), which need
  *     it to bucket by month in the first place.
  */
@@ -36,12 +36,12 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { project, purchase, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
-  PURCHASE_MONTH_BUCKET,
-  purchaseAggregateFields,
-} from "~/server/repo/purchase-aggregate-sql";
+  EXPENSE_MONTH_BUCKET,
+  expenseAggregateFields,
+} from "~/server/repo/expense-aggregate-sql";
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
 import { loadProjectSubtreeRollups } from "./subtree";
@@ -89,46 +89,46 @@ export async function projectPortfolioAnalytics(
     }))
     .sort((a, b) => b.spend - a.spend);
 
-  // Purchase-based aggregates: purchases whose OWN projectId is in the
-  // filtered set (not subtree-expanded — a sub-project's own purchases only
+  // Expense-based aggregates: expenses whose OWN projectId is in the
+  // filtered set (not subtree-expanded — a sub-project's own expenses only
   // count here if the sub-project itself matched the filter; unlike
   // costVsEstimate/spendingByProject, which intentionally show subtree
-  // totals). Inbox purchases (no project) are excluded — judgment call, see
+  // totals). Inbox expenses (no project) are excluded — judgment call, see
   // the task report.
-  const purchaseScope = and(
-    inArray(purchase.projectId, ids),
-    notDeleted(purchase),
-    filters.dateFrom ? gte(purchase.date, filters.dateFrom) : undefined,
-    filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
+  const expenseScope = and(
+    inArray(expense.projectId, ids),
+    notDeleted(expense),
+    filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
+    filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
   );
-  const purchaseScopeWithDate = and(purchaseScope, isNotNull(purchase.date));
+  const expenseScopeWithDate = and(expenseScope, isNotNull(expense.date));
 
   const [monthlyRows, plannedVsActualRows, tradeRows, taskHeatmapRows] =
     await Promise.all([
       getDb(db)
         .select({
-          month: sql<string>`${PURCHASE_MONTH_BUCKET}`,
-          ...purchaseAggregateFields(),
+          month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
+          ...expenseAggregateFields(),
         })
-        .from(purchase)
-        .where(purchaseScopeWithDate)
-        .groupBy(PURCHASE_MONTH_BUCKET)
-        .orderBy(PURCHASE_MONTH_BUCKET),
+        .from(expense)
+        .where(expenseScopeWithDate)
+        .groupBy(EXPENSE_MONTH_BUCKET)
+        .orderBy(EXPENSE_MONTH_BUCKET),
       getDb(db)
         .select({
-          month: sql<string>`${PURCHASE_MONTH_BUCKET}`,
-          planned: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.future} = true), 0)::float`,
-          actual: sql<number>`coalesce(sum(${purchase.cost}) filter (where ${purchase.future} = false), 0)::float`,
+          month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
+          planned: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = true), 0)::float`,
+          actual: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.future} = false), 0)::float`,
         })
-        .from(purchase)
-        .where(purchaseScopeWithDate)
-        .groupBy(PURCHASE_MONTH_BUCKET)
-        .orderBy(PURCHASE_MONTH_BUCKET),
+        .from(expense)
+        .where(expenseScopeWithDate)
+        .groupBy(EXPENSE_MONTH_BUCKET)
+        .orderBy(EXPENSE_MONTH_BUCKET),
       getDb(db)
-        .select({ trade: purchase.trade, ...purchaseAggregateFields() })
-        .from(purchase)
-        .where(purchaseScope)
-        .groupBy(purchase.trade),
+        .select({ trade: expense.trade, ...expenseAggregateFields() })
+        .from(expense)
+        .where(expenseScope)
+        .groupBy(expense.trade),
       getDb(db)
         .select({
           projectId: task.projectId,

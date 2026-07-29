@@ -75,8 +75,6 @@ export function useProblemsData(opts?: {
         staleLocations: fast.data?.staleLocations ?? [],
         neverVerifiedInventory: fast.data?.neverVerifiedInventory ?? [],
         unknownParkedItems: fast.data?.unknownParkedItems ?? [],
-        ordersWithPartialVendor: fast.data?.ordersWithPartialVendor ?? [],
-        vendorSpellingVariants: fast.data?.vendorSpellingVariants ?? [],
         manufacturerSpellingVariants:
           fast.data?.manufacturerSpellingVariants ?? [],
         ingredientsWithPartialCoverage:
@@ -87,8 +85,8 @@ export function useProblemsData(opts?: {
         overdueTasks: tracker.data?.overdueTasks ?? [],
         stalledProjects: tracker.data?.stalledProjects ?? [],
         projectsMissingBudget: tracker.data?.projectsMissingBudget ?? [],
-        pastDuePlannedPurchases: tracker.data?.pastDuePlannedPurchases ?? [],
-        unclassifiedPurchases: tracker.data?.unclassifiedPurchases ?? [],
+        pastDuePlannedExpenses: tracker.data?.pastDuePlannedExpenses ?? [],
+        unclassifiedExpenses: tracker.data?.unclassifiedExpenses ?? [],
         blockedWorkProjects: tracker.data?.blockedWorkProjects ?? [],
         projectsWithDateDrift: tracker.data?.projectsWithDateDrift ?? [],
       };

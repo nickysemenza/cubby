@@ -1,13 +1,13 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   type CookbookSearchResult,
+  type ExpenseSearchResult,
   type IngredientSearchResult,
   type InventorySearchResult,
   type LocationSearchResult,
   type MealSearchResult,
   type ProductSearchResult,
   type ProjectSearchResult,
-  type PurchaseSearchResult,
   type RecipeSearchResult,
   type SearchableEntity,
   type SearchResultItem,
@@ -26,6 +26,7 @@ import {
 import type { Database } from "~/server/db";
 import {
   cookbook,
+  expense,
   ingredient,
   inventoryEntry,
   location,
@@ -35,12 +36,29 @@ import {
   purchase,
   recipe,
   task,
+  vendor,
 } from "~/server/db/schema";
 import { formatSearchTerm, getDb, notDeleted } from "./database-helpers";
 import { liveRecipeCountForIngredientSql } from "./recipe";
 
 const formatArraySearchTerm = (column: AnyColumn, query: string): SQL =>
   sql`EXISTS (SELECT 1 FROM unnest(${column}) AS alias WHERE alias ILIKE ${`%${query}%`})`;
+
+/**
+ * Match an expense's charge — its vendor's name or its order id — as one
+ * correlated EXISTS. See the call site for why this is raw `sql` and why both
+ * `deletedAt IS NULL` guards matter.
+ */
+const chargeTextMatch = (query: string): SQL => {
+  const term = `%${query}%`;
+  return sql`EXISTS (
+    SELECT 1 FROM ${purchase} pu
+    LEFT JOIN ${vendor} v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
+    WHERE pu."id" = ${expense.purchaseId}
+      AND pu."deletedAt" IS NULL
+      AND (pu."orderId" ILIKE ${term} OR v."name" ILIKE ${term})
+  )`;
+};
 
 const idIn = (column: AnyColumn, ids: string[]): SQL =>
   sql`${column} IN (${sql.join(
@@ -323,7 +341,7 @@ const searchQueries = {
           createdAt: project.createdAt,
           status: project.status,
           spent: sql<number>`(
-            SELECT COALESCE(SUM(${purchase.cost}), 0)::float FROM "Purchase" p
+            SELECT COALESCE(SUM(${expense.cost}), 0)::float FROM "Expense" p
             WHERE p."projectId" = "Project"."id" AND p."deletedAt" IS NULL
           )`.as("spent"),
         })
@@ -359,36 +377,45 @@ const searchQueries = {
         .where(and(notDeleted(task), condition))
         .limit(limit) as Promise<TaskSearchResult[]>,
   },
-  purchase: {
+  expense: {
     lexicalCondition: (query) =>
       or(
-        formatSearchTerm(purchase.name, query),
-        formatSearchTerm(purchase.trade, query),
-        formatSearchTerm(purchase.notes, query),
-        formatSearchTerm(purchase.vendor, query),
-        formatSearchTerm(purchase.orderId, query),
+        formatSearchTerm(expense.name, query),
+        formatSearchTerm(expense.trade, query),
+        formatSearchTerm(expense.notes, query),
+        // Vendor name and order id live on the charge now, so they're reached
+        // with a correlated EXISTS rather than two more column predicates. Raw
+        // `sql` instead of drizzle's `exists()` because `lexicalCondition` is
+        // handed only the query string — no client to build a subquery from.
+        //
+        // Both `deletedAt IS NULL` guards are load-bearing: an EXISTS is
+        // satisfied by soft-deleted rows, so without them an expense would keep
+        // matching a deleted charge's vendor (the `findOrphanedProducts` bug
+        // class — see the soft-delete section of CLAUDE.md). Guard-exempt only
+        // because it's hand-written SQL, not a `notExists(...)` call.
+        chargeTextMatch(query),
       ),
-    idCondition: (ids) => idIn(purchase.id, ids),
+    idCondition: (ids) => idIn(expense.id, ids),
     load: (client, condition, limit) =>
       client
         .select({
-          id: purchase.id,
-          name: purchase.name,
+          id: expense.id,
+          name: expense.name,
           subtitle: project.name,
-          entityType: sql<"purchase">`'purchase'`.as("entityType"),
-          typeHint: purchase.costType,
+          entityType: sql<"expense">`'expense'`.as("entityType"),
+          typeHint: expense.costType,
           imageUrl: sql<string | null>`null`.as("imageUrl"),
-          createdAt: purchase.createdAt,
-          cost: purchase.cost,
+          createdAt: expense.createdAt,
+          cost: expense.cost,
           projectName: project.name,
         })
-        .from(purchase)
+        .from(expense)
         .leftJoin(
           project,
-          and(eq(purchase.projectId, project.id), notDeleted(project)),
+          and(eq(expense.projectId, project.id), notDeleted(project)),
         )
-        .where(and(notDeleted(purchase), condition))
-        .limit(limit) as Promise<PurchaseSearchResult[]>,
+        .where(and(notDeleted(expense), condition))
+        .limit(limit) as Promise<ExpenseSearchResult[]>,
   },
 } satisfies Record<SearchableEntity, EntitySearchQuery>;
 

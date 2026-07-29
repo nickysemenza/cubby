@@ -1,0 +1,40 @@
+/**
+ * Expense repository — public API barrel.
+ *
+ * An Expense is ONE categorized line of spend, and **all money in the system
+ * lives here** — every `SUM(cost)` in the codebase reads this table alone. It
+ * hangs off two optional parents: a `Project` (its budget envelope) and a
+ * `Purchase` (the vendor charge it was part of). See
+ * packages/schemas/src/project.ts for the domain doc comment. Import expense
+ * operations from `~/server/repo/expense` (this barrel).
+ *
+ *   CRUD      → `crud.ts`      (create / delete hand-rolled; get/update go
+ *                                through `createEntityCrud` — no dependency
+ *                                edges, no rollups, so the shared factory
+ *                                fits directly. `update` is wrapped to resolve
+ *                                `{vendor, orderId}` into `purchaseId`.)
+ *   LOOKUP    → `lookup.ts`    (filtered/sorted/paginated list; also exports
+ *                                `buildExpenseWhereClause` for `analytics.ts`
+ *                                to import directly — not re-exported here,
+ *                                it's an internal sibling seam, not a public
+ *                                barrel surface)
+ *   ANALYTICS → `analytics.ts` (server-side grouped SQL aggregates for charts)
+ *
+ * Sibling relationships: `expense.projectId` references `project` (feeds its
+ * `spent`/`expenseCount` rollup — see project/analytics.ts);
+ * `expense.purchaseId` references `purchase`, through which `vendor` and
+ * `orderId` are resolved on read (see repo/purchase.ts, repo/vendor.ts).
+ * `helpers.ts` (row→API mapping) is internal.
+ */
+
+export { expenseAnalytics, expenseTradeAffinity } from "./analytics";
+export {
+  createExpense,
+  deleteExpenses,
+  getExpenseByID,
+  moveExpenses,
+  setExpensesCostType,
+  setExpensesTrade,
+  updateExpense,
+} from "./crud";
+export { expenseList } from "./lookup";

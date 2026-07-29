@@ -7,24 +7,26 @@ import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
+import { purchaseLabel } from "~/lib/purchase-label";
 
 export const Route = createFileRoute("/_authenticated/purchases/$id")({
   ssr: false,
   loader: async ({ params, context }) => {
+    // `purchase.getByID` takes the id as a BARE scalar, not `{ id }` (see
+    // routers/purchase.ts). No branding needed: a branded zod schema's INPUT
+    // type is plain `string`.
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.purchase.getByID.queryOptions({ id: params.id }),
+      context.trpc.purchase.getByID.queryOptions(params.id),
     );
     if (!data) throw notFound();
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <Page variant="list" title="Purchase not found" entity="purchase" compact>
+    <Page variant="list" title="Charge not found" entity="purchase" compact>
       <Empty>
-        <EmptyTitle>Purchase not found</EmptyTitle>
-        <EmptyDescription>
-          This purchase is no longer available.
-        </EmptyDescription>
+        <EmptyTitle>Charge not found</EmptyTitle>
+        <EmptyDescription>This charge is no longer available.</EmptyDescription>
       </Empty>
     </Page>
   ),
@@ -35,10 +37,10 @@ function PurchaseDetailPage() {
   const { id } = Route.useParams();
   const api = useTRPC();
   const { data: purchase } = useSuspenseQuery(
-    api.purchase.getByID.queryOptions({ id }),
+    api.purchase.getByID.queryOptions(id),
   );
 
-  useDocumentTitle(purchase.name);
+  useDocumentTitle(purchaseLabel(purchase));
 
   return <PurchaseDetail key={id} purchase={purchase} />;
 }

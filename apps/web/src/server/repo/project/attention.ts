@@ -2,14 +2,14 @@
  * Server-side "Needs Attention" detector for the Overview page — ports the
  * client-side computation from `app/projects/needs-attention.tsx` (overdue
  * tasks, stalled projects, missing budgets) and adds four more rule types:
- * past-due planned purchases, unclassified purchases, blocked work with no
+ * past-due planned expenses, unclassified expenses, blocked work with no
  * unblocked next task, and date-window drift (a manual override that now
  * hides real derived work). See `projectAttentionTypeSchema` in
  * packages/schemas/src/project.ts for the full rule enum.
  *
  * The Problems page computes this globally. The dashboard passes its matched
  * project ids so project-owned results match the visible portfolio while
- * unassigned task/purchase results remain visible like the dashboard Data
+ * unassigned task/expense results remain visible like the dashboard Data
  * view. Rollups still load the whole tree: filtering the output must not make
  * a matched parent's unmatched child disappear from its subtree spend.
  *
@@ -39,7 +39,7 @@ import {
 import { householdDaysAgo, householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
-import { project, purchase, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { listActionableTasks } from "~/server/repo/task/actionable";
 import {
@@ -99,8 +99,8 @@ export async function computeAttentionItems(
     overdueTaskRows,
     inProgressProjectRows,
     { allRows: allProjectRows, subtreeRollups, dateWindows },
-    pastDuePurchaseRows,
-    unclassifiedPurchaseRows,
+    pastDueExpenseRows,
+    unclassifiedExpenseRows,
     actionable,
   ] = await Promise.all([
     getDb(db)
@@ -141,35 +141,35 @@ export async function computeAttentionItems(
     options?.preloaded ?? loadProjectSubtreeRollups(db),
     getDb(db)
       .select({
-        id: purchase.id,
-        name: purchase.name,
-        projectId: purchase.projectId,
-        date: purchase.date,
+        id: expense.id,
+        name: expense.name,
+        projectId: expense.projectId,
+        date: expense.date,
       })
-      .from(purchase)
+      .from(expense)
       .where(
         and(
-          notDeleted(purchase),
-          eq(purchase.future, true),
-          isNotNull(purchase.date),
-          lt(purchase.date, today),
-          scopedOrInbox(purchase.projectId),
+          notDeleted(expense),
+          eq(expense.future, true),
+          isNotNull(expense.date),
+          lt(expense.date, today),
+          scopedOrInbox(expense.projectId),
         ),
       ),
     getDb(db)
       .select({
-        id: purchase.id,
-        name: purchase.name,
-        projectId: purchase.projectId,
-        date: purchase.date,
+        id: expense.id,
+        name: expense.name,
+        projectId: expense.projectId,
+        date: expense.date,
       })
-      .from(purchase)
+      .from(expense)
       .where(
         and(
-          notDeleted(purchase),
-          eq(purchase.trade, "other"),
-          isNull(purchase.cost),
-          scopedOrInbox(purchase.projectId),
+          notDeleted(expense),
+          eq(expense.trade, "other"),
+          isNull(expense.cost),
+          scopedOrInbox(expense.projectId),
         ),
       ),
     listActionableTasks(db),
@@ -194,11 +194,11 @@ export async function computeAttentionItems(
     });
   }
 
-  // 2. stalled_project — in_progress project with no project/task/purchase
+  // 2. stalled_project — in_progress project with no project/task/expense
   // `updatedAt` in the last 30 days. (Note/image activity isn't included —
   // no cheap existing "last activity" timestamp for those; see module doc.)
   const inProgressIds = inProgressProjectRows.map((r) => r.id);
-  const [taskActivityRows, purchaseActivityRows] = await Promise.all([
+  const [taskActivityRows, expenseActivityRows] = await Promise.all([
     inProgressIds.length > 0
       ? getDb(db)
           .select({
@@ -212,17 +212,14 @@ export async function computeAttentionItems(
     inProgressIds.length > 0
       ? getDb(db)
           .select({
-            projectId: purchase.projectId,
-            lastActivity: sql<Date>`max(${purchase.updatedAt})`,
+            projectId: expense.projectId,
+            lastActivity: sql<Date>`max(${expense.updatedAt})`,
           })
-          .from(purchase)
+          .from(expense)
           .where(
-            and(
-              inArray(purchase.projectId, inProgressIds),
-              notDeleted(purchase),
-            ),
+            and(inArray(expense.projectId, inProgressIds), notDeleted(expense)),
           )
-          .groupBy(purchase.projectId)
+          .groupBy(expense.projectId)
       : Promise.resolve([]),
   ]);
   const taskActivityByProject = new Map<ProjectId, Date>();
@@ -230,17 +227,17 @@ export async function computeAttentionItems(
     if (row.projectId)
       taskActivityByProject.set(row.projectId, row.lastActivity);
   }
-  const purchaseActivityByProject = new Map<ProjectId, Date>();
-  for (const row of purchaseActivityRows) {
+  const expenseActivityByProject = new Map<ProjectId, Date>();
+  for (const row of expenseActivityRows) {
     if (row.projectId)
-      purchaseActivityByProject.set(row.projectId, row.lastActivity);
+      expenseActivityByProject.set(row.projectId, row.lastActivity);
   }
 
   for (const row of inProgressProjectRows) {
     const candidates = [
       row.updatedAt,
       taskActivityByProject.get(row.id),
-      purchaseActivityByProject.get(row.id),
+      expenseActivityByProject.get(row.id),
     ].filter((d): d is Date => d != null);
     const lastActivity = candidates.reduce(
       (latest, d) => (d > latest ? d : latest),
@@ -252,7 +249,7 @@ export async function computeAttentionItems(
       key: attentionKey("stalled_project", row.id),
       type: "stalled_project",
       severity: "warning",
-      description: `"${row.name}" has had no project, task, or purchase activity in ${STALE_ACTIVITY_DAYS}+ days`,
+      description: `"${row.name}" has had no project, task, or expense activity in ${STALE_ACTIVITY_DAYS}+ days`,
       entityType: "project",
       entityId: row.id,
       date: lastActivityDate,
@@ -291,35 +288,35 @@ export async function computeAttentionItems(
     }
   }
 
-  // 4. past_due_planned_purchase
-  for (const row of pastDuePurchaseRows) {
+  // 4. past_due_planned_expense
+  for (const row of pastDueExpenseRows) {
     items.push({
-      key: attentionKey("past_due_planned_purchase", row.id),
-      type: "past_due_planned_purchase",
+      key: attentionKey("past_due_planned_expense", row.id),
+      type: "past_due_planned_expense",
       severity: "warning",
       description: `"${row.name}" was planned for ${row.date} but hasn't been logged as spent`,
-      entityType: "purchase",
+      entityType: "expense",
       entityId: row.id,
       date: row.date,
       amount: null,
-      href: `/purchases/${row.id}`,
+      href: `/expenses/${row.id}`,
     });
   }
 
-  // 5. unclassified_purchase — trade left at the catch-all "other" AND no
+  // 5. unclassified_expense — trade left at the catch-all "other" AND no
   // cost logged (costType itself stays a clean 3-value enum — no
   // "uncategorized" value added there).
-  for (const row of unclassifiedPurchaseRows) {
+  for (const row of unclassifiedExpenseRows) {
     items.push({
-      key: attentionKey("unclassified_purchase", row.id),
-      type: "unclassified_purchase",
+      key: attentionKey("unclassified_expense", row.id),
+      type: "unclassified_expense",
       severity: "info",
       description: `"${row.name}" has no trade or cost recorded`,
-      entityType: "purchase",
+      entityType: "expense",
       entityId: row.id,
       date: row.date,
       amount: null,
-      href: `/purchases/${row.id}`,
+      href: `/expenses/${row.id}`,
     });
   }
 
@@ -352,7 +349,7 @@ export async function computeAttentionItems(
   }
 
   // 7. date_window_drift — a manual startDate/endDate override that now hides
-  // real derived work (own tasks/purchases, folded up through live
+  // real derived work (own tasks/expenses, folded up through live
   // sub-projects). Checked independently per side against `row`'s raw
   // override columns (not `dates.effectiveStart/End`, which the override
   // itself determines) vs. the corresponding `derivedStart`/`derivedEnd`. A

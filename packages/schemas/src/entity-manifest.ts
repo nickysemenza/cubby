@@ -171,15 +171,47 @@ export const entityManifest = {
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
+  // A thin roster of the places money goes. Deliberately minimal in v1 —
+  // contractor metadata (license, COI expiry) and vendor-level documents (W-9,
+  // contracts) are the natural follow-ons once the roster exists.
+  vendor: {
+    dbTable: "Vendor",
+    idBrand: "VendorId",
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    // Out of the embedding pipeline in v1: a vendor is a name, and the ledger
+    // rows that mention it are already indexed.
+    searchable: false,
+    countable: true,
+    references: [],
+    mcp: [],
+    routerStyle: "custom",
+  },
+  // ONE vendor transaction — identity (`vendorId` + optional `orderId`), the
+  // charge date, an optional `statedTotal` that is never summed into spend, and
+  // its documents. Money lives on the expenses below it.
   purchase: {
     dbTable: "Purchase",
     idBrand: "PurchaseId",
     softDelete: true,
     auditable: true,
+    hasImages: true,
+    searchable: false,
+    countable: true,
+    references: ["vendor", "image"],
+    mcp: [],
+    routerStyle: "custom",
+  },
+  expense: {
+    dbTable: "Expense",
+    idBrand: "ExpenseId",
+    softDelete: true,
+    auditable: true,
     hasImages: false,
     searchable: true,
     countable: true,
-    references: ["project", "product"],
+    references: ["purchase", "project", "product"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },

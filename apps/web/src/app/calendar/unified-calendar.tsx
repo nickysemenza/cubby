@@ -32,10 +32,10 @@ import {
   useState,
 } from "react";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import { CreateProjectDialog } from "~/app/projects/create-project-dialog";
 import { capitalize } from "~/app/projects/project-formatting";
-import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Row, Stack } from "~/components/layout";
 import {
@@ -61,8 +61,8 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import {
+  expenseMutationInvalidateKeys,
   mealMutationInvalidateKeys,
-  purchaseMutationInvalidateKeys,
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -84,27 +84,27 @@ const CALENDAR_CLASS_NAMES = {
   monthCellContent: "min-h-24 sm:min-h-28",
   monthBar: "z-10",
 } as const;
-const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "purchase", "project"];
+const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "expense", "project"];
 const NO_ITEMS: CalendarItem[] = [];
 
 const KIND_LABELS: Record<CalendarItemKind, string> = {
   meal: "Meals",
   task: "Tasks",
-  purchase: "Purchases",
+  expense: "Expenses",
   project: "Projects",
 };
 
 const KIND_ICONS: Record<CalendarItemKind, typeof CookingPot> = {
   meal: CookingPot,
   task: CheckSquare,
-  purchase: CircleDollarSign,
+  expense: CircleDollarSign,
   project: CalendarRange,
 };
 
 const KIND_COLORS: Record<CalendarItemKind, string> = {
   meal: "var(--positive)",
   task: "var(--plum)",
-  purchase: "var(--primary)",
+  expense: "var(--primary)",
   project: "var(--slate)",
 };
 
@@ -147,7 +147,7 @@ const eventClassName = (item: CalendarItem, today: string) => {
   if (item.kind === "project") {
     return "bg-muted py-1 hover:bg-muted dark:bg-muted dark:hover:bg-muted";
   }
-  if (item.kind === "purchase" && item.future) {
+  if (item.kind === "expense" && item.future) {
     return item.startDate < today
       ? "border border-dashed border-destructive bg-destructive/10 hover:bg-destructive/15 dark:bg-destructive/10 dark:hover:bg-destructive/15"
       : "border border-dashed border-warning bg-warning/10 hover:bg-warning/15 dark:bg-warning/10 dark:hover:bg-warning/15";
@@ -178,7 +178,7 @@ const toEvent = (
         ? 50
         : 10,
   color:
-    item.kind === "purchase" && item.future
+    item.kind === "expense" && item.future
       ? item.startDate < today
         ? "var(--destructive)"
         : "var(--warning)"
@@ -199,7 +199,7 @@ function CalendarChip({
       <span className="truncate" title={item.title}>
         {item.title}
       </span>
-      {item.kind === "purchase" && item.cost != null && (
+      {item.kind === "expense" && item.cost != null && (
         <span className="ml-auto shrink-0 tabular-nums">
           {formatCurrency(item.cost, 0)}
         </span>
@@ -218,7 +218,7 @@ const summarizeDay = (items: CalendarItem[]): CalendarDaySummary => {
     calories: 0,
     nutritionPending: false,
     taskCount: 0,
-    purchaseCount: 0,
+    expenseCount: 0,
     mealCount: 0,
     projectCount: 0,
   };
@@ -229,8 +229,8 @@ const summarizeDay = (items: CalendarItem[]): CalendarDaySummary => {
       summary.nutritionPending ||= item.nutritionPending;
     } else if (item.kind === "task") {
       summary.taskCount += 1;
-    } else if (item.kind === "purchase") {
-      summary.purchaseCount += 1;
+    } else if (item.kind === "expense") {
+      summary.expenseCount += 1;
       if (item.future) summary.plannedSpend += item.cost ?? 0;
       else summary.actualSpend += item.cost ?? 0;
     } else {
@@ -311,10 +311,10 @@ export function UnifiedCalendar({
     entity: "task",
     invalidateKeys: taskMutationInvalidateKeys,
   });
-  const purchaseUpdate = useUpdateMutation({
-    mutationFn: api.purchase.update.mutationOptions,
-    entity: "purchase",
-    invalidateKeys: purchaseMutationInvalidateKeys,
+  const expenseUpdate = useUpdateMutation({
+    mutationFn: api.expense.update.mutationOptions,
+    entity: "expense",
+    invalidateKeys: expenseMutationInvalidateKeys,
   });
 
   const persistMove = useCallback(
@@ -342,8 +342,8 @@ export function UnifiedCalendar({
               : null,
           },
         });
-      } else if (item.kind === "purchase" && item.future) {
-        request = purchaseUpdate.mutateAsync({
+      } else if (item.kind === "expense" && item.future) {
+        request = expenseUpdate.mutateAsync({
           id: item.id,
           data: { date: nextStart },
         });
@@ -353,7 +353,7 @@ export function UnifiedCalendar({
       void request.catch(() => setEvents(sourceEvents));
       return true;
     },
-    [mealUpdate, purchaseUpdate, sourceEvents, taskUpdate],
+    [mealUpdate, expenseUpdate, sourceEvents, taskUpdate],
   );
 
   const [internalDay, setInternalDay] = useState<string>();
@@ -546,8 +546,8 @@ export function UnifiedCalendar({
         }}
         presetDate={selectedDay}
       />
-      <CreatePurchaseDialog
-        open={createKind === "purchase"}
+      <CreateExpenseDialog
+        open={createKind === "expense"}
         onOpenChange={(open) => {
           if (!open) setCreateKind(null);
         }}
@@ -625,9 +625,7 @@ function CalendarDaySheet({
                   >
                     <Plus />
                     <Icon />
-                    {kind === "purchase"
-                      ? "Planned purchase"
-                      : KIND_LABELS[kind]}
+                    {kind === "expense" ? "Planned expense" : KIND_LABELS[kind]}
                   </Button>
                 );
               })}
@@ -664,7 +662,7 @@ function CalendarItemLink({ item }: { item: CalendarItem }) {
       <span className="min-w-0 flex-1 truncate" title={item.title}>
         {item.title}
       </span>
-      {item.kind === "purchase" && item.cost != null && (
+      {item.kind === "expense" && item.cost != null && (
         <span className="shrink-0 tabular-nums">
           {formatCurrency(item.cost)}
         </span>
@@ -673,7 +671,7 @@ function CalendarItemLink({ item }: { item: CalendarItem }) {
   );
   const className = cn(
     "flex items-center gap-2 border-b py-2 text-sm last:border-b-0 hover:text-primary",
-    item.kind === "purchase" && item.future && "text-warning",
+    item.kind === "expense" && item.future && "text-warning",
   );
 
   if (item.kind === "meal") {
@@ -690,9 +688,9 @@ function CalendarItemLink({ item }: { item: CalendarItem }) {
       </Link>
     );
   }
-  if (item.kind === "purchase") {
+  if (item.kind === "expense") {
     return (
-      <Link to="/purchases/$id" params={{ id: item.id }} className={className}>
+      <Link to="/expenses/$id" params={{ id: item.id }} className={className}>
         {content}
       </Link>
     );

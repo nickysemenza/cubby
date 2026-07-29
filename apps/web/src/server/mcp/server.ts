@@ -35,7 +35,7 @@ Workflow tips:
 - Products: usdaFdcId reflects either an explicit fdc_id or a UPC-resolved USDA link.
 - Recipes: prefer create_recipe_from_text for pasted prep sheets; use create_recipe when you already have ingredient ids.
 - Problems: list_problems countsOnly=true for cheap triage; reparse_stale_parses recovers mis-merged ingredient lines.
-- Projects: list_projects/list_tasks/list_purchases are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
+- Projects: list_projects/list_tasks/list_expenses are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 

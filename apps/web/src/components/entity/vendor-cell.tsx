@@ -22,7 +22,7 @@ const hasVendorLogo = (vendor: string): boolean =>
 
 /**
  * A vendor's brand mark: its logo when we have one in R2, otherwise a monogram
- * tile. `Purchase.vendor` is free text with a long tail of one-off local trades
+ * tile. `Expense.vendor` is free text with a long tail of one-off local trades
  * and wedding vendors (42 of 82 vendors appear exactly once, and ~100 rows will
  * never have a logo), so the monogram is a first-class path, not an edge case.
  *
@@ -89,7 +89,7 @@ export function VendorMark({
 /**
  * The ledger's vendor cell: brand mark plus name.
  *
- * `compactOnMobile` is for the purchases table, whose mobile card renders this
+ * `compactOnMobile` is for the expenses table, whose mobile card renders this
  * same node into a width-constrained meta slot. There the logo alone carries the
  * vendor — but only when there *is* a logo; a bare monogram with no name would
  * make ~100 rows of local trades anonymous, so those drop the tile and keep the

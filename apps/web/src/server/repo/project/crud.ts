@@ -5,7 +5,7 @@
  * hand-rolled (like meal/location): `update` manages the `blockedByIds`
  * replacement set (delete-then-insert `projectDependency` rows) inside the
  * same transaction as the column update, and `delete` guards against
- * orphaning live tasks/purchases before hard-deleting the dependency edges.
+ * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectId } from "@cubby/schemas/identifiers";
@@ -18,10 +18,10 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  expense,
   project,
   projectDependency,
   projectImage,
-  purchase,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -83,8 +83,8 @@ export const getProjectByID = (
  * The referenced project must exist and be live. Guards `parentProjectId`
  * writes (this file) and any other write that points a foreign key straight
  * at a project id without going through a picker that already filters to live
- * projects — task/purchase bulk-move (`repo/task/crud.ts`'s `moveTasks`,
- * `repo/purchase/crud.ts`'s `movePurchases`) reuse this rather than
+ * projects — task/expense bulk-move (`repo/task/crud.ts`'s `moveTasks`,
+ * `repo/expense/crud.ts`'s `moveExpenses`) reuse this rather than
  * re-implementing the same live-row check.
  */
 export async function assertProjectLive(
@@ -278,8 +278,8 @@ export const updateProject = async (
 };
 
 /**
- * Soft-delete projects. Guards against orphaning live tasks/purchases/child
- * projects (throws `PROJECT_HAS_TASKS` / `PROJECT_HAS_PURCHASES` /
+ * Soft-delete projects. Guards against orphaning live tasks/expenses/child
+ * projects (throws `PROJECT_HAS_TASKS` / `PROJECT_HAS_EXPENSES` /
  * `PROJECT_HAS_CHILDREN` — no cascade, a child project stays a live orphan
  * candidate until reparented or deleted itself), then always hard-deletes the
  * project's dependency edges in both directions — a `projectDependency` row
@@ -329,20 +329,20 @@ export const deleteProjects = async (
         `Cannot delete ${count} project(s): ${names} still have tasks. Delete or reassign them first.`,
     });
 
-    const livePurchases = await tx.query.purchase.findMany({
-      where: and(inArray(purchase.projectId, ids), notDeleted(purchase)),
+    const liveExpenses = await tx.query.expense.findMany({
+      where: and(inArray(expense.projectId, ids), notDeleted(expense)),
       columns: { projectId: true },
     });
     await assertNoDependents({
-      offendingParentIds: livePurchases.map((p) => p.projectId),
+      offendingParentIds: liveExpenses.map((p) => p.projectId),
       fetchNames: (failedIds) =>
         tx.query.project.findMany({
           where: inArray(project.id, failedIds),
           columns: { name: true },
         }),
-      reason: "PROJECT_HAS_PURCHASES",
+      reason: "PROJECT_HAS_EXPENSES",
       message: (count, names) =>
-        `Cannot delete ${count} project(s): ${names} still have purchases. Delete or reassign them first.`,
+        `Cannot delete ${count} project(s): ${names} still have expenses. Delete or reassign them first.`,
     });
 
     await tx

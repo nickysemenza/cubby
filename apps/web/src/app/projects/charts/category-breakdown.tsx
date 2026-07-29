@@ -1,8 +1,8 @@
-import type { PurchaseOut, Trade } from "@cubby/schemas/project";
+import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
 import { Grid, Section, Stack } from "~/components/layout";
 import { capitalize, normalizeCostTypeKey } from "../shared";
-import { PurchaseDonut } from "./purchase-donut";
+import { ExpenseDonut } from "./expense-donut";
 import { TradeBars } from "./trade-bars";
 import { type TradeCostCell, TradeCostMatrix } from "./trade-cost-matrix";
 import type { PivotCostKey } from "./trade-cost-pivot";
@@ -13,13 +13,13 @@ import type { PivotCostKey } from "./trade-cost-pivot";
  * cost type. Owns its own `Section` wrappers — callers render it bare.
  */
 export function CategoryBreakdown({
-  purchases,
+  expenses,
   donutHeight = 300,
   centerLabel = "Total cost",
   onMatrixCellClick,
   activeMatrixCell,
 }: {
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
   donutHeight?: number;
   centerLabel?: string;
   onMatrixCellClick?: (trade: Trade, costType: PivotCostKey | null) => void;
@@ -27,22 +27,22 @@ export function CategoryBreakdown({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
 
-  // Selection can go stale when the purchases set changes underneath us
-  // (e.g. a /purchases filter removes the cost type) — derive, don't effect.
+  // Selection can go stale when the expenses set changes underneath us
+  // (e.g. a /expenses filter removes the cost type) — derive, don't effect.
   const effectiveSelected =
     selected != null &&
-    purchases.some((p) => normalizeCostTypeKey(p.costType) === selected)
+    expenses.some((p) => normalizeCostTypeKey(p.costType) === selected)
       ? selected
       : null;
 
   const scoped = useMemo(
     () =>
       effectiveSelected
-        ? purchases.filter(
+        ? expenses.filter(
             (p) => normalizeCostTypeKey(p.costType) === effectiveSelected,
           )
-        : purchases,
-    [purchases, effectiveSelected],
+        : expenses,
+    [expenses, effectiveSelected],
   );
 
   return (
@@ -56,8 +56,8 @@ export function CategoryBreakdown({
               : "Click a slice to drill into its trades"
           }
         >
-          <PurchaseDonut
-            purchases={purchases}
+          <ExpenseDonut
+            expenses={expenses}
             height={donutHeight}
             centerLabel={centerLabel}
             selectedCostType={effectiveSelected}
@@ -84,7 +84,7 @@ export function CategoryBreakdown({
             ) : undefined
           }
         >
-          <TradeBars purchases={scoped} />
+          <TradeBars expenses={scoped} />
         </Section>
       </Grid>
       <Section
@@ -96,7 +96,7 @@ export function CategoryBreakdown({
         }
       >
         <TradeCostMatrix
-          purchases={purchases}
+          expenses={expenses}
           onCellClick={onMatrixCellClick}
           activeCell={activeMatrixCell}
         />

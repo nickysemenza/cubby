@@ -62,7 +62,7 @@ function project(params: {
       actualSpent: 0,
       committedSpent: 0,
       contributions: 0,
-      purchaseCount: 0,
+      expenseCount: 0,
       taskCount,
       doneTaskCount,
       subtree: {
@@ -70,7 +70,7 @@ function project(params: {
         actualSpent: 0,
         committedSpent: 0,
         contributions: 0,
-        purchaseCount: 0,
+        expenseCount: 0,
         taskCount: params.subtreeTaskCount ?? taskCount,
         doneTaskCount: params.subtreeDoneTaskCount ?? doneTaskCount,
         projectCount: 0,

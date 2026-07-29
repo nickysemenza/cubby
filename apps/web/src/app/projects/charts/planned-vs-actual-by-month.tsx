@@ -34,7 +34,7 @@ const SERIES_LABELS: Record<string, string> = {
  * across every project matching the dashboard's filter scope (see
  * repo/project/portfolio-analytics.ts). A sibling of the project detail
  * page's `PlannedVsActual` (`./planned-vs-actual.tsx`, grouped by cost type
- * over one project's raw purchases) — kept as a separate component rather
+ * over one project's raw expenses) — kept as a separate component rather
  * than repurposing that one, since the detail page consumes it with a
  * different prop shape and is out of scope for this change.
  */
@@ -58,7 +58,7 @@ export function PlannedVsActualByMonth({
   );
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CalendarClock} title="No purchase data." />;
+    return <ChartEmpty icon={CalendarClock} title="No expense data." />;
   }
 
   const chartHeight = Math.max(220, data.length * 56 + 80);

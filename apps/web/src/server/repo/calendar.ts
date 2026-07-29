@@ -8,11 +8,11 @@ import { addDays } from "date-fns";
 import { and, gte, isNotNull, lte, or, sql } from "drizzle-orm";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
-import { project, purchase, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted, relations } from "./database-helpers";
+import { dbExpenseToAPI } from "./expense/helpers";
 import { getMealsByDateRange } from "./meal";
 import { loadProjectSubtreeRollups } from "./project/subtree";
-import { dbPurchaseToAPI } from "./purchase/helpers";
 import { dbTaskToAPI } from "./task/helpers";
 
 const emptyDaySummary = (): CalendarDaySummary => ({
@@ -21,7 +21,7 @@ const emptyDaySummary = (): CalendarDaySummary => ({
   calories: 0,
   nutritionPending: false,
   taskCount: 0,
-  purchaseCount: 0,
+  expenseCount: 0,
   mealCount: 0,
   projectCount: 0,
 });
@@ -33,7 +33,7 @@ const itemOrder: Record<CalendarItem["kind"], number> = {
   project: 0,
   task: 1,
   meal: 2,
-  purchase: 3,
+  expense: 3,
 };
 
 /**
@@ -45,7 +45,7 @@ export async function getCalendarRange(
   input: CalendarRangeInput,
 ): Promise<CalendarRangeOut> {
   const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
-  const [meals, taskRows, purchaseRows, projectRows, projectRollups] =
+  const [meals, taskRows, expenseRows, projectRows, projectRollups] =
     await Promise.all([
       getMealsByDateRange(db, input.startDate, endInclusive),
       getDb(db).query.task.findMany({
@@ -61,15 +61,15 @@ export async function getCalendarRange(
         orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
         ...relations.task.withProject,
       }),
-      getDb(db).query.purchase.findMany({
+      getDb(db).query.expense.findMany({
         where: and(
-          notDeleted(purchase),
-          isNotNull(purchase.date),
-          gte(purchase.date, input.startDate),
-          lte(purchase.date, endInclusive),
+          notDeleted(expense),
+          isNotNull(expense.date),
+          gte(expense.date, input.startDate),
+          lte(expense.date, endInclusive),
         ),
         orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
-        ...relations.purchase.withProject,
+        ...relations.expense.withProject,
       }),
       getDb(db)
         .select({
@@ -119,11 +119,11 @@ export async function getCalendarRange(
     });
   }
 
-  for (const row of purchaseRows) {
-    const value = dbPurchaseToAPI(row);
+  for (const row of expenseRows) {
+    const value = dbExpenseToAPI(row);
     if (!value.date) continue;
     items.push({
-      kind: "purchase",
+      kind: "expense",
       id: value.id,
       title: value.name,
       startDate: value.date,
@@ -201,8 +201,8 @@ export async function getCalendarRange(
         summary.nutritionPending ||= item.nutritionPending;
       } else if (item.kind === "task") {
         summary.taskCount += 1;
-      } else if (item.kind === "purchase") {
-        summary.purchaseCount += 1;
+      } else if (item.kind === "expense") {
+        summary.expenseCount += 1;
         if (item.future) summary.plannedSpend += item.cost ?? 0;
         else summary.actualSpend += item.cost ?? 0;
       } else {

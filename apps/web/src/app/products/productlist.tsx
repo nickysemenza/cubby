@@ -332,7 +332,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
               // `useEntityPreview`'s onRowClick, and TanStack's Link
               // preventDefaults without stopping propagation — so without it the
               // chip would navigate AND open the row's preview sheet. Same guard
-              // as the purchases link below.
+              // as the expenses link below.
               renderItem={(tag) => (
                 <Link
                   key={tag}
@@ -347,9 +347,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           );
         },
       }),
-      columnHelper.accessor("purchaseCount", {
-        id: "purchases",
-        header: "Purchases",
+      columnHelper.accessor("expenseCount", {
+        id: "expenses",
+        header: "Expenses",
         meta: {
           numeric: true,
           className: "w-24",
@@ -360,7 +360,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           if (!count) return <NoneValue />;
           return (
             <Link
-              to="/purchases"
+              to="/expenses"
               search={{ productId: info.row.original.id }}
               className="font-mono text-primary tabular-nums transition-colors hover:underline"
               onClick={(e) => e.stopPropagation()}

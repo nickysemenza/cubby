@@ -1,9 +1,10 @@
 /**
  * Vendor string → domain, the input to `seed-vendor-logos.ts`.
  *
- * Keys are the EXACT free-text values stored in `Purchase.vendor` (they come
- * straight from `SELECT DISTINCT vendor FROM "Purchase"`), because that string
- * is the only identity a vendor has — there is no vendor entity.
+ * Keys are the EXACT values stored in `Vendor.name` (`SELECT name FROM "Vendor"`).
+ * There IS a vendor entity now, so the long-term home for a brand domain is a
+ * column on it; this map stays a hand-curated file because a wrong domain yields
+ * a confidently-wrong logo and a reviewed diff is the right gate for that.
  *
  * Deliberately incomplete. A wrong domain yields a confidently-wrong logo, which
  * is far worse than no logo, so vendors whose domain isn't certain (small local

@@ -122,7 +122,7 @@ export function getStatusBadgeProps(
 
 // -- Cost-type colors (monochrome ink ladder + ultramarine accent) --
 
-/** `purchase.costType` -> chart/badge color, using the warm chart tokens. */
+/** `expense.costType` -> chart/badge color, using the warm chart tokens. */
 const COST_TYPE_COLORS: Record<CostType, string> = {
   materials: "var(--chart-1)",
   tools: "var(--chart-5)",
@@ -132,7 +132,7 @@ const COST_TYPE_COLORS: Record<CostType, string> = {
 /**
  * Accepts a plain string, not the strict `CostType` enum — callers pass ad
  * hoc bucket labels (e.g. treemap/donut group keys like "uncategorized")
- * through here too, not just raw purchase.costType values.
+ * through here too, not just raw expense.costType values.
  */
 export function getCostTypeColor(costType: string | null): string {
   if (!costType) return "var(--chart-neutral)";

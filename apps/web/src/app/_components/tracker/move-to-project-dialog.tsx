@@ -16,22 +16,22 @@ interface MoveToProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: MoveToProjectItem[];
-  /** Noun for the dialog title/count line, e.g. "Task" / "Purchase". */
+  /** Noun for the dialog title/count line, e.g. "Task" / "Expense". */
   entityLabel: string;
   /** Include an explicit "No project" option. Defaults to true — both
-   * task and purchase `projectId` are nullable. */
+   * task and expense `projectId` are nullable. */
   allowNoProject?: boolean;
   /** Runs the actual mutation — kept caller-owned so this dialog has no tRPC
-   * shape coupling and works for both `task.bulkMove` and `purchase.bulkMove`. */
+   * shape coupling and works for both `task.bulkMove` and `expense.bulkMove`. */
   onConfirm: (projectId: ProjectId | null) => Promise<void>;
   isPending: boolean;
 }
 
 /**
- * Bulk "move to project" dialog shared by the tasks and purchases list pages.
+ * Bulk "move to project" dialog shared by the tasks and expenses list pages.
  * Mirrors inventory's `MoveInventoryDialog` shape (a `BulkActionDialog` shell
  * + a single destination picker) minus the location-specific quantity
- * merging — a task/purchase move is a plain `projectId` column write, so
+ * merging — a task/expense move is a plain `projectId` column write, so
  * there's no partial-quantity/source-location bookkeeping to do here.
  */
 export function MoveToProjectDialog({

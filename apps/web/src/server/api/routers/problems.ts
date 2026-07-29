@@ -1,7 +1,5 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
-  backfillOrderVendorInput,
-  backfillOrderVendorOut,
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
   coverageTotalsSchema,
@@ -21,7 +19,6 @@ import {
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
-  backfillOrderVendor,
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
   dryRunPruneAliases,
@@ -64,7 +61,7 @@ const getUpc = protectedProcedure
   .output(problemsUpcSchema)
   .query(async ({ ctx }) => findUpcProblems(ctx.db, ctx.upcLookupClient));
 
-// Group: household-tracker attention rules (projects/tasks/purchases). Cheap
+// Group: household-tracker attention rules (projects/tasks/expenses). Cheap
 // aggregate SQL, but its own group so it runs concurrently with — rather than
 // serialized behind — the fast group's pinned single connection.
 const getTracker = protectedProcedure
@@ -184,22 +181,6 @@ const cleanupOrphanedEmbeddings = protectedProcedure
     return await cleanupOrphanedEntityEmbeddings(ctx.db, input?.ids);
   });
 
-// Writes stored data, so it stays a per-card fix rather than joining the
-// top-level auto-fix run (see auto-fix-registry's membership rule). Idempotent:
-// once applied the order is consistent, so the detector no longer reports it
-// and a re-run resolves to nothing.
-const backfillOrderVendorProc = protectedProcedure
-  .input(backfillOrderVendorInput)
-  .output(backfillOrderVendorOut)
-  .mutation(async ({ ctx, input }) => {
-    const result = await backfillOrderVendor(
-      ctx.db,
-      input.orderId,
-      ctx.actorContext,
-    );
-    return result;
-  });
-
 export const problemsRouter = createTRPCRouter({
   getFast,
   getCoverage,
@@ -215,5 +196,4 @@ export const problemsRouter = createTRPCRouter({
   recipeUsageByProduct,
   deleteUnused,
   cleanupOrphanedEmbeddings,
-  backfillOrderVendor: backfillOrderVendorProc,
 });

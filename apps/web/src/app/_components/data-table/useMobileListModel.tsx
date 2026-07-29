@@ -72,7 +72,7 @@ function humanizeColumnId(colId: string): string {
  *
  * The object case matters: the entity-link columns accessor to
  * `{ id, name }`, which is truthy even when both are null — so an unlinked
- * purchase rendered a full `PRODUCT —` line, 30px of vertical space saying
+ * expense rendered a full `PRODUCT —` line, 30px of vertical space saying
  * there is no product.
  */
 function isEmptyCellValue(value: unknown): boolean {
@@ -245,7 +245,7 @@ export function useMobileListModel<TItem>({
         metaValues.sort((a, b) => a.priority - b.priority);
 
         // Nothing is capped — the row grows to fit instead. A fixed budget of
-        // two meant purchases declared six values and rendered two, with no
+        // two meant expenses declared six values and rendered two, with no
         // way to tell which four were missing.
         //
         // The leading subtitle keeps its own prop (it reads as prose, not a
@@ -298,7 +298,7 @@ export function useMobileListModel<TItem>({
 // Measured in the browser against real rows, not derived from the type scale:
 // spec rows come out at 28-32px, not the ~16px a bare text line would suggest,
 // because most values are chunky (badges, entity links) and the interactive
-// ones carry `min-h-8`. A purchase with 5 spec rows measures 226px total.
+// ones carry `min-h-8`. An expense with 5 spec rows measures 226px total.
 //   py-2 x2 (16) + title (~19) + hairline (1)        = 36
 //   identity line                                     = 24
 //   spec block: 2 + n*30 + (n-1)*4
@@ -315,9 +315,9 @@ const specBlockHeight = (count: number): number =>
  * Per-row height estimate for the virtualizer.
  *
  * Estimated per row rather than as one constant: rows now range from ~55px
- * (search results, no spec values) to ~152px (a fully-populated purchase), and
+ * (search results, no spec values) to ~152px (a fully-populated expense), and
  * a flat guess that far off makes `getTotalSize()` lurch as measurements land
- * during a fast scroll. This knows a purchase missing its project renders one
+ * during a fast scroll. This knows an expense missing its project renders one
  * fewer line, so `measureElement` corrects by a few px instead of ~100.
  */
 export function estimateMobileRowHeight(

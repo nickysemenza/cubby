@@ -102,6 +102,16 @@ export function ImageDetail({ image }: ImageDetailProps) {
           {entityName}
         </a>
       ))
+      .with("PURCHASE", () => (
+        // Plain anchor, not a typed <Link> — /purchases/$id is being added by
+        // the parallel routes work and isn't in routeTree.gen.ts yet.
+        <a
+          href={`/purchases/${entityId}`}
+          className="font-medium text-sm hover:underline"
+        >
+          {entityName}
+        </a>
+      ))
       .exhaustive();
   };
 

@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { location } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
+import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import { createLocation } from "./location";
@@ -15,11 +16,10 @@ import {
   productList,
   updateProduct,
 } from "./product";
-import { createPurchase, deletePurchases } from "./purchase";
 import {
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
-  makePurchaseInput,
 } from "./repo.fixtures";
 
 describe("product repository", () => {
@@ -545,17 +545,17 @@ describe("product repository", () => {
       expect(has.data.map((p) => p.id)).not.toContain(stranded.id);
     });
 
-    describe("purchasePresenceFilter", () => {
+    describe("expensePresenceFilter", () => {
       /**
        * The `NOT IN (NULL)` trap, and the most important test in this file.
-       * `purchase.productId` is nullable, so the subquery behind this filter
-       * MUST carry `isNotNull(purchase.productId)`. Without it a single
-       * product-less purchase row anywhere in the table makes the whole
+       * `expense.productId` is nullable, so the subquery behind this filter
+       * MUST carry `isNotNull(expense.productId)`. Without it a single
+       * product-less expense row anywhere in the table makes the whole
        * `notInArray` predicate UNKNOWN and `"none"` returns ZERO rows — a
        * silent, total failure that no other assertion here would catch, since
-       * the unlinked purchase is invisible from the product side.
+       * the unlinked expense is invisible from the product side.
        */
-      it("none still returns rows when an unlinked purchase exists", async () => {
+      it("none still returns rows when an unlinked expense exists", async () => {
         const bought = await createProduct(
           ctx.db,
           makeProductInput({ name: "Bought Product", upc: "710000000001" }),
@@ -567,42 +567,42 @@ describe("product repository", () => {
           ctx.actor,
         );
 
-        await createPurchase(
+        await createExpense(
           ctx.db,
-          { ...makePurchaseInput(), name: "Linked", productId: bought.id },
+          { ...makeExpenseInput(), name: "Linked", productId: bought.id },
           ctx.actor,
         );
-        // The poison row: a real purchase with no product, which is the common
+        // The poison row: a real expense with no product, which is the common
         // case in this ledger (most material runs stay unlinked).
-        await createPurchase(
+        await createExpense(
           ctx.db,
-          { ...makePurchaseInput(), name: "Unlinked", productId: null },
+          { ...makeExpenseInput(), name: "Unlinked", productId: null },
           ctx.actor,
         );
 
-        const none = await listWith({ purchasePresenceFilter: "none" });
+        const none = await listWith({ expensePresenceFilter: "none" });
         expect(none.data.map((p) => p.id)).toContain(neverBought.id);
         expect(none.data.map((p) => p.id)).not.toContain(bought.id);
 
-        const has = await listWith({ purchasePresenceFilter: "has" });
+        const has = await listWith({ expensePresenceFilter: "has" });
         expect(has.data.map((p) => p.id)).toContain(bought.id);
         expect(has.data.map((p) => p.id)).not.toContain(neverBought.id);
       });
 
-      it("a soft-deleted purchase doesn't count as having one", async () => {
+      it("a soft-deleted expense doesn't count as having one", async () => {
         const product = await createProduct(
           ctx.db,
           makeProductInput({ name: "Refunded Product", upc: "710000000003" }),
           ctx.actor,
         );
-        const p = await createPurchase(
+        const p = await createExpense(
           ctx.db,
-          { ...makePurchaseInput(), name: "Deleted", productId: product.id },
+          { ...makeExpenseInput(), name: "Deleted", productId: product.id },
           ctx.actor,
         );
-        await deletePurchases(ctx.db, [p.id], ctx.actor);
+        await deleteExpenses(ctx.db, [p.id], ctx.actor);
 
-        const none = await listWith({ purchasePresenceFilter: "none" });
+        const none = await listWith({ expensePresenceFilter: "none" });
         expect(none.data.map((p) => p.id)).toContain(product.id);
       });
     });
@@ -945,24 +945,24 @@ describe("product repository", () => {
 
   describe("deleteProducts", () => {
     /**
-     * PRODUCT_HAS_PURCHASES: a live purchase blocks the delete, mirroring
+     * PRODUCT_HAS_EXPENSES: a live expense blocks the delete, mirroring
      * PRODUCT_HAS_INVENTORY. This used to be permitted — a product referenced
-     * only by purchases deleted fine, degrading the link to a null display
+     * only by expenses deleted fine, degrading the link to a null display
      * name. That was reversed: the ledger's net cost and owned/sold window are
      * derived from these rows, and a nameless product silently corrupts that
      * derivation with no restore path.
      */
-    it("rejects a product with a live purchase, succeeds once the purchase is soft-deleted", async () => {
+    it("rejects a product with a live expense, succeeds once the expense is soft-deleted", async () => {
       const bought = await createProduct(
         ctx.db,
-        makeProductInput({ name: "Purchase-Blocked Product" }),
+        makeProductInput({ name: "Expense-Blocked Product" }),
         ctx.actor,
       );
-      const purchase = await createPurchase(
+      const expense = await createExpense(
         ctx.db,
         {
-          ...makePurchaseInput(),
-          name: "blocking purchase",
+          ...makeExpenseInput(),
+          name: "blocking expense",
           productId: bought.id,
         },
         ctx.actor,
@@ -972,11 +972,11 @@ describe("product repository", () => {
         deleteProducts(ctx.db, [bought.id], ctx.actor),
       ).rejects.toMatchObject({
         code: "PRECONDITION_FAILED",
-        cause: { reason: "PRODUCT_HAS_PURCHASES" },
-        message: expect.stringContaining("have purchases"),
+        cause: { reason: "PRODUCT_HAS_EXPENSES" },
+        message: expect.stringContaining("have expenses"),
       });
 
-      await deletePurchases(ctx.db, [purchase.id], ctx.actor);
+      await deleteExpenses(ctx.db, [expense.id], ctx.actor);
 
       await expect(
         deleteProducts(ctx.db, [bought.id], ctx.actor),
