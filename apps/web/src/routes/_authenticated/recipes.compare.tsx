@@ -25,9 +25,10 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { useTRPC } from "~/integrations/trpc/react";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
+import { urlStringParam } from "~/lib/search-params";
 
 const searchParamsSchema = z.object({
-  ids: z.string().optional().catch(undefined),
+  ids: urlStringParam,
 });
 
 const searchDefaults = { ids: undefined } as const;

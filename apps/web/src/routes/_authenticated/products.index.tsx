@@ -10,16 +10,17 @@ import { ProductList } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { urlStringParam } from "~/lib/search-params";
 
 const searchSchema = z.object({
-  category: z.string().optional().catch(undefined),
+  category: urlStringParam,
   ...tableSearchFields,
   ...entityFilterSearchFields("product"),
   // `entityFilterSearchFields` returns a `Record<string, …>`, so its keys are
   // not statically known to `<Link search={…}>`. Re-declaring the one key we
   // navigate to programmatically (the "Fits With" tag chips) with the identical
   // shape makes those links type-safe without duplicating the manifest.
-  tags: z.string().optional().catch(undefined),
+  tags: urlStringParam,
 });
 
 const searchDefaults = { category: undefined } as const;

@@ -1,6 +1,11 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
-import { getEntityFilters, manifestFilterConfig } from "./filter-manifest";
+import { z } from "zod";
+import {
+  entityFilterSearchFields,
+  getEntityFilters,
+  manifestFilterConfig,
+} from "./filter-manifest";
 import {
   buildFiltersFromManifest,
   FILTER_ANY,
@@ -201,5 +206,26 @@ describe("purchase order-id filters", () => {
       orderId: "#11325",
       orderIdPresenceFilter: FILTER_ANY,
     });
+  });
+});
+
+/**
+ * The manifest's own schema fragment must survive what TanStack's `parseSearch`
+ * hands it, not just the strings the specs describe. Both of these arrive
+ * pre-parsed into another type from a hand-typed URL, and used to be dropped.
+ */
+describe("manifest search fields survive JSON-parsed values", () => {
+  const parse = (search: Record<string, unknown>) =>
+    z.object(entityFilterSearchFields("purchase")).parse(search);
+
+  it("keeps an all-digits order id that parsed as a number", () => {
+    expect(parse({ order: 11334 })).toMatchObject({ order: "11334" });
+  });
+
+  it("keeps a boolean-shaped filter value that parsed as a boolean", () => {
+    // `future`'s option values are the literal strings "true"/"false", so its
+    // URL form is indistinguishable from a JSON boolean.
+    expect(parse({ future: true })).toMatchObject({ future: "true" });
+    expect(parse({ future: false })).toMatchObject({ future: "false" });
   });
 });

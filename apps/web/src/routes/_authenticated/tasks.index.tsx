@@ -21,6 +21,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import { urlStringParam } from "~/lib/search-params";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
 // until selected — lazy so that stack stays out of the default List view.
@@ -50,7 +51,7 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 ];
 
 const searchSchema = z.object({
-  q: z.string().optional().catch(undefined),
+  q: urlStringParam,
   view: z.enum(viewOptions).optional().catch(undefined),
   // Board layout: column axis + swimlane axis. `lane` is normalized to only
   // apply when `cols === "status"` inside TasksBoardView.

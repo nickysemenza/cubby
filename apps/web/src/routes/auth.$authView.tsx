@@ -2,6 +2,7 @@ import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { IconPattern } from "~/components/common/icon-pattern";
+import { urlStringParam } from "~/lib/search-params";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query
 // here (`sig` + repeated `ba_param` names, whose signature covers the exact
@@ -12,7 +13,7 @@ import { IconPattern } from "~/components/common/icon-pattern";
 // repeated keys and invalidate the signature — and it degrades `search` typing
 // on every other route.
 const searchSchema = z.object({
-  redirect: z.string().optional().catch(undefined),
+  redirect: urlStringParam,
 });
 
 const searchDefaults = { redirect: undefined } as const;
