@@ -25,12 +25,16 @@ function CategoryIcon({
   );
 }
 
-/** Product category options with colored icons for dropdowns */
+/**
+ * Product category options with colored icons for dropdowns.
+ *
+ * No `color`: the combobox renders that as a swatch *beside* the icon, and the
+ * icon is already tinted with the same value — two marks for one fact.
+ */
 export const productCategoryOptionsWithTheme = productCategory.options.map(
   (cat) => ({
     value: cat,
     label: cat.replace("-", " "),
     icon: <CategoryIcon category={cat} size={14} colored />,
-    color: getCategoryColor(cat),
   }),
 );

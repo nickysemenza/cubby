@@ -31,8 +31,8 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
+  eqAnyOrPresence,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   notDeleted,
   presenceCondition,
@@ -104,7 +104,14 @@ export const buildPurchaseWhereClause = async (
       // same column-null-only rule applies to the project presence above: a
       // purchase whose project was soft-deleted is NOT "(none)".
       presenceCondition(purchase.productId, filters.productPresenceFilter),
-      formatSearchTerm(purchase.vendor, filters.vendor),
+      // Exact, not ILIKE: the control is a picklist over the `vendorOptions`
+      // roster below, so a substring match let one option's count disagree with
+      // the rows it returned. `(none)` ORs in, same rule as project above.
+      eqAnyOrPresence(
+        purchase.vendor,
+        filters.vendor,
+        filters.vendorPresenceFilter,
+      ),
       filters.future !== undefined
         ? eq(purchase.future, filters.future)
         : undefined,

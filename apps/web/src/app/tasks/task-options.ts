@@ -2,7 +2,9 @@ import type { TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
 import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
 import { match } from "ts-pattern";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
+import { getStatusChartColor } from "~/lib/status-colors";
 
 /**
  * Human-facing labels for the raw DB enum values — single source of truth for
@@ -31,10 +33,17 @@ export const taskStatusBadgeVariant: Record<
   done: "positive",
 };
 
-/** `{value,label}` options for the status filter/inline-edit select. */
-export const taskStatusOptions = buildSelectOptions(
-  taskStatusValues,
-  TASK_STATUS_LABELS,
+/**
+ * `{value,label,color}` options for the status filter/inline-edit select. Not
+ * `buildSelectOptions` — that helper carries no color, and the swatch is what
+ * ties the picklist to the status chip the cell renders.
+ */
+export const taskStatusOptions: FilterableComboboxItem[] = taskStatusValues.map(
+  (value) => ({
+    value,
+    label: TASK_STATUS_LABELS[value],
+    color: getStatusChartColor(value),
+  }),
 );
 
 /** Fixed preset values for the task due-date filter. */

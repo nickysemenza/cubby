@@ -190,6 +190,63 @@ export function buildFiltersFromManifest(
   return filters;
 }
 
+/**
+ * Does one cell value satisfy a multiselect column filter?
+ *
+ * Sentinels mirror `eqAnyOrPresence` server-side, including its OR rule:
+ * `["projA", FILTER_NONE]` is "project A *or* unassigned", not a contradiction.
+ */
+function matchesMultiSelect(
+  value: string | null | undefined,
+  filterValue: unknown,
+): boolean {
+  if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
+  const selected = filterValue as string[];
+  // "" counts as absent: clearing an inline text edit writes an empty string,
+  // and the `(none)` option has to find those rows too.
+  const isEmpty = value == null || value === "";
+
+  const wantsNone = selected.includes(FILTER_NONE);
+  const wantsAny = selected.includes(FILTER_ANY);
+  // Both sentinels together are `IS NULL OR IS NOT NULL` — every row.
+  if (wantsNone && wantsAny) return true;
+  if (wantsNone && isEmpty) return true;
+  if (wantsAny && !isEmpty) return true;
+
+  return !isEmpty && selected.includes(value);
+}
+
+/**
+ * Builds a client-side filterFn for a multiselect column over an arbitrary cell
+ * shape. `read` narrows the raw cell value to the string the roster holds — the
+ * project column's accessor yields `{id, name}`, so it reads `.id`.
+ *
+ * A factory rather than a 4th parameter: TanStack's `FilterFn` signature already
+ * claims that slot for `addMeta`.
+ */
+export const multiSelectFilterFnBy =
+  (read: (value: unknown) => string | null | undefined) =>
+  (
+    row: { getValue: (id: string) => unknown },
+    columnId: string,
+    filterValue: unknown,
+  ): boolean =>
+    matchesMultiSelect(read(row.getValue(columnId)), filterValue);
+
+/**
+ * Client-side filterFn for a multiselect column whose cell value is the roster
+ * string itself.
+ *
+ * Required, not optional, on every client-side table. TanStack picks a filterFn
+ * from the ROW value's type, not the filter value's — a string column handed
+ * `["a","b"]` resolves to `includesString`, which tests
+ * `String(rowValue).includes("a,b")` and so matches nothing, silently. Server
+ * tables (`manualFiltering: true`) never run this.
+ */
+export const multiSelectFilterFn = multiSelectFilterFnBy((v) =>
+  v == null ? null : String(v),
+);
+
 /** Kinds whose column-filter state is an array rather than a scalar. */
 const MULTI_KINDS: ReadonlySet<FilterKind> = new Set<FilterKind>([
   "multiselect",

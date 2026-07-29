@@ -10,7 +10,11 @@ import { productMutationInvalidateKeys } from "~/lib/query-keys";
  * while the card is expanded) and clears its problem on success.
  */
 
-/** Delete an orphaned product (no inventory, so the safety check can't trip). */
+/**
+ * Delete an orphaned product. findOrphanedProducts and deleteProducts' safety
+ * checks agree on the same two acquisition edges (inventory, purchases), so a
+ * product surfaced here can't trip either guard.
+ */
 export function OrphanedDeleteFix({
   id,
   name,
@@ -31,8 +35,8 @@ export function OrphanedDeleteFix({
   return (
     <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
-        Delete <span className="font-medium">{name}</span>? It has no inventory
-        and isn't linked to a recipe.
+        Delete <span className="font-medium">{name}</span>? It has no inventory,
+        no purchases, and isn't linked to an ingredient.
       </p>
       <Button
         size="sm"

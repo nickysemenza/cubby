@@ -36,6 +36,7 @@ import type {
   EntityDetailRoute,
 } from "~/entities/entities";
 import { entities } from "~/entities/entities";
+import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -88,6 +89,9 @@ export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select" | "multiselect";
   options?: FilterableComboboxItem[];
+  // Add matching-row hints from TanStack's client-side faceting. Off by
+  // default because server-backed tables only hold their loaded pages.
+  facetCount?: boolean;
 }
 
 /**
@@ -95,24 +99,15 @@ export interface FilterConfig {
  * ("has" | "none") to the entity's `*PresenceFilter` field, resolved server-side
  * as an exists / is-null condition. Clearing the filter means "any".
  */
-/**
- * Client-side filterFn for a multiselect column (cell value is one of the
- * selected set).
- *
- * Required, not optional: TanStack picks a filterFn from the ROW value's type,
- * not the filter value's. A string column handed `["a","b"]` resolves to
- * `includesString`, which tests `String(rowValue).includes("a,b")` and so
- * matches nothing — silently. Server-side tables (`manualFiltering: true`)
- * never run this, but every client-side table would quietly show zero rows.
- */
-export function multiSelectFilterFn(
-  row: { getValue: (id: string) => unknown },
-  columnId: string,
-  filterValue: unknown,
-): boolean {
-  if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
-  return (filterValue as string[]).includes(String(row.getValue(columnId)));
-}
+// Lives in `entities/filters.ts` (dependency-free, so the vitest `unit` project
+// can reach it — it can't resolve a `~/…` .tsx). Re-exported here because this
+// is where every column def picks it up.
+export { multiSelectFilterFn };
+
+/** Multiselect filterFn for an entity-reference column, matching on its id. */
+const projectRefFilterFn = multiSelectFilterFnBy(
+  (v) => (v as { id?: string | null } | null)?.id ?? null,
+);
 
 /**
  * Sorts an entity-reference column ({id, name}) by name.
@@ -835,6 +830,12 @@ export function createTextColumn<
   return columnHelper.accessor((row) => row[accessor] as string | null, {
     id: String(accessor),
     header: options?.header,
+    // Same reason as `createSelectColumn`: a client-side table resolves its
+    // filterFn from the ROW value's type, so a string column handed an array
+    // would silently match nothing. (Vendor is a text column with a picklist.)
+    ...(options?.filterConfig?.filterType === "multiselect"
+      ? { filterFn: multiSelectFilterFn }
+      : {}),
     meta: {
       className: options?.className,
       mobile: options?.mobile,
@@ -1599,6 +1600,13 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
       id: "project",
       header: options?.header ?? "Project",
       sortingFn: entityRefSortingFn,
+      // Client-side tables (the embedded project-detail lists) filter this
+      // column by project id. The accessor yields an object, which the default
+      // stringifying comparison turns into "[object Object]" — so the roster
+      // matched nothing and `(none)` never found an unassigned row.
+      ...(options?.filterConfig?.filterType === "multiselect"
+        ? { filterFn: projectRefFilterFn }
+        : {}),
       meta: {
         className: options?.className,
         mobile: options?.mobile,

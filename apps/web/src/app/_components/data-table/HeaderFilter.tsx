@@ -89,13 +89,27 @@ export function HeaderFilter<TData>({
   const inputClassName =
     "h-5 text-2xs px-1.5 border shadow-none bg-background border-border placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40"; /* tight */
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API
   const selectOptions = useMemo(() => {
     const isSelectLike =
       filterConfig.filterType === "select" ||
       filterConfig.filterType === "multiselect";
     if (!isSelectLike || !filterConfig.options) return [];
-    return filterConfig.options;
-  }, [filterConfig.options, filterConfig.filterType]);
+    if (!filterConfig.facetCount) return filterConfig.options;
+    let facetMap: Map<string, number>;
+    try {
+      facetMap = column.getFacetedUniqueValues();
+    } catch {
+      return filterConfig.options;
+    }
+    if (!facetMap.size) return filterConfig.options;
+    return filterConfig.options.map((opt) => {
+      // `hint`, not `label` — the label is interpolated into filter chips and
+      // the collapsed multi-select summary, and drives the type-ahead match.
+      const count = facetMap.get(opt.value);
+      return count !== undefined ? { ...opt, hint: String(count) } : opt;
+    });
+  }, [filterConfig.options, filterConfig.filterType, filterConfig.facetCount]);
 
   if (filterConfig.filterType === "select" || isMulti) {
     // A select filter lives in a narrow column behind a chevron, and the

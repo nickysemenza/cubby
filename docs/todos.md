@@ -467,6 +467,24 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 
+- [ ] **Type-level enumeration of incoming FK edges.** A sweep found four
+  "this entity is unreferenced / safe to delete" predicates that each enumerated
+  only *some* of the target's incoming FK edges, and every one of them had
+  immaculate soft-delete hygiene *inside* an incomplete predicate:
+  `findOrphanedProducts` skipped `purchase` (32 of 40 flagged orphans were false
+  positives, and the card offers one-click delete), `deleteProducts` guarded
+  inventory but not purchases, `findCullablePendingImages` checked four join
+  tables but not `cookbook.coverImageId`, and `deleteRecipesTx` guarded nothing
+  at all while `mealRecipe` dangled. All four are fixed, but the *class* isn't:
+  `scripts/check-soft-delete-filters.mjs` catches a missing `notDeleted` inside a
+  subquery and by construction cannot catch a **missing subquery**. The two
+  detectors that provably can't drift (`detectors-embedding.ts`,
+  `entity-embedding-cleanup.ts`) are the two built on
+  `satisfies Record<SearchableEntity, …>` — the compiler enumerates for them.
+  The real fix is the same trick for "incoming FK edges per entity", so adding a
+  referencing table is a compile error in every deletability predicate until it's
+  wired. Worth doing before the next entity lands.
+
 ### MCP Apps — further candidates
 
 The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
@@ -521,9 +539,9 @@ has to keep those arms.
 ### Remaining from the filter-honesty audit
 
 The semantic cleanup shipped: dashboard-scoped attention, shared task/purchase bulk
-workflows, honest infinite-list URL state, one server-list query path, dead facet-count
-removal, and shared project-tree expansion. The old ingredient `presenceCondition`
-item was stale; that implementation now uses `idSetPresence`.
+workflows, honest infinite-list URL state, one server-list query path, and shared
+project-tree expansion. The old ingredient `presenceCondition` item was stale; that
+implementation now uses `idSetPresence`.
 
 - [ ] **History view filtering/over-fetch.** `HistoryView` still owns local `useState`
       filters, which are unshareable unlike every other view on that page, and reads only

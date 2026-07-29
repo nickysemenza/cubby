@@ -133,10 +133,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("product"),
     },
     {
+      // Free text on the row, but a bounded roster in practice — options come
+      // from `purchase.vendorOptions` at runtime, carrying each vendor's brand
+      // mark and row count. `(none)` is the where-did-this-come-from worklist;
+      // vendor is null on most rows.
       columnId: "vendor",
-      kind: "select",
+      kind: "multiselect",
       placeholder: "Filter by vendor...",
       optionsKey: "vendor",
+      nullable: { field: "vendorPresenceFilter", label: "vendor" },
     },
     {
       // "none" is the unreconciled worklist — no vendor order id recorded.

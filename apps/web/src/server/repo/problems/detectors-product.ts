@@ -9,6 +9,7 @@
 
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import { unsafeProductId } from "@cubby/schemas/identifiers";
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type {
   DuplicateUniqueProduct,
   OrphanedProduct,
@@ -24,6 +25,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
   notExists,
   sql,
 } from "drizzle-orm";
@@ -31,10 +33,12 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import {
+  image,
   inventoryEntry,
   product,
   productImage,
   productUnitMappings,
+  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -101,13 +105,29 @@ export const findDuplicateUniqueProducts = async (
     }));
 };
 
-// Find products that have no *live* inventory entries.
+// Find products nothing points at — no live inventory, no live purchase, no
+// ingredient link. This drives a one-click Delete on the Problems page, so a
+// false positive here is an executable data loss, not just a noisy list.
 //
-// The `notDeleted(inventoryEntry)` inside the subquery is load-bearing: without
-// it a soft-deleted entry still satisfies EXISTS, so a product whose inventory
-// was deleted (rather than never created) stays invisible here — which is the
-// common case, since emptying a shelf soft-deletes the row instead of removing
-// it. That blind spot hid 18 of the 20 genuinely-uninventoried products.
+// Two distinct traps, both of which this predicate got wrong at some point:
+//
+//  1. *Liveness* — the `notDeleted(...)` inside each subquery is load-bearing:
+//     a soft-deleted row still satisfies EXISTS, so a product whose inventory
+//     was deleted (rather than never created) stays invisible — the common
+//     case, since emptying a shelf soft-deletes instead of removing. That blind
+//     spot hid 18 of the 20 genuinely-uninventoried products.
+//
+//  2. *Completeness* — Product has five incoming FK edges, and checking only
+//     some of them yields a confident wrong answer. Omitting `purchase` made 32
+//     of 40 flagged "orphans" false positives: a tool that was bought, logged in
+//     the ledger, and later sold looks exactly like one that was never real.
+//     Note the soft-delete guard script can catch (1) but by construction cannot
+//     catch (2) — a missing subquery is invisible to it.
+//
+// Inventory and purchases are the two *acquisition* edges, so they're the ones
+// that disqualify. The metadata edges (productExternalId, productUnitMappings,
+// productImage) deliberately don't: an ASIN or a hand-entered conversion says
+// nothing about whether the thing was ever owned.
 export const findOrphanedProducts = async (
   db: Database,
 ): Promise<OrphanedProduct[]> => {
@@ -134,6 +154,18 @@ export const findOrphanedProducts = async (
                 eq(inventoryEntry.productId, product.id),
                 notDeleted(inventoryEntry),
               ),
+            ),
+        ),
+        // Unlike the `productIdsWithPurchases` subquery in product/crud.ts, this
+        // needs no `isNotNull(purchase.productId)`: that one is an uncorrelated
+        // NOT IN list, where a single NULL makes the whole predicate UNKNOWN. A
+        // correlated `eq` simply never matches NULL.
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(purchase)
+            .where(
+              and(eq(purchase.productId, product.id), notDeleted(purchase)),
             ),
         ),
       ),
@@ -299,14 +331,26 @@ export const findProductsWithUpcGaps = async (
       manufacturer: product.manufacturer,
       upc: product.upc,
       price: product.price,
+      // Must agree with `productIdsWithImages` in product/crud.ts, and with
+      // findProductsWithNoImages in product/analytics.ts: Image is separately
+      // soft-deletable from ProductImage, and a PDF is a manual, not a photo.
+      // Checking ProductImage alone reads `true` for a product whose only
+      // attachment is a PDF, which then gets filtered out of the candidate list
+      // below and never gets the UPC lookup that would fetch it a real photo —
+      // hitting tools and hardware hardest.
       hasImage: exists(
         dbClient
           .select({ id: sql`1` })
           .from(productImage)
+          .innerJoin(
+            image,
+            and(eq(image.id, productImage.imageId), notDeleted(image)),
+          )
           .where(
             and(
               eq(productImage.productId, product.id),
               notDeleted(productImage),
+              ne(image.contentType, PDF_CONTENT_TYPE),
             ),
           ),
       ),

@@ -29,7 +29,7 @@ import type {
   ImageWithEntity,
 } from "@cubby/schemas/image";
 import { imageSortableFields } from "@cubby/schemas/image";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -440,20 +440,46 @@ const findCullablePendingImages = async (
     .select({ imageId: projectImage.imageId })
     .from(projectImage);
 
+  // A cookbook cover is a DIRECT FK, not a join row, so enumerating only the
+  // four join tables misses it — and this feeds a HARD delete wired to the
+  // one-click auto-fix. `deleteImages` below already handles this edge
+  // explicitly; that asymmetry was the omission, not a decision. Currently
+  // unreachable (upsertCookbook flips a cover to UPLOADED in the same txn that
+  // writes coverImageId, and this only looks at PENDING), but nothing enforces
+  // that pairing and the failure mode is a raw FK violation aborting the whole
+  // cull *after* the caller has dropped the R2 objects.
+  //
+  // Deliberately NOT filtered by `notDeleted(cookbook)`: deleteCookbook
+  // tombstones the row without nulling coverImageId, so a soft-deleted cookbook
+  // still holds a live FK. The constraint doesn't care about deletedAt, and this
+  // cull is a hard delete — filtering here would cull exactly the images that
+  // then blow up on Cookbook_coverImageId_fkey.
+  const imagesUsedAsCookbookCovers = dbClient
+    .select({ imageId: cookbook.coverImageId })
+    .from(cookbook)
+    .where(isNotNull(cookbook.coverImageId));
+
   // Get all image IDs that have any association
-  const [productAssocs, locationAssocs, recipeAssocs, projectAssocs] =
-    await Promise.all([
-      imagesWithProductAssociations,
-      imagesWithLocationAssociations,
-      imagesWithRecipeAssociations,
-      imagesWithProjectAssociations,
-    ]);
+  const [
+    productAssocs,
+    locationAssocs,
+    recipeAssocs,
+    projectAssocs,
+    cookbookCovers,
+  ] = await Promise.all([
+    imagesWithProductAssociations,
+    imagesWithLocationAssociations,
+    imagesWithRecipeAssociations,
+    imagesWithProjectAssociations,
+    imagesUsedAsCookbookCovers,
+  ]);
 
   const associatedImageIds = new Set([
     ...productAssocs.map((a) => a.imageId),
     ...locationAssocs.map((a) => a.imageId),
     ...recipeAssocs.map((a) => a.imageId),
     ...projectAssocs.map((a) => a.imageId),
+    ...cookbookCovers.map((a) => a.imageId),
   ]);
 
   // Find pending images older than the cutoff date
