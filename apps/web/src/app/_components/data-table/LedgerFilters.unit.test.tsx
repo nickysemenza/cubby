@@ -23,6 +23,7 @@ vi.mock("~/components/reui/filters", () => ({
         data-testid="set-trade"
         onClick={() =>
           onChange([
+            ...filters.filter((filter) => filter.field !== "trade"),
             {
               id: "ledger-trade",
               field: "trade",
@@ -65,6 +66,28 @@ vi.mock("~/components/reui/filters", () => ({
         }
       >
         Type name
+      </button>
+      <button
+        type="button"
+        data-testid="clear-name"
+        onClick={() =>
+          onChange(
+            filters.map((filter) =>
+              filter.field === "name" ? { ...filter, values: [""] } : filter,
+            ),
+          )
+        }
+      >
+        Clear name
+      </button>
+      <button
+        type="button"
+        data-testid="remove-name"
+        onClick={() =>
+          onChange(filters.filter((filter) => filter.field !== "name"))
+        }
+      >
+        Remove name
       </button>
     </div>
   ),
@@ -204,5 +227,87 @@ describe("LedgerFilters synchronization", () => {
     expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
       '"values":["lemon"]',
     );
+  });
+
+  it("preserves an empty text draft while committing an immediate select", () => {
+    vi.useFakeTimers();
+    const { table, setColumnFilters } = makeTable();
+    const { rerender } = render(<LedgerFilters table={table} />);
+
+    fireEvent.click(screen.getByTestId("add-name"));
+    fireEvent.click(screen.getByTestId("set-trade"));
+
+    expect(setColumnFilters).toHaveBeenCalledTimes(1);
+    expect(setColumnFilters).toHaveBeenLastCalledWith([
+      { id: "trade", value: ["electrical"] },
+    ]);
+
+    rerender(<LedgerFilters table={table} />);
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"field":"name"',
+    );
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"field":"trade"',
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(setColumnFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a newer external text filter replace a pending toolbar edit", () => {
+    vi.useFakeTimers();
+    const { table, setColumnFilters, setExternalFilters } = makeTable();
+    const { rerender } = render(<LedgerFilters table={table} />);
+
+    fireEvent.click(screen.getByTestId("add-name"));
+    fireEvent.click(screen.getByTestId("type-name"));
+
+    act(() => {
+      setExternalFilters([{ id: "name", value: "lime" }]);
+      rerender(<LedgerFilters table={table} />);
+    });
+
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"values":["lime"]',
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(setColumnFilters).not.toHaveBeenCalled();
+  });
+
+  it("clears a committed text value without removing its draft input", () => {
+    vi.useFakeTimers();
+    const { table, setColumnFilters, setExternalFilters } = makeTable();
+    const { rerender } = render(<LedgerFilters table={table} />);
+
+    act(() => {
+      setExternalFilters([{ id: "name", value: "lemon" }]);
+      rerender(<LedgerFilters table={table} />);
+    });
+    fireEvent.click(screen.getByTestId("clear-name"));
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(setColumnFilters).toHaveBeenCalledTimes(1);
+    expect(setColumnFilters).toHaveBeenLastCalledWith([]);
+
+    rerender(<LedgerFilters table={table} />);
+    expect(screen.getByTestId("ledger-filters")).toHaveTextContent(
+      '"values":[""]',
+    );
+
+    fireEvent.click(screen.getByTestId("remove-name"));
+    expect(screen.getByTestId("ledger-filters")).not.toHaveTextContent(
+      '"field":"name"',
+    );
+    expect(setColumnFilters).toHaveBeenCalledTimes(1);
   });
 });

@@ -80,6 +80,19 @@ const filterStateKey = (filters: Filter<string>[]): string =>
       .sort((left, right) => left.field.localeCompare(right.field)),
   );
 
+function normalizeLedgerFilters(
+  filters: Filter<string>[],
+  fields: LedgerFilterField[],
+): { columnFilters: ColumnFiltersState; externalKey: string } {
+  const columnFilters = ledgerFiltersToColumnFilters(filters, fields);
+  return {
+    columnFilters,
+    externalKey: filterStateKey(
+      columnFiltersToLedgerFilters(columnFilters, fields),
+    ),
+  };
+}
+
 function getLedgerFields<TData>(table: Table<TData>): LedgerFilterField[] {
   return table.getAllLeafColumns().flatMap((column) => {
     const config = column.columnDef.meta?.filterConfig as
@@ -156,13 +169,8 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
     // intentionally normalizes to no TanStack filter. Compare the normalized
     // state to the table so an empty input stays mounted instead of being
     // written as `[]` and then removed by the external-state sync.
-    const nextColumnFilters = ledgerFiltersToColumnFilters(
-      debouncedDraftFilters,
-      fields,
-    );
-    const nextExternalKey = filterStateKey(
-      columnFiltersToLedgerFilters(nextColumnFilters, fields),
-    );
+    const { columnFilters: nextColumnFilters, externalKey: nextExternalKey } =
+      normalizeLedgerFilters(debouncedDraftFilters, fields);
     if (nextExternalKey === externalKey) return;
 
     lastExternalKeyRef.current = nextExternalKey;
@@ -202,8 +210,12 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
 
     setDraftFilters(nextFilters);
     if (commitImmediately) {
-      lastExternalKeyRef.current = filterStateKey(nextFilters);
-      table.setColumnFilters(ledgerFiltersToColumnFilters(nextFilters, fields));
+      const { columnFilters: nextColumnFilters, externalKey: nextExternalKey } =
+        normalizeLedgerFilters(nextFilters, fields);
+      lastExternalKeyRef.current = nextExternalKey;
+      if (nextExternalKey !== externalKey) {
+        table.setColumnFilters(nextColumnFilters);
+      }
     }
   };
 

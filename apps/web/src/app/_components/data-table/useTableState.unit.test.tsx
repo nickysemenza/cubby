@@ -16,6 +16,11 @@ vi.mock("@tanstack/react-router", () => ({
 import type { FilterSpecCore } from "~/entities/filters";
 import { useTableState } from "./useTableState";
 
+const URL_BACKED_SPECS: readonly FilterSpecCore[] = [
+  { columnId: "name", urlKey: "q", kind: "text" },
+  { columnId: "trade", kind: "multiselect" },
+];
+
 describe("useTableState — pageIndex reset on filter change", () => {
   beforeEach(() => {
     mockSearch = {};
@@ -119,6 +124,68 @@ describe("useTableState — pageIndex reset on filter change", () => {
       search: (previous: Record<string, unknown>) => Record<string, unknown>;
     };
     expect(navigateOptions.search(mockSearch)).toEqual({ keep: "yes" });
+  });
+});
+
+describe("useTableState — URL-backed column filters", () => {
+  beforeEach(() => {
+    mockSearch = {};
+    mockNavigate.mockClear();
+  });
+
+  it("initializes table filters from a shared URL", () => {
+    mockSearch = { q: "lemon", trade: "demo,electrical" };
+
+    const { result } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+
+    expect(result.current.columnFilters).toEqual([
+      { id: "name", value: "lemon" },
+      { id: "trade", value: ["demo", "electrical"] },
+    ]);
+  });
+
+  it("writes interactive filters to the URL and removes cleared keys", async () => {
+    const { result } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    mockNavigate.mockClear();
+
+    await act(async () => {
+      result.current.setColumnFilters([
+        { id: "name", value: "lemon" },
+        { id: "trade", value: ["demo", "electrical"] },
+      ]);
+    });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+
+    const setOptions = mockNavigate.mock.calls.at(-1)?.[0] as {
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(setOptions.search({ keep: "yes" })).toEqual({
+      keep: "yes",
+      q: "lemon",
+      trade: "demo,electrical",
+    });
+
+    mockNavigate.mockClear();
+    await act(async () => {
+      result.current.setColumnFilters([]);
+    });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+
+    const clearOptions = mockNavigate.mock.calls.at(-1)?.[0] as {
+      search: (previous: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(
+      clearOptions.search({
+        keep: "yes",
+        q: "lemon",
+        trade: "demo,electrical",
+      }),
+    ).toEqual({ keep: "yes" });
   });
 });
 
