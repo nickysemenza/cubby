@@ -86,6 +86,14 @@ declare module "@tanstack/react-table" {
   // module augmentation to merge; it's structurally unused here.
   interface TableMeta<TData extends RowData> {
     serverTotals?: ServerTotals;
+    /**
+     * How many URL-only scopes (see `urlOnly` in `entities/filters`) are
+     * narrowing the rows. They can't live in `columnFilters` — TanStack
+     * resolves every entry there to a column — but the empty state still has
+     * to know they're on, or a scoped deep link that matches nothing reads as
+     * "you have no purchases at all". See `isNarrowed`.
+     */
+    urlScopeCount?: number;
     /** User-resized column pixel widths, by column id (persisted per entity). */
     columnSizing?: Record<string, number>;
     /** Persist a resized column width (double-click a handle to reset). */
@@ -124,10 +132,16 @@ export function useTableConfig<TData>({
     sorting,
     setSorting,
     columnFilters,
+    allFilters,
     setColumnFilters,
     pagination,
     setPagination,
   } = tableState;
+
+  // `allFilters` is `columnFilters` plus the URL-only scopes; only the latter
+  // go into the table (every entry there must resolve to a column), so the
+  // difference is what the empty state would otherwise be blind to.
+  const urlScopeCount = allFilters.length - columnFilters.length;
 
   const [internalVisibility, setInternalVisibility] = useState<
     Record<string, boolean>
@@ -180,6 +194,7 @@ export function useTableConfig<TData>({
       rowCount: totalCount,
       meta: {
         ...(serverTotals ? { serverTotals } : {}),
+        ...(urlScopeCount > 0 ? { urlScopeCount } : {}),
         ...(columnSizing ? { columnSizing } : {}),
         ...(setColumnSize ? { setColumnSize } : {}),
         ...(resetColumnSize ? { resetColumnSize } : {}),
@@ -227,6 +242,7 @@ export function useTableConfig<TData>({
       enableSorting,
       totalCount,
       serverTotals,
+      urlScopeCount,
       columnSizing,
       setColumnSize,
       resetColumnSize,

@@ -18,7 +18,7 @@ import { useDebug } from "~/hooks/useDebug";
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
-import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
+import { EntityEmptyState, isNarrowed } from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
 import type { GroupConfig } from "./useGroupedList";
 import { useGroupedList } from "./useGroupedList";
@@ -290,10 +290,7 @@ export function MobileCardView<TItem>({
           )}
         </div>
       ) : entity ? (
-        <EntityEmptyState
-          entity={entity}
-          isFiltered={hasActiveFilters(table.getState().columnFilters)}
-        />
+        <EntityEmptyState entity={entity} isFiltered={isNarrowed(table)} />
       ) : (
         <EntityEmptyState entity="product" isFiltered={true} />
       )}
