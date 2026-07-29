@@ -65,6 +65,7 @@ import {
   findIngredientsWithUnusedAliases,
   findLinkedProductIds,
   findLocationsWithoutAiDescription,
+  findManufacturerSpellingVariants,
   findNeverVerifiedInventory,
   findOrphanedProducts,
   findParentRecipesWithDeletedSubRecipes,
@@ -75,6 +76,7 @@ import {
   findStaleLocations,
   findUnknownParkedItems,
   findUnusedIngredients,
+  findVendorSpellingVariants,
   loadProductsForCoverage,
   pruneUnusedAliases,
   type ReparsedStaleLineWrite,
@@ -462,6 +464,9 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       staleLocations: () => findStaleLocations(scoped),
       neverVerifiedInventory: () => findNeverVerifiedInventory(scoped),
       unknownParkedItems: () => findUnknownParkedItems(scoped),
+      vendorSpellingVariants: () => findVendorSpellingVariants(scoped),
+      manufacturerSpellingVariants: () =>
+        findManufacturerSpellingVariants(scoped),
     }),
   );
   return {
@@ -482,6 +487,8 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     staleLocations: r.staleLocations,
     neverVerifiedInventory: r.neverVerifiedInventory,
     unknownParkedItems: r.unknownParkedItems,
+    vendorSpellingVariants: r.vendorSpellingVariants,
+    manufacturerSpellingVariants: r.manufacturerSpellingVariants,
   };
 };
 

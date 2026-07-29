@@ -81,6 +81,7 @@ const searchSchema = z
     date: z.string().optional().catch(undefined),
     productId: z.string().optional().catch(undefined),
     product: z.string().optional().catch(undefined),
+    vendor: z.string().optional().catch(undefined),
     // Quick-capture deep link (navbar "+" / command palette) — there is no
     // /purchases/new route, so the create dialog is opened by this param.
     create: z.boolean().optional().catch(undefined),

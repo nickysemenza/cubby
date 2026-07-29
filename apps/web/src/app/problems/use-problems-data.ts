@@ -72,6 +72,9 @@ export function useProblemsData(opts?: {
         staleLocations: fast.data?.staleLocations ?? [],
         neverVerifiedInventory: fast.data?.neverVerifiedInventory ?? [],
         unknownParkedItems: fast.data?.unknownParkedItems ?? [],
+        vendorSpellingVariants: fast.data?.vendorSpellingVariants ?? [],
+        manufacturerSpellingVariants:
+          fast.data?.manufacturerSpellingVariants ?? [],
         ingredientsWithPartialCoverage:
           coverage.data?.ingredientsWithPartialCoverage ?? [],
         productsWithIslandedMappings:
