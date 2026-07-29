@@ -5,6 +5,10 @@ inputs:
     description: "Whether to download WASM artifact"
     required: false
     default: "false"
+  workspace-filter:
+    description: "Optional pnpm workspace filter for a narrower install"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -27,7 +31,14 @@ runs:
     # store cache (cache: "pnpm" above) makes install offline; the hardlink/
     # symlink step is fast. Don't reintroduce a node_modules cache.
     - name: Install dependencies
-      run: pnpm install --frozen-lockfile --prefer-offline
+      env:
+        WORKSPACE_FILTER: ${{ inputs.workspace-filter }}
+      run: |
+        if [[ -n "$WORKSPACE_FILTER" ]]; then
+          pnpm install --frozen-lockfile --prefer-offline --filter "$WORKSPACE_FILTER"
+        else
+          pnpm install --frozen-lockfile --prefer-offline
+        fi
       shell: bash
 
     - name: Download WASM pkg artifact

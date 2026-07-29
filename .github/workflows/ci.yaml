@@ -386,15 +386,7 @@ jobs:
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           name: Unit Tests - auxiliary packages
-          path: |
-            packages/schemas/test-results/vitest-junit.xml
-            packages/shared/test-results/vitest-junit.xml
-            packages/upc-contract/test-results/vitest-junit.xml
-            apps/usda-api/test-results/vitest-junit.xml
-            packages/usda-contract/test-results/vitest-junit.xml
-            packages/usda-schemas/test-results/vitest-junit.xml
-            apps/upc-lookup/test-results/vitest-junit.xml
-            packages/worker-tracing/test-results/vitest-junit.xml
+          path: "**/test-results/vitest-junit.xml"
           reporter: java-junit
           fail-on-error: false
 
@@ -489,6 +481,10 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
+          # The Playwright image intentionally omits a compiler toolchain.
+          # Restrict the install to web + its workspace dependencies so the
+          # unrelated USDA API's better-sqlite3 native build is never invoked.
+          workspace-filter: "@cubby/web..."
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
       # NOTE: no manual `pg_trgm` / `db:push` against the `cubby` service DB —
