@@ -189,6 +189,13 @@ export default Sentry.withSentry(
   () => ({
     dsn: SENTRY_DSN,
     sendDefaultPii: true,
+    // Explicit rather than relying on the SDK default, which is also
+    // "production" — stating it keeps the three init sites (here, router.tsx,
+    // instrument.server.mjs) readable as a set, so a future reader can see at a
+    // glance which one owns which environment. Branch preview deploys
+    // (`versions upload`) also run this worker and so also report production;
+    // they hit the prod database, so that is the honest label.
+    environment: "production",
     // `sendDefaultPii` attaches the full request URL (incl. query string) to
     // events. Defensively redact any credential-bearing query param (e.g. a
     // stale MCP `?key=`) before the event leaves the process.

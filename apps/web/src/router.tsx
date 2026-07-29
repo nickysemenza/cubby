@@ -63,6 +63,16 @@ export const getRouter = () => {
     Sentry.init({
       dsn: SENTRY_DSN,
       sendDefaultPii: true,
+      // Without this the SDK defaults to "production", so every error from
+      // `vite dev` on localhost lands in the same bucket as a real user's.
+      // That is not hypothetical: CUBBY-DY accumulated 761 events over 11 days
+      // tagged production, all of them from http://localhost:3000, and it made
+      // a genuine-looking prod issue out of transient HMR noise.
+      //
+      // Keyed on the build, not the hostname: a local `build:cf` preview is a
+      // production bundle and should report as one — dev-server noise is the
+      // thing being separated out here.
+      environment: isProd ? "production" : "development",
       // `sendDefaultPii` attaches the full request URL (incl. query string) to
       // events. Defensively redact any credential-bearing query param (e.g. a
       // stale MCP `?key=`) before the event leaves the browser.
