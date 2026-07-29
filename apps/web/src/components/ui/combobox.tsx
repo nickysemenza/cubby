@@ -11,8 +11,18 @@ import { cn } from "~/lib/utils";
 export interface FilterableComboboxItem {
   value: string;
   label: string;
+  /** Leading glyph — a trade icon, a category mark, a vendor's brand logo. */
   icon?: React.ReactNode;
   color?: string;
+  /**
+   * Trailing micro-annotation ABOUT the option — today, how many rows carry it
+   * ("254"). Deliberately its own field rather than baked into `label`: the
+   * label is interpolated verbatim into `ActiveFilterChips` and the collapsed
+   * multi-select summary (`"Amazon (254) +1"` reads as nonsense), and the local
+   * type-ahead matches on `label`, so a count in there means typing digits
+   * filters the roster by its counts.
+   */
+  hint?: string;
   /**
    * A meta option is a predicate ABOUT the data (e.g. "Has project" / "(none)"
    * nullable-filter sentinels), not a value drawn FROM it — it renders in the
@@ -261,9 +271,14 @@ function ComboboxPopup({
                         style={{ backgroundColor: item.color }}
                       />
                     )}
-                    <span className="flex-1 truncate">{item.label}</span>
                     {item.icon && (
                       <span className="shrink-0">{item.icon}</span>
+                    )}
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.hint && (
+                      <span className="shrink-0 font-mono text-2xs text-slate tabular-nums">
+                        {item.hint}
+                      </span>
                     )}
                   </ComboboxPrimitive.Item>
                 );

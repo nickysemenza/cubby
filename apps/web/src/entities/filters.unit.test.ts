@@ -6,6 +6,8 @@ import {
   type FilterSpecCore,
   type FilterValue,
   isMultiFilterKind,
+  multiSelectFilterFn,
+  multiSelectFilterFnBy,
   nullableSentinelOptions,
 } from "./filters";
 
@@ -272,5 +274,69 @@ describe("nullableSentinelOptions", () => {
       { value: FILTER_ANY, label: "Has Category", meta: true },
       { value: FILTER_NONE, label: "(none)", meta: true },
     ]);
+  });
+});
+
+describe("multiSelectFilterFn", () => {
+  /** Minimal stand-in for a TanStack row. */
+  const row = (value: unknown) => ({ getValue: () => value });
+  const run = (
+    value: unknown,
+    filterValue: unknown,
+    read?: (v: unknown) => string | null | undefined,
+  ) =>
+    (read ? multiSelectFilterFnBy(read) : multiSelectFilterFn)(
+      row(value),
+      "col",
+      filterValue,
+    );
+
+  it("passes every row when nothing is selected", () => {
+    expect(run("Amazon", undefined)).toBe(true);
+    expect(run("Amazon", [])).toBe(true);
+  });
+
+  it("matches a value in the selected set, exactly", () => {
+    expect(run("Amazon", ["Amazon", "eBay"])).toBe(true);
+    expect(run("Lowe's", ["Amazon", "eBay"])).toBe(false);
+    // Exact, not substring — the whole point of the eqAny move server-side.
+    expect(run("Amazon Business", ["Amazon"])).toBe(false);
+  });
+
+  it("finds empty rows via (none), and only those", () => {
+    expect(run(null, [FILTER_NONE])).toBe(true);
+    expect(run(undefined, [FILTER_NONE])).toBe(true);
+    // Clearing an inline text edit writes "", which is absent for our purposes.
+    expect(run("", [FILTER_NONE])).toBe(true);
+    expect(run("Amazon", [FILTER_NONE])).toBe(false);
+  });
+
+  it("finds non-empty rows via Has x", () => {
+    expect(run("Amazon", [FILTER_ANY])).toBe(true);
+    expect(run(null, [FILTER_ANY])).toBe(false);
+  });
+
+  it("ORs a sentinel with the value selection rather than ANDing", () => {
+    // "Amazon or no vendor recorded" — mirrors eqAnyOrPresence server-side.
+    expect(run("Amazon", ["Amazon", FILTER_NONE])).toBe(true);
+    expect(run(null, ["Amazon", FILTER_NONE])).toBe(true);
+    expect(run("eBay", ["Amazon", FILTER_NONE])).toBe(false);
+  });
+
+  it("treats both sentinels together as no constraint", () => {
+    expect(run(null, [FILTER_ANY, FILTER_NONE])).toBe(true);
+    expect(run("Amazon", [FILTER_ANY, FILTER_NONE])).toBe(true);
+  });
+
+  it("uses the accessor for object-valued columns", () => {
+    // The regression: an entity-ref accessor ({id,name}) stringifies to
+    // "[object Object]", so the roster matched nothing and (none) never found
+    // an unassigned row on the embedded project-detail tables.
+    const byId = (v: unknown) =>
+      (v as { id?: string | null } | null)?.id ?? null;
+    expect(run({ id: "p1", name: "Kitchen" }, ["p1"], byId)).toBe(true);
+    expect(run({ id: "p2", name: "Bath" }, ["p1"], byId)).toBe(false);
+    expect(run({ id: null, name: null }, [FILTER_NONE], byId)).toBe(true);
+    expect(run({ id: "p1", name: "Kitchen" }, [FILTER_NONE], byId)).toBe(false);
   });
 });

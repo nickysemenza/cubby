@@ -5,6 +5,7 @@ import { match } from "ts-pattern";
 import type { BadgeVariant } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { buildSelectOptions } from "~/lib/select-options";
+import { getCostTypeColor } from "~/lib/status-colors";
 
 /** Human labels for the fixed cost-type enum. */
 export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
@@ -27,10 +28,17 @@ export const costTypeBadgeVariant: Record<CostType, BadgeVariant> = {
   services: "secondary",
 };
 
-/** `{value,label}` options for the cost-type filter/inline-edit select. */
-export const costTypeOptions = buildSelectOptions(
-  costTypeValues,
-  costTypeLabels,
+/**
+ * `{value,label,color}` options for the cost-type filter/inline-edit select.
+ * Not `buildSelectOptions` — that helper carries no color, and the swatch is
+ * what makes the picklist read as the twin of the cell's chip.
+ */
+export const costTypeOptions: FilterableComboboxItem[] = costTypeValues.map(
+  (value) => ({
+    value,
+    label: costTypeLabels[value],
+    color: getCostTypeColor(value),
+  }),
 );
 
 /** `{value,label}` options for the "future" (planned vs. made) filter. */

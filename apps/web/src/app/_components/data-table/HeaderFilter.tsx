@@ -105,10 +105,10 @@ export function HeaderFilter<TData>({
     }
     if (!facetMap.size) return filterConfig.options;
     return filterConfig.options.map((opt) => {
+      // `hint`, not `label` — the label is interpolated into filter chips and
+      // the collapsed multi-select summary, and drives the type-ahead match.
       const count = facetMap.get(opt.value);
-      return count !== undefined
-        ? { ...opt, label: `${opt.label} (${count})` }
-        : opt;
+      return count !== undefined ? { ...opt, hint: String(count) } : opt;
     });
   }, [filterConfig.options, filterConfig.filterType, filterConfig.facetCount]);
 

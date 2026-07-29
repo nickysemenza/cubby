@@ -21,6 +21,7 @@ import {
   purchaseVendorColumn,
   tradeOptions,
 } from "~/app/projects/shared";
+import { VendorMark } from "~/components/entity/vendor-cell";
 import { Grid } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -70,9 +71,11 @@ export function PurchaseList() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
-  // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor") —
-  // labeled with a `(count)` suffix so the most-used vendors sort to the top
-  // (the query is already ranked by frequency; see `purchaseVendorOptions`).
+  // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor"),
+  // ranked by frequency so the most-used vendors sort to the top (see
+  // `purchaseVendorOptions`). The count rides in `hint`, NOT the label: the
+  // label is what filter chips and the collapsed multi-select summary
+  // interpolate, and what the type-ahead matches on.
   const vendorOptionsQuery = useQuery(
     api.purchase.vendorOptions.queryOptions(),
   );
@@ -80,7 +83,9 @@ export function PurchaseList() {
     () =>
       vendorOptionsQuery.data?.map(({ vendor, count }) => ({
         value: vendor,
-        label: `${vendor} (${count})`,
+        label: vendor,
+        hint: String(count),
+        icon: <VendorMark vendor={vendor} />,
       })) ?? NO_VENDOR_OPTIONS,
     [vendorOptionsQuery.data],
   );

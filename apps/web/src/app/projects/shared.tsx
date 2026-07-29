@@ -12,13 +12,16 @@ import {
   type ColumnHelper,
   createColumnHelper,
   getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   type Row as TableRow,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
-import { partition } from "es-toolkit";
+import { partition, uniq } from "es-toolkit";
 import {
   ArrowRightLeft,
   ExternalLink,
@@ -43,10 +46,12 @@ import {
 } from "~/app/_components/data-table/cell-data";
 import {
   createActionsColumn,
+  createCreatedAtColumn,
   createCurrencyColumn,
   createFilterableSelectColumn,
   createNameColumn,
   createPlainDateColumn,
+  createProductLinkColumn,
   createProjectLinkColumn,
   createTextColumn,
   type FilterConfig,
@@ -56,6 +61,7 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
+import { useTableColumnVisibility } from "~/app/_components/data-table/useTableColumnVisibility";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -75,7 +81,7 @@ import {
   taskStatusBadgeVariant,
   taskStatusOptions,
 } from "~/app/tasks/task-options";
-import { VendorCell } from "~/components/entity/vendor-cell";
+import { VendorCell, VendorMark } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -239,6 +245,24 @@ export function taskDueColumn(
 }
 
 /**
+ * `N/M` checklist chip after a parent task's name — the twin of the /tasks
+ * ledger's. Module-level so it stays referentially stable across renders (it
+ * sits in the columns `useMemo`'s dependency graph).
+ */
+const subtaskCountSuffix = (row: TaskOut): ReactNode =>
+  row.subtaskCount > 0 ? (
+    <Badge variant="outline">
+      {row.doneSubtaskCount}/{row.subtaskCount}
+    </Badge>
+  ) : undefined;
+
+/**
+ * Columns off by default on the embedded task table. Provenance detail on a
+ * project page, reachable from the column menu when you want it.
+ */
+const EMBEDDED_TASK_COLUMNS: VisibilityState = { createdAt: false };
+
+/**
  * The embedded task table: client-side filter/sort/pagination over a
  * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
  *
@@ -355,6 +379,7 @@ export function TaskList({
       createNameColumn(taskHelper, "task", "name", {
         header: "Task",
         editable: nameEditable,
+        nameSuffix: subtaskCountSuffix,
       }),
       // The inline move-to-sub-project affordance — omitted on leaf projects
       // where every row shares the one project (see `showProjectColumn`).
@@ -394,6 +419,7 @@ export function TaskList({
         },
         { mobile: { slot: "meta", priority: 40, interactive: true } },
       ),
+      createCreatedAtColumn(taskHelper),
       createActionsColumn(taskHelper, "task", {
         extraActions: combinedExtraActions,
       }),
@@ -411,6 +437,11 @@ export function TaskList({
     return [...active, ...done];
   }, [tasks]);
 
+  // Own storage scope: this table's column set isn't the /tasks ledger's, so
+  // sharing `table-columns:task` would let a toggle here move a column there.
+  const { columnVisibility, onColumnVisibilityChange } =
+    useTableColumnVisibility("task", EMBEDDED_TASK_COLUMNS, "embedded");
+
   const table = useReactTable({
     data: sortedData,
     columns,
@@ -418,10 +449,19 @@ export function TaskList({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    // Feeds the header picklists' `(count)` hints. Client-side faceting is
+    // honest here (unlike on a server-paginated ledger): the table holds the
+    // whole set it's filtering.
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     getRowId: (row) => row.id,
     enableRowSelection: true,
-    state: { rowSelection: bulkActionsState.rowSelection },
+    state: {
+      rowSelection: bulkActionsState.rowSelection,
+      columnVisibility,
+    },
     onRowSelectionChange: bulkActionsState.onRowSelectionChange,
+    onColumnVisibilityChange,
     initialState: {
       pagination: { pageSize: 25 },
     },
@@ -497,7 +537,12 @@ export function TaskList({
 
   return (
     <>
-      <RTable table={table} embedded bulkActionBar={bulkActionBar} />
+      <RTable
+        table={table}
+        embedded
+        showColumnMenu
+        bulkActionBar={bulkActionBar}
+      />
       {deleteDialog}
       {bulkMoveItems.length > 0 && (
         <MoveToProjectDialog
@@ -744,29 +789,46 @@ export function purchaseFutureColumn(
 }
 
 /**
- * Vendor column — free-text `vendor` write. Used only by the /purchases ledger,
- * where it's hidden by default (see `initialColumnVisibility` in
- * purchaselist.tsx) because vendor is set on only ~30% of rows. Its filter is a
- * picklist fed by the `purchase.vendorOptions` query, so it belongs on tables
- * that supply that via `filterOptions`.
+ * Vendor column — free-text `vendor` write. Hidden by default wherever it
+ * appears (see `initialColumnVisibility` in purchaselist.tsx, and the embedded
+ * table's own visibility default) because vendor is set on only ~30% of rows.
  *
  * Leads with the vendor's brand mark (`VendorCell`) so long runs of the same
  * vendor — 539 of the 737 vendor-bearing rows are Amazon/Home Depot/eBay/Lowe's
  * — are scannable by shape rather than by reading. `w-40` rather than `w-32`:
  * the mark costs ~24px and the narrower column already truncated "Direct Tools
  * Outlet".
+ *
+ * Its filter is a picklist, so a caller must supply the roster. The ledger
+ * routes the global `purchase.vendorOptions` query in through `useEntityList`'s
+ * `filterOptions` (which overrides this config wholesale); the embedded table
+ * passes `vendorOptions` here, derived from the rows it was handed, plus
+ * `facetCount` so the counts are that project's rather than the ledger's.
  */
 export function purchaseVendorColumn(
   helper: ColumnHelper<PurchaseOut>,
   save: (vendor: string | null, purchase: PurchaseOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
+  opts?: {
+    mobile?: MobileColumnMeta;
+    vendorOptions?: FilterableComboboxItem[];
+    /** Client-side tables only — counts come from TanStack faceting. */
+    facetCount?: boolean;
+  },
 ) {
+  const filterConfig = manifestFilterConfig(
+    "purchase",
+    "vendor",
+    opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
+  );
   return createTextColumn(helper, "vendor", {
     header: "Vendor",
     placeholder: "Where from?",
     className: "w-40",
     mobile: opts?.mobile,
-    filterConfig: manifestFilterConfig("purchase", "vendor"),
+    filterConfig:
+      filterConfig && opts?.facetCount
+        ? { ...filterConfig, facetCount: true }
+        : filterConfig,
     renderValue: (v) =>
       v ? <VendorCell vendor={v} compactOnMobile /> : <NoneValue />,
     editable: {
@@ -803,6 +865,19 @@ export function purchaseOrderIdColumn(
     },
   });
 }
+
+/**
+ * Columns off by default on the embedded purchase table. Vendor (~30% filled),
+ * Order # (~25%) and Product are sparse enough that showing them by default
+ * would cost more density than they return on a project page — but the column
+ * menu makes them one click away.
+ */
+const EMBEDDED_PURCHASE_COLUMNS: VisibilityState = {
+  vendor: false,
+  orderId: false,
+  product: false,
+  createdAt: false,
+};
 
 /**
  * The embedded purchase table: client-side filter/sort/pagination over a
@@ -855,6 +930,23 @@ export function PurchaseList({
   });
   const nameEditable = useNameEditable<PurchaseOut>(
     updatePurchaseMutation.mutateAsync,
+  );
+
+  // The Vendor picklist's roster, from the rows this table was handed rather
+  // than the ledger-wide `purchase.vendorOptions` query: on a project page the
+  // useful question is "which vendors did THIS project use", and offering the
+  // other 70 would mostly be options that match nothing. Counts come from
+  // TanStack faceting (`facetCount`), so they track the other active filters.
+  const rowVendorOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      uniq(purchases.flatMap((p) => (p.vendor ? [p.vendor] : [])))
+        .sort((a, b) => a.localeCompare(b))
+        .map((vendor) => ({
+          value: vendor,
+          label: vendor,
+          icon: <VendorMark vendor={vendor} />,
+        })),
+    [purchases],
   );
 
   // Hand-wired for the same reason as `TaskList` above — raw `useReactTable`,
@@ -1015,17 +1107,45 @@ export function PurchaseList({
         },
         { mobile: { slot: "meta", priority: 50 } },
       ),
-      // Vendor / Order # are deliberately NOT here. This embedded table has no
-      // column-visibility toggle (raw `useReactTable`, unlike the ledger's
-      // `useEntityList`), so any column added is permanent — and both are
-      // sparse (~30%/25% filled), which would cost density on a project page
-      // for little gain. They live on the /purchases ledger, hidden by default.
+      // Vendor / Order # / Product are sparse (~30% / ~25% / rarer still), so
+      // they stay off by default — but they're reachable now, via the column
+      // menu `showColumnMenu` keeps on screen. (They used to be omitted
+      // outright: without that menu any column added here was permanent.)
+      createProductLinkColumn(purchaseHelper, {
+        className: "w-40",
+        filterConfig: manifestFilterConfig("purchase", "product"),
+      }),
+      purchaseVendorColumn(
+        purchaseHelper,
+        async (vendor, purchase) => {
+          await updatePurchaseMutation.mutateAsync({
+            id: purchase.id,
+            data: { vendor },
+          });
+        },
+        // Roster from the rows on screen + faceted counts, so the picklist
+        // describes THIS project's spend rather than the whole ledger.
+        { vendorOptions: rowVendorOptions, facetCount: true },
+      ),
+      purchaseOrderIdColumn(purchaseHelper, async (orderId, purchase) => {
+        await updatePurchaseMutation.mutateAsync({
+          id: purchase.id,
+          data: { orderId },
+        });
+      }),
+      createCreatedAtColumn(purchaseHelper),
       createActionsColumn(purchaseHelper, "purchase", {
         extraActions: combinedExtraActions,
       }),
     ],
-    [showProjectColumn, nameEditable, combinedExtraActions],
+    [showProjectColumn, nameEditable, combinedExtraActions, rowVendorOptions],
   );
+
+  // Own storage scope — this column set isn't the /purchases ledger's, so a
+  // toggle here must not move a column there.
+  const { columnVisibility, onColumnVisibilityChange } =
+    useTableColumnVisibility("purchase", EMBEDDED_PURCHASE_COLUMNS, "embedded");
+
   const table = useReactTable({
     data: purchases,
     columns,
@@ -1033,10 +1153,18 @@ export function PurchaseList({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    // Feeds the Vendor picklist's count hints. Honest here, unlike on a
+    // server-paginated ledger: this table holds the whole set it filters.
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     getRowId: (row) => row.id,
     enableRowSelection: true,
-    state: { rowSelection: bulkActionsState.rowSelection },
+    state: {
+      rowSelection: bulkActionsState.rowSelection,
+      columnVisibility,
+    },
     onRowSelectionChange: bulkActionsState.onRowSelectionChange,
+    onColumnVisibilityChange,
     initialState: {
       pagination: { pageSize: 25 },
     },
@@ -1124,7 +1252,12 @@ export function PurchaseList({
 
   return (
     <>
-      <RTable table={table} embedded bulkActionBar={bulkActionBar} />
+      <RTable
+        table={table}
+        embedded
+        showColumnMenu
+        bulkActionBar={bulkActionBar}
+      />
       {deleteDialog}
       {bulkMoveItems.length > 0 && (
         <MoveToProjectDialog

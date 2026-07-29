@@ -25,6 +25,15 @@ const stores = new Map<string, Store>();
 
 const storageKey = (entity: string) => `table-columns:${entity}`;
 
+/**
+ * The store key for one table. `scope` separates two tables listing the SAME
+ * entity with different column sets — the project detail page's embedded
+ * purchases table has no Product/URL/Created columns the ledger has, so sharing
+ * `table-columns:purchase` would let hiding Vendor in one hide it in the other.
+ */
+const scopedKey = (entity: Entity, scope?: string) =>
+  scope ? `${entity}:${scope}` : entity;
+
 function getStore(entity: string): Store {
   let store = stores.get(entity);
   if (!store) {
@@ -63,16 +72,18 @@ const getServerSnapshot = () => null;
 export function useTableColumnVisibility(
   entity: Entity,
   initial?: VisibilityState,
+  scope?: string,
 ) {
+  const key = scopedKey(entity, scope);
   const subscribe = useCallback(
     (listener: () => void) => {
-      const store = getStore(entity);
+      const store = getStore(key);
       store.listeners.add(listener);
       return () => store.listeners.delete(listener);
     },
-    [entity],
+    [key],
   );
-  const getSnapshot = useCallback(() => readStored(entity), [entity]);
+  const getSnapshot = useCallback(() => readStored(key), [key]);
   const stored = useSyncExternalStore(
     subscribe,
     getSnapshot,
@@ -92,13 +103,10 @@ export function useTableColumnVisibility(
 
   const onColumnVisibilityChange: OnChangeFn<VisibilityState> = useCallback(
     (updater) => {
-      const prev = { ...initialRef.current, ...readStored(entity) };
-      writeStored(
-        entity,
-        typeof updater === "function" ? updater(prev) : updater,
-      );
+      const prev = { ...initialRef.current, ...readStored(key) };
+      writeStored(key, typeof updater === "function" ? updater(prev) : updater);
     },
-    [entity],
+    [key],
   );
 
   return { columnVisibility, onColumnVisibilityChange } as const;

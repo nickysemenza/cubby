@@ -758,11 +758,26 @@ export const purchaseFilterFields = {
   projectPresenceFilter: presenceFilter,
   productId: productId.optional(),
   productPresenceFilter: presenceFilter,
-  // Its own filter, deliberately NOT folded into `search`: buildSearchConditions
-  // ANDs its entries, so a second column sharing the `search` term would mean
-  // `name ILIKE q AND vendor ILIKE q` — and vendor is null on almost every row,
-  // which would silently zero out purchase search.
-  vendor: z.string().optional(),
+  /**
+   * Its own filter, deliberately NOT folded into `search`:
+   * `buildSearchConditions` ANDs its entries, so a second column sharing the
+   * `search` term would mean `name ILIKE q AND vendor ILIKE q` — and vendor is
+   * null on most rows, which would silently zero out purchase search.
+   *
+   * Matched EXACTLY (`eqAny`), not as a substring. The header control is a
+   * picklist over the real `vendorOptions` roster, so a substring match made
+   * the option's own count disagree with the rows it returned — picking
+   * "Amazon (254)" would also drag in an "Amazon Business". `oneOrMany` keeps
+   * scalar MCP callers schema-valid, but they must now pass the exact stored
+   * string ("Home Depot", not "home depot").
+   */
+  vendor: oneOrMany(z.string()).optional(),
+  /**
+   * `"none"` matches purchases with `vendor IS NULL` — the where-did-this-come-
+   * from worklist. ORs with `vendor` per `eqAnyOrPresence`, so "Amazon or no
+   * vendor recorded" is one filter.
+   */
+  vendorPresenceFilter: presenceFilter,
   future: z.boolean().optional(),
   search: z.string().optional(),
   dateFrom: plainDate
