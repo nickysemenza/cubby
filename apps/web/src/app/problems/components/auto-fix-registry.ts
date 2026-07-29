@@ -28,6 +28,20 @@ export type AutoFixTask = {
     problems: AllProblems,
     counts: MaintenanceCounts | undefined,
   ) => number | null;
+  /**
+   * How many of `count` are actually represented in `problems.totalProblems`.
+   * Defaults to `count`.
+   *
+   * These diverge in two ways, and conflating them made the summary card lie:
+   * `cullPendingImages` has no Problems section at all (none of its work is in
+   * the total), and `missingEmbeddings`' section carries only a capped sample
+   * while its count is the true uncapped figure. Summing raw `count` let
+   * "N of them need no decisions" exceed the issue count above it.
+   */
+  listedCount?: (
+    problems: AllProblems,
+    counts: MaintenanceCounts | undefined,
+  ) => number;
   /** Run alongside the others even at a zero/unknown count (idempotent tail steps). */
   alwaysRun?: boolean;
   run: (client: TRPCClient) => Promise<AutoFixOutcome>;
@@ -80,6 +94,9 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     key: "cullPendingImages",
     label: "Cull abandoned uploads",
     count: (_problems, counts) => counts?.cullablePendingImages ?? null,
+    // Abandoned uploads are maintenance, not a detected problem — there's no
+    // Problems section for them, so none of this work is in `totalProblems`.
+    listedCount: () => 0,
     invalidateKeys: [queryKeys.image.list],
     run: async (client) => {
       const r = await client.image.cullPendingImages.mutate({
@@ -115,6 +132,9 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     // The Problems section only carries a sampled list, so the true figure comes
     // from the maintenance counts.
     count: (_problems, counts) => counts?.entitiesMissingEmbeddings ?? null,
+    // The section is a capped sample, so only what's listed counts toward the
+    // total — a model swap can make the true figure dwarf it.
+    listedCount: (problems) => problems.entitiesMissingEmbeddings.length,
     invalidateKeys: [queryKeys.search.all],
     // Called unbounded on purpose: `limit` selects an arbitrary per-type window
     // rather than a needs-work one, so a bounded call can enqueue nothing useful

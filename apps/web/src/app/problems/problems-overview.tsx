@@ -169,7 +169,9 @@ function ProblemsSummary({
   problems: AllProblems;
   onJump: (id: string, grouped: boolean) => void;
 }) {
-  const { items: autoFixable } = useAutoFixPlan(problems);
+  // `listedItems`, not `items` — only the part of the run that's actually among
+  // the issues counted above can be described as "N of them".
+  const { listedItems } = useAutoFixPlan(problems);
 
   if (problems.totalProblems === 0) {
     return (
@@ -207,9 +209,9 @@ function ProblemsSummary({
               </Badge>
               {problems.totalProblems === 1 ? "Issue" : "Issues"} Found
             </CardTitle>
-            {autoFixable > 0 && (
+            {listedItems > 0 && (
               <CardDescription>
-                {autoFixable} of them need no decisions from you.
+                {listedItems} of them need no decisions from you.
               </CardDescription>
             )}
           </Stack>

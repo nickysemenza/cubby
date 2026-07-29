@@ -22,7 +22,17 @@ import {
 } from "~/lib/query-keys";
 import { AUTO_FIX_TASKS, type AutoFixTask } from "./auto-fix-registry";
 
-/** How many items the whole run would touch, and which tasks would actually fire. */
+/**
+ * What a run would do right now.
+ *
+ * Two different figures, deliberately not merged:
+ * - `items` — everything the run touches. This is the button's promise, so it
+ *   must include work with no Problems section (abandoned uploads) and the
+ *   true uncapped figure behind a sampled section (missing embeddings).
+ * - `listedItems` — the subset of `problems.totalProblems` the run clears. Only
+ *   this may be described as "N of them", since `items` can legitimately exceed
+ *   the issue count above it.
+ */
 export function useAutoFixPlan(problems: AllProblems) {
   const api = useTRPC();
   const { data: counts } = useQuery(
@@ -37,9 +47,14 @@ export function useAutoFixPlan(problems: AllProblems) {
   }));
   const actionable = counted.filter((t) => (t.count ?? 0) > 0);
   const items = actionable.reduce((n, t) => n + (t.count ?? 0), 0);
+  const listedItems = actionable.reduce(
+    (n, t) => n + (t.task.listedCount?.(problems, counts) ?? t.count ?? 0),
+    0,
+  );
 
   return {
     items,
+    listedItems,
     // Tail steps ride along, but only when something else justified the run.
     tasks: actionable.length
       ? counted
