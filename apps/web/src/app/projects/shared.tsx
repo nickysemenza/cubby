@@ -48,6 +48,7 @@ import {
   createNameColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
+  createTextColumn,
   type FilterConfig,
   type MobileColumnMeta,
 } from "~/app/_components/data-table/columnHelpers";
@@ -742,6 +743,59 @@ export function purchaseFutureColumn(
 }
 
 /**
+ * Vendor column — free-text `vendor` write. Used only by the /purchases ledger,
+ * where it's hidden by default (see `initialColumnVisibility` in
+ * purchaselist.tsx) because vendor is set on only ~30% of rows. Its filter is a
+ * picklist fed by the `purchase.vendorOptions` query, so it belongs on tables
+ * that supply that via `filterOptions`.
+ */
+export function purchaseVendorColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (vendor: string | null, purchase: PurchaseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createTextColumn(helper, "vendor", {
+    header: "Vendor",
+    placeholder: "Where from?",
+    className: "w-32",
+    mobile: opts?.mobile,
+    filterConfig: manifestFilterConfig("purchase", "vendor"),
+    editable: {
+      onSave: async (newVendor, purchase) => {
+        await save(newVendor, purchase);
+      },
+    },
+  });
+}
+
+/**
+ * Order # column — free-text `orderId` write, the vendor's own order/receipt id.
+ * Rendered `font-mono` (house convention for identifiers). Hidden by default on
+ * the /purchases ledger; see `purchaseVendorColumn`. Its filter is presence-only
+ * ("has order id" / "(none)") — the "(none)" side is the unreconciled worklist.
+ */
+export function purchaseOrderIdColumn(
+  helper: ColumnHelper<PurchaseOut>,
+  save: (orderId: string | null, purchase: PurchaseOut) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta },
+) {
+  return createTextColumn(helper, "orderId", {
+    header: "Order #",
+    placeholder: "Vendor order #",
+    className: "w-32",
+    mobile: opts?.mobile,
+    filterConfig: manifestFilterConfig("purchase", "orderId"),
+    renderValue: (v) =>
+      v ? <span className="font-mono">{v}</span> : <NoneValue />,
+    editable: {
+      onSave: async (newOrderId, purchase) => {
+        await save(newOrderId, purchase);
+      },
+    },
+  });
+}
+
+/**
  * The embedded purchase table: client-side filter/sort/pagination over a
  * caller-supplied array, deliberately — NOT an unconverted `useEntityList`.
  *
@@ -952,6 +1006,11 @@ export function PurchaseList({
         },
         { mobile: { slot: "meta", priority: 50 } },
       ),
+      // Vendor / Order # are deliberately NOT here. This embedded table has no
+      // column-visibility toggle (raw `useReactTable`, unlike the ledger's
+      // `useEntityList`), so any column added is permanent — and both are
+      // sparse (~30%/25% filled), which would cost density on a project page
+      // for little gain. They live on the /purchases ledger, hidden by default.
       createActionsColumn(purchaseHelper, "purchase", {
         extraActions: combinedExtraActions,
       }),

@@ -37,6 +37,7 @@ const quickAddPurchaseSchema = z.object({
   trade: tradeSchema,
   future: z.boolean(),
   vendor: z.string(),
+  orderId: z.string(),
 });
 type QuickAddPurchaseValues = z.infer<typeof quickAddPurchaseSchema>;
 
@@ -91,6 +92,7 @@ export function CreatePurchaseDialog({
       trade: "other",
       future: false,
       vendor: "",
+      orderId: "",
     }),
     [presetProjectId, isDisposition],
   );
@@ -117,6 +119,7 @@ export function CreatePurchaseDialog({
         projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
         productId: presetProductId ?? null,
         vendor: values.vendor.trim() || null,
+        orderId: values.orderId.trim() || null,
         costType: values.costType,
         trade: values.trade,
         url: null,
@@ -206,6 +209,12 @@ export function CreatePurchaseDialog({
             name="vendor"
             label="Vendor"
             placeholder={isDisposition ? "Sold to / given to" : "Where from?"}
+          />
+          <UnifiedTextField
+            form={form}
+            name="orderId"
+            label="Order #"
+            placeholder="Vendor order #"
           />
           <SelectField
             form={form}

@@ -3,9 +3,26 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
+import type {
+  PurchaseFilters,
+  PurchaseOut,
+  PurchaseVendorOptionsOut,
+} from "@cubby/schemas/project";
 import { purchaseSortableFields } from "@cubby/schemas/project";
-import { eq, gte, inArray, lte, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
@@ -17,6 +34,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  notDeleted,
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
@@ -97,7 +115,32 @@ export const buildPurchaseWhereClause = async (
       filters.dateFrom ? gte(purchase.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(purchase.date, filters.dateTo) : undefined,
       presenceCondition(purchase.cost, filters.costPresenceFilter),
+      presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
     ],
+  );
+};
+
+/**
+ * Distinct vendor roster + row counts, ranked by frequency (then
+ * alphabetically) — feeds the ledger's Vendor filter picklist
+ * (`purchase.vendorOptions`). Modeled on `projectNameOptions`
+ * (repo/project/lookup.ts): a single indexed query, no rollup/dependency
+ * joins. Unlike that one, vendor is free text on `purchase` itself rather
+ * than a joined entity, so this groups instead of selecting distinct rows.
+ */
+export const purchaseVendorOptions = async (
+  db: Database,
+): Promise<PurchaseVendorOptionsOut> => {
+  const rows = await getDb(db)
+    .select({ vendor: purchase.vendor, count: count() })
+    .from(purchase)
+    .where(and(notDeleted(purchase), isNotNull(purchase.vendor)))
+    .groupBy(purchase.vendor)
+    .orderBy(desc(count()), asc(purchase.vendor));
+  // `isNotNull` already filtered nulls out in SQL; narrow the type rather than
+  // casting, same convention as the `rawLine` narrowing in problems/reparse.ts.
+  return rows.flatMap((row) =>
+    row.vendor ? [{ vendor: row.vendor, count: row.count }] : [],
   );
 };
 

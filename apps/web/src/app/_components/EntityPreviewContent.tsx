@@ -911,6 +911,8 @@ export type PurchasePreview = {
   costType: CostType | null;
   trade: Trade | null;
   future: boolean;
+  vendor?: string | null;
+  orderId?: string | null;
   projectId?: string | null;
   projectName?: string | null;
 };
@@ -924,6 +926,17 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
       .filter(Boolean)
       .join(" · ") + (vm.future ? " · planned" : "");
 
+  const stats: { label: string; value: ReactNode }[] = [
+    { label: "Cost", value: vm.cost != null ? formatCurrency(vm.cost) : "—" },
+    { label: "Date", value: vm.date ? formatDate(vm.date) : "—" },
+  ];
+  if (vm.vendor) stats.push({ label: "Vendor", value: vm.vendor });
+  if (vm.orderId)
+    stats.push({
+      label: "Order #",
+      value: <span className="font-mono text-xs">{vm.orderId}</span>,
+    });
+
   return {
     entity: "purchase",
     routeParam: vm.id,
@@ -935,18 +948,7 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
       vm.projectId && vm.projectName
         ? [projectCrossLink(vm.projectId, vm.projectName)]
         : undefined,
-    body: [
-      {
-        kind: "stats",
-        stats: [
-          {
-            label: "Cost",
-            value: vm.cost != null ? formatCurrency(vm.cost) : "—",
-          },
-          { label: "Date", value: vm.date ? formatDate(vm.date) : "—" },
-        ],
-      },
-    ],
+    body: [{ kind: "stats", stats }],
   };
 }
 
@@ -968,6 +970,8 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
             costType: data.costType,
             trade: data.trade,
             future: data.future,
+            vendor: data.vendor,
+            orderId: data.orderId,
             projectId: data.projectId,
             projectName: data.projectName,
           })}
