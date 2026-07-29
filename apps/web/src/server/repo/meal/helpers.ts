@@ -85,6 +85,7 @@ type MealRow = {
       servings: number | null;
       yield: MealRecipeOut["recipe"]["yield"];
       totals: RecipeTotals | null;
+      deletedAt: Date | null;
     };
   }>;
 };
@@ -92,7 +93,15 @@ type MealRow = {
 export const dbMealToAPI = (row: MealRow): MealOut => {
   const recipes: MealRecipeOut[] = row.recipes
     // Drizzle can't filter soft-deleted rows inside `with`; do it here.
-    .filter((mr) => mr.deletedAt === null)
+    //
+    // Both deletedAts are load-bearing and mean different things: the LINK's
+    // says the recipe was unplanned from this meal, the RECIPE's says it no
+    // longer exists at all. deleteRecipes now cascades the link, so the second
+    // check is defense-in-depth for rows written before that — but it's the one
+    // that was missing, and it let a deleted recipe keep rendering in the meal
+    // and keep summing its stale persisted totals into rollupMealTotals with
+    // pending:false, i.e. a wrong number that reads as trustworthy.
+    .filter((mr) => mr.deletedAt === null && mr.recipe.deletedAt === null)
     .map((mr) => ({
       id: mr.id,
       mealId: mr.mealId,

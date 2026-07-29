@@ -538,9 +538,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     entity: "product",
     title: "Orphaned Products",
     description:
-      "Products with no inventory entries and not linked to any recipe ingredients. These may be unused and can potentially be deleted.",
+      "Products with no inventory, no purchase history, and not linked to an ingredient. These may be unused and can potentially be deleted.",
     emptyMessage:
-      "No orphaned products found. All products have inventory entries.",
+      "No orphaned products found. Every product is stocked, purchased, or linked to an ingredient.",
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),

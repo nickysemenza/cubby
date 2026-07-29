@@ -1,9 +1,11 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { and, desc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
+import { createTestTRPCContext } from "~/server/api/trpc";
 import {
   auditLog,
+  mealRecipe,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -11,7 +13,8 @@ import {
 import { upsertCookbook } from "./cookbook";
 import { getDb, notDeleted } from "./database-helpers";
 import { createIngredient } from "./ingredient";
-import { createMeal, deleteMeals } from "./meal";
+import { createMeal, deleteMeals, getMealByID } from "./meal";
+import { createProduct } from "./product";
 import {
   createRecipe,
   deleteRecipes,
@@ -23,7 +26,11 @@ import {
   upsertRecipe,
 } from "./recipe";
 import type { RecipeFilters } from "./recipe/internal-types";
-import { ingredientRef, makeRecipeInput } from "./repo.fixtures";
+import {
+  ingredientRef,
+  makeProductInput,
+  makeRecipeInput,
+} from "./repo.fixtures";
 
 // Direct repo-layer tests for recipe/crud.ts: the soft-delete cascade + audit
 // trail, the keyed upsert variants, and updateRecipe's section replacement +
@@ -32,7 +39,7 @@ import { ingredientRef, makeRecipeInput } from "./repo.fixtures";
 
 describe("recipe crud repo", () => {
   const ctx = withTestDb();
-  let flourId: string;
+  let flourId: IngredientId;
   beforeEach(async () => {
     const flour = await createIngredient(
       ctx.db,
@@ -108,6 +115,113 @@ describe("recipe crud repo", () => {
       expect(entry).toBeDefined();
       expect(entry?.changes?.cascadedSections).toEqual({ from: 1, to: 0 });
       expect(entry?.changes?.cascadedIngredients).toEqual({ from: 1, to: 0 });
+    });
+
+    // Regression guard: deleteRecipesTx now soft-deletes the recipe's live
+    // MealRecipe rows (and counts them into the audit trail as
+    // cascadedMealRecipes) in the SAME transaction as the recipe delete — a
+    // deleted recipe used to keep rendering inside any meal it was planned
+    // into, and dbMealToAPI (repo/meal/helpers.ts) kept summing its stale
+    // persisted totals into the rollup with pending:false, i.e. a wrong number
+    // that reads as trustworthy.
+    it("soft-deletes the MealRecipe link and drops the recipe's contribution from the meal's rollup", async () => {
+      // 1 lb = $4 is a clean weight->money mapping the costing engine can
+      // actually convert (mirrors RecipeCostingService's "cascade flour" case),
+      // so costTotal lands on an exact, assertable number instead of "some
+      // positive value".
+      await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Meal Flour Product",
+          ingredientId: flourId,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "lb" },
+              b: { value: 4, unit: "dollar" },
+              source: "test",
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+      const recipe = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Costed Meal Recipe",
+          sections: [
+            {
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                ingredientRef(flourId, { amounts: [{ value: 1, unit: "lb" }] }),
+              ],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+      // Persist totals via the real costing engine (no fdc_id, so no USDA gap —
+      // `complete: true`, costTotal exactly $4, caloriesTotal 0 for lack of
+      // nutrition data).
+      await createTestTRPCContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }).services.recipeCosting.recompute([recipe.id as RecipeId]);
+
+      const planned = await createMeal(
+        ctx.db,
+        {
+          date: "2026-07-01",
+          recipes: [{ recipeId: recipe.id, scale: 1 }],
+        },
+        ctx.actor,
+      );
+      expect(planned.recipes).toHaveLength(1);
+      expect(planned.totals).toEqual(
+        expect.objectContaining({
+          costTotal: 4,
+          caloriesTotal: 0,
+          pending: false,
+        }),
+      );
+
+      const [linkBefore] = await getDb(ctx.db)
+        .select({ deletedAt: mealRecipe.deletedAt })
+        .from(mealRecipe)
+        .where(eq(mealRecipe.mealId, planned.id));
+      expect(linkBefore?.deletedAt).toBeNull();
+
+      await deleteRecipes(ctx.db, [recipe.id as RecipeId], ctx.actor);
+
+      // 1. The MealRecipe row itself is soft-deleted, not left dangling.
+      const [linkAfter] = await getDb(ctx.db)
+        .select({ deletedAt: mealRecipe.deletedAt })
+        .from(mealRecipe)
+        .where(eq(mealRecipe.mealId, planned.id));
+      expect(linkAfter?.deletedAt).not.toBeNull();
+
+      // 2. Reading the meal no longer lists the deleted recipe.
+      const after = await getMealByID(ctx.db, planned.id);
+      expect(after?.recipes).toHaveLength(0);
+
+      // 3. Its cost/calorie contribution is dropped from the rollup entirely
+      // (not just hidden) — an empty recipe list means nothing to sum and
+      // nothing pending.
+      expect(after?.totals).toEqual(
+        expect.objectContaining({
+          costTotal: 0,
+          caloriesTotal: 0,
+          pending: false,
+        }),
+      );
+
+      // The cascade is also visible in the delete's audit trail.
+      const [entry] = await getDb(ctx.db)
+        .select()
+        .from(auditLog)
+        .where(
+          and(eq(auditLog.entityId, recipe.id), eq(auditLog.action, "delete")),
+        )
+        .limit(1);
+      expect(entry?.changes?.cascadedMealRecipes).toEqual({ from: 1, to: 0 });
     });
   });
 

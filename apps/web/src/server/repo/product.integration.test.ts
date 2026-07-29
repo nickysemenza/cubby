@@ -9,6 +9,7 @@ import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import { createLocation } from "./location";
 import {
   createProduct,
+  deleteProducts,
   findProductByNameFuzzyManufacturer,
   getProductByID,
   productList,
@@ -939,6 +940,51 @@ describe("product repository", () => {
 
       expect(found).not.toBeNull();
       expect(found!.name).toEqual("Power Drill PRO");
+    });
+  });
+
+  describe("deleteProducts", () => {
+    /**
+     * PRODUCT_HAS_PURCHASES: a live purchase blocks the delete, mirroring
+     * PRODUCT_HAS_INVENTORY. This used to be permitted — a product referenced
+     * only by purchases deleted fine, degrading the link to a null display
+     * name. That was reversed: the ledger's net cost and owned/sold window are
+     * derived from these rows, and a nameless product silently corrupts that
+     * derivation with no restore path.
+     */
+    it("rejects a product with a live purchase, succeeds once the purchase is soft-deleted", async () => {
+      const bought = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Purchase-Blocked Product" }),
+        ctx.actor,
+      );
+      const purchase = await createPurchase(
+        ctx.db,
+        {
+          ...makePurchaseInput(),
+          name: "blocking purchase",
+          productId: bought.id,
+        },
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [bought.id], ctx.actor),
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        cause: { reason: "PRODUCT_HAS_PURCHASES" },
+        message: expect.stringContaining("have purchases"),
+      });
+
+      await deletePurchases(ctx.db, [purchase.id], ctx.actor);
+
+      await expect(
+        deleteProducts(ctx.db, [bought.id], ctx.actor),
+      ).resolves.toBeUndefined();
+
+      await expect(getProductByID(ctx.db, bought.id)).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
     });
   });
 });
