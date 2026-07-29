@@ -80,6 +80,19 @@ const filterStateKey = (filters: Filter<string>[]): string =>
       .sort((left, right) => left.field.localeCompare(right.field)),
   );
 
+function normalizeLedgerFilters(
+  filters: Filter<string>[],
+  fields: LedgerFilterField[],
+): { columnFilters: ColumnFiltersState; externalKey: string } {
+  const columnFilters = ledgerFiltersToColumnFilters(filters, fields);
+  return {
+    columnFilters,
+    externalKey: filterStateKey(
+      columnFiltersToLedgerFilters(columnFilters, fields),
+    ),
+  };
+}
+
 function getLedgerFields<TData>(table: Table<TData>): LedgerFilterField[] {
   return table.getAllLeafColumns().flatMap((column) => {
     const config = column.columnDef.meta?.filterConfig as
@@ -135,21 +148,41 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
   const lastExternalKeyRef = useRef(filterStateKey(externalFilters));
 
   const externalKey = filterStateKey(externalFilters);
+  const draftKey = filterStateKey(draftFilters);
+  const debouncedDraftKey = filterStateKey(debouncedDraftFilters);
   if (externalKey !== lastExternalKeyRef.current) {
     lastExternalKeyRef.current = externalKey;
-    if (externalKey !== filterStateKey(draftFilters)) {
+    if (externalKey !== draftKey) {
       setDraftFilters(externalFilters);
     }
   }
 
   useEffect(() => {
-    const nextKey = filterStateKey(debouncedDraftFilters);
-    if (nextKey === externalKey) return;
-    lastExternalKeyRef.current = nextKey;
-    table.setColumnFilters(
-      ledgerFiltersToColumnFilters(debouncedDraftFilters, fields),
-    );
-  }, [debouncedDraftFilters, externalKey, fields, table]);
+    // Header filters, saved views, reset, and URL restoration can advance the
+    // table while this hook's debounced value still represents its previous
+    // draft. Only a debounce that has caught up to the latest local draft may
+    // write back; otherwise it would immediately undo the external change.
+    if (debouncedDraftKey !== draftKey) return;
+
+    // ReUI creates text filters with an empty value so their focused input can
+    // exist before the user types. That placeholder is real draft UI state but
+    // intentionally normalizes to no TanStack filter. Compare the normalized
+    // state to the table so an empty input stays mounted instead of being
+    // written as `[]` and then removed by the external-state sync.
+    const { columnFilters: nextColumnFilters, externalKey: nextExternalKey } =
+      normalizeLedgerFilters(debouncedDraftFilters, fields);
+    if (nextExternalKey === externalKey) return;
+
+    lastExternalKeyRef.current = nextExternalKey;
+    table.setColumnFilters(nextColumnFilters);
+  }, [
+    debouncedDraftFilters,
+    debouncedDraftKey,
+    draftKey,
+    externalKey,
+    fields,
+    table,
+  ]);
 
   const handleChange = (nextFilters: Filter<string>[]) => {
     const previousByField = new Map(
@@ -177,8 +210,12 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
 
     setDraftFilters(nextFilters);
     if (commitImmediately) {
-      lastExternalKeyRef.current = filterStateKey(nextFilters);
-      table.setColumnFilters(ledgerFiltersToColumnFilters(nextFilters, fields));
+      const { columnFilters: nextColumnFilters, externalKey: nextExternalKey } =
+        normalizeLedgerFilters(nextFilters, fields);
+      lastExternalKeyRef.current = nextExternalKey;
+      if (nextExternalKey !== externalKey) {
+        table.setColumnFilters(nextColumnFilters);
+      }
     }
   };
 
