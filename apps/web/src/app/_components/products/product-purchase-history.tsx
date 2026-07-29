@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import type { FC } from "react";
 import { splitPurchaseSpend } from "~/app/projects/spend";
+import { VendorCell } from "~/components/entity/vendor-cell";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
@@ -94,7 +95,11 @@ export const ProductPurchaseHistory: FC<{ product: ProductWithFoodOut }> = ({
                 <EntityInlineLink entity="purchase" data={purchase} />
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {purchase.vendor ?? <NoneValue />}
+                {purchase.vendor ? (
+                  <VendorCell vendor={purchase.vendor} />
+                ) : (
+                  <NoneValue />
+                )}
               </TableCell>
               <TableCell className="font-mono">
                 {purchase.orderId ?? <NoneValue />}

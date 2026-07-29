@@ -68,7 +68,11 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "hover:bg-muted/50 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_3px_0_0_var(--row-accent,var(--brand-ultramarine))] border-b transition-colors",
+        // `group/row` is the hover anchor cells reach for when a row-level hover
+        // must drive something other than the row's own background — currently
+        // VendorMark's desaturate-at-rest logo. Named so it can't be captured by
+        // an unrelated `group` nested inside a cell.
+        "group/row hover:bg-muted/50 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_3px_0_0_var(--row-accent,var(--brand-ultramarine))] border-b transition-colors",
         className,
       )}
       {...props}

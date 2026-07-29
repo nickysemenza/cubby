@@ -75,6 +75,7 @@ import {
   taskStatusBadgeVariant,
   taskStatusOptions,
 } from "~/app/tasks/task-options";
+import { VendorCell } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -748,6 +749,12 @@ export function purchaseFutureColumn(
  * purchaselist.tsx) because vendor is set on only ~30% of rows. Its filter is a
  * picklist fed by the `purchase.vendorOptions` query, so it belongs on tables
  * that supply that via `filterOptions`.
+ *
+ * Leads with the vendor's brand mark (`VendorCell`) so long runs of the same
+ * vendor — 539 of the 737 vendor-bearing rows are Amazon/Home Depot/eBay/Lowe's
+ * — are scannable by shape rather than by reading. `w-40` rather than `w-32`:
+ * the mark costs ~24px and the narrower column already truncated "Direct Tools
+ * Outlet".
  */
 export function purchaseVendorColumn(
   helper: ColumnHelper<PurchaseOut>,
@@ -757,9 +764,11 @@ export function purchaseVendorColumn(
   return createTextColumn(helper, "vendor", {
     header: "Vendor",
     placeholder: "Where from?",
-    className: "w-32",
+    className: "w-40",
     mobile: opts?.mobile,
     filterConfig: manifestFilterConfig("purchase", "vendor"),
+    renderValue: (v) =>
+      v ? <VendorCell vendor={v} compactOnMobile /> : <NoneValue />,
     editable: {
       onSave: async (newVendor, purchase) => {
         await save(newVendor, purchase);
