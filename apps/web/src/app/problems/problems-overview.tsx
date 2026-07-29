@@ -5,7 +5,7 @@ import { CheckCircle, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Row, Stack } from "~/components/layout";
+import { Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -43,11 +43,16 @@ function scrollWhenLaidOut(el: HTMLElement, framesLeft = 20) {
   requestAnimationFrame(() => scrollWhenLaidOut(el, framesLeft - 1));
 }
 
+// Three disjoint lists. Coverage is checked FIRST so a coverage section can't
+// also fall into the main list (`images` is coverage and has a fix-all button,
+// but isn't one of the Fix button's auto-fix tasks).
+const COVERAGE_SECTIONS = PROBLEM_SECTIONS.filter((s) => s.coverage != null);
 const MAIN_SECTIONS = PROBLEM_SECTIONS.filter(
-  (section) => !AUTO_FIX_SECTION_IDS.has(section.id),
+  (section) =>
+    section.coverage == null && !AUTO_FIX_SECTION_IDS.has(section.id),
 );
-const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter((section) =>
-  AUTO_FIX_SECTION_IDS.has(section.id),
+const AUTO_FIXABLE_SECTIONS = PROBLEM_SECTIONS.filter(
+  (section) => section.coverage == null && AUTO_FIX_SECTION_IDS.has(section.id),
 );
 
 export function ProblemsOverview() {
@@ -94,6 +99,18 @@ export function ProblemsOverview() {
     api.problems.recipeUsageByProduct.queryOptions({ productIds }),
   );
 
+  // Denominators for the coverage meters. Its own cheap batched query — the
+  // meters are page-only, so this stays off the four unbatched hot-path groups.
+  //
+  // Deliberately NOT folded into the `isLoading` gate below, and deliberately
+  // left `undefined` rather than defaulted to zeros: the page shouldn't hold the
+  // whole defect list behind a query only the coverage meters need, and a
+  // section whose denominators haven't landed simply renders without its meter
+  // (see `resolveCoverage`) instead of briefly showing "-178 / 0".
+  const { data: coverageTotals } = useQuery(
+    api.problems.getCoverageTotals.queryOptions(),
+  );
+
   if (isLoading) {
     return <SimpleLoading text="Analyzing data consistency..." />;
   }
@@ -130,7 +147,7 @@ export function ProblemsOverview() {
         }
       }}
     >
-      {section.node(problems)}
+      {section.node(problems, coverageTotals)}
     </div>
   );
 
@@ -150,6 +167,17 @@ export function ProblemsOverview() {
         >
           {AUTO_FIXABLE_SECTIONS.map(renderSection)}
         </AutoFixableGroup>
+
+        {/* Backlog, not defects. Kept on this page (it's the same housekeeping
+            headspace) but below the issues and visually distinct: these never
+            reach zero, so counting them as problems is what made the badge
+            permanently red and taught everyone to ignore it. */}
+        <Section
+          title="Coverage"
+          description="How much of the house has been itemized, photographed and counted. These don't reach zero — new things arrive faster than they get filed — so they're progress, not problems."
+        >
+          {COVERAGE_SECTIONS.map(renderSection)}
+        </Section>
 
         {/* Force-run batch fixes — surfaced here (not just buried in Settings)
             so the "fix it" tools live right next to the issues. Same shared card
@@ -194,12 +222,16 @@ function ProblemsSummary({
 
   // Both the summary chips and the section list derive from PROBLEM_SECTIONS,
   // so each check is declared exactly once (see ./components/problem-sections).
-  const chips = PROBLEM_SECTIONS.map((section) => ({
-    id: section.id,
-    label: section.label,
-    count: section.count(problems),
-    grouped: AUTO_FIX_SECTION_IDS.has(section.id),
-  })).filter((cat) => cat.count > 0);
+  // Coverage sections are excluded: this card counts issues, and their rows
+  // aren't issues — they'd also swamp the chip row, being the bulk of the page.
+  const chips = PROBLEM_SECTIONS.filter((s) => s.coverage == null)
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      count: section.count(problems),
+      grouped: AUTO_FIX_SECTION_IDS.has(section.id),
+    }))
+    .filter((cat) => cat.count > 0);
 
   return (
     <Card>

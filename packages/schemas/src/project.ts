@@ -51,6 +51,14 @@ export const LIVE_PROJECT_STATUSES = [
   "in_progress",
 ] as const satisfies readonly ProjectStatus[];
 
+/**
+ * Whether a project is still live (i.e. not `done`). Use this for rules that
+ * only make sense on unfinished work — e.g. asking for a budget estimate, which
+ * is a forecast and so is meaningless once the spend has already happened.
+ */
+export const isLiveProjectStatus = (status: ProjectStatus): boolean =>
+  (LIVE_PROJECT_STATUSES as readonly ProjectStatus[]).includes(status);
+
 export const projectKindValues = [
   "furniture",
   "workshop",

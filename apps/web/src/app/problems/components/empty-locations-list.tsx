@@ -8,13 +8,15 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import type { EmptyLocation } from "~/server/repo/problems";
 import { AddInventoryDialog } from "./add-inventory-dialog";
-import { ProblemSection } from "./problem-section";
+import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";
 import { createdAgoDetail } from "./render-helpers";
 
 export function EmptyLocationsList({
   locations,
+  coverage,
 }: {
   locations: EmptyLocation[];
+  coverage?: ProblemSectionCoverage;
 }) {
   const [addDialogLocation, setAddDialogLocation] =
     useState<EmptyLocation | null>(null);
@@ -23,9 +25,10 @@ export function EmptyLocationsList({
     <>
       <ProblemSection
         title="Empty Locations"
-        description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
+        description="Leaf locations holding no inventory entries. Many are deliberate — a crate of zip ties is photographed and described rather than itemized — so treat this as how much of the house is itemized, not as a list of mistakes."
         entity="location"
         items={locations}
+        coverage={coverage}
         emptyMessage="All leaf locations have inventory entries."
         renderItem={(location) => {
           const details: ReactNode[] = [];

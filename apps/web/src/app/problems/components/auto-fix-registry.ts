@@ -40,6 +40,11 @@ export type AutoFixTask = {
    * three of the six. Defaulting this to `count` silently overcounted twice
    * during review, so each task must now state where its number comes from and
    * the compiler enforces it.
+   *
+   * Second way to reach zero: a section classed `coverage` in `PROBLEM_CLASS`
+   * is excluded from `totalProblems`, so a task fixing one must return 0 here
+   * even though it reads a real `AllProblems` array. All three non-zero tasks
+   * below happen to be defect-classed today.
    */
   listedCount: (
     problems: AllProblems,

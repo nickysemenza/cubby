@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink, type LucideIcon, Wrench, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
-import { Grid } from "~/components/layout";
+import { Grid, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Progress } from "~/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -77,6 +78,28 @@ export type RenderedProblemItem = {
   inlineFix?: { label: string; render: (close: () => void) => ReactNode };
 };
 
+/** A coverage section's denominator — the "M" in "N of M photographed". */
+type ProblemSectionMeter = {
+  /** Population the remaining items are a fraction of. */
+  total: number;
+  /** Past-participle for what's been done, e.g. "photographed", "counted". */
+  doneLabel: string;
+};
+
+/**
+ * Present ⇒ this section is backlog, not defects: the rows are things not yet
+ * done rather than things that are wrong. See `PROBLEM_CLASS` in
+ * @cubby/schemas/problems for which sections are which.
+ *
+ * Coverage-ness is carried HERE rather than inferred from `meter`, because the
+ * two genuinely come apart: `unvalued-buckets` is coverage with no meter (a misc
+ * bucket isn't a fraction of anything), and every coverage section is briefly
+ * meter-less while its denominators load. Keying the styling off `meter` made
+ * both of those render as red defects underneath the "progress, not problems"
+ * heading.
+ */
+export type ProblemSectionCoverage = { meter?: ProblemSectionMeter };
+
 type ProblemSectionProps<T> = {
   title: string;
   description: string;
@@ -86,6 +109,7 @@ type ProblemSectionProps<T> = {
   groupBy?: (items: T[]) => { [key: string]: T[] };
   /** Only rendered when items exist */
   headerAction?: ReactNode;
+  coverage?: ProblemSectionCoverage;
 } & IconProp;
 
 export function ProblemSection<T>({
@@ -98,9 +122,14 @@ export function ProblemSection<T>({
   renderItem,
   groupBy,
   headerAction,
+  coverage,
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
-  const iconColor = hasItems ? "text-destructive" : "text-secondary-foreground";
+  const meter = coverage?.meter;
+  // Coverage sections never go red: an un-photographed tool isn't an error, and
+  // a permanently-destructive section is exactly what made the old page unreadable.
+  const iconColor =
+    hasItems && !coverage ? "text-destructive" : "text-secondary-foreground";
 
   // Render icon based on whether we have an entity or a LucideIcon
   const IconElement = entity ? (
@@ -140,7 +169,18 @@ export function ProblemSection<T>({
           <CardTitle>
             {IconElement}
             {title}
-            <Badge variant="destructive">{items.length}</Badge>
+            {coverage ? (
+              // A coverage section still shows a count when it has no meter —
+              // either permanently (unvalued buckets) or until its denominators
+              // land — just never in the defect red.
+              <Badge variant="secondary">
+                {meter
+                  ? `${meter.total - items.length} / ${meter.total}`
+                  : items.length}
+              </Badge>
+            ) : (
+              <Badge variant="destructive">{items.length}</Badge>
+            )}
           </CardTitle>
           {headerAction && (
             <Tooltip>
@@ -155,6 +195,16 @@ export function ProblemSection<T>({
           )}
         </div>
         <CardDescription>{description}</CardDescription>
+        {meter && (
+          <Stack gap="xs" className="pt-2">
+            <Progress value={meter.total - items.length} max={meter.total} />
+            <span className="font-mono text-slate text-xs uppercase tracking-wider">
+              {meter.total - items.length} of {meter.total} {meter.doneLabel}
+              {" · "}
+              {items.length} remaining
+            </span>
+          </Stack>
+        )}
       </CardHeader>
       <CardContent>
         <div className="space-y-6">

@@ -156,8 +156,9 @@ export const staleLocationSchema = z.object({
 
 /**
  * A live inventory entry that has never been through a recount
- * (`verifiedAt IS NULL`). Sampled, not exhaustive — see
- * NEVER_VERIFIED_SAMPLE_LIMIT in the detector.
+ * (`verifiedAt IS NULL`). Exhaustive — the detector's old 25-row sample cap was
+ * removed because it reported a fraction of the real population. Classed
+ * `coverage`, so it renders as an "N of M verified" meter, not a red count.
  */
 export const neverVerifiedInventorySchema = z.object({
   id: inventoryId,
@@ -417,6 +418,84 @@ export const allProblemsSchema = z.object({
   totalProblems: z.number(),
 });
 
+export type ProblemKey = keyof typeof allProblemArrayFields;
+
+/**
+ * What kind of thing each detector reports. This is the axis the Problems page
+ * splits on, and it is deliberately INDEPENDENT of the cost grouping above
+ * (`fast`/`coverage`/`upc`/`tracker`) — those group by how expensive a detector
+ * is to run, not by what its rows mean. `productsWithoutMappings` is a cheap
+ * `fast` detector but a defect; `emptyLocations` is equally cheap but coverage.
+ *
+ *  - `defect`   — something is *wrong* and can be driven to zero. These are the
+ *                 only rows that count toward `totalProblems` and the badge.
+ *  - `coverage` — a measure of how much of the house has been through a manual
+ *                 data-entry workflow (itemized, photographed, recounted). These
+ *                 never reach zero: new things arrive faster than they get
+ *                 filed, so counting them as problems produced a permanently red
+ *                 badge nobody could act on. They render as progress meters.
+ *
+ * `satisfies` makes a newly-added detector a compile error until it is classed.
+ */
+export const PROBLEM_CLASS = {
+  // --- defects: wrong data, converges to zero ---
+  duplicateUniqueProducts: "defect",
+  orphanedProducts: "defect",
+  productsMissingPrice: "defect",
+  productsWithoutMappings: "defect",
+  unusedIngredientsWithProduct: "defect",
+  unusedIngredientsWithoutProduct: "defect",
+  locationsWithoutAiDescription: "defect",
+  orphanedEntityEmbeddings: "defect",
+  entitiesMissingEmbeddings: "defect",
+  staleParentRecipes: "defect",
+  unknownParkedItems: "defect",
+  ordersWithPartialVendor: "defect",
+  vendorSpellingVariants: "defect",
+  manufacturerSpellingVariants: "defect",
+  ingredientsWithPartialCoverage: "defect",
+  productsWithIslandedMappings: "defect",
+  productsWithBetterUpcData: "defect",
+  overdueTasks: "defect",
+  stalledProjects: "defect",
+  projectsMissingBudget: "defect",
+  pastDuePlannedPurchases: "defect",
+  unclassifiedPurchases: "defect",
+  blockedWorkProjects: "defect",
+  projectsWithDateDrift: "defect",
+
+  // --- coverage: backlog size, never reaches zero ---
+  // Misc buckets are *expected* to be unpriced — `findProductsMissingPrice`
+  // already partitions them out for exactly this reason; classing them here is
+  // what finally keeps them out of the total.
+  unvaluedBucketProducts: "coverage",
+  ingredientsWithoutProduct: "coverage",
+  emptyLocations: "coverage",
+  staleLocations: "coverage",
+  neverVerifiedInventory: "coverage",
+  productsWithNoImages: "coverage",
+} as const satisfies Record<ProblemKey, "defect" | "coverage">;
+
+const isDefectKey = (key: string): boolean =>
+  PROBLEM_CLASS[key as ProblemKey] === "defect";
+
+/**
+ * Sum only the `defect` sections. The single definition of "how many problems
+ * are there", shared by `assembleAllProblems` (MCP) and the Problems page's
+ * client-side merge (`useProblemsData`, which is the navbar badge's real
+ * source) — those two summed independently before this existed, so a change to
+ * one silently diverged from the other.
+ */
+export const sumProblemSections = (
+  sections: Record<string, readonly unknown[]>,
+  problemClass: "defect" | "coverage",
+): number =>
+  Object.entries(sections).reduce(
+    (n, [key, items]) =>
+      isDefectKey(key) === (problemClass === "defect") ? n + items.length : n,
+    0,
+  );
+
 // Count-only output schema for badge display. byType derives mechanically from
 // allProblemsSchema — every array key becomes a count — so the count roster
 // can't drift from the set of detectors (the runtime derives it the same way).
@@ -425,9 +504,40 @@ const byTypeShape = Object.fromEntries(
 ) as { [K in keyof typeof allProblemArrayFields]: z.ZodNumber };
 
 export const problemsCountSchema = z.object({
+  /** Defect rows only — what the navbar badge and homepage banner show. */
   total: z.number(),
+  /** Coverage-backlog rows, reported separately so they never inflate `total`. */
+  coverageTotal: z.number(),
   byType: z.object(byTypeShape),
 });
+
+/**
+ * Denominators for the coverage meters — the "M" in "N of M photographed".
+ *
+ * Every detector returns only its failing rows, so a percentage needs a
+ * population count that nothing else computes. Keyed by the coverage detector
+ * each one pairs with, so a meter can't be wired to the wrong denominator.
+ *
+ * Deliberately its OWN schema and procedure rather than a field on
+ * `problemsFastShape`: `allProblemArrayFields` must stay arrays-only, or the
+ * mechanically-derived `byTypeShape` and `countProblems` both break on a
+ * non-array key. `unvaluedBucketProducts` is absent on purpose — a misc bucket
+ * has no meaningful population to be a fraction of, so it renders as a plain
+ * list.
+ */
+export const coverageTotalsSchema = z.object({
+  /** Live non-ingredient products (the ones a photo backfill could cover). */
+  productsWithNoImages: z.number(),
+  /** Live leaf locations — the only ones that can hold inventory directly. */
+  emptyLocations: z.number(),
+  /** Live locations currently holding stock. */
+  staleLocations: z.number(),
+  /** Live inventory entries. */
+  neverVerifiedInventory: z.number(),
+  /** Live ingredients referenced by at least one live recipe. */
+  ingredientsWithoutProduct: z.number(),
+});
+export type CoverageTotals = z.infer<typeof coverageTotalsSchema>;
 
 export type AllProblems = z.infer<typeof allProblemsSchema>;
 export type ProblemsFast = z.infer<typeof problemsFastSchema>;
@@ -443,7 +553,13 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
   const byType = Object.fromEntries(
     Object.entries(arrays).map(([key, items]) => [key, items.length]),
   ) as ProblemsCount["byType"];
-  return { total: totalProblems, byType };
+  // `byType` stays the FULL roster (coverage keys included) so per-detector
+  // consumers and the MCP `type` slices keep working; only the totals split.
+  return {
+    total: totalProblems,
+    coverageTotal: sumProblemSections(arrays, "coverage"),
+    byType,
+  };
 };
 
 // Assemble the cost-grouped detector results into the combined AllProblems
@@ -463,11 +579,10 @@ export const assembleAllProblems = (groups: {
     ...groups.upc,
     ...groups.tracker,
   };
-  const totalProblems = Object.values(sections).reduce(
-    (n, items) => n + items.length,
-    0,
-  );
-  return { ...sections, totalProblems };
+  return {
+    ...sections,
+    totalProblems: sumProblemSections(sections, "defect"),
+  };
 };
 
 // Per-detector item types — the canonical shapes the problems repo's find*

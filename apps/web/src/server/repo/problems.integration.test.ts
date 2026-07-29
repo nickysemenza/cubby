@@ -1,5 +1,10 @@
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  LocationId,
+  ProductId,
+  ProjectId,
+} from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
+import { countProblems, sumProblemSections } from "@cubby/schemas/problems";
 import {
   projectCreateInput,
   purchaseCreateInput,
@@ -867,6 +872,54 @@ describe("problems service — tracker slice", () => {
     expect(everyEntityId).not.toContain(planned.id);
     expect(everyEntityId).not.toContain(project.id);
   });
+
+  // A budget estimate is a FORECAST, so asking for one on finished work is
+  // busywork that can never be satisfied meaningfully. This dominated the real
+  // count: 29 of 32 flagged projects were `done` (a completed wedding, a
+  // replaced furnace, a 2023 garden). `stalled_project` already scoped itself
+  // to live projects; `missing_budget` simply didn't.
+  it("asks for a budget only on live projects, not finished ones", async () => {
+    const spend = async (projectId: ProjectId, name: string) => {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          projectId,
+          cost: 500,
+        }),
+        ctx.actor,
+      );
+    };
+
+    const live = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "budget live project",
+        status: "in_progress",
+      }),
+      ctx.actor,
+    );
+    const finished = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "budget finished project",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    // Both have spend and neither has a cost estimate — the only difference is
+    // status, so status alone must decide.
+    await spend(live.id, "budget live spend");
+    await spend(finished.id, "budget finished spend");
+
+    const tracker = await findTrackerProblems(ctx.db);
+    const flagged = tracker.projectsMissingBudget.map((i) => i.entityId);
+
+    expect(flagged).toContain(live.id);
+    expect(flagged).not.toContain(finished.id);
+  });
 });
 
 // The recount-staleness detectors (tenet 1: only a deliberate recount restores
@@ -991,6 +1044,92 @@ describe("problems service — recount staleness", () => {
     await deleteInventoryEntries(ctx.db, [parked.id], ctx.actor);
     const after = await findFastProblems(ctx.db);
     expect(after.unknownParkedItems.map((i) => i.id)).not.toContain(parked.id);
+  });
+
+  // The detector used to `.limit(25)`, which reported 25 for a real population
+  // of 178 — a number that was both wrong and impossible to drive to zero.
+  // Uncapping is safe because the section is coverage, not a defect: it's a
+  // meter, and rendering is bounded by SectionGroup's show-all toggle.
+  it("returns every never-verified entry, not a capped sample", async () => {
+    const loc = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Uncapped bin" }),
+      ctx.actor,
+    );
+    // One entry per product: (productId, locationId) is unique, so a bigger
+    // sample needs distinct products rather than repeated rows.
+    const seeded = 30;
+    for (let i = 0; i < seeded; i++) {
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: `Uncapped widget ${i}` }),
+        ctx.actor,
+      );
+      await createInventoryEntry(
+        ctx.db,
+        { productId: prod.id, locationId: loc.id, amount },
+        ctx.actor,
+      );
+    }
+
+    const { neverVerifiedInventory } = await findFastProblems(ctx.db);
+    const inBin = neverVerifiedInventory.filter(
+      (i) => i.location.id === loc.id,
+    );
+    expect(inBin).toHaveLength(seeded);
+  });
+});
+
+// The defect/coverage split. `totalProblems` — the navbar badge, the homepage
+// banner, the headline card — must count only rows that can reach zero;
+// coverage rows (un-itemized bins, un-photographed tools, un-recounted shelves)
+// never can, and folding them in is what made the badge permanently red.
+describe("problems service — totals count defects only", () => {
+  const ctx = withTestDb();
+
+  it("excludes coverage sections from totalProblems but still lists them", async () => {
+    // An empty leaf location is coverage; an orphaned product is a defect.
+    const emptyLoc = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Totals empty bin" }),
+      ctx.actor,
+    );
+    const orphan = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Totals orphan widget" }),
+      ctx.actor,
+    );
+
+    const all = await findAllProblems(
+      ctx.db,
+      fakeUpcClient().client,
+      fakeUsdaClient(),
+    );
+
+    // Both are detected...
+    expect(all.emptyLocations.map((l) => l.id)).toContain(emptyLoc.id);
+    expect(all.orphanedProducts.map((p) => p.id)).toContain(orphan.id);
+
+    // ...but only the defect moves the total. Compare against the summed
+    // defect sections rather than a literal, since the shared fixture DB may
+    // carry unrelated rows.
+    const defectSum = sumProblemSections(
+      Object.fromEntries(
+        Object.entries(all).filter(([, v]) => Array.isArray(v)),
+      ) as Record<string, readonly unknown[]>,
+      "defect",
+    );
+    expect(all.totalProblems).toBe(defectSum);
+    expect(all.emptyLocations.length).toBeGreaterThan(0);
+
+    // countProblems reports the two populations separately, and byType keeps
+    // the FULL roster so per-detector consumers and MCP slices still work.
+    const counts = countProblems(all);
+    expect(counts.total).toBe(all.totalProblems);
+    expect(counts.coverageTotal).toBeGreaterThanOrEqual(
+      all.emptyLocations.length,
+    );
+    expect(counts.byType.emptyLocations).toBe(all.emptyLocations.length);
   });
 });
 

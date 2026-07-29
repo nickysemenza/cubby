@@ -17,6 +17,9 @@
  *                                            stocked bins overdue for a recount)
  *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
  *                                            in the global "Unknown" location)
+ *   COVERAGE    → `detectors-coverage.ts`   (population denominators for the
+ *                                            coverage meters — the only module
+ *                                            here that counts *healthy* rows)
  *   PURCHASE    → `detectors-purchase.ts`   (orders whose rows disagree about
  *                                            their vendor — the (vendor,
  *                                            orderId) group-key guardrail)
@@ -38,6 +41,8 @@
  * package.
  */
 
+// Population counts behind the coverage meters (the "M" in "N of M")
+export { findCoverageTotals } from "./detectors-coverage";
 // Embedding-coverage detector (mirror of the orphaned-embedding sweep)
 export {
   countEntitiesMissingEmbeddings,

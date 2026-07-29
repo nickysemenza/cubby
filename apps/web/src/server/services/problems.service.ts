@@ -20,6 +20,7 @@ import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import {
   type AllProblems,
   assembleAllProblems,
+  type CoverageTotals,
   type IngredientWithPartialCoverage,
   type MaintenanceCounts,
   type ProblemsCoverage,
@@ -58,6 +59,7 @@ import {
   applyReparsedStaleLines,
   countEntitiesMissingEmbeddings,
   countReparseableLines,
+  findCoverageTotals as findCoverageTotalsRepo,
   findDuplicateUniqueProducts,
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
@@ -537,6 +539,13 @@ export const cleanupOrphanedEntityEmbeddings = async (
   );
   return { found: orphaned.length, deleted };
 };
+
+// Population denominators for the coverage meters. Cheap count(*)s, pinned to
+// ONE connection like findFastProblems (the cost here is connection
+// acquisition, not the queries). Deliberately NOT on the unbatched hot path —
+// it's page-only, and neither the navbar badge nor MCP needs it.
+export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
+  withConnection(db, (scoped) => findCoverageTotalsRepo(scoped));
 
 // USDA-coverage group — both sections share one product scan + USDA enrichment.
 export const findCoverageProblems = (

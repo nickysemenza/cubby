@@ -18,7 +18,7 @@
  * `computeAttentionItems` re-derived the same thing independently).
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type { ProjectDateWindow } from "@cubby/schemas/project";
+import type { ProjectDateWindow, ProjectStatus } from "@cubby/schemas/project";
 import { asc } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
@@ -43,6 +43,12 @@ export type ProjectParentRow = {
   /** Manual overrides on the derived window — see `aggregateSubtreeDates`. */
   startDate: string | null;
   endDate: string | null;
+  /**
+   * Carried so whole-tree consumers can tell finished work from live work
+   * without a second query — `computeAttentionItems`' `missing_budget` rule
+   * needs it (asking for a budget estimate on a `done` project is meaningless).
+   */
+  status: ProjectStatus;
 };
 
 /** Depth cap for tree walks (children-map traversal, ancestor walks) —
@@ -63,6 +69,7 @@ async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
       costEstimate: project.costEstimate,
       startDate: project.startDate,
       endDate: project.endDate,
+      status: project.status,
     })
     .from(project)
     .where(notDeleted(project))

@@ -19,9 +19,10 @@
  * in; `problems.service.ts` calls this standalone and lets it load its own.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import type {
-  ProjectAttentionItem,
-  ProjectAttentionType,
+import {
+  isLiveProjectStatus,
+  type ProjectAttentionItem,
+  type ProjectAttentionType,
 } from "@cubby/schemas/project";
 import {
   type AnyColumn,
@@ -263,8 +264,15 @@ export async function computeAttentionItems(
   // 3. missing_budget — subtree actual+committed spend > 0, subtree
   // costEstimate still null. Reuses the same batched rollup/aggregation the
   // project reads use — never re-derived here.
+  //
+  // Restricted to LIVE projects. A `done` project's budget estimate is a
+  // forecast for work that already happened, so asking for one is busywork that
+  // can never be "wrong" — and it dominated the count (29 of 32 flagged rows
+  // were finished projects like a completed wedding and a replaced furnace).
+  // Rule 2 above already scopes itself this way; this rule simply didn't.
   for (const row of allProjectRows) {
     if (!projectInScope(row.id)) continue;
+    if (!isLiveProjectStatus(row.status)) continue;
     const subtree = subtreeRollups.get(row.id);
     if (!subtree) continue;
     const spend = subtree.actualSpent + subtree.committedSpent;

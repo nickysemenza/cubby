@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
+  type CoverageTotals,
   type LabelVariant,
   type ProductMissingPrice,
   TRACKER_PROBLEM_KEY_BY_TYPE,
@@ -47,6 +48,7 @@ import { BackfillButton } from "./problem-backfill-action";
 import {
   type IconProp,
   ProblemSection,
+  type ProblemSectionCoverage,
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
@@ -59,6 +61,48 @@ import {
   unitCoverageGroup,
 } from "./unit-coverage-fix";
 
+/**
+ * Marks a section as COVERAGE rather than defects (see `PROBLEM_CLASS` in
+ * @cubby/schemas/problems). Coverage sections render in their own group with a
+ * neutral progress meter and are excluded from `totalProblems` / the navbar
+ * badge: they never reach zero — new things arrive faster than they get filed —
+ * so counting them as problems is what made the badge permanently red.
+ *
+ * Presence is the marker, so membership and the meter are one declaration and
+ * can't drift. `meter` is optional because `unvalued-buckets` is coverage with
+ * no meaningful denominator (a misc bucket isn't a fraction of anything).
+ *
+ * Auto-fixable membership is NOT expressed here — it's derived from
+ * `AUTO_FIX_SECTION_IDS` so it can't drift from what the Fix button clears.
+ */
+type ProblemSectionDeclaredCoverage = {
+  meter?: { total: (totals: CoverageTotals) => number; doneLabel: string };
+};
+
+/**
+ * Bind a declared coverage config to the loaded denominators.
+ *
+ * `totals` is undefined until its own query resolves, which happens AFTER the
+ * four cost-grouped detector queries the page gates on — so coverage sections
+ * render with rows but no denominators for a beat. Returning `{}` there (rather
+ * than substituting 0) keeps the section styled as coverage while simply
+ * omitting the meter; a zero denominator isn't a loading state, it's a wrong
+ * number, and it rendered as "-178 / 0".
+ */
+const resolveCoverage = (
+  declared: ProblemSectionDeclaredCoverage | undefined,
+  totals: CoverageTotals | undefined,
+): ProblemSectionCoverage | undefined => {
+  if (!declared) return undefined;
+  if (!declared.meter || !totals) return {};
+  return {
+    meter: {
+      total: declared.meter.total(totals),
+      doneLabel: declared.meter.doneLabel,
+    },
+  };
+};
+
 /** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
 type ProblemSectionEntry = {
   /** Scroll-anchor id; also the summary-chip key. */
@@ -67,8 +111,16 @@ type ProblemSectionEntry = {
   label: string;
   /** Issue count, used to show/hide the summary chip. */
   count: (problems: AllProblems) => number;
-  /** The section card. */
-  node: (problems: AllProblems) => ReactNode;
+  /**
+   * The section card. `totals` carries the coverage denominators (loaded by a
+   * separate cheap query); defect sections ignore it.
+   */
+  node: (
+    problems: AllProblems,
+    totals: CoverageTotals | undefined,
+  ) => ReactNode;
+  /** Present ⇒ coverage, not a defect; absent ⇒ the main defect list. */
+  coverage?: ProblemSectionDeclaredCoverage;
 };
 
 /**
@@ -90,6 +142,7 @@ function section<T>(config: {
   groupBy?: (items: T[]) => Record<string, T[]>;
   /** A static "fix all" node, or one built from the current items (for bulk delete). */
   headerAction?: ReactNode | ((items: T[]) => ReactNode);
+  coverage?: ProblemSectionDeclaredCoverage;
 }): ProblemSectionEntry {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -97,8 +150,13 @@ function section<T>(config: {
   return {
     id: config.id,
     label: config.label,
+    // Must be forwarded, not just closed over by `node` below: the page groups
+    // sections by reading THIS field. Omitting it still rendered a correct
+    // meter (node reads `config` directly) while the section itself sat in the
+    // defect list — a mismatch the meter hides rather than reveals.
+    coverage: config.coverage,
     count: (problems) => config.select(problems).length,
-    node: (problems) => {
+    node: (problems, totals) => {
       const items = [...config.select(problems)];
       return (
         <ProblemSection
@@ -109,6 +167,7 @@ function section<T>(config: {
           items={items}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
+          coverage={resolveCoverage(config.coverage, totals)}
           headerAction={
             typeof config.headerAction === "function"
               ? config.headerAction(items)
@@ -125,13 +184,22 @@ function customSection<T>(def: {
   id: string;
   label: string;
   select: (problems: AllProblems) => readonly T[];
-  render: (items: T[]) => ReactNode;
+  render: (
+    items: T[],
+    coverage: ProblemSectionCoverage | undefined,
+  ) => ReactNode;
+  coverage?: ProblemSectionDeclaredCoverage;
 }): ProblemSectionEntry {
   return {
     id: def.id,
     label: def.label,
+    coverage: def.coverage,
     count: (problems) => def.select(problems).length,
-    node: (problems) => def.render([...def.select(problems)]),
+    node: (problems, totals) =>
+      def.render(
+        [...def.select(problems)],
+        resolveCoverage(def.coverage, totals),
+      ),
   };
 }
 
@@ -619,6 +687,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "unvalued-buckets",
     label: "Unvalued buckets",
     select: (p) => p.unvaluedBucketProducts,
+    // Coverage, but with no meter: a misc bucket isn't a fraction of any
+    // population, so there's nothing honest to put in a denominator.
+    coverage: {},
     entity: "product",
     title: "Unvalued Bucket Products",
     description:
@@ -655,6 +726,12 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "no-product-ingredients",
     label: "No product",
     select: (p) => p.ingredientsWithoutProduct,
+    coverage: {
+      meter: {
+        total: (t) => t.ingredientsWithoutProduct,
+        doneLabel: "linked to a product",
+      },
+    },
     entity: "ingredient",
     title: "Ingredients without a product",
     description:
@@ -747,12 +824,20 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "locations",
     label: "Locations",
     select: (p) => p.emptyLocations,
-    render: (items) => <EmptyLocationsList locations={items} />,
+    coverage: {
+      meter: { total: (t) => t.emptyLocations, doneLabel: "itemized" },
+    },
+    render: (items, coverage) => (
+      <EmptyLocationsList locations={items} coverage={coverage} />
+    ),
   }),
   section({
     id: "stale-recounts",
     label: "Stale recounts",
     select: (p) => p.staleLocations,
+    coverage: {
+      meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
+    },
     entity: "location",
     title: "Locations overdue for a recount",
     description:
@@ -785,10 +870,13 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "never-verified",
     label: "Never verified",
     select: (p) => p.neverVerifiedInventory,
+    coverage: {
+      meter: { total: (t) => t.neverVerifiedInventory, doneLabel: "verified" },
+    },
     entity: "inventory",
     title: "Inventory never confirmed by a recount",
     description:
-      "Entries whose count has never been checked against the shelf (oldest first — a sample, not the full backlog). Recount the location they live in to clear them.",
+      "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
     emptyMessage: "Every inventory entry has been verified at least once.",
     renderItem: (item) => ({
       title: item.product.name,
@@ -874,6 +962,12 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     id: "images",
     label: "Images",
     select: (p) => p.productsWithNoImages,
+    coverage: {
+      meter: {
+        total: (t) => t.productsWithNoImages,
+        doneLabel: "photographed",
+      },
+    },
     icon: ImageOff,
     title: "Missing Images",
     description: "Products that don't have any images.",
