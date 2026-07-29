@@ -15,6 +15,9 @@ export default defineConfig({
     },
   },
   test: {
+    coverage: {
+      exclude: ["src/components/reui/**"],
+    },
     projects: [
       {
         // will inherit options from this config like plugins and pool

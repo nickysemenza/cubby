@@ -12,4 +12,3 @@ ignore:
   - "scripts"
   - "tooling"
   - "src/components/ui" #shadcn/ui
-  - "apps/web/src/components/reui" # copied ReUI source
