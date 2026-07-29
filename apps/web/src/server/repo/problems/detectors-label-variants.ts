@@ -29,7 +29,7 @@
 
 import type { LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { type Column, sql } from "drizzle-orm";
+import { type Column, type SQLWrapper, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product, purchase } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -42,11 +42,14 @@ import { getDb } from "~/server/repo/database-helpers";
  * That last step is what collapses `Lowe's`→`lowes`, `Bob s Red Mill`→
  * `bobsredmill` and `Home  Depot`→`homedepot` in one rule, rather than needing
  * a case for apostrophes, one for double spaces and one for hyphens.
+ *
+ * Takes any SQL expression, not just a column, so a constant can be run through
+ * the same normalization it's being compared against.
  */
-const canonicalKey = (column: Column) => sql`
+const canonicalKey = (value: SQLWrapper) => sql`
   regexp_replace(
     regexp_replace(
-      regexp_replace(lower(btrim(${column})), '^the\\s+', ''),
+      regexp_replace(lower(btrim(${value})), '^the\\s+', ''),
       '(\\.com|,?\\s+(inc|llc|co)\\.?)$', ''),
     '[^a-z0-9]', '', 'g')`;
 
@@ -113,10 +116,18 @@ export const findVendorSpellingVariants = (
 /**
  * Product manufacturers spelled more than one way.
  *
- * `(unspecified)` is excluded explicitly: it's the deliberate not-a-brand
- * sentinel (`isUnspecifiedManufacturer` in ~/lib/manufacturer-utils) carried by
- * 159 of 381 products, and reporting it as a spelling would be noise even
- * though it can't currently collide with anything.
+ * `(unspecified)` is excluded: it's the deliberate not-a-brand sentinel
+ * (`isUnspecifiedManufacturer` in ~/lib/manufacturer-utils) carried by 159 of
+ * 381 products, and reporting it as a spelling would be noise.
+ *
+ * The comparison is on the CANONICAL key, not the raw string. A plain `<>` is
+ * case-sensitive, so a `(Unspecified)` from a CSV import would survive the
+ * exclusion — and then `canonicalKey` would fold it onto the same `unspecified`
+ * key as the 159 correctly-cased rows and report the sentinel as a spelling
+ * variant. Comparing after normalization is immune to that by construction, and
+ * covers spacing drift too; it's the same case-insensitive intent as
+ * `isUnspecifiedManufacturer` and `ilike(product.manufacturer,
+ * UNSPECIFIED_MANUFACTURER)` in product/lookup.ts.
  */
 export const findManufacturerSpellingVariants = (
   db: Database,
@@ -125,5 +136,5 @@ export const findManufacturerSpellingVariants = (
     db,
     product,
     product.manufacturer,
-    sql`${product.manufacturer} <> ${UNSPECIFIED_MANUFACTURER}`,
+    sql`${canonicalKey(product.manufacturer)} <> ${canonicalKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
   );

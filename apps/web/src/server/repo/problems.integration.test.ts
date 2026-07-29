@@ -1095,6 +1095,22 @@ describe("problems — brand-label spelling variants", () => {
     expect(manufacturerSpellingVariants).toEqual([]);
   });
 
+  it("excludes the sentinel however it is cased or spaced", async () => {
+    // A case-sensitive `<>` would let these through the exclusion, and then
+    // canonicalKey would fold them onto the same `unspecified` key as the
+    // correctly-cased rows — reporting the not-a-brand sentinel as a brand
+    // spelling variant, the exact false positive this detector avoids. The
+    // exclusion compares canonical keys, so casing and spacing can't matter.
+    await seedProduct("mystery a", UNSPECIFIED_MANUFACTURER);
+    await seedProduct("mystery b", UNSPECIFIED_MANUFACTURER);
+    await seedProduct("mystery c", "(Unspecified)");
+    await seedProduct("mystery d", "(UNSPECIFIED)");
+    await seedProduct("mystery e", " (unspecified) ");
+
+    const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
+    expect(manufacturerSpellingVariants).toEqual([]);
+  });
+
   it("clears once the odd spelling is soft-deleted", async () => {
     await seedProduct("Milwaukee drill", "Milwaukee");
     const odd = await seedProduct("Milwaukee saw", "MILWAUKEE");
