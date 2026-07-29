@@ -70,9 +70,10 @@ const { list } = createEntityListProcedure({
 /**
  * Hard-delete images (rows + associations + R2 objects).
  *
- * Images have no `deletedAt` column — they're the one gallery entity outside the
- * soft-delete convention (see the entity manifest), so this really removes them.
- * Shaped by `createDeleteProcedure` like every other entity delete, so the list
+ * `Image` has a `deletedAt` column like every other entity; it's just never set.
+ * Images are deleted for real rather than tombstoned — an image with no owning
+ * entity has no use once removed — so this really removes the row and its R2
+ * object. Shaped by `createDeleteProcedure` like every other entity delete, so the list
  * page's `deletable` config and bulk selection work unchanged; there are no
  * mutation side-effects to run (images carry no embedding / derived data).
  */

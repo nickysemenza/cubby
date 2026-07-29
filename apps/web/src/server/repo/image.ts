@@ -511,9 +511,14 @@ export const cullPendingImages = async (
  * Hard-delete image rows and return their R2 keys so the caller can drop the
  * objects too.
  *
- * Images are the one gallery entity that is NOT soft-deleted (no `deletedAt` on
- * `Image`), so "delete" here means the row is gone — matching how the pending
- * cull already works. The join rows are deleted first (they FK the image), which
+ * `Image` DOES carry a `deletedAt` (see `softDeletedAt()` in schema.ts, and the
+ * partial unique index on `key` that keys off it) — it's simply never set,
+ * because images are the one gallery entity deleted for real rather than
+ * tombstoned. An image with no owning entity has no use once removed, and
+ * restore was never implemented for any entity, so "delete" here means the row
+ * is gone — matching how the pending cull already works. Reads still go through
+ * `notDeleted(image)` so the column stays honest if that ever changes.
+ * The join rows are deleted first (they FK the image), which
  * also detaches the image from whatever product/location/recipe/project owned
  * it. Missing ids are skipped; the returned keys are only those actually removed.
  */
