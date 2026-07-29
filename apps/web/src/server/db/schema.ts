@@ -477,6 +477,18 @@ export const product = pgTable(
     category: text("category", {
       enum: productCategoryValues,
     }), // product category for filtering
+    // Free-form compatibility/grouping tags, same convention as `recipe.tags`.
+    // The point is class compatibility, which a product→product edge table
+    // models badly: 3 angle grinders × 2 disc products would be 6 edges for one
+    // fact, and 13 M18 tools would need 13 more for a battery. One shared tag
+    // ("grinder-4.5in", "M18") on both the tool and the consumable does it, and
+    // `category` (tools vs tool-consumables) already carries which side is which
+    // — so the tag needs no direction of its own.
+    // `notNull` + `'{}'` default follows `aliases` above rather than
+    // `recipe.tags` (nullable), so the presence predicate is a plain
+    // `cardinality(tags) = 0`. No GIN index: ~380 products, and every extra GIN
+    // index widens the standing `db:push` drift for no measurable gain.
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     price: real("price"), // Unit price in dollars, null if no price mapping
     // Operator confirmed there's no USDA food for this product, so the coverage
     // fix stops suggesting a (futile) USDA link and expects manual entry of

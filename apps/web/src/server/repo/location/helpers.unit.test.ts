@@ -97,6 +97,7 @@ const product = {
   shortcode: "P-TEST",
   name: "Flour",
   manufacturer: "Generic",
+  tags: [],
   upc: null,
   fdc_id: null,
   model: null,

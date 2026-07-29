@@ -28,6 +28,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
+  arrayOverlaps,
   asc,
   eq,
   inArray,
@@ -366,6 +367,9 @@ export const productList = async (
   // silently drops every UPC-only product from "has".
   const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND ${product.upc} IS NULL)`;
 
+  // Untagged. Outer parens load-bearing for the same `not()` reason as above.
+  const NO_TAGS = sql`(cardinality(${product.tags}) = 0)`;
+
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
@@ -410,6 +414,18 @@ export const productList = async (
         product.fdc_id,
         filters.usdaPresenceFilter,
         NO_USDA_KEY,
+      ),
+      // OR-ed with the tag column's presence sentinel so "M18 or untagged" is
+      // one filter, same shape as recipe/crud.ts. `product.tags` is notNull
+      // with a `'{}'` default, so untagged is only ever zero-length — no
+      // `IS NULL` half to check, unlike `recipe.tags`.
+      // `arrayOverlaps`, NOT sql`${col} && ${arr}`: interpolating a JS array
+      // emits a row constructor `($1,$2)` rather than `text[]`.
+      or(
+        filters.tagFilters && filters.tagFilters.length > 0
+          ? arrayOverlaps(product.tags, filters.tagFilters)
+          : undefined,
+        presenceCondition(product.tags, filters.tagsPresenceFilter, NO_TAGS),
       ),
     ],
   );
@@ -748,6 +764,7 @@ export const updateProduct = async (
     const updateData: {
       name?: string;
       aliases?: string[];
+      tags?: string[];
       manufacturer?: string;
       category?: ProductCategory | null;
       upc?: string | null;
@@ -815,6 +832,7 @@ export const updateProduct = async (
     const changes = computeChanges(beforeProduct, updated, [
       "name",
       "aliases",
+      "tags",
       "manufacturer",
       "category",
       "upc",

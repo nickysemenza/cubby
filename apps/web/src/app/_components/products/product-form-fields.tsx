@@ -297,6 +297,19 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           product name. Full form only; the compact quick-add stays minimal. */}
       {!compact && <AliasesField<TFieldValues> form={form} />}
 
+      {/* Compatibility/grouping tags. The same tag goes on the tool AND on the
+          consumables that fit it ("grinder-4.5in"); `category` says which side
+          each product is, so the tag carries no direction of its own. */}
+      {!compact && (
+        <AliasesField<TFieldValues>
+          form={form}
+          name="tags"
+          title="Tags"
+          addButtonText="Add Tag"
+          placeholder="e.g. grinder-4.5in, M18"
+        />
+      )}
+
       {!isMisc && (
         <>
           <FormSection title="Quantity & price" compact={compact}>

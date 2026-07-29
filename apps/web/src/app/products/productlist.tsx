@@ -13,6 +13,7 @@ import {
 } from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -45,7 +46,9 @@ import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
+import { useProductTagOptions } from "../_components/hooks/useProductTagOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "../_components/inventory/hooks";
@@ -53,6 +56,7 @@ import { InventoryEntriesQuickEditDialog } from "../_components/inventory/invent
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { ProductShelf } from "../_components/products/product-shelf";
+import { TruncatedList } from "../_components/TruncatedList";
 
 interface ProductListProps {
   initialCategory?: string;
@@ -89,6 +93,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<ProductListItem>(), []);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
+  // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
+  const { options: tagOptions } = useProductTagOptions();
+  const filterOptions = useFilterOptions({ tags: tagOptions });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
   );
@@ -300,6 +307,34 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       ),
+      // Read-only: the Tags filter spec declares `columnId: "tags"`, and the
+      // header-filter machinery needs a real column to hang that control on —
+      // without it the table logs `Column with id 'tags' does not exist` and
+      // the filter is only reachable by hand-editing the URL. Editing stays in
+      // the product form / detail page rather than an inline array editor.
+      columnHelper.accessor("tags", {
+        id: "tags",
+        header: "Tags",
+        meta: {
+          className: "w-40",
+          mobile: { slot: "meta", priority: 60 },
+        },
+        cell: (info) => {
+          const tags = info.getValue();
+          if (!tags.length) return <NoneValue />;
+          return (
+            <TruncatedList
+              items={tags}
+              maxItems={2}
+              renderItem={(tag) => (
+                <Badge key={tag} variant="outline">
+                  {tag}
+                </Badge>
+              )}
+            />
+          );
+        },
+      }),
       columnHelper.accessor("purchaseCount", {
         id: "purchases",
         header: "Purchases",
@@ -399,10 +434,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     tableStateOptions,
     columns,
     deletable: deletableConfig,
+    filterOptions,
     extraActions,
     nameEditable,
     infinite: true,
     initialColumnVisibility: {
+      tags: false,
       fdc_id: false,
       model: false,
       manufacturer: false,

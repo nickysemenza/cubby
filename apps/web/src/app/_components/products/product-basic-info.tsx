@@ -5,6 +5,7 @@ import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -180,6 +181,22 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                   );
                 })}
               </div>
+            ),
+          },
+        ]
+      : []),
+    ...(product.tags.length > 0
+      ? [
+          {
+            label: "Tags",
+            value: (
+              <Row gap="xs" wrap justify="end">
+                {product.tags.map((tag) => (
+                  <Badge key={tag} variant="outline">
+                    {tag}
+                  </Badge>
+                ))}
+              </Row>
             ),
           },
         ]

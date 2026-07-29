@@ -30,6 +30,7 @@ import {
   productSortableFields,
   productSummariesInput,
   productSummariesOut,
+  productTagOptionsOut,
   productTopLevelOut,
   productUpdateData,
   productUpdateInput,
@@ -45,6 +46,7 @@ import {
   getProductByShortcode,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
+  getProductTagOptions,
   productList as productListRepo,
   productSearch,
   quickCreateProduct,
@@ -347,6 +349,17 @@ const categoryDistribution = protectedProcedure
     return await getCategoryDistribution(ctx.db);
   });
 
+/**
+ * Tag roster for the product list's Tags filter picklist — one grouped query
+ * (see `getProductTagOptions`), same "cheap options query" shape as
+ * `purchase.vendorOptions`.
+ */
+const tagOptions = protectedProcedure
+  .output(productTagOptionsOut)
+  .query(async ({ ctx }) => {
+    return await getProductTagOptions(ctx.db);
+  });
+
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(productShortcodesInput)
@@ -473,4 +486,5 @@ export const productRouter = createTRPCRouter({
   findOrCreateByUPC,
   backfillUPCImages,
   categoryDistribution,
+  tagOptions,
 });
