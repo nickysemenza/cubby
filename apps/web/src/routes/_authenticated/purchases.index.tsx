@@ -16,7 +16,10 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import {
+  entityFilterSearchFields,
+  filterSearchValue,
+} from "~/entities/filter-manifest";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
 // selected — lazy so the chart stack stays out of the default Ledger view.
@@ -72,15 +75,26 @@ const searchSchema = z
     // by name in TS are then declared explicitly below, because a computed
     // Record has no literal key types for `Route.useSearch()` to expose.
     ...entityFilterSearchFields("purchase"),
-    q: z.string().optional().catch(undefined),
-    trade: z.string().optional().catch(undefined),
-    costType: z.string().optional().catch(undefined),
-    cost: z.string().optional().catch(undefined),
-    project: z.string().optional().catch(undefined),
-    future: z.string().optional().catch(undefined),
-    date: z.string().optional().catch(undefined),
-    productId: z.string().optional().catch(undefined),
-    product: z.string().optional().catch(undefined),
+    // `filterSearchValue`, NOT a bare `z.string()`: these sit AFTER the spread
+    // and override it, so a plain string schema here would reinstate the
+    // silently-dropped-numeric hole the shared value schema exists to close
+    // (see its doc comment) — `?q=486242` and `?order=11334` both hit it.
+    q: filterSearchValue,
+    trade: filterSearchValue,
+    costType: filterSearchValue,
+    cost: filterSearchValue,
+    project: filterSearchValue,
+    future: filterSearchValue,
+    date: filterSearchValue,
+    productId: filterSearchValue,
+    product: filterSearchValue,
+    // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
+    // together as a pair by the "Same Order" section and the ledger's Order #
+    // cell — an order id only identifies an order within one vendor. Declared
+    // by name so those `<Link search={{ order, vendor }}>` calls typecheck.
+    order: filterSearchValue,
+    vendor: filterSearchValue,
+    orderId: filterSearchValue,
     // Quick-capture deep link (navbar "+" / command palette) — there is no
     // /purchases/new route, so the create dialog is opened by this param.
     create: z.boolean().optional().catch(undefined),
@@ -108,6 +122,9 @@ const searchDefaults = {
   date: undefined,
   productId: undefined,
   product: undefined,
+  order: undefined,
+  vendor: undefined,
+  orderId: undefined,
   create: undefined,
 } as const;
 

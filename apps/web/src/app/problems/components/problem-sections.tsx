@@ -48,7 +48,7 @@ import {
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
-import { OrphanedDeleteFix } from "./tier2-fixes";
+import { OrderVendorBackfillFix, OrphanedDeleteFix } from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
   CoverageChips,
@@ -961,6 +961,58 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         route: { to: "/products/$id", params: { id: product.id } },
         editLabel: "Open product",
         customActions: <UpcApplyAction product={product} />,
+      };
+    },
+  }),
+  section({
+    id: "partial-vendor-orders",
+    label: "Split orders",
+    select: (p) => p.ordersWithPartialVendor,
+    entity: "purchase",
+    title: "Orders Split by a Missing Vendor",
+    description:
+      "An order is grouped by vendor AND order id together, so when only some of its rows record a vendor the order silently splits in two and each half looks complete. Backfilling the vendor rejoins them.",
+    emptyMessage:
+      "No orders are split by a missing vendor. Every order id agrees with itself on the vendor.",
+    renderItem: (order) => {
+      // One card per order id, and `route` points at one of its member rows —
+      // so the default `title`-`route.params.id` key would collide across two
+      // orders that happen to lead with the same purchase. The order id is the
+      // card's real identity.
+      const soleVendor = order.vendors.length === 1 ? order.vendors[0] : null;
+      return {
+        key: `partial-vendor:${order.orderId}`,
+        title: order.orderId,
+        subtitle: soleVendor
+          ? `${order.missingCount} of ${order.rowCount} rows missing "${soleVendor}"`
+          : `${order.rowCount} rows across conflicting vendors: ${order.vendors.join(", ")}`,
+        badges: [
+          <Badge key="rows" variant="outline">
+            {order.rowCount} rows
+          </Badge>,
+        ],
+        // Lands on one of the vendorless rows, whose "Same Order" section shows
+        // exactly the truncated half this card is reporting.
+        route: {
+          to: "/purchases/$id" as const,
+          params: { id: order.purchaseIds[0] ?? "" },
+        },
+        editLabel: "Open purchase",
+        // No fix for the ambiguous case: two real retailers sharing an id
+        // format is not something a backfill can adjudicate.
+        inlineFix: soleVendor
+          ? {
+              label: "Backfill vendor",
+              render: (close) => (
+                <OrderVendorBackfillFix
+                  orderId={order.orderId}
+                  vendor={soleVendor}
+                  missingCount={order.missingCount}
+                  close={close}
+                />
+              ),
+            }
+          : undefined,
       };
     },
   }),

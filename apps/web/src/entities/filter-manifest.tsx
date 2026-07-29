@@ -157,6 +157,19 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter by order id...",
       options: presenceFilterOptions("order id"),
     },
+    {
+      // URL-only, like `productId` above — seeded by the "Same Order" section's
+      // header badge and the ledger's Order # cell, surfaced as a ScopeChip.
+      // Its `columnId` can't be `orderId`: that one is the presence control,
+      // and a second spec on the same id would read the same filter slot.
+      // Always paired with `vendor` (or `vendor=(none)`) by its callers, since
+      // an order id is only unique within a vendor.
+      columnId: "orderIdExact",
+      field: "orderId",
+      urlKey: "order",
+      kind: "id",
+      placeholder: "Filter by order id...",
+    },
   ],
 
   task: [
@@ -481,6 +494,30 @@ export function manifestFilterConfig(
 }
 
 /**
+ * One filter value as it survives the URL round-trip.
+ *
+ * Everything reduces to a string: sets are comma-joined, and the enums are
+ * validated where they're consumed (`decodeFilters` →
+ * `buildFiltersFromManifest` → the tRPC input schema). `.catch(undefined)`
+ * keeps a malformed value from throwing the whole route.
+ *
+ * The `z.number()` arm is load-bearing, not defensive. TanStack's default
+ * `parseSearch` JSON-parses each param, so an all-digits value arrives as a
+ * NUMBER — and a bare `z.string()` sends it straight to `.catch(undefined)`,
+ * dropping the filter with no chip, no error, and a full result set that looks
+ * like a real answer. Its stringifier quotes those on write (`?order=%2211334%22`)
+ * so links built by `<Link search>` round-trip fine; this covers the URL a
+ * person types, tidies, or copies out of a receipt. Not hypothetical — order
+ * ids are routinely all digits (Tool Nirvana "11334", Lowe's
+ * "300902141253424770"), and so are the SKUs people search the ledger for.
+ */
+export const filterSearchValue = z
+  .union([z.string(), z.number()])
+  .transform(String)
+  .optional()
+  .catch(undefined);
+
+/**
  * `validateSearch` fragment for an entity's filter params.
  *
  * A route with a strict `z.object` schema strips any key it doesn't declare —
@@ -488,20 +525,16 @@ export function manifestFilterConfig(
  * removes it again before anything can read it back. Derived from the manifest
  * rather than hand-listed per route, so a new spec can't be forgotten here.
  *
- * Values stay `z.string()`: sets are comma-joined, and the enums are validated
- * where they're consumed (`decodeFilters` → `buildFiltersFromManifest` → the
- * tRPC input schema). `.catch(undefined)` keeps a malformed value from
- * throwing the whole route.
+ * Routes that ALSO re-declare a key by name (for `<Link search>` literal key
+ * types) must use {@link filterSearchValue} there too — an explicit
+ * `z.string()` sits after this spread and would reinstate the numeric hole.
  */
 export function entityFilterSearchFields(
   entity: Entity,
-): Record<string, z.ZodType<string | undefined>> {
-  const fields: Record<string, z.ZodType<string | undefined>> = {};
+): Record<string, typeof filterSearchValue> {
+  const fields: Record<string, typeof filterSearchValue> = {};
   for (const spec of getEntityFilters(entity)) {
-    fields[spec.urlKey ?? spec.columnId] = z
-      .string()
-      .optional()
-      .catch(undefined);
+    fields[spec.urlKey ?? spec.columnId] = filterSearchValue;
   }
   return fields;
 }

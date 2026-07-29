@@ -1,7 +1,12 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 import { getEntityFilters, manifestFilterConfig } from "./filter-manifest";
-import { FILTER_ANY, FILTER_NONE } from "./filters";
+import {
+  buildFiltersFromManifest,
+  FILTER_ANY,
+  FILTER_NONE,
+  filterGetterFromSearch,
+} from "./filters";
 
 /**
  * `manifestFilterConfig` is what tables that bypass `useStandardColumns` (the
@@ -122,5 +127,79 @@ describe("manifest naming invariant", () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * `decodeFilters` / `encodeFilters` / `buildFiltersFromManifest` all key off
+ * `columnId` and `urlKey ?? columnId`, and each reads ONE slot per key. Two
+ * specs colliding on either would silently share a filter slot — the reason
+ * purchase's exact order-id filter is `orderIdExact` + `?order=` rather than a
+ * second spec on `orderId` (which the presence control already owns).
+ */
+describe("manifest key uniqueness", () => {
+  it("no two specs in an entity share a columnId or a URL key", () => {
+    const violations: string[] = [];
+    for (const entity of entitySchema.options) {
+      const seenColumns = new Set<string>();
+      const seenUrlKeys = new Set<string>();
+      for (const spec of getEntityFilters(entity)) {
+        const urlKey = spec.urlKey ?? spec.columnId;
+        if (seenColumns.has(spec.columnId)) {
+          violations.push(`${entity}: duplicate columnId "${spec.columnId}"`);
+        }
+        if (seenUrlKeys.has(urlKey)) {
+          violations.push(`${entity}: duplicate url key "${urlKey}"`);
+        }
+        seenColumns.add(spec.columnId);
+        seenUrlKeys.add(urlKey);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
+/**
+ * The two order-id filters are independent: `?order=` is the exact "rest of
+ * this order" scope, `?orderId=` is the has/none reconciliation worklist. They
+ * must be able to coexist in one URL and land on different server fields.
+ */
+describe("purchase order-id filters", () => {
+  const build = (search: Record<string, unknown>) => {
+    const specs = getEntityFilters("purchase");
+    return buildFiltersFromManifest(
+      specs,
+      filterGetterFromSearch(specs, search),
+    );
+  };
+
+  it("routes ?order= to the exact orderId field", () => {
+    expect(build({ order: "111-1234567-1234567" })).toMatchObject({
+      orderId: "111-1234567-1234567",
+    });
+  });
+
+  it("routes ?orderId= to the presence field", () => {
+    expect(build({ orderId: FILTER_NONE })).toMatchObject({
+      orderIdPresenceFilter: FILTER_NONE,
+    });
+  });
+
+  it("carries the vendor its links always pair with, without collapsing them", () => {
+    // The link shape the Same Order section emits: an order id is only unique
+    // within a vendor, so both keys ride together and must survive as two
+    // separate server-side conditions.
+    expect(build({ order: "WN63446464", vendor: "Home Depot" })).toMatchObject({
+      orderId: "WN63446464",
+      vendor: ["Home Depot"],
+    });
+  });
+
+  it("keeps the exact scope and the presence worklist independent", () => {
+    const built = build({ order: "#11325", orderId: FILTER_ANY });
+    expect(built).toMatchObject({
+      orderId: "#11325",
+      orderIdPresenceFilter: FILTER_ANY,
+    });
   });
 });

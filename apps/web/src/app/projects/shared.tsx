@@ -8,6 +8,7 @@ import type {
   TaskStatus,
   Trade,
 } from "@cubby/schemas/project";
+import { Link } from "@tanstack/react-router";
 import {
   type ColumnHelper,
   createColumnHelper,
@@ -26,6 +27,7 @@ import {
   ArrowRightLeft,
   ExternalLink,
   ListChecks,
+  ListFilter,
   ListTodo,
   ShoppingCart,
   Tag,
@@ -44,6 +46,7 @@ import {
   selectCellData,
   specFromCellData,
 } from "~/app/_components/data-table/cell-data";
+import { CellLinkFence } from "~/app/_components/data-table/cell-edit-trigger";
 import {
   createActionsColumn,
   createCreatedAtColumn,
@@ -93,6 +96,7 @@ import {
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+import { FILTER_NONE } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import {
   projectMutationInvalidateKeys,
@@ -844,6 +848,12 @@ export function purchaseVendorColumn(
  * Rendered `font-mono` (house convention for identifiers). Hidden by default on
  * the /purchases ledger; see `purchaseVendorColumn`. Its filter is presence-only
  * ("has order id" / "(none)") — the "(none)" side is the unreconciled worklist.
+ *
+ * The trailing icon scopes the ledger to the rest of that order. It carries the
+ * row's `vendor` alongside the id because an order id is only unique within a
+ * vendor, and it sits in a `CellLinkFence` so navigating never also opens the
+ * inline editor (or, in cell-selection mode, eats the first of the two clicks
+ * that would otherwise open it).
  */
 export function purchaseOrderIdColumn(
   helper: ColumnHelper<PurchaseOut>,
@@ -856,8 +866,24 @@ export function purchaseOrderIdColumn(
     className: "w-32",
     mobile: opts?.mobile,
     filterConfig: manifestFilterConfig("purchase", "orderId"),
-    renderValue: (v) =>
-      v ? <span className="font-mono">{v}</span> : <NoneValue />,
+    renderValue: (v, row) =>
+      v ? (
+        <>
+          <span className="font-mono">{v}</span>
+          <CellLinkFence>
+            <Link
+              to="/purchases"
+              search={{ order: v, vendor: row.vendor ?? FILTER_NONE }}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label={`Show the rest of order ${v}`}
+            >
+              <ListFilter className="size-3.5" />
+            </Link>
+          </CellLinkFence>
+        </>
+      ) : (
+        <NoneValue />
+      ),
     editable: {
       onSave: async (newOrderId, purchase) => {
         await save(newOrderId, purchase);

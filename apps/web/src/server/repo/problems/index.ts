@@ -17,6 +17,9 @@
  *                                            stocked bins overdue for a recount)
  *   INVENTORY   → `detectors-inventory.ts`  (never-verified entries, items parked
  *                                            in the global "Unknown" location)
+ *   PURCHASE    → `detectors-purchase.ts`   (orders whose rows disagree about
+ *                                            their vendor — the (vendor,
+ *                                            orderId) group-key guardrail)
  *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
  *                                            sub-recipe while marked fresh —
  *                                            derived-data-on-removal guardrail)
@@ -68,6 +71,11 @@ export {
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
+// Purchase-centric detectors (the (vendor, orderId) group-key guardrail)
+export {
+  findOrdersWithPartialVendor,
+  resolveOrderVendorBackfill,
+} from "./detectors-purchase";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,

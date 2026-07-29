@@ -11,6 +11,7 @@ import type {
   PurchaseBulkCostTypeInput,
   PurchaseBulkMoveInput,
   PurchaseBulkTradeInput,
+  PurchaseBulkVendorInput,
   PurchaseCreateInput,
   PurchaseOut,
   PurchaseUpdateInput,
@@ -258,6 +259,46 @@ export const setPurchasesCostType = async (
       const changes = computeChanges(row, { id: row.id, costType }, [
         "costType",
       ]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "purchase",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return before.map((row) => row.id);
+  });
+
+  return getPurchasesByIDs(db, updatedIds);
+};
+
+/** Bulk vendor write — same shape as {@link setPurchasesTrade}. */
+export const setPurchasesVendor = async (
+  db: Database,
+  input: PurchaseBulkVendorInput,
+  actor: ActorContext,
+): Promise<PurchaseOut[]> => {
+  const { ids, vendor } = input;
+
+  const updatedIds = await withTransaction(db, async (tx) => {
+    const before = await tx.query.purchase.findMany({
+      where: and(inArray(purchase.id, ids), notDeleted(purchase)),
+      columns: { id: true, vendor: true },
+    });
+    if (before.length === 0) return [];
+
+    await tx
+      .update(purchase)
+      .set({ vendor })
+      .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { id: row.id, vendor }, ["vendor"]);
       if (changes) {
         auditEntries.push({
           entityType: "purchase",
