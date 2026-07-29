@@ -297,7 +297,7 @@ export function RecipeFlowMap({
             <div
               key={source.id}
               className={cn(
-                "absolute grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-[var(--border)] bg-background px-2 py-1 shadow-sm transition-opacity",
+                "absolute grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-[var(--border)] bg-background px-2 py-1 transition-opacity",
                 source.kind === "unlisted" && "border-warning",
                 dimmed && "opacity-40",
               )}
@@ -321,7 +321,7 @@ export function RecipeFlowMap({
               onClick={() => onSelectOperation(operation.id)}
               aria-pressed={selected}
               className={cn(
-                "absolute flex flex-col items-center justify-center gap-1 border bg-muted px-2 py-1 text-center shadow-sm transition-all hover:border-primary",
+                "absolute flex flex-col items-center justify-center gap-1 border bg-muted px-2 py-1 text-center transition-all hover:border-primary",
                 outputs.has(operation.id)
                   ? "border-positive"
                   : "border-[var(--border)]",
