@@ -59,6 +59,11 @@ Sentry.init({
   // via `node --import` before TS transpilation, so it can't import that module.
   dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
   sendDefaultPii: true,
+  // Unconditionally "development": this preload is wired into the `dev` script
+  // only (`NODE_OPTIONS='--import ./instrument.server.mjs' vite dev`), so it
+  // never runs in a deployed worker. Without it the SDK defaults to
+  // "production" and dev SSR errors are indistinguishable from real ones.
+  environment: "development",
   // Disable Sentry tracing in dev — the NodeSDK above handles tracing for Jaeger.
   // Sentry's tracer provider conflicts, causing DB spans to land in separate traces.
   tracesSampleRate: 0,
