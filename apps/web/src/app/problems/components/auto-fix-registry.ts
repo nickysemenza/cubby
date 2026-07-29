@@ -29,16 +29,17 @@ export type AutoFixTask = {
     counts: MaintenanceCounts | undefined,
   ) => number | null;
   /**
-   * How many of `count` are actually represented in `problems.totalProblems`.
-   * Defaults to `count`.
+   * How many of `count` are actually represented in `problems.totalProblems` —
+   * the only figure the summary card may phrase as "N of them".
    *
-   * These diverge in two ways, and conflating them made the summary card lie:
-   * `cullPendingImages` has no Problems section at all (none of its work is in
-   * the total), and `missingEmbeddings`' section carries only a capped sample
-   * while its count is the true uncapped figure. Summing raw `count` let
-   * "N of them need no decisions" exceed the issue count above it.
+   * REQUIRED, deliberately: a task's count and its listed count diverge more
+   * often than not, and every task that draws its count from `MaintenanceCounts`
+   * rather than an `AllProblems` array contributes ZERO here — that describes
+   * three of the six. Defaulting this to `count` silently overcounted twice
+   * during review, so each task must now state where its number comes from and
+   * the compiler enforces it.
    */
-  listedCount?: (
+  listedCount: (
     problems: AllProblems,
     counts: MaintenanceCounts | undefined,
   ) => number;
@@ -79,6 +80,8 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     key: "orphanedEmbeddings",
     label: "Clean orphaned embeddings",
     count: (problems) => problems.orphanedEntityEmbeddings.length,
+    // Its own section, uncapped — every item is on the page.
+    listedCount: (problems) => problems.orphanedEntityEmbeddings.length,
     invalidateKeys: [queryKeys.search.all],
     // Omitting `ids` cleans every orphan — the server already supports it.
     run: async (client) => {
@@ -113,6 +116,8 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     key: "locationDescriptions",
     label: "Analyze location photos",
     count: (problems) => problems.locationsWithoutAiDescription.length,
+    // Its own section, uncapped.
+    listedCount: (problems) => problems.locationsWithoutAiDescription.length,
     invalidateKeys: [queryKeys.location.list],
     run: async (client) => {
       const r = await collectBulkStream(
@@ -153,6 +158,10 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     key: "staleRecipeTotals",
     label: "Recompute stale recipe totals",
     count: (_problems, counts) => counts?.staleRecipeTotals ?? null,
+    // Maintenance-only, like the image cull: `staleRecipeTotals` lives in
+    // MaintenanceCounts and has no Problems section, so none of it is in the
+    // total. (`staleParentRecipes` is a different, unrelated detector.)
+    listedCount: () => 0,
     invalidateKeys: [queryKeys.recipe.list],
     run: async (client) => {
       const r = await collectBulkStream(
@@ -173,6 +182,7 @@ export const AUTO_FIX_TASKS: AutoFixTask[] = [
     // bypassed the router (raw SQL / postgres MCP), so there is nothing to
     // count. Rides along whenever the button runs; never justifies a run alone.
     count: () => null,
+    listedCount: () => 0,
     alwaysRun: true,
     invalidateKeys: [queryKeys.location.all],
     run: async (client) => {

@@ -48,7 +48,7 @@ export function useAutoFixPlan(problems: AllProblems) {
   const actionable = counted.filter((t) => (t.count ?? 0) > 0);
   const items = actionable.reduce((n, t) => n + (t.count ?? 0), 0);
   const listedItems = actionable.reduce(
-    (n, t) => n + (t.task.listedCount?.(problems, counts) ?? t.count ?? 0),
+    (n, t) => n + t.task.listedCount(problems, counts),
     0,
   );
 
