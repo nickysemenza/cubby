@@ -135,21 +135,35 @@ export function LedgerFilters<TData>({ table }: { table: Table<TData> }) {
   const lastExternalKeyRef = useRef(filterStateKey(externalFilters));
 
   const externalKey = filterStateKey(externalFilters);
+  const draftKey = filterStateKey(draftFilters);
+  const debouncedDraftKey = filterStateKey(debouncedDraftFilters);
   if (externalKey !== lastExternalKeyRef.current) {
     lastExternalKeyRef.current = externalKey;
-    if (externalKey !== filterStateKey(draftFilters)) {
+    if (externalKey !== draftKey) {
       setDraftFilters(externalFilters);
     }
   }
 
   useEffect(() => {
-    const nextKey = filterStateKey(debouncedDraftFilters);
-    if (nextKey === externalKey) return;
-    lastExternalKeyRef.current = nextKey;
+    // Header filters, saved views, reset, and URL restoration can advance the
+    // table while this hook's debounced value still represents its previous
+    // draft. Only a debounce that has caught up to the latest local draft may
+    // write back; otherwise it would immediately undo the external change.
+    if (debouncedDraftKey !== draftKey || debouncedDraftKey === externalKey) {
+      return;
+    }
+    lastExternalKeyRef.current = debouncedDraftKey;
     table.setColumnFilters(
       ledgerFiltersToColumnFilters(debouncedDraftFilters, fields),
     );
-  }, [debouncedDraftFilters, externalKey, fields, table]);
+  }, [
+    debouncedDraftFilters,
+    debouncedDraftKey,
+    draftKey,
+    externalKey,
+    fields,
+    table,
+  ]);
 
   const handleChange = (nextFilters: Filter<string>[]) => {
     const previousByField = new Map(
