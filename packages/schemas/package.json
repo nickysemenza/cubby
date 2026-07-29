@@ -38,6 +38,7 @@
     "./ai": "./src/ai.ts",
     "./agent": "./src/agent.ts",
     "./background-jobs": "./src/background-jobs.ts",
+    "./calendar": "./src/calendar.ts",
     "./dashboard": "./src/dashboard.ts",
     "./project": "./src/project.ts"
   },

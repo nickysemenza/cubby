@@ -464,3 +464,22 @@ describe("EditableCell type-to-edit seeding", () => {
     expect(input).toHaveValue("hello");
   });
 });
+
+describe("EditableCell rich display trigger", () => {
+  it("renders a link beside the edit button instead of inside it", () => {
+    render(
+      <EditableCell
+        value="linked"
+        onSave={vi.fn()}
+        config={{ type: "text" }}
+        trigger="pencil"
+        renderValue={(value) => <a href="/detail">{value}</a>}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "linked" });
+    const editButton = screen.getByRole("button", { name: "Edit value" });
+    expect(link.closest("button")).toBeNull();
+    expect(editButton.contains(link)).toBe(false);
+  });
+});

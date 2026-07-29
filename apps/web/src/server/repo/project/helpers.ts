@@ -6,7 +6,7 @@ import type {
 } from "@cubby/schemas/project";
 
 /** Shape of a `project` row as returned by a plain (no relations) select. */
-type ProjectRow = {
+export type ProjectRow = {
   id: ProjectOut["id"];
   name: string;
   status: ProjectOut["status"];
@@ -98,7 +98,7 @@ export const EMPTY_PROJECT_SUBTREE_ROLLUP: ProjectSubtreeRollup = {
  * object rather than a positional list: it already carried seven arguments,
  * three of which are same-typed id arrays, and the date window made eight.
  */
-export const dbProjectToAPI = ({
+const dbProjectToAPI = ({
   row,
   ownRollup,
   subtreeRollup,
@@ -137,3 +137,35 @@ export const dbProjectToAPI = ({
   rollup: { ...ownRollup, subtree: subtreeRollup },
   dates,
 });
+
+/**
+ * Apply the repository's canonical empty fallbacks and parent/child/dependency
+ * lookups to a project row. Every read path gets the same hydrated shape.
+ */
+export const hydrateProjectRow = (
+  row: ProjectRow,
+  context: {
+    ownRollups: Map<ProjectId, ProjectOwnRollup>;
+    subtreeRollups: Map<ProjectId, ProjectSubtreeRollup>;
+    dateWindows: Map<ProjectId, ProjectDateWindow>;
+    nameById: Map<ProjectId, string>;
+    childrenByParent: Map<ProjectId, ProjectId[]>;
+  },
+  dependencies: {
+    blockedBy: Map<ProjectId, ProjectId[]>;
+    blocking: Map<ProjectId, ProjectId[]>;
+  },
+): ProjectOut =>
+  dbProjectToAPI({
+    row,
+    ownRollup: context.ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
+    subtreeRollup:
+      context.subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
+    dates: context.dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
+    blockedByIds: dependencies.blockedBy.get(row.id) ?? [],
+    blockingIds: dependencies.blocking.get(row.id) ?? [],
+    parentProjectName: row.parentProjectId
+      ? (context.nameById.get(row.parentProjectId) ?? null)
+      : null,
+    childProjectIds: context.childrenByParent.get(row.id) ?? [],
+  });

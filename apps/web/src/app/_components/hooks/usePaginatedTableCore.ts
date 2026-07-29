@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
-import type { QueryTiming } from "~/lib/query-timing";
+import { useMemo } from "react";
 import type { TableStateReturn } from "../data-table/useTableState";
 
 export interface ListQueryResponse<TData> {
@@ -67,28 +66,4 @@ export function usePaginatedTableCore<TFilters>({
     queryParams,
     memoizedQueryOptions,
   };
-}
-
-export function useQueryTiming(isFetching: boolean): QueryTiming {
-  const startTimeRef = useRef<number | null>(null);
-  const timingRef = useRef<QueryTiming>({
-    durationMs: null,
-    isFresh: false,
-  });
-
-  useEffect(() => {
-    if (isFetching && startTimeRef.current === null) {
-      startTimeRef.current = performance.now();
-    }
-  }, [isFetching]);
-
-  useEffect(() => {
-    if (!isFetching && startTimeRef.current !== null) {
-      const duration = Math.round(performance.now() - startTimeRef.current);
-      timingRef.current = { durationMs: duration, isFresh: true };
-      startTimeRef.current = null;
-    }
-  }, [isFetching]);
-
-  return timingRef.current;
 }

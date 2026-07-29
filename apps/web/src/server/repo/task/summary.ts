@@ -13,19 +13,13 @@
  * actionable.ts's doc comment), match that convention.
  */
 import type { TaskSummaryOut } from "@cubby/schemas/project";
-import { and, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, gte, isNull, lt, lte, ne } from "drizzle-orm";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
 import { countWhere, notDeleted } from "~/server/repo/database-helpers";
 import { listActionableTasks } from "./actionable";
-
-/** The EFFECTIVE due date SQL expression — `dueEndDate ?? dueDate` — matching
- * taskList's overdue/due-window filtering convention. A fresh fragment per
- * call (mirrors lookup.ts's inline `sql` template usage) rather than a
- * shared const, since each is bound into a different comparison. */
-const effectiveDueDate = () =>
-  sql`coalesce(${task.dueEndDate}, ${task.dueDate})`;
+import { effectiveTaskDueDateSql } from "./helpers";
 
 const topLevelOpen = () =>
   and(notDeleted(task), ne(task.status, "done"), isNull(task.parentTaskId));
@@ -38,14 +32,18 @@ export async function getTaskSummary(db: Database): Promise<TaskSummaryOut> {
     await Promise.all([
       countWhere(db, task, topLevelOpen()),
       countWhere(db, task, and(topLevelOpen(), isNull(task.projectId))),
-      countWhere(db, task, and(topLevelOpen(), lt(effectiveDueDate(), today))),
+      countWhere(
+        db,
+        task,
+        and(topLevelOpen(), lt(effectiveTaskDueDateSql(), today)),
+      ),
       countWhere(
         db,
         task,
         and(
           topLevelOpen(),
-          gte(effectiveDueDate(), today),
-          lte(effectiveDueDate(), weekOut),
+          gte(effectiveTaskDueDateSql(), today),
+          lte(effectiveTaskDueDateSql(), weekOut),
         ),
       ),
       listActionableTasks(db),

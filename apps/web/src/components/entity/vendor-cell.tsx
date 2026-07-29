@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Row } from "~/components/layout";
-import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
+import {
+  publicBucketUrl,
+  transformedImageUrl,
+  transformedSrcSet,
+} from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 import {
   VENDOR_LOGO_PREFIX,
@@ -8,9 +12,6 @@ import {
   vendorSlug,
 } from "~/lib/vendor-logo";
 import { VENDOR_LOGO_SLUGS } from "~/lib/vendor-logos.generated";
-
-/** Bucket host serving `vendors/<slug>.<ext>`; see scripts/seed-vendor-logos.ts. */
-const BUCKET_ORIGIN = "https://foobucket.nicky.fun";
 
 /** Rendered edge in CSS px. `size-4` — an inline glyph, not a card icon. */
 const MARK_PX = 16;
@@ -68,7 +69,7 @@ export function VendorMark({
   // Always PNG — the seed script normalizes every source format on the way in,
   // so Cloudflare Image Transformations can serve an exact 1x/2x AVIF/WebP pair
   // off whatever resolution the original happened to be.
-  const url = `${BUCKET_ORIGIN}/${VENDOR_LOGO_PREFIX}/${slug}.png`;
+  const url = publicBucketUrl(`${VENDOR_LOGO_PREFIX}/${slug}.png`);
 
   return (
     <img

@@ -14,9 +14,7 @@ import {
   filterGetterFromColumnFilters,
 } from "~/entities/filters";
 import type { QueryTiming } from "~/lib/query-timing";
-import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
-import { useBulkActions } from "../data-table/useBulkActions";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
@@ -29,9 +27,10 @@ import {
   type InfiniteScrollControls,
   useInfiniteTableList,
 } from "./useInfiniteTableList";
+import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
+import type { TRPCQueryOptionsFn } from "./usePaginatedTableCore";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
-import { type UseTableListOptions, useTableList } from "./useTableList";
 
 /** Base interface for entities in list views */
 export interface BaseListRow {
@@ -51,13 +50,13 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   /** The entity type */
   entity: Entity;
   /** tRPC queryOptions function */
-  queryOptions: UseTableListOptions<TFilters>["queryOptions"];
+  queryOptions: TRPCQueryOptionsFn<TFilters>;
   /**
    * Build filters from table state. Omit it to derive them from the entity's
    * filter manifest, which is what every list page should do — a hand-written
    * builder is for the leftovers a manifest spec can't express.
    */
-  buildFilters?: UseTableListOptions<TFilters>["buildFilters"];
+  buildFilters?: (tableState: TableStateReturn) => TFilters;
   /**
    * Filters that aren't column filters: page-level scope constants and view
    * presets (a cookbook id, `topLevelOnly`, a mode's fixed `trade`). Merged
@@ -81,8 +80,6 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   bulkActions?: BulkActionsConfig<TData>;
   /** Extra actions to render in the row action menu (after "View Details") */
   extraActions?: (row: TData) => ReactNode;
-  /** Enable infinite scroll on mobile (default: false) */
-  infinite?: boolean;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
   /**
@@ -152,8 +149,8 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
   deleteDialog: ReactNode | null;
   /** Opens the delete confirmation for one item (e.g. mobile swipe actions) */
   requestDelete: (item: TData) => void;
-  /** Infinite scroll controls (only present when infinite: true) */
-  infiniteScroll?: InfiniteScrollControls;
+  /** Infinite scroll controls for the server-backed list. */
+  infiniteScroll: InfiniteScrollControls;
   /** Pull-to-refresh controls for mobile views */
   refreshControls: {
     onRefresh: () => Promise<void>;
@@ -180,7 +177,7 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
  * Hook for managing entity list pages with common conventions.
  *
  * Handles:
- * - Table query via useTableList
+ * - Infinite table query via useInfiniteTableList
  * - Unit mappings loading if getMappings provided
  * - Standard columns based on entity config (image, name, createdAt)
  * - Filter expansion from simple string definitions
@@ -198,7 +195,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   bulkActions,
   extraActions,
   deletable,
-  infinite = false,
   initialColumnVisibility,
   nameClassName,
   nameEditable,
@@ -210,11 +206,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   TFilters
 > {
   const [grouped, setGrouped] = useState(false);
-
-  // Server-backed infinite mode accumulates pages on both desktop and mobile.
-  // The table still virtualizes the accumulated rows, so desktop does not need
-  // the old sticky pager or a 500-row first page to feel continuous.
-  const useInfiniteMode = infinite;
 
   const onGroupedChange = useCallback((value: boolean) => {
     setGrouped(value);
@@ -237,42 +228,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     requestDelete,
   } = useOptimisticDelete<TData>({ deletable, extraActions });
 
-  // Combine user's bulk actions with delete bulk action if deletable is provided
-  const effectiveBulkActions = useMemo(():
-    | BulkActionsConfig<TData>
-    | undefined => {
-    if (!deleteBulkAction && !bulkActions) return undefined;
-
-    const userActions = bulkActions?.actions ?? [];
-    const combinedActions = deleteBulkAction
-      ? [...userActions, deleteBulkAction]
-      : userActions;
-
-    return {
-      ...bulkActions,
-      actions: combinedActions,
-    };
-  }, [deleteBulkAction, bulkActions]);
-
-  // Always call useBulkActions unconditionally (Rules of Hooks).
-  // When no bulk actions configured, pass an empty config.
-  const EMPTY_BULK_CONFIG = useMemo(
-    (): BulkActionsConfig<TData> => ({ actions: [] }),
-    [],
-  );
-  const bulkActionsState = useBulkActions({
-    config: effectiveBulkActions ?? EMPTY_BULK_CONFIG,
+  const listBulkActions = useListBulkActions({
+    bulkActions,
+    deleteBulkAction,
   });
-
-  // Determine effective row selection state - bulk actions takes precedence
-  // (mirrors useClientEntityList's equivalent).
-  const effectiveEnableRowSelection = !!effectiveBulkActions;
-  const effectiveRowSelection = effectiveBulkActions
-    ? bulkActionsState.rowSelection
-    : {};
-  const effectiveOnRowSelectionChange = effectiveBulkActions
-    ? bulkActionsState.onRowSelectionChange
-    : undefined;
 
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { hasUnitMappings, defaultSort } = useMemo(() => {
@@ -292,16 +251,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       // shareable). Overridable: `useTableState` wants exactly ONE writer per
       // page, so a table embedded alongside others must opt out.
       urlSync: true,
+      syncPaginationToUrl: false,
       filterSpecs: getEntityFilters(entity),
       ...tableStateOptions,
     }),
     [defaultSort, entity, tableStateOptions],
   );
 
-  // ONE tableState owned here and shared by both data hooks. Keeping a single
-  // instance means sort/pagination survive the desktop⇄mobile data-mode flip
-  // (the two hooks no longer hold divergent state), and only one writer touches
-  // the URL.
+  // One tableState owns the server-backed list. Infinite lists still use page
+  // size internally, but never expose meaningless page/pageSize URL state.
   const tableState = useTableState(mergedTableStateOptions);
 
   // Column-filter state → the server's `*Filters` object, driven by the
@@ -337,26 +295,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [effectiveBuildFilters, tableState],
   );
 
-  // Always call both hooks unconditionally (Rules of Hooks).
-  // The unused hook has enabled: false so its query won't fire.
   const infiniteResult = useInfiniteTableList<TFilters, TData>({
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,
-    enabled: useInfiniteMode,
-  });
-
-  const paginatedResult = useTableList<TFilters, TData>({
-    queryOptions,
-    buildFilters: effectiveBuildFilters,
-    tableState,
-    groupBy: groupByField,
-    enabled: !useInfiniteMode,
   });
 
   const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
-    useInfiniteMode ? infiniteResult : paginatedResult;
+    infiniteResult;
 
   // Full-filtered-set totals for footer renderers — client rows only cover
   // the loaded pages, so footers must not sum/count them.
@@ -385,7 +332,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     customColumns,
     filters: filters ?? NO_FILTERS,
     filterOptions,
-    enableRowSelection: effectiveEnableRowSelection,
+    enableRowSelection: listBulkActions.enableRowSelection,
     combinedExtraActions,
     mappingsMap: effectiveMappingsMap,
     hasUnitMappings,
@@ -397,8 +344,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
   // Memoize getRowId to prevent recreating on every render
   const getRowId = useMemo(
-    () => (effectiveEnableRowSelection ? (row: TData) => row.id : undefined),
-    [effectiveEnableRowSelection],
+    () =>
+      listBulkActions.enableRowSelection ? (row: TData) => row.id : undefined,
+    [listBulkActions.enableRowSelection],
   );
 
   // Persisted per-entity column visibility (localStorage), layered over the
@@ -411,19 +359,18 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const { columnSizing, setColumnSize, resetColumnSize } =
     useTableColumnSizing(entity);
 
-  // Configure the table
-  // In infinite mode, feed all accumulated rows as a single "page" so TanStack Table
-  // doesn't try to paginate server-side.
+  // Feed all accumulated rows as a single "page" so TanStack Table doesn't
+  // try to paginate the infinite result.
   const table = useTableConfig({
     data,
     columns: allColumns,
     tableState,
-    totalCount: useInfiniteMode ? data.length : totalCount,
-    manualPagination: !useInfiniteMode,
+    totalCount: data.length,
+    manualPagination: false,
     getRowId,
-    enableRowSelection: effectiveEnableRowSelection,
-    rowSelection: effectiveRowSelection,
-    onRowSelectionChange: effectiveOnRowSelectionChange,
+    enableRowSelection: listBulkActions.enableRowSelection,
+    rowSelection: listBulkActions.rowSelection,
+    onRowSelectionChange: listBulkActions.onRowSelectionChange,
     initialColumnVisibility,
     columnVisibility,
     onColumnVisibilityChange,
@@ -434,10 +381,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   });
 
   // "Select all N matching": pull every remaining page into memory (bulk
-  // actions need full rows, not ids), then select all. Infinite mode only.
+  // actions need full rows, not ids), then select all.
   const [isSelectingAll, setIsSelectingAll] = useState(false);
   const handleSelectAllMatching = useCallback(async () => {
-    if (!useInfiniteMode) return;
     setIsSelectingAll(true);
     try {
       // Select from the RETURNED items, not table.getRowModel(): the table
@@ -458,45 +404,22 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     } finally {
       setIsSelectingAll(false);
     }
-  }, [useInfiniteMode, infiniteResult.infiniteScroll, table, totalCount]);
+  }, [infiniteResult.infiniteScroll, table, totalCount]);
 
   // Build bulk action bar element if bulk actions configured
-  const bulkActionBar = useMemo(
-    () =>
-      effectiveBulkActions ? (
-        <BulkActionBar
-          selectedCount={bulkActionsState.selectedCount}
-          selectedRows={table.getFilteredSelectedRowModel().rows}
-          actions={bulkActionsState.getAvailableActions(
-            table.getFilteredSelectedRowModel().rows,
-          )}
-          onExecute={bulkActionsState.executeAction}
-          onClearSelection={bulkActionsState.clearSelection}
-          isExecuting={bulkActionsState.isExecuting}
-          currentAction={bulkActionsState.currentAction}
-          selectAllMatching={
-            useInfiniteMode
-              ? {
-                  totalCount,
-                  loadedCount: data.length,
-                  onSelectAll: handleSelectAllMatching,
-                  isSelectingAll,
-                }
-              : undefined
-          }
-        />
-      ) : null,
-    [
-      bulkActionsState,
-      effectiveBulkActions,
-      table,
-      useInfiniteMode,
-      totalCount,
-      data.length,
-      handleSelectAllMatching,
-      isSelectingAll,
-    ],
-  );
+  const bulkActionBar = listBulkActions.config ? (
+    <ListBulkActionBar
+      table={table}
+      config={listBulkActions.config}
+      state={listBulkActions.state}
+      selectAllMatching={{
+        totalCount,
+        loadedCount: data.length,
+        onSelectAll: handleSelectAllMatching,
+        isSelectingAll,
+      }}
+    />
+  ) : null;
 
   return {
     table,
@@ -509,7 +432,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     bulkActionBar,
     deleteDialog,
     requestDelete,
-    infiniteScroll: useInfiniteMode ? infiniteResult.infiniteScroll : undefined,
+    infiniteScroll: infiniteResult.infiniteScroll,
     refreshControls,
     grouped,
     onGroupedChange,

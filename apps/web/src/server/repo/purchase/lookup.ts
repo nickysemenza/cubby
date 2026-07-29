@@ -40,9 +40,8 @@ import {
   relations,
 } from "~/server/repo/database-helpers";
 import {
-  allProjectParentRows,
-  buildChildrenMap,
   collectDescendantIds,
+  loadProjectTree,
 } from "~/server/repo/project/subtree";
 import { dbPurchaseToAPI } from "./helpers";
 
@@ -65,13 +64,13 @@ export const buildPurchaseWhereClause = async (
     : [];
   let projectValues = eqAny(purchase.projectId, filters.projectId);
   if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
-    const childrenMap = buildChildrenMap(await allProjectParentRows(db));
+    const { childrenByParent } = await loadProjectTree(db);
     projectValues = inArray(
       purchase.projectId,
       uniq(
         selectedProjectIds.flatMap((id) => [
           id,
-          ...collectDescendantIds(childrenMap, id),
+          ...collectDescendantIds(childrenByParent, id),
         ]),
       ),
     );

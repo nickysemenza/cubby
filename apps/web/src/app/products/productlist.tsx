@@ -449,7 +449,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     filterOptions,
     extraActions,
     nameEditable,
-    infinite: true,
     initialColumnVisibility: {
       tags: false,
       fdc_id: false,

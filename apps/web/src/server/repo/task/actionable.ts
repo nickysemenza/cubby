@@ -61,6 +61,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, asc, ne } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import {
   project,
@@ -204,14 +205,6 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   }
 }
 
-/** A task/blocked-row's effective due date — `dueEndDate ?? dueDate`. */
-function effectiveDueDate(row: {
-  dueDate: string | null;
-  dueEndDate: string | null;
-}): string | null {
-  return row.dueEndDate ?? row.dueDate;
-}
-
 /**
  * `next` order: overdue (effective due date before `today`) first, then
  * effective due date ascending (nulls last), then `in_progress` before
@@ -222,8 +215,8 @@ function compareNext(
   b: ActionableTaskOut,
   today: string,
 ): number {
-  const aDue = effectiveDueDate(a);
-  const bDue = effectiveDueDate(b);
+  const aDue = effectiveTaskDueDate(a);
+  const bDue = effectiveTaskDueDate(b);
   const aOverdue = aDue != null && aDue < today;
   const bOverdue = bDue != null && bDue < today;
   if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
@@ -254,8 +247,8 @@ function compareLater(a: ActionableTaskOut, b: ActionableTaskOut): number {
 
 /** `blocked` order: effective due date ascending (nulls last), then name ascending. */
 function compareBlocked(a: BlockedTaskOut, b: BlockedTaskOut): number {
-  const aDue = effectiveDueDate(a.task);
-  const bDue = effectiveDueDate(b.task);
+  const aDue = effectiveTaskDueDate(a.task);
+  const bDue = effectiveTaskDueDate(b.task);
   if (aDue !== bDue) {
     if (aDue == null) return 1;
     if (bDue == null) return -1;

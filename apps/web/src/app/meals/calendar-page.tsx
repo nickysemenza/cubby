@@ -1,29 +1,13 @@
-import type { MealOut } from "@cubby/schemas/meal";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { addDays, addWeeks, format, isSameDay } from "date-fns";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  ShoppingCart,
-  Table as TableIcon,
-} from "lucide-react";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import type { CalendarItemKind } from "@cubby/schemas/calendar";
+import { Link } from "@tanstack/react-router";
+import { CalendarDays, ShoppingCart, Table as TableIcon } from "lucide-react";
+import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/integrations/trpc/react";
-import { formatMealCost } from "./meal-format";
-import {
-  formatWeekSearch,
-  type MealCalendarView,
-  parseWeekStart,
-} from "./meal-search";
+import type { MealCalendarView } from "./meal-search";
 import { MealTable } from "./meal-table";
-import { useInvalidateMeals } from "./use-meal-mutations";
+
+const MEAL_KINDS: CalendarItemKind[] = ["meal"];
 
 interface MealCalendarPageProps {
   view: MealCalendarView;
@@ -32,19 +16,18 @@ interface MealCalendarPageProps {
   onWeekChange: (week?: string) => void;
 }
 
+/**
+ * Meals retain their table workflow, while the calendar tab shares the same
+ * month engine, meal chips, drag behavior, and day drawer as `/calendar`.
+ * The legacy `week` search key remains accepted as the month anchor so old
+ * meal-calendar links keep working.
+ */
 export function MealCalendarPage({
   view,
   week,
   onViewChange,
   onWeekChange,
 }: MealCalendarPageProps) {
-  const hydrated = useHydrated();
-  // `week` unset resolves to "current week" via `new Date()`; server (UTC)
-  // and the client's first paint (local tz) can land on different calendar
-  // days. Pin the fallback reference to the epoch until hydrated so SSR and
-  // the initial client render agree, then resolve the real client-local week.
-  const weekStart = parseWeekStart(week, hydrated ? new Date() : new Date(0));
-
   return (
     <Stack>
       <Row align="center" gap="xs">
@@ -75,166 +58,14 @@ export function MealCalendarPage({
       </Row>
 
       {view === "calendar" ? (
-        <CalendarView weekStart={weekStart} onWeekChange={onWeekChange} />
+        <UnifiedCalendar
+          date={week}
+          lockedKinds={MEAL_KINDS}
+          onDateChange={onWeekChange}
+        />
       ) : (
         <MealTable />
       )}
     </Stack>
-  );
-}
-
-function CalendarView({
-  weekStart,
-  onWeekChange,
-}: {
-  weekStart: Date;
-  onWeekChange: (week?: string) => void;
-}) {
-  const api = useTRPC();
-  const navigate = useNavigate();
-  const invalidate = useInvalidateMeals();
-
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  // Date-only bounds (no time) so the range matches the calendar's days exactly.
-  const from = format(weekStart, "yyyy-MM-dd");
-  const to = format(addDays(weekStart, 6), "yyyy-MM-dd");
-
-  const { data: meals, isLoading } = useQuery(
-    api.meal.getByDateRange.queryOptions({ from, to }),
-  );
-
-  const createMeal = useMutation(
-    api.meal.create.mutationOptions({
-      onSuccess: (meal) => {
-        invalidate();
-        void navigate({ to: "/meals/$id", params: { id: meal.id } });
-      },
-    }),
-  );
-
-  const hydrated = useHydrated();
-  const today = new Date();
-
-  return (
-    <Stack>
-      <Row align="center" gap="xs">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Previous week"
-          onClick={() =>
-            onWeekChange(formatWeekSearch(addWeeks(weekStart, -1)))
-          }
-        >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onWeekChange(undefined)}
-        >
-          Today
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-label="Next week"
-          onClick={() => onWeekChange(formatWeekSearch(addWeeks(weekStart, 1)))}
-        >
-          <ChevronRight className="size-4" />
-        </Button>
-        <Description as="span" className="ml-2">
-          {format(weekStart, "MMM d")} –{" "}
-          {format(addDays(weekStart, 6), "MMM d, yyyy")}
-        </Description>
-      </Row>
-
-      {isLoading ? (
-        <SimpleLoading text="Loading your week..." />
-      ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-7">
-          {days.map((day) => {
-            const dayStr = format(day, "yyyy-MM-dd");
-            const dayMeals = (meals ?? []).filter((m) => m.date === dayStr);
-            // Neutral (no highlight) until hydrated so SSR + first paint
-            // agree; the real client-local "today" appears post-hydration.
-            const isToday = hydrated && isSameDay(day, today);
-            return (
-              <div
-                key={dayStr}
-                className="flex min-h-32 flex-col gap-1.5 rounded-lg border p-2" /* tight: calendar day cell */
-              >
-                <Row align="center" justify="between">
-                  <span className="text-muted-foreground text-xs uppercase">
-                    {format(day, "EEE")}
-                  </span>
-                  <span
-                    className={
-                      isToday
-                        ? "flex size-5 items-center justify-center rounded-full bg-warning/20 font-semibold text-warning text-xs"
-                        : "text-muted-foreground text-xs"
-                    }
-                  >
-                    {format(day, "d")}
-                  </span>
-                </Row>
-
-                {dayMeals.map((m) => (
-                  <MealChip key={m.id} meal={m} />
-                ))}
-
-                <button
-                  type="button"
-                  disabled={createMeal.isPending}
-                  onClick={() => createMeal.mutate({ date: dayStr })}
-                  className="mt-auto flex items-center justify-center gap-1 rounded-md border border-dashed py-1 text-muted-foreground text-xs transition-colors hover:bg-accent disabled:opacity-50"
-                >
-                  <Plus className="size-3" />
-                  Meal
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Stack>
-  );
-}
-
-function MealChip({ meal }: { meal: MealOut }) {
-  return (
-    <Link
-      to="/meals/$id"
-      params={{ id: meal.id }}
-      className="flex flex-col gap-0.5 rounded-md border bg-card p-1.5 text-xs transition-colors hover:bg-accent" /* tight: calendar meal chip */
-    >
-      <Row align="center" justify="between" gap="xs">
-        <span className="truncate font-medium" title={meal.name || "Meal"}>
-          {meal.name || "Meal"}
-        </span>
-        <span className="shrink-0 text-muted-foreground tabular-nums">
-          {formatMealCost(meal.totals)}
-        </span>
-      </Row>
-      {meal.recipes.length === 0 ? (
-        <span className="text-muted-foreground italic">empty</span>
-      ) : (
-        // Title only, no link: the whole chip is already an <a> to the meal, and
-        // an anchor can't nest another one. The meal page links each recipe.
-        meal.recipes.map((r) => (
-          <span
-            key={r.id}
-            className="truncate text-muted-foreground"
-            title={r.recipe.name}
-          >
-            {r.scale !== 1 ? `${r.scale}× ` : ""}
-            {r.recipe.name}
-          </span>
-        ))
-      )}
-    </Link>
   );
 }

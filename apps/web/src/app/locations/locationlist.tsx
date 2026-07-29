@@ -283,7 +283,6 @@ export function LocationList() {
     deletable: deletableConfig,
     bulkActions,
     extraActions,
-    infinite: true,
     initialColumnVisibility: {
       children: false,
       aiDescription: false,
