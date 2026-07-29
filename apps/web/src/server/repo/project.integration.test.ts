@@ -1065,6 +1065,111 @@ describe("project repository — date windows (derivation)", () => {
     expect(result.get(a.id)).toEqual(expected);
     expect(result.get(b.id)).toEqual(expected);
   });
+
+  /**
+   * Regression: the `startDate` sort resolver is a correlated sub-select fed
+   * to `query.project.findMany`, whose alias mapper rewrites every column ref
+   * inside the clause to the root alias — a `sql` template over Drizzle column
+   * refs emitted `min("project"."dueDate") from "Task"` and threw at runtime.
+   * It shipped broken because nothing exercised this sort, and `startDate` is
+   * the projects table's DEFAULT sort. It must also sort by the EARLIER of the
+   * task and purchase mins (LEAST, not a coalesce chain) so the ordering
+   * agrees with the `dates.effectiveStart` each row displays.
+   */
+  it("sorts by effective start, folding override and both content sources", async () => {
+    // Override far in the past — must sort first ascending even though its
+    // own content is much later.
+    const overridden = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "sort override early",
+        startDate: "2001-01-01",
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "sort override task",
+        projectId: overridden.id,
+        dueDate: "2024-09-01",
+      }),
+      ctx.actor,
+    );
+
+    // No override, and its PURCHASE predates its task — the coalesce-chain bug
+    // sorted this by the task min (2024-08-01) instead of 2024-03-01.
+    const derived = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "sort derived middle" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "sort derived task",
+        projectId: derived.id,
+        dueDate: "2024-08-01",
+      }),
+      ctx.actor,
+    );
+    await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "sort derived purchase",
+        projectId: derived.id,
+        cost: 5,
+        date: "2024-03-01",
+      }),
+      ctx.actor,
+    );
+
+    // Neither override nor content — sorts last in BOTH directions (the
+    // house-wide nulls-last convention).
+    const undated = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "sort undated" }),
+      ctx.actor,
+    );
+
+    const page = { pageIndex: 0, pageSize: 100 };
+    const asc = await projectList(
+      ctx.db,
+      {},
+      [{ orderBy: "startDate", direction: "asc" }],
+      page,
+    );
+    const desc = await projectList(
+      ctx.db,
+      {},
+      [{ orderBy: "startDate", direction: "desc" }],
+      page,
+    );
+
+    const positions = (rows: { id: string }[]) => ({
+      overridden: rows.findIndex((r) => r.id === overridden.id),
+      derived: rows.findIndex((r) => r.id === derived.id),
+      undated: rows.findIndex((r) => r.id === undated.id),
+    });
+
+    const ascPos = positions(asc.data);
+    expect(ascPos.overridden).toBeLessThan(ascPos.derived);
+    expect(ascPos.derived).toBeLessThan(ascPos.undated);
+
+    const descPos = positions(desc.data);
+    expect(descPos.derived).toBeLessThan(descPos.overridden);
+    expect(descPos.overridden).toBeLessThan(descPos.undated);
+
+    // The sort key and the displayed window agree: the derived row's start is
+    // the purchase date, not the later task date.
+    expect(
+      asc.data.find((r) => r.id === derived.id)?.dates.effectiveStart,
+    ).toBe("2024-03-01");
+  });
 });
 
 describe("project dashboard — attention detector + summary", () => {

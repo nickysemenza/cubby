@@ -11,7 +11,7 @@ import type {
 import { projectSortableFields } from "@cubby/schemas/project";
 import { asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { project, purchase, task } from "~/server/db/schema";
+import { project } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildSearchConditions,
@@ -130,26 +130,45 @@ export const projectList = async (
   // recursive fold would need a recursive CTE, and at this scale (75 projects,
   // 15 of them children) it moves nothing. Everything *displayed* comes from
   // `dates.effectiveStart`, which is fully recursive; this only orders rows.
-  const effectiveStartSort = sql`coalesce(
-    ${project.startDate},
-    (select min(${task.dueDate}) from ${task}
-      where ${task.projectId} = ${project.id} and ${notDeleted(task)}),
-    (select min(${purchase.date}) from ${purchase}
-      where ${purchase.projectId} = ${project.id} and ${notDeleted(purchase)})
-  )`;
+  //
+  // `sql.raw` with the alias spelled out by hand, NOT a `sql` template over
+  // Drizzle column refs — same pattern as `resolveProductSort`
+  // (product/crud.ts) and location/crud.ts's "parent" resolver, for the same
+  // reason `buildDashboardProjectWhere` had to drop correlated `EXISTS`
+  // (dashboard-shared.ts). This is fed to `query.project.findMany`, whose
+  // alias mapper rewrites EVERY column ref inside the clause — including ones
+  // belonging to Task/Purchase — to the root alias, emitting
+  // `min("project"."dueDate") from "Task"` and a self-referential
+  // `"project"."projectId" = "project"."id"`. That is not a subtle ordering
+  // bug: the query throws, and `startDate` is this table's DEFAULT sort.
+  // Exercised by project.integration.test.ts's "sorts by effective start".
+  //
+  // The `deletedAt IS NULL` guards below are hand-written for the same reason
+  // and are load-bearing — `check-soft-delete-filters.mjs` only scans
+  // `exists`/`notExists` bodies, so it cannot see them.
+  //
+  // The two content sources are combined with LEAST, not chained into the
+  // coalesce: a project with both tasks and purchases must sort by the
+  // EARLIER of the two, and `coalesce(taskMin, purchaseMin)` would take the
+  // task min whenever any task exists — silently ignoring an earlier purchase
+  // and disagreeing with the `dates.effectiveStart` the row displays.
+  // (LEAST ignores NULL args and is NULL only when all of them are.)
+  const effectiveStartSortSql = (direction: SortParams["direction"]) =>
+    sql.raw(
+      `coalesce("project"."startDate", LEAST(` +
+        `(SELECT min(t."dueDate") FROM "Task" t ` +
+        `WHERE t."projectId" = "project"."id" AND t."deletedAt" IS NULL), ` +
+        `(SELECT min(pu."date") FROM "Purchase" pu ` +
+        `WHERE pu."projectId" = "project"."id" AND pu."deletedAt" IS NULL))) ` +
+        `${direction === "asc" ? "asc" : "desc"} nulls last`,
+    );
   const orderByArray = buildOrderBy(
     project,
     sorts,
     [...projectSortableFields],
     {
       resolve: (s) =>
-        s.orderBy === "startDate"
-          ? [
-              s.direction === "asc"
-                ? sql`${effectiveStartSort} asc nulls last`
-                : sql`${effectiveStartSort} desc nulls last`,
-            ]
-          : null,
+        s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
     },
   );
   const { take, skip } = buildTakeSkip(pagination);
