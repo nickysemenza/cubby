@@ -50,10 +50,12 @@ describe("deriveUpdateData", () => {
 // when their keys are omitted (this is what the destructive-default trap would
 // silently do). Guards the deriveUpdateData wiring for the most dangerous case.
 describe("productUpdateData destructive-default guard", () => {
-  it("leaves unitMappings/externalIds undefined when omitted", () => {
+  it("leaves unitMappings/externalIds/aliases/tags undefined when omitted", () => {
     const parsed = productUpdateData.parse({ name: "Renamed" });
     expect(parsed.name).toBe("Renamed");
     expect(parsed.unitMappings).toBeUndefined();
     expect(parsed.externalIds).toBeUndefined();
+    expect(parsed.aliases).toBeUndefined();
+    expect(parsed.tags).toBeUndefined();
   });
 });

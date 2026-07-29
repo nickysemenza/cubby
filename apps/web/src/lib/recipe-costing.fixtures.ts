@@ -53,6 +53,7 @@ export const makeProduct = (
   shortcode: unsafeProductShortcode("P-TEST"),
   name: idStr,
   aliases: [],
+  tags: [],
   upc: opts.upc ?? null,
   fdc_id: opts.fdc ?? null,
   manufacturer: "",

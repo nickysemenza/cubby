@@ -274,6 +274,18 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter mappings...",
       options: presenceFilterOptions("mappings"),
     },
+    {
+      // Compatibility/grouping tags — the same value sits on a tool and on the
+      // consumables that fit it, so this answers "what's in the 4.5in grinder
+      // ecosystem". Options come from `product.tagOptions` at runtime (free
+      // text, so there's no static roster). `(none)` is the untagged worklist.
+      columnId: "tags",
+      field: "tagFilters",
+      kind: "multiselect",
+      placeholder: "Filter by tag...",
+      optionsKey: "tags",
+      nullable: { field: "tagsPresenceFilter", label: "tags" },
+    },
   ],
 
   recipe: [

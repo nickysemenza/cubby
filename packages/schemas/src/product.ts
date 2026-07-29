@@ -79,6 +79,12 @@ const productCreateShape = {
     .describe(
       "Alternate names for this product — searched alongside the name. Replaces the existing list when provided.",
     ),
+  tags: z
+    .array(z.string())
+    .default([])
+    .describe(
+      'Free-form compatibility/grouping tags, e.g. "grinder-4.5in" or "M18". Tag the tool AND the consumables that fit it with the same value; `category` says which side each is. Replaces the existing list when provided.',
+    ),
   upc: upc.nullable(),
   fdc_id: fdcId
     .nullable()
@@ -196,6 +202,17 @@ export const productFilterFields = {
     .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
   ingredientPresenceFilter: presenceFilter,
+  tagFilters: z
+    .array(z.string())
+    .optional()
+    .describe("Match products carrying any of these tags"),
+  /**
+   * `"none"` is the untagged worklist. Unlike `recipe.tags`, `product.tags` is
+   * `notNull` with a `'{}'` default, so empty is the only untagged state —
+   * `cardinality(tags) = 0`, no `IS NULL` half. OR-ed with `tagFilters` rather
+   * than narrowing it (see `taskFilterFields.projectPresenceFilter`).
+   */
+  tagsPresenceFilter: presenceFilter,
   /**
    * `product.category` is nullable, so `"none"` is the uncategorized worklist.
    * OR-ed with `categoryFilter` — see `taskFilterFields.projectPresenceFilter`.
@@ -254,6 +271,12 @@ const productTopLevelFields = {
     .array(z.string())
     .default([])
     .describe("Alternate names for this product (searched + embedded)"),
+  tags: z
+    .array(z.string())
+    .default([])
+    .describe(
+      'Free-form compatibility/grouping tags, e.g. "grinder-4.5in", "M18"',
+    ),
   upc: upc.nullable(),
   fdc_id: fdcId
     .nullable()
@@ -434,6 +457,20 @@ export type ProductSummariesOut = z.infer<typeof productSummariesOut>;
 
 export const productShortcodeListOut = z.array(productTopLevelOut);
 
+/**
+ * `product.tagOptions`' output — the distinct tag roster feeding the product
+ * list's Tags filter picklist, ranked by how many products carry each tag.
+ * Counted (unlike `recipeTagsOut`, a bare string array) so the picklist can
+ * show usage and surface near-duplicate tags.
+ */
+export const productTagOptionsOut = z.array(
+  z.object({
+    tag: z.string(),
+    count: z.number().int().nonnegative(),
+  }),
+);
+export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
+
 export const productCategoryDistributionOut = z.array(
   z.object({
     category: productCategory.nullable(),
@@ -511,6 +548,13 @@ export const mcpProductUpdateInput = z.object({
     .array(z.string())
     .optional()
     .describe("Alternate names (replaces the existing list)"),
+  // Same reason as aliases — hand-written shape, so this has to be listed.
+  tags: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Compatibility/grouping tags, e.g. "grinder-4.5in" or "M18" (replaces the existing list). Tag a tool and the consumables that fit it with the same value; `category` distinguishes which is which.',
+    ),
   // Same reason as aliases — hand-written shape, so this has to be listed to be
   // writable. Omitting it leaves existing rows untouched (see productUpdateData).
   externalIds: z
@@ -543,6 +587,7 @@ export const productMcpOut = z.object({
   manufacturer: z.string(),
   upc: upc.nullable(),
   category: productCategory.nullable(),
+  tags: z.array(z.string()),
   price: z.number().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   fdc_id: fdcId.nullable(),

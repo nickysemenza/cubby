@@ -33,6 +33,7 @@ export const makeProductInput = (
 ): ProductCreateInput => ({
   name: "Test Product",
   aliases: [],
+  tags: [],
   manufacturer: "Test Manufacturer",
   model: "TEST-123",
   upc: null,

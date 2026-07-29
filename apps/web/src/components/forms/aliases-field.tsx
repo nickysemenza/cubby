@@ -3,10 +3,11 @@ import { Input } from "~/components/ui/input";
 import { ArrayFieldManager } from "./array-field-manager";
 
 /**
- * The shared "Aliases" editor: a labeled, add/remove list of alternate names
- * backed by a `string[]` form field. Extracted from the ingredient form so
- * ingredients, products, and locations all edit their `aliases` column through
- * one control (all three are searched + embedded on those aliases).
+ * The shared editor for a plain `string[]` form field: a labeled, add/remove
+ * list. Extracted from the ingredient form so ingredients, products, and
+ * locations all edit their `aliases` column through one control (all three are
+ * searched + embedded on those aliases). The labels default to "Aliases" for
+ * those callers; `product.tags` reuses it with its own.
  *
  * Callers are responsible for stripping blank entries before submit — see
  * `filterAliases`.
@@ -15,18 +16,22 @@ export function AliasesField<TFieldValues extends FieldValues>({
   form,
   name = "aliases",
   placeholder = "Alias name",
+  title = "Aliases",
+  addButtonText = "Add Alias",
 }: {
   form: { control: Control<TFieldValues> };
   /** Form path holding the `string[]`. Defaults to `aliases`. */
   name?: string;
   placeholder?: string;
+  title?: string;
+  addButtonText?: string;
 }) {
   return (
     <ArrayFieldManager<string, TFieldValues>
       form={form}
       name={name}
-      title="Aliases"
-      addButtonText="Add Alias"
+      title={title}
+      addButtonText={addButtonText}
       emptyValue=""
     >
       {(_field, index) => (

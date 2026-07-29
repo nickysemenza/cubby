@@ -46,6 +46,7 @@ const productFormSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
     aliases: z.array(z.string()),
+    tags: z.array(z.string()),
     manufacturer: z.string().min(1, "Manufacturer is required"),
     model: z.string().nullable(),
     notes: z.string().nullable(),
@@ -215,6 +216,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     defaultValues: {
       name: product ? product.name : (initialName ?? ""),
       aliases: product?.aliases ?? [],
+      tags: product?.tags ?? [],
       manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
       model: product ? product.model : null,
       notes: product ? product.notes : null,
@@ -233,12 +235,15 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   const handleSubmit = (values: ProductFormValues) => {
     const aliases = filterAliases(values.aliases);
+    // Same blank-stripping as aliases — an empty row in the editor is not a tag.
+    const tags = filterAliases(values.tags);
 
     if (mode === "create") {
       // For creation, pass all fields
       const createData: ProductCreateInput = {
         name: values.name,
         aliases,
+        tags,
         manufacturer: values.manufacturer,
         model: values.model,
         notes: values.notes,
@@ -260,10 +265,11 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         {
           ...product,
         },
-        { ...values, aliases },
+        { ...values, aliases, tags },
         [
           "name",
           "aliases",
+          "tags",
           "manufacturer",
           "model",
           "notes",

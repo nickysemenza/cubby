@@ -44,6 +44,7 @@ const baseProduct = {
   shortcode: "P-TEST",
   name: "Flour",
   manufacturer: "Generic",
+  tags: [],
   upc: "012345678905",
   fdc_id: null,
   model: "5lb",

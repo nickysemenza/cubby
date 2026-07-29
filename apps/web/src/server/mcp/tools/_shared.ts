@@ -479,6 +479,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     manufacturer: p.manufacturer,
     upc: p.upc,
     category: p.category,
+    tags: p.tags ?? [],
     price: p.price,
     expectedQuantity: p.expectedQuantity,
     fdc_id: p.fdc_id ?? null,

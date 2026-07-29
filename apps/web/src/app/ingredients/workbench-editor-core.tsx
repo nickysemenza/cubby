@@ -333,6 +333,7 @@ export const buildProductWrite = (
       input: {
         name: row.name,
         aliases: [],
+        tags: [],
         manufacturer: UNSPECIFIED_MANUFACTURER,
         upc: null,
         expectedQuantity: null,
