@@ -8,6 +8,20 @@ import {
   tradeSchema,
 } from "./project";
 
+export const MAX_CALENDAR_RANGE_DAYS = 366;
+const MILLISECONDS_PER_DAY = 86_400_000;
+
+function calendarRangeDays(value: {
+  startDate: string;
+  endDateExclusive: string;
+}): number {
+  return (
+    (Date.parse(`${value.endDateExclusive}T00:00:00Z`) -
+      Date.parse(`${value.startDate}T00:00:00Z`)) /
+    MILLISECONDS_PER_DAY
+  );
+}
+
 export const calendarItemKind = z.enum(["meal", "task", "purchase", "project"]);
 export type CalendarItemKind = z.infer<typeof calendarItemKind>;
 
@@ -80,6 +94,10 @@ export const calendarRangeInput = z
   })
   .refine((value) => value.startDate < value.endDateExclusive, {
     message: "endDateExclusive must be after startDate",
+    path: ["endDateExclusive"],
+  })
+  .refine((value) => calendarRangeDays(value) <= MAX_CALENDAR_RANGE_DAYS, {
+    message: `calendar range cannot exceed ${MAX_CALENDAR_RANGE_DAYS} days`,
     path: ["endDateExclusive"],
   });
 export type CalendarRangeInput = z.infer<typeof calendarRangeInput>;
