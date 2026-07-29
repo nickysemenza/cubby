@@ -49,6 +49,7 @@ const PROBLEM_LABELS: Record<
   pastDuePlannedPurchases: (n) => `${n} planned purchase past due`,
   projectsMissingBudget: (n) => `${n} missing a cost estimate`,
   unclassifiedPurchases: (n) => pl(n, "unclassified purchase"),
+  projectsWithDateDrift: (n) => pl(n, "date window drift"),
 };
 
 export const ProblemsBadge = () => {

@@ -9,7 +9,7 @@
  * projects costs 4 queries total, not 200.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import { and, inArray, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { projectDependency, purchase, task } from "~/server/db/schema";
 import {
@@ -17,7 +17,14 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { EMPTY_PROJECT_OWN_ROLLUP, type ProjectOwnRollup } from "./helpers";
+import {
+  EMPTY_PROJECT_CONTENT_DATES,
+  EMPTY_PROJECT_OWN_ROLLUP,
+  maxPlainDate,
+  minPlainDate,
+  type ProjectContentDates,
+  type ProjectOwnRollup,
+} from "./helpers";
 
 /**
  * SUM/COUNT rollups over live purchases and tasks, per project — this
@@ -83,6 +90,69 @@ export async function projectRollups(
       ...existing,
       taskCount: row.taskCount,
       doneTaskCount: row.doneTaskCount,
+    });
+  }
+  return out;
+}
+
+/**
+ * Each project's OWN dated-content bounds — `min`/`max` over its live tasks
+ * (`dueDate` … `coalesce(dueEndDate, dueDate)`, since a task with no
+ * `dueEndDate` is a one-day task) and its live purchases (`date`). This is the
+ * leaf input to subtree.ts's `aggregateSubtreeDates`, which folds it up the
+ * WBS tree into each project's derived window.
+ *
+ * Two grouped queries in parallel, merged in TS — the same batching discipline
+ * as `projectRollups`, never one query per project. It lives here as its own
+ * function rather than riding along inside `projectRollups` because the picker
+ * path (`projectNameOptions`) wants dates *without* the money aggregate, and
+ * restating the one-day-task rule at a second call site is how it would drift.
+ *
+ * Negative purchases (refunds, family contributions) count: they are dated
+ * project activity, and the tracker has no other place that filters them out
+ * of a date range.
+ *
+ * `projectIds` scopes the scan; omit it for every live project.
+ */
+export async function projectContentDates(
+  db: Database,
+  projectIds?: ProjectId[],
+): Promise<Map<ProjectId, ProjectContentDates>> {
+  const out = new Map<ProjectId, ProjectContentDates>();
+  if (projectIds?.length === 0) return out;
+
+  const scope = (column: typeof task.projectId | typeof purchase.projectId) =>
+    projectIds ? inArray(column, projectIds) : isNotNull(column);
+
+  const [taskRows, purchaseRows] = await Promise.all([
+    getDb(db)
+      .select({
+        projectId: task.projectId,
+        contentStart: sql<string | null>`min(${task.dueDate})`,
+        contentEnd: sql<
+          string | null
+        >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
+      })
+      .from(task)
+      .where(and(scope(task.projectId), notDeleted(task)))
+      .groupBy(task.projectId),
+    getDb(db)
+      .select({
+        projectId: purchase.projectId,
+        contentStart: sql<string | null>`min(${purchase.date})`,
+        contentEnd: sql<string | null>`max(${purchase.date})`,
+      })
+      .from(purchase)
+      .where(and(scope(purchase.projectId), notDeleted(purchase)))
+      .groupBy(purchase.projectId),
+  ]);
+
+  for (const row of [...taskRows, ...purchaseRows]) {
+    if (!row.projectId) continue;
+    const existing = out.get(row.projectId) ?? EMPTY_PROJECT_CONTENT_DATES;
+    out.set(row.projectId, {
+      contentStart: minPlainDate(existing.contentStart, row.contentStart),
+      contentEnd: maxPlainDate(existing.contentEnd, row.contentEnd),
     });
   }
   return out;

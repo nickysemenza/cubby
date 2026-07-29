@@ -761,6 +761,13 @@ export type ProjectPreview = {
   taskCount: number;
   doneTaskCount: number;
   purchaseCount: number;
+  // The EFFECTIVE window (derived rollup or manual override, whichever
+  // wins) — see `projectDateWindow` in packages/schemas/src/project.ts.
+  // Never the raw `startDate`/`endDate` override columns. Optional (like
+  // `costEstimate` above) so existing static callers (design gallery
+  // samples) aren't forced to supply it.
+  effectiveStart?: string | null;
+  effectiveEnd?: string | null;
 };
 
 export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
@@ -797,6 +804,13 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
           },
           { label: "Tasks", value: `${vm.doneTaskCount}/${vm.taskCount}` },
           { label: "Purchases", value: vm.purchaseCount },
+          {
+            label: "Dates",
+            value: formatDateRange(
+              vm.effectiveStart ?? null,
+              vm.effectiveEnd ?? null,
+            ),
+          },
         ],
       },
     ],
@@ -823,6 +837,8 @@ export function ProjectPreviewContent({ projectId }: { projectId: string }) {
             taskCount: data.rollup.taskCount,
             doneTaskCount: data.rollup.doneTaskCount,
             purchaseCount: data.rollup.purchaseCount,
+            effectiveStart: data.dates.effectiveStart,
+            effectiveEnd: data.dates.effectiveEnd,
           })}
         />
       )}

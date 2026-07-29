@@ -1,9 +1,10 @@
 /**
  * Server-side "Needs Attention" detector for the Overview page — ports the
  * client-side computation from `app/projects/needs-attention.tsx` (overdue
- * tasks, stalled projects, missing budgets) and adds three more rule types:
- * past-due planned purchases, unclassified purchases, and blocked work with
- * no unblocked next task. See `projectAttentionTypeSchema` in
+ * tasks, stalled projects, missing budgets) and adds four more rule types:
+ * past-due planned purchases, unclassified purchases, blocked work with no
+ * unblocked next task, and date-window drift (a manual override that now
+ * hides real derived work). See `projectAttentionTypeSchema` in
  * packages/schemas/src/project.ts for the full rule enum.
  *
  * Computed GLOBALLY (not scoped to the dashboard's current filter set) — the
@@ -47,7 +48,7 @@ export async function computeAttentionItems(
   const [
     overdueTaskRows,
     inProgressProjectRows,
-    { allRows: allProjectRows, subtreeRollups },
+    { allRows: allProjectRows, subtreeRollups, dateWindows },
     pastDuePurchaseRows,
     unclassifiedPurchaseRows,
     actionable,
@@ -254,6 +255,52 @@ export async function computeAttentionItems(
         entityType: "project",
         entityId: row.id,
         date: null,
+        amount: null,
+        href: `/projects/${row.id}`,
+      });
+    }
+  }
+
+  // 7. date_window_drift — a manual startDate/endDate override that now hides
+  // real derived work (own tasks/purchases, folded up through live
+  // sub-projects). Checked independently per side against `row`'s raw
+  // override columns (not `dates.effectiveStart/End`, which the override
+  // itself determines) vs. the corresponding `derivedStart`/`derivedEnd`. A
+  // WIDER override (e.g. a deliberate forward end date with nothing dated
+  // out there yet) is intent, not drift, so only a too-narrow override
+  // fires — and an override that exactly equals the derived bound doesn't
+  // either.
+  for (const row of allProjectRows) {
+    const window = dateWindows.get(row.id);
+    if (!window) continue;
+    if (
+      row.startDate != null &&
+      window.derivedStart != null &&
+      row.startDate > window.derivedStart
+    ) {
+      items.push({
+        type: "date_window_drift",
+        severity: "info",
+        description: `Start date ${row.startDate} is after the earliest dated work (${window.derivedStart})`,
+        entityType: "project",
+        entityId: row.id,
+        date: window.derivedStart,
+        amount: null,
+        href: `/projects/${row.id}`,
+      });
+    }
+    if (
+      row.endDate != null &&
+      window.derivedEnd != null &&
+      row.endDate < window.derivedEnd
+    ) {
+      items.push({
+        type: "date_window_drift",
+        severity: "info",
+        description: `End date ${row.endDate} is before the latest dated work (${window.derivedEnd})`,
+        entityType: "project",
+        entityId: row.id,
+        date: window.derivedEnd,
         amount: null,
         href: `/projects/${row.id}`,
       });

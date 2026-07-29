@@ -33,7 +33,7 @@ export interface GanttProjectRow {
   status: ProjectStatus;
   startDay: number | null;
   endDay: number | null;
-  /** Has a `startDate` but no `endDate`. */
+  /** Has an effective start but no effective end. */
   openEnded: boolean;
   /**
    * The outer [min, max] day range spanned by this node + all its live
@@ -102,12 +102,25 @@ const MAX_TREE_DEPTH = 100;
 /** Sentinel kind key for projects with a null `kind`, in `groupBy: "kind"` mode. */
 const OTHER_KIND_KEY = "other";
 
+// Named "own*Day" for historical reasons (pre-dating the derived date
+// window) — these now read the EFFECTIVE bound (override when set, else
+// rolled up from the project's own tasks/purchases + live sub-projects), not
+// the raw `startDate`/`endDate` override columns. `computeSubtreeExtents`
+// below still walks the client-side tree on top of this: the server's own
+// `dates.effectiveStart/End` already folds in live descendants, but the
+// client tree here can be chip-filtered to a different subset (e.g. a status
+// filter that drops a sub-project), so the extent still needs recomputing
+// over whatever's actually visible.
 function ownStartDay(project: ProjectOut): number | null {
-  return project.startDate ? toDayIndex(project.startDate) : null;
+  return project.dates.effectiveStart
+    ? toDayIndex(project.dates.effectiveStart)
+    : null;
 }
 
 function ownEndDay(project: ProjectOut): number | null {
-  return project.endDate ? toDayIndex(project.endDate) : null;
+  return project.dates.effectiveEnd
+    ? toDayIndex(project.dates.effectiveEnd)
+    : null;
 }
 
 interface Extent {
@@ -127,8 +140,8 @@ function considerInto(extent: Extent, value: number | null): Extent {
 
 /**
  * Post-order DFS over `nodes` (using `childrenByParent`), computing each
- * node's own-dates memoized min/max over itself + every descendant. One pass
- * over the whole node set, O(n).
+ * node's own-effective-dates memoized min/max over itself + every
+ * descendant. One pass over the whole node set, O(n).
  */
 function computeSubtreeExtents(
   nodes: readonly ProjectOut[],
@@ -225,7 +238,9 @@ function buildProjectRow(
     status: project.status,
     startDay,
     endDay,
-    openEnded: project.startDate != null && project.endDate == null,
+    openEnded:
+      project.dates.effectiveStart != null &&
+      project.dates.effectiveEnd == null,
     envelope: computeEnvelope(startDay, endDay, extent),
     progress: computeProgress(project, childCount),
     blockedByIds: project.blockedByIds,

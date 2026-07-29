@@ -1359,10 +1359,20 @@ export function ProjectTable({
           );
         },
       }),
+      // Display the EFFECTIVE window (rolled up from tasks/purchases/live
+      // sub-projects, or the override when set); the inline editor still
+      // opens on and saves to the raw startDate/endDate override columns —
+      // see `displayValue`'s doc comment on `createPlainDateColumn`. A
+      // "derived" value renders muted so a computed date reads as distinct
+      // from a typed-in one.
       createPlainDateColumn(columnHelper, "startDate", {
         header: "Start",
         className: "w-28",
         mobile: { slot: "meta", priority: 50 },
+        displayValue: (project) => ({
+          value: project.dates.effectiveStart,
+          muted: project.dates.startSource === "derived",
+        }),
         editable: {
           onSave: async (newStartDate, project) => {
             await updateProjectMutation.mutateAsync({
@@ -1376,6 +1386,10 @@ export function ProjectTable({
         header: "End",
         className: "w-28",
         mobile: { slot: "meta", priority: 60 },
+        displayValue: (project) => ({
+          value: project.dates.effectiveEnd,
+          muted: project.dates.endSource === "derived",
+        }),
         editable: {
           onSave: async (newEndDate, project) => {
             await updateProjectMutation.mutateAsync({

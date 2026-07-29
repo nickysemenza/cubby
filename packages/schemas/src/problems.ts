@@ -306,6 +306,7 @@ const problemsTrackerShape = {
   pastDuePlannedPurchases: z.array(projectAttentionItemSchema),
   unclassifiedPurchases: z.array(projectAttentionItemSchema),
   blockedWorkProjects: z.array(projectAttentionItemSchema),
+  projectsWithDateDrift: z.array(projectAttentionItemSchema),
 };
 
 export const problemsTrackerSchema = z.object(problemsTrackerShape);
@@ -323,6 +324,7 @@ export const TRACKER_PROBLEM_KEY_BY_TYPE = {
   past_due_planned_purchase: "pastDuePlannedPurchases",
   unclassified_purchase: "unclassifiedPurchases",
   blocked_work: "blockedWorkProjects",
+  date_window_drift: "projectsWithDateDrift",
 } as const satisfies Record<ProjectAttentionType, keyof ProblemsTracker>;
 
 // Combined output schema for all problems. It intentionally spells out the wire

@@ -27,20 +27,20 @@ const projects: SuggestableProject[] = [
   {
     id: "kitchen-remodel",
     name: "Kitchen Remodel",
-    startDate: "2024-01-01",
-    endDate: "2025-06-30",
+    effectiveStart: "2024-01-01",
+    effectiveEnd: "2025-06-30",
   },
   ...KITCHEN_SUBPROJECTS.map((trade) => ({
     id: `kitchen-${trade}`,
     name: `Kitchen: ${trade}`,
-    startDate: "2024-05-01",
-    endDate: "2024-08-31",
+    effectiveStart: "2024-05-01",
+    effectiveEnd: "2024-08-31",
   })),
   {
     id: "landscaping",
     name: "2025 backyard landscaping",
-    startDate: "2025-04-01",
-    endDate: "2025-11-30",
+    effectiveStart: "2025-04-01",
+    effectiveEnd: "2025-11-30",
   },
 ];
 
@@ -56,7 +56,8 @@ describe("rankProjectSuggestions", () => {
   it("picks the trade-matched sub-project out of many concurrent candidates", () => {
     const overlapping = projects.filter(
       (p) =>
-        p.startDate! <= "2024-06-15" && (p.endDate ?? TODAY) >= "2024-06-15",
+        p.effectiveStart! <= "2024-06-15" &&
+        (p.effectiveEnd ?? TODAY) >= "2024-06-15",
     );
     // Guard the premise: date overlap alone leaves a wide field.
     expect(overlapping.length).toBe(9);
@@ -102,14 +103,14 @@ describe("rankProjectSuggestions", () => {
       {
         id: "ongoing",
         name: "Ongoing maintenance",
-        startDate: "2024-01-01",
-        endDate: null,
+        effectiveStart: "2024-01-01",
+        effectiveEnd: null,
       },
       {
         id: "bounded",
         name: "Bounded job",
-        startDate: "2024-06-01",
-        endDate: "2024-07-01",
+        effectiveStart: "2024-06-01",
+        effectiveEnd: "2024-07-01",
       },
     ];
     const suggestions = rankProjectSuggestions(
@@ -132,9 +133,16 @@ describe("rankProjectSuggestions", () => {
     ).toEqual([]);
   });
 
-  it("ignores projects with no start date", () => {
+  // No override AND no dated tasks/purchases/sub-projects — there is no
+  // window for the purchase to fall inside, so the project can't be suggested.
+  it("ignores projects with no effective start", () => {
     const undated: SuggestableProject[] = [
-      { id: "undated", name: "Undated", startDate: null, endDate: null },
+      {
+        id: "undated",
+        name: "Undated",
+        effectiveStart: null,
+        effectiveEnd: null,
+      },
     ];
     expect(
       rankProjectSuggestions(

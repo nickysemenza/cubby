@@ -651,14 +651,14 @@ function HiddenByDateNote({
 
 // -- History --
 
-/** `project.endDate` (a plain "YYYY-MM-DD" date) when set; otherwise the
+/** `project.dates.effectiveEnd` (a plain "YYYY-MM-DD" date — the derived
+ * rollup, or the manual override when set) when non-null; otherwise the
  * household-local year the project was last touched (a reasonable proxy for
  * "completed" — there's no dedicated `completedAt` column). */
 function completionYear(project: ProjectOut): string {
-  return (project.endDate ?? format(project.updatedAt, "yyyy-MM-dd")).slice(
-    0,
-    4,
-  );
+  return (
+    project.dates.effectiveEnd ?? format(project.updatedAt, "yyyy-MM-dd")
+  ).slice(0, 4);
 }
 
 /**
@@ -909,10 +909,13 @@ function ProjectCard({
                 {formatCurrency(spent, 0)} spent
               </Badge>
             )}
-            {(project.startDate || project.endDate) && (
+            {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
               <Badge variant="outline">
                 <Calendar className="size-3" />
-                {formatDateRange(project.startDate, project.endDate)}
+                {formatDateRange(
+                  project.dates.effectiveStart,
+                  project.dates.effectiveEnd,
+                )}
               </Badge>
             )}
           </Row>

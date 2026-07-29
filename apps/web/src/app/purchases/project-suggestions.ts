@@ -17,12 +17,21 @@
  * import `~/`-aliased `.tsx`.
  */
 
-/** Minimal shape of a project option — matches `projectOptionsOut`. */
+/**
+ * Minimal shape of a project option — matches `projectOptionsOut`.
+ *
+ * The bounds are the EFFECTIVE window (the manual `startDate`/`endDate`
+ * override when set, else the window derived from the project's own tasks and
+ * purchases plus its live sub-projects), already folded server-side by
+ * `projectNameOptions`. Ranking against the raw override columns is what made
+ * suggestions miss: most projects leave them null, and a hand-typed one goes
+ * stale the moment the work runs long.
+ */
 export interface SuggestableProject {
   id: string;
   name: string;
-  startDate: string | null;
-  endDate: string | null;
+  effectiveStart: string | null;
+  effectiveEnd: string | null;
 }
 
 /** One cell of the project x trade count matrix — matches `purchaseTradeAffinityOut`. */
@@ -75,16 +84,17 @@ export function rankProjectSuggestions(
 
   return projects
     .filter((project) => {
-      // A project with no start date has no window to fall inside.
-      if (!project.startDate) return false;
-      const end = project.endDate ?? today;
-      return purchase.date! >= project.startDate && purchase.date! <= end;
+      // A project with no effective start has no window to fall inside — no
+      // override, no dated tasks or purchases, no dated sub-projects either.
+      if (!project.effectiveStart) return false;
+      const end = project.effectiveEnd ?? today;
+      return purchase.date! >= project.effectiveStart && purchase.date! <= end;
     })
     .map((project) => ({
       id: project.id,
       name: project.name,
       affinity: sameTradeCounts.get(project.id) ?? 0,
-      span: spanInDays(project.startDate, project.endDate),
+      span: spanInDays(project.effectiveStart, project.effectiveEnd),
     }))
     .sort((a, b) => {
       // Strongest same-trade history first.

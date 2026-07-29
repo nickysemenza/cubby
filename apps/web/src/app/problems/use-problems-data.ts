@@ -82,6 +82,7 @@ export function useProblemsData(opts?: {
         pastDuePlannedPurchases: tracker.data?.pastDuePlannedPurchases ?? [],
         unclassifiedPurchases: tracker.data?.unclassifiedPurchases ?? [],
         blockedWorkProjects: tracker.data?.blockedWorkProjects ?? [],
+        projectsWithDateDrift: tracker.data?.projectsWithDateDrift ?? [],
       };
       const results = [fast, coverage, upc, tracker];
       return {
