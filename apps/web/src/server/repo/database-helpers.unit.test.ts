@@ -1,10 +1,55 @@
 import { describe, expect, it } from "vitest";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import {
   buildPartialUpdateValues,
   eqAnyOrPresence,
   formatSearchTerm,
+  isTransaction,
+  withTransactionOn,
 } from "~/server/repo/database-helpers";
+
+/**
+ * `Database` is opaque (declares no members), so the only structural signal that
+ * separates it from a `DrizzleTransaction` is the latter's `rollback`. These
+ * stand in for the two handles without a DB — the branch decision is pure.
+ */
+const fakeTx = { rollback: () => {} } as unknown as DrizzleTransaction;
+const fakeDb = {} as Database;
+
+describe("isTransaction", () => {
+  it("recognizes an open transaction by its rollback method", () => {
+    expect(isTransaction(fakeTx)).toBe(true);
+  });
+
+  it("does not treat the opaque Database handle as a transaction", () => {
+    expect(isTransaction(fakeDb)).toBe(false);
+  });
+});
+
+describe("withTransactionOn", () => {
+  it("JOINS an open transaction — same handle, no new boundary", async () => {
+    // The whole point of the helper: the callback must receive the caller's own
+    // `tx`, not a fresh one. A new boundary here would be a different pooled
+    // connection that cannot see the caller's uncommitted writes.
+    let received: unknown;
+    const out = await withTransactionOn(fakeTx, async (tx) => {
+      received = tx;
+      return "joined";
+    });
+    expect(received).toBe(fakeTx);
+    expect(out).toBe("joined");
+  });
+
+  it("opens one when handed the pooled Database", async () => {
+    // No real client here, so `getDb(db).transaction` is unreachable — asserting
+    // it *tried* is enough to pin that this handle takes the open path rather
+    // than being passed through as a transaction.
+    await expect(
+      withTransactionOn(fakeDb, async () => "unreachable"),
+    ).rejects.toThrow();
+  });
+});
 
 describe("formatSearchTerm", () => {
   it("should return undefined for undefined input", () => {

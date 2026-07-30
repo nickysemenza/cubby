@@ -18,7 +18,6 @@ import { ingredient } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   findOrCreate,
-  getDb,
   insertAndReturn,
   notDeleted,
   relations,
@@ -34,10 +33,13 @@ import { dbIngredientToAPI } from "./mappers";
 // they accept the Database | DrizzleTransaction union and own ingredient-specific
 // alias-dedupe / race semantics.
 const fetchIngredientById = async (
-  db: Database,
+  // The union, not `Database`: the factory's `update` runs on a transaction and
+  // reads the before-state through this. `dbIngredientToAPI` (the `fromDB`)
+  // already takes the union and ignores the handle, so nothing else widens.
+  db: Database | DrizzleTransaction,
   id: IngredientId,
 ): Promise<IngredientDeepDB | undefined> => {
-  const row = await getDb(db).query.ingredient.findFirst({
+  const row = await unwrapDb(db).query.ingredient.findFirst({
     where: and(eq(ingredient.id, id), notDeleted(ingredient)),
     ...relations.ingredient.full,
   });
@@ -93,8 +95,14 @@ export const createIngredient = async (
   return await dbIngredientToAPI(db, ingredientData);
 };
 
+/**
+ * Accepts an open transaction as well as the pooled handle, matching
+ * `createIngredient` above: the factory's `update` joins a caller's transaction
+ * rather than opening its own, so an importer that creates a recipe and renames
+ * its ingredients can keep the whole thing atomic.
+ */
 export const updateIngredient = (
-  db: Database,
+  db: Database | DrizzleTransaction,
   id: IngredientId,
   data: z.infer<typeof ingredientUpdateData>,
   actor: ActorContext,

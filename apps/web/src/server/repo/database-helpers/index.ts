@@ -6,7 +6,13 @@
  */
 
 // Core database access
-export { getDb, unwrapDb, withTransaction } from "./core";
+export {
+  getDb,
+  isTransaction,
+  unwrapDb,
+  withTransaction,
+  withTransactionOn,
+} from "./core";
 // CRUD operations
 export {
   applyImageOrder,
