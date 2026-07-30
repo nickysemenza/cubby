@@ -820,6 +820,52 @@ function listHandler(
   };
 }
 
+/**
+ * A tool input object that REJECTS an unknown filter key instead of ignoring it.
+ *
+ * Zod strips unknown keys by default, and `pickSchemaFilters` below then copies
+ * only the known ones — so a misspelled or not-yet-deployed filter used to
+ * vanish silently and the tool returned the ENTIRE unfiltered set *presented as
+ * a filtered result*. That happened for real: during the 2026-07-30 rollout,
+ * `list_expenses({costMin: 500})` against a build without `costMin` came back
+ * with all 1112 rows. Wrong data that looks right is worse than an error, and
+ * any client/server skew reproduces it — a stale tool catalog, a request landing
+ * mid-deploy, or a plain typo.
+ *
+ * Two things make this the right shape rather than a runtime guard in the
+ * handler:
+ *
+ * - The MCP SDK parses arguments against this schema and hands the HANDLER the
+ *   parsed object, so by then the offending key is already gone. The rejection
+ *   has to live in the schema itself.
+ * - `z.strictObject` publishes `additionalProperties: false` in the tool's JSON
+ *   Schema, so a well-behaved client is told the rule up front rather than only
+ *   discovering it by failing.
+ *
+ * `shape` is the whole input (filters PLUS `pageIndex`/`pageSize`, which
+ * `mcpListInputShape` spreads into the same flat object and which must not trip
+ * this); `filterFields` is only what we advertise as filters in the message.
+ *
+ * The message names the offending key AND lists the valid ones on purpose — an
+ * agent told only "unrecognized key" will guess again.
+ */
+export function strictFilterInput<TShape extends Record<string, z.ZodType>>(
+  toolName: string,
+  shape: TShape,
+  filterFields: Record<string, z.ZodType>,
+) {
+  const valid = Object.keys(filterFields).sort().join(", ");
+  return z.strictObject(shape, {
+    error: (issue) =>
+      issue.code === "unrecognized_keys"
+        ? `Unknown filter ${issue.keys.map((key) => `"${key}"`).join(", ")} for ${toolName}. ` +
+          `Valid filters: ${valid}. Filters are matched EXACTLY, and an unknown one is ` +
+          "rejected rather than ignored — silently dropping it would return the whole " +
+          "unfiltered set as if it were filtered. Check the spelling against the list above."
+        : undefined,
+  });
+}
+
 /** Pick filter fields present in params using a filter field map's keys. */
 function pickSchemaFilters(
   params: Row,
@@ -860,10 +906,14 @@ export function registerEntityListTool(
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: mcpListInputShape(config.filterFields, {
-      defaultPageSize,
-      maxPageSize: config.maxPageSize,
-    }),
+    inputSchema: strictFilterInput(
+      config.name,
+      mcpListInputShape(config.filterFields, {
+        defaultPageSize,
+        maxPageSize: config.maxPageSize,
+      }),
+      config.filterFields,
+    ),
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     handler: listHandler(config.router, config.slim, {

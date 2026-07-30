@@ -736,6 +736,104 @@ describe("merge_ingredients partial-success aggregation", () => {
   });
 });
 
+/**
+ * An unknown filter key must FAIL, not be silently dropped.
+ *
+ * Before this, zod stripped it and the tool returned the whole unfiltered set
+ * presented as a filtered result — `list_expenses({costMin: 500})` against a
+ * build without `costMin` came back with all 1112 rows. These pin the rejection
+ * AND the message, because the message is what lets an agent self-correct.
+ */
+describe("unknown filter keys are rejected", () => {
+  it("rejects a misspelled filter and names both it and the valid set", async () => {
+    const list = vi.fn();
+    const result = await callTool(
+      createMcpServer(),
+      "list_expenses",
+      { costMinn: 500 },
+      { expense: { list } },
+    );
+
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result.content);
+    // Names the offending key...
+    expect(text).toContain("costMinn");
+    // ...and the valid ones, so the caller can fix it without guessing.
+    expect(text).toContain("costMin");
+    expect(text).toContain("costMax");
+    // And says WHY it isn't just ignored.
+    expect(text).toContain("rejected rather than ignored");
+    // The router was never reached — no chance of returning unfiltered rows.
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it("does not trip on the pagination keys that share the same flat object", async () => {
+    // `mcpListInputShape` spreads pageIndex/pageSize alongside the filters, so
+    // they arrive in the same params object and must not read as filters.
+    const list = vi.fn().mockResolvedValue({
+      meta: { pageIndex: 1, pageSize: 5, totalCount: 0 },
+      items: [],
+    });
+    const result = await callTool(
+      createMcpServer(),
+      "list_expenses",
+      { pageIndex: 1, pageSize: 5, costMin: 500 },
+      { expense: { list } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: { costMin: 500 },
+        pagination: { pageIndex: 1, pageSize: 5 },
+      }),
+    );
+  });
+
+  it("guards get_expense_analytics too, which bypasses the list plumbing", async () => {
+    // It takes expenseFilterFields directly via registerRouterTool, so it needs
+    // its own strict input rather than inheriting registerEntityListTool's.
+    const analytics = vi.fn();
+    const result = await callTool(
+      createMcpServer(),
+      "get_expense_analytics",
+      { costMaxx: 0 },
+      { expense: { analytics } },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("costMaxx");
+    expect(analytics).not.toHaveBeenCalled();
+  });
+
+  it("still reports a normal validation error for a KNOWN filter's bad value", async () => {
+    // The custom message is scoped to `unrecognized_keys` and must not swallow
+    // other issues — a wrong-typed value on a real filter has to say so, not
+    // come back as "unknown filter".
+    const list = vi.fn();
+    const result = await callTool(
+      createMcpServer(),
+      "list_expenses",
+      { costPresenceFilter: "sometimes" },
+      { expense: { list } },
+    );
+
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result.content);
+    expect(text).toContain("costPresenceFilter");
+    expect(text).not.toContain("Unknown filter");
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it("advertises the rule in the published JSON Schema, not just at runtime", async () => {
+    // additionalProperties:false tells a well-behaved client up front instead
+    // of letting it discover the rule by failing.
+    const { tools } = await listMcpToolCatalog();
+    const listExpenses = tools.find((t) => t.name === "list_expenses");
+    expect(listExpenses?.inputSchema.additionalProperties).toBe(false);
+  });
+});
+
 describe("household tracker synthesis + bulk tools", () => {
   const PROJECT_A = "44444444-4444-4444-8444-444444444441";
   const PROJECT_B = "44444444-4444-4444-8444-444444444442";
