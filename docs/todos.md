@@ -276,17 +276,20 @@ Roughly priority order.
   needs-attention. (The rest of the old maintenance+budgeting bundle shipped
   2026-07: inbox view + promote-to-project, the attention detectors in
   `repo/project/attention.ts`, and the planned-vs-actual budget views.)
-- [ ] **Surface the tracker to the rest of the app** (2026-07 audit): register
-  the 6 attention detectors as a Problems group (the navbar badge, `/problems`,
-  homepage banner, and `list_problems` MCP are tracker-blind today); quick-capture
-  Add Task/Project/Expense in the navbar-create + palette registry (House is the
-  only domain with no quick-add path); a House tile on the home dashboard over
-  the currently-unused `task.summary`; MCP synthesis tools (`get_house_status`
-  over `project.dashboardSummary`, task/expense analytics + bulk tools — the
-  tracker has CRUD-only MCP while the food domain has nine specialized tools).
-  `Vendor` and `Purchase` have **no** MCP surface at all (`mcp: []`), so an
-  agent-driven import can write lines but can't read the roster or set a charge's
-  `statedTotal`.
+- [ ] **Surface the tracker to the rest of the app** (2026-07 audit) — mostly
+  shipped; what remains is the two UI entry points.
+  **Shipped:** the attention rules are a first-class Problems group
+  (`findTrackerProblems` in `services/problems.service.ts`, seven rules not six,
+  feeding the navbar badge / `/problems` / homepage banner / `list_problems`);
+  the MCP synthesis tools landed (`get_house_status`, `get_project_budget`,
+  `get_expense_analytics`, plus the `bulk_move_expenses` /
+  `bulk_set_expense_trade` / `bulk_set_expense_cost_type` classifiers); and
+  `Vendor`/`Purchase` now have a full MCP toolset (`list_`/`get_`/`create_`/
+  `update_` for both, delete deliberately withheld), so an agent-driven import
+  can read the roster and set a charge's `statedTotal` without SQL or the web UI.
+  **Still open:** quick-capture Add Task/Project/Expense in the navbar-create +
+  palette registry (House is the only domain with no quick-add path); a House
+  tile on the home dashboard over the currently-unused `task.summary`.
 - [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
   "year in the house" + de-noises the stalled-project detector — `updatedAt`
   resets on any edit); portfolio-level estimate
