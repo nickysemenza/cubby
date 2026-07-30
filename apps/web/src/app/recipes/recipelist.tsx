@@ -490,6 +490,7 @@ export function RecipeList({
     <div>
       <RTable
         table={table}
+        fillWidth
         isLoading={isLoading}
         error={error}
         ariaLabel="Recipes Table"

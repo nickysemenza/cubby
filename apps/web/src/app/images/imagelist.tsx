@@ -195,6 +195,7 @@ export default function ImageList() {
     <div>
       <RTable
         table={table}
+        fillWidth
         isLoading={isLoading}
         error={error}
         ariaLabel="Images Table"

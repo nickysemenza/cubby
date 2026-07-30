@@ -307,6 +307,7 @@ export function InventoryItemList() {
       ) : (
         <RTable
           table={table}
+          fillWidth
           additionalToolbarContent={
             <InventoryValuationSummary
               items={data as InventoryItem[]}

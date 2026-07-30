@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
-import type { EntityDetailRoute } from "~/entities/entities";
+import type {
+  EntityDetailParams,
+  EntityDetailRoute,
+} from "~/entities/entities";
 
 const tableLinkVariants = cva("transition-colors hover:underline", {
   variants: {
@@ -21,8 +24,13 @@ type USDALookupRoute =
   | { to: "/usda/upc/$code"; params: { code: string } }
   | { to: "/usda/ndb/$code"; params: { code: string } };
 
-/** Standard entity detail routes */
-type EntityRoute = { to: EntityDetailRoute; params: { id: string } };
+/**
+ * Standard entity detail routes. `params` is the full `EntityDetailParams`
+ * union, not `{ id: string }` — cookbook's route takes `cookbookId`, so the
+ * narrower shape made `TableLink` unusable for polymorphic rows (the global
+ * search table) even though it's the canonical entity link.
+ */
+type EntityRoute = { to: EntityDetailRoute; params: EntityDetailParams };
 
 type TableLinkProps = VariantProps<typeof tableLinkVariants> & {
   children: ReactNode;

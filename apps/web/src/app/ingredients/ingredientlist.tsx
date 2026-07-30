@@ -343,6 +343,7 @@ export function IngredientList() {
     >
       <RTable
         table={table}
+        fillWidth
         isLoading={isLoading}
         error={error}
         ariaLabel="Ingredients Table"

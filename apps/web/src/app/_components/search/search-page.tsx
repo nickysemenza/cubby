@@ -1,16 +1,18 @@
 import type { SearchResultItem, SearchType } from "@cubby/schemas/search";
-import { searchableEntities } from "@cubby/schemas/search";
+import { searchableEntities, searchTypeSchema } from "@cubby/schemas/search";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import type { ColumnFiltersState, OnChangeFn } from "@tanstack/react-table";
 import {
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { Equal, Search } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
@@ -41,6 +43,9 @@ interface SearchPageProps {
   query?: string;
   type: SearchType;
 }
+
+/** Stable empty filter list — a fresh `[]` would re-create table state each render. */
+const NO_COLUMN_FILTERS: ColumnFiltersState = [];
 
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
@@ -80,6 +85,51 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     setRecents((prev) => uniq([trimmed, ...prev]).slice(0, 8));
   };
 
+  // The type filter is CONTROLLED by the `?type=` param rather than seeded
+  // into initialState. As initial-only state the desktop Filter/HeaderFilter
+  // wrote `columnFilters` and never the URL, so the two diverged: the chip said
+  // "Product" while the URL still said `all`, and a reload or share-link threw
+  // the filter away. `entityType` is the only column with a `filterConfig`, so
+  // it's the only thing that can appear here.
+  const columnFilters = useMemo(
+    () =>
+      type === "all" ? NO_COLUMN_FILTERS : [{ id: "entityType", value: type }],
+    [type],
+  );
+
+  const handleTypeChange = useCallback(
+    (nextType: SearchType) => {
+      // No `replace` here: a filter change is a deliberate action, so it should
+      // push history (Back undoes the filter). Still skip the view transition —
+      // the mobile slide on a same-page param change is noise.
+      navigate({
+        to: "/search",
+        search: {
+          q: query || undefined,
+          type: nextType === "all" ? undefined : nextType,
+        },
+        viewTransition: false,
+      });
+    },
+    [navigate, query],
+  );
+
+  // Route every filter write back through the URL. The select filter hands
+  // back either a bare value or a single-element array depending on which
+  // control wrote it (HeaderFilter's combobox vs the toolbar's Filter chip).
+  const onColumnFiltersChange: OnChangeFn<ColumnFiltersState> = useCallback(
+    (updater) => {
+      const next =
+        typeof updater === "function" ? updater(columnFilters) : updater;
+      const raw = next.find((f) => f.id === "entityType")?.value;
+      const parsed = searchTypeSchema.safeParse(
+        Array.isArray(raw) ? raw[0] : raw,
+      );
+      handleTypeChange(parsed.success ? parsed.data : "all");
+    },
+    [columnFilters, handleTypeChange],
+  );
+
   // Create table instance (client-side filtering/sorting) — desktop only
   const table = useReactTable({
     data: data ?? [],
@@ -87,9 +137,13 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    initialState: {
-      columnFilters: type !== "all" ? [{ id: "entityType", value: type }] : [],
-    },
+    // Without a pagination row model the toolbar's rows-per-page control and
+    // the bottom pager render but do nothing — every row was always drawn.
+    getPaginationRowModel: getPaginationRowModel(),
+    state: { columnFilters },
+    onColumnFiltersChange,
+    // TanStack's default is 10, which isn't even one of the offered sizes.
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
 
   // Sync URL query param with input. `viewTransition: false` + `replace`: a
@@ -105,20 +159,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
       },
       viewTransition: false,
       replace: true,
-    });
-  };
-
-  const handleTypeChange = (nextType: SearchType) => {
-    // No `replace` here: a filter-chip click is a deliberate action, so it
-    // should push history (Back undoes the filter). Still skip the view
-    // transition — the mobile slide on a same-page param change is noise.
-    navigate({
-      to: "/search",
-      search: {
-        q: query || undefined,
-        type: nextType === "all" ? undefined : nextType,
-      },
-      viewTransition: false,
     });
   };
 

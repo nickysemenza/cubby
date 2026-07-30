@@ -76,10 +76,11 @@ export function LocationList() {
     () => [
       createImageColumn(columnHelper, { entity: "location" }),
       createNameColumn(columnHelper, "location", "name", {
-        // Auto width (no w-*): locations is a sparse table, so under
-        // table-fixed the name column splits the leftover width with the
-        // slack spacer instead of leaving one oversized empty gutter.
-        className: "min-w-0",
+        // Keeps the default w-64. This used to be a bare `min-w-0` so the
+        // auto-width name would split the leftover with the slack spacer —
+        // but an auto column under table-fixed absorbs the squeeze in the
+        // other direction too, collapsing toward 0 on a narrow window. The
+        // table's `fillWidth` gets the same no-dead-space result safely.
         mobile: { slot: "title", priority: 0 },
         filterConfig: { placeholder: "Filter by location name..." },
         editable: {
@@ -297,6 +298,7 @@ export function LocationList() {
     <>
       <RTable
         table={table}
+        fillWidth
         isLoading={isLoading}
         error={error}
         ariaLabel="Locations Table"

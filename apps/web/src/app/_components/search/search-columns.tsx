@@ -4,12 +4,18 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { EntityIcon, entities } from "~/entities/entities";
 import {
   createActionsColumnBase,
   createCreatedAtColumn,
   createImageColumn,
 } from "../data-table/columnHelpers";
+import { TableLink } from "../table/TableLink";
 import {
   entityTypeMap,
   getEnrichmentText,
@@ -42,7 +48,11 @@ export const searchColumns = [
     className: "w-12",
   }),
 
-  // Name with type-specific icon (custom - can't use createNameColumn since entity varies per row)
+  // Name with type-specific icon. Can't use `createNameColumn` — it takes one
+  // `Entity` for the whole column and search rows are polymorphic — but it
+  // still owes the same contract as every other name cell: linked to the
+  // detail route, and the full name reachable on hover (apps/web/CLAUDE.md,
+  // "entity names are always readable and always clickable").
   columnHelper.accessor("name", {
     header: "Name",
     enableSorting: true,
@@ -52,7 +62,16 @@ export const searchColumns = [
     cell: ({ row }) => (
       <Row align="center" gap="sm">
         <SearchResultItemIcon item={row.original} />
-        <span className="truncate font-medium">{row.original.name}</span>
+        <Tooltip>
+          <TooltipTrigger render={<span className="block min-w-0 truncate" />}>
+            <TableLink {...getSearchResultRoute(row.original)}>
+              {row.original.name}
+            </TableLink>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            {row.original.name}
+          </TooltipContent>
+        </Tooltip>
       </Row>
     ),
   }),
