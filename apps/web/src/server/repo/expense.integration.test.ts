@@ -388,6 +388,168 @@ describe("expense repository — expenseList filters", () => {
     );
   });
 
+  it("filters by costMin/costMax (inclusive boundary, outside window, null-cost excluded)", async () => {
+    const mk = (name: string, cost: number | undefined) =>
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          trade: "other",
+          costType: "materials",
+          name,
+          ...(cost === undefined ? {} : { cost }),
+        }),
+        ctx.actor,
+      );
+
+    const lowerBoundary = await mk("cost on lower boundary", 100);
+    const inWindow = await mk("cost in window", 250);
+    const upperBoundary = await mk("cost on upper boundary", 500);
+    const belowWindow = await mk("cost below window", 99.99);
+    const aboveWindow = await mk("cost above window", 500.01);
+    const credit = await mk("cost credit", -96.67);
+    const zero = await mk("cost zero", 0);
+    const nullCost = await mk("cost not recorded", undefined);
+    expect(nullCost.cost).toBeNull();
+
+    const windowed = await expenseList(
+      ctx.db,
+      { costMin: 100, costMax: 500 },
+      [],
+      pagination,
+    );
+    expect(new Set(windowed.data.map((p) => p.id))).toEqual(
+      new Set([lowerBoundary.id, inWindow.id, upperBoundary.id]),
+    );
+    // Null cost falls out of the window by SQL semantics, exactly as a null
+    // date does — `costPresenceFilter: "none"` is the filter for those rows.
+    expect(windowed.data.map((p) => p.id)).not.toContain(nullCost.id);
+    expect(windowed.data.map((p) => p.id)).not.toContain(belowWindow.id);
+    expect(windowed.data.map((p) => p.id)).not.toContain(aboveWindow.id);
+
+    // costMin alone — open upper bound.
+    const fromOnly = await expenseList(
+      ctx.db,
+      { costMin: 500 },
+      [],
+      pagination,
+    );
+    expect(new Set(fromOnly.data.map((p) => p.id))).toEqual(
+      new Set([upperBoundary.id, aboveWindow.id]),
+    );
+
+    // costMax alone — open lower bound. Credits are BELOW zero, so they are in.
+    const toOnly = await expenseList(ctx.db, { costMax: 0 }, [], pagination);
+    expect(new Set(toOnly.data.map((p) => p.id))).toEqual(
+      new Set([credit.id, zero.id]),
+    );
+
+    // The guard-style regression: `costMin: 0` is a real bound, not a falsy
+    // no-op. A truthiness check here would return the credit row too.
+    const nonNegative = await expenseList(
+      ctx.db,
+      { costMin: 0 },
+      [],
+      pagination,
+    );
+    expect(nonNegative.data.map((p) => p.id)).not.toContain(credit.id);
+    expect(nonNegative.data.map((p) => p.id)).toContain(zero.id);
+
+    // ...and `costMax: 0` likewise excludes every positive row rather than
+    // being dropped as falsy.
+    expect(toOnly.data.map((p) => p.id)).not.toContain(inWindow.id);
+  });
+
+  it("ORs several `search` terms over the name, and ANDs notesSearch/urlSearch", async () => {
+    const extractor = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "dust extractor",
+        notes: "festool order CT-36",
+        url: "home depot",
+      }),
+      ctx.actor,
+    );
+    const chopSaw = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name: "chop saw",
+        notes: "bosch miter",
+      }),
+      ctx.actor,
+    );
+    const unrelated = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "nursery mix",
+      }),
+      ctx.actor,
+    );
+
+    // A bare string behaves exactly as it always did.
+    const single = await expenseList(
+      ctx.db,
+      { search: "extractor" },
+      [],
+      pagination,
+    );
+    expect(single.data.map((p) => p.id)).toEqual([extractor.id]);
+
+    // Several terms OR — this is the whole point. The ledger names the thing,
+    // not the product, so a caller guessing at synonyms wants any of them to
+    // hit. ANDing would make this strictly worse than the single-term search.
+    const either = await expenseList(
+      ctx.db,
+      { search: ["extractor", "chop"] },
+      [],
+      pagination,
+    );
+    expect(new Set(either.data.map((p) => p.id))).toEqual(
+      new Set([extractor.id, chopSaw.id]),
+    );
+    expect(either.data.map((p) => p.id)).not.toContain(unrelated.id);
+
+    // notesSearch is its own column, and ANDs with the name search rather than
+    // reusing its term — the bug that would otherwise zero out every search,
+    // since most rows have no notes.
+    const byNotes = await expenseList(
+      ctx.db,
+      { notesSearch: "festool" },
+      [],
+      pagination,
+    );
+    expect(byNotes.data.map((p) => p.id)).toEqual([extractor.id]);
+
+    const nameAndNotes = await expenseList(
+      ctx.db,
+      { search: ["extractor", "chop"], notesSearch: "bosch" },
+      [],
+      pagination,
+    );
+    expect(nameAndNotes.data.map((p) => p.id)).toEqual([chopSaw.id]);
+
+    // `url` routinely holds a bare pre-roster store name.
+    const byUrl = await expenseList(
+      ctx.db,
+      { urlSearch: "home depot" },
+      [],
+      pagination,
+    );
+    expect(byUrl.data.map((p) => p.id)).toEqual([extractor.id]);
+
+    // An all-whitespace term degrades to no constraint rather than matching
+    // nothing (`formatSearchTerm` returns undefined, so `or()` collapses).
+    const blank = await expenseList(ctx.db, { search: ["  "] }, [], pagination);
+    expect(blank.data.map((p) => p.id)).toEqual(
+      expect.arrayContaining([extractor.id, chopSaw.id, unrelated.id]),
+    );
+  });
+
   it("combines filters with AND semantics", async () => {
     const project = await createProject(
       ctx.db,
@@ -1320,6 +1482,63 @@ describe("expense repository — expenseAnalytics", () => {
     );
     const summedCost = listedRows.reduce((sum, p) => sum + (p.cost ?? 0), 0);
     expect(summedCost).toBe(result.summary.net);
+  });
+
+  it("groups byVendor through the charge, and does NOT sum to summary.net", async () => {
+    const mk = (name: string, cost: number, vendor?: string) =>
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          trade: "other",
+          costType: "tools",
+          name,
+          cost,
+          future: false,
+          date: "2026-04-01",
+          ...(vendor ? { vendor } : {}),
+        }),
+        ctx.actor,
+      );
+
+    const acmeA = await mk("vendor acme a", 100, "Analytics Acme");
+    const acmeB = await mk("vendor acme b", 25, "Analytics Acme");
+    // A credit against the same vendor — negative rows are real here, and the
+    // vendor's net must telescope rather than being filtered out.
+    await mk("vendor acme refund", -25, "Analytics Acme");
+    await mk("vendor other", 40, "Analytics Other");
+    // No vendor recorded: no charge to attach to, so the inner join drops it.
+    // This is the row that makes byVendor disagree with summary.net.
+    const vendorless = await mk("vendor none", 60);
+    expect(vendorless.purchaseId).toBeNull();
+
+    const result = await expenseAnalytics(ctx.db, { dateFrom: "2026-04-01" });
+
+    const acme = result.byVendor.find((r) => r.vendorName === "Analytics Acme");
+    expect(acme).toMatchObject({
+      vendorId: vendorIdOf(acmeA),
+      vendorName: "Analytics Acme",
+      actual: 125,
+      committed: 0,
+      credits: 25,
+      net: 100,
+      count: 3,
+    });
+    // Both lines resolved onto the SAME vendor by name, so the group key is one
+    // id rather than two spellings.
+    expect(vendorIdOf(acmeB)).toBe(vendorIdOf(acmeA));
+
+    expect(
+      result.byVendor.find((r) => r.vendorName === "Analytics Other")?.net,
+    ).toBe(40);
+    expect(result.byVendor.map((r) => r.vendorName)).not.toContain(null);
+
+    // --- the asymmetry, asserted rather than treated as a bug ---
+    // byVendor is an INNER join, so the charge-less row is excluded and the
+    // vendor nets total LESS than summary.net. The gap is exactly that row.
+    const vendorNet = result.byVendor.reduce((sum, r) => sum + r.net, 0);
+    expect(vendorNet).toBe(140);
+    expect(result.summary.net).toBe(200);
+    expect(result.summary.net - vendorNet).toBe(60);
   });
 
   it("applies the same filters as expenseList (e.g. trade) so a scoped analytics call only sees the matching rows", async () => {

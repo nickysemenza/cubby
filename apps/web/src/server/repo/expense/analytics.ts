@@ -25,14 +25,24 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
-import { expense, project } from "~/server/db/schema";
+import { expense, project, purchase, vendor } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   expenseAggregateFields as aggregateSelect,
   EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
 } from "~/server/repo/expense-aggregate-sql";
 import { buildExpenseWhereClause } from "./lookup";
+
+/**
+ * The charge table under its own alias, for `byVendor`'s join.
+ *
+ * See the ⚠️ note at the join itself: `buildExpenseWhereClause` already
+ * sub-selects the unaliased `purchase` for the vendor/order filters, so the
+ * join must not reuse that name.
+ */
+const chargeJoin = alias(purchase, "chargeJoin");
 
 export async function expenseAnalytics(
   db: Database,
@@ -52,6 +62,7 @@ export async function expenseAnalytics(
     tradeCostMatrix,
     monthly,
     byProjectRows,
+    byVendor,
   ] = await Promise.all([
     getDb(db)
       .select({
@@ -104,6 +115,43 @@ export async function expenseAnalytics(
       )
       .where(and(whereClause, isNotNull(expense.projectId)))
       .groupBy(expense.projectId, project.name),
+    // Spend by the vendor the money went to, resolved through the charge:
+    // expense → Purchase → Vendor. Inner-joined for the same reason `byProject`
+    // is, with the same consequence: charge-less rows (no vendor recorded) are
+    // excluded, so this does NOT sum to `summary.net`. That gap is the size of
+    // the unattributed tail and is worth reading, not papering over with a left
+    // join that would invent an "unknown vendor" bucket.
+    //
+    // `notDeleted` on BOTH joins: a soft-deleted charge is still a row, so
+    // without it an expense whose charge was deleted would keep reporting under
+    // its old vendor — the same guard `resolveExpenseSort`'s vendor subquery
+    // applies on read.
+    //
+    // ⚠️ The charge table is ALIASED, deliberately. `buildExpenseWhereClause`
+    // emits `inArray(expense.purchaseId, <SELECT purchase.id …>)` whenever
+    // `vendorId`/`orderId`/`orderIdPresenceFilter` is set, which puts the
+    // unaliased `purchase` inside this query's WHERE. Joining the same table
+    // unaliased in the FROM as well would place it in two scopes at once —
+    // Postgres resolves that today, but it's implicit coupling that breaks
+    // quietly later. `byProject` never hit this: nothing in the where clause
+    // sub-selects `project`.
+    getDb(db)
+      .select({
+        vendorId: chargeJoin.vendorId,
+        vendorName: vendor.name,
+        ...aggregateSelect(),
+      })
+      .from(expense)
+      .innerJoin(
+        chargeJoin,
+        and(eq(expense.purchaseId, chargeJoin.id), notDeleted(chargeJoin)),
+      )
+      .innerJoin(
+        vendor,
+        and(eq(chargeJoin.vendorId, vendor.id), notDeleted(vendor)),
+      )
+      .where(whereClause)
+      .groupBy(chargeJoin.vendorId, vendor.name),
   ]);
 
   // A GROUP-BY-less aggregate always returns exactly one row, even over zero
@@ -132,6 +180,7 @@ export async function expenseAnalytics(
       // above — Drizzle just doesn't narrow the select's inferred type from it.
       projectId: row.projectId!,
     })),
+    byVendor,
   };
 }
 

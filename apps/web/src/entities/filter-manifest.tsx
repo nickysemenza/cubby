@@ -11,9 +11,11 @@ import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
 import {
+  costRangeOptions,
   costTypeOptions,
   dateRangeOptions,
   futureFilterOptions,
+  resolveCostFilter,
   resolveDateRange,
 } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
@@ -99,14 +101,60 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: futureFilterOptions,
     },
     {
-      // The Cost column has no picklist of its own — this only distinguishes
-      // recorded vs. not, which is what makes the Unclassified predicate
-      // (`trade='other' AND cost IS NULL`) expressible as plain URL state.
+      // ONE control for the Cost column, covering both "is a number recorded at
+      // all" (the two sentinels, which make the Unclassified predicate
+      // `trade='other' AND cost IS NULL` expressible as plain URL state) and
+      // "how big is it" (the amount buckets).
+      //
+      // `kind: "range"` rather than `presence` because a range spec's `expand`
+      // returns a whole patch — that is what lets one selected value resolve to
+      // EITHER `costPresenceFilter` or a `costMin`/`costMax` pair. `?cost=has` /
+      // `?cost=none` bookmarks are unaffected: `resolveCostFilter` handles them
+      // first and emits exactly what the old `presence` spec did.
+      //
+      // Merging the two is safe because a bucket already implies a recorded
+      // cost, so no meaningful combination is lost — and the column has exactly
+      // one filter slot to spend.
       columnId: "cost",
-      field: "costPresenceFilter",
-      kind: "presence",
+      kind: "range",
       placeholder: "Filter by cost...",
-      options: presenceFilterOptions("cost"),
+      options: [...presenceFilterOptions("cost"), ...costRangeOptions],
+      expand: resolveCostFilter,
+    },
+    {
+      // Exact money bounds, URL/MCP only — the header offers presets (above)
+      // because the control layer has no numeric-range widget. Distinct
+      // `columnId`s: two specs may not share a slot, and `cost` is the presets'.
+      //
+      // `kind: "text"` yields the raw string off the URL; `costMin`/`costMax`
+      // are `z.coerce.number()` server-side precisely so `?costMin=500` parses.
+      columnId: "costMin",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Minimum cost...",
+    },
+    {
+      columnId: "costMax",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Maximum cost...",
+    },
+    {
+      // `notes` and `url` aren't rendered columns, so these are URL/MCP-only —
+      // the same treatment `productId` and `orderIdExact` get below. Separate
+      // fields rather than a widening of `search`, because the server ANDs its
+      // search filters and most rows have neither value (see
+      // `expenseFilterFields`).
+      columnId: "notesSearch",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Search notes...",
+    },
+    {
+      columnId: "urlSearch",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Search url...",
     },
     {
       columnId: "project",

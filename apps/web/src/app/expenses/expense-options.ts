@@ -66,6 +66,67 @@ export const dateRangeOptions = buildSelectOptions(
 );
 
 /**
+ * Fixed preset values for the Cost column filter — the amount half. The two
+ * presence sentinels (`has` / `none`) share the same control and the same
+ * resolver; see `resolveCostFilter`.
+ *
+ * These four buckets are the windows the hand-written SQL kept rebuilding: the
+ * big-ticket worklists, and credits. `credits` is `costMax: 0` rather than a
+ * strict negative because a $0 row (a broken or gifted item, recorded at zero
+ * rather than null) belongs in the same "no money went out" bucket.
+ */
+const costRangeValues = ["gte500", "gte200", "gte100", "credits"] as const;
+type CostRangePreset = (typeof costRangeValues)[number];
+
+/** Human labels for the cost-bucket preset enum. */
+const costRangeLabels: Record<CostRangePreset, string> = {
+  gte500: "$500 and up",
+  gte200: "$200 and up",
+  gte100: "$100 and up",
+  credits: "Credits (≤ $0)",
+};
+
+/** `{value,label}` options for the amount half of the Cost column filter. */
+export const costRangeOptions = buildSelectOptions(
+  costRangeValues,
+  costRangeLabels,
+);
+
+/**
+ * Resolves the Cost column's selected value into the server fields it owns.
+ *
+ * One control covers both "is there a number at all" and "how big is it",
+ * because a bucket already implies a recorded cost (`costMin: 100` can only
+ * match a non-null row) — so the only combination the merge gives up is a
+ * redundant one, and the column has exactly one filter slot.
+ *
+ * `has` / `none` are handled first and unchanged, so existing `?cost=has`
+ * bookmarks keep resolving to `costPresenceFilter` exactly as before.
+ *
+ * Presets rather than a two-number input because the control layer has no
+ * numeric-range widget. MCP and the URL still take exact `costMin`/`costMax`
+ * (declared `urlOnly` in the manifest).
+ */
+export function resolveCostFilter(preset: string | undefined): {
+  costPresenceFilter?: "has" | "none";
+  costMin?: number;
+  costMax?: number;
+} {
+  return (
+    match(preset)
+      .with("has", () => ({ costPresenceFilter: "has" as const }))
+      .with("none", () => ({ costPresenceFilter: "none" as const }))
+      .with("gte500", () => ({ costMin: 500 }))
+      .with("gte200", () => ({ costMin: 200 }))
+      .with("gte100", () => ({ costMin: 100 }))
+      // Credits are real in this ledger (refunds, the family wedding
+      // contributions) — never assume a lower bound of zero.
+      .with("credits", () => ({ costMax: 0 }))
+      .otherwise(() => ({}))
+  );
+}
+
+/**
  * Resolves a date-range preset (as read off the "date" column filter) into
  * inclusive "YYYY-MM-DD" bounds anchored on today's local date. An
  * unknown/undefined preset resolves to `{}` — no bound, matching every date

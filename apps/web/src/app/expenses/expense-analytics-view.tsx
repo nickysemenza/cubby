@@ -22,6 +22,7 @@ import {
   TradeBarsAggregate,
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
+import { VendorBreakdown } from "./charts/vendor-breakdown";
 
 const route = getRouteApi("/_authenticated/expenses/");
 
@@ -105,6 +106,7 @@ export function ExpenseAnalyticsView() {
     monthly,
     cumulative,
     byProject,
+    byVendor,
   } = data;
 
   return (
@@ -188,6 +190,15 @@ export function ExpenseAnalyticsView() {
       {byProject.length > 0 && (
         <Section title="By Project" description="Net spend per project.">
           <ProjectBreakdown byProject={byProject} />
+        </Section>
+      )}
+
+      {byVendor.length > 0 && (
+        <Section
+          title="By Vendor"
+          description="Net spend per vendor. Expenses with no vendor recorded are excluded, so these bars total less than Net above."
+        >
+          <VendorBreakdown byVendor={byVendor} />
         </Section>
       )}
     </Stack>
