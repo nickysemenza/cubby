@@ -31,6 +31,7 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   relations,
+  unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
@@ -43,13 +44,21 @@ import {
   renameChargeOrderId,
 } from "~/server/repo/purchase";
 import { findOrCreateVendor } from "~/server/repo/vendor";
-import { dbExpenseToAPI } from "./helpers";
+import { dbExpenseToAPI, type ExpenseRow } from "./helpers";
 
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
 
-const fetchExpenseById = (db: Database, id: ExpenseId) =>
-  getDb(db).query.expense.findFirst({
+// The union, not `Database`: the factory's `update` runs on a transaction and
+// reads the before-state through this. The return type is annotated explicitly
+// because `unwrapDb` hands back `DrizzleClient | DrizzleTransaction` and the
+// inferred `findFirst` result would union across the two relational clients —
+// structurally identical, but a union TS then has to re-check at every use.
+const fetchExpenseById = (
+  db: Database | DrizzleTransaction,
+  id: ExpenseId,
+): Promise<ExpenseRow | undefined> =>
+  unwrapDb(db).query.expense.findFirst({
     where: and(eq(expense.id, id), notDeleted(expense)),
     ...relations.expense.withProject,
   });
@@ -227,6 +236,18 @@ const resolveCharge = async (
  * An explicit `purchaseId` in the input short-circuits the name resolution
  * entirely (see the field's doc): an id is never a guess, so there's nothing to
  * resolve.
+ *
+ * ONE transaction covers all three phases — the `assertPurchaseLive` guard, the
+ * charge resolution, and the factory's audited column write. That is a
+ * correctness requirement, not a round-trip saving, and it's the same invariant
+ * `createExpense` states below: `resolveCharge` can mint a vendor, mint a
+ * charge, rename a charge in place, or fold one away, and the column write can
+ * still fail afterwards (`updateLiveAndReturn` throws when the row was
+ * concurrently soft-deleted). With separate boundaries those side-effects
+ * committed and the failed write left behind an orphan vendor, an orphan charge,
+ * or a charge folded away for no reason. Sharing the boundary also closes the
+ * guard's TOCTOU window: a purchase soft-deleted between `assertPurchaseLive`
+ * and the UPDATE can no longer be adopted.
  */
 export const updateExpense = async (
   db: Database,
@@ -240,29 +261,15 @@ export const updateExpense = async (
     data.purchaseId === undefined &&
     (data.vendor !== undefined || data.orderId !== undefined);
 
-  if (!needsResolve) {
+  return withTransaction(db, async (tx) => {
     // `rest` can carry an explicit `purchaseId` that never passes through
-    // `resolveCharge`, so validate it here or it goes in unchecked.
-    //
-    // The check and the write below are separate transactions for the same
-    // reason the resolve path splits (see the note under this branch): the
-    // factory owns its own boundary. So a purchase soft-deleted in the window
-    // between them would still be adopted. Not closable from here — the
-    // factory's generic `update` isn't transactional either — and the cost is a
-    // repairable dangling `purchaseId`, not lost money, so it stays a guard
-    // against the ordinary case rather than a lock.
-    if (rest.purchaseId) {
-      const target = rest.purchaseId;
-      await withTransaction(db, (tx) => assertPurchaseLive(tx, target));
-    }
-    return expenseCrud.update(db, id, rest, actor);
-  }
+    // `resolveCharge`, so validate it here or it goes in unchecked. Mutually
+    // exclusive with the resolve path below (`needsResolve` requires
+    // `data.purchaseId === undefined`).
+    if (rest.purchaseId) await assertPurchaseLive(tx, rest.purchaseId);
 
-  // Resolving the charge is its own transaction, then the factory's audited
-  // column write is another. Splitting them is deliberate: the factory owns the
-  // before/after diff and its own transaction boundary, and re-implementing that
-  // here to save one round-trip would fork the audit path for a single field.
-  const resolved = await withTransaction(db, async (tx) => {
+    if (!needsResolve) return expenseCrud.update(tx, id, rest, actor);
+
     // The row's CURRENT charge, so an unchanged `{vendor}` write doesn't mint a
     // duplicate — see `resolveCharge`.
     const existing = await tx.query.expense.findFirst({
@@ -298,7 +305,7 @@ export const updateExpense = async (
         )[0]?.n ?? 0)
       : 0;
 
-    return resolveCharge(tx, actor, data, {
+    const resolved = await resolveCharge(tx, actor, data, {
       purchaseId: live ? (existing?.purchaseId ?? null) : null,
       vendorName:
         live?.vendor && live.vendor.deletedAt === null
@@ -307,14 +314,14 @@ export const updateExpense = async (
       orderId: live?.orderId ?? null,
       lineCount,
     });
-  });
 
-  return expenseCrud.update(
-    db,
-    id,
-    { ...rest, ...(resolved === undefined ? {} : { purchaseId: resolved }) },
-    actor,
-  );
+    return expenseCrud.update(
+      tx,
+      id,
+      { ...rest, ...(resolved === undefined ? {} : { purchaseId: resolved }) },
+      actor,
+    );
+  });
 };
 
 /**

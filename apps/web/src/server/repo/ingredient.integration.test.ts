@@ -4,6 +4,7 @@ import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { ingredient, recipe } from "~/server/db/schema";
+import { getAuditLog } from "~/server/repo/audit-log";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
 import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
@@ -11,9 +12,11 @@ import {
   createIngredient,
   enrichmentWorkbenchIngredients,
   findOrCreateIngredient,
+  getIngredientByID,
   ingredientList,
   mergeIngredients,
   resolveOrCreateIngredients,
+  updateIngredient,
 } from "./ingredient";
 import { createProduct, deleteProducts } from "./product";
 import {
@@ -621,5 +624,78 @@ describe("ingredient", () => {
       expect(row).toBeDefined();
       expect(row?.appearsInRecipes).toEqual([]);
     });
+  });
+});
+
+/**
+ * `createEntityCrud`'s `update` is transactional and JOINS a caller's open
+ * transaction (`withTransactionOn`) rather than opening its own. Ingredient is
+ * the second of the two entities built on the factory (expense is the other, and
+ * `expense.integration.test.ts` pins the same properties from the charge side),
+ * so these assert the generic contract once, here.
+ */
+describe("ingredient repository — transactional update", () => {
+  const ctx = withTestDb();
+
+  it("joins an outer transaction instead of opening its own", async () => {
+    // The strongest observable proof of joining: the row it updates does not
+    // exist yet outside the transaction. If `update` opened its own boundary it
+    // would run on a DIFFERENT pooled connection, which under READ COMMITTED
+    // cannot see this transaction's uncommitted INSERT — so `updateLiveAndReturn`
+    // would match zero rows and throw "Failed to update record".
+    const renamed = await withTransaction(ctx.db, async (tx) => {
+      const created = await createIngredient(
+        tx,
+        { name: "joins-outer-tx before", aliases: [] },
+        ctx.actor,
+      );
+      return updateIngredient(
+        tx,
+        created.id,
+        { name: "joins-outer-tx after" },
+        ctx.actor,
+      );
+    });
+
+    expect(renamed.name).toBe("joins-outer-tx after");
+    // And it really committed with the outer transaction.
+    expect((await getIngredientByID(ctx.db, renamed.id)).name).toBe(
+      "joins-outer-tx after",
+    );
+  });
+
+  it("a throw after the UPDATE leaves no column change and no audit row", async () => {
+    const original = "throw-after-update original";
+    const created = await createIngredient(
+      ctx.db,
+      { name: original, aliases: [] },
+      ctx.actor,
+    );
+
+    await expect(
+      withTransaction(ctx.db, async (tx) => {
+        // Succeeds: the UPDATE lands and the audit entry is written…
+        const updated = await updateIngredient(
+          tx,
+          created.id,
+          { name: "throw-after-update renamed" },
+          ctx.actor,
+        );
+        expect(updated.name).toBe("throw-after-update renamed");
+        // …and then the caller fails, which must undo BOTH. Before `update` was
+        // transactional the column write and its audit row were already
+        // committed by the time the caller threw.
+        throw new Error("caller failed after the update");
+      }),
+    ).rejects.toThrow("caller failed after the update");
+
+    expect((await getIngredientByID(ctx.db, created.id)).name).toBe(original);
+
+    const audit = await getAuditLog(ctx.db, {
+      entityType: "ingredient",
+      entityId: created.id,
+      limit: 20,
+    });
+    expect(audit.entries.filter((e) => e.action === "update")).toEqual([]);
   });
 });

@@ -2282,6 +2282,61 @@ describe("expense repository — charge resolution on update", () => {
     expect(await chargeCount(vendorId)).toBe(1);
   });
 
+  /**
+   * ATOMICITY GATE — fails on the pre-`withTransactionOn` code.
+   *
+   * `resolveCharge` used to run in its OWN transaction and commit, and only then
+   * did the factory's column write run in a second one. So when the write failed
+   * — `updateLiveAndReturn` throws when there is no live row, which is exactly
+   * what a concurrent soft-delete produces — the vendor and charge it had just
+   * minted survived with nothing pointing at them, and nothing sweeps up empty
+   * charges. Same invariant `createExpense` already documents ("a vendor or
+   * charge created here must not outlive a failed expense write"), which the
+   * update path silently didn't hold.
+   *
+   * The delete-then-update ordering here is the deterministic form of the race:
+   * the window it models is "soft-deleted after `resolveCharge` read the row",
+   * and the observable outcome is identical.
+   */
+  it("rolls back a resolved vendor AND charge when the row was concurrently soft-deleted", async () => {
+    const doomed = await createExpense(
+      ctx.db,
+      line("about to be deleted", null),
+      ctx.actor,
+    );
+    const chargesBefore = (await purchaseList(ctx.db, {}, [], page)).count;
+    const vendorsBefore = (await vendorOptions(ctx.db)).length;
+
+    await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
+
+    // A brand-new vendor AND a brand-new charge, so both sides of the resolve
+    // have something to leak.
+    await expect(
+      updateExpense(
+        ctx.db,
+        doomed.id,
+        { vendor: "Ghost Supply Co", orderId: "GSC-rollback-1" },
+        ctx.actor,
+      ),
+    ).rejects.toThrow();
+
+    expect((await vendorOptions(ctx.db)).map((v) => v.name)).not.toContain(
+      "Ghost Supply Co",
+    );
+    expect((await vendorOptions(ctx.db)).length).toBe(vendorsBefore);
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(
+      chargesBefore,
+    );
+
+    // And no audit entry for a write that never landed.
+    const audit = await getAuditLog(ctx.db, {
+      entityType: "expense",
+      entityId: doomed.id,
+      limit: 20,
+    });
+    expect(audit.entries.filter((e) => e.action === "update")).toEqual([]);
+  });
+
   it("refuses an explicit purchaseId that points at a soft-deleted charge", async () => {
     // An FK proves the charge row exists, not that it isn't tombstoned, and an
     // explicit `purchaseId` skips `resolveCharge` entirely — so

@@ -6,7 +6,7 @@ import { resolveLiveJoinName } from "~/server/repo/database-helpers";
  * linked `product`, and the `purchase` (charge) it belongs to — with that
  * charge's `vendor` in turn.
  */
-type ExpenseRow = {
+export type ExpenseRow = {
   id: ExpenseOut["id"];
   name: string;
   cost: number | null;
