@@ -38,6 +38,8 @@ Workflow tips:
 - Problems: list_problems countsOnly=true for cheap triage; reparse_stale_parses recovers mis-merged ingredient lines.
 - Projects: list_projects/list_tasks/list_expenses are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
 - Ledger shape: \`Vendor ──< Purchase ──< Expense\`. ALL money lives on \`expense\` — list_expenses/create_expense are the spend ledger. A \`purchase\` is ONE vendor charge (it used to mean the ledger row; it no longer does), and its \`statedTotal\` is a reconciliation cue that is never summed into spend.
+- Reconciling a vendor export against the ledger: match_expenses (read-only, ranks candidates for the whole batch) → update_expense to set vendor/orderId on what you confirm, or split_expense when one ledger row aggregates several export lines. Never write from a match without confirming it — and run match_expenses BEFORE create_expense, since the row you are about to add usually already exists under a different name.
+- Reconciling a charge against its own paperwork: update_purchase records \`statedTotal\`; list_problems type="chargesNotReconciling" is the worklist of charges whose lines don't add up to it (a soft flag, often legitimately mismatched after a partial refund).
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 

@@ -154,12 +154,25 @@ carries real numbers.
 | Exact tax-inclusive amount + date | strong *with* a name check | The workhorse; see traps below. |
 | Embedding / fuzzy name similarity | hint only | Never auto-apply. |
 
+The bottom three rows are what **`match_expenses`** automates — pass `orderId` and it uses the top
+row too, in the same call. Reach for it rather than issuing a query per line.
+
 **Vendor identity hides in four fields, not one.** Before concluding a row has no vendor, check its
 resolved `vendor`, plus `url`, `notes` *and* `name`. Pre-roster rows routinely carry a bare store name
 as the whole `url` value (`home depot`, `lowes`, `tol nirvana`, `wwe`) or as a short `notes` string or
 in the name itself (`woodworker express`, `supplyhouse return`). A 2026-07 sweep lifted 268 + 23 such
 rows into the vendor field. Note `url` is rendered as `<a href={url}>` — a marker left there paints a
 broken link, so clear it once the vendor is recorded.
+
+`list_expenses` searches all four: `search` matches the NAME (and takes several terms, which **OR** —
+pass `["dust","vacuum"]` when guessing at synonyms), while **`notesSearch`** and **`urlSearch`** are
+separate substring filters on those two columns. So the marker sweep is
+`urlSearch: "home depot"` + `vendorPresenceFilter: "none"`, not a scan.
+
+It also has **`costMin`/`costMax`** — inclusive, **signed** dollar bounds. `costMax: 0` is the
+credits worklist; `costMin: 500` + `vendorPresenceFilter: "none"` is the big-ticket vendorless
+worklist. A row with no cost recorded falls out of any cost window, so use
+`costPresenceFilter: "none"` to find those instead.
 
 An expense with no charge attached (`purchaseId IS NULL`) is exactly "no vendor recorded" —
 `purchase.vendorId` is NOT NULL, so the two can't disagree. That's the
@@ -180,22 +193,44 @@ Nov 28. Not a conflict worth resolving twice: prefer the vendor's own order reco
 buckets and project windows — an invoice dated the 3rd can clear on the 8th, and they're allowed to
 differ.)
 
-**Tolerances must be relative, not absolute.** ±$0.25 is sensible at $200 and meaningless at $1: a
-$0.93 order (wood screws, net of two returns) matched a $1.00 `5 yd nursery mix` row on amount+date
-and had to be reverted. Scale the tolerance to the amount, and **read the line descriptions** before
-accepting any match under ~$20.
+### Don't hand-roll the amount+date sweep — `match_expenses` does it
 
-**Grade every amount+date match by name-token overlap** (drop stopwords, require ≥2 shared tokens).
-Validation signal: genuine matches cluster at **0–1 day** delta. If candidates scatter across a ±14d
-window, they're coincidences. In the 2026-07 pass, 209 amount matches graded down to 97 real ones.
+**`match_expenses` is the tool for this whole phase.** Pass up to 200 export lines at once, each with
+your own `key`, a `date`, a **signed** `amount`, and — whenever the line has them — `orderId`,
+`label` and `vendor`. It returns ranked candidates per key and never writes anything.
 
-Tokenizers miss compound words — `labelmaker`/"label maker", `stepstool`/"step stool",
-`straightedge`/"straight edges". Sweep the zero-overlap bucket by eye before discarding it.
+It exists because the sweep is not expressible as a search, and every hand-rolled version of it has
+gone wrong in the same few ways. Those traps are now encoded in the tool, but you still have to read
+its output correctly:
 
-**Costs are tax-inclusive; the house rate is 8.625%.** Test *all* of these against each row:
-`cost == line total`, `cost == order total`, `cost × 1.08625 == line`, `cost × 1.08625 == order`,
-and hand-rounded variants (a $599.00 row for a $599.99 unit price). Pre-tax entry is a recurring
-bug class — 24 rows in one pass, found four different ways because each hypothesis was tested alone.
+- **Tolerances are relative, not absolute** — ±$0.25 is sensible at $200 and meaningless at $1. The
+  tool matches on one window (10% below for pre-tax entry, 15% above for tax and fees, with a $1
+  absolute floor) and reports `amountDelta` / `ratio` / `ratioLabel` so you can judge each hit.
+  ⚠️ **Below about $20 the band contains almost anything — read the line descriptions.** A $0.93 order
+  (wood screws, net of two returns) matched a $1.00 `5 yd nursery mix` row and had to be reverted.
+  The tool *will* return that candidate; no tolerance setting excludes it while staying usable, and
+  only you can tell the two apart.
+- **`tokenOverlap` grades, it never filters.** Zero overlap is routine on true matches — that is the
+  whole reason this phase exists. And tokenizers miss compound words (`labelmaker`/"label maker",
+  `stepstool`/"step stool", `straightedge`/"straight edges"), so sweep the zero-overlap bucket by eye
+  before discarding it.
+- **`dayDelta` is the validation signal.** Genuine matches cluster at **0–1 day**. Candidates
+  scattered across a ±14d window are coincidences — in the 2026-07 pass, 209 amount matches graded
+  down to 97 real ones.
+- **Costs are tax-inclusive; the house rate is 8.625%** — but do **not** hand-test discrete
+  hypotheses (`cost`, `cost × 1.08625`, `cost ÷ 1.08625`, order-total). That is what failed before:
+  pre-tax entry was a recurring bug class (24 rows in one pass, found four separate ways *because
+  each hypothesis was tested alone*), and no hypothesis covers an ADDITIVE fee at all. `ratioLabel`
+  classifies each hit as `exact` | `plus_tax` | `pre_tax` | `other` instead — and on an `other`, read
+  the raw `amountDelta`: a residual of exactly `9.99` or `12.50` is shipping, which a
+  hypothesis check would have silently rejected. Hand-rounded variants (a $599.00 row for a $599.99
+  unit price) land inside the window rather than needing their own rule.
+- **Always pass `orderId` when the line has one** — see the mirror trap in Phase 3. That arm ignores
+  the day window on purpose.
+
+Planned (`future: true`) rows come back flagged, not filtered — an export line often turns out to be
+one. And when one ledger row is the best candidate for two export lines, it is returned for both;
+resolve that yourself rather than assuming a one-to-one assignment.
 
 ## Phase 3 — before proposing any *add*, rule out an existing row
 
@@ -203,10 +238,16 @@ bug class — 24 rows in one pass, found four different ways because each hypoth
 `festool`/`vacuum`/`vac` for a "Festool Vacuum" product found nothing, so a row was added — but a
 `dust extractor` row for the identical amount and date had existed since 2024. Zero shared tokens.
 The same trap hid a Bosch miter saw booked as `chop saw`. **The only filter that works is amount +
-date across the whole ledger, ignoring names entirely** — run it before every add, and again as a
-post-hoc check over each newly created row (same amount, ±30 days) to catch what slipped through.
-`find_similar_entities` (`expense_to_product`) is the right *candidate generator*, but its own docs
-warn the scores rank without verifying — never auto-link.
+date across the whole ledger, ignoring names entirely** — which is exactly what **`match_expenses`**
+does. Run it before every add, and again as a post-hoc check over each newly created row (same
+amount, ±30 days) to catch what slipped through.
+
+An empty `candidates` list means "nothing within the window", **not** "this expense is missing" — an
+aggregate row covering your line can sit at an amount no formula relates to yours (see below).
+
+`find_similar_entities` (`expense_to_product`) is the right *candidate generator* for the separate
+question of which product a line refers to, but its own docs warn the scores rank without verifying —
+never auto-link.
 
 
 This is the trap that survives every automated filter. A ledger row often **aggregates several
@@ -229,10 +270,13 @@ guards against adding components when a combined row exists. The reverse also ha
 amount+date check completely, because the total you are searching for *appears nowhere*. B&H order
 `1121197219` was already booked as two sibling rows ($203.36 AP + $102.91 switch); an amount+date
 search for its $306.27 order total found nothing, so a duplicate aggregate was created and had to be
-deleted. **Whenever the export line has an order id, query `orderId` first** — it catches both
-directions in one shot, and amount+date catches neither reliably. Post-split this is stronger, not
-weaker: both sibling lines hang off one `Purchase`, so the group is a parent link rather than a
-two-column string match, and `statedTotal` can hold the $306.27 the search was looking for.
+deleted. **Whenever the export line has an order id, pass it as `match_expenses`' `orderId`** — that
+arm catches both directions in one shot, and amount+date catches neither reliably. A candidate coming
+back with `matchedOn: "order_id"` is telling you it found the row by identifier rather than by guess,
+which is why it outranks every amount hit; that arm also ignores the day window, since a charge's
+lines can sit weeks from the order date. Post-split this is stronger, not weaker: both sibling lines
+hang off one `Purchase`, so the group is a parent link rather than a two-column string match, and
+`statedTotal` can hold the $306.27 the search was looking for.
 
 **Check the refund file before adding ANY expense — not just when reconciling.** This is the single
 most expensive omission found so far. A 2026-07-28 pass added rows whose notes read *"order had no
@@ -262,7 +306,7 @@ list, and then routinely forgotten. It still needs:
    expense per product, summing to the original total, all hanging off the same charge.
    `productId` is single-valued, so an unsplit aggregate can never link more than one product, and
    any product in inventory whose only expense is inside an aggregate has **no cost basis at all**.
-   This is `splitExpense` now (below) — not a row-naming convention.
+   This is `split_expense` now (below) — not a row-naming convention.
 
 Real case: `scaffolding` $434.47 was correctly identified as covering a 2-line MetalTech order and
 then dropped. Months later both MetalTech products still sat in inventory with zero purchases, and
@@ -310,24 +354,27 @@ worklist, not a dead end.
   never a new column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces
   the whole set**, so read-then-merge. Partial unique index on `(productId, source)` = one id per
   source.
-- **Splitting a line** is `splitExpense` (tRPC `purchase.split`): pass the `expenseId` and ≥2 parts,
-  each with its own `name`/`cost`/`costType`/`trade`/`projectId`/`productId`. The parts land on the
-  same charge, the original is soft-deleted, and the charge's `statedTotal` is **seeded from the
-  original cost** when it had none — so the parts have something to reconcile against. A deliberately
-  mismatched sum is displayed, never rejected. This **replaces the `(combo, saw portion)` row-naming
-  convention** that used to encode splits in row names; don't write those names any more. It refuses
-  on an expense with no charge attached — record the vendor first. There's no MCP tool for it: via
-  MCP the equivalent is `create_expense` for each part with the shared `purchaseId`, then
-  `delete_expenses` the original.
+- **Splitting a line** is **`split_expense`**: pass the `expenseId` and ≥2 parts, each with its own
+  `name`/`cost`/`costType`/`trade`/`projectId`/`productId`. The parts land on the same charge, the
+  original is soft-deleted, and the charge's `statedTotal` is **seeded from the original cost** when
+  it had none — so the parts have something to reconcile against. A deliberately mismatched sum is
+  displayed, never rejected. This **replaces the `(combo, saw portion)` row-naming convention** that
+  used to encode splits in row names; don't write those names any more. It refuses on an expense with
+  no charge attached — record the vendor first, with `update_expense`.
+
+  Do **not** fake it with `create_expense` per part plus `delete_expenses` on the original (the old
+  MCP workaround). That hand-rolled path loses the `statedTotal` seeding and the shared-charge
+  guarantee, which are the two things making the split worth doing.
 - **One invoice spanning trades** (Flow Form Plumbing's $2,516 covering rough-in *and* fixtures) is
-  `linkExpensesToPurchase` — attach existing expenses to one charge. Explicitly **not** for payment
-  schedules: separate charges stay separate purchases, so a contractor's 11 progress payments are
-  **11 charges**, not one. The contract-level rollup is `Project`.
-- **Merging charges** is `mergePurchases`, for the ~364 order-less singletons no key could have
+  **`link_expenses_to_purchase`** — re-parent existing expenses onto one charge. It moves no money.
+  Explicitly **not** for payment schedules: separate charges stay separate purchases, so a
+  contractor's 11 progress payments are **11 charges**, not one. The contract-level rollup is
+  `Project`.
+- **Merging charges** is **`merge_purchases`**, for the ~364 order-less singletons no key could have
   grouped. It refuses across vendors (that would rewrite who was paid) and refuses when both sides
-  carry a non-null order id (two real order ids are two real transactions). A user action, never a
-  guess — and note there is deliberately **no `splitPurchase`**: one order is one charge by
-  construction.
+  carry a non-null order id (two real order ids are two real transactions). Destructive and with no
+  inverse — there is deliberately **no `splitPurchase`**, one order being one charge by construction.
+  A user action, never a guess: propose the merge and get an explicit yes.
 - **Refund handling** is unchanged, by shape:
   - Full return → negative expense at full price, same `trade`, `projectId: null`.
   - Partial refund on a multi-item order → **reduce the expense cost** to the kept items. (Operator
