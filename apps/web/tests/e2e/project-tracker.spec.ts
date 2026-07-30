@@ -342,7 +342,7 @@ test.describe("Project tracker", () => {
     const driveUrl =
       "https://drive.google.com/drive/u/1/folders/e2e-drive?usp=sharing";
     const notionUrl =
-      "https://cubby.notion.site/E2E-Resource-0123456789abcdef?pvs=4";
+      "https://app.notion.com/p/nickysemenza/Backyard-Project-Main-Page-d4ffaba2e4b240ebb4aa8b7d80a7aabb?source=copy_link";
 
     await page.goto("/projects");
     await page.waitForLoadState("networkidle");
