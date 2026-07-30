@@ -1,5 +1,5 @@
 import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 import type { AiFeature } from "~/server/ai/features";
 import type { Database } from "~/server/db";
@@ -16,6 +16,61 @@ interface AiAnalysisKey<T> {
   entityId: string | null;
   feature: AiFeature<T>;
   inputFingerprint: string;
+}
+
+export interface StoredAiAnalysis<T> {
+  inputFingerprint: string;
+  model: string;
+  promptVersion: string;
+  result: T;
+  updatedAt: Date;
+}
+
+export async function listAiAnalysesForEntityFeature<T>(
+  db: Database,
+  input: {
+    entityType: AiAnalysisEntityType;
+    entityId: string | null;
+    feature: string;
+    promptVersion: string;
+    schema: z.ZodType<T>;
+    limit?: number;
+  },
+): Promise<StoredAiAnalysis<T>[]> {
+  const rows = await getDb(db).query.aiAnalysis.findMany({
+    where: and(
+      eq(aiAnalysis.entityType, input.entityType),
+      input.entityId == null
+        ? isNull(aiAnalysis.entityId)
+        : eq(aiAnalysis.entityId, input.entityId),
+      eq(aiAnalysis.feature, input.feature),
+      eq(aiAnalysis.promptVersion, input.promptVersion),
+      notDeleted(aiAnalysis),
+    ),
+    columns: {
+      inputFingerprint: true,
+      model: true,
+      promptVersion: true,
+      result: true,
+      updatedAt: true,
+    },
+    orderBy: desc(aiAnalysis.updatedAt),
+    limit: input.limit ?? 50,
+  });
+
+  return rows.flatMap((row) => {
+    const parsed = input.schema.safeParse(row.result);
+    if (!parsed.success) {
+      console.warn("ai.analysis.invalid-stored-result", {
+        entityType: input.entityType,
+        entityId: input.entityId,
+        feature: input.feature,
+        model: row.model,
+      });
+      return [];
+    }
+    return [{ ...row, result: parsed.data }];
+  });
 }
 
 const analysisWhere = <T>({

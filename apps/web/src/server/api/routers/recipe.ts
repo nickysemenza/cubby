@@ -14,6 +14,7 @@
 import { createTRPCRouter } from "../trpc";
 import { recipeAnalysisProcedures } from "./recipe/analysis";
 import { recipeCrudProcedures } from "./recipe/crud";
+import { recipeFlowProcedures } from "./recipe/flow";
 import { recipeImportProcedures } from "./recipe/import";
 
 export const recipeRouter = createTRPCRouter({
@@ -41,6 +42,8 @@ export const recipeRouter = createTRPCRouter({
   update: recipeCrudProcedures.update,
   delete: recipeCrudProcedures.delete,
   getAllTags: recipeCrudProcedures.getAllTags,
+  getFlow: recipeFlowProcedures.getFlow,
+  generateFlow: recipeFlowProcedures.generateFlow,
 
   // Analysis + costing maintenance
   harvestEquivalences: recipeAnalysisProcedures.harvestEquivalences,

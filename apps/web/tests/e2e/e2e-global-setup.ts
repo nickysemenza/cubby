@@ -166,6 +166,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
   // Store for teardown
   (globalThis as Record<string, unknown>).__E2E_SERVER__ = serverProcess;
   (globalThis as Record<string, unknown>).__E2E_DB_URL__ = databaseUrl;
+  process.env.E2E_DATABASE_URL = databaseUrl;
 
   // 3. Wait for server to be ready
   const baseURL = config.projects[0]?.use?.baseURL || "http://localhost:3001";

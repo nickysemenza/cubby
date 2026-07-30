@@ -5,8 +5,14 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { Grid3x3, ListChecks, ListTree, Printer } from "lucide-react";
-import { useMemo } from "react";
+import {
+  GitBranch,
+  Grid3x3,
+  ListChecks,
+  ListTree,
+  Printer,
+} from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import { CopyDebugButton } from "~/app/_components/recipe/copy-debug-button";
@@ -14,6 +20,7 @@ import {
   buildDisplayQuantities,
   gramMapFromCosting,
 } from "~/app/_components/recipe/IngredientQuantities";
+import { RecipeFlowView } from "~/app/_components/recipe/RecipeFlowView";
 import { RecipeIngredientMatrixView } from "~/app/_components/recipe/RecipeIngredientMatrixView";
 import { RecipePrepSheetView } from "~/app/_components/recipe/RecipePrepSheetView";
 import { RecipeScaleControl } from "~/app/_components/recipe/RecipeScaleControl";
@@ -34,16 +41,20 @@ import {
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 
-type ExportFormat = "prep" | "nested" | "matrix";
+type ExportFormat = "prep" | "nested" | "matrix" | "flow";
 
 const FORMAT_OPTIONS: ViewSwitcherOption<ExportFormat>[] = [
   { value: "prep", label: "Prep sheet", icon: ListChecks },
   { value: "nested", label: "Spec", icon: ListTree },
   { value: "matrix", label: "Matrix", icon: Grid3x3 },
+  { value: "flow", label: "Flow", icon: GitBranch },
 ];
 
 const searchSchema = z.object({
-  format: z.enum(["prep", "nested", "matrix"]).optional().catch(undefined),
+  format: z
+    .enum(["prep", "nested", "matrix", "flow"])
+    .optional()
+    .catch(undefined),
   scale: z.number().positive().optional().catch(undefined),
 });
 
@@ -69,6 +80,10 @@ function RecipeExportPage() {
   const { format: rawFormat, scale } = Route.useSearch();
   const navigate = useNavigate();
   const api = useTRPC();
+  const [flowReady, setFlowReady] = useState(false);
+  const handleFlowReadyChange = useCallback((ready: boolean) => {
+    setFlowReady(ready);
+  }, []);
 
   const { data: recipe } = useSuspenseQuery(
     api.recipe.getByID.queryOptions({ id }),
@@ -88,7 +103,7 @@ function RecipeExportPage() {
     scaledRecipe,
     ingMap,
     recipeMap,
-    true,
+    format !== "flow",
   );
   const totals = costingById?.get(recipe.id)?.totals ?? null;
 
@@ -107,7 +122,7 @@ function RecipeExportPage() {
     });
 
   const getMarkdown = () =>
-    tree
+    format !== "flow" && tree
       ? recipeTreeToMarkdown(tree, {
           flavor: format,
           quantityText: (node, row) => {
@@ -138,17 +153,20 @@ function RecipeExportPage() {
             onFactorChange={setScale}
           />
           <Row align="center" gap="sm" className="ml-auto">
-            <CopyDebugButton
-              getText={getMarkdown}
-              label="Copy Markdown"
-              toastLabel="Copied markdown"
-              title="Copy this sheet as Markdown"
-            />
+            {format !== "flow" && (
+              <CopyDebugButton
+                getText={getMarkdown}
+                label="Copy Markdown"
+                toastLabel="Copied markdown"
+                title="Copy this sheet as Markdown"
+              />
+            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => window.print()}
+              disabled={format === "flow" && !flowReady}
             >
               <Printer className="mr-2 size-4" />
               Print
@@ -156,7 +174,14 @@ function RecipeExportPage() {
           </Row>
         </Row>
 
-        {tree ? (
+        {format === "flow" ? (
+          <RecipeFlowView
+            recipe={recipe}
+            scaledRecipe={scaledRecipe}
+            layout="table"
+            onReadyChange={handleFlowReadyChange}
+          />
+        ) : tree ? (
           format === "prep" ? (
             <RecipePrepSheetView tree={tree} hideGrid />
           ) : format === "matrix" ? (
