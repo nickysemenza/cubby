@@ -27,6 +27,7 @@ import {
   countWhere,
   eqAny,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   notDeleted,
   presenceCondition,
@@ -140,15 +141,35 @@ export const buildExpenseWhereClause = async (
     presenceCondition(expense.projectId, filters.projectPresenceFilter),
   );
 
-  // `search` stays a single-column term: buildSearchConditions ANDs its
-  // searchFilters entries, so adding `{ column: vendor, term: filters.search }`
-  // here would mean `name ILIKE q AND vendor ILIKE q` — and vendor is null on
-  // nearly every row, which would silently zero out expense search. Vendor
-  // matching is its own filter, applied below.
+  // `search` matches the expense NAME only, and its terms OR. It is passed as
+  // an extra condition rather than a `searchFilters` entry because
+  // buildSearchConditions ANDs those — which is right for `notesSearch` and
+  // `urlSearch` below (distinct filters, meant to narrow) but wrong within one
+  // multi-term name search, where the caller is guessing at synonyms for a row
+  // that names the thing rather than the product (`dust extractor` for a
+  // Festool vacuum). Same pattern as repo/search.ts.
+  //
+  // `formatSearchTerm` returns undefined for an empty/whitespace term, so `or()`
+  // degrades cleanly to undefined when every term is blank.
+  const nameSearch = or(
+    ...[filters.search ?? []]
+      .flat()
+      .map((term) => formatSearchTerm(expense.name, term)),
+  );
+
+  // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
+  // filters and ANDing them with each other and with the name search is the
+  // intended semantics. What must never happen is a second entry reusing
+  // `filters.search` itself — that would mean `name ILIKE q AND notes ILIKE q`,
+  // and most rows have no notes, which would silently zero out expense search.
   return buildSearchConditions(
     expense,
-    [{ column: expense.name, term: filters.search }],
     [
+      { column: expense.notes, term: filters.notesSearch },
+      { column: expense.url, term: filters.urlSearch },
+    ],
+    [
+      nameSearch,
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),
       projectCondition,
@@ -175,6 +196,20 @@ export const buildExpenseWhereClause = async (
       // semantics; that's intended, not a bug to work around.
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
+      // `!== undefined`, NOT the truthiness guard the two date lines above use.
+      // `costMin: 0` is a meaningful bound ("actuals and credits, no free
+      // items") and `costMax: 0` is the credits-only worklist — a truthiness
+      // check would silently drop both. Follows `future`'s guard style instead.
+      //
+      // Null-cost rows fall out of either bound by SQL semantics, same as
+      // null-date rows do above; `costPresenceFilter: "none"` is the filter for
+      // "no cost recorded".
+      filters.costMin !== undefined
+        ? gte(expense.cost, filters.costMin)
+        : undefined,
+      filters.costMax !== undefined
+        ? lte(expense.cost, filters.costMax)
+        : undefined,
       presenceCondition(expense.cost, filters.costPresenceFilter),
       // `orderId` presence can't be a column-null check any more: it's a column
       // on the CHARGE, and a row with a charge that has no order id is a

@@ -882,13 +882,72 @@ export const expenseFilterFields = {
    */
   vendorPresenceFilter: presenceFilter,
   future: z.boolean().optional(),
-  search: z.string().optional(),
+  /**
+   * Substring match on the expense NAME. `oneOrMany`, mirroring
+   * `costType`/`trade`/`projectId` — a bare string still behaves exactly as it
+   * always did, and several terms can now be passed at once.
+   *
+   * Several terms **OR** rather than AND. That's the point: the ledger names
+   * the *thing*, not the product (a Festool vacuum is booked as
+   * `dust extractor`, a Bosch miter saw as `chop saw`), so a caller guessing at
+   * synonyms wants any of them to hit. ANDing would make a two-term search
+   * strictly worse than a one-term search.
+   *
+   * Resolved in the repo as an OR of `formatSearchTerm`s passed as an extra
+   * condition, NOT as a `buildSearchConditions` search entry — that helper ANDs
+   * its `searchFilters`.
+   */
+  search: oneOrMany(z.string()).optional(),
+  /**
+   * Substring match on `notes`. Deliberately its OWN field rather than folded
+   * into `search`, for the same reason `vendorId` is: `buildSearchConditions`
+   * ANDs its `searchFilters` entries, so a second entry sharing the `search`
+   * term would mean `name ILIKE q AND notes ILIKE q` — and most rows have no
+   * notes, which would silently zero out expense search.
+   *
+   * Notes carry an import's provenance (line itemizations on aggregate rows,
+   * refund documentation, legacy `"<Vendor> order <ID>"` prose), so this is how
+   * you find the rows a previous pass touched.
+   */
+  notesSearch: z.string().optional(),
+  /**
+   * Substring match on `url`. Own field for the same AND-vs-OR reason as
+   * `notesSearch`. Pre-roster rows routinely carry a bare store name as the
+   * whole `url` value (`home depot`, `lowes`), so this is the vendor-marker
+   * sweep.
+   */
+  urlSearch: z.string().optional(),
   dateFrom: plainDate
     .optional()
     .describe("Inclusive lower bound on expense date"),
   dateTo: plainDate
     .optional()
     .describe("Inclusive upper bound on expense date"),
+  /**
+   * Inclusive bounds on `cost`, in dollars — the money window the ledger has
+   * never had. (Its absence is why 61 of 318 audited raw-SQL statements existed
+   * at all: they were writing `cost BETWEEN a AND b` by hand.)
+   *
+   * `z.coerce` is load-bearing, not decoration: these arrive from the URL as
+   * strings (`?costMin=500`), and a bare `z.number()` rejects `"500"`.
+   *
+   * Rows with a null `cost` fall out of any window by plain SQL comparison
+   * semantics, exactly as null-`date` rows do for the date bounds. That is
+   * intended, not a gap: `costPresenceFilter: "none"` is the filter for "no
+   * cost recorded".
+   *
+   * Negative bounds are meaningful and supported — credits are real in this
+   * ledger (refunds, and the family wedding contributions), so `costMax: 0` is
+   * the credits-only worklist. Never assume a lower bound of zero.
+   */
+  costMin: z.coerce
+    .number()
+    .optional()
+    .describe("Inclusive lower bound on expense cost, in dollars"),
+  costMax: z.coerce
+    .number()
+    .optional()
+    .describe("Inclusive upper bound on expense cost, in dollars"),
   /**
    * `"none"` matches expenses with a null `cost`; `"has"` matches expenses
    * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
@@ -1052,6 +1111,25 @@ export const expenseProjectAggregate = z.object({
 export type ExpenseProjectAggregate = z.infer<typeof expenseProjectAggregate>;
 
 /**
+ * Spend grouped by the vendor the money went to, resolved through
+ * `expense.purchaseId → Purchase.vendorId → Vendor`.
+ *
+ * Like `byProject`, this is an INNER join, so it deliberately does **not** sum
+ * to `summary.net`: every expense with no charge attached (no vendor recorded)
+ * is excluded, and there are ~193 of those. That asymmetry is the same one
+ * `byProject` already has, and it is the honest shape — a left join would
+ * invent an "unknown vendor" bucket that is really "we never wrote it down".
+ * Read the gap between `sum(byVendor.net)` and `summary.net` as the size of the
+ * unattributed tail, not as a bug.
+ */
+export const expenseVendorAggregate = z.object({
+  vendorId,
+  vendorName: z.string(),
+  ...expenseAggregateFields,
+});
+export type ExpenseVendorAggregate = z.infer<typeof expenseVendorAggregate>;
+
+/**
  * `expense.analytics`'s output — chart-ready aggregates computed server-side
  * (SQL GROUP BYs), replacing client-side computation over the full
  * `expense.chartData` fetch-all. Empty categories are omitted from each
@@ -1065,6 +1143,7 @@ export const expenseAnalyticsOut = z.object({
   monthly: z.array(expenseMonthlyAggregate),
   cumulative: z.array(expenseCumulativePoint),
   byProject: z.array(expenseProjectAggregate),
+  byVendor: z.array(expenseVendorAggregate),
 });
 export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 

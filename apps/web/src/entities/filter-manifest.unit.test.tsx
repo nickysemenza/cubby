@@ -57,6 +57,7 @@ describe("manifestFilterConfig", () => {
     // A boolean, and a set of mutually exclusive windows.
     ["expense", "future"],
     ["expense", "date"],
+    ["expense", "cost"],
     ["purchase", "date"],
   ] as const)("%s.%s stays single-select", (entity, columnId) => {
     expect(manifestFilterConfig(entity, columnId)?.filterType).toBe("select");
@@ -108,8 +109,8 @@ describe("manifestFilterConfig", () => {
   );
 
   it("returns undefined for a column with no declared filter", () => {
-    // `cost` now HAS a spec (the presence filter added alongside this test) —
-    // `createdAt` is a real expenses column that genuinely has none.
+    // `cost` HAS a spec (the preset select — presence sentinels plus amount
+    // buckets) — `createdAt` is a real expenses column that genuinely has none.
     expect(manifestFilterConfig("expense", "createdAt")).toBeUndefined();
   });
 });
@@ -510,11 +511,18 @@ describe("purchase filters", () => {
 });
 
 /**
- * The expenses ledger's two column-less scopes. `urlOnly` keeps them out of
+ * The expenses ledger's column-less scopes. `urlOnly` keeps them out of
  * `columnFilters` (a TanStack column has to exist for every entry there, or it
  * logs `[Table] Column with id '<x>' does not exist.` on every render) WITHOUT
  * taking them off the wire — they're still ordinary manifest specs everywhere
  * else.
+ *
+ * Two reasons a spec lands here: it's a deep-link scope with no control
+ * (`productId`, `orderIdExact`, `purchaseId`), or the column it belongs to
+ * already spends its single filter slot on something else. `costMin`/`costMax`
+ * are the latter — the Cost column renders the preset select, and these carry
+ * the exact bounds for MCP and hand-written URLs. `notesSearch`/`urlSearch`
+ * have no rendered column at all.
  */
 describe("expense URL-only scopes", () => {
   it("marks exactly the specs no column renders", () => {
@@ -522,11 +530,45 @@ describe("expense URL-only scopes", () => {
       getEntityFilters("expense"),
     );
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "costMin",
+      "costMax",
+      "notesSearch",
+      "urlSearch",
       "productId",
       "orderIdExact",
       "purchaseId",
     ]);
     expect(columnBacked.some((spec) => spec.urlOnly)).toBe(false);
+  });
+
+  it("routes the Cost column's preset to either presence or a bound", () => {
+    const specs = getEntityFilters("expense");
+    // The sentinels keep their old meaning...
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { cost: "none" }),
+      ),
+    ).toEqual({ costPresenceFilter: "none" });
+    // ...and the buckets expand to a signed money bound instead.
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { cost: "credits" }),
+      ),
+    ).toEqual({ costMax: 0 });
+  });
+
+  it("passes exact ?costMin=/?costMax= through for the server to coerce", () => {
+    const specs = getEntityFilters("expense");
+    // Raw strings off the URL — `costMin`/`costMax` are `z.coerce.number()`
+    // server-side precisely so this parses rather than being rejected.
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { costMin: "500", costMax: "1000" }),
+      ),
+    ).toEqual({ costMin: "500", costMax: "1000" });
   });
 
   it("still routes ?productId= to the server filter", () => {
