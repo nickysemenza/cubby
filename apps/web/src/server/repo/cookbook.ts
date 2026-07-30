@@ -14,6 +14,7 @@ import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { cookbook, image, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
@@ -35,6 +36,10 @@ import {
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
 } from "~/server/repo/recipe";
+
+export const COOKBOOK_DELETE_EDGE_POLICY = {
+  "Recipe.cookbookId": "cascade-delete-entity",
+} as const satisfies IncomingEdgePolicy<"cookbook", "cascade-delete-entity">;
 
 // Everything an import knows about a cookbook before its recipes are written: the
 // book name plus the full extraction and OPF metadata. `author`/`subjects` default

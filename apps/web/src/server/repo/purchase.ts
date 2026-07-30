@@ -48,6 +48,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { expense, image, purchase, purchaseImage } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -78,6 +79,22 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { assertVendorLive } from "~/server/repo/vendor";
+
+export const PURCHASE_DELETE_EDGE_POLICY = {
+  "Expense.purchaseId": "clear-live-fk-with-audit",
+  "PurchaseImage.purchaseId": "soft-delete-association",
+} as const satisfies IncomingEdgePolicy<
+  "purchase",
+  "clear-live-fk-with-audit" | "soft-delete-association"
+>;
+
+export const PURCHASE_MERGE_EDGE_POLICY = {
+  "Expense.purchaseId": "repoint-live-fk-with-audit",
+  "PurchaseImage.purchaseId": "move-dedupe-and-soft-delete-source",
+} as const satisfies IncomingEdgePolicy<
+  "purchase",
+  "repoint-live-fk-with-audit" | "move-dedupe-and-soft-delete-source"
+>;
 
 /**
  * A charge's line count and line total, as correlated scalar subqueries.

@@ -19,6 +19,7 @@ import {
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   type image,
   inventoryEntry,
@@ -64,6 +65,15 @@ import type {
   LocationWithParentChild,
 } from "./internal-types";
 import { wouldCreateParentCycle } from "./tree";
+
+export const LOCATION_DELETE_EDGE_POLICY = {
+  "InventoryEntry.locationId": "block-live-inventory",
+  "LocationImage.locationId": "soft-delete-association",
+  "Location.parentId": "clear-live-child-parent",
+} as const satisfies IncomingEdgePolicy<
+  "location",
+  "block-live-inventory" | "soft-delete-association" | "clear-live-child-parent"
+>;
 
 // Verify a proposed parent location actually exists and isn't soft-deleted.
 // Without this, a dangling parentId silently inserts: wouldCreateParentCycle

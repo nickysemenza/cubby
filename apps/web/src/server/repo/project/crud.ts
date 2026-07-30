@@ -17,6 +17,7 @@ import type {
 import { and, eq, inArray, or } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
   project,
@@ -48,6 +49,22 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cle
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
+
+export const PROJECT_DELETE_EDGE_POLICY = {
+  "Project.parentProjectId": "block-live-child",
+  "ProjectDependency.projectId": "hard-delete-dependency",
+  "ProjectDependency.blockedByProjectId": "hard-delete-dependency",
+  "Task.projectId": "block-live-task",
+  "Expense.projectId": "block-live-expense",
+  "ProjectImage.projectId": "soft-delete-association",
+} as const satisfies IncomingEdgePolicy<
+  "project",
+  | "block-live-child"
+  | "hard-delete-dependency"
+  | "block-live-task"
+  | "block-live-expense"
+  | "soft-delete-association"
+>;
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
 type ProjectUpdateData = ProjectUpdateInput["data"];

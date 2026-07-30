@@ -20,6 +20,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -46,6 +47,15 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { assertProjectLive } from "~/server/repo/project";
 import { dbTaskToAPI } from "./helpers";
+
+export const TASK_DELETE_EDGE_POLICY = {
+  "Task.parentTaskId": "cascade-live-child",
+  "TaskDependency.taskId": "hard-delete-dependency",
+  "TaskDependency.blockedByTaskId": "hard-delete-dependency",
+} as const satisfies IncomingEdgePolicy<
+  "task",
+  "cascade-live-child" | "hard-delete-dependency"
+>;
 
 /** `taskUpdateData` has no standalone type export — derive it from the input. */
 type TaskUpdateData = TaskUpdateInput["data"];

@@ -13,6 +13,7 @@ import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   ingredient,
   product,
@@ -26,6 +27,11 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+
+export const INGREDIENT_MERGE_EDGE_POLICY = {
+  "RecipeSectionIngredient.ingredientId": "repoint-to-survivor",
+  "Product.ingredientId": "repoint-to-survivor",
+} as const satisfies IncomingEdgePolicy<"ingredient", "repoint-to-survivor">;
 
 /**
  * The serialized {@link MergeSummaryOut} (aliasesAdded / recipesMoved /
