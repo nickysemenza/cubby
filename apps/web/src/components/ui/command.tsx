@@ -66,8 +66,11 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  startAdornment,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> & {
+  startAdornment?: React.ReactNode;
+}) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
       <InputGroup className="bg-input/20 h-8!">
@@ -81,6 +84,7 @@ function CommandInput({
         />
         <InputGroupAddon>
           <SearchIcon className="size-3.5 shrink-0 opacity-50" />
+          {startAdornment}
         </InputGroupAddon>
       </InputGroup>
     </div>
@@ -98,19 +102,6 @@ function CommandList({
         "no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
         className,
       )}
-      {...props}
-    />
-  );
-}
-
-function CommandEmpty({
-  className,
-  ...props
-}: React.ComponentProps<typeof CommandPrimitive.Empty>) {
-  return (
-    <CommandPrimitive.Empty
-      data-slot="command-empty"
-      className={cn("py-6 text-center text-xs/relaxed", className)}
       {...props}
     />
   );
@@ -170,7 +161,6 @@ export {
   CommandDialog,
   CommandInput,
   CommandList,
-  CommandEmpty,
   CommandGroup,
   CommandItem,
 

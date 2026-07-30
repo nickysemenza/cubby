@@ -23,6 +23,9 @@ export type SearchType = z.infer<typeof searchTypeSchema>;
 export const globalSearchInputSchema = z.object({
   query: z.string().min(1).max(100),
   limit: z.number().min(1).max(50).default(5),
+  entityType: searchableEntitySchema
+    .optional()
+    .describe("Restrict results to one searchable entity type."),
   /**
    * "lexical" skips the semantic (embedding + pgvector) path so the fast
    * ilike results can render immediately; the command palette pairs it with

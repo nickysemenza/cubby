@@ -15,7 +15,7 @@ export function registerSearchTools(server: McpServer) {
   registerMcpTool(server, {
     name: "global_search",
     description:
-      "Fuzzy name search across every indexed entity in one call — products, inventory entries, locations, recipes, ingredients, cookbooks, meals, and the household tracker (projects, tasks, expenses). Ranked hybrid of lexical (exact/substring/trigram) and semantic matching; pass mode: 'lexical' to skip the embedding call for a faster, name-only pass. Each hit returns entityType + id, so this is the way to turn a name into an ID before calling get_*/update_* tools. For entity-to-entity matching (which product does this expense refer to?) use find_similar_entities instead.",
+      "Fuzzy name search across every indexed entity in one call — products, inventory entries, locations, recipes, ingredients, cookbooks, meals, and the household tracker (projects, tasks, expenses). Pass entityType to restrict the search to one indexed type. Ranked hybrid of lexical (exact/substring/trigram) and semantic matching; pass mode: 'lexical' to skip the embedding call for a faster, name-only pass. Each hit returns entityType + id, so this is the way to turn a name into an ID before calling get_*/update_* tools. For entity-to-entity matching (which product does this expense refer to?) use find_similar_entities instead.",
     inputSchema: globalSearchInputSchema.shape,
     outputSchema: globalSearchMcpOut,
     annotations: READ_ONLY_CLOSED,
@@ -25,6 +25,7 @@ export function registerSearchTools(server: McpServer) {
         query: params.query,
         limit: params.limit,
         mode: params.mode,
+        entityType: params.entityType,
       });
       return { results: result };
     },

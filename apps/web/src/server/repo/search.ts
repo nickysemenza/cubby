@@ -438,10 +438,11 @@ export async function globalSearch(
   db: Database,
   query: string,
   limitPerType = 5,
+  entityTypes: readonly SearchableEntity[] = searchableEntities,
 ): Promise<SearchResultItem[]> {
   const client = getDb(db);
   const resultGroups = await Promise.all(
-    searchableEntities.map((entityType) => {
+    entityTypes.map((entityType) => {
       const entityQuery = searchQueries[entityType];
       return entityQuery.load(
         client,

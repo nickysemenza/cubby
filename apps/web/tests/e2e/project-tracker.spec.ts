@@ -251,19 +251,39 @@ test.describe("Project tracker", () => {
 
     const palette = page.getByRole("dialog");
     await expect(palette).toBeVisible({ timeout: 10000 });
-    await palette
-      .getByPlaceholder("Search, jump to a page, or ask Cubby…")
-      .fill(name);
+    const searchInput = palette.getByPlaceholder(
+      "Search, jump to a page, or ask Cubby…",
+    );
+    await searchInput.fill(`task:${name}`);
+    await expect(
+      palette.getByRole("button", { name: "Clear Tasks scope" }),
+    ).toBeVisible();
+    await expect(palette.getByPlaceholder("Search Tasks…")).toHaveValue(name);
 
-    // Target the search-result name node specifically (`className="truncate
-    // text-sm"` in search-utils.tsx's result renderer) rather than
-    // `getByText(name)` — the "Ask Cubby: "<query>"" item (pinned above the
-    // results while searching) also contains the literal query text, and its
-    // wrapper span doesn't share this class pair.
+    // Empty-query Backspace removes the scope without closing the palette.
+    await palette.getByPlaceholder("Search Tasks…").fill("");
+    await palette.getByPlaceholder("Search Tasks…").press("Backspace");
+    await expect(
+      palette.getByRole("button", { name: "Clear Tasks scope" }),
+    ).not.toBeVisible();
+    await searchInput.fill(`tasks:${name}`);
+
+    // Target the search-result name node specifically; the Ask Cubby action
+    // below the results also contains the literal query.
     const resultName = palette.locator("div.truncate.text-sm", {
       hasText: name,
     });
     await expect(resultName).toBeVisible({ timeout: 10000 });
+    const resultItem = resultName.locator("xpath=ancestor::*[@cmdk-item]");
+    await expect(resultItem.getByText("task", { exact: true })).toBeVisible();
+    await expect(resultItem).not.toContainText("pts");
+    const optionTexts = await palette.getByRole("option").allTextContents();
+    const resultIndex = optionTexts.findIndex((text) => text.includes(name));
+    const askIndex = optionTexts.findIndex((text) =>
+      text.includes(`Ask Cubby: "${name}"`),
+    );
+    expect(resultIndex).toBeGreaterThanOrEqual(0);
+    expect(askIndex).toBeGreaterThan(resultIndex);
     await resultName.click();
 
     // Lands on the real detail route (/tasks/$id), not the /tasks list.
@@ -271,6 +291,20 @@ test.describe("Project tracker", () => {
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
       timeout: 10000,
     });
+
+    // The exhaustive search page receives the clean query and selected type.
+    await page.getByRole("button", { name: "Search" }).click();
+    const reopenedPalette = page.getByRole("dialog");
+    await reopenedPalette
+      .getByPlaceholder("Search, jump to a page, or ask Cubby…")
+      .fill(`task:${name}`);
+    await reopenedPalette
+      .getByText(`See all results for "${name}"`, { exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/search\?/);
+    const searchUrl = new URL(page.url());
+    expect(searchUrl.searchParams.get("q")).toBe(name);
+    expect(searchUrl.searchParams.get("type")).toBe("task");
   });
 
   test("task detail: the parent-project field is a real link to /projects/$id", async ({
