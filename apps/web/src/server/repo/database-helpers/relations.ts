@@ -218,6 +218,18 @@ export const relations = {
           sql<number>`(SELECT count(*) FROM "Expense" pu WHERE pu."productId" = "product"."id" AND pu."deletedAt" IS NULL)`.as(
             "expenseCount",
           ),
+        // Net basis: SUM(expense.cost) over this product's live expenses.
+        // Plain sum IS the net basis — negative rows (refunds, disposals) are
+        // real in this ledger. COALESCE matters: a product with no expenses
+        // nets $0, not null. Same "hand-qualified alias, no interpolated
+        // PgColumn" shape as expenseCount above — see `purchaseExpenseTotal`
+        // in repo/purchase.ts for the full warning about why a Drizzle
+        // column interpolated into this select field would self-join and
+        // silently return 0 for every row.
+        expenseTotal:
+          sql<number>`(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL)`.as(
+            "expenseTotal",
+          ),
       },
     },
   },

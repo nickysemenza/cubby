@@ -124,6 +124,17 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
+  // Same correlated-scalar shape as `relations.product.list.extras.expenseTotal`
+  // — the RQB data query's root alias for product is lowercase "product".
+  if (sort.orderBy === "expenseTotal") {
+    return [
+      sql.raw(
+        `(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e ` +
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
   return null;
 };
 
@@ -378,6 +389,7 @@ export const productList = async (
       { column: product.name, term: filters.nameFilter },
       { column: product.manufacturer, term: filters.manufacturerFilter },
       { column: product.upc, term: filters.upcFilter },
+      { column: product.model, term: filters.modelFilter },
     ],
     [
       eqAnyOrPresence(
@@ -416,6 +428,9 @@ export const productList = async (
         filters.usdaPresenceFilter,
         NO_USDA_KEY,
       ),
+      // `product.price` is a nullable root column, not a cross-entity id-set
+      // subquery — presenceCondition alone covers it.
+      presenceCondition(product.price, filters.pricePresenceFilter),
       // OR-ed with the tag column's presence sentinel so "M18 or untagged" is
       // one filter, same shape as recipe/crud.ts. `product.tags` is notNull
       // with a `'{}'` default, so untagged is only ever zero-length — no

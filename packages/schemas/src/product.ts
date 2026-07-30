@@ -197,6 +197,12 @@ export const productFilterFields = {
   nameFilter: z.string().optional().describe("Filter by product name"),
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   upcFilter: z.string().optional().describe("Filter by UPC code"),
+  modelFilter: z
+    .string()
+    .optional()
+    .describe(
+      "Filter by model number — a tool's real identity when the name is generic.",
+    ),
   categoryFilter: oneOrMany(productCategory)
     .optional()
     .describe("Filter by category"),
@@ -220,6 +226,16 @@ export const productFilterFields = {
   categoryPresenceFilter: presenceFilter,
   expensePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
+  ),
+  /**
+   * `product.price` is a nullable column on the root table (not a
+   * cross-entity id-set subquery like `expensePresenceFilter`/
+   * `inventoryPresenceFilter`) — combine with `inventoryPresenceFilter: "has"`
+   * for the valuation-gap worklist: products physically in inventory that
+   * nobody has priced yet.
+   */
+  pricePresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have a price set.",
   ),
   /**
    * A *key* filter, not a resolution filter. The USDA link is resolved at read
@@ -256,6 +272,7 @@ export const productSortableFields = [
   "notes",
   "location",
   "ingredient",
+  "expenseTotal",
 ] as const;
 
 export type ProductSortField = (typeof productSortableFields)[number];
@@ -398,6 +415,11 @@ export const productListItemOut = z.object({
   // product — backs the list's "Expenses" column + its deep link to
   // `/expenses?productId=`.
   expenseCount: z.number().int(),
+  // Net basis: SUM(expense.cost) over this product's live expenses. Plain sum
+  // IS the net basis here — negative rows (refunds, disposals) are real in
+  // this ledger, so they telescope correctly. 0 for a product with no
+  // expenses, never null.
+  expenseTotal: z.number(),
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 

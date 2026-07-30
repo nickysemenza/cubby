@@ -37,7 +37,7 @@ export function registerProductTools(server: McpServer) {
     slim: slimProduct,
     sort: { orderBy: "name" },
     descriptions: {
-      list: "Search products by name, manufacturer, UPC, or category.",
+      list: "Search products by name, manufacturer, UPC, model, or category.",
       get: "Get a product by ID.",
       create:
         'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
