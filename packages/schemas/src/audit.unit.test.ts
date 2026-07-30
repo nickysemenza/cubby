@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { auditLogListOut } from "./audit";
+import { auditLogListInput, auditLogListOut } from "./audit";
 import {
   APPLICATION_AUDIT_SOURCES,
   auditSourceSchema,
   isScriptAuditSource,
 } from "./context";
+import { oneOrMany } from "./pagination";
 
 /**
  * Regression guard for the closed-enum outage: 567 `AuditLog` rows written by
@@ -44,6 +45,73 @@ describe("auditSourceSchema", () => {
   it("narrows script sources without swallowing application ones", () => {
     expect(isScriptAuditSource("script:whatever")).toBe(true);
     expect(isScriptAuditSource("ui")).toBe(false);
+  });
+});
+
+/**
+ * `auditLogListInput.source` (PR 6, Phase 6) reuses `auditSourceSchema`
+ * through `oneOrMany` rather than narrowing it — a closed enum on the filter
+ * would reintroduce the exact outage this file's first describe block guards
+ * against, just on the read side of a query param instead of the DB column.
+ */
+describe("oneOrMany(auditSourceSchema)", () => {
+  const sourceFilter = oneOrMany(auditSourceSchema);
+
+  it.each([...APPLICATION_AUDIT_SOURCES])(
+    "accepts a bare APPLICATION_AUDIT_SOURCES value: %s",
+    (source) => {
+      expect(sourceFilter.parse(source)).toBe(source);
+    },
+  );
+
+  it("accepts a bare script: value", () => {
+    expect(sourceFilter.parse("script:home-depot-export-2026-07-28")).toBe(
+      "script:home-depot-export-2026-07-28",
+    );
+  });
+
+  it("accepts an array mixing application and script sources", () => {
+    const value = ["ui", "script:url-cleanup-2026-07-28", "api"];
+    expect(sourceFilter.parse(value)).toEqual(value);
+  });
+
+  it.each(["script:", "", "nonsense", "SCRIPT:shouting"])(
+    "rejects %o whether bare or inside an array",
+    (bad) => {
+      expect(sourceFilter.safeParse(bad).success).toBe(false);
+      expect(sourceFilter.safeParse([bad]).success).toBe(false);
+    },
+  );
+
+  it("is exactly what auditLogListInput.source accepts", () => {
+    // auditLogListInput must not narrow the filter beyond oneOrMany(auditSourceSchema).
+    expect(
+      auditLogListInput.shape.source.parse(
+        "script:vendor-normalization-2026-07-28",
+      ),
+    ).toBe("script:vendor-normalization-2026-07-28");
+    expect(
+      auditLogListInput.shape.source.parse(["ui", "sheets_import"]),
+    ).toEqual(["ui", "sheets_import"]);
+  });
+});
+
+describe("auditLogListInput window filters", () => {
+  it("accepts createdAtFrom/createdAtTo as plain ISO strings", () => {
+    const parsed = auditLogListInput.parse({
+      limit: 50,
+      createdAtFrom: "2026-07-01T00:00:00.000Z",
+      createdAtTo: "2026-07-31T23:59:59.999Z",
+    });
+    expect(parsed.createdAtFrom).toBe("2026-07-01T00:00:00.000Z");
+    expect(parsed.createdAtTo).toBe("2026-07-31T23:59:59.999Z");
+  });
+
+  it("leaves createdAtFrom/createdAtTo/source optional", () => {
+    const parsed = auditLogListInput.parse({ limit: 50 });
+    expect(parsed.createdAtFrom).toBeUndefined();
+    expect(parsed.createdAtTo).toBeUndefined();
+    expect(parsed.source).toBeUndefined();
   });
 });
 

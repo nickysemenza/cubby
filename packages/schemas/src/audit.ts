@@ -2,6 +2,7 @@ import { z } from "zod";
 import { auditSourceSchema } from "./context";
 import { entitySchema } from "./entity";
 import { auditableEntities } from "./entity-manifest";
+import { oneOrMany } from "./pagination";
 
 /**
  * Audit log schemas and types.
@@ -15,6 +16,23 @@ export type AuditEntityType = z.infer<typeof auditEntitySchema>;
 export const auditLogListInput = z.object({
   entityType: auditEntitySchema.optional(),
   entityId: z.uuid().optional(),
+  /**
+   * `oneOrMany`: deliberately reuses `auditSourceSchema` rather than a
+   * narrower enum — see that schema's doc comment for why `source` is
+   * open-ended (the `script:<slug>` template-literal arm). Resolved with
+   * `eqAny` in the repo.
+   */
+  source: oneOrMany(auditSourceSchema).optional(),
+  // Same ISO-string encoding as `cursor` below (not `z.date()`): both are
+  // plain strings over the wire, parsed to a `Date` in the repo.
+  createdAtFrom: z
+    .string()
+    .optional()
+    .describe("Inclusive lower bound on createdAt, as an ISO date string"),
+  createdAtTo: z
+    .string()
+    .optional()
+    .describe("Inclusive upper bound on createdAt, as an ISO date string"),
   limit: z.number().min(1).max(500).default(50),
   cursor: z.string().optional(),
 });
