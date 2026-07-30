@@ -76,6 +76,83 @@ export const recipeFlowPlanSchema = z.object({
 });
 export type RecipeFlowPlan = z.infer<typeof recipeFlowPlanSchema>;
 
+// Anthropic's native structured-output dialect rejects several JSON Schema
+// keywords emitted by the strict canonical contract above, including integer
+// bounds and `oneOf`. Keep the provider projection deliberately flat and
+// unconstrained; normalizeRecipeFlowAiPlan always revalidates its result against
+// recipeFlowPlanSchema before application code can use or persist it.
+const recipeFlowAiInstructionRefSchema = z.object({
+  sectionId: z.string(),
+  instructionIndex: z.number(),
+});
+
+const recipeFlowAiAnnotationSchema = z.object({
+  kind: z.enum(["time", "temperature", "cue"]),
+  text: z.string(),
+});
+
+export const recipeFlowAiPlanSchema = z.object({
+  schemaVersion: z.literal(1),
+  setup: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      instructionRefs: z.array(recipeFlowAiInstructionRefSchema),
+      annotations: z.array(recipeFlowAiAnnotationSchema),
+    }),
+  ),
+  sources: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(["usage", "unlisted"]),
+      usageId: z.string().nullable(),
+      role: z.string().nullable(),
+      label: z.string().nullable(),
+      instructionRefs: z.array(recipeFlowAiInstructionRefSchema),
+    }),
+  ),
+  operations: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      outputLabel: z.string().nullable(),
+      inputs: z.array(
+        z.object({
+          kind: z.enum(["source", "operation"]),
+          id: z.string(),
+        }),
+      ),
+      instructionRefs: z.array(recipeFlowAiInstructionRefSchema),
+      annotations: z.array(recipeFlowAiAnnotationSchema),
+    }),
+  ),
+  outputOperationIds: z.array(z.string()),
+});
+export type RecipeFlowAiPlan = z.infer<typeof recipeFlowAiPlanSchema>;
+
+export function normalizeRecipeFlowAiPlan(
+  candidate: RecipeFlowAiPlan,
+): RecipeFlowPlan {
+  return recipeFlowPlanSchema.parse({
+    ...candidate,
+    sources: candidate.sources.map((source) =>
+      source.kind === "usage"
+        ? {
+            id: source.id,
+            kind: source.kind,
+            usageId: source.usageId,
+            role: source.role,
+          }
+        : {
+            id: source.id,
+            kind: source.kind,
+            label: source.label,
+            instructionRefs: source.instructionRefs,
+          },
+    ),
+  });
+}
+
 export const recipeFlowWarningCode = z.enum([
   "unlisted-input",
   "unreferenced-instruction",

@@ -26,8 +26,9 @@ import {
   productCategoryValues,
 } from "@cubby/schemas/product";
 import {
+  normalizeRecipeFlowAiPlan,
   type RecipeFlowPlan,
-  recipeFlowPlanSchema,
+  recipeFlowAiPlanSchema,
 } from "@cubby/schemas/recipe-flow";
 import { chat, type ImagePart } from "@tanstack/ai";
 import type { AnthropicImageMetadata } from "@tanstack/ai-anthropic";
@@ -43,6 +44,7 @@ import {
   type GatewayMetadata,
   gatewayAdapterConfig,
 } from "~/server/clients/gateway-config";
+import { surfaceStructuredOutputRunErrors } from "~/server/clients/structured-output-adapter";
 
 type AnthropicUsageContext = Omit<
   AiGatewayUsageContext,
@@ -192,6 +194,13 @@ class AnthropicClient {
     return createAnthropicChat(model, gatewayAdapterConfig({ metadata }));
   }
 
+  private getStructuredAdapter(
+    metadata?: GatewayMetadata,
+    model: SupportedChatModel = DEFAULT_CHAT_MODEL,
+  ) {
+    return surfaceStructuredOutputRunErrors(this.getAdapter(metadata, model));
+  }
+
   /**
    * Expose the shared text adapter so callers (the agent runtime, the cookbook
    * proxy, the USDA/merge tool loops) can drive their own `chat()` loop without
@@ -208,7 +217,7 @@ class AnthropicClient {
     manufacturer: string,
     usage?: AnthropicUsageContext,
   ): Promise<CategorySuggestion> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     return chat({
       adapter,
@@ -236,7 +245,7 @@ Categorize this product and explain your reasoning.`,
     locationName: string,
     usage?: AnthropicUsageContext,
   ): Promise<LocationTypeSuggestion> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     return chat({
       adapter,
@@ -264,7 +273,7 @@ Determine the appropriate type for this location and explain your reasoning.`,
     locationName: string,
     usage?: AnthropicUsageContext,
   ): Promise<LocationDescription> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
       (url) => ({
@@ -305,7 +314,7 @@ Determine the appropriate type for this location and explain your reasoning.`,
     locationName: string,
     usage?: AnthropicUsageContext,
   ): Promise<DetectedInventoryAiResult> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
       (url) => ({
@@ -371,7 +380,7 @@ Do not list the storage crate/bin/drawer itself. Do not list vague clutter, pack
       | undefined,
     usage?: AnthropicUsageContext,
   ): Promise<RecipeFlowPlan> {
-    const adapter = this.getAdapter(undefined, usage?.model);
+    const adapter = this.getStructuredAdapter(undefined, usage?.model);
     const guidanceText = guidance
       ? `\nPersistent user guidance:\n${guidance}`
       : "";
@@ -384,7 +393,7 @@ Invalid candidate:
 ${JSON.stringify(repair.candidate)}`
       : "";
 
-    return chat({
+    const candidate = await chat({
       adapter,
       middleware: aiGatewayUsageMiddleware(
         anthropicUsageWithDefaults(usage, {
@@ -409,7 +418,8 @@ Rules:
 9. Time, temperature, and doneness annotations must be concise and supported by the cited instruction.
 10. The operation graph must be acyclic. Every source and operation must lead to a listed terminal output; listed outputs cannot feed another operation.
 11. Use unique lowercase kebab-case node IDs beginning with a letter.
-12. Return schemaVersion 1.`,
+12. Every source object must include all provider fields. For a "usage" source, set label to null and instructionRefs to []; for an "unlisted" source, set usageId and role to null.
+13. Return schemaVersion 1.`,
       ],
       messages: [
         {
@@ -419,15 +429,16 @@ Rules:
 ${recipeJson}${guidanceText}${repairText}`,
         },
       ],
-      outputSchema: recipeFlowPlanSchema,
+      outputSchema: recipeFlowAiPlanSchema,
     });
+    return normalizeRecipeFlowAiPlan(candidate);
   }
 
   async identifyProduct(
     imageUrls: string[],
     usage?: AnthropicUsageContext,
   ): Promise<ProductIdentification> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
       (url) => ({
@@ -471,7 +482,7 @@ ${recipeJson}${guidanceText}${repairText}`,
     existingCategories: Record<string, string>,
     usage?: AnthropicUsageContext,
   ): Promise<CategoryAudit> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     const categoryList = Object.entries(existingCategories)
       .map(([cat, desc]) => `- "${cat}": ${desc}`)
@@ -520,7 +531,7 @@ Rules:
     locationNames: string[],
     usage?: AnthropicUsageContext,
   ): Promise<ParsedSearch> {
-    const adapter = this.getAdapter();
+    const adapter = this.getStructuredAdapter();
 
     const locationList =
       locationNames.length > 0

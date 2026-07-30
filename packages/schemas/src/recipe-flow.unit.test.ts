@@ -1,5 +1,8 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
+  normalizeRecipeFlowAiPlan,
+  recipeFlowAiPlanSchema,
   recipeFlowGenerateInputSchema,
   recipeFlowPlanSchema,
 } from "./recipe-flow";
@@ -48,6 +51,50 @@ describe("recipeFlowPlanSchema", () => {
         outputOperationIds: ["Mix Batter"],
       }),
     ).toThrow();
+  });
+});
+
+describe("recipeFlowAiPlanSchema", () => {
+  it("emits an Anthropic-compatible provider schema", () => {
+    const jsonSchema = JSON.stringify(z.toJSONSchema(recipeFlowAiPlanSchema));
+
+    expect(jsonSchema).not.toContain('"oneOf"');
+    expect(jsonSchema).not.toContain('"minimum"');
+    expect(jsonSchema).not.toContain('"maximum"');
+  });
+
+  it("normalizes the flat provider source shape into the canonical plan", () => {
+    const result = normalizeRecipeFlowAiPlan(
+      recipeFlowAiPlanSchema.parse({
+        schemaVersion: 1,
+        setup: [],
+        sources: [
+          {
+            id: "flour",
+            kind: "usage",
+            usageId,
+            role: null,
+            label: null,
+            instructionRefs: [],
+          },
+        ],
+        operations: [
+          {
+            id: "mix",
+            label: "mix",
+            outputLabel: "batter",
+            inputs: [{ kind: "source", id: "flour" }],
+            instructionRefs: [{ sectionId, instructionIndex: 0 }],
+            annotations: [],
+          },
+        ],
+        outputOperationIds: ["mix"],
+      }),
+    );
+
+    expect(result.sources).toEqual([
+      { id: "flour", kind: "usage", usageId, role: null },
+    ]);
   });
 });
 
