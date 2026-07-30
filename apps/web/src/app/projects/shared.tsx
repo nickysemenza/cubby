@@ -105,6 +105,7 @@ import {
 } from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
+import { persistedVendorId } from "~/lib/vendor-logo-lookup";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
@@ -768,7 +769,15 @@ export function expenseVendorColumn(
           clipboard={specFromCellData(cellData, expense)}
           SearchProvider={WithVendorSearch}
           renderValue={(v) =>
-            v ? <VendorCell vendor={v.name} compactOnMobile /> : <NoneValue />
+            v ? (
+              <VendorCell
+                vendor={v.name}
+                vendorId={persistedVendorId(v.name, expense)}
+                compactOnMobile
+              />
+            ) : (
+              <NoneValue />
+            )
           }
         />
       );
@@ -912,7 +921,7 @@ export function ExpenseList({
         value: id,
         label: name,
         hint: String(count),
-        icon: <VendorMark vendor={name} />,
+        icon: <VendorMark vendor={name} vendorId={id} />,
       }));
   }, [expenses]);
 

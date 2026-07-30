@@ -52,11 +52,16 @@ export function WithVendorSearch({
   });
 
   const items = useMemo<ComboboxItem<VendorName>[]>(() => {
+    // Destructuring the real `id` here while the item's own `id` stays the
+    // NAME (per this module's doc above) looks like a bug — it isn't. The
+    // combobox item's identity is deliberately the name; `id` is consumed only
+    // by the icon, to resolve a rename-proof logo via `VendorMark`'s
+    // `vendorId` prop.
     const all =
-      data?.map(({ name }) => ({
+      data?.map(({ id, name }) => ({
         id: name,
         name,
-        icon: <VendorMark vendor={name} />,
+        icon: <VendorMark vendor={name} vendorId={id} />,
       })) ?? [];
     const query = searchQuery.trim().toLowerCase();
     if (!query) return all;

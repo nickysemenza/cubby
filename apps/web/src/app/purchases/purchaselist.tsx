@@ -56,7 +56,7 @@ export function PurchaseList() {
         value: id,
         label: name,
         hint: String(count),
-        icon: <VendorMark vendor={name} />,
+        icon: <VendorMark vendor={name} vendorId={id} />,
       })) ?? NO_VENDOR_OPTIONS,
     [vendorOptionsQuery.data],
   );

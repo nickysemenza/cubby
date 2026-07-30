@@ -75,7 +75,7 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
             className="min-w-0 hover:underline"
           >
             {expense.vendor ? (
-              <VendorCell vendor={expense.vendor} />
+              <VendorCell vendor={expense.vendor} vendorId={expense.vendorId} />
             ) : (
               <span className="truncate">View charge</span>
             )}

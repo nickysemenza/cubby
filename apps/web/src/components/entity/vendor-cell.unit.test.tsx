@@ -1,6 +1,21 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { VendorCell } from "./vendor-cell";
+import { VENDOR_LOGO_BY_ID } from "~/lib/vendor-logos.generated";
+import { VendorCell, VendorMark } from "./vendor-cell";
+
+// Driven off a live manifest entry, not a hardcoded id, so these survive a
+// re-seed that drops or renumbers vendors — any entry works, this just needs
+// one to exist.
+const [SEEDED_ID] = Object.entries(VENDOR_LOGO_BY_ID)[0] ?? [];
+if (!SEEDED_ID) {
+  throw new Error(
+    "VENDOR_LOGO_BY_ID is empty — vendor-cell.unit.test.tsx needs at least one seeded entry to test the vendorId-resolved path against.",
+  );
+}
+// Deliberately a name that slugs to nothing in the manifest, so any logo that
+// renders for it can only have come from `vendorId` resolution, never from
+// the name-derived fallback — that's what isolates the id-first behavior.
+const RENAMED_VENDOR = "Totally Unrelated Renamed Co";
 
 /**
  * Both regressions here come from the same place: this cell is never remounted
@@ -42,5 +57,55 @@ describe("VendorCell", () => {
     const name = screen.getByText("eBay");
     expect(name.className).toContain("sr-only");
     expect(name.className).not.toContain("max-sm:hidden");
+  });
+});
+
+/**
+ * The `vendorId` prop's whole reason to exist: a vendor rename must not
+ * demote its logo to a monogram just because the NAME-derived slug no longer
+ * matches. These fail on `main`, where `VendorCell`/`VendorMark` have no
+ * `vendorId` prop and can only ever slug the (possibly stale) name.
+ */
+describe("VendorCell / VendorMark with vendorId", () => {
+  it("resolves the logo by id even when the name matches no slug (rename-doesn't-demote)", () => {
+    render(<VendorMark vendor={RENAMED_VENDOR} vendorId={SEEDED_ID} />);
+    expect(document.querySelector("img")).toBeTruthy();
+  });
+
+  it("keys the failed-logo guard on the RESOLVED slug, not a name-derived one", () => {
+    const { rerender } = render(
+      <VendorMark vendor={RENAMED_VENDOR} vendorId={SEEDED_ID} />,
+    );
+    expect(document.querySelector("img")).toBeTruthy();
+
+    fireEvent.error(document.querySelector("img") as HTMLImageElement);
+    expect(document.querySelector("img")).toBeNull();
+
+    // Re-rendering with the SAME vendor/id must not retry the broken request.
+    // If `failedSlug` were keyed on `vendorSlug(vendor)` (the name-derived
+    // slug — which for a renamed vendor differs from the id-resolved slug
+    // that actually failed above), this guard would never match its own
+    // failure and the <img> would come back every render.
+    rerender(<VendorMark vendor={RENAMED_VENDOR} vendorId={SEEDED_ID} />);
+    expect(document.querySelector("img")).toBeNull();
+  });
+
+  it("keeps compactOnMobile consistent with the mark under an id-resolved logo", () => {
+    // The name alone has no logo (`RENAMED_VENDOR` slugs to nothing), but the
+    // id resolves one. `compactOnMobile`'s own presence check must agree with
+    // what `VendorMark` actually renders — forwarding `vendorId` to only one
+    // of the two would either hide the name behind a mark that isn't really
+    // there, or show a bare unlabeled mark with no name, the "anonymous rows"
+    // failure `VendorCell`'s doc comment warns about.
+    render(
+      <VendorCell
+        vendor={RENAMED_VENDOR}
+        vendorId={SEEDED_ID}
+        compactOnMobile
+      />,
+    );
+    expect(document.querySelector("img")).toBeTruthy();
+    const name = screen.getByText(RENAMED_VENDOR);
+    expect(name.className).toContain("max-sm:sr-only");
   });
 });

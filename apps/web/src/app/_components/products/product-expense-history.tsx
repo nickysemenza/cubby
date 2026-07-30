@@ -96,7 +96,10 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {expense.vendor ? (
-                  <VendorCell vendor={expense.vendor} />
+                  <VendorCell
+                    vendor={expense.vendor}
+                    vendorId={expense.vendorId}
+                  />
                 ) : (
                   <NoneValue />
                 )}
