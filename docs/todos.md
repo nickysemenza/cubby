@@ -276,6 +276,39 @@ Roughly priority order.
   needs-attention. (The rest of the old maintenance+budgeting bundle shipped
   2026-07: inbox view + promote-to-project, the attention detectors in
   `repo/project/attention.ts`, and the planned-vs-actual budget views.)
+- [ ] **Deferred from the 2026-07-30 MCP-gap pass** (PRs #493–#500, which closed
+  the ledger money filters, `match_expenses`, `byVendor`, the product/inventory/
+  audit filters, and exposed `split_expense`/`merge_purchases`/
+  `link_expenses_to_purchase`). Three things were deliberately left:
+  - **Location subtree scoping.** There is no descendant walk for locations —
+    `parentId` matches direct children only, and `filter-manifest.tsx` says so in
+    a comment. Needs a new `repo/location/subtree.ts` (query +
+    `buildChildrenMap` + `collectDescendantIds` with a depth cap and `visited`
+    guard, modelled on `repo/project/subtree.ts`'s in-memory BFS), which forces
+    `locationList`'s where-build **async** — the same reason
+    `buildExpenseWhereClause` is. Then an `includeSubLocations` boolean on both
+    `locationFilterFields` and `inventoryFilterFields`, mirroring
+    `includeSubProjects`. Note `repo/location/tree.ts` has a real
+    `WITH RECURSIVE` CTE, but it fetches the whole tree with images and
+    inventory for the tree view — extract a scoped id helper rather than reusing
+    it. Cut because the cost is out of proportion to how often it actually came
+    up.
+  - **The new expense filters don't reach the project portfolio charts.**
+    `repo/project/portfolio-analytics.ts` hand-rolls its own `gte`/`lte` on
+    `expense.date` from a *different* input schema and never goes through
+    `buildExpenseWhereClause`, so `costMin`/`costMax`/`notesSearch`/`urlSearch`
+    and the OR-search are invisible to it. Stated as a known limit rather than
+    fixed; the fix is to route it through the shared builder.
+  - **Unknown filter params are silently ignored, not rejected.** Zod strips
+    unknown keys, so `list_expenses({costMin: 500})` against a server that
+    doesn't have `costMin` returns the *entire ledger* presented as a filtered
+    result — wrong data that looks right, rather than an error. Observed for
+    real during this pass, in the window between the docs merging and the code
+    deploying. Any client/server skew (a stale MCP tool catalog, a mid-deploy
+    request) degrades this way. Options: `.strict()` on the filter schemas so
+    unknown keys throw, or accept it as a known hazard — but decide, because
+    "the filter silently did nothing" is the exact failure mode the MCP surface
+    exists to prevent.
 - [ ] **Surface the tracker to the rest of the app** (2026-07 audit) — mostly
   shipped; what remains is the two UI entry points.
   **Shipped:** the attention rules are a first-class Problems group
