@@ -1,11 +1,9 @@
-import type { VendorKind, VendorOut } from "@cubby/schemas/vendor";
-import { VENDOR_KIND_LABELS } from "@cubby/schemas/vendor";
+import type { VendorOut } from "@cubby/schemas/vendor";
 import { ExternalLink, Info, Receipt } from "lucide-react";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
-import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
@@ -19,7 +17,6 @@ import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { VendorChargesTable } from "./vendor-charges-table";
-import { VENDOR_KIND_BADGE_VARIANT, vendorKindOptions } from "./vendor-options";
 
 interface VendorDetailProps {
   vendor: VendorOut;
@@ -91,31 +88,6 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    },
-    {
-      label: "Kind",
-      value: (
-        <EditableCell
-          value={vendor.kind}
-          config={{ type: "select", options: vendorKindOptions }}
-          onSave={async (kind) => {
-            await updateMutation.mutateAsync({
-              id: vendor.id,
-              // Nullable on purpose — clearing it back to blank is legitimate.
-              data: { kind: kind as VendorKind | null },
-            });
-          }}
-          renderValue={(v) =>
-            v ? (
-              <Badge variant={VENDOR_KIND_BADGE_VARIANT[v]}>
-                {VENDOR_KIND_LABELS[v]}
-              </Badge>
-            ) : (
-              <NoneValue />
-            )
-          }
         />
       ),
     },
@@ -212,9 +184,14 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       entity="vendor"
       title={vendor.name}
       rawData={vendor}
+      // Only the unusual state gets a placard: a roster entry no money has gone
+      // to yet (the whole point of a vendor table — its free-text predecessor
+      // could never hold one), which is also the only state `deleteVendors`
+      // accepts. A vendor WITH charges needs no stamp; the Charges hero stat
+      // already says how many.
       heroStamp={
-        vendor.kind
-          ? { label: VENDOR_KIND_LABELS[vendor.kind], tone: "ink" }
+        vendor.purchaseCount === 0
+          ? { label: "No charges", tone: "ink" }
           : undefined
       }
       heroStats={heroStats}

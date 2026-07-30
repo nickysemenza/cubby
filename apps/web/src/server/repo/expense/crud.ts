@@ -15,7 +15,7 @@ import type {
   ExpenseOut,
   ExpenseUpdateInput,
 } from "@cubby/schemas/project";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expense } from "~/server/db/schema";
 import {
@@ -36,7 +36,12 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { assertProjectLive } from "~/server/repo/project";
-import { findOrCreatePurchase } from "~/server/repo/purchase";
+import {
+  assertPurchaseLive,
+  findOrCreatePurchase,
+  foldChargeInto,
+  renameChargeOrderId,
+} from "~/server/repo/purchase";
 import { findOrCreateVendor } from "~/server/repo/vendor";
 import { dbExpenseToAPI } from "./helpers";
 
@@ -108,47 +113,110 @@ export const getExpenseByID = expenseCrud.getByID;
  * a transaction (they're only unique per vendor), so writing one would create a
  * charge nobody can identify. The order id is dropped rather than half-recorded.
  *
- * `current` is the charge the row is already on, and passing it is what keeps an
- * UPDATE idempotent. Without it, re-writing the same `{vendor}` onto an
+ * `current` is the charge the row is already on, and passing it is what stops an
+ * UPDATE leaking charges. Without it, re-writing the same `{vendor}` onto an
  * order-less row would mint a fresh charge every time (`orderId: null` can't
  * dedupe — see `findOrCreatePurchase`), re-point the row to it, and leave the
  * previous charge behind with no lines and possibly a `statedTotal` and documents
  * on it. Nothing sweeps up empty charges, so that leak would be permanent.
+ *
+ * There are **two** doors to that leak and both are closed here:
+ *
+ * 1. An unchanged `{vendor}` resubmit — short-circuited as a no-op below.
+ * 2. **Correcting the order id** on a charge whose only line is this expense.
+ *    Minting a new charge there would abandon the old one exactly as in (1); what
+ *    the user means by fixing a typo'd order id on a single-line charge is *edit
+ *    this charge*, so the charge is renamed IN PLACE and keeps its `statedTotal`
+ *    and documents. If the charge has OTHER lines it is not renamed — the line is
+ *    genuinely being reassigned to a different order, and the old charge keeps its
+ *    remaining lines, so nothing is orphaned.
+ *
+ * The in-place rename can still collide with an existing charge for
+ * `(vendor, newOrderId)` — the partial-unique index. `findOrCreatePurchase`
+ * resolves that by returning the existing charge, and the now-empty old one is
+ * folded away by the caller.
  */
 const resolveCharge = async (
   tx: DrizzleTransaction,
+  actor: ActorContext,
   data: { vendor?: string | null; orderId?: string | null },
   current?: {
     purchaseId: PurchaseId | null;
     vendorName: string | null;
     orderId: string | null;
+    /** Live lines on the current charge, this expense included. */
+    lineCount: number;
   },
 ): Promise<PurchaseId | null | undefined> => {
   if (data.vendor === undefined && data.orderId === undefined) return undefined;
 
-  const vendorName = data.vendor?.trim();
-  if (!vendorName) return data.vendor === null ? null : undefined;
+  // An explicit null is "detach from the charge", and outranks everything else.
+  if (data.vendor === null) return null;
+
+  // ⚠️ Falling back to the row's CURRENT vendor is load-bearing, not defensive.
+  // Both Order # inline editors save `data: { orderId }` and nothing else
+  // (expenselist.tsx and projects/shared.tsx), which is the ONLY shape the UI ever
+  // sends for an order-id correction. Reading only `data.vendor` here made that
+  // write a silent no-op — it appeared to save and changed nothing — which broke
+  // the central purchase-import workflow of reconciling an order id against a
+  // charge. A row with no vendor anywhere still drops the order id below, because
+  // an order id alone can't name a transaction.
+  const vendorName = data.vendor?.trim() || current?.vendorName || undefined;
+  if (!vendorName) return undefined;
+
+  const requestedOrderId = data.orderId?.trim() || null;
+  const sameVendor = current?.vendorName === vendorName;
 
   // Already on a charge that says exactly this? Then this write is a no-op, and
   // creating a second identical charge would be the bug, not the fix.
-  const requestedOrderId = data.orderId?.trim() || null;
   if (
     current?.purchaseId &&
-    current.vendorName === vendorName &&
+    sameVendor &&
     // An omitted `orderId` means "leave it alone", so it can't force a new charge.
     (data.orderId === undefined || current.orderId === requestedOrderId)
   ) {
     return undefined;
   }
 
+  // Door 2: same vendor, order id genuinely changing, and this expense is the
+  // charge's only line — rename the charge rather than abandoning it.
+  if (
+    current?.purchaseId &&
+    sameVendor &&
+    current.lineCount <= 1 &&
+    data.orderId !== undefined
+  ) {
+    const renamed = await renameChargeOrderId(
+      tx,
+      current.purchaseId,
+      requestedOrderId,
+      actor,
+    );
+    if (renamed) return undefined;
+    // Collided with an existing charge for this (vendor, orderId): fall through
+    // and attach to that one, then fold the emptied charge below.
+  }
+
   const vendorId = await findOrCreateVendor(tx, vendorName);
-  return findOrCreatePurchase(tx, {
+  const target = await findOrCreatePurchase(tx, {
     vendorId,
     orderId:
       data.orderId === undefined
         ? (current?.orderId ?? null)
         : requestedOrderId,
   });
+
+  // Leaving its last line behind makes the old charge dead weight. Fold it into
+  // the target so its documents and `statedTotal` survive rather than stranding.
+  if (
+    current?.purchaseId &&
+    current.purchaseId !== target &&
+    current.lineCount <= 1
+  ) {
+    await foldChargeInto(tx, current.purchaseId, target, actor);
+  }
+
+  return target;
 };
 
 /**
@@ -173,6 +241,12 @@ export const updateExpense = async (
     (data.vendor !== undefined || data.orderId !== undefined);
 
   if (!needsResolve) {
+    // `rest` can carry an explicit `purchaseId` that never passes through
+    // `resolveCharge`, so validate it here or it goes in unchecked.
+    if (rest.purchaseId) {
+      const target = rest.purchaseId;
+      await withTransaction(db, (tx) => assertPurchaseLive(tx, target));
+    }
     return expenseCrud.update(db, id, rest, actor);
   }
 
@@ -188,7 +262,7 @@ export const updateExpense = async (
       columns: { purchaseId: true },
       with: {
         purchase: {
-          columns: { orderId: true, deletedAt: true },
+          columns: { id: true, orderId: true, deletedAt: true },
           with: { vendor: { columns: { name: true, deletedAt: true } } },
         },
       },
@@ -198,13 +272,32 @@ export const updateExpense = async (
     // vendor write should give it a live charge rather than reuse a dead one.
     const live =
       existing?.purchase?.deletedAt === null ? existing.purchase : undefined;
-    return resolveCharge(tx, data, {
+
+    // How many live lines the current charge has, which decides whether an
+    // order-id correction renames the charge in place or reassigns this line to a
+    // different one. Only asked when there IS a charge.
+    //
+    // Counted on `tx`, not on `db`: a read on the outer handle is a DIFFERENT
+    // connection, so it can't see this transaction's own writes and — under the
+    // per-request `pg.Pool` (max 5) — competes with it for a connection. The
+    // decision this count drives then races the very rows it's counting.
+    const lineCount = live
+      ? ((
+          await tx
+            .select({ n: sql<number>`count(*)::int` })
+            .from(expense)
+            .where(and(eq(expense.purchaseId, live.id), notDeleted(expense)))
+        )[0]?.n ?? 0)
+      : 0;
+
+    return resolveCharge(tx, actor, data, {
       purchaseId: live ? (existing?.purchaseId ?? null) : null,
       vendorName:
         live?.vendor && live.vendor.deletedAt === null
           ? live.vendor.name
           : null,
       orderId: live?.orderId ?? null,
+      lineCount,
     });
   });
 
@@ -242,8 +335,12 @@ export const createExpense = async (
   const id = await withTransaction(db, async (tx) => {
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.
+    // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
+    // the only place it gets checked for liveness — an FK proves the row exists,
+    // not that it isn't tombstoned.
+    if (data.purchaseId) await assertPurchaseLive(tx, data.purchaseId);
     const purchaseId =
-      data.purchaseId ?? (await resolveCharge(tx, data)) ?? null;
+      data.purchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
 
     const created = await insertAndReturn(tx, expense, {
       name: data.name,

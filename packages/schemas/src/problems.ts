@@ -5,9 +5,11 @@ import {
   inventoryId,
   locationId,
   productId,
+  purchaseId,
   recipeId,
 } from "./identifiers";
 import {
+  plainDate,
   type ProjectAttentionType,
   projectAttentionItemSchema,
 } from "./project";
@@ -191,9 +193,14 @@ export const unknownParkedItemSchema = z.object({
  * VARIANT, not per record, so one card covers however many rows carry the
  * misspelling.
  */
-export const labelVariantSchema = z.object({
+const labelVariantFields = {
   /** The minority spelling, exactly as stored. */
   value: z.string(),
+  /**
+   * How much backs this spelling: products carrying it for a manufacturer, live
+   * charges pointing at it for a vendor (whose name is unique per row, so
+   * counting rows there could never produce a majority).
+   */
   count: z.number().int(),
   /** The most-used spelling sharing this canonical form. */
   canonical: z.string(),
@@ -204,6 +211,33 @@ export const labelVariantSchema = z.object({
    * route.
    */
   sampleId: z.string(),
+};
+
+export const labelVariantSchema = z.object(labelVariantFields);
+
+/**
+ * Two vendors on the roster whose names normalize to the same thing — `Amazon`
+ * and `Amazon.com` are one real vendor entered twice, splitting that vendor's
+ * spend across two rows.
+ *
+ * A {@link labelVariantSchema} row plus the CANONICAL row's own id, which the
+ * manufacturer sibling has no use for. A manufacturer is a free-text string, so
+ * its fix is a rename; these are two real `Vendor` rows and the fix is
+ * `mergeVendors({ keepId, mergeIds })`, which needs an id for BOTH sides —
+ * `canonical` is a name and `sampleId` is the VARIANT's id, so neither answers
+ * "what do we keep".
+ *
+ * Its own contract over the shared field map rather than a field ON
+ * `labelVariantSchema`, so the manufacturer detector's wire shape is untouched
+ * (they share one SQL helper, so the column is selected for both and this schema's
+ * absence of it is what strips it there). Both ids stay plain strings for the same
+ * reason `sampleId` does — a branded schema's tRPC *input* type is `string`, so
+ * the merge call needs no cast.
+ */
+export const duplicateVendorSchema = z.object({
+  ...labelVariantFields,
+  /** The vendor row a merge would KEEP — the majority spelling. */
+  canonicalSampleId: z.string(),
 });
 
 export const productWithNoImagesSchema = z.object({
@@ -291,6 +325,35 @@ export const productWithBetterUpcDataSchema = z.object({
   }),
 });
 
+/**
+ * A charge whose live lines don't add up to what the charge itself stated.
+ *
+ * **Advisory, not a defect** — hence its non-defect `PROBLEM_CLASS`. `Purchase.
+ * statedTotal` is what the paperwork claimed and is never summed into spend
+ * (spend is `SUM(expense.cost)` = `expenseTotal` below), so a disagreement is a
+ * cue to look, not a fault: a partial refund reduces a line without changing what
+ * the charge originally stated. Nothing offers to "fix" one of these, because the
+ * only mechanical fix would be back-computing a cost from `statedTotal`, which is
+ * forbidden.
+ *
+ * `statedTotal` is non-nullable here: a charge with none recorded reconciles as
+ * `"unknown"` and can't mismatch, so it never becomes a row. The delta is
+ * deliberately NOT a field — `reconciliationDelta` already derives it from these
+ * two numbers for the list column and the detail cue.
+ */
+export const chargeNotReconcilingSchema = z.object({
+  id: purchaseId,
+  /** Through the join; null only if the vendor was soft-deleted. */
+  vendorName: z.string().nullable(),
+  orderId: z.string().nullable(),
+  date: plainDate.nullable(),
+  /** What the paperwork claimed. Never spend. */
+  statedTotal: z.number(),
+  /** `SUM(cost)` over the charge's live lines — the charge's real spend. */
+  expenseTotal: z.number(),
+  expenseCount: z.number().int(),
+});
+
 // Grouped output shapes — the Problems page loads detectors in cost-grouped
 // chunks (one tRPC query each, routed through an UNBATCHED link so each runs in
 // its own Worker invocation/CPU budget; see root-provider.tsx). The groups split
@@ -318,6 +381,8 @@ const problemsFastShape = {
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
+  duplicateVendors: z.array(duplicateVendorSchema),
+  chargesNotReconciling: z.array(chargeNotReconcilingSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -406,6 +471,15 @@ export type ProblemKey = keyof typeof allProblemArrayFields;
  *                 filed, so counting them as problems produced a permanently red
  *                 badge nobody could act on. They render as progress meters.
  *
+ * `coverage` is really "the non-defect bucket", and it carries one more kind of
+ * row: ADVISORY cues, which are frequently correct exactly as they stand
+ * (`chargesNotReconciling` — a partial refund legitimately leaves a charge's lines
+ * disagreeing with what its paperwork stated). Those aren't a data-entry backlog,
+ * but the operative contract is the same one this class exists to express — not
+ * wrong, never forced to zero, never in `totalProblems` or the badge, never
+ * rendered in the defect red. They differ from a coverage backlog only in having
+ * no meaningful denominator, which `unvaluedBucketProducts` already models.
+ *
  * `satisfies` makes a newly-added detector a compile error until it is classed.
  */
 export const PROBLEM_CLASS = {
@@ -422,6 +496,13 @@ export const PROBLEM_CLASS = {
   staleParentRecipes: "defect",
   unknownParkedItems: "defect",
   manufacturerSpellingVariants: "defect",
+  // Two roster rows for one real vendor is simply wrong — that vendor's spend is
+  // split across both — and it converges to zero: `mergeVendors` folds the pair
+  // and the pair never comes back (the live roster sits at 0 across 114 vendors).
+  // Not `coverage`: there is no backlog being worked through and no denominator,
+  // and unlike `chargesNotReconciling` a reported row is never legitimately
+  // correct as it stands.
+  duplicateVendors: "defect",
   ingredientsWithPartialCoverage: "defect",
   productsWithIslandedMappings: "defect",
   productsWithBetterUpcData: "defect",
@@ -443,6 +524,11 @@ export const PROBLEM_CLASS = {
   staleLocations: "coverage",
   neverVerifiedInventory: "coverage",
   productsWithNoImages: "coverage",
+  // Advisory, not backlog (see the note above): a charge whose lines disagree
+  // with its stated total is often correct as-is, and the only mechanical "fix"
+  // would be back-computing a cost from `statedTotal` — which nothing may do. So
+  // it is reported, never counted, and never red.
+  chargesNotReconciling: "coverage",
 } as const satisfies Record<ProblemKey, "defect" | "coverage">;
 
 const isDefectKey = (key: string): boolean =>
@@ -582,6 +668,7 @@ export type NeverVerifiedInventory = z.infer<
 >;
 export type UnknownParkedItem = z.infer<typeof unknownParkedItemSchema>;
 export type LabelVariant = z.infer<typeof labelVariantSchema>;
+export type DuplicateVendor = z.infer<typeof duplicateVendorSchema>;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
 >;
@@ -593,6 +680,7 @@ export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;
+export type ChargeNotReconciling = z.infer<typeof chargeNotReconcilingSchema>;
 
 // Counts powering the Settings → Maintenance "N affected" dry-run. A focused
 // subset (the batch tools shown there), kept separate from problemsCount so it

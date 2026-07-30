@@ -249,6 +249,16 @@ export function createNameColumn<T extends BaseRow>(
      */
     nameSuffix?: (row: T) => ReactNode;
     /**
+     * Extra content rendered inline BEFORE the name — a brand mark or avatar that
+     * identifies the row at a glance (the vendor roster's logo glyph).
+     *
+     * Separate from `nameSuffix` because leading and trailing content mean
+     * different things: a suffix is a secondary affordance about the row, a prefix
+     * is part of how you recognize it. Putting a logo in `nameSuffix` reads
+     * backwards. Return `undefined`/`null` for rows with nothing to show.
+     */
+    namePrefix?: (row: T) => ReactNode;
+    /**
      * Render a tree expand/collapse affordance: a depth-proportional left
      * indent plus a chevron toggle on rows that `getCanExpand()` (a fixed-width
      * spacer keeps leaf names aligned). Only meaningful when the table wires
@@ -308,11 +318,13 @@ export function createNameColumn<T extends BaseRow>(
         options?.emptyLabel,
       );
       const suffix = options?.nameSuffix?.(info.row.original);
-      // Only wrap when a suffix is actually present — every other entity's
-      // name column renders exactly as before (no extra markup).
+      const prefix = options?.namePrefix?.(info.row.original);
+      // Only wrap when a prefix or suffix is actually present — every other
+      // entity's name column renders exactly as before (no extra markup).
       const wrapWithSuffix = (nameEl: ReactNode) =>
-        suffix ? (
+        prefix || suffix ? (
           <Row align="center" gap="xs" className="min-w-0">
+            {prefix}
             <span className="min-w-0 flex-1 truncate">{nameEl}</span>
             {suffix}
           </Row>

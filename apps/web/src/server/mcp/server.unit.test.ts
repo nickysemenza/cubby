@@ -402,10 +402,10 @@ describe("listMcpToolCatalog", () => {
       project: ["project", "projects"],
       task: ["task", "tasks"],
       expense: ["expense", "expenses"],
-      // vendor/purchase expose no MCP ops (`mcp: []`), so the loop below never
-      // iterates for them and these slugs are unused placeholders. `expense`
-      // above is ALL_MCP — its slugs are the real ones behind create_expense /
-      // list_expenses / etc.
+      // vendor/purchase expose get/list/create/update but NOT delete, so the
+      // loop below never asks for delete_vendors / delete_purchases. Note that
+      // `purchase` here is the vendor CHARGE, not the old flat ledger row —
+      // that one is `expense` above, and it is the one that owns money.
       vendor: ["vendor", "vendors"],
       purchase: ["purchase", "purchases"],
       "usda-food": ["usda_food", "usda_foods", { list: "search_usda_foods" }],
@@ -415,14 +415,36 @@ describe("listMcpToolCatalog", () => {
       (await listMcpToolCatalog()).tools.map(({ name }) => name),
     );
 
+    const OPERATIONS: Operation[] = [
+      "list",
+      "get",
+      "create",
+      "update",
+      "delete",
+    ];
+
     for (const entity of allEntities) {
       const [singular, plural, overrides = {}] = slugs[entity];
-      for (const operation of entityManifest[entity].mcp) {
+      const declared = new Set<Operation>(entityManifest[entity].mcp);
+      // Both directions: a declared op must be registered, and an UNDECLARED op
+      // must not be. The negative half is what guards the deliberate omissions —
+      // vendor/purchase have no delete tool on purpose (see the manifest), and
+      // without this a stray registration would pass unnoticed.
+      for (const operation of OPERATIONS) {
         const defaultSlug =
           operation === "list" || operation === "delete" ? plural : singular;
-        expect(
-          catalog.has(overrides[operation] ?? `${operation}_${defaultSlug}`),
-        ).toBe(true);
+        const toolName = overrides[operation] ?? `${operation}_${defaultSlug}`;
+        expect({
+          entity,
+          operation,
+          toolName,
+          registered: catalog.has(toolName),
+        }).toEqual({
+          entity,
+          operation,
+          toolName,
+          registered: declared.has(operation),
+        });
       }
     }
   });

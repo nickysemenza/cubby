@@ -23,7 +23,7 @@ Vendor ──< Purchase ──< Expense
   `Expense`**; every `SUM(cost)` reads that table alone.
 - **`Purchase` now means ONE vendor transaction** (a charge): `vendorId` (NOT NULL), optional
   `orderId`, `date`, optional `statedTotal`, notes, and its documents. It holds **no** money.
-- **`Vendor`** is a real roster (`name` unique, `kind`, `website`, `notes`), not a text column.
+- **`Vendor`** is a real roster (`name` unique, `website`, `notes`), not a text column.
 
 **`create_purchase` does not exist any more.** Neither do `get_purchase`, `list_purchases`,
 `update_purchase`, `delete_purchases`, `bulk_move_purchases`, `bulk_set_purchase_trade`,

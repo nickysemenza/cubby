@@ -29,7 +29,6 @@ describe("manifestFilterConfig", () => {
     ["task", "trade"],
     ["expense", "trade"],
     ["expense", "costType"],
-    ["vendor", "kind"],
     ["purchase", "vendor"],
   ] as const)("%s.%s is multiselect", (entity, columnId) => {
     expect(manifestFilterConfig(entity, columnId)?.filterType).toBe(
@@ -276,7 +275,7 @@ describe("expense vendor filter", () => {
 });
 
 /**
- * The vendor roster's two filters — the whole of `vendorFiltersSchema`. Both used
+ * The vendor roster's single filter — the whole of `vendorFiltersSchema`. It used
  * to be hand-written on the page (a `filters` fallback plus a `buildFilters`
  * callback), which is why a filtered roster wasn't bookmarkable: `useTableState`
  * only URL-encodes manifest specs. These pin the wiring that replaced it.
@@ -296,82 +295,20 @@ describe("vendor filters", () => {
     expect(build({ q: "home depot" })).toEqual({ search: "home depot" });
   });
 
-  it("routes ?kind= to a kind SET, not a scalar", () => {
-    // A multi kind always holds an array, even for one value: mixing the two
-    // shapes is what splits the React Query cache (see `many` in ./filters).
-    expect(build({ kind: "retailer" })).toEqual({ kind: ["retailer"] });
-    expect(build({ kind: "retailer,contractor" })).toEqual({
-      kind: ["retailer", "contractor"],
-    });
-  });
-
-  it("routes the (none) sentinel to kindPresenceFilter, ORing with a selection", () => {
-    // Same shape as expense's vendor filter below: the sentinel is partitioned
-    // out BEFORE it can reach the `kind` value list, where `vendorKindSchema`
-    // would reject it at the tRPC boundary. Server-side `eqAnyOrPresence` ORs
-    // the two, so this is "contractors *or* unclassified", not a contradiction.
-    expect(build({ kind: `contractor,${FILTER_NONE}` })).toEqual({
-      kind: ["contractor"],
-      kindPresenceFilter: "none",
-    });
-    // The sentinel alone is the classify-the-roster worklist — no `kind` key.
-    expect(build({ kind: FILTER_NONE })).toEqual({
-      kindPresenceFilter: "none",
-    });
-    // And its complement: every vendor that HAS been classified.
-    expect(build({ kind: FILTER_ANY })).toEqual({
-      kindPresenceFilter: "has",
-    });
-  });
-
-  it("treats both sentinels together as no constraint at all", () => {
-    // `IS NULL OR IS NOT NULL` is every row, and the OR swallows any value
-    // selection sitting alongside it — so neither key may be emitted.
-    expect(build({ kind: `${FILTER_ANY},${FILTER_NONE}` })).toEqual({});
-    expect(build({ kind: `retailer,${FILTER_ANY},${FILTER_NONE}` })).toEqual(
-      {},
-    );
-    // The search box is an independent condition and must survive it.
-    expect(build({ q: "ace", kind: `${FILTER_ANY},${FILTER_NONE}` })).toEqual({
-      search: "ace",
-    });
-  });
-
-  it("combines the two into one filter object", () => {
-    expect(build({ q: "ace", kind: "supplier" })).toEqual({
-      search: "ace",
-      kind: ["supplier"],
-    });
-  });
-
   it("emits nothing for an unfiltered roster", () => {
     // An absent key means "no constraint" — `vendorFiltersSchema` has no
     // defaults, so an empty object must stay empty.
     expect(build({})).toEqual({});
   });
 
-  it("declares exactly two specs, matching vendorFiltersSchema", () => {
+  it("declares exactly one spec, matching vendorFiltersSchema", () => {
     // The rollup columns (`purchaseCount`, `spend`) are display/sort-only —
     // there's no server filter behind either, so neither may grow a spec here.
     const [columnBacked, urlOnly] = partitionFilterSpecs(
       getEntityFilters("vendor"),
     );
-    expect(columnBacked.map((spec) => spec.columnId)).toEqual(["name", "kind"]);
+    expect(columnBacked.map((spec) => spec.columnId)).toEqual(["name"]);
     expect(urlOnly).toEqual([]);
-  });
-
-  it("labels the kind options instead of showing the raw slug, behind the sentinels", () => {
-    // Sentinels lead (reachable without scrolling), in the eyebrow register via
-    // `meta: true`; then the roster, every slug mapped through
-    // VENDOR_KIND_LABELS so the control never shows a bare "retailer".
-    expect(manifestFilterConfig("vendor", "kind")?.options).toEqual([
-      { value: FILTER_ANY, label: "Has kind", meta: true },
-      { value: FILTER_NONE, label: "(none)", meta: true },
-      { value: "retailer", label: "Retailer" },
-      { value: "contractor", label: "Contractor" },
-      { value: "supplier", label: "Supplier" },
-      { value: "other", label: "Other" },
-    ]);
   });
 
   it("gives the name column a text control", () => {
@@ -382,38 +319,15 @@ describe("vendor filters", () => {
     });
   });
 
-  it("declares both URL keys so the route schema can't strip them", () => {
+  it("declares its URL key so the route schema can't strip it", () => {
     // The route spreads this into its `validateSearch`; a missing key means the
     // table writes the filter and the router removes it before anything reads it.
-    expect(Object.keys(entityFilterSearchFields("vendor"))).toEqual([
-      "q",
-      "kind",
-    ]);
+    expect(Object.keys(entityFilterSearchFields("vendor"))).toEqual(["q"]);
     // And the fragment survives what `parseSearch` hands it — an all-digits
     // vendor name search arrives pre-parsed as a number.
     expect(
       z.object(entityFilterSearchFields("vendor")).parse({ q: 486242 }),
     ).toMatchObject({ q: "486242" });
-  });
-
-  it("round-trips a ?kind=__none__ worklist through the URL", () => {
-    // The whole point of the manifest entry: the sentinel survives the route's
-    // schema fragment, decodes back into the multi column's ARRAY state, and
-    // re-encodes to the same param — so the shared link lands on the same rows.
-    const specs = getEntityFilters("vendor");
-    const url = z
-      .object(entityFilterSearchFields("vendor"))
-      .parse({ kind: FILTER_NONE });
-    expect(url.kind).toBe(FILTER_NONE);
-
-    const decoded = decodeFilters(specs, url);
-    expect(decoded).toEqual([{ id: "kind", value: [FILTER_NONE] }]);
-
-    const state = new Map(decoded.map((f) => [f.id, f.value]));
-    expect(encodeFilters(specs, (columnId) => state.get(columnId))).toEqual({
-      q: undefined,
-      kind: FILTER_NONE,
-    });
   });
 });
 

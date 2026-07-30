@@ -2,7 +2,15 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { reconcilePurchase } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
-import { Clock, FileText, Info, Merge, ReceiptText, Scale } from "lucide-react";
+import {
+  Clock,
+  FileText,
+  Info,
+  Link2,
+  Merge,
+  ReceiptText,
+  Scale,
+} from "lucide-react";
 import { type FC, useMemo, useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -25,6 +33,7 @@ import {
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
 import {
@@ -45,6 +54,7 @@ const NO_VENDOR_OPTIONS: Array<{ value: string; label: string }> = [];
 export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const api = useTRPC();
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const { data: expenses = NO_EXPENSES } = useQuery(
     api.purchase.expenses.queryOptions(purchase.id),
@@ -205,6 +215,12 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           <span className="font-mono text-sm tabular-nums">
             {formatCurrency(purchase.expenseTotal)}
           </span>
+          {/* Sits with the lines rather than in the page actions: it edits THIS
+              section's contents, unlike Merge (which consumes other charges). */}
+          <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
+            <Link2 />
+            Attach existing expenses
+          </Button>
         </Row>
       ),
       content: <ExpenseList expenses={expenses} />,
@@ -337,6 +353,11 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       <MergePurchasesDialog
         open={mergeOpen}
         onOpenChange={setMergeOpen}
+        purchase={purchase}
+      />
+      <LinkExpensesDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
         purchase={purchase}
       />
       {deleteDialog}

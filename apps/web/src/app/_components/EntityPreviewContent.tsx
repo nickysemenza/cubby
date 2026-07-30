@@ -8,8 +8,6 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
-import type { VendorKind } from "@cubby/schemas/vendor";
-import { VENDOR_KIND_LABELS } from "@cubby/schemas/vendor";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType, NutrientKey } from "@cubby/usda-schemas";
 import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
@@ -1097,7 +1095,6 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
 export type VendorPreview = {
   id: string;
   name: string;
-  kind: VendorKind | null;
   purchaseCount: number;
   spend: number;
 };
@@ -1109,7 +1106,6 @@ export function toVendorCard(vm: VendorPreview): ManifestCardProps {
     icon: <EntityIcon entity="vendor" size={14} colored />,
     name: vm.name,
     tag: "vendor",
-    identity: vm.kind ? VENDOR_KIND_LABELS[vm.kind] : undefined,
     body: [
       {
         kind: "stats",
@@ -1136,7 +1132,6 @@ export function VendorPreviewContent({ vendorId }: { vendorId: string }) {
           {...toVendorCard({
             id: vendorId,
             name: data.name,
-            kind: data.kind,
             purchaseCount: data.purchaseCount,
             spend: data.spend,
           })}

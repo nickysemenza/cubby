@@ -23,8 +23,8 @@ export function registerImageTools(server: McpServer) {
       "(image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, " +
       "or application/pdf) unless a data: URI already carries it. Resolve the " +
       "target id first via search_products / list_recipes / list_locations / " +
-      "list_projects; a purchase id comes back on every expense row as " +
-      "`purchaseId` (list_expenses / get_expense).",
+      "list_projects; for a charge use list_purchases / get_purchase, or read " +
+      "`purchaseId` off any expense row (list_expenses / get_expense).",
     inputSchema: attachFileFields,
     outputSchema: attachFileResponse,
     annotations: WRITE_CLOSED,

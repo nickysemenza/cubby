@@ -21,7 +21,6 @@ import {
   resolveDueRange,
   taskStatusOptions,
 } from "~/app/tasks/task-options";
-import { vendorKindOptions } from "~/app/vendors/vendor-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { urlStringParam } from "~/lib/search-params";
 import {
@@ -192,12 +191,11 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
   ],
 
-  // The roster of places money goes. Two specs, covering all of
-  // `vendorFiltersSchema` (packages/schemas/src/vendor.ts) — `search`, `kind`,
-  // and `kind`'s paired `kindPresenceFilter`. The rollup columns
-  // (`purchaseCount`, `spend`) are correlated subqueries the repo computes for
-  // display and sorting; there is no server filter behind either, so neither
-  // gets a spec.
+  // The roster of places money goes. One spec, covering all of
+  // `vendorFiltersSchema` (packages/schemas/src/vendor.ts) — just `search`. The
+  // rollup columns (`purchaseCount`, `spend`) are correlated subqueries the repo
+  // computes for display and sorting; there is no server filter behind either,
+  // so neither gets a spec.
   vendor: [
     {
       // `?q=`, like the ledger's name search and purchases' `q` — the money
@@ -208,27 +206,6 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       urlKey: "q",
       kind: "text",
       placeholder: "Search vendors...",
-    },
-    {
-      // Static-enum multiselect, same shape as expense's `costType`/`trade`:
-      // a closed slug enum with human labels beside it. Options come from
-      // `vendorKindOptions`, which maps each slug through
-      // `VENDOR_KIND_LABELS` — the raw slug is never displayed.
-      //
-      // `nullable` because `Vendor.kind` IS nullable (the backfill can't infer
-      // it, and guessing would be worse than blank) — so the picklist gains the
-      // two sentinels and `(none)` becomes the classify-the-roster worklist,
-      // matching what the cell renders as `NoneValue`. Modelled on `project`
-      // above: the sentinel never reaches the wire as a `kind` value, which is
-      // what keeps `vendorKindSchema` from rejecting it at the tRPC boundary —
-      // `buildFiltersFromManifest` partitions it out into `kindPresenceFilter`,
-      // where the repo ORs it with the value selection (`eqAnyOrPresence`), so
-      // "contractors or unclassified" is one filter.
-      columnId: "kind",
-      kind: "multiselect",
-      placeholder: "Filter by kind...",
-      options: vendorKindOptions,
-      nullable: { field: "kindPresenceFilter", label: "kind" },
     },
   ],
 

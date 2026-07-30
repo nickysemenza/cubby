@@ -185,7 +185,9 @@ export const entityManifest = {
     searchable: false,
     countable: true,
     references: [],
-    mcp: [],
+    // No delete: `deleteVendors` refuses while live charges still reference the
+    // vendor, and an agent has no way to rehome them.
+    mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
   },
   // ONE vendor transaction — identity (`vendorId` + optional `orderId`), the
@@ -200,7 +202,10 @@ export const entityManifest = {
     searchable: false,
     countable: true,
     references: ["vendor", "image"],
-    mcp: [],
+    // No delete: soft-deleting a charge nulls `purchaseId` on real money. The
+    // restructuring ops (split/link/merge) stay UI-only for the same reason —
+    // subtle refusal semantics an agent can't be trusted with yet.
+    mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
   },
   expense: {

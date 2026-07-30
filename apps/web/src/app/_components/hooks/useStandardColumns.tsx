@@ -82,6 +82,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   };
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
+  namePrefix?: (row: TData) => ReactNode;
   /**
    * Render the tree expand/collapse affordance (chevron + depth indent) on the
    * standard name column. Forwarded to `createNameColumn`; inert when unset.
@@ -125,6 +126,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   nameClassName,
   nameEditable,
   nameSuffix,
+  namePrefix,
   expandable,
   hiddenFilterColumns,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
@@ -238,6 +240,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           className: nameClassName,
           editable: nameEditable,
           nameSuffix,
+          namePrefix,
           expandable,
         }),
       );
@@ -317,6 +320,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     nameClassName,
     nameEditable,
     nameSuffix,
+    namePrefix,
     expandable,
     hiddenFilterColumnSet,
   ]);

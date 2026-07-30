@@ -18,6 +18,7 @@ import {
   SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
+import { VendorField } from "../_components/form-utils/vendor-field";
 import { FormFieldGroup } from "../_components/forms/form-field-group";
 import { costTypeOptions } from "./expense-options";
 
@@ -208,7 +209,10 @@ export function CreateExpenseDialog({
             label="Trade"
             options={tradeOptions}
           />
-          <UnifiedTextField
+          {/* Roster picker, not free text — see `VendorField`. A disposition's
+              vendor is who you sold/gave the thing TO, so only the prompt
+              changes. */}
+          <VendorField
             form={form}
             name="vendor"
             label="Vendor"

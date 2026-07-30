@@ -42,8 +42,8 @@ import {
   desc,
   eq,
   inArray,
-  isNotNull,
   isNull,
+  ne,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -75,7 +75,9 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
+import { assertVendorLive } from "~/server/repo/vendor";
 
 /**
  * A charge's line count and line total, as correlated scalar subqueries.
@@ -251,6 +253,30 @@ const syncPurchaseImages = async (
   }
 };
 
+/**
+ * The named charge must exist and be live — the `Purchase` analogue of
+ * `assertVendorLive` / `assertProjectLive`, for the same FK-checks-existence-not-
+ * `deletedAt` reason. `expenseCreateInput.purchaseId` and
+ * `expenseUpdateData.purchaseId` are caller-supplied ids that bypass
+ * `resolveCharge`'s name resolution entirely, so this is the only thing standing
+ * between a public API call and an expense attached to a tombstoned charge.
+ */
+export const assertPurchaseLive = async (
+  tx: DrizzleTransaction,
+  id: PurchaseId,
+): Promise<void> => {
+  const live = await tx.query.purchase.findFirst({
+    where: and(eq(purchase.id, id), notDeleted(purchase)),
+    columns: { id: true },
+  });
+  if (!live) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchase ${id} does not exist or has been deleted`,
+    );
+  }
+};
+
 const buildPurchaseWhereClause = (filters: PurchaseFilters) =>
   buildSearchConditions(
     purchase,
@@ -405,6 +431,8 @@ export const createPurchase = async (
   actor: ActorContext,
 ): Promise<PurchaseOut> => {
   const id = await withTransaction(db, async (tx) => {
+    // An FK proves the vendor row exists, not that it's live.
+    await assertVendorLive(tx, data.vendorId);
     const created = await insertAndReturn(tx, purchase, {
       vendorId: data.vendorId,
       orderId: data.orderId?.trim() || null,
@@ -454,6 +482,47 @@ export const updatePurchase = async (
     });
     if (!before) {
       throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
+    }
+
+    if (data.vendorId !== undefined) {
+      await assertVendorLive(tx, data.vendorId);
+    }
+
+    // This is the one writer that can move BOTH halves of the partial-unique
+    // `(vendorId, orderId)` key, so it is the one that can collide. Two charges
+    // legitimately share an order id across vendors — order ids are only unique
+    // per vendor (Tool Nirvana's "#11325") — so moving a charge to a vendor that
+    // already holds that order id raises 23505. Nothing maps that to an AppError,
+    // so it surfaced as an untyped 500 instead of the message
+    // `renameChargeOrderId` was built to give. Pre-checked with a SELECT for the
+    // same reason it is there: a failed statement poisons the transaction.
+    const nextVendorId = data.vendorId ?? before.vendorId;
+    const nextOrderId =
+      data.orderId === undefined
+        ? before.orderId
+        : data.orderId?.trim() || null;
+    if (
+      nextOrderId !== null &&
+      (nextVendorId !== before.vendorId || nextOrderId !== before.orderId)
+    ) {
+      const [clash] = await tx
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(
+          and(
+            eq(purchase.vendorId, nextVendorId),
+            eq(purchase.orderId, nextOrderId),
+            ne(purchase.id, id),
+            notDeleted(purchase),
+          ),
+        )
+        .limit(1);
+      if (clash) {
+        throw createAppError(
+          "PURCHASE_MERGE_ORDER_COLLISION",
+          `Another charge for this vendor already carries order id ${nextOrderId}. Merge the two charges instead of moving this one onto it.`,
+        );
+      }
     }
 
     await syncPurchaseImages(
@@ -632,6 +701,14 @@ export const splitExpense = async (
       .set({ deletedAt: new Date() })
       .where(eq(expense.id, expenseId));
 
+    // Removal-path invariant (root CLAUDE.md, guard-enforced): this is a delete
+    // path like any other, so the original's embedding goes in the SAME
+    // transaction. `expense` is `searchable: true`, so skipping this leaves a live
+    // `EntityEmbedding` row pointing at a dead id — semantic search keeps
+    // returning a result that renders blank, `findOrphanedEntityEmbeddings` flags
+    // it, and soft deletes aren't restorable so there's no clean recovery.
+    await softDeleteEntityEmbeddingsTx(tx, "expense", [expenseId]);
+
     await logAuditEntries(tx, actor, [
       ...inserted.map((id) => ({
         entityType: "expense" as const,
@@ -653,6 +730,225 @@ export const splitExpense = async (
     ...relations.expense.withProject,
   });
   return rows.map(dbExpenseToAPI);
+};
+
+/**
+ * Rename a charge's order id in place, or report that it can't be.
+ *
+ * Correcting a typo'd order id on a charge whose only line is the expense being
+ * edited should EDIT that charge, not abandon it for a fresh one — the charge's
+ * `statedTotal` and filed documents are the whole reason the row exists. See
+ * `resolveCharge` for which writes reach this.
+ *
+ * Returns `false` when a live charge already holds `(vendorId, orderId)`, which
+ * the partial-unique index would refuse. Detected with a SELECT rather than by
+ * catching the constraint error: a failed statement poisons the surrounding
+ * transaction, so the caller could not then fall back to attaching to the winner.
+ */
+export const renameChargeOrderId = async (
+  tx: DrizzleTransaction,
+  id: PurchaseId,
+  orderId: string | null,
+  actor: ActorContext,
+): Promise<boolean> => {
+  const [self] = await tx
+    .select({ vendorId: purchase.vendorId, orderId: purchase.orderId })
+    .from(purchase)
+    .where(and(eq(purchase.id, id), notDeleted(purchase)))
+    .limit(1);
+  if (!self) return false;
+
+  if (orderId !== null) {
+    const [clash] = await tx
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(
+        and(
+          eq(purchase.vendorId, self.vendorId),
+          eq(purchase.orderId, orderId),
+          ne(purchase.id, id),
+          notDeleted(purchase),
+        ),
+      )
+      .limit(1);
+    if (clash) return false;
+  }
+
+  await tx.update(purchase).set({ orderId }).where(eq(purchase.id, id));
+
+  // Audited, because this is the COMMON path: the only shape both Order # inline
+  // editors send is `{ orderId }`, which lands here and returns `undefined` to
+  // `resolveCharge` — so `expenseCrud.update` sees no column change either and
+  // emits nothing. Without this row, correcting an order id (the central
+  // purchase-import reconciliation action) left no trace anywhere.
+  if (self.orderId !== orderId) {
+    await logAuditEntry(tx, actor, {
+      entityType: "purchase",
+      entityId: id,
+      action: "update",
+      changes: { orderId: { from: self.orderId, to: orderId } },
+    });
+  }
+  return true;
+};
+
+/**
+ * Move one charge's contents onto another and soft-delete it.
+ *
+ * The shared core of both merges: `mergePurchases` (two charges of one vendor)
+ * and `mergeVendors` (two charges that turned out to be the same order under two
+ * spellings of one vendor). Extracted rather than duplicated because the
+ * `onConflictDoNothing` below is a non-obvious correctness detail, and a second
+ * hand-written copy would drift from it.
+ *
+ * Callers own the ordering constraints around the partial-unique
+ * `(vendorId, orderId)` index — this helper only ever soft-deletes `deadId`, so
+ * it frees a slot and never claims one.
+ *
+ * Re-pointing an expense is an AUDITED change to its `purchaseId`, exactly as it
+ * is on the single-row `updateExpense` path (where `purchaseId` is in
+ * `auditUpdateFields`) and in `linkExpensesToPurchase`. Without these rows a merge
+ * would silently move money between charges with no trail — the one thing the
+ * audit log exists to prevent.
+ */
+export const foldChargeInto = async (
+  tx: DrizzleTransaction,
+  deadId: PurchaseId,
+  survivorId: PurchaseId,
+  actor: ActorContext,
+): Promise<void> => {
+  // Charge-level truth has to come along, not just the lines and documents.
+  // `statedTotal` especially: it is the reconciliation cue the whole `Purchase`
+  // table exists to hold, and dropping it here meant a vendor typo-fix on a
+  // single-line charge silently destroyed it (the fold is reached from
+  // `resolveCharge`, not only from an explicit merge).
+  //
+  // Only fills a field the survivor DOESN'T have — never overwrites. When both
+  // carry a `statedTotal` and they disagree, the survivor's stands and the
+  // discarded one is named in the audit row rather than vanishing: two different
+  // stated totals is a real conflict and picking silently would be the worse
+  // failure.
+  const [dead] = await tx
+    .select({
+      statedTotal: purchase.statedTotal,
+      notes: purchase.notes,
+      date: purchase.date,
+    })
+    .from(purchase)
+    .where(eq(purchase.id, deadId))
+    .limit(1);
+  const [survivor] = await tx
+    .select({
+      statedTotal: purchase.statedTotal,
+      notes: purchase.notes,
+      date: purchase.date,
+    })
+    .from(purchase)
+    .where(eq(purchase.id, survivorId))
+    .limit(1);
+
+  const carried = buildPartialUpdateValues({
+    statedTotal:
+      survivor?.statedTotal == null && dead?.statedTotal != null
+        ? dead.statedTotal
+        : undefined,
+    notes:
+      survivor?.notes == null && dead?.notes != null ? dead.notes : undefined,
+    date: survivor?.date == null && dead?.date != null ? dead.date : undefined,
+  });
+  if (Object.keys(carried).length > 0) {
+    await tx.update(purchase).set(carried).where(eq(purchase.id, survivorId));
+  }
+
+  const discardedStatedTotal =
+    survivor?.statedTotal != null &&
+    dead?.statedTotal != null &&
+    survivor.statedTotal !== dead.statedTotal
+      ? dead.statedTotal
+      : undefined;
+
+  const moving = await tx
+    .select({ id: expense.id })
+    .from(expense)
+    .where(and(eq(expense.purchaseId, deadId), notDeleted(expense)));
+
+  await tx
+    .update(expense)
+    .set({ purchaseId: survivorId })
+    .where(and(eq(expense.purchaseId, deadId), notDeleted(expense)));
+
+  await logAuditEntries(
+    tx,
+    actor,
+    moving.map((row) => ({
+      entityType: "expense" as const,
+      entityId: row.id,
+      action: "update" as const,
+      changes: { purchaseId: { from: deadId, to: survivorId } },
+    })),
+  );
+
+  // Documents follow their charge. `onConflictDoNothing` covers the case where
+  // the same Image is already filed against the survivor (a statement spanning
+  // both charges) — the partial-unique (purchaseId, imageId) would otherwise
+  // abort the whole merge.
+  const movingImages = await tx.query.purchaseImage.findMany({
+    where: and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
+    columns: { imageId: true, sortOrder: true },
+  });
+  if (movingImages.length > 0) {
+    await tx
+      .insert(purchaseImage)
+      .values(
+        movingImages.map((img) => ({
+          purchaseId: survivorId,
+          imageId: img.imageId,
+          sortOrder: img.sortOrder,
+        })),
+      )
+      .onConflictDoNothing();
+    await tx
+      .update(purchaseImage)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
+      );
+  }
+
+  await tx
+    .update(purchase)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(purchase.id, deadId), notDeleted(purchase)));
+
+  // The charge itself gets a `delete` entry, and the survivor an `update` naming
+  // what it absorbed — so a fold is reconstructible from the log rather than
+  // inferable only from the absence of a row.
+  await logAuditEntries(tx, actor, [
+    {
+      entityType: "purchase" as const,
+      entityId: survivorId,
+      action: "update" as const,
+      changes: {
+        foldedIn: { from: null, to: deadId },
+        ...(Object.keys(carried).length > 0
+          ? { carriedOver: { from: null, to: carried } }
+          : {}),
+        ...(discardedStatedTotal !== undefined
+          ? {
+              discardedStatedTotal: {
+                from: discardedStatedTotal,
+                to: survivor?.statedTotal ?? null,
+              },
+            }
+          : {}),
+      },
+    },
+    {
+      entityType: "purchase" as const,
+      entityId: deadId,
+      action: "delete" as const,
+    },
+  ]);
 };
 
 /**
@@ -745,42 +1041,15 @@ export const mergePurchases = async (
         .where(eq(purchase.id, keepId));
     }
 
-    await tx
-      .update(expense)
-      .set({ purchaseId: keepId })
-      .where(and(inArray(expense.purchaseId, losers), notDeleted(expense)));
-
-    // Documents follow their charge. `onConflictDoNothing` covers the case where
-    // the same Image is already filed against the keeper (a statement spanning
-    // both charges) — the partial-unique (purchaseId, imageId) would otherwise
-    // abort the whole merge.
-    const movingImages = await tx.query.purchaseImage.findMany({
-      where: and(
-        inArray(purchaseImage.purchaseId, losers),
-        notDeleted(purchaseImage),
-      ),
-      columns: { id: true, imageId: true, sortOrder: true },
-    });
-    if (movingImages.length > 0) {
-      await tx
-        .insert(purchaseImage)
-        .values(
-          movingImages.map((img) => ({
-            purchaseId: keepId,
-            imageId: img.imageId,
-            sortOrder: img.sortOrder,
-          })),
-        )
-        .onConflictDoNothing();
-      await tx
-        .update(purchaseImage)
-        .set({ deletedAt: new Date() })
-        .where(
-          and(
-            inArray(purchaseImage.purchaseId, losers),
-            notDeleted(purchaseImage),
-          ),
-        );
+    // One `foldChargeInto` per loser rather than two bulk statements: it is the
+    // shared core (expenses re-pointed WITH audit rows, documents moved with the
+    // onConflictDoNothing that a statement spanning both charges needs, loser
+    // soft-deleted). Hand-writing it here is what let this path silently move
+    // money between charges with no audit trail while `linkExpensesToPurchase`
+    // logged the same change. The soft-delete above already vacated the index
+    // slot, so the one inside is a no-op.
+    for (const loser of losers) {
+      await foldChargeInto(tx, loser, keepId, actor);
     }
 
     await logAuditEntries(tx, actor, [
@@ -825,10 +1094,31 @@ export const deletePurchases = async (
 
     const now = new Date();
 
+    // Detaching a line is an audited change to its `purchaseId`, same as every
+    // other writer of that column. Without these rows, spend silently loses its
+    // vendor attribution with only the charge's own `delete` entry to hint at it —
+    // and since `vendor`/`orderId` resolve THROUGH this column, the row's whole
+    // provenance goes with it.
+    const detaching = await tx
+      .select({ id: expense.id, purchaseId: expense.purchaseId })
+      .from(expense)
+      .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
+
     await tx
       .update(expense)
       .set({ purchaseId: null })
       .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
+
+    await logAuditEntries(
+      tx,
+      actor,
+      detaching.map((row) => ({
+        entityType: "expense" as const,
+        entityId: row.id,
+        action: "update" as const,
+        changes: { purchaseId: { from: row.purchaseId, to: null } },
+      })),
+    );
 
     await tx
       .update(purchaseImage)
@@ -852,30 +1142,4 @@ export const deletePurchases = async (
       })),
     );
   });
-};
-
-/**
- * Charges whose lines don't add up to what the charge said it was.
- *
- * A **soft** flag only: this is a read, nothing calls it on a write path, and no
- * cost is ever back-computed from `statedTotal`. Mismatch is frequently correct
- * (a partial refund reduces a line without changing what the charge stated), so
- * this is a worklist, not an error.
- */
-export const findPurchasesNotReconciling = async (
-  db: Database,
-): Promise<PurchaseOut[]> => {
-  const rows = await getDb(db)
-    .select(purchaseColumns)
-    .from(purchase)
-    .where(and(notDeleted(purchase), isNotNull(purchase.statedTotal)))
-    .orderBy(desc(purchase.date));
-
-  return rows
-    .map((row) => dbPurchaseToAPI(row))
-    .filter(
-      (p) =>
-        p.statedTotal !== null &&
-        Math.abs(p.statedTotal - p.expenseTotal) > 0.01,
-    );
 };

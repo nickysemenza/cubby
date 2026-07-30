@@ -69,8 +69,9 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
    * The widget's removable rows. `purchaseOut.images` carries every field
    * `PendingDocument` needs (`key` included, which nothing renders — see its
    * schema comment); `size` isn't on the summary, so the row's file-size chip
-   * just hides. PDFs only: images have no detach affordance here, since the
-   * upload widget is PDF-only and `EntityImageList` is display-only.
+   * just hides. PDFs only — the upload widget is `accept`-restricted to PDF, so
+   * a non-PDF image can only arrive via MCP `attach_file`, and it gets its
+   * detach control from `EntityImageList`'s `onRemove` below instead.
    */
   const existingDocuments = useMemo<PendingDocument[]>(
     () =>
@@ -88,7 +89,21 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
       {documents.length > 0 && <ProductManuals documents={documents} />}
 
       {images.length > 0 && (
-        <EntityImageList images={images} showViewAllButton={false} />
+        <EntityImageList
+          images={images}
+          showViewAllButton={false}
+          // Non-PDF images reach a charge only through MCP `attach_file` (the
+          // upload widget accepts PDF only), so this is their sole detach path.
+          // Same server field the PDF removal uses — `removeImageIds`, handled
+          // by `syncPurchaseImages` — and re-sending an already-detached id is a
+          // no-op there, so a double click can't error.
+          onRemove={(imageId) =>
+            saveDocuments.mutate({
+              id: purchase.id,
+              data: { removeImageIds: [imageId] },
+            })
+          }
+        />
       )}
 
       {purchase.images.length === 0 && (
@@ -106,6 +121,8 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
       {/* `folder` is the charge id, so R2 keys read as
           .../documents/<purchaseId>/invoice.pdf. */}
       <PendingDocumentUpload
+        label="Invoices & receipts (PDF)"
+        dropLabel="Drop an invoice or receipt PDF here"
         key={saveGeneration}
         entityType="PURCHASE"
         folder={purchase.id}

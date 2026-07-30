@@ -33,8 +33,13 @@ import {
   useRef,
 } from "react";
 import {
+  type VendorName,
+  WithVendorSearch,
+} from "~/app/_components/combobox/with-vendor-search";
+import {
   selectCellData,
   specFromCellData,
+  textCellData,
 } from "~/app/_components/data-table/cell-data";
 import {
   createActionsColumn,
@@ -50,6 +55,7 @@ import {
   type MobileColumnMeta,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
+import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
@@ -689,11 +695,31 @@ const vendorIdFilterFn: FilterFn<ExpenseOut> = (row, columnId, filterValue) =>
  * the mark costs ~24px and the narrower column already truncated "Direct Tools
  * Outlet".
  *
- * Its filter is an id-based picklist, so a caller must supply the roster of
- * `{value: vendorId, label: name}` options. The ledger routes the global
+ * **The editor is a roster picker, not a text box.** `findOrCreateVendor` matches
+ * names exactly (trimmed, case-sensitive, deliberately), so a free-text cell made
+ * inline-typing `amazon` next to an existing `Amazon` silently mint a second
+ * roster row — with no detector to catch it. `WithVendorSearch` offers the whole
+ * `vendor.options` roster and saves the picked option's name **verbatim**, so a
+ * pick can only ever resolve to the vendor that produced it. Typing a genuinely
+ * new vendor still works (a first purchase at a new store shouldn't require a
+ * detour to /vendors) but is no longer the accidental default: the combobox only
+ * offers "Create new vendor: …" once the typed term matches nothing on the
+ * roster, exactly like the product/location pickers.
+ *
+ * Hand-rolled rather than `createTextColumn(…, { editable })` for that reason —
+ * the shared text factory's editor is an `<Input>`. Everything else is kept
+ * byte-equivalent to it (same id, `w-40`, `textCellData` clipboard kind, so a
+ * copied vendor name still pastes across text cells and into the ledger from a
+ * spreadsheet).
+ *
+ * Its FILTER is a separate, id-based picklist, so a caller must supply the roster
+ * of `{value: vendorId, label: name}` options. The ledger routes the global
  * `expense.vendorOptions` query in through `useEntityList`'s `filterOptions`
  * (which overrides this config wholesale); the embedded table passes
- * `vendorOptions` here, derived from the rows it was handed.
+ * `vendorOptions` here, derived from the rows it was handed. The EDITOR
+ * deliberately does not reuse those: a row-derived list can't offer a vendor
+ * that isn't already on screen, so `WithVendorSearch` queries the full roster
+ * itself and both call sites get it without threading anything.
  */
 export function expenseVendorColumn(
   helper: ColumnHelper<ExpenseOut>,
@@ -703,28 +729,51 @@ export function expenseVendorColumn(
     vendorOptions?: FilterableComboboxItem[];
   },
 ) {
-  const column = createTextColumn(helper, "vendor", {
+  const cellData = textCellData<ExpenseOut>(
+    "text",
+    (row) => row.vendor,
+    (row, value) => save(value, row),
+  );
+
+  return helper.accessor((row) => row.vendor, {
+    id: "vendor",
     header: "Vendor",
-    placeholder: "Where from?",
-    className: "w-40",
-    mobile: opts?.mobile,
-    filterConfig: manifestFilterConfig(
-      "expense",
-      "vendor",
-      opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
-    ),
-    renderValue: (v) =>
-      v ? <VendorCell vendor={v} compactOnMobile /> : <NoneValue />,
-    editable: {
-      onSave: async (newVendor, expense) => {
-        await save(newVendor, expense);
-      },
+    // Overrides the name-based `multiSelectFilterFn` a multiselect text column
+    // would otherwise get — see `vendorIdFilterFn` for why the two can't be the
+    // same function here.
+    filterFn: vendorIdFilterFn,
+    meta: {
+      className: "w-40",
+      mobile: opts?.mobile,
+      filterConfig: manifestFilterConfig(
+        "expense",
+        "vendor",
+        opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
+      ),
+      cellData,
+    },
+    cell: (info) => {
+      const expense = info.row.original;
+      const vendor = info.getValue();
+      return (
+        <EditableEntityCell<VendorName>
+          // id === name: the server contract is name-based, so the picker's
+          // identity is the name. See `WithVendorSearch`'s doc.
+          value={vendor ? { id: vendor, name: vendor } : null}
+          label="vendor"
+          // A charge's vendor is optional — toggling the selected row off clears
+          // it, same as emptying the old text input did.
+          clearable
+          onSave={(newVendor) => save(newVendor, expense)}
+          clipboard={specFromCellData(cellData, expense)}
+          SearchProvider={WithVendorSearch}
+          renderValue={(v) =>
+            v ? <VendorCell vendor={v.name} compactOnMobile /> : <NoneValue />
+          }
+        />
+      );
     },
   });
-  // Overrides the name-based `multiSelectFilterFn` `createTextColumn` attaches to
-  // any multiselect text column — see `vendorIdFilterFn` for why the two can't
-  // be the same function here.
-  return { ...column, filterFn: vendorIdFilterFn };
 }
 
 /**

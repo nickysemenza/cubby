@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { vendorId } from "./identifiers";
-import {
-  createPaginatedResponseSchema,
-  oneOrMany,
-  presenceFilter,
-} from "./pagination";
+import { createPaginatedResponseSchema } from "./pagination";
 
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:
@@ -19,37 +15,14 @@ import {
  * free-text column repeated on every ledger row.
  */
 
-/**
- * What kind of counterparty this is. Follows `tradeValues` (project.ts): a flat
- * slug enum with human labels beside it, no hierarchy. Nullable on the row —
- * the backfill can't infer it, and guessing would be worse than blank.
- */
-export const vendorKindValues = [
-  "retailer",
-  "contractor",
-  "supplier",
-  "other",
-] as const;
-export const vendorKindSchema = z.enum(vendorKindValues);
-export type VendorKind = z.infer<typeof vendorKindSchema>;
-
-export const VENDOR_KIND_LABELS: Record<VendorKind, string> = {
-  retailer: "Retailer",
-  contractor: "Contractor",
-  supplier: "Supplier",
-  other: "Other",
-};
-
 const vendorFields = {
   name: z.string().min(1),
-  kind: vendorKindSchema.nullable(),
   website: z.string().nullable(),
   notes: z.string().nullable(),
 };
 
 const vendorCreateShape = {
   ...vendorFields,
-  kind: vendorKindSchema.nullable().default(null),
   website: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
 };
@@ -67,25 +40,12 @@ export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
 
 export const vendorFilterFields = {
   search: z.string().optional(),
-  kind: oneOrMany(vendorKindSchema).optional(),
-  /**
-   * `"none"` matches vendors with no `kind` set — the classify-the-roster
-   * worklist, and the reason `kind` is nullable at all (the backfill can't infer
-   * it). ORs with `kind` rather than ANDing, per `eqAnyOrPresence`, so
-   * "contractors or unclassified" is one filter.
-   *
-   * A separate field rather than a `__none__` sentinel inside `kind`: that value
-   * would fall through into the enum list and be rejected by `vendorKindSchema`
-   * at the tRPC boundary. Same shape as every other `*PresenceFilter`.
-   */
-  kindPresenceFilter: presenceFilter,
 };
 export const vendorFiltersSchema = z.object(vendorFilterFields);
 export type VendorFilters = z.infer<typeof vendorFiltersSchema>;
 
 export const vendorSortableFields = [
   "name",
-  "kind",
   // Rollups over the vendor's live purchases and their expenses, resolved by
   // correlated subqueries in repo/vendor.ts — not columns on `Vendor`.
   "purchaseCount",
@@ -125,3 +85,18 @@ export const vendorOptionsOut = z.array(
   }),
 );
 export type VendorOptionsOut = z.infer<typeof vendorOptionsOut>;
+
+/**
+ * Fold duplicate vendors into one — the fix for the duplicate-vendor worklist.
+ *
+ * `findOrCreateVendor` matches names exactly, so an importer meeting a new
+ * spelling mints a new roster row; nothing on the write path can safely decide
+ * two spellings are the same vendor. This is how a human says so. See
+ * `mergeVendors` in repo/vendor.ts for what happens to charges the two vendors
+ * hold under the same order id.
+ */
+export const mergeVendorsInput = z.object({
+  keepId: vendorId,
+  mergeIds: z.array(vendorId).min(1),
+});
+export type MergeVendorsInput = z.infer<typeof mergeVendorsInput>;

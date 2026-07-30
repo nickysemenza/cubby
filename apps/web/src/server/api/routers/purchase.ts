@@ -27,7 +27,6 @@ import { z } from "zod";
 import {
   createPurchase,
   deletePurchases,
-  findPurchasesNotReconciling,
   getPurchaseByID,
   getPurchaseExpenses,
   linkExpensesToPurchase,
@@ -136,15 +135,6 @@ const merge = protectedProcedure
     mergePurchases(ctx.db, input, ctx.actorContext),
   );
 
-/**
- * Charges whose lines don't add up to their `statedTotal` — a worklist, not an
- * error. Mismatch is often correct (a partial refund reduces a line without
- * changing what the charge stated), which is why nothing rejects a write on it.
- */
-const notReconciling = protectedProcedure
-  .output(z.array(purchaseOut))
-  .query(({ ctx }) => findPurchasesNotReconciling(ctx.db));
-
 const deleteItem = protectedProcedure
   .input(z.object({ ids: z.array(purchaseId).min(1) }))
   .mutation(async ({ ctx, input }) => {
@@ -160,6 +150,5 @@ export const purchaseRouter = createTRPCRouter({
   link,
   split,
   merge,
-  notReconciling,
   delete: deleteItem,
 });

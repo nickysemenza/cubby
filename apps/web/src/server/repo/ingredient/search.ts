@@ -79,7 +79,18 @@ export const searchIngredientsForMerge = async (
     .select({
       id: ingredient.id,
       name: ingredient.name,
-      productCount: sql<number>`(SELECT count(*) FROM "Product" p WHERE p."ingredientId" = ${ingredient.id} AND p."deletedAt" IS NULL)`,
+      // ⚠️ `"Ingredient"."id"` hand-qualified, NOT an interpolated
+      // `${ingredient.id}`. For a single-table `select().from(x)` Drizzle's
+      // `buildSelection` rewrites a top-level `PgColumn` chunk inside a `sql`
+      // select field to a BARE identifier, so the interpolated form emitted
+      // `p."ingredientId" = "id"` — which binds to the subquery's own `p.id` and
+      // is never true. This count read 0 for every candidate, silently killing the
+      // merge suggester's "prefer an already-enriched target" signal. Same trap
+      // documented at length in repo/purchase.ts.
+      productCount: sql<number>`(
+        SELECT count(*) FROM "Product" p
+        WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL
+      )`,
     })
     .from(ingredient)
     .where(

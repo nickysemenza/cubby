@@ -99,6 +99,8 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   };
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
+  /** Leading content on the name cell — see `createNameColumn`'s `namePrefix`. */
+  namePrefix?: (row: TData) => ReactNode;
   /**
    * Column ids to render with no filter control — for a page that pins that
    * column's value via `extraFilters` (which wins over the manifest-derived
@@ -199,6 +201,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   nameClassName,
   nameEditable,
   nameSuffix,
+  namePrefix,
   hiddenFilterColumns,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<
@@ -339,6 +342,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     nameClassName,
     nameEditable,
     nameSuffix,
+    namePrefix,
     hiddenFilterColumns,
   });
 

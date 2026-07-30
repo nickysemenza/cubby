@@ -1546,7 +1546,6 @@ const PURCHASE_SAMPLE: PurchasePreview = {
 const VENDOR_SAMPLE: VendorPreview = {
   id: "sample-vendor",
   name: "Home Depot",
-  kind: "retailer",
   purchaseCount: 27,
   spend: 8412.55,
 };

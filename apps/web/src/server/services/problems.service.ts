@@ -59,8 +59,10 @@ import {
   applyReparsedStaleLines,
   countEntitiesMissingEmbeddings,
   countReparseableLines,
+  findChargesNotReconciling,
   findCoverageTotals as findCoverageTotalsRepo,
   findDuplicateUniqueProducts,
+  findDuplicateVendors,
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
   findIngredientsWithoutProduct,
@@ -467,6 +469,12 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       unknownParkedItems: () => findUnknownParkedItems(scoped),
       manufacturerSpellingVariants: () =>
         findManufacturerSpellingVariants(scoped),
+      // Same shared spelling-key SQL as above, over the vendor roster instead —
+      // one grouped scan of 114 rows.
+      duplicateVendors: () => findDuplicateVendors(scoped),
+      // One grouped SQL scan that returns only the offenders (the stated-total
+      // comparison is a HAVING, not a JS filter) — cheap enough for this group.
+      chargesNotReconciling: () => findChargesNotReconciling(scoped),
     }),
   );
   return {
@@ -488,6 +496,8 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     neverVerifiedInventory: r.neverVerifiedInventory,
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
+    duplicateVendors: r.duplicateVendors,
+    chargesNotReconciling: r.chargesNotReconciling,
   };
 };
 

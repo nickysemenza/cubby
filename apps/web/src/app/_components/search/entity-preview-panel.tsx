@@ -7,6 +7,7 @@ import { match } from "ts-pattern";
 import { ExpenseDetail } from "~/app/expenses/expense-detail";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
+import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { TaskDetail } from "~/app/tasks/task-detail";
 import { VendorDetail } from "~/app/vendors/vendor-detail";
 import { Row } from "~/components/layout";
@@ -134,11 +135,12 @@ export function EntityPreviewPanel({
           .with("vendor", () =>
             data ? <VendorDetail vendor={data as never} /> : null,
           )
-          // Neither is searchable in v1 (entity-manifest.ts), so no search
-          // result resolves here — but the vendors roster opens this panel on
-          // row click, hence the real arm above. The purchase arm stays null
-          // until /purchases lands its own detail component.
-          .with("purchase", () => null)
+          // Neither is searchable in v1 (entity-manifest.ts), so no search result
+          // resolves to either — but both rosters open this panel on row click,
+          // which is why both arms are real rather than null.
+          .with("purchase", () =>
+            data ? <PurchaseDetail purchase={data as never} /> : null,
+          )
           .exhaustive()}
       </div>
     </div>

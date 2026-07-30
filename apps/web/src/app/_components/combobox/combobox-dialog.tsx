@@ -61,6 +61,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   renderItem,
   wide,
   autoFocus,
+  placeholder,
 }: {
   label: string;
   items: ComboboxItem<TId>[];
@@ -91,6 +92,14 @@ export function DialogCompatibleCombobox<TId extends string = string>({
    * deferred-search host needs it to activate its query.
    */
   autoFocus?: boolean;
+  /**
+   * Empty-trigger text, replacing the default `Select {label}…`. For a field
+   * whose prompt carries meaning the label can't (an expense's vendor is
+   * "Where from?" but a disposition's is "Sold to / given to"), so the copy the
+   * old text input's `placeholder` carried survives the move to a picker.
+   * `label` still drives the search box, the empty state, and "Create new …".
+   */
+  placeholder?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
@@ -376,7 +385,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         type="button"
       >
         <span className={cn("truncate", !value && "text-muted-foreground")}>
-          {value?.name ?? `Select ${label}…`}
+          {value?.name ?? placeholder ?? `Select ${label}…`}
         </span>
         <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
       </Button>

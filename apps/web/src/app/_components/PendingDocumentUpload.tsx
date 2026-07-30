@@ -31,6 +31,13 @@ interface PendingDocumentUploadProps {
   onDocumentsChange?: (documents: PendingDocument[]) => void;
   existingDocuments?: PendingDocument[];
   onExistingDocumentsRemove?: (removedDocumentIds: string[]) => void;
+  /**
+   * Field label and drop-zone copy. Defaults to a product's manuals, which is
+   * where this started — a charge's documents are invoices and receipts, and
+   * calling them "Manuals" on a purchase page is just wrong vocabulary.
+   */
+  label?: string;
+  dropLabel?: string;
 }
 
 function DocumentRow({
@@ -80,6 +87,8 @@ export function PendingDocumentUpload({
   onDocumentsChange,
   existingDocuments = EMPTY_DOCUMENTS,
   onExistingDocumentsRemove,
+  label,
+  dropLabel,
 }: PendingDocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>(
@@ -202,10 +211,10 @@ export function PendingDocumentUpload({
 
   return (
     <Stack gap="sm">
-      <Label>Manuals (PDF)</Label>
+      <Label>{label ?? "Manuals (PDF)"}</Label>
       <FileDropField
         accept={PDF_CONTENT_TYPE}
-        label="Drop a PDF manual here"
+        label={dropLabel ?? "Drop a PDF manual here"}
         description="or choose a file"
         onFilesAdded={handleFilesAdded}
         disabled={uploading}

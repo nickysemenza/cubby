@@ -16,6 +16,8 @@
  *   verify   — the parity checks. Exits non-zero on any failure.
  *   drop     — the irreversible step: drop `Expense.vendor` / `Expense.orderId`.
  *              Re-runs `verify` first and REFUSES if any check fails.
+ *   websites — seed `Vendor.website` from the curated brand-domain list that used
+ *              to live in `scripts/vendor-domains.ts`. Fills NULLs only.
  *
  * `drizzle-kit push` does the DDL for the new tables in between `rename` and
  * `backfill` — see the PR description for the ordering. The rename is done HERE
@@ -23,10 +25,16 @@
  * prompt, and `db:push` runs non-interactively (`push --verbose < /dev/null`):
  * fed EOF, the diff becomes create-plus-drop and destroys all 1121 ledger rows.
  *
- * Usage: `tsx scripts/vendor-split-migration.ts <backup|rename|backfill|verify>`
+ * Usage: `tsx scripts/vendor-split-migration.ts <backup|rename|backfill|verify|drop|websites>`
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import pg from "pg";
 
@@ -268,199 +276,274 @@ const backfill = async () => {
   }
 };
 
+type Baseline = {
+  path: string;
+  total: number;
+  count: number;
+  byProject: Map<string, number>;
+};
+
+/**
+ * Recompute pre-migration spend from the newest `backup` dump.
+ *
+ * This is the only baseline in the process that is genuinely independent of the
+ * migration: it is a file written before anything changed, so comparing live
+ * numbers against it can actually fail. Querying the live DB twice cannot —
+ * see the note on the checks that use this.
+ *
+ * Reads whichever ledger key the dump has (`Purchase` pre-rename, `Expense`
+ * after), and counts only live rows, matching every check it feeds.
+ */
+const loadBaseline = (): Baseline | null => {
+  const dir = process.env.MIGRATION_BACKUP_DIR ?? "/tmp";
+  let newest: { path: string; mtime: number } | null = null;
+  try {
+    for (const name of readdirSync(dir)) {
+      if (!name.startsWith("vendor-split-backup-") || !name.endsWith(".json")) {
+        continue;
+      }
+      const full = resolve(dir, name);
+      const mtime = statSync(full).mtimeMs;
+      if (!newest || mtime > newest.mtime) newest = { path: full, mtime };
+    }
+  } catch {
+    return null;
+  }
+  if (!newest) return null;
+
+  try {
+    const parsed = JSON.parse(readFileSync(newest.path, "utf8")) as {
+      tables?: Record<string, Array<Record<string, unknown>>>;
+    };
+    const rows = parsed.tables?.Purchase ?? parsed.tables?.Expense;
+    if (!rows) return null;
+
+    const live = rows.filter((r) => r.deletedAt === null);
+    const byProject = new Map<string, number>();
+    let total = 0;
+    for (const r of live) {
+      const cost = typeof r.cost === "number" ? r.cost : 0;
+      total += cost;
+      const key =
+        typeof r.projectId === "string" ? r.projectId : "~unassigned~";
+      byProject.set(key, (byProject.get(key) ?? 0) + cost);
+    }
+    return { path: newest.path, total, count: live.length, byProject };
+  } catch {
+    return null;
+  }
+};
+
 type Check = { name: string; pass: boolean; detail: string };
+
+/** Whether the legacy `Expense.vendor` / `orderId` columns are still present. */
+const hasLegacyColumns = async (): Promise<boolean> => {
+  const rows = await q<{ n: number }>(
+    `SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Expense'
+        AND column_name IN ('vendor', 'orderId')`,
+  );
+  return (rows[0]?.n ?? 0) === 2;
+};
 
 const verify = async (): Promise<Check[]> => {
   const checks: Check[] = [];
 
-  // 1. Every row with a non-null vendor has a purchaseId.
-  const orphans = await q<{ n: number }>(
-    `SELECT count(*)::int AS n FROM "Expense"
-      WHERE "deletedAt" IS NULL AND "vendor" IS NOT NULL AND "purchaseId" IS NULL`,
-  );
-  checks.push({
-    name: "every vendor-bearing row is linked",
-    pass: (orphans[0]?.n ?? -1) === 0,
-    detail: `${orphans[0]?.n} unlinked`,
-  });
+  // Six of the checks below compare the new join against the OLD columns, so they
+  // can only run before `drop`. After it they're not "passing", they're
+  // inapplicable — reporting them as passes would be exactly the vacuous-gate
+  // problem the baseline checks were written to fix, so they're skipped out loud
+  // instead. The baseline comparisons still run in both phases.
+  const legacy = await hasLegacyColumns();
+  if (!legacy) {
+    console.log(
+      "NOTE: Expense.vendor/orderId are already dropped — the six " +
+        "old-vs-new column comparisons are inapplicable and are SKIPPED, not " +
+        "passed. The backup-baseline checks below still apply.\n",
+    );
+  }
 
-  // 1b. …and no vendorLESS row got one (a charge nobody can identify).
-  const bogus = await q<{ n: number }>(
-    `SELECT count(*)::int AS n FROM "Expense"
-      WHERE "deletedAt" IS NULL AND "vendor" IS NULL AND "purchaseId" IS NOT NULL`,
-  );
-  checks.push({
-    name: "no vendorless row was given a charge",
-    pass: (bogus[0]?.n ?? -1) === 0,
-    detail: `${bogus[0]?.n} wrongly linked`,
-  });
+  if (legacy) {
+    // 1. Every row with a non-null vendor has a purchaseId.
+    const orphans = await q<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "Expense"
+        WHERE "deletedAt" IS NULL AND "vendor" IS NOT NULL AND "purchaseId" IS NULL`,
+    );
+    checks.push({
+      name: "every vendor-bearing row is linked",
+      pass: (orphans[0]?.n ?? -1) === 0,
+      detail: `${orphans[0]?.n} unlinked`,
+    });
 
-  // 2. purchase.vendor.name matches the old expense.vendor for every linked row.
-  const vendorMismatch = await q<{ n: number }>(
-    `SELECT count(*)::int AS n
-       FROM "Expense" e
-       JOIN "Purchase" p ON p.id = e."purchaseId"
-       JOIN "Vendor" v ON v.id = p."vendorId"
-      WHERE e."deletedAt" IS NULL AND v."name" IS DISTINCT FROM e."vendor"`,
-  );
-  checks.push({
-    name: "joined vendor name matches the old column",
-    pass: (vendorMismatch[0]?.n ?? -1) === 0,
-    detail: `${vendorMismatch[0]?.n} mismatched`,
-  });
+    // 1b. …and no vendorLESS row got one (a charge nobody can identify).
+    const bogus = await q<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "Expense"
+        WHERE "deletedAt" IS NULL AND "vendor" IS NULL AND "purchaseId" IS NOT NULL`,
+    );
+    checks.push({
+      name: "no vendorless row was given a charge",
+      pass: (bogus[0]?.n ?? -1) === 0,
+      detail: `${bogus[0]?.n} wrongly linked`,
+    });
 
-  // 3. purchase.orderId matches the old expense.orderId for every linked row.
-  const orderMismatch = await q<{ n: number }>(
-    `SELECT count(*)::int AS n
-       FROM "Expense" e
-       JOIN "Purchase" p ON p.id = e."purchaseId"
-      WHERE e."deletedAt" IS NULL AND p."orderId" IS DISTINCT FROM e."orderId"`,
-  );
-  checks.push({
-    name: "joined order id matches the old column",
-    pass: (orderMismatch[0]?.n ?? -1) === 0,
-    detail: `${orderMismatch[0]?.n} mismatched`,
-  });
-
-  // 4. vendorOptions counts match the pre-migration GROUP BY vendor exactly.
-  //    Compared as row COUNTS per vendor, which is what the picklist showed;
-  //    the new options query counts CHARGES, so this compares the old shape
-  //    against the same shape rebuilt through the join.
-  const optionDrift = await q<{ name: string; before: number; after: number }>(
-    `WITH before AS (
-       SELECT "vendor" AS name, count(*)::int AS n FROM "Expense"
-        WHERE "deletedAt" IS NULL AND "vendor" IS NOT NULL GROUP BY 1
-     ),
-     after AS (
-       SELECT v."name" AS name, count(*)::int AS n
+    // 2. purchase.vendor.name matches the old expense.vendor for every linked row.
+    const vendorMismatch = await q<{ n: number }>(
+      `SELECT count(*)::int AS n
          FROM "Expense" e
-         JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
-         JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-        WHERE e."deletedAt" IS NULL GROUP BY 1
-     )
-     SELECT COALESCE(b.name, a.name) AS name,
-            COALESCE(b.n, 0) AS before, COALESCE(a.n, 0) AS after
-       FROM before b FULL OUTER JOIN after a ON a.name = b.name
-      WHERE COALESCE(b.n, 0) <> COALESCE(a.n, 0)`,
-  );
-  checks.push({
-    name: "per-vendor row counts identical pre/post",
-    pass: optionDrift.length === 0,
-    detail:
-      optionDrift.length === 0
-        ? "all vendors agree"
-        : JSON.stringify(optionDrift.slice(0, 10)),
-  });
+         JOIN "Purchase" p ON p.id = e."purchaseId"
+         JOIN "Vendor" v ON v.id = p."vendorId"
+        WHERE e."deletedAt" IS NULL AND v."name" IS DISTINCT FROM e."vendor"`,
+    );
+    checks.push({
+      name: "joined vendor name matches the old column",
+      pass: (vendorMismatch[0]?.n ?? -1) === 0,
+      detail: `${vendorMismatch[0]?.n} mismatched`,
+    });
 
-  // 5. Order-sibling sets identical pre/post. Pre = rows sharing
-  //    (vendor, orderId); post = rows sharing a purchaseId. Compared as the
-  //    sorted id array per group, so a group that merely changed size fails too.
-  const siblingDrift = await q<{ key: string; before: string; after: string }>(
-    `WITH before AS (
-       SELECT e."vendor" || '|' || e."orderId" AS key,
-              string_agg(e.id::text, ',' ORDER BY e.id) AS ids
+    // 3. purchase.orderId matches the old expense.orderId for every linked row.
+    const orderMismatch = await q<{ n: number }>(
+      `SELECT count(*)::int AS n
          FROM "Expense" e
-        WHERE e."deletedAt" IS NULL AND e."orderId" IS NOT NULL AND e."vendor" IS NOT NULL
-        GROUP BY 1
-     ),
-     after AS (
-       SELECT v."name" || '|' || p."orderId" AS key,
-              string_agg(e.id::text, ',' ORDER BY e.id) AS ids
-         FROM "Expense" e
-         JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
-         JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-        WHERE e."deletedAt" IS NULL AND p."orderId" IS NOT NULL
-        GROUP BY 1
-     )
-     SELECT COALESCE(b.key, a.key) AS key,
-            COALESCE(b.ids, '') AS before, COALESCE(a.ids, '') AS after
-       FROM before b FULL OUTER JOIN after a ON a.key = b.key
-      WHERE COALESCE(b.ids, '') <> COALESCE(a.ids, '')`,
-  );
-  checks.push({
-    name: "order-sibling sets identical pre/post",
-    pass: siblingDrift.length === 0,
-    detail:
-      siblingDrift.length === 0
-        ? "all order groups agree"
-        : JSON.stringify(siblingDrift.slice(0, 5)),
-  });
+         JOIN "Purchase" p ON p.id = e."purchaseId"
+        WHERE e."deletedAt" IS NULL AND p."orderId" IS DISTINCT FROM e."orderId"`,
+    );
+    checks.push({
+      name: "joined order id matches the old column",
+      pass: (orderMismatch[0]?.n ?? -1) === 0,
+      detail: `${orderMismatch[0]?.n} mismatched`,
+    });
 
-  // 6. Rollup guard — the load-bearing one. Spend is SUM(expense.cost) and must
-  //    be byte-identical before and after, in total and sliced every way the
-  //    rollups slice it. `statedTotal` must never reach spend, which is checked
-  //    by construction here: it is null on every backfilled charge, and the sums
-  //    below never reference it.
-  const totals = await q<{ scope: string; before: number; after: number }>(
-    `WITH t AS (
-       SELECT
-         COALESCE(sum(cost), 0)::numeric AS all_rows,
-         COALESCE(sum(cost) FILTER (WHERE future = false), 0)::numeric AS actual,
-         COALESCE(sum(cost) FILTER (WHERE future = true), 0)::numeric AS committed,
-         COALESCE(sum(cost) FILTER (WHERE cost < 0), 0)::numeric AS credits,
-         count(*)::int AS n
-       FROM "Expense" WHERE "deletedAt" IS NULL
-     )
-     SELECT 'total' AS scope, all_rows AS before, all_rows AS after FROM t
-     UNION ALL SELECT 'actual', actual, actual FROM t
-     UNION ALL SELECT 'committed', committed, committed FROM t
-     UNION ALL SELECT 'credits', credits, credits FROM t
-     UNION ALL SELECT 'count', n, n FROM t`,
-  );
-  // The split touched no cost, no date, no project and no `future` flag — the
-  // backfill only wrote `purchaseId` — so the real assertion is that summing
-  // THROUGH the new join reproduces the same numbers as summing the table.
-  const throughJoin = await q<{
-    linked: number;
-    unlinked: number;
-    all: number;
-  }>(
-    `SELECT
-       COALESCE(sum(e.cost) FILTER (WHERE e."purchaseId" IS NOT NULL), 0)::numeric AS linked,
-       COALESCE(sum(e.cost) FILTER (WHERE e."purchaseId" IS NULL), 0)::numeric AS unlinked,
-       COALESCE(sum(e.cost), 0)::numeric AS all
-     FROM "Expense" e WHERE e."deletedAt" IS NULL`,
-  );
-  const row = throughJoin[0];
-  const linked = Number(row?.linked ?? 0);
-  const unlinked = Number(row?.unlinked ?? 0);
-  const all = Number(row?.all ?? 0);
-  checks.push({
-    name: "spend partitions exactly across the new join (no double-count, no loss)",
-    pass: Math.abs(linked + unlinked - all) < 0.005,
-    detail: `linked ${linked.toFixed(2)} + unlinked ${unlinked.toFixed(2)} = ${(linked + unlinked).toFixed(2)} vs total ${all.toFixed(2)}`,
-  });
+    // 4. vendorOptions counts match the pre-migration GROUP BY vendor exactly.
+    //    Compared as row COUNTS per vendor, which is what the picklist showed;
+    //    the new options query counts CHARGES, so this compares the old shape
+    //    against the same shape rebuilt through the join.
+    const optionDrift = await q<{
+      name: string;
+      before: number;
+      after: number;
+    }>(
+      `WITH before AS (
+         SELECT "vendor" AS name, count(*)::int AS n FROM "Expense"
+          WHERE "deletedAt" IS NULL AND "vendor" IS NOT NULL GROUP BY 1
+       ),
+       after AS (
+         SELECT v."name" AS name, count(*)::int AS n
+           FROM "Expense" e
+           JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
+           JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
+          WHERE e."deletedAt" IS NULL GROUP BY 1
+       )
+       SELECT COALESCE(b.name, a.name) AS name,
+              COALESCE(b.n, 0) AS before, COALESCE(a.n, 0) AS after
+         FROM before b FULL OUTER JOIN after a ON a.name = b.name
+        WHERE COALESCE(b.n, 0) <> COALESCE(a.n, 0)`,
+    );
+    checks.push({
+      name: "per-vendor row counts identical pre/post",
+      pass: optionDrift.length === 0,
+      detail:
+        optionDrift.length === 0
+          ? "all vendors agree"
+          : JSON.stringify(optionDrift.slice(0, 10)),
+    });
 
-  // Per-project spend must also partition, since projectRollups group by it.
+    // 5. Order-sibling sets identical pre/post. Pre = rows sharing
+    //    (vendor, orderId); post = rows sharing a purchaseId. Compared as the
+    //    sorted id array per group, so a group that merely changed size fails too.
+    const siblingDrift = await q<{
+      key: string;
+      before: string;
+      after: string;
+    }>(
+      `WITH before AS (
+         SELECT e."vendor" || '|' || e."orderId" AS key,
+                string_agg(e.id::text, ',' ORDER BY e.id) AS ids
+           FROM "Expense" e
+          WHERE e."deletedAt" IS NULL AND e."orderId" IS NOT NULL AND e."vendor" IS NOT NULL
+          GROUP BY 1
+       ),
+       after AS (
+         SELECT v."name" || '|' || p."orderId" AS key,
+                string_agg(e.id::text, ',' ORDER BY e.id) AS ids
+           FROM "Expense" e
+           JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
+           JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
+          WHERE e."deletedAt" IS NULL AND p."orderId" IS NOT NULL
+          GROUP BY 1
+       )
+       SELECT COALESCE(b.key, a.key) AS key,
+              COALESCE(b.ids, '') AS before, COALESCE(a.ids, '') AS after
+         FROM before b FULL OUTER JOIN after a ON a.key = b.key
+        WHERE COALESCE(b.ids, '') <> COALESCE(a.ids, '')`,
+    );
+    checks.push({
+      name: "order-sibling sets identical pre/post",
+      pass: siblingDrift.length === 0,
+      detail:
+        siblingDrift.length === 0
+          ? "all order groups agree"
+          : JSON.stringify(siblingDrift.slice(0, 5)),
+    });
+  }
+
+  // ⚠️ Compared against the BACKUP FILE, not against another query of the live DB.
   //
-  // The join key is COALESCE'd to a text sentinel rather than compared with
-  // `IS NOT DISTINCT FROM`: Postgres rejects a FULL JOIN whose condition isn't
-  // merge- or hash-joinable ("FULL JOIN is only supported with merge-joinable or
-  // hash-joinable join conditions"), and `IS NOT DISTINCT FROM` isn't. Plain
-  // equality would silently drop the unassigned-project bucket, which is the one
-  // most likely to drift.
-  const projectDrift = await q<{ n: number }>(
-    `WITH direct AS (
-       SELECT COALESCE("projectId"::text, '~unassigned~') AS k,
+  // This check previously asserted `sum(x FILTER p) + sum(x FILTER NOT p) =
+  // sum(x)`, which is a tautology for any boolean partition — it holds by
+  // construction whether or not the backfill was correct, and could never fail.
+  // A gate that cannot fail is worse than no gate, because it reports PASS.
+  //
+  // The only genuinely independent baseline is one captured BEFORE anything
+  // changed, which is what `backup` writes. Recomputing spend from those rows and
+  // comparing it to the live table is a real assertion: it fails if the backfill
+  // dropped, duplicated or altered a row.
+  const baseline = loadBaseline();
+  if (!baseline) {
+    checks.push({
+      name: "spend matches the pre-migration backup",
+      pass: false,
+      detail:
+        "NO BASELINE FOUND — run `backup` first (or set MIGRATION_BACKUP_DIR). " +
+        "Refusing to report a pass on a check that could not run.",
+    });
+  } else {
+    const live = await q<{ total: number; n: number }>(
+      `SELECT COALESCE(sum(cost), 0)::numeric AS total, count(*)::int AS n
+         FROM "Expense" WHERE "deletedAt" IS NULL`,
+    );
+    const liveTotal = Number(live[0]?.total ?? 0);
+    const liveCount = Number(live[0]?.n ?? 0);
+    checks.push({
+      name: "spend matches the pre-migration backup",
+      pass:
+        Math.abs(liveTotal - baseline.total) < 0.005 &&
+        liveCount === baseline.count,
+      detail: `backup ${baseline.total.toFixed(2)} / ${baseline.count} rows vs live ${liveTotal.toFixed(2)} / ${liveCount} rows (from ${baseline.path})`,
+    });
+
+    // Per-project too, since `projectRollups` groups by it — a backfill that
+    // moved spend BETWEEN projects would leave the grand total untouched.
+    const liveByProject = await q<{ k: string; s: number }>(
+      `SELECT COALESCE("projectId"::text, '~unassigned~') AS k,
               COALESCE(sum(cost), 0)::numeric AS s
-         FROM "Expense" WHERE "deletedAt" IS NULL GROUP BY 1
-     ),
-     viajoin AS (
-       SELECT COALESCE(e."projectId"::text, '~unassigned~') AS k,
-              COALESCE(sum(e.cost), 0)::numeric AS s
-         FROM "Expense" e
-         LEFT JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
-        WHERE e."deletedAt" IS NULL GROUP BY 1
-     )
-     SELECT count(*)::int AS n FROM direct d
-       FULL OUTER JOIN viajoin j ON j.k = d.k
-      WHERE COALESCE(d.s, 0) <> COALESCE(j.s, 0)`,
-  );
-  checks.push({
-    name: "per-project spend unchanged by the join",
-    pass: (projectDrift[0]?.n ?? -1) === 0,
-    detail: `${projectDrift[0]?.n} projects drifted`,
-  });
+         FROM "Expense" WHERE "deletedAt" IS NULL GROUP BY 1`,
+    );
+    const drifted = liveByProject.filter((r) => {
+      const was = baseline.byProject.get(r.k) ?? 0;
+      return Math.abs(Number(r.s) - was) >= 0.005;
+    });
+    const vanished = [...baseline.byProject.keys()].filter(
+      (k) => !liveByProject.some((r) => r.k === k),
+    );
+    checks.push({
+      name: "per-project spend matches the pre-migration backup",
+      pass: drifted.length === 0 && vanished.length === 0,
+      detail:
+        drifted.length === 0 && vanished.length === 0
+          ? `${baseline.byProject.size} project buckets agree`
+          : `drifted: ${drifted.map((d) => d.k).join(", ")}; vanished: ${vanished.join(", ")}`,
+    });
+  }
 
   // Sanity counts, reported not asserted.
   const shape = await q(
@@ -471,11 +554,25 @@ const verify = async (): Promise<Check[]> => {
        (SELECT count(*)::int FROM "Purchase" WHERE "deletedAt" IS NULL AND "orderId" IS NOT NULL) AS with_order,
        (SELECT count(*)::int FROM "Purchase" WHERE "statedTotal" IS NOT NULL) AS with_stated_total`,
   );
-  console.log("\nShape:", JSON.stringify(shape[0]));
-  console.log(
-    "Totals:",
-    JSON.stringify(totals.map((t) => [t.scope, t.before])),
+  // Reported for eyeballing, not asserted — the assertions are the
+  // backup-baseline comparisons above.
+  const totals = await q<{
+    all_rows: number;
+    actual: number;
+    committed: number;
+    credits: number;
+    n: number;
+  }>(
+    `SELECT
+       COALESCE(sum(cost), 0)::numeric AS all_rows,
+       COALESCE(sum(cost) FILTER (WHERE future = false), 0)::numeric AS actual,
+       COALESCE(sum(cost) FILTER (WHERE future = true), 0)::numeric AS committed,
+       COALESCE(sum(cost) FILTER (WHERE cost < 0), 0)::numeric AS credits,
+       count(*)::int AS n
+     FROM "Expense" WHERE "deletedAt" IS NULL`,
   );
+  console.log("\nShape:", JSON.stringify(shape[0]));
+  console.log("Totals:", JSON.stringify(totals[0]));
 
   return checks;
 };
@@ -537,6 +634,197 @@ const drop = async () => {
   );
 };
 
+/**
+ * The curated vendor → brand-domain list, inlined from the deleted
+ * `scripts/vendor-domains.ts`. Read as `[exact Vendor.name, bare domain]`.
+ *
+ * **Deliberately incomplete, and it should stay that way.** A wrong domain yields
+ * a confidently-wrong logo, which is far worse than no logo — so vendors whose
+ * domain isn't certain (small local Bay Area suppliers, ambiguous names like
+ * "Muller" or "Casson") are simply absent, and fall through to the monogram tile.
+ * Nothing here was inferred from a vendor's name; each was looked up and eyeballed.
+ *
+ * Names must match `Vendor.name` byte-for-byte ("Home depot" silently matches
+ * nothing), which is exactly why this list is a one-shot backfill of a column
+ * rather than a permanent lookup table: after this runs, the domain lives on the
+ * row and a rename carries it along.
+ */
+const VENDOR_DOMAINS: [name: string, domain: string][] = [
+  ["Amazon", "amazon.com"],
+  ["Home Depot", "homedepot.com"],
+  ["eBay", "ebay.com"],
+  ["Lowe's", "lowes.com"],
+  ["SupplyHouse", "supplyhouse.com"],
+  ["Direct Tools Outlet", "directtoolsoutlet.com"],
+  ["Woodworker Express", "woodworkerexpress.com"],
+  ["Harbor Freight", "harborfreight.com"],
+  ["Golden State Lumber", "goldenstatelumber.com"],
+  ["Sloat Garden Center", "sloatgardens.com"],
+  ["Zoro", "zoro.com"],
+  ["Rockler", "rockler.com"],
+  ["Walmart", "walmart.com"],
+  ["Residence Supply", "residencesupply.com"],
+  ["B&H", "bhphotovideo.com"],
+  ["Rain Bird", "rainbird.com"],
+  ["SendCutSend", "sendcutsend.com"],
+  ["Woodcraft", "woodcraft.com"],
+  ["Color Atelier", "coloratelier.com"],
+  ["Four Winds Growers", "fourwindsgrowers.com"],
+  ["Urban Farmer", "ufseeds.com"],
+  ["DK Hardware", "dkhardware.com"],
+  ["Overstock", "overstock.com"],
+  ["DigiKey", "digikey.com"],
+  ["Etsy", "etsy.com"],
+  ["Architectural Depot", "architecturaldepot.com"],
+  ["Bambu Lab", "bambulab.com"],
+  ["The Growers Exchange", "thegrowers-exchange.com"],
+  ["CabinetParts", "cabinetparts.com"],
+  ["Botanical Interests", "botanicalinterests.com"],
+  ["ToolsToday", "toolstoday.com"],
+  ["Flexfire LEDs", "flexfireleds.com"],
+  ["SuperBrightLEDs", "superbrightleds.com"],
+  ["Mountain Valley Growers", "mountainvalleygrowers.com"],
+  ["Tool Nut", "toolnut.com"],
+  ["TSO Products", "tsoproducts.com"],
+  ["One Green World", "onegreenworld.com"],
+  ["Acme Tools", "acmetools.com"],
+  ["Flora Grubb Gardens", "floragrubb.com"],
+  ["Veradek", "veradek.com"],
+  ["Center Hardware", "centerhardware.com"],
+  ["Häfele", "hafele.com"],
+  ["Sherwin-Williams", "sherwin-williams.com"],
+  ["Target", "target.com"],
+  ["McMaster-Carr", "mcmaster.com"],
+  ["Penn State Industries", "pennstateind.com"],
+  ["Festool", "festoolusa.com"],
+  ["Festool Recon", "festoolusa.com"],
+  ["Northern Tool", "northerntool.com"],
+  ["Ewing Irrigation", "ewingoutdoorsupply.com"],
+  ["Sprinkler Supply Store", "sprinklersupplystore.com"],
+  ["The Evergreen Nursery", "evergreennursery.com"],
+];
+
+/**
+ * Seed `Vendor.website` from {@link VENDOR_DOMAINS}, matched on exact
+ * `Vendor.name`.
+ *
+ * Stored WITH the `https://` scheme, not as a bare domain: the vendor list
+ * renders the value straight into `href={website}`, and a scheme-less href is a
+ * relative path. `seed-vendor-logos.ts` normalizes back down to a bare hostname,
+ * so it accepts either — the UI is the side with the requirement.
+ *
+ * Only fills rows where `website IS NULL`. A value someone typed is never
+ * overwritten, even when it disagrees with the curated domain — the disagreement
+ * is reported instead, since the human-entered one is the more recent judgement.
+ * Idempotent: a second run reports every pair as already-set and writes nothing.
+ */
+const websites = async () => {
+  const rows = await q<{ name: string; website: string | null }>(
+    `SELECT "name", "website" FROM "Vendor" WHERE "deletedAt" IS NULL`,
+  );
+  const existing = new Map(rows.map((r) => [r.name, r.website]));
+
+  const set: string[] = [];
+  const kept: string[] = [];
+  const conflicting: string[] = [];
+  const noVendor: string[] = [];
+
+  for (const [name, domain] of VENDOR_DOMAINS) {
+    if (!existing.has(name)) {
+      noVendor.push(name);
+      continue;
+    }
+    const current = existing.get(name) ?? null;
+    const url = `https://${domain}`;
+    if (current !== null) {
+      if (current === url) kept.push(`${name} = ${current}`);
+      else conflicting.push(`${name}: kept ${current}, curated ${url}`);
+      continue;
+    }
+    const res = await pool.query(
+      `UPDATE "Vendor"
+          SET "website" = $2, "updatedAt" = now()
+        WHERE "name" = $1 AND "deletedAt" IS NULL AND "website" IS NULL`,
+      [name, url],
+    );
+    if (res.rowCount === 1) set.push(`${name} → ${url}`);
+    else {
+      // The row was read as website IS NULL a moment ago, so 0 rows here means
+      // something else wrote it in between. Report rather than retry.
+      conflicting.push(
+        `${name}: UPDATE matched ${res.rowCount} rows, expected 1`,
+      );
+    }
+  }
+
+  for (const line of set) console.log(`  set   ${line}`);
+  for (const line of kept) console.log(`  keep  ${line}`);
+  for (const line of conflicting) console.log(`  ⚠ differs ${line}`);
+  for (const name of noVendor) console.log(`  ⚠ no vendor named "${name}"`);
+
+  const stillNull = await q<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "Vendor"
+      WHERE "deletedAt" IS NULL AND "website" IS NULL`,
+  );
+  console.log(
+    `\n${set.length} set, ${kept.length} already correct, ${conflicting.length} left alone, ` +
+      `${noVendor.length} unmatched (of ${VENDOR_DOMAINS.length} curated pairs).`,
+  );
+  console.log(
+    `${stillNull[0]?.n ?? "?"} live vendor(s) still have no website — monogram tile only.`,
+  );
+};
+
+/**
+ * Drop `Vendor.kind`.
+ *
+ * The column shipped with the split as a nullable descriptor, then came straight
+ * back out: nothing branched on it — every reference was a badge, a hovercard, or
+ * a filter — and it was null on 111 of 114 rows. It can return as a plain additive
+ * migration if contractor metadata (license, COI expiry) ever needs a
+ * discriminator.
+ *
+ * Explicit SQL rather than `drizzle-kit push --force`, for the same reason as
+ * `drop`: push needs a TTY to confirm a data-loss statement, and `--force` would
+ * apply whatever else a diff decided. Reports the values being discarded first, so
+ * the three rows classified by hand aren't lost silently.
+ */
+const dropVendorKind = async () => {
+  const present = await q<{ n: number }>(
+    `SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Vendor'
+        AND column_name = 'kind'`,
+  );
+  if ((present[0]?.n ?? 0) === 0) {
+    console.log("  Vendor.kind is already gone — nothing to do");
+    return;
+  }
+
+  const classified = await q<{ kind: string; n: number }>(
+    `SELECT "kind", count(*)::int AS n FROM "Vendor"
+      WHERE "deletedAt" IS NULL AND "kind" IS NOT NULL GROUP BY 1 ORDER BY 1`,
+  );
+  console.log(
+    classified.length === 0
+      ? "  no vendor carried a kind"
+      : `  discarding: ${classified.map((c) => `${c.kind} (${c.n})`).join(", ")}`,
+  );
+
+  const before = await q<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "Vendor"`,
+  );
+  await q(`ALTER TABLE "Vendor" DROP COLUMN "kind"`);
+  const after = await q<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "Vendor"`,
+  );
+  if (before[0]?.n !== after[0]?.n) {
+    throw new Error(
+      `Vendor row count changed across the drop: ${before[0]?.n} → ${after[0]?.n}`,
+    );
+  }
+  console.log(`  dropped "Vendor"."kind"; ${after[0]?.n} vendors intact`);
+};
+
 const main = async () => {
   const cmd = process.argv[2];
   try {
@@ -546,8 +834,12 @@ const main = async () => {
       await rename();
     } else if (cmd === "backfill") {
       await backfill();
+    } else if (cmd === "drop-vendor-kind") {
+      await dropVendorKind();
     } else if (cmd === "drop") {
       await drop();
+    } else if (cmd === "websites") {
+      await websites();
     } else if (cmd === "verify") {
       const checks = await verify();
       console.log("");
@@ -559,7 +851,7 @@ const main = async () => {
       console.log(`\n${checks.length - failed}/${checks.length} checks passed`);
       if (failed > 0) process.exitCode = 1;
     } else {
-      console.error("usage: <backup|rename|backfill|verify|drop>");
+      console.error("usage: <backup|rename|backfill|verify|drop|websites>");
       process.exitCode = 2;
     }
   } finally {

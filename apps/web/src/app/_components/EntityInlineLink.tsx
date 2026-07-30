@@ -4,8 +4,6 @@ import type {
   ProjectStatus,
   TaskStatus,
 } from "@cubby/schemas/project";
-import type { VendorKind } from "@cubby/schemas/vendor";
-import { VENDOR_KIND_LABELS } from "@cubby/schemas/vendor";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
 import type { ReactNode } from "react";
@@ -91,7 +89,7 @@ type EntityInlineLinkProps = {
     }
   | {
       entity: "vendor";
-      data: MinimalEntityData & { kind?: VendorKind | null };
+      data: MinimalEntityData;
     }
 );
 
@@ -382,7 +380,6 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         className={wrapperClass}
         icon={<EntityIcon entity="vendor" size={12} colored />}
         name={data.name}
-        metadata={data.kind ? VENDOR_KIND_LABELS[data.kind] : undefined}
         compact={compact}
         truncate={truncate}
       />

@@ -1,14 +1,16 @@
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
-import { ExternalLink, Info, PackagePlus, Receipt } from "lucide-react";
+import { ExternalLink, Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
 import {
   WithProductSearch,
   WithProjectSearch,
 } from "~/app/_components/combobox/with-search-hook";
+import { WithVendorSearch } from "~/app/_components/combobox/with-vendor-search";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { TradeBadge, tradeOptions } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { VendorCell } from "~/components/entity/vendor-cell";
+import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
@@ -36,6 +38,7 @@ import {
 } from "./expense-options";
 import { ProjectSuggestionChips } from "./project-suggestion-chips";
 import { ReceiveExpenseDialog } from "./receive-expense-dialog";
+import { SplitExpenseDialog } from "./split-expense-dialog";
 
 interface ExpenseDetailProps {
   expense: ExpenseOut;
@@ -44,6 +47,7 @@ interface ExpenseDetailProps {
 export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
   const api = useTRPC();
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
@@ -242,16 +246,31 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     {
       label: "Vendor",
       value: (
-        <EditableCell
-          value={expense.vendor}
-          config={{ type: "text", placeholder: "Where from?" }}
+        // A roster picker, not a text box. Free text here minted a duplicate
+        // `Vendor` row on any typo — `findOrCreateVendor` matches names EXACTLY
+        // (deliberately), so "amazon" beside an existing "Amazon" becomes a second
+        // row with nothing to detect it. Same `EditableEntityCell` +
+        // `WithVendorSearch` pairing as the ledger's Vendor column; `id === name`
+        // because the server contract stays name-based.
+        <EditableEntityCell<string>
+          value={
+            expense.vendor ? { id: expense.vendor, name: expense.vendor } : null
+          }
+          label="vendor"
+          // A charge's vendor is optional — clearing detaches the line from its
+          // charge, exactly as emptying the old text input did.
+          clearable
+          trigger="pencil"
           onSave={async (vendor) => {
             await updateMutation.mutateAsync({
               id: expense.id,
               data: { vendor },
             });
           }}
-          renderValue={(v) => (v ? <VendorCell vendor={v} /> : <NoneValue />)}
+          SearchProvider={WithVendorSearch}
+          renderValue={(v) =>
+            v ? <VendorCell vendor={v.name} /> : <NoneValue />
+          }
         />
       ),
     },
@@ -442,9 +461,42 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
         tone: expense.future ? "ink" : "green",
       }}
       heroStats={heroStats}
-      actions={deleteButton}
+      actions={
+        <Row align="center" gap="sm">
+          {/* A split files its parts under this line's CHARGE, so a line with no
+              charge has nothing to file them under — `splitExpense` refuses with
+              "record its vendor first". Disabled with that explanation rather
+              than surfaced as an error toast: the fix is a field on this page. */}
+          <span
+            title={
+              expense.purchaseId
+                ? undefined
+                : "Record this line's vendor first — a split files its parts under the line's charge."
+            }
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!expense.purchaseId}
+              onClick={() => setSplitOpen(true)}
+            >
+              <Split />
+              Split
+            </Button>
+          </span>
+          {deleteButton}
+        </Row>
+      }
     >
       <DetailSections sections={sections} rawData={expense} />
+      {expense.purchaseId ? (
+        <SplitExpenseDialog
+          open={splitOpen}
+          onOpenChange={setSplitOpen}
+          expense={expense}
+          purchaseId={expense.purchaseId}
+        />
+      ) : null}
       {expense.productId ? (
         <ReceiveExpenseDialog
           open={receiveOpen}

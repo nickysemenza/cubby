@@ -23,6 +23,7 @@ import {
   SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
+import { VendorField } from "../_components/form-utils/vendor-field";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { costTypeOptions } from "./expense-options";
 
@@ -170,12 +171,8 @@ export function SettleExpenseDialog({
           options={projectOptions}
           nullable
         />
-        <UnifiedTextField
-          form={form}
-          name="vendor"
-          label="Vendor"
-          placeholder="Where from?"
-        />
+        {/* Roster picker, not free text — see `VendorField`. */}
+        <VendorField form={form} name="vendor" label="Vendor" />
         <UnifiedTextField
           form={form}
           name="orderId"

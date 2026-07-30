@@ -19,23 +19,16 @@ const searchSchema = z.object({
   ...entityFilterSearchFields("vendor"),
   // Re-declared by name (a computed Record has no literal key types for
   // `Route.useSearch()` / `<Link search>` to expose) and with `urlStringParam`,
-  // NOT a bare `z.string()`: these sit AFTER the spread and override it, so a
+  // NOT a bare `z.string()`: this sits AFTER the spread and overrides it, so a
   // plain string schema would reinstate the hole `urlStringParam` closes —
   // TanStack's `parseSearch` JSON-parses first, so an all-digits vendor search
   // (`?q=486242`) arrives as a number and a `z.string()` would drop it.
-  //
-  // Two keys, not three: `kind`'s `(none)` / `Has kind` sentinels ride INSIDE
-  // this param (`?kind=contractor,__none__`) and are split off into
-  // `kindPresenceFilter` by `buildFiltersFromManifest`, so the presence filter
-  // claims no URL key of its own.
   q: urlStringParam,
-  kind: urlStringParam,
   ...tableSearchFields,
 });
 
 const searchDefaults = {
   q: undefined,
-  kind: undefined,
 } as const;
 
 export const Route = createFileRoute("/_authenticated/vendors/")({

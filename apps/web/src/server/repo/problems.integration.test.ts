@@ -1,15 +1,23 @@
-import type {
-  LocationId,
-  ProductId,
-  ProjectId,
+import {
+  type LocationId,
+  type ProductId,
+  type ProjectId,
+  type PurchaseId,
+  unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import { countProblems, sumProblemSections } from "@cubby/schemas/problems";
 import {
+  countProblems,
+  PROBLEM_CLASS,
+  sumProblemSections,
+} from "@cubby/schemas/problems";
+import {
+  type ExpenseCreateInput,
   expenseCreateInput,
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
+import { purchaseUpdateInput } from "@cubby/schemas/purchase";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
@@ -40,14 +48,17 @@ import { createLocation, ensureGlobalUnknownLocation } from "./location";
 import { findStaleIngredientParses } from "./problems";
 import { createProduct, deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
+import { updatePurchase } from "./purchase";
 import { createRecipe } from "./recipe";
 import {
   ingredientRef,
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
 import { createTask, deleteTasks } from "./task";
+import { findOrCreateVendor, mergeVendors } from "./vendor";
 
 // Repo-layer tests for the WASM-driven, highest-logic problem scans. The
 // coverage/UPC find* helpers are exercised through the public findAllProblems
@@ -1134,8 +1145,8 @@ describe("problems — brand-label spelling variants", () => {
     createProduct(ctx.db, makeProductInput({ name, manufacturer }), ctx.actor);
 
   it("flags the minority spelling of a manufacturer, pointing at the majority", async () => {
-    await seedProduct("Ryobi drill", "Ryobi");
-    await seedProduct("Ryobi saw", "Ryobi");
+    const drill = await seedProduct("Ryobi drill", "Ryobi");
+    const saw = await seedProduct("Ryobi saw", "Ryobi");
     const odd = await seedProduct("Ryobi sander", "RYOBI");
 
     const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
@@ -1146,6 +1157,13 @@ describe("problems — brand-label spelling variants", () => {
         canonical: "Ryobi",
         canonicalCount: 2,
         sampleId: odd.id,
+        // Shared with the vendor detector, which needs an id for the spelling it
+        // MERGES INTO. Only that caller reads it (a manufacturer is a string, so
+        // its fix is a rename, not a merge) and `problemsFastSchema` strips it
+        // from this key on the wire — but the SQL selects it for both, so it is
+        // pinned here too. `min(id::text)` over the canonical spelling's two
+        // products, derived rather than hardcoded since uuids decide which.
+        canonicalSampleId: drill.id < saw.id ? drill.id : saw.id,
       },
     ]);
   });
@@ -1187,5 +1205,236 @@ describe("problems — brand-label spelling variants", () => {
 
     const after = await findFastProblems(ctx.db);
     expect(after.manufacturerSpellingVariants).toEqual([]);
+  });
+});
+
+describe("problems — duplicate vendors", () => {
+  const ctx = withTestDb();
+
+  // Seed through the door the duplicates actually come in: `createExpense`
+  // resolves its `vendor` name via findOrCreateVendor, which matches EXACTLY, so
+  // a second spelling mints a second roster row. Each distinct orderId is a
+  // separate charge on that vendor, which is what the detector weighs.
+  const seedCharge = (vendor: string, orderId: string) =>
+    createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: `${vendor} ${orderId}`,
+          cost: 10,
+          vendor,
+          orderId,
+        }),
+      ),
+      ctx.actor,
+    );
+
+  // Idempotent by contract (vendor.integration.test pins it), so this reads an
+  // existing roster row's id rather than creating anything.
+  const vendorIdOf = (name: string) => findOrCreateVendor(ctx.db, name);
+
+  it("pairs two spellings of one vendor, keeping the one with more charges", async () => {
+    await seedCharge("Amazon", "AMZ-1");
+    await seedCharge("Amazon", "AMZ-2");
+    await seedCharge("amazon", "AMZ-3");
+
+    const { duplicateVendors } = await findFastProblems(ctx.db);
+    expect(duplicateVendors).toEqual([
+      {
+        value: "amazon",
+        // Live CHARGES, not roster rows: `Vendor.name` is unique among live rows,
+        // so a row count would be 1 on both sides and the canonical pick would
+        // fall through to alphabetical order.
+        count: 1,
+        canonical: "Amazon",
+        canonicalCount: 2,
+        sampleId: await vendorIdOf("amazon"),
+        canonicalSampleId: await vendorIdOf("Amazon"),
+      },
+    ]);
+    // A duplicate roster row is wrong and drivable to zero, so unlike the
+    // advisory stated-total worklist it counts toward the badge.
+    expect(PROBLEM_CLASS.duplicateVendors).toBe("defect");
+  });
+
+  it("leaves vendors that are each spelled one way alone", async () => {
+    await seedCharge("Tool Nirvana", "TN-1");
+    await seedCharge("Home Depot", "HD-1");
+    await seedCharge("Home Depot", "HD-2");
+
+    const { duplicateVendors } = await findFastProblems(ctx.db);
+    expect(duplicateVendors).toEqual([]);
+  });
+
+  it("does not fold an abbreviation, only a respelling", async () => {
+    // `bh` vs `bhphoto` are different canonical keys. This pair was real and was
+    // merged by hand — the detector deliberately doesn't guess at it, so the UI
+    // copy must not claim it does.
+    await seedCharge("B&H", "BH-1");
+    await seedCharge("B&H Photo", "BH-2");
+
+    const { duplicateVendors } = await findFastProblems(ctx.db);
+    expect(duplicateVendors).toEqual([]);
+  });
+
+  it("clears once merged with the two ids the row carries", async () => {
+    // The row's own `canonicalSampleId`/`sampleId` are exactly what the Problems
+    // card hands `mergeVendors` — this pins that they're the right way round.
+    await seedCharge("Lowes", "LW-1");
+    await seedCharge("Lowes", "LW-2");
+    await seedCharge("Lowe's", "LW-3");
+
+    const before = await findFastProblems(ctx.db);
+    expect(before.duplicateVendors).toHaveLength(1);
+    const row = before.duplicateVendors[0];
+    if (!row) throw new Error("expected a duplicate-vendor row");
+    expect(row.value).toBe("Lowe's");
+
+    const keeper = await mergeVendors(
+      ctx.db,
+      {
+        keepId: unsafeVendorId(row.canonicalSampleId),
+        mergeIds: [unsafeVendorId(row.sampleId)],
+      },
+      ctx.actor,
+    );
+    expect(keeper.name).toBe("Lowes");
+    // All three charges are now the keeper's — the merge moved them rather than
+    // stranding them on a soft-deleted vendor.
+    expect(keeper.purchaseCount).toBe(3);
+
+    const after = await findFastProblems(ctx.db);
+    expect(after.duplicateVendors).toEqual([]);
+  });
+});
+
+describe("problems — charges not reconciling", () => {
+  const ctx = withTestDb();
+
+  // A charge is minted by the expense write (findOrCreateVendor +
+  // findOrCreatePurchase on vendor+orderId), so two lines sharing an order id
+  // land on ONE charge. `statedTotal` is charge-level and is set afterwards —
+  // there is deliberately no path that derives it from the lines.
+  const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+    createExpense(
+      ctx.db,
+      expenseCreateInput.parse(makeExpenseInput(overrides)),
+      ctx.actor,
+    );
+
+  const setStated = (id: PurchaseId, statedTotal: number) =>
+    updatePurchase(
+      ctx.db,
+      purchaseUpdateInput.parse({ id, data: { statedTotal } }),
+      ctx.actor,
+    );
+
+  it("flags charges whose lines don't add up, biggest gap first, and leaves a matching one alone", async () => {
+    const big = await seedLine({
+      name: "big gap line",
+      cost: 300,
+      vendor: "Reconcile Depot",
+      orderId: "RD-BIG",
+    });
+    const small = await seedLine({
+      name: "small gap line",
+      cost: 85,
+      vendor: "Reconcile Depot",
+      orderId: "RD-SMALL",
+    });
+    // Two lines on one order = one charge with two lines, which is the case a
+    // charge-level stated total exists to check.
+    const okFirst = await seedLine({
+      name: "matching line a",
+      cost: 60,
+      vendor: "Reconcile Depot",
+      orderId: "RD-OK",
+    });
+    const okSecond = await seedLine({
+      name: "matching line b",
+      cost: 40,
+      vendor: "Reconcile Depot",
+      orderId: "RD-OK",
+    });
+    expect(okSecond.purchaseId).toBe(okFirst.purchaseId);
+
+    const bigCharge = await setStated(big.purchaseId as PurchaseId, 500);
+    const smallCharge = await setStated(small.purchaseId as PurchaseId, 100);
+    const okCharge = await setStated(okFirst.purchaseId as PurchaseId, 100);
+
+    const { chargesNotReconciling } = await findFastProblems(ctx.db);
+
+    // Ordered by the size of the discrepancy: $200 before $15.
+    expect(chargesNotReconciling.map((c) => c.id)).toEqual([
+      bigCharge.id,
+      smallCharge.id,
+    ]);
+    expect(chargesNotReconciling.map((c) => c.id)).not.toContain(okCharge.id);
+    expect(chargesNotReconciling[1]).toMatchObject({
+      id: smallCharge.id,
+      vendorName: "Reconcile Depot",
+      orderId: "RD-SMALL",
+      statedTotal: 100,
+      expenseTotal: 85,
+      expenseCount: 1,
+    });
+  });
+
+  it("doesn't compare a charge with no stated total recorded", async () => {
+    // `statedTotal` is null on ~every charge (nobody has keyed the paperwork in
+    // yet), which reconciles as "unknown" — absence of a claim is not a
+    // discrepancy, and flagging it would make the section permanently full.
+    await seedLine({
+      name: "no paperwork line",
+      cost: 42,
+      vendor: "No Paperwork Co",
+      orderId: "NP-1",
+    });
+
+    const { chargesNotReconciling } = await findFastProblems(ctx.db);
+    expect(chargesNotReconciling).toEqual([]);
+  });
+
+  it("sums only live lines, so emptying one re-opens the discrepancy", async () => {
+    const kept = await seedLine({
+      name: "kept portion",
+      cost: 60,
+      vendor: "Refund Mart",
+      orderId: "RM-1",
+    });
+    const refunded = await seedLine({
+      name: "refunded portion",
+      cost: 40,
+      vendor: "Refund Mart",
+      orderId: "RM-1",
+    });
+    const charge = await setStated(kept.purchaseId as PurchaseId, 100);
+
+    const before = await findFastProblems(ctx.db);
+    expect(before.chargesNotReconciling).toEqual([]);
+
+    await deleteExpenses(ctx.db, [refunded.id], ctx.actor);
+
+    const after = await findFastProblems(ctx.db);
+    expect(after.chargesNotReconciling).toMatchObject([
+      { id: charge.id, statedTotal: 100, expenseTotal: 60, expenseCount: 1 },
+    ]);
+  });
+
+  it("is advisory: reported, but never counted as a defect", async () => {
+    const line = await seedLine({
+      name: "advisory line",
+      cost: 85,
+      vendor: "Advisory Mart",
+      orderId: "AM-1",
+    });
+    await setStated(line.purchaseId as PurchaseId, 100);
+
+    const { chargesNotReconciling } = await findFastProblems(ctx.db);
+    expect(chargesNotReconciling).toHaveLength(1);
+    // A mismatch is frequently correct (a partial refund), so it must never
+    // reach `totalProblems` or the navbar badge.
+    expect(PROBLEM_CLASS.chargesNotReconciling).not.toBe("defect");
+    expect(sumProblemSections({ chargesNotReconciling }, "defect")).toBe(0);
   });
 });

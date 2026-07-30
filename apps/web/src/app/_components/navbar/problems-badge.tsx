@@ -45,6 +45,7 @@ const PROBLEM_LABELS: Record<
   neverVerifiedInventory: (n) => pl(n, "never-verified item"),
   unknownParkedItems: (n) => `${n} parked in Unknown`,
   manufacturerSpellingVariants: (n) => pl(n, "manufacturer spelling"),
+  duplicateVendors: (n) => pl(n, "duplicate vendor"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
   orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),
@@ -58,6 +59,9 @@ const PROBLEM_LABELS: Record<
   projectsMissingBudget: (n) => `${n} missing a cost estimate`,
   unclassifiedExpenses: (n) => pl(n, "unclassified expense"),
   projectsWithDateDrift: (n) => pl(n, "date window drift"),
+  // Advisory, so it's filtered out of the tooltip at render like the coverage
+  // keys — the phrase exists only to keep this Record exhaustive.
+  chargesNotReconciling: (n) => `${n} not matching a stated total`,
 };
 
 export const ProblemsBadge = () => {

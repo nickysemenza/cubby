@@ -135,15 +135,14 @@ The household project tracker (migrated from Notion) is a self-contained module:
 Vendor ──< Purchase ──< Expense
   │            │  └── documents (PurchaseImage → Image)
   │            └── orderId?, date, statedTotal?
-  └── name (unique), kind, website, notes
+  └── name (unique), website, notes
 ```
 
 - **Vendor** (`Vendor`) — the roster of places money goes. Name is uniquely
-  indexed (live rows), `kind` is `retailer|contractor|supplier|other` and
-  nullable (the backfill can't infer it; guessing is worse than blank). Holds
-  **identity only** — its `spend` and `purchaseCount` are correlated rollups, not
-  columns. Deliberately thin in v1: contractor metadata (license, COI) and
-  vendor-level documents (W-9, contracts) are the natural follow-ons.
+  indexed (live rows). Holds **identity only** — its `spend` and `purchaseCount`
+  are correlated rollups, not columns. Deliberately thin: contractor metadata
+  (license, COI) and vendor-level documents (W-9, contracts) are the natural
+  follow-ons, and would arrive as additive columns.
 - **Purchase** (`Purchase`) — **ONE vendor transaction**, i.e. a charge.
   `vendorId` is NOT NULL; `orderId` is the vendor's own free-text order/receipt
   id, unique per vendor via a **partial-unique `(vendorId, orderId)` index where

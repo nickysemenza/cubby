@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
+  type ChargeNotReconciling,
   type CoverageTotals,
   type LabelVariant,
   type ProductMissingPrice,
@@ -31,6 +32,10 @@ import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { formatDate } from "~/app/projects/project-formatting";
+import {
+  ReconciliationBadge,
+  reconciliationDelta,
+} from "~/app/purchases/purchase-reconciliation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
@@ -52,7 +57,7 @@ import {
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
-import { OrphanedDeleteFix } from "./tier2-fixes";
+import { DuplicateVendorMergeFix, OrphanedDeleteFix } from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
   CoverageChips,
@@ -589,6 +594,29 @@ function locationBadges(
   ));
 }
 
+/** `Stated $431.24 · lines $416.24 across 3 lines` — the charge card's subtitle. */
+function chargeSubtitle(charge: ChargeNotReconciling): string {
+  const lines = `${charge.expenseCount} ${charge.expenseCount === 1 ? "line" : "lines"}`;
+  return `Stated ${formatCurrency(charge.statedTotal)} · lines ${formatCurrency(charge.expenseTotal)} across ${lines}`;
+}
+
+/**
+ * Names the discrepancy and its most likely innocent explanation, per direction.
+ *
+ * Deliberately not phrased as a fault: the lines coming in UNDER the stated total
+ * is the partial-refund shape, which is correct as it stands, and the reverse can
+ * simply be a stated total recorded before a line was added. `reconciliationDelta`
+ * is the shared derivation (lines − stated), so this can't drift from the badge.
+ */
+function chargeDeltaHint(charge: ChargeNotReconciling): string | null {
+  const delta = reconciliationDelta(charge);
+  if (delta === null) return null;
+  const gap = formatCurrency(Math.abs(delta));
+  return delta < 0
+    ? `Lines come in ${gap} under the stated total — the shape a partial refund leaves, or a line not recorded yet.`
+    : `Lines come in ${gap} over the stated total — an extra line, or a stated total captured before one was added.`;
+}
+
 /**
  * The Problems page in declaration order — the summary chips and the section
  * list both derive from this, so adding a check is a single entry here.
@@ -904,6 +932,33 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
+    id: "duplicate-vendors",
+    label: "Duplicate vendors",
+    select: (p) => p.duplicateVendors,
+    entity: "vendor",
+    title: "One vendor, two roster rows",
+    description:
+      "Vendor names are matched exactly when a charge is imported, so the same vendor entered two ways becomes two roster rows — and that vendor's spend splits across both. Merging folds one into the other, charges and all. Only spellings that normalize to the same name are compared, so a genuine abbreviation (B&H vs B&H Photo) is never guessed at here.",
+    emptyMessage: "Every vendor on the roster is spelled one way.",
+    renderItem: (v) => ({
+      // Names are unique among live vendors, so the variant spelling is a stable
+      // per-card key.
+      key: v.value,
+      title: v.value,
+      // Weighed by charges, not by roster rows — a duplicate is 1 row either way,
+      // so the charge count is what says which spelling is the real one.
+      subtitle: variantSubtitle(v, "charge"),
+      route: { to: "/vendors/$id", params: { id: v.sampleId } },
+      editLabel: "Open vendor",
+      inlineFix: {
+        label: "Merge",
+        render: (close) => (
+          <DuplicateVendorMergeFix variant={v} close={close} />
+        ),
+      },
+    }),
+  }),
+  section({
     id: "unknown-parked",
     label: "Parked in Unknown",
     select: (p) => p.unknownParkedItems,
@@ -1097,6 +1152,56 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         route: { to: "/products/$id", params: { id: product.id } },
         editLabel: "Open product",
         customActions: <UpcApplyAction product={product} />,
+      };
+    },
+  }),
+  section({
+    id: "charges-not-reconciling",
+    label: "Stated totals",
+    select: (p) => p.chargesNotReconciling,
+    // Advisory, so it declares `coverage` — that marker is what keeps it out of
+    // the defect list, out of the red, and out of `totalProblems`. No meter: a
+    // discrepancy isn't a fraction of a population, and "N of M charges
+    // reconcile" would read as a score to drive to 100%, which this isn't.
+    coverage: {},
+    entity: "purchase",
+    title: "Stated Totals That Don't Match the Lines",
+    description:
+      "What the paperwork claimed, next to what the charge's lines actually add up to. A cue, not a fault: a partial refund reduces a line without changing what the charge originally stated, so plenty of these are correct exactly as they are. Stated totals are never summed into spend — spend is always the lines — so nothing here needs doing unless a line is genuinely wrong or missing.",
+    emptyMessage:
+      "Every charge with a stated total agrees with its lines. Charges with no stated total recorded aren't compared.",
+    renderItem: (charge) => {
+      const hint = chargeDeltaHint(charge);
+      return {
+        // A charge has no name, and two charges from one vendor would otherwise
+        // share a card key by way of the title.
+        key: charge.id,
+        title: charge.vendorName ?? "Vendor deleted",
+        subtitle: chargeSubtitle(charge),
+        details: hint
+          ? [
+              <div key="hint" className="text-muted-foreground text-sm">
+                {hint}
+              </div>,
+            ]
+          : [],
+        badges: [
+          // The same soft `warning`-tone verdict the ledger column and the charge
+          // page show, from the same `reconcilePurchase` — never a defect red.
+          <ReconciliationBadge key="reconciliation" purchase={charge} />,
+          ...(charge.orderId
+            ? [<CodeChip key="order">{charge.orderId}</CodeChip>]
+            : []),
+          ...(charge.date
+            ? [
+                <Badge key="date" variant="outline">
+                  {formatDate(charge.date)}
+                </Badge>,
+              ]
+            : []),
+        ],
+        route: { to: "/purchases/$id", params: { id: charge.id } },
+        editLabel: "Open charge",
       };
     },
   }),

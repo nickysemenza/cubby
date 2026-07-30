@@ -340,8 +340,15 @@ const searchQueries = {
           imageUrl: sql<string | null>`null`.as("imageUrl"),
           createdAt: project.createdAt,
           status: project.status,
+          // Hand-qualified `p."cost"`, not an interpolated `${expense.cost}`.
+          // Drizzle's `buildSelection` strips the table prefix off a `PgColumn`
+          // inside a single-table select field, so the interpolated form emitted a
+          // bare `"cost"` that resolved to `p.cost` only because the subquery
+          // happens to alias `"Expense"` as `p` — correct by accident. Spelling it
+          // out removes the accident. See the long note in repo/purchase.ts for
+          // what this trap cost there.
           spent: sql<number>`(
-            SELECT COALESCE(SUM(${expense.cost}), 0)::float FROM "Expense" p
+            SELECT COALESCE(SUM(p."cost"), 0)::float FROM "Expense" p
             WHERE p."projectId" = "Project"."id" AND p."deletedAt" IS NULL
           )`.as("spent"),
         })

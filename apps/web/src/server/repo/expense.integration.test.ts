@@ -25,8 +25,16 @@ import {
 } from "~/server/repo/expense";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
-import { getPurchaseExpenses } from "~/server/repo/purchase";
-import { makeProductInput } from "~/server/repo/repo.fixtures";
+import {
+  getPurchaseByID,
+  getPurchaseExpenses,
+  purchaseList,
+} from "~/server/repo/purchase";
+import {
+  makeExpenseInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
+import { vendorOptions } from "~/server/repo/vendor";
 
 /**
  * `vendor` on the create input still resolves into a real `Vendor` + `Purchase`
@@ -628,6 +636,80 @@ describe("expense router", () => {
         listed.items.reduce((sum, p) => sum + (p.cost ?? 0), 0),
         2,
       );
+    });
+  });
+
+  describe("chargeSiblings", () => {
+    it("returns the charge's other lines, excluding the expense itself", async () => {
+      const caller = createTestCaller(expenseRouter, ctx.db);
+      const orderId = "111-siblings-0000001";
+      const [self, sibling] = await Promise.all([
+        createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "sibling source row",
+            vendor: "Amazon",
+            orderId,
+          }),
+          ctx.actor,
+        ),
+        createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "the other line",
+            vendor: "Amazon",
+            orderId,
+          }),
+          ctx.actor,
+        ),
+      ]);
+      // A line of a DIFFERENT charge, to prove the scope is the charge and not
+      // the vendor.
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({ name: "unrelated amazon buy", vendor: "Amazon" }),
+        ctx.actor,
+      );
+
+      const siblings = await caller.chargeSiblings(self.id);
+      // `getPurchaseExpenses` includes the source row (the charge total needs
+      // it); the detail section filters itself out here, so a single-line charge
+      // renders nothing rather than a list of one.
+      expect(siblings.map((p) => p.id)).toEqual([sibling.id]);
+    });
+
+    it("returns [] for an expense with no charge — without early-returning on a missing order id", async () => {
+      const caller = createTestCaller(expenseRouter, ctx.db);
+      const chargeless = await createExpense(
+        ctx.db,
+        makeExpenseInput({ name: "cash, no vendor" }),
+        ctx.actor,
+      );
+      expect(chargeless.purchaseId).toBeNull();
+      expect(await caller.chargeSiblings(chargeless.id)).toEqual([]);
+
+      // The distinction the old `orderSiblings` got wrong: it bailed on a missing
+      // ORDER ID, which would have hidden this section for the 33% of
+      // vendor-bearing rows that have none — even though they sit on a real
+      // charge with real siblings. Gating on `purchaseId` instead is what fixed
+      // it.
+      const orderless = await createExpense(
+        ctx.db,
+        makeExpenseInput({ name: "walk-in line a", vendor: "Tool Nirvana" }),
+        ctx.actor,
+      );
+      const alsoOnThatCharge = await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: "walk-in line b",
+          purchaseId: purchaseIdOf(orderless),
+        }),
+        ctx.actor,
+      );
+      expect(orderless.orderId).toBeNull();
+      expect(
+        (await caller.chargeSiblings(orderless.id)).map((p) => p.id),
+      ).toEqual([alsoOnThatCharge.id]);
     });
   });
 
@@ -1743,5 +1825,356 @@ describe("expense repository — charge grouping", () => {
     expect(
       (await getPurchaseExpenses(ctx.db, purchaseIdOf(keep))).map((p) => p.id),
     ).toEqual([keep.id]);
+  });
+});
+
+/**
+ * Charge resolution on UPDATE — `resolveCharge`'s `current` argument, which the
+ * create path never exercises.
+ *
+ * An update is the side where a name-to-charge resolution can do damage rather
+ * than just be wrong: the row is already ON a charge, so a careless re-resolve
+ * re-points it and leaves the old charge behind. Nothing sweeps up empty charges
+ * and there is no restore path, so a leak there is permanent — that's the bug
+ * these pin.
+ */
+describe("expense repository — charge resolution on update", () => {
+  const ctx = withTestDb();
+  const page = { pageIndex: 0, pageSize: 100 };
+
+  const line = (
+    name: string,
+    vendor: string | null,
+    orderId: string | null = null,
+  ) => makeExpenseInput({ name, cost: 10, vendor, orderId });
+
+  /** Live charges belonging to one vendor — the orphan detector below. */
+  const chargeCount = async (id: VendorId) =>
+    (await purchaseList(ctx.db, { vendorId: id }, [], page)).count;
+
+  it("re-writing the SAME vendor onto an order-less row mints no second charge", async () => {
+    // THE regression gate. `(vendorId, null)` is not unique, so
+    // `findOrCreatePurchase` cannot dedupe an order-less charge — it always
+    // inserts. Without `resolveCharge`'s `current` short-circuit, every save of
+    // an unchanged vendor (an inline edit that re-submits the same value, a
+    // re-import of the same row) created a fresh charge, re-pointed the expense
+    // at it, and orphaned the previous one — `statedTotal` and attached
+    // documents included.
+    const counterSale = await createExpense(
+      ctx.db,
+      line("counter sale", "Tool Nirvana"),
+      ctx.actor,
+    );
+    const vendorId = vendorIdOf(counterSale);
+    const chargeBefore = purchaseIdOf(counterSale);
+    expect(await chargeCount(vendorId)).toBe(1);
+
+    const rewritten = await updateExpense(
+      ctx.db,
+      counterSale.id,
+      { vendor: "Tool Nirvana" },
+      ctx.actor,
+    );
+
+    expect(rewritten.purchaseId).toBe(chargeBefore);
+    expect(await chargeCount(vendorId)).toBe(1);
+
+    // Idempotent again when the unchanged order id is restated alongside it —
+    // the `current.orderId === requestedOrderId` arm of the same guard.
+    const withOrder = await createExpense(
+      ctx.db,
+      line("online order", "Tool Nirvana", "#11325"),
+      ctx.actor,
+    );
+    const restated = await updateExpense(
+      ctx.db,
+      withOrder.id,
+      { vendor: "Tool Nirvana", orderId: "#11325" },
+      ctx.actor,
+    );
+    expect(restated.purchaseId).toBe(purchaseIdOf(withOrder));
+    expect(await chargeCount(vendorId)).toBe(2); // the walk-in + this order
+  });
+
+  it("vendor: null detaches the line but leaves the charge and its other lines intact", async () => {
+    const orderId = "111-detach-0000001";
+    const keep = await createExpense(
+      ctx.db,
+      line("stays on the order", "Amazon", orderId),
+      ctx.actor,
+    );
+    const leaving = await createExpense(
+      ctx.db,
+      line("mis-filed line", "Amazon", orderId),
+      ctx.actor,
+    );
+    const chargeId = purchaseIdOf(keep);
+    expect(purchaseIdOf(leaving)).toBe(chargeId);
+
+    const detached = await updateExpense(
+      ctx.db,
+      leaving.id,
+      { vendor: null },
+      ctx.actor,
+    );
+    expect(detached.purchaseId).toBeNull();
+    expect(detached.vendorId).toBeNull();
+    expect(detached.vendor).toBeNull();
+    expect(detached.orderId).toBeNull();
+
+    // Detaching one line is never a reason to delete the charge: the charge is
+    // where `statedTotal` and the invoice PDF live, and its OTHER lines are real
+    // spend. `null` means "this row isn't part of that transaction", not
+    // "that transaction didn't happen".
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    expect(charge.orderId).toBe(orderId);
+    expect(
+      (await getPurchaseExpenses(ctx.db, chargeId)).map((p) => p.id),
+    ).toEqual([keep.id]);
+  });
+
+  it("changing the vendor moves the line to the other vendor's charge, carrying its order id", async () => {
+    const orderId = "WN-moved-0001";
+    const misattributed = await createExpense(
+      ctx.db,
+      line("bought at the wrong store", "Lowe's", orderId),
+      ctx.actor,
+    );
+    const wrongCharge = purchaseIdOf(misattributed);
+
+    const corrected = await updateExpense(
+      ctx.db,
+      misattributed.id,
+      { vendor: "Home Depot" },
+      ctx.actor,
+    );
+
+    expect(corrected.purchaseId).not.toBe(wrongCharge);
+    expect(corrected.vendor).toBe("Home Depot");
+    // An omitted `orderId` means "leave it alone" — the receipt number is still
+    // the receipt number, so it rides along to the new vendor's charge
+    // (`current?.orderId ?? null`).
+    expect(corrected.orderId).toBe(orderId);
+
+    // The vacated charge is FOLDED into the new one, not left line-less: `resolveCharge` folds when the old charge loses its last line, so its statedTotal/notes/date and documents carry over rather than stranding. Same rule as detaching above.
+    expect(await getPurchaseExpenses(ctx.db, wrongCharge)).toEqual([]);
+  });
+
+  it("adding an order id moves an order-less line onto the (vendor, orderId) charge, joining a sibling already there", async () => {
+    const orderId = "111-adopt-0000001";
+    const alreadyFiled = await createExpense(
+      ctx.db,
+      line("first line of the order", "Amazon", orderId),
+      ctx.actor,
+    );
+    const loose = await createExpense(
+      ctx.db,
+      line("second line, order id not known yet", "Amazon"),
+      ctx.actor,
+    );
+    // Two separate charges to start with — an order-less buy can't dedupe.
+    expect(purchaseIdOf(loose)).not.toBe(purchaseIdOf(alreadyFiled));
+
+    const adopted = await updateExpense(
+      ctx.db,
+      loose.id,
+      { vendor: "Amazon", orderId },
+      ctx.actor,
+    );
+
+    // Reconciling an order id is what MERGES the two lines: `(vendorId, orderId)`
+    // is partial-unique, so the resolve finds the existing charge rather than
+    // creating a second one for the same order.
+    expect(adopted.purchaseId).toBe(purchaseIdOf(alreadyFiled));
+    expect(adopted.orderId).toBe(orderId);
+    expect(
+      (await getPurchaseExpenses(ctx.db, purchaseIdOf(alreadyFiled)))
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual([alreadyFiled.id, loose.id].sort());
+  });
+
+  // REGRESSION GUARD. This was a live bug: `resolveCharge` read only
+  // `data.vendor` and returned "no change" whenever it was omitted, ignoring
+  // `current.vendorName` sitting in the same argument — so an `{ orderId }`-only
+  // update was silently dropped.
+  //
+  // It is not a hypothetical input shape, it is the ONLY shape the UI sends: both
+  // Order # inline editors save `data: { orderId }` and nothing else
+  // (app/expenses/expenselist.tsx and app/projects/shared.tsx), so typing an
+  // order number into the ledger's Order # cell did nothing on every
+  // vendor-bearing row — breaking the central purchase-import workflow.
+  //
+  // The test below this one pins the constraint the fix must not break: a
+  // genuinely vendorless row still drops the order id.
+  it("adopts an order id written on its own, using the vendor the row already has", async () => {
+    const orderId = "111-alone-0000001";
+    const alreadyFiled = await createExpense(
+      ctx.db,
+      line("first line of the order", "Amazon", orderId),
+      ctx.actor,
+    );
+    const loose = await createExpense(
+      ctx.db,
+      line("order id typed in later", "Amazon"),
+      ctx.actor,
+    );
+
+    const adopted = await updateExpense(
+      ctx.db,
+      loose.id,
+      { orderId },
+      ctx.actor,
+    );
+
+    expect(adopted.orderId).toBe(orderId);
+    expect(adopted.purchaseId).toBe(purchaseIdOf(alreadyFiled));
+  });
+
+  it("an explicit purchaseId short-circuits name resolution and wins over a conflicting vendor", async () => {
+    // `expenseCreateInput.purchaseId`'s doc: an id is never a guess, so there is
+    // nothing to resolve. This is the purchase detail page's "add a line to this
+    // charge" path — it must not be second-guessed by a stale vendor value the
+    // form happened to carry along.
+    const anchor = await createExpense(
+      ctx.db,
+      line("known charge anchor", "eBay", "eb-shortcircuit-1"),
+      ctx.actor,
+    );
+    const chargeId = purchaseIdOf(anchor);
+    const stray = await createExpense(
+      ctx.db,
+      line("stray line", null),
+      ctx.actor,
+    );
+
+    const attached = await updateExpense(
+      ctx.db,
+      stray.id,
+      { purchaseId: chargeId, vendor: "Conflicting Vendor" },
+      ctx.actor,
+    );
+
+    expect(attached.purchaseId).toBe(chargeId);
+    expect(attached.vendor).toBe("eBay");
+    expect(attached.orderId).toBe("eb-shortcircuit-1");
+    // The short-circuit is before `findOrCreateVendor`, so the conflicting name
+    // never reaches the roster — a resolve-anyway implementation would leave a
+    // junk vendor row behind even though the id won.
+    expect((await vendorOptions(ctx.db)).map((v) => v.name)).not.toContain(
+      "Conflicting Vendor",
+    );
+  });
+
+  it("drops an order id written with no vendor rather than half-recording it", async () => {
+    // An order id alone can't name a transaction — they're only unique per
+    // vendor — so there is no charge it could safely create. Dropped, not
+    // stored on an unidentifiable charge.
+    const cash = await createExpense(
+      ctx.db,
+      line("cash, no receipt", null),
+      ctx.actor,
+    );
+    expect(cash.purchaseId).toBeNull();
+    const chargesBefore = (await purchaseList(ctx.db, {}, [], page)).count;
+
+    const updated = await updateExpense(
+      ctx.db,
+      cash.id,
+      { orderId: "WN-no-vendor" },
+      ctx.actor,
+    );
+
+    expect(updated.purchaseId).toBeNull();
+    expect(updated.orderId).toBeNull();
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(
+      chargesBefore,
+    );
+  });
+});
+
+/**
+ * `orderIdPresenceFilter` — presence resolved through the CHARGE, not a column
+ * on the row. See `orderIdPresence` in repo/expense/lookup.ts.
+ */
+describe("expense repository — orderIdPresenceFilter", () => {
+  const ctx = withTestDb();
+  const pagination = { pageIndex: 0, pageSize: 50 };
+
+  /** The three states the filter has to tell apart. */
+  const seed = async () => {
+    const hasOrderId = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "amazon order line",
+        vendor: "Amazon",
+        orderId: "111-presence-0000001",
+      }),
+      ctx.actor,
+    );
+    // A contractor's progress payment: a real charge, but the vendor never
+    // issued an order number for it.
+    const chargeWithoutOrderId = await createExpense(
+      ctx.db,
+      makeExpenseInput({ name: "progress payment", vendor: "Flow Form" }),
+      ctx.actor,
+    );
+    // No charge at all — cash at the yard, no vendor recorded.
+    const noCharge = await createExpense(
+      ctx.db,
+      makeExpenseInput({ name: "cash at the yard" }),
+      ctx.actor,
+    );
+
+    expect(hasOrderId.orderId).toBe("111-presence-0000001");
+    expect(purchaseIdOf(chargeWithoutOrderId)).toBeTruthy();
+    expect(chargeWithoutOrderId.orderId).toBeNull();
+    expect(noCharge.purchaseId).toBeNull();
+
+    return { hasOrderId, chargeWithoutOrderId, noCharge };
+  };
+
+  it("'none' spans BOTH a charge-less row and a charge with a null order id", async () => {
+    // The load-bearing case. `NOT IN (…)` evaluates to NULL — and so fails to
+    // match — when the left side is NULL, so `notInArray(purchaseId, …)` ALONE
+    // would silently drop every charge-less row from this bucket: 193 rows on the
+    // real ledger, i.e. most of the unreconciled worklist. The `isNull` arm is
+    // what puts them back, and both states must come back together because "no
+    // order id" has always meant exactly that.
+    const { hasOrderId, chargeWithoutOrderId, noCharge } = await seed();
+
+    const { data } = await expenseList(
+      ctx.db,
+      { orderIdPresenceFilter: "none" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id).sort()).toEqual(
+      [chargeWithoutOrderId.id, noCharge.id].sort(),
+    );
+    expect(data.map((p) => p.id)).not.toContain(hasOrderId.id);
+  });
+
+  it("'has' matches only rows whose charge carries an order id", async () => {
+    const { hasOrderId } = await seed();
+
+    const { data } = await expenseList(
+      ctx.db,
+      { orderIdPresenceFilter: "has" },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.id)).toEqual([hasOrderId.id]);
+  });
+
+  it("contributes no constraint when unset", async () => {
+    // `orderIdPresence` returns undefined for an absent filter rather than an
+    // always-true clause, so an unfiltered ledger query still sees everything.
+    const { hasOrderId, chargeWithoutOrderId, noCharge } = await seed();
+
+    const { data } = await expenseList(ctx.db, {}, [], pagination);
+    expect(data.map((p) => p.id).sort()).toEqual(
+      [hasOrderId.id, chargeWithoutOrderId.id, noCharge.id].sort(),
+    );
   });
 });

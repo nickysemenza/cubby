@@ -10,6 +10,7 @@
 
 import { vendorId } from "@cubby/schemas/identifiers";
 import {
+  mergeVendorsInput,
   vendorCreateInput,
   vendorFiltersSchema,
   vendorOptionsOut,
@@ -22,6 +23,7 @@ import {
   createVendor,
   deleteVendors,
   getVendorByID,
+  mergeVendors,
   updateVendor,
   vendorList,
   vendorOptions,
@@ -68,6 +70,17 @@ const update = protectedProcedure
   .output(vendorOut)
   .mutation(({ ctx, input }) => updateVendor(ctx.db, input, ctx.actorContext));
 
+/**
+ * Fold duplicate roster rows into one. Charges follow the keeper; any two charges
+ * sharing an order id across the merged vendors are themselves folded, since the
+ * partial-unique `(vendorId, orderId)` index means only one can survive — see
+ * `mergeVendors`.
+ */
+const merge = protectedProcedure
+  .input(mergeVendorsInput)
+  .output(vendorOut)
+  .mutation(({ ctx, input }) => mergeVendors(ctx.db, input, ctx.actorContext));
+
 const deleteItem = protectedProcedure
   .input(z.object({ ids: z.array(vendorId).min(1) }))
   .mutation(async ({ ctx, input }) => {
@@ -80,5 +93,6 @@ export const vendorRouter = createTRPCRouter({
   options,
   create,
   update,
+  merge,
   delete: deleteItem,
 });

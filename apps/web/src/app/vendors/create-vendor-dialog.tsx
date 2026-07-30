@@ -1,4 +1,3 @@
-import { vendorKindSchema } from "@cubby/schemas/vendor";
 import { useMemo } from "react";
 import { z } from "zod";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
@@ -6,14 +5,11 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   NullableTextareaField,
-  SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
-import { vendorKindOptions } from "./vendor-options";
 
 const quickAddVendorSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  kind: vendorKindSchema.nullable(),
   website: z.string().nullable(),
   notes: z.string().nullable(),
 });
@@ -26,8 +22,8 @@ interface CreateVendorDialogProps {
 
 /**
  * Add a vendor before any money has gone there — the one thing the old free-text
- * `vendor` column couldn't do. `kind` stays nullable and defaults to blank: the
- * backfill can't infer it, and guessing is worse than empty (see vendor.ts).
+ * `vendor` column couldn't do. Identity only: `name` plus two optional fields,
+ * mirroring how thin the roster row itself is (see vendor.ts).
  */
 export function CreateVendorDialog({
   open,
@@ -35,7 +31,7 @@ export function CreateVendorDialog({
 }: CreateVendorDialogProps) {
   const api = useTRPC();
   const defaultValues = useMemo<QuickAddVendorValues>(
-    () => ({ name: "", kind: null, website: null, notes: null }),
+    () => ({ name: "", website: null, notes: null }),
     [],
   );
 
@@ -52,7 +48,6 @@ export function CreateVendorDialog({
       invalidateKeys={vendorMutationInvalidateKeys}
       buildPayload={(values) => ({
         name: values.name,
-        kind: values.kind,
         website: values.website,
         notes: values.notes,
       })}
@@ -65,13 +60,6 @@ export function CreateVendorDialog({
             label="Name"
             placeholder="Who are you paying?"
             autoFocus
-          />
-          <SelectField
-            form={form}
-            name="kind"
-            label="Kind"
-            options={vendorKindOptions}
-            nullable
           />
           <UnifiedTextField
             form={form}

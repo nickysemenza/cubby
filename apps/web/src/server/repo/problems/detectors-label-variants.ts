@@ -1,10 +1,13 @@
 /**
- * Spelling-variant detector for the free-text `Product.manufacturer` column.
+ * Spelling-variant detectors for two name columns nothing normalizes on write:
+ * the free-text `Product.manufacturer` and the `Vendor.name` roster.
  *
- * The column is not an enum, and shouldn't be: typing it would put "create an
- * entity first" in front of a one-off brand. The cost of leaving it free text
- * is that the same name can be entered two ways, which an exact-match filter
- * then splits into two picklist rows. This catches that drift rather than
+ * Neither column is an enum, and manufacturer shouldn't be: typing it would put
+ * "create an entity first" in front of a one-off brand. `Vendor` IS an entity,
+ * but `findOrCreateVendor` matches its name EXACTLY, which has the same effect —
+ * the cost either way is that the same name can be entered two ways, which an
+ * exact-match filter then splits into two picklist rows (or, for vendors, two
+ * roster rows splitting one vendor's spend). This catches that drift rather than
  * preventing it.
  *
  * **Why a canonical key and not fuzzy matching.** Trigram similarity is
@@ -24,11 +27,11 @@
  * which needs `fuzzystrmatch`.
  */
 
-import type { LabelVariant } from "@cubby/schemas/problems";
+import type { DuplicateVendor, LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { type Column, type SQLWrapper, sql } from "drizzle-orm";
+import { type Column, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { product } from "~/server/db/schema";
+import { product, purchase, vendor } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 /**
@@ -58,28 +61,41 @@ const canonicalKey = (value: SQLWrapper) => sql`
  * deterministic. A tie means there is no majority (`Bob's Red Mill` 1 vs `Bob s
  * Red Mill` 1) and the winner is arbitrary — the row carries both counts so
  * that's visible rather than hidden, and choosing between them is the human's
- * job. This is a report, not a merge.
+ * job.
+ *
+ * "Used most" needs a per-caller `weight`, because what backs a spelling isn't
+ * the same thing in both tables. A manufacturer spelling is backed by the
+ * PRODUCTS carrying it, so `count(*)` over the group is the measure. A vendor
+ * name is unique among live rows (`Vendor_name_key`), so counting rows there
+ * would return 1 for every spelling — no majority ever, and the canonical pick
+ * would silently degrade to alphabetical order, which is not just arbitrary but
+ * COLLATION-dependent. A vendor spelling is backed by the charges pointing at
+ * it, which is the signal that actually decided the one real case: `B&H Photo`
+ * (4 charges) was the row to keep, `B&H` (1) the row to retire.
  *
  * `sampleId` is one record bearing the variant, so the Problems card can link
  * somewhere; `min(id)` makes it stable across runs rather than picking a
- * different row each scan.
- *
- * Only `findManufacturerSpellingVariants` calls this today — the sibling
- * `Expense.vendor` detector was removed once vendor became a real `Vendor` FK
- * with a partial-unique index, which makes that drift unrepresentable. Kept as
- * its own function (rather than inlined) so a second free-text brand column
- * can reuse it the same way without re-deriving the SQL.
+ * different row each scan. `canonicalSampleId` is the same thing for the winning
+ * spelling — selected unconditionally because it is one more `first_value` over
+ * the window that is already there, and only a caller whose rows are real
+ * entities (`findDuplicateVendors`) has any use for it. The manufacturer caller
+ * narrows it away in its return type, and `problemsFastSchema` strips it from
+ * that key's wire shape.
  */
 const findSpellingVariants = async (
   db: Database,
-  table: typeof product,
+  table: typeof product | typeof vendor,
   column: Column,
-  extraWhere = sql`TRUE`,
-): Promise<LabelVariant[]> => {
-  const res = await getDb(db).execute<LabelVariant>(sql`
+  {
+    extraWhere = sql`TRUE`,
+    /** Aggregate over one spelling's rows — see the `weight` note above. */
+    weight = sql`count(*)`,
+  }: { extraWhere?: SQL; weight?: SQL } = {},
+): Promise<DuplicateVendor[]> => {
+  const res = await getDb(db).execute<DuplicateVendor>(sql`
     WITH spellings AS (
       SELECT ${column} AS value,
-             count(*)::int AS count,
+             ${weight}::int AS count,
              min(id::text) AS "sampleId",
              ${canonicalKey(column)} AS key
       FROM ${table}
@@ -97,12 +113,14 @@ const findSpellingVariants = async (
     ranked AS (
       SELECT s.*,
              first_value(s.value) OVER w AS canonical,
-             first_value(s.count) OVER w AS "canonicalCount"
+             first_value(s.count) OVER w AS "canonicalCount",
+             first_value(s."sampleId") OVER w AS "canonicalSampleId"
       FROM spellings s
       INNER JOIN drifted d ON d.key = s.key
       WINDOW w AS (PARTITION BY s.key ORDER BY s.count DESC, s.value ASC)
     )
-    SELECT value, count, "sampleId", canonical, "canonicalCount"
+    SELECT value, count, "sampleId", canonical, "canonicalCount",
+           "canonicalSampleId"
     FROM ranked
     WHERE value <> canonical
     ORDER BY "canonicalCount" DESC, count DESC, value ASC
@@ -129,9 +147,49 @@ const findSpellingVariants = async (
 export const findManufacturerSpellingVariants = (
   db: Database,
 ): Promise<LabelVariant[]> =>
-  findSpellingVariants(
-    db,
-    product,
-    product.manufacturer,
-    sql`${canonicalKey(product.manufacturer)} <> ${canonicalKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
-  );
+  findSpellingVariants(db, product, product.manufacturer, {
+    extraWhere: sql`${canonicalKey(product.manufacturer)} <> ${canonicalKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
+  });
+
+/**
+ * Vendors on the roster whose names normalize to the same thing — `Amazon` /
+ * `amazon` / `Amazon.com`.
+ *
+ * This replaces the deleted `findVendorSpellingVariants`, which read the old
+ * free-text `Expense.vendor` column, and it is a genuinely different thing.
+ * That detector could only ever REPORT drift, because there was no entity to
+ * merge; these are two real `Vendor` rows, so this worklist has a fix —
+ * `mergeVendors` (repo/vendor.ts), which also folds any charges the two vendors
+ * hold under the same order id.
+ *
+ * The gap it closes: `findOrCreateVendor` matches names EXACTLY on the write
+ * path (deliberately — folding case there would silently merge a real `3M` /
+ * `3m` distinction on first sight), so every importer that meets a new spelling
+ * mints a new row and nothing else notices. As of the split's backfill there are
+ * 0 such pairs across 114 vendors; this exists to keep it that way.
+ *
+ * `sampleId` is the VARIANT's own vendor id, so the card links to the row a merge
+ * would retire — not to some expense that merely mentions it; `canonicalSampleId`
+ * is the row it would be folded INTO, which is what `mergeVendors` needs as its
+ * `keepId` (`canonical` is only a name).
+ *
+ * It catches SPELLING drift, not ABBREVIATION drift: `B&H` and `B&H Photo`
+ * normalize to different keys (`bh` / `bhphoto`) and are not reported. That pair
+ * was real, and merging it was a human judgement no key could have made.
+ *
+ * `count` is LIVE CHARGES, not roster rows — see the `weight` note on
+ * `findSpellingVariants` for why counting rows here can't produce a majority.
+ * `sum(...)` rather than a bare scalar because the group-by still demands an
+ * aggregate; each group is exactly one vendor row, so the sum IS that row's
+ * charge count.
+ */
+export const findDuplicateVendors = (
+  db: Database,
+): Promise<DuplicateVendor[]> =>
+  findSpellingVariants(db, vendor, vendor.name, {
+    weight: sql`sum((
+      SELECT count(*) FROM ${purchase}
+      WHERE ${purchase.vendorId} = ${vendor.id}
+        AND ${purchase.deletedAt} IS NULL
+    ))`,
+  });

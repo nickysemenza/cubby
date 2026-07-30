@@ -42,7 +42,6 @@ import {
   recipeSourceValues,
 } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { vendorKindValues } from "@cubby/schemas/vendor";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -953,7 +952,6 @@ export const vendor = pgTable(
   {
     id: pkUuid<VendorId>(),
     name: text("name").notNull(),
-    kind: text("kind", { enum: vendorKindValues }),
     website: text("website"),
     notes: text("notes"),
     ...baseTimestamps(),

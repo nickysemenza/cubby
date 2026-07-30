@@ -50,7 +50,6 @@ import {
   createPurchase,
   deletePurchases,
   findOrCreatePurchase,
-  findPurchasesNotReconciling,
   getPurchaseByID,
   getPurchaseExpenses,
   linkExpensesToPurchase,
@@ -578,9 +577,10 @@ describe("purchase repository — splitExpense", () => {
     expect(charge.expenseTotal).toBe(85);
     expect(reconcilePurchase(charge)).toBe("mismatch");
 
-    // ...and it surfaces on the soft worklist, which is a read-only detector.
-    const notReconciling = await findPurchasesNotReconciling(ctx.db);
-    expect(notReconciling.map((p) => p.id)).toContain(chargeId);
+    // The soft worklist that surfaces this now lives in Problems
+    // (`findChargesNotReconciling`), which does the comparison in SQL — see
+    // problems.integration.test.ts. `reconcilePurchase` above is the shared
+    // verdict both sides use, so asserting it here is asserting the same rule.
   });
 
   it("refuses to split an expense with no charge attached", async () => {
@@ -1073,10 +1073,14 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
     const chargeId = line.purchaseId!;
     const vendorId = line.vendorId!;
 
-    // `deleteVendors` REFUSES while live charges point at the vendor (that's the
-    // `VENDOR_HAS_PURCHASES` guard), so this state is only reachable by writing
-    // the tombstone directly. Pinning it here keeps the read-side fallback
-    // honest: `vendorName` goes null rather than resolving a deleted row.
+    // `deleteVendors` refuses while live charges point at the vendor
+    // (`VENDOR_HAS_PURCHASES`), and `assertVendorLive` now stops a charge being
+    // POINTED at a tombstoned vendor — but neither closes the door completely: a
+    // vendor with no charges deletes fine, and any pre-existing row predating the
+    // guard can still be in this state. So the read-side fallback stays
+    // load-bearing, and this pins it: `vendorName` goes null rather than
+    // resolving a deleted row. The tombstone is written directly here because
+    // that is now the only way to reach the state.
     await getDb(ctx.db)
       .update(vendor)
       .set({ deletedAt: new Date() })

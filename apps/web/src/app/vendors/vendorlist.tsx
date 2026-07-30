@@ -1,24 +1,19 @@
 import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
-import { VENDOR_KIND_LABELS } from "@cubby/schemas/vendor";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
-import { useMemo } from "react";
-import {
-  createCurrencyColumn,
-  createFilterableSelectColumn,
-} from "~/app/_components/data-table/columnHelpers";
+import { type ReactNode, useMemo } from "react";
+import { createCurrencyColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { VendorMark } from "~/components/entity/vendor-cell";
 import { usePageCount } from "~/components/page/Page";
-import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { vendorMutationInvalidateKeys } from "~/lib/query-keys";
-import { VENDOR_KIND_BADGE_VARIANT, vendorKindOptions } from "./vendor-options";
 
 /**
  * Open on biggest spenders first, overriding `entities.vendor.list.defaultSort`
@@ -28,6 +23,16 @@ import { VENDOR_KIND_BADGE_VARIANT, vendorKindOptions } from "./vendor-options";
  * `useEntityList`'s tableState memo.
  */
 const VENDOR_TABLE_STATE = { initialSort: "spend" } as const;
+
+/**
+ * The brand mark leading each vendor's name. Module-level for the same reason as
+ * tasklist's `subtaskCountSuffix`: `namePrefix` sits in useStandardColumns'
+ * columns-`useMemo` dependency array, so an inline arrow would churn the memo
+ * every render.
+ */
+const VENDOR_NAME_PREFIX = (row: VendorOut): ReactNode => (
+  <VendorMark vendor={row.name} />
+);
 
 export function VendorList() {
   const api = useTRPC();
@@ -53,32 +58,8 @@ export function VendorList() {
     invalidateKeys: vendorMutationInvalidateKeys,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateVendorMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createFilterableSelectColumn(columnHelper, "kind", {
-        header: "Kind",
-        placeholder: "Filter by kind...",
-        selectOptions: vendorKindOptions,
-        className: "w-32",
-        mobile: { slot: "meta", priority: 10 },
-        editable: {
-          onSave: async (kind, vendor) => {
-            await updateVendorMutation.mutateAsync({
-              id: vendor.id,
-              data: { kind },
-            });
-          },
-        },
-        renderCell: (kind) =>
-          kind ? (
-            <Badge variant={VENDOR_KIND_BADGE_VARIANT[kind]}>
-              {VENDOR_KIND_LABELS[kind]}
-            </Badge>
-          ) : (
-            <NoneValue />
-          ),
-      }),
       columnHelper.accessor((row) => row.website, {
         id: "website",
         header: "Website",
@@ -138,9 +119,8 @@ export function VendorList() {
 
   // Neither `buildFilters` nor `filters` is passed: the `vendor` entry in
   // `entities/filter-manifest.tsx` drives all three surfaces at once — the Name
-  // search box and the Kind multiselect (`manifestFilterConfig` overlays the
-  // control onto the column above), the server `VendorFilters` object, and the
-  // `?q=`/`?kind=` URL round-trip that makes a filtered roster shareable.
+  // search box, the server `VendorFilters` object, and the `?q=` URL round-trip
+  // that makes a filtered roster shareable.
   const {
     table,
     isLoading,
@@ -158,9 +138,15 @@ export function VendorList() {
     deletable: deletableConfig,
     nameEditable,
     tableStateOptions: VENDOR_TABLE_STATE,
-    // Sparse table (five columns), so the name gets a fixed width instead of
+    // Sparse table (four columns), so the name gets a fixed width instead of
     // ballooning to absorb the leftover space under the fixed layout.
     nameClassName: "w-64",
+    // The roster reads by brand: the same mark the ledger's vendor cell leads
+    // with, so a vendor looks identical wherever it appears. `VendorMark` falls
+    // back to a monogram tile, so every row carries something (roughly half the
+    // roster is one-off local trades with no logo). It's a fixed-width
+    // `shrink-0` glyph, so the name keeps truncating at `w-64`.
+    namePrefix: VENDOR_NAME_PREFIX,
   });
   usePageCount(totalCount);
 

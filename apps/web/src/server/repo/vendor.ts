@@ -12,7 +12,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { VendorId } from "@cubby/schemas/identifiers";
+import type { PurchaseId, VendorId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -26,8 +26,17 @@ import type {
   VendorUpdateInput,
 } from "@cubby/schemas/vendor";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
-import type { Database } from "~/server/db";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { purchase, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -40,7 +49,6 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   countWhere,
-  eqAnyOrPresence,
   findOrCreate,
   getDb,
   insertAndReturn,
@@ -49,6 +57,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { foldChargeInto } from "~/server/repo/purchase";
 
 /**
  * `purchaseCount` and `spend`, as correlated scalar subqueries rather than a
@@ -93,7 +102,6 @@ const vendorSpend = correlated<number>(
 const vendorColumns = {
   id: vendor.id,
   name: vendor.name,
-  kind: vendor.kind,
   website: vendor.website,
   notes: vendor.notes,
   createdAt: vendor.createdAt,
@@ -105,7 +113,6 @@ const vendorColumns = {
 type VendorRow = {
   id: VendorId;
   name: string;
-  kind: VendorOut["kind"];
   website: string | null;
   notes: string | null;
   createdAt: Date;
@@ -117,7 +124,6 @@ type VendorRow = {
 const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   id: row.id,
   name: row.name,
-  kind: row.kind,
   website: row.website,
   notes: row.notes,
   purchaseCount: Number(row.purchaseCount),
@@ -130,15 +136,9 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
 });
 
 const buildVendorWhereClause = (filters: VendorFilters) =>
-  buildSearchConditions(
-    vendor,
-    [{ column: vendor.name, term: filters.search }],
-    [
-      // `(none)` ORs with the selection rather than ANDing, so "contractors or
-      // unclassified" is one filter — see `eqAnyOrPresence`.
-      eqAnyOrPresence(vendor.kind, filters.kind, filters.kindPresenceFilter),
-    ],
-  );
+  buildSearchConditions(vendor, [
+    { column: vendor.name, term: filters.search },
+  ]);
 
 /**
  * Sorts the generic column path can't produce — the two rollups above aren't
@@ -151,6 +151,34 @@ const resolveVendorSort = (sort: SortParams) => {
   if (sort.orderBy === "purchaseCount") return [dir(vendorPurchaseCount)];
   if (sort.orderBy === "spend") return [dir(vendorSpend)];
   return null;
+};
+
+/**
+ * The named vendor must exist and be live.
+ *
+ * Mirrors `assertProjectLive` (repo/project/crud.ts), and exists for the same
+ * reason: an FK checks existence, not `deletedAt`, so nothing stopped a charge
+ * from being pointed at a tombstoned vendor. That state was reachable in three
+ * public calls — create a vendor, delete it (allowed: 0 charges, so
+ * `VENDOR_HAS_PURCHASES` doesn't fire), then `purchase.update({vendorId})` — and
+ * it leaves the charge resolving `vendorName` to null, which `deleteVendors`' own
+ * doc calls "a lie". The codebase treated this as an invariant without enforcing
+ * it.
+ */
+export const assertVendorLive = async (
+  tx: DrizzleTransaction,
+  id: VendorId,
+): Promise<void> => {
+  const live = await tx.query.vendor.findFirst({
+    where: and(eq(vendor.id, id), notDeleted(vendor)),
+    columns: { id: true },
+  });
+  if (!live) {
+    throw createAppError(
+      "VENDOR_NOT_FOUND",
+      `Vendor ${id} does not exist or has been deleted`,
+    );
+  }
 };
 
 export const vendorList = async (
@@ -280,7 +308,6 @@ export const createVendor = async (
   const id = await withTransaction(db, async (tx) => {
     const created = await insertAndReturn(tx, vendor, {
       name: data.name.trim(),
-      kind: data.kind,
       website: data.website,
       notes: data.notes,
     });
@@ -294,7 +321,7 @@ export const createVendor = async (
   return getVendorByID(db, id);
 };
 
-const VENDOR_AUDIT_FIELDS = ["name", "kind", "website", "notes"] as const;
+const VENDOR_AUDIT_FIELDS = ["name", "website", "notes"] as const;
 
 export const updateVendor = async (
   db: Database,
@@ -316,7 +343,6 @@ export const updateVendor = async (
       vendor,
       buildPartialUpdateValues({
         name: data.name?.trim(),
-        kind: data.kind,
         website: data.website,
         notes: data.notes,
       }),
@@ -338,14 +364,159 @@ export const updateVendor = async (
 };
 
 /**
+ * Fold duplicate vendors into one — `Amazon` / `amazon` / `Amazon.com`.
+ *
+ * This exists because `findOrCreateVendor` matches names EXACTLY (see its note on
+ * why case-folding on the write path would be worse), so an importer that meets a
+ * new spelling mints a new roster row. Nothing on the write path can safely decide
+ * two spellings are the same vendor; a human can, and this is how they say so.
+ *
+ * **The subtle part is the partial-unique `(vendorId, orderId)` index on
+ * `Purchase`.** Re-pointing every loser's charges at the keeper collides whenever
+ * two of the merged vendors hold a charge with the SAME non-null order id — which
+ * is not an edge case here, it's the signature of the exact duplication being
+ * fixed (the same Amazon order imported twice under two spellings). Those two
+ * charges are one charge, so they get folded: the loser's expenses and documents
+ * move to the survivor and the loser charge is soft-deleted, rather than
+ * re-pointed into a constraint violation.
+ *
+ * Grouping is over the WHOLE merge set, not just keeper-vs-loser, so two losers
+ * colliding with each other are handled too. The keeper's own charge always wins
+ * the survivor slot when it has one, so ids the user can already see stay stable.
+ *
+ * Order-less charges (`orderId IS NULL`) are never folded — `(vendorId, null)`
+ * isn't unique and two undated cash runs to one vendor are two real charges. They
+ * all re-point and coexist, exactly as they do under one vendor today.
+ */
+export const mergeVendors = async (
+  db: Database,
+  input: { keepId: VendorId; mergeIds: VendorId[] },
+  actor: ActorContext,
+): Promise<VendorOut> => {
+  const { keepId } = input;
+  const losers = input.mergeIds.filter((id) => id !== keepId);
+  if (losers.length === 0) return getVendorByID(db, keepId);
+
+  await withTransaction(db, async (tx) => {
+    await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
+
+    // Carry vendor-level identity the keeper is missing. Same rule as
+    // `foldChargeInto`: fill a field the survivor DOESN'T have, never overwrite.
+    // Without this, merging the row that HAS the website into the row with more
+    // history silently discards it — which is the common shape, because the
+    // better-populated duplicate is rarely the one with more charges. The real
+    // first case was `B&H` (website, 1 charge) vs `B&H Photo` (none, 4 charges).
+    const [keeperRow] = await tx
+      .select({ website: vendor.website, notes: vendor.notes })
+      .from(vendor)
+      .where(eq(vendor.id, keepId))
+      .limit(1);
+    const loserRows = await tx
+      .select({ website: vendor.website, notes: vendor.notes })
+      .from(vendor)
+      .where(inArray(vendor.id, losers));
+
+    const carried = buildPartialUpdateValues({
+      website:
+        keeperRow?.website == null
+          ? (loserRows.find((r) => r.website != null)?.website ?? undefined)
+          : undefined,
+      notes:
+        keeperRow?.notes == null
+          ? (loserRows.find((r) => r.notes != null)?.notes ?? undefined)
+          : undefined,
+    });
+    if (Object.keys(carried).length > 0) {
+      await tx.update(vendor).set(carried).where(eq(vendor.id, keepId));
+    }
+
+    // Every live charge across the merge set, so collisions can be resolved
+    // against the whole group rather than pairwise.
+    const charges = await tx
+      .select({
+        id: purchase.id,
+        vendorId: purchase.vendorId,
+        orderId: purchase.orderId,
+      })
+      .from(purchase)
+      .where(
+        and(
+          inArray(purchase.vendorId, [keepId, ...losers]),
+          notDeleted(purchase),
+          isNotNull(purchase.orderId),
+        ),
+      );
+
+    // One survivor per order id; the keeper's charge takes precedence.
+    const survivorByOrderId = new Map<string, PurchaseId>();
+    for (const c of charges) {
+      if (c.orderId === null) continue;
+      const held = survivorByOrderId.get(c.orderId);
+      if (held === undefined || c.vendorId === keepId) {
+        survivorByOrderId.set(c.orderId, c.id);
+      }
+    }
+
+    const doomed = charges.filter(
+      (c) => c.orderId !== null && survivorByOrderId.get(c.orderId) !== c.id,
+    );
+
+    for (const dead of doomed) {
+      const survivor = dead.orderId
+        ? survivorByOrderId.get(dead.orderId)
+        : undefined;
+      if (!survivor) continue;
+      await foldChargeInto(tx, dead.id, survivor, actor);
+    }
+
+    // Everything still live moves to the keeper. The doomed charges are already
+    // soft-deleted, so `notDeleted` is what keeps this from re-introducing the
+    // collision the fold just resolved.
+    await tx
+      .update(purchase)
+      .set({ vendorId: keepId })
+      .where(and(inArray(purchase.vendorId, losers), notDeleted(purchase)));
+
+    await tx
+      .update(vendor)
+      .set({ deletedAt: new Date() })
+      .where(and(inArray(vendor.id, losers), notDeleted(vendor)));
+
+    await logAuditEntries(tx, actor, [
+      {
+        entityType: "vendor" as const,
+        entityId: keepId,
+        action: "update" as const,
+        changes: {
+          mergedFrom: { from: null, to: losers },
+          ...(Object.keys(carried).length > 0
+            ? { carriedOver: { from: null, to: carried } }
+            : {}),
+          ...(doomed.length > 0
+            ? { foldedCharges: { from: null, to: doomed.map((d) => d.id) } }
+            : {}),
+        },
+      },
+      ...losers.map((id) => ({
+        entityType: "vendor" as const,
+        entityId: id,
+        action: "delete" as const,
+      })),
+    ]);
+  });
+
+  return getVendorByID(db, keepId);
+};
+
+/**
  * Soft-delete vendors, refusing while live charges still reference them —
  * mirroring `PROJECT_HAS_EXPENSES` one level up the chain. A vendor with
  * charges is load-bearing history: dropping it would leave every one of those
  * charges resolving `vendorName` to null, which reads as "no vendor recorded"
  * and is a lie.
  *
- * The re-point path is `mergePurchases` (move the charges first), not a
- * cascading delete.
+ * The re-point paths are `mergePurchases` (one vendor's charges) and
+ * `mergeVendors` (two spellings of one vendor) — never a cascading delete.
  */
 export const deleteVendors = async (
   db: Database,

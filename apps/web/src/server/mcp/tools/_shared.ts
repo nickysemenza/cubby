@@ -29,12 +29,14 @@ import {
   type TaskOut,
   taskOut,
 } from "@cubby/schemas/project";
+import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
 import {
   type RecipeMcpOut,
   type RecipeTopLevel,
   recipeMcpOut,
 } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
+import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
 import type { foodSummary } from "@cubby/usda-schemas";
 import type {
   McpServer,
@@ -530,16 +532,23 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   };
 });
 
-// Project/task/expense rows already match their schema exactly (no relation
-// reshaping needed) — a typed passthrough is enough. structuredSuccess
-// re-validates via outputSchema.parse, so new schema fields flow through
-// automatically without an MCP-side edit.
+// Project/task/vendor/purchase/expense rows already match their schema exactly
+// (no relation reshaping needed) — a typed passthrough is enough.
+// structuredSuccess re-validates via outputSchema.parse, so new schema fields
+// flow through automatically without an MCP-side edit.
 export const slimProject = defineSlim(
   projectOut,
   (row: Row) => row as ProjectOut,
 );
 
 export const slimTask = defineSlim(taskOut, (row: Row) => row as TaskOut);
+
+export const slimVendor = defineSlim(vendorOut, (row: Row) => row as VendorOut);
+
+export const slimPurchase = defineSlim(
+  purchaseOut,
+  (row: Row) => row as PurchaseOut,
+);
 
 export const slimExpense = defineSlim(
   expenseOut,
@@ -727,11 +736,26 @@ function getEntityRouter(
   return routers[routerName] as DynamicEntityRouter;
 }
 
-function getByIdHandler(routerName: string, slim: Slim = identity) {
+/**
+ * How a get tool fetches its row, when `router.getByID({ id })` is the wrong
+ * call. The crud-factory routers take `{ id }`, but a hand-rolled router may
+ * take the branded id as a BARE scalar (`.input(vendorId)` — vendor, purchase),
+ * and `{ id }` fails zod there. Symmetric with the toolset's `create` hatch:
+ * the MCP layer adapts, rather than the router changing shape to suit MCP.
+ */
+type GetByIdFetch = (caller: Caller, id: string) => Promise<unknown>;
+
+function getByIdHandler(
+  routerName: string,
+  slim: Slim = identity,
+  fetch?: GetByIdFetch,
+) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const result = await getEntityRouter(getCaller(extra), routerName).getByID({
-      id: params.id,
-    });
+    const caller = getCaller(extra);
+    const id = params.id as string;
+    const result = fetch
+      ? await fetch(caller, id)
+      : await getEntityRouter(caller, routerName).getByID({ id });
     return respond(result, slim);
   };
 }
@@ -858,6 +882,8 @@ export function registerEntityGetTool(
     outputSchema: z.ZodType;
     slim?: Slim;
     annotations: ToolAnnotations;
+    /** Override the fetch when `router.getByID({ id })` is the wrong call. */
+    get?: GetByIdFetch;
   },
 ) {
   registerMcpTool(server, {
@@ -866,7 +892,7 @@ export function registerEntityGetTool(
     inputSchema: { id: idParam(config.idLabel) },
     outputSchema: config.outputSchema,
     annotations: config.annotations,
-    handler: getByIdHandler(config.router, config.slim ?? identity),
+    handler: getByIdHandler(config.router, config.slim ?? identity, config.get),
   });
 }
 
@@ -969,7 +995,12 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
     get: string;
     create: string;
     update: string;
-    delete: string;
+    /**
+     * Required unless the entity opts out of delete (`operations.delete: false`)
+     * — an entity with no delete tool must not carry the dead prose for one.
+     * Registration throws if it's missing while delete is enabled.
+     */
+    delete?: string;
   };
   names?: Partial<
     Record<"list" | "get" | "create" | "update" | "delete", string>
@@ -982,6 +1013,8 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
     caller: Caller,
     params: InferSchemaLike<TCreateInput>,
   ) => Promise<unknown>;
+  /** Override the get fetch — see `GetByIdFetch`. */
+  get?: GetByIdFetch;
 };
 
 /**
@@ -1035,6 +1068,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
           ? undefined
           : (config.detailSlim ?? config.slim),
       annotations: READ_ONLY_CLOSED,
+      get: config.get,
     });
 
   if (enabled("create"))
@@ -1065,14 +1099,21 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       annotations: WRITE_CLOSED,
     });
 
-  if (enabled("delete"))
+  if (enabled("delete")) {
+    const description = config.descriptions.delete;
+    if (!description) {
+      throw new Error(
+        `registerEntityCrudToolset(${config.entity}): descriptions.delete is required unless operations.delete is false`,
+      );
+    }
     registerEntityDeleteTool(server, {
       name: name("delete", `delete_${entityPlural}`),
-      description: config.descriptions.delete,
+      description,
       router: config.entity,
       entityLabel: idLabel.toLowerCase(),
       annotations: WRITE_DESTRUCTIVE_CLOSED,
     });
+  }
 }
 
 /** Register a tool that calls a tRPC procedure and returns the result as-is. */
