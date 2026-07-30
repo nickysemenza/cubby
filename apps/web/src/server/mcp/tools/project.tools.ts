@@ -15,6 +15,8 @@ import {
   expenseBulkTradeInput,
   expenseCreateInput,
   expenseFilterFields,
+  expenseMatchInput,
+  expenseMatchOut,
   expenseMcpListOut,
   expenseOut,
   expenseUpdateData,
@@ -348,6 +350,23 @@ export function registerProjectTools(server: McpServer) {
     outputSchema: expenseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.expense.analytics(params),
+  });
+
+  registerRouterTool(server, {
+    name: "match_expenses",
+    description:
+      "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label` (the export's description), `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseId/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`. Also returns `unmatched` keys and a summary. " +
+      "WARNING — this RANKS candidates, it does not VERIFY them, and it never writes anything. Run it BEFORE proposing any new expense, and again over each row you did create (same amount, ±30 days) to catch what slipped through. Then confirm every match with the user before a single update_expense or create_expense call. " +
+      "Read `tokenOverlap` as a hint and NOTHING more. Zero overlap is routine on TRUE matches, because this ledger names the THING, not the product: a Festool vacuum is booked as `dust extractor`, a Bosch miter saw as `chop saw`. That is the exact trap this tool exists for — a keyword search for 'festool' found nothing and a duplicate row was added while the real one had sat there since 2024. Never discard a zero-overlap candidate on that basis, and note that tokenizers also miss compound words (`labelmaker` vs 'label maker', `stepstool` vs 'step stool'). Conversely, high overlap on a coincidental amount is not evidence either. " +
+      "**Below about $20, READ the line descriptions before accepting anything.** A $0.93 order matched a $1.00 `5 yd nursery mix` row on amount+date and had to be reverted. Small amounts are inside any usable band by construction; the tool will surface them, and only you can tell them apart. " +
+      "Genuine matches cluster at `dayDelta` 0–1. Candidates scattered across a ±14d window are usually coincidences — in one pass 209 amount matches graded down to 97 real ones. " +
+      "`ratioLabel` classifies cost/amount against `taxRate` as exact | plus_tax | pre_tax | other. It LABELS, it does not match: matching uses one wide window, because tax is multiplicative while fees are additive and no single band catches both. So read the raw `amountDelta` on an `other` — a residual of exactly 9.99 or 12.50 is shipping, which a tax-hypothesis check would have silently rejected. Pre-tax entry is a recurring bug class (24 rows in one pass), which is what `pre_tax` is there to make visible. " +
+      "**Always pass `orderId` when the export line has one.** It is the only key that catches BOTH directions of the aggregate problem: a ledger row may AGGREGATE several export lines at an amount that reconciles to nothing, and it may equally hold the SPLIT while you search for the total (B&H order 1121197219 was already two sibling rows, so an amount+date search for its $306.27 total found nothing and a duplicate aggregate was created). The order-id arm ignores the day window on purpose. " +
+      "An empty `candidates` list means 'nothing within the window', NOT 'this expense is missing' — an aggregate row covering your line can sit at an amount no formula relates to yours. Rows with no cost or no date recorded are outside every amount window by construction. Planned (`future: true`) rows are included and flagged, never filtered: an export line often turns out to be one. When one ledger row is the best candidate for two export lines it is returned for both — resolve that yourself rather than assuming a one-to-one assignment.",
+    inputSchema: expenseMatchInput.shape,
+    outputSchema: expenseMatchOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.expense.match(params),
   });
 
   registerRouterTool(server, {

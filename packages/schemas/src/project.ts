@@ -1147,6 +1147,147 @@ export const expenseAnalyticsOut = z.object({
 });
 export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 
+// ---------------------------------------------------------------------------
+// Reconciliation matcher (match_expenses)
+// ---------------------------------------------------------------------------
+
+/**
+ * The household's sales-tax rate, 8.625%.
+ *
+ * Used **only to LABEL** a candidate, never to match one — see `taxRate` on
+ * `expenseMatchInput`. Lives here rather than beside `RECONCILIATION_TOLERANCE`
+ * in ./purchase because that module imports from this one.
+ */
+export const HOUSE_TAX_RATE = 0.08625;
+
+/** Default half-widths of the amount window, as fractions of the row amount. */
+export const MATCH_TOLERANCE_LOW = 0.1;
+export const MATCH_TOLERANCE_HIGH = 0.15;
+/** Dollars. Below this, a relative band is too narrow to be useful. */
+export const MATCH_AMOUNT_FLOOR = 1.0;
+/** Largest batch one `match_expenses` call accepts. */
+export const MATCH_MAX_ROWS = 200;
+
+/** One line of a vendor export, to be matched against the ledger. */
+export const expenseMatchRow = z.object({
+  /** Caller's own id for this row, echoed back on the result. Must be unique. */
+  key: z.string().min(1),
+  date: plainDate,
+  /**
+   * Signed dollars. A refund or sale is NEGATIVE, and the amount window is
+   * computed on the signed value — see `expenseMatchInput`.
+   */
+  amount: z.number(),
+  /** The export's description. Used ONLY to grade candidates by name overlap. */
+  label: z.string().optional(),
+  /** The vendor's own order/receipt id, when the export line carries one. */
+  orderId: z.string().optional(),
+  /** Vendor name, echoed for context. Not used as a predicate. */
+  vendor: z.string().optional(),
+});
+export type ExpenseMatchRow = z.infer<typeof expenseMatchRow>;
+
+export const expenseMatchInput = z.object({
+  rows: z.array(expenseMatchRow).min(1).max(MATCH_MAX_ROWS),
+  /** Inclusive +/- day window for the amount arm. Order-id hits ignore it. */
+  dayWindow: z.number().int().min(0).max(365).default(30),
+  /**
+   * How far BELOW the row amount a ledger cost may sit, as a fraction — the
+   * pre-tax-entry direction.
+   */
+  amountToleranceLow: z.number().min(0).max(1).default(MATCH_TOLERANCE_LOW),
+  /**
+   * How far ABOVE, as a fraction — tax plus additive fees (shipping, core
+   * charges). Asymmetric on purpose: the two distortions are not symmetric.
+   */
+  amountToleranceHigh: z.number().min(0).max(1).default(MATCH_TOLERANCE_HIGH),
+  /**
+   * Absolute dollar floor on the window: the half-width is
+   * `max(relative, floor)`.
+   *
+   * Load-bearing, not cosmetic. Tolerances must be relative (+/-$0.25 is sensible
+   * at $200 and meaningless at $1), but a purely relative band collapses to
+   * nothing at small amounts — which is how a $0.93 order false-matched a $1.00
+   * ledger row and had to be reverted.
+   */
+  amountFloor: z.number().min(0).default(MATCH_AMOUNT_FLOOR),
+  /**
+   * **Labeling only. Never a matching mechanism.**
+   *
+   * Classifies each candidate's `cost / amount` ratio as
+   * `exact` | `plus_tax` | `pre_tax` | `other`. Matching uses one wide window
+   * instead, because tax is MULTIPLICATIVE while fees are ADDITIVE and no single
+   * band catches both — so a residual of exactly `9.99` surfaces as a plain
+   * number a human recognizes as shipping, where a discrete
+   * `cost x 1.08625`-style hypothesis would have silently rejected it.
+   */
+  taxRate: z.number().min(0).max(1).default(HOUSE_TAX_RATE),
+  maxCandidatesPerRow: z.number().int().min(1).max(50).default(10),
+});
+export type ExpenseMatchInput = z.input<typeof expenseMatchInput>;
+/** Post-parse shape: every default applied, so the repo takes no optionals. */
+export type ExpenseMatchOptions = z.output<typeof expenseMatchInput>;
+
+/** Which arm produced a candidate. Order-id hits always outrank amount+date. */
+export const expenseMatchedOn = z.enum(["order_id", "amount_date"]);
+export type ExpenseMatchedOn = z.infer<typeof expenseMatchedOn>;
+
+/** How a candidate's `cost / amount` ratio reads against `taxRate`. */
+export const expenseMatchRatioLabel = z.enum([
+  "exact",
+  "plus_tax",
+  "pre_tax",
+  "other",
+]);
+export type ExpenseMatchRatioLabel = z.infer<typeof expenseMatchRatioLabel>;
+
+export const expenseMatchCandidate = z.object({
+  expenseId,
+  name: z.string(),
+  cost: z.number().nullable(),
+  date: plainDate.nullable(),
+  /** Planned spend. Included, never filtered — an export line often IS one. */
+  future: z.boolean(),
+  notes: z.string().nullable(),
+  vendorName: z.string().nullable(),
+  orderId: z.string().nullable(),
+  projectName: z.string().nullable(),
+  productName: z.string().nullable(),
+  matchedOn: expenseMatchedOn,
+  /** `expense.date - row.date` in days. Null when the ledger row has no date. */
+  dayDelta: z.number().int().nullable(),
+  /** `expense.cost - row.amount`, signed dollars. */
+  amountDelta: z.number().nullable(),
+  /** `expense.cost / row.amount`. Null when the row amount is 0. */
+  ratio: z.number().nullable(),
+  ratioLabel: expenseMatchRatioLabel,
+  /**
+   * Shared non-stopword tokens between the export label and the ledger name.
+   * A GRADING signal only — never a filter. Zero overlap is common on true
+   * matches, because this ledger names the thing rather than the product.
+   */
+  tokenOverlap: z.number().int(),
+});
+export type ExpenseMatchCandidate = z.infer<typeof expenseMatchCandidate>;
+
+export const expenseMatchOut = z.object({
+  matches: z.array(
+    z.object({
+      key: z.string(),
+      candidates: z.array(expenseMatchCandidate),
+    }),
+  ),
+  /** Keys that produced no candidate at all. */
+  unmatched: z.array(z.string()),
+  summary: z.object({
+    rowsIn: z.number().int(),
+    rowsWithCandidates: z.number().int(),
+    /** Input rows that got at least one order-id hit — the strongest key. */
+    exactOrderIdHits: z.number().int(),
+  }),
+});
+export type ExpenseMatchOut = z.infer<typeof expenseMatchOut>;
+
 /**
  * One cell of the project x trade expense-count matrix — how many expenses of
  * a given trade a project has already absorbed. Ranks project suggestions for

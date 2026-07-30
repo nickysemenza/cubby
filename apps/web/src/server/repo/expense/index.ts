@@ -19,6 +19,10 @@
  *                                it's an internal sibling seam, not a public
  *                                barrel surface)
  *   ANALYTICS → `analytics.ts` (server-side grouped SQL aggregates for charts)
+ *   MATCHING  → `match.ts`     (read-only reconciliation matcher: ranks vendor
+ *                                export lines against the ledger, one query per
+ *                                batch. Shares none of `lookup.ts`'s filter
+ *                                machinery, hence its own file.)
  *
  * Sibling relationships: `expense.projectId` references `project` (feeds its
  * `spent`/`expenseCount` rollup — see project/analytics.ts);
@@ -38,3 +42,4 @@ export {
   updateExpense,
 } from "./crud";
 export { expenseList } from "./lookup";
+export { matchExpenses } from "./match";

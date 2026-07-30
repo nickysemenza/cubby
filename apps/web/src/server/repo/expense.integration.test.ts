@@ -12,6 +12,7 @@ import {
   type ExpenseCreateInput,
   type ExpenseOut,
   expenseCreateInput,
+  expenseMatchInput,
   projectCreateInput,
 } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
@@ -29,6 +30,7 @@ import {
   expenseAnalytics,
   expenseList,
   getExpenseByID,
+  matchExpenses,
   moveExpenses,
   setExpensesCostType,
   setExpensesTrade,
@@ -2744,5 +2746,273 @@ describe("expense repository — orderIdPresenceFilter", () => {
     expect(data.map((p) => p.id).sort()).toEqual(
       [hasOrderId.id, chargeWithoutOrderId.id, noCharge.id].sort(),
     );
+  });
+});
+
+/**
+ * The reconciliation matcher. Read-only — every assertion here is about what
+ * gets RANKED and how it's explained, never about anything being applied.
+ */
+describe("expense repository — matchExpenses", () => {
+  const ctx = withTestDb();
+
+  /** `matchExpenses` takes the post-parse shape, so defaults come from zod. */
+  const run = (
+    rows: Array<Record<string, unknown>>,
+    overrides: Record<string, unknown> = {},
+  ) => matchExpenses(ctx.db, expenseMatchInput.parse({ rows, ...overrides }));
+
+  const line = (
+    name: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<ExpenseOut> =>
+    createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "tools",
+        name,
+        ...extra,
+      }),
+      ctx.actor,
+    );
+
+  it("matches on amount+date with ZERO token overlap — the trap the matcher exists for", async () => {
+    // The real case: a Festool vacuum was booked as `dust extractor`, so every
+    // keyword search missed it and a duplicate row was added. Amount+date finds
+    // it; the name is only used to grade afterwards.
+    const extractor = await line("dust extractor", {
+      cost: 599,
+      date: "2024-06-10",
+    });
+
+    const result = await run([
+      {
+        key: "export-1",
+        date: "2024-06-10",
+        amount: 599,
+        label: "Festool Vacuum CT 36 AC",
+      },
+    ]);
+
+    const candidates = result.matches[0]?.candidates ?? [];
+    expect(candidates.map((c) => c.expenseId)).toContain(extractor.id);
+
+    const hit = candidates.find((c) => c.expenseId === extractor.id);
+    expect(hit).toMatchObject({
+      matchedOn: "amount_date",
+      dayDelta: 0,
+      amountDelta: 0,
+      ratioLabel: "exact",
+      // Zero shared tokens on a TRUE positive. This is exactly why overlap
+      // grades and must never filter.
+      tokenOverlap: 0,
+    });
+    expect(result.summary).toEqual({
+      rowsIn: 1,
+      rowsWithCandidates: 1,
+      exactOrderIdHits: 0,
+    });
+  });
+
+  it("computes the amount window on the SIGNED amount, so credits match credits", async () => {
+    const refund = await line("festool accessory refund", {
+      cost: -96.67,
+      date: "2025-12-01",
+    });
+    const purchaseOfSameSize = await line("something bought for 96.67", {
+      cost: 96.67,
+      date: "2025-12-01",
+    });
+
+    const result = await run([
+      { key: "credit", date: "2025-12-01", amount: -96.67 },
+    ]);
+    const ids = (result.matches[0]?.candidates ?? []).map((c) => c.expenseId);
+
+    expect(ids).toContain(refund.id);
+    // The window is roughly [-111, -87] — a POSITIVE row of the same magnitude
+    // is nowhere near it. Getting the sign wrong here would silently break
+    // every disposal reconciliation.
+    expect(ids).not.toContain(purchaseOfSameSize.id);
+  });
+
+  it("excludes null-cost and null-date rows from the amount arm", async () => {
+    const noCost = await line("no cost recorded", { date: "2026-03-01" });
+    const noDate = await line("planned, no date", { cost: 250, future: true });
+    const real = await line("real row", { cost: 250, date: "2026-03-01" });
+    expect(noCost.cost).toBeNull();
+    expect(noDate.date).toBeNull();
+
+    const result = await run([{ key: "r", date: "2026-03-01", amount: 250 }]);
+    const ids = (result.matches[0]?.candidates ?? []).map((c) => c.expenseId);
+
+    expect(ids).toEqual([real.id]);
+    expect(ids).not.toContain(noCost.id);
+    expect(ids).not.toContain(noDate.id);
+  });
+
+  it("ranks an order-id hit above a closer amount match, and ignores the day window for it", async () => {
+    // The order-id row is deliberately WORSE on both amount and date: far
+    // outside the day window, and nowhere near the export amount. It must still
+    // rank first, because an order id is an identifier and amount+date is a
+    // guess.
+    const byOrderId = await line("b&h order line", {
+      cost: 203.36,
+      date: "2025-01-05",
+      vendor: "Matcher B&H",
+      orderId: "1121197219",
+    });
+    const closerOnAmount = await line("coincidence", {
+      cost: 306.27,
+      date: "2025-06-01",
+    });
+
+    const result = await run([
+      {
+        key: "bh",
+        date: "2025-06-01",
+        amount: 306.27,
+        orderId: "1121197219",
+      },
+    ]);
+
+    const candidates = result.matches[0]?.candidates ?? [];
+    expect(candidates[0]).toMatchObject({
+      expenseId: byOrderId.id,
+      matchedOn: "order_id",
+      orderId: "1121197219",
+      vendorName: "Matcher B&H",
+    });
+    // 151 days apart and $103 off — well outside both windows, found anyway.
+    expect(candidates[0]?.dayDelta).toBe(-147);
+    expect(candidates.map((c) => c.expenseId)).toContain(closerOnAmount.id);
+    expect(result.summary.exactOrderIdHits).toBe(1);
+  });
+
+  it("explains each hit instead of enumerating tax hypotheses", async () => {
+    const exact = await line("exact", { cost: 100, date: "2026-05-01" });
+    const plusTax = await line("plus tax", {
+      cost: 108.63,
+      date: "2026-05-01",
+    });
+    const preTax = await line("pre tax", { cost: 92.06, date: "2026-05-01" });
+    const shipping = await line("plus shipping", {
+      cost: 109.99,
+      date: "2026-05-01",
+    });
+
+    const result = await run([{ key: "r", date: "2026-05-01", amount: 100 }]);
+    const byId = new Map(
+      (result.matches[0]?.candidates ?? []).map((c) => [c.expenseId, c]),
+    );
+
+    expect(byId.get(exact.id)?.ratioLabel).toBe("exact");
+    expect(byId.get(plusTax.id)?.ratioLabel).toBe("plus_tax");
+    expect(byId.get(preTax.id)?.ratioLabel).toBe("pre_tax");
+
+    // The whole point of the design: an ADDITIVE $9.99 fee is not a tax
+    // hypothesis and is not supposed to be labelled as one. It comes back as
+    // `other` with the residual sitting right there as a plain number a human
+    // recognizes as shipping — where a discrete `cost x 1.08625` check would
+    // have rejected it outright.
+    const fee = byId.get(shipping.id);
+    expect(fee?.ratioLabel).toBe("other");
+    expect(fee?.amountDelta).toBeCloseTo(9.99, 2);
+  });
+
+  it("caps candidates per row and orders by closeness", async () => {
+    for (let i = 0; i < 6; i += 1) {
+      await line(`bulk ${i}`, { cost: 200 + i * 0.5, date: "2026-07-01" });
+    }
+
+    const result = await run([{ key: "r", date: "2026-07-01", amount: 200 }], {
+      maxCandidatesPerRow: 3,
+    });
+    const candidates = result.matches[0]?.candidates ?? [];
+
+    expect(candidates).toHaveLength(3);
+    const deltas = candidates.map((c) => Math.abs(c.amountDelta ?? 0));
+    expect(deltas).toEqual([...deltas].sort((a, b) => a - b));
+  });
+
+  it("excludes soft-deleted expenses, and reports unmatched keys", async () => {
+    const deleted = await line("deleted row", {
+      cost: 777,
+      date: "2026-08-01",
+    });
+    await deleteExpenses(ctx.db, [deleted.id], ctx.actor);
+
+    const result = await run([
+      { key: "gone", date: "2026-08-01", amount: 777 },
+      { key: "never-existed", date: "2026-08-01", amount: 123456 },
+    ]);
+
+    expect(result.matches).toEqual([]);
+    expect(result.unmatched.sort()).toEqual(["gone", "never-existed"]);
+    expect(result.summary).toEqual({
+      rowsIn: 2,
+      rowsWithCandidates: 0,
+      exactOrderIdHits: 0,
+    });
+  });
+
+  /**
+   * The sub-$20 hazard, pinned as behavior rather than wished away.
+   *
+   * A $0.93 order once false-matched a $1.00 `5 yd nursery mix` row and had to
+   * be reverted. It is INSIDE any sane relative band (the two are 7.5% apart,
+   * against a 10%/15% default), and the absolute floor widens the band further
+   * so small amounts get a usable one at all. So the matcher returns it — that
+   * is correct for a tool that ranks rather than decides.
+   *
+   * What protects against it is the grading signal plus the tool description's
+   * instruction to read the line descriptions under ~$20, NOT a filter.
+   */
+  it("still surfaces the small-amount false positive, with zero overlap to grade it down", async () => {
+    const nurseryMix = await line("5 yd nursery mix", {
+      cost: 1.0,
+      date: "2024-04-01",
+    });
+
+    const result = await run([
+      {
+        key: "screws",
+        date: "2024-04-01",
+        amount: 0.93,
+        label: "wood screws",
+      },
+    ]);
+    const hit = (result.matches[0]?.candidates ?? []).find(
+      (c) => c.expenseId === nurseryMix.id,
+    );
+
+    expect(hit).toBeDefined();
+    expect(hit?.tokenOverlap).toBe(0);
+    expect(hit?.ratioLabel).toBe("other");
+    expect(hit?.amountDelta).toBeCloseTo(0.07, 2);
+  });
+
+  it("scores token overlap when the names DO agree", async () => {
+    const milwaukee = await line("milwaukee packout rolling toolbox", {
+      cost: 149,
+      date: "2026-09-01",
+    });
+
+    const result = await run([
+      {
+        key: "r",
+        date: "2026-09-01",
+        amount: 149,
+        label: "Milwaukee PACKOUT Rolling Tool Box",
+      },
+    ]);
+    const hit = (result.matches[0]?.candidates ?? []).find(
+      (c) => c.expenseId === milwaukee.id,
+    );
+
+    // "milwaukee", "packout", "rolling" — "tool"/"box" vs "toolbox" is the
+    // compound-word gap the description warns about, not something scored away.
+    expect(hit?.tokenOverlap).toBe(3);
   });
 });
