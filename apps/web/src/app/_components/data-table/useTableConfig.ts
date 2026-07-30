@@ -52,10 +52,6 @@ interface UseTableConfigOptions<TData> {
    * renderers via table meta — client rows only cover loaded pages.
    */
   serverTotals?: ServerTotals;
-  /** Persisted per-entity column widths (from useTableColumnSizing). */
-  columnSizing?: Record<string, number>;
-  setColumnSize?: (columnId: string, width: number) => void;
-  resetColumnSize?: (columnId: string) => void;
   /**
    * Opt-in expandable tree support. Return a row's children to render nested
    * sub-rows. Expansion is enabled purely by the PRESENCE of `getSubRows` —
@@ -94,11 +90,6 @@ declare module "@tanstack/react-table" {
      * "you have no expenses at all". See `isNarrowed`.
      */
     urlScopeCount?: number;
-    /** User-resized column pixel widths, by column id (persisted per entity). */
-    columnSizing?: Record<string, number>;
-    /** Persist a resized column width (double-click a handle to reset). */
-    setColumnSize?: (columnId: string, width: number) => void;
-    resetColumnSize?: (columnId: string) => void;
     _tData?: TData;
   }
 }
@@ -120,9 +111,6 @@ export function useTableConfig<TData>({
   columnVisibility: controlledVisibility,
   onColumnVisibilityChange: controlledOnVisibilityChange,
   serverTotals,
-  columnSizing,
-  setColumnSize,
-  resetColumnSize,
   getSubRows,
   filterFromLeafRows,
   paginateExpandedRows,
@@ -195,9 +183,6 @@ export function useTableConfig<TData>({
       meta: {
         ...(serverTotals ? { serverTotals } : {}),
         ...(urlScopeCount > 0 ? { urlScopeCount } : {}),
-        ...(columnSizing ? { columnSizing } : {}),
-        ...(setColumnSize ? { setColumnSize } : {}),
-        ...(resetColumnSize ? { resetColumnSize } : {}),
       },
       // Row selection
       ...(getRowId ? { getRowId } : {}),
@@ -243,9 +228,6 @@ export function useTableConfig<TData>({
       totalCount,
       serverTotals,
       urlScopeCount,
-      columnSizing,
-      setColumnSize,
-      resetColumnSize,
       getRowId,
       enableRowSelection,
       rowSelection,

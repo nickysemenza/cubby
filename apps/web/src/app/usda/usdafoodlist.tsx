@@ -260,6 +260,7 @@ export function USDAFoodList() {
         isLoading={isLoading}
         error={error}
         ariaLabel="USDA Foods Table"
+        sizingKey="usdaFood"
         timing={timing}
         onRowClick={onRowClick}
         onRowHover={onRowHover}

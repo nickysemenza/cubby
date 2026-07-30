@@ -502,6 +502,7 @@ export const RecipeIngredientList: React.FC<{
         isLoading={displayData.length === 0}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
+        sizingKey="recipe:ingredients"
         verticalAlign="top"
         embedded
         getRowClassName={(row) =>

@@ -1,18 +1,27 @@
-import type { Entity } from "@cubby/schemas/entity";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 /**
  * Per-table column-width persistence, mirroring `useTableColumnVisibility`
- * (module cache + localStorage + useSyncExternalStore, keyed per entity).
+ * (module cache + localStorage + useSyncExternalStore, keyed per table).
  *
  * Stores only USER-RESIZED columns as `{ [columnId]: pixelWidth }`. Columns
  * the user hasn't touched are absent and keep their code-defined Tailwind
  * width class. Under the table's `table-fixed` layout only the header row's
  * widths drive the columns, so applying a width to the header cell resizes the
  * whole column — no per-body-cell change (and no row-memo invalidation).
+ *
+ * The key is a plain string, not an `Entity`: `RTable` defaults it to its
+ * `entity` prop, but surfaces with no single entity need one too (the global
+ * search table lists every entity type at once). `scope` mirrors
+ * `useTableColumnVisibility` — two tables over the same entity with different
+ * column sets must not share widths.
+ *
+ * Called with `undefined` the hook is inert (empty widths, no setters), which
+ * is how a table opts out without anyone writing a conditional hook call:
+ * `ColumnResizeHandle` renders nothing when `setColumnSize` is absent.
  */
 
-const MIN_COLUMN_WIDTH = 48;
+export const MIN_COLUMN_WIDTH = 48;
 
 type Store = {
   value: Record<string, number> | undefined;
@@ -21,7 +30,11 @@ type Store = {
 
 const stores = new Map<string, Store>();
 
-const storageKey = (entity: string) => `table-sizes:${entity}`;
+const storageKey = (key: string) => `table-sizes:${key}`;
+
+/** Same shape as `useTableColumnVisibility`'s scoped key. */
+const scopedKey = (key: string, scope?: string) =>
+  scope ? `${key}:${scope}` : key;
 
 function getStore(entity: string): Store {
   let store = stores.get(entity);
@@ -59,16 +72,34 @@ function writeStored(entity: string, next: Record<string, number>) {
 const EMPTY: Record<string, number> = {};
 const getServerSnapshot = () => EMPTY;
 
-export function useTableColumnSizing(entity: Entity) {
+export interface TableColumnSizing {
+  /** User-resized pixel widths by column id; sparse (untouched columns absent). */
+  columnSizing: Record<string, number>;
+  /** Absent when the table opted out — that's what disables the drag handle. */
+  setColumnSize?: (columnId: string, width: number) => void;
+  resetColumnSize?: (columnId: string) => void;
+  resetAllColumnSizes?: () => void;
+}
+
+export function useTableColumnSizing(
+  key: string | undefined,
+  scope?: string,
+): TableColumnSizing {
+  // "" is never a real key, so an opted-out table subscribes to a store nobody
+  // writes — the snapshot stays EMPTY and the setters below no-op away.
+  const storeKey = key ? scopedKey(key, scope) : "";
   const subscribe = useCallback(
     (listener: () => void) => {
-      const store = getStore(entity);
+      const store = getStore(storeKey);
       store.listeners.add(listener);
       return () => store.listeners.delete(listener);
     },
-    [entity],
+    [storeKey],
   );
-  const getSnapshot = useCallback(() => readStored(entity), [entity]);
+  const getSnapshot = useCallback(
+    () => (storeKey ? readStored(storeKey) : EMPTY),
+    [storeKey],
+  );
   const columnSizing = useSyncExternalStore(
     subscribe,
     getSnapshot,
@@ -77,24 +108,50 @@ export function useTableColumnSizing(entity: Entity) {
 
   const setColumnSize = useCallback(
     (columnId: string, width: number) => {
-      const next = { ...readStored(entity) };
+      if (!storeKey) return;
+      const next = { ...readStored(storeKey) };
       next[columnId] = Math.max(MIN_COLUMN_WIDTH, Math.round(width));
-      writeStored(entity, next);
+      writeStored(storeKey, next);
     },
-    [entity],
+    [storeKey],
   );
 
   const resetColumnSize = useCallback(
     (columnId: string) => {
-      const next = { ...readStored(entity) };
+      if (!storeKey) return;
+      const next = { ...readStored(storeKey) };
       delete next[columnId];
-      writeStored(entity, next);
+      writeStored(storeKey, next);
     },
-    [entity],
+    [storeKey],
   );
 
+  const resetAllColumnSizes = useCallback(() => {
+    if (!storeKey) return;
+    writeStored(storeKey, {});
+  }, [storeKey]);
+
   return useMemo(
-    () => ({ columnSizing, setColumnSize, resetColumnSize }),
-    [columnSizing, setColumnSize, resetColumnSize],
+    () =>
+      storeKey
+        ? {
+            columnSizing,
+            setColumnSize,
+            resetColumnSize,
+            resetAllColumnSizes,
+          }
+        : {
+            columnSizing: EMPTY,
+            setColumnSize: undefined,
+            resetColumnSize: undefined,
+            resetAllColumnSizes: undefined,
+          },
+    [
+      storeKey,
+      columnSizing,
+      setColumnSize,
+      resetColumnSize,
+      resetAllColumnSizes,
+    ],
   );
 }

@@ -57,7 +57,7 @@ export const NutritionInfoTable: React.FC<{
 
   return (
     <div className="text-xs">
-      <RTable table={table} embedded />
+      <RTable table={table} sizingKey="usda:nutrition" embedded />
     </div>
   );
 };

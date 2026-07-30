@@ -223,11 +223,11 @@ export function createNameColumn<T extends BaseRow>(
     /**
      * Override the column width class. Defaults to `w-64` (16rem). The fixed
      * table layout IGNORES `min-width` on cells (only `width` counts), so a
-     * `min-w-*` floor does nothing — an explicit width is the only lever. At
-     * `w-64` the name still grows to absorb leftover space on sparse tables
-     * (fixed layout distributes surplus across width-bearing columns) but holds
-     * a readable 16rem on dense tables (many columns) instead of collapsing to a
-     * few characters; the table scrolls horizontally for the rest.
+     * `min-w-*` floor does nothing — an explicit width is the only lever.
+     * `w-64` holds a readable 16rem on dense tables (many columns) instead of
+     * collapsing to a few characters. On a table with room to spare it also
+     * grows: leftover width is distributed across the sized columns in
+     * proportion to their widths, so this reads as a *share* as much as a size.
      */
     className?: string;
     /** Enable inline editing */
