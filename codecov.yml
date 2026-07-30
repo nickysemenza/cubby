@@ -31,12 +31,18 @@ comment:
 
 # Paths are relative to the REPO ROOT and are not implicitly prefix-matched, so
 # every entry needs `**` to reach into a workspace. The list inherited from the
-# dead .github/codecov.yml was written against a single-app layout: `scripts`
-# missed `apps/web/scripts`, `src/components/ui` missed the only real
-# `apps/web/src/components/ui`, and `tooling` names a directory that does not
-# exist in this repo at all. So the shadcn exclusion stayed unapplied even after
-# the configs were merged — same silent no-op, new cause. Rewritten to match.
+# dead .github/codecov.yml was written against a single-app layout, so every
+# bare entry silently stopped matching once it moved here: `scripts` missed
+# `apps/web/scripts`, `src/components/ui` missed the only real
+# `apps/web/src/components/ui`, and `tooling` missed `apps/web/tooling`.
+#
+# `apps/web/tooling` earns its place for a second reason: vitest v4 dropped
+# `coverage.all`, so only files that actually EXECUTE are measured — and these
+# are the harness that executes on every single suite (`globalSetup` /
+# `setupFiles` in apps/web/vitest.config.ts). Left in, ~16KB of test plumbing
+# lands in the coverage denominator as if it were app code.
 ignore:
   - "**/*.config.*"
   - "**/scripts/**"
   - "apps/web/src/components/ui/**" # shadcn/ui — vendored primitives, not our code
+  - "apps/web/tooling/**" # test harness (globalSetup/setupFiles), not app code
