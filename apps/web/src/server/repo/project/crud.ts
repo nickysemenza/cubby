@@ -160,6 +160,8 @@ export const createProject = async (
       endDate: data.endDate,
       icon: data.icon,
       notes: data.notes,
+      googleDriveFolderUrl: data.googleDriveFolderUrl,
+      notionPageUrl: data.notionPageUrl,
     });
     await logAuditEntry(tx, actor, {
       entityType: "project",
@@ -182,6 +184,8 @@ const AUDIT_FIELDS = [
   "endDate",
   "icon",
   "notes",
+  "googleDriveFolderUrl",
+  "notionPageUrl",
 ] as const;
 
 export const updateProject = async (
@@ -227,6 +231,8 @@ export const updateProject = async (
       endDate: data.endDate,
       icon: data.icon,
       notes: data.notes,
+      googleDriveFolderUrl: data.googleDriveFolderUrl,
+      notionPageUrl: data.notionPageUrl,
     });
     const updated = await updateLiveAndReturn(tx, project, updateValues, id);
 

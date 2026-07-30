@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  ExternalLink,
   FileText,
   FolderTree,
   Info,
@@ -300,6 +301,45 @@ function ProjectDateField({
         </span>
       )}
     </Stack>
+  );
+}
+
+function ProjectResourceLink({
+  value,
+  placeholder,
+  linkLabel,
+  onSave,
+}: {
+  value: string | null;
+  placeholder: string;
+  linkLabel: string;
+  onSave: (value: string | null) => Promise<void>;
+}) {
+  return (
+    <EditableCell
+      value={value}
+      config={{ type: "text", placeholder }}
+      onSave={(next) => onSave(next?.trim() || null)}
+      // A real external anchor cannot live inside EditableCell's button-style
+      // wrap trigger. Keep it beside the shared pencil trigger instead.
+      trigger="pencil"
+      renderValue={(url) =>
+        url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={url}
+            className="inline-flex min-w-0 items-center gap-1 hover:underline"
+          >
+            <span className="truncate">{linkLabel}</span>
+            <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+          </a>
+        ) : (
+          <span className="text-muted-foreground">Add</span>
+        )
+      }
+    />
   );
 }
 
@@ -1007,6 +1047,49 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     content: <BasicInfo fields={fields} />,
   };
 
+  const resourcesSection: DetailSection = {
+    title: "Resources",
+    icon: ExternalLink,
+    content: (
+      <BasicInfo
+        fields={[
+          {
+            label: "Google Drive folder",
+            value: (
+              <ProjectResourceLink
+                value={project.googleDriveFolderUrl}
+                placeholder="https://drive.google.com/drive/folders/…"
+                linkLabel="Open folder"
+                onSave={async (googleDriveFolderUrl) => {
+                  await updateMutation.mutateAsync({
+                    id: project.id,
+                    data: { googleDriveFolderUrl },
+                  });
+                }}
+              />
+            ),
+          },
+          {
+            label: "Notion page",
+            value: (
+              <ProjectResourceLink
+                value={project.notionPageUrl}
+                placeholder="https://….notion.site/…"
+                linkLabel="Open page"
+                onSave={async (notionPageUrl) => {
+                  await updateMutation.mutateAsync({
+                    id: project.id,
+                    data: { notionPageUrl },
+                  });
+                }}
+              />
+            ),
+          },
+        ]}
+      />
+    ),
+  };
+
   const dependenciesSection: DetailSection = {
     title: "Dependencies",
     icon: Link2,
@@ -1146,6 +1229,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasSubtree ? [] : [expensesSection]),
     // Aside rail: metadata + (when empty) the slim Notes card.
     overviewSection,
+    resourcesSection,
     dependenciesSection,
     subProjectsSection,
     ...(hasNotesContent ? [] : [notesSection]),

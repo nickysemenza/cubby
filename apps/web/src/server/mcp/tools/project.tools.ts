@@ -64,6 +64,8 @@ import {
  * and timestamps that `get_project` already returns in full. */
 const houseStatusProject = projectOut.omit({
   notes: true,
+  googleDriveFolderUrl: true,
+  notionPageUrl: true,
   icon: true,
   childProjectIds: true,
   blockedByIds: true,
@@ -162,8 +164,8 @@ export function registerProjectTools(server: McpServer) {
     slim: slimProject,
     sort: { orderBy: "startDate", direction: "desc" },
     descriptions: {
-      list: "List household projects with status, kind, dates, cost estimate, spend/progress rollups (own + subtree), parent/child project links, and dependency ids. Read dates from the `dates` object (derivedStart/derivedEnd, effectiveStart/effectiveEnd, startSource/endSource), NOT from the top-level startDate/endDate — those two are manual overrides and are usually null. Filter by status/kind/location/search/topLevelOnly/parentProjectId/includeSubProjects. Pass topLevelOnly=true to exclude sub-projects; pass includeSubProjects=true with parentProjectId to match the whole live subtree under that parent, not just direct children.",
-      get: "Get a project by ID, including markdown notes (the former Notion page body), own + subtree rollups, parent/child project links, blocked-by/blocking project ids, and the `dates` object (derived vs effective window plus which source each side came from). Prefer dates.effectiveStart/dates.effectiveEnd over the raw startDate/endDate override columns.",
+      list: "List household projects with status, kind, dates, cost estimate, canonical Google Drive/Notion resource URLs, spend/progress rollups (own + subtree), parent/child project links, and dependency ids. Read dates from the `dates` object (derivedStart/derivedEnd, effectiveStart/effectiveEnd, startSource/endSource), NOT from the top-level startDate/endDate — those two are manual overrides and are usually null. Filter by status/kind/location/search/topLevelOnly/parentProjectId/includeSubProjects. Pass topLevelOnly=true to exclude sub-projects; pass includeSubProjects=true with parentProjectId to match the whole live subtree under that parent, not just direct children.",
+      get: "Get a project by ID, including markdown notes (the former Notion page body), canonical googleDriveFolderUrl/notionPageUrl resource links, own + subtree rollups, parent/child project links, blocked-by/blocking project ids, and the `dates` object (derived vs effective window plus which source each side came from). Prefer dates.effectiveStart/dates.effectiveEnd over the raw startDate/endDate override columns.",
       create:
         "Create a household project (status planning|not_started|in_progress|done, kind furniture|workshop|household|renovation|garden). Set parentProjectId to create it as a sub-project (arbitrary depth) — a phase/trade with its own costEstimate budget envelope; tasks/expenses still attribute to it via their own projectId. startDate/endDate are OVERRIDES on a derived window, not the window itself: a project's dates are normally rolled up from its own tasks and expenses plus every live sub-project, and writing either column PINS that side and suppresses the roll-up for it. Leave both unset unless you are recording a date the work itself doesn't imply (a contracted start, a hard deadline) — a stale override does not widen to cover later activity, it just goes wrong quietly.",
       update:

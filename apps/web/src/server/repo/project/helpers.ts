@@ -18,6 +18,8 @@ export type ProjectRow = {
   endDate: string | null;
   icon: string | null;
   notes: string | null;
+  googleDriveFolderUrl: string | null;
+  notionPageUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -130,6 +132,8 @@ const dbProjectToAPI = ({
   endDate: row.endDate,
   icon: row.icon,
   notes: row.notes,
+  googleDriveFolderUrl: row.googleDriveFolderUrl,
+  notionPageUrl: row.notionPageUrl,
   blockedByIds,
   blockingIds,
   createdAt: row.createdAt,

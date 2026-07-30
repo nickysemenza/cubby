@@ -830,6 +830,8 @@ export const project = pgTable(
     icon: text("icon"),
     // Freeform markdown, converted from the Notion page body at import.
     notes: text("notes"),
+    googleDriveFolderUrl: text("googleDriveFolderUrl"),
+    notionPageUrl: text("notionPageUrl"),
     // Source Notion page id (dashed uuid) — the import script's idempotency key.
     notionPageId: text("notionPageId"),
     ...baseTimestamps(),

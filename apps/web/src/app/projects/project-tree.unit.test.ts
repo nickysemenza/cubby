@@ -19,6 +19,8 @@ function proj(id: string, parentProjectId?: string): ProjectOut {
     endDate: null,
     icon: null,
     notes: null,
+    googleDriveFolderUrl: null,
+    notionPageUrl: null,
     dates: {
       derivedStart: null,
       derivedEnd: null,

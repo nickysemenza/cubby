@@ -10,6 +10,7 @@ import { eq, or } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { image, projectDependency, projectImage } from "~/server/db/schema";
+import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, expenseList } from "./expense";
 import {
@@ -73,6 +74,93 @@ describe("project repository", () => {
     });
     expect(count).toBe(1);
     expect(data.map((p) => p.id)).toEqual([created.id]);
+  });
+
+  it("creates, reads, updates, clears, and audits project resource URLs", async () => {
+    const driveUrl =
+      "https://drive.google.com/drive/folders/create123?usp=sharing";
+    const notionUrl =
+      "https://www.notion.so/workspace/Create-0123456789abcdef?pvs=4";
+    const created = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "project resource links",
+        googleDriveFolderUrl: driveUrl,
+        notionPageUrl: notionUrl,
+      }),
+      ctx.actor,
+    );
+
+    expect(created).toMatchObject({
+      googleDriveFolderUrl: driveUrl,
+      notionPageUrl: notionUrl,
+    });
+    await expect(getProjectByID(ctx.db, created.id)).resolves.toMatchObject({
+      googleDriveFolderUrl: driveUrl,
+      notionPageUrl: notionUrl,
+    });
+
+    const updatedDriveUrl =
+      "https://drive.google.com/drive/u/1/folders/update456?resourcekey=key";
+    const updatedNotionUrl =
+      "https://cubby.notion.site/Update-0123456789abcdef#details";
+    const updated = await updateProject(
+      ctx.db,
+      created.id,
+      {
+        googleDriveFolderUrl: updatedDriveUrl,
+        notionPageUrl: updatedNotionUrl,
+      },
+      ctx.actor,
+    );
+    expect(updated).toMatchObject({
+      googleDriveFolderUrl: updatedDriveUrl,
+      notionPageUrl: updatedNotionUrl,
+    });
+
+    const cleared = await updateProject(
+      ctx.db,
+      created.id,
+      { googleDriveFolderUrl: null, notionPageUrl: null },
+      ctx.actor,
+    );
+    expect(cleared).toMatchObject({
+      googleDriveFolderUrl: null,
+      notionPageUrl: null,
+    });
+
+    const audit = await getAuditLog(ctx.db, {
+      entityType: "project",
+      entityId: created.id,
+      limit: 20,
+    });
+    const updateChanges = audit.entries
+      .filter((entry) => entry.action === "update")
+      .map((entry) => entry.changes);
+    expect(updateChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          googleDriveFolderUrl: {
+            from: driveUrl,
+            to: updatedDriveUrl,
+          },
+          notionPageUrl: {
+            from: notionUrl,
+            to: updatedNotionUrl,
+          },
+        }),
+        expect.objectContaining({
+          googleDriveFolderUrl: {
+            from: updatedDriveUrl,
+            to: null,
+          },
+          notionPageUrl: {
+            from: updatedNotionUrl,
+            to: null,
+          },
+        }),
+      ]),
+    );
   });
 
   it("filters the list by location (ANY over the free-form locations[] column)", async () => {
