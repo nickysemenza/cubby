@@ -1254,6 +1254,18 @@ export const expenseMatchCandidate = z.object({
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
   matchedOn: expenseMatchedOn,
+  /**
+   * Does this row's vendor agree with the one on the export line?
+   *
+   * `null` = nothing to compare (the export line carried no vendor, or the
+   * ledger row has no charge) — unknown, NOT clean. `false` is a real conflict.
+   *
+   * Load-bearing on an `order_id` hit: an order id is only unique WITHIN a
+   * vendor (`Purchase_vendorId_orderId_key`), so a short id can collide across
+   * retailers. A conflicting order-id hit is demoted below every amount+date
+   * candidate rather than keeping the top slot it would otherwise take.
+   */
+  vendorMatch: z.boolean().nullable(),
   /** `expense.date - row.date` in days. Null when the ledger row has no date. */
   dayDelta: z.number().int().nullable(),
   /** `expense.cost - row.amount`, signed dollars. */

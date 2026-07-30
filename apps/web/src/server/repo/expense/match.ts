@@ -81,6 +81,7 @@ type MatchRow = {
   projectName: string | null;
   productName: string | null;
   matchedOn: "order_id" | "amount_date";
+  vendorMatch: boolean | null;
   dayDelta: number | null;
   amountDelta: number | null;
 };
@@ -184,13 +185,13 @@ export const matchExpenses = async (
   const values = sql.join(
     rows.map(
       (row) =>
-        sql`(${row.key}::text, ${row.date}::date, ${row.amount}::double precision, ${row.orderId ?? null}::text)`,
+        sql`(${row.key}::text, ${row.date}::date, ${row.amount}::double precision, ${row.orderId ?? null}::text, ${row.vendor ?? null}::text)`,
     ),
     sql`, `,
   );
 
   const res = await getDb(db).execute<MatchRow>(sql`
-    WITH input("key", "inDate", "amount", "orderId") AS (VALUES ${values}),
+    WITH input("key", "inDate", "amount", "orderId", "vendor") AS (VALUES ${values}),
     -- Every live expense with its display joins resolved. Each join carries its
     -- own deletedAt guard: a soft-deleted charge is still a row, so without it
     -- an expense whose charge was deleted would keep reporting its old vendor.
@@ -227,7 +228,22 @@ export const matchExpenses = async (
       -- Arm 1: exact order id. No day window — a charge's lines can sit weeks
       -- from the order date, and this arm is precisely the one that finds the
       -- aggregate when you searched for a component (and vice versa).
-      SELECT i."key", i."inDate", i."amount", l.*, 0 AS "arm"
+      --
+      -- ⚠️ An order id is only unique WITHIN a vendor: the charge table's
+      -- "Purchase_vendorId_orderId_key" is UNIQUE(vendorId, orderId), and short
+      -- ids genuinely collide across retailers (Tool Nirvana's "#11325"). So
+      -- this join alone can return an unrelated vendor's expense — on the arm
+      -- that ignores the day window and ranks first, i.e. dressed up as the
+      -- highest-confidence candidate. That is the exact plausible-but-wrong
+      -- failure this matcher exists to avoid.
+      --
+      -- The join stays permissive rather than adding "AND vendor = vendor",
+      -- because vendor names are matched EXACTLY here and an export's spelling
+      -- routinely differs from the roster's ("Amazon" vs "Amazon.com" are two
+      -- real rows). A hard vendor predicate would drop TRUE matches on the one
+      -- arm that finds what nothing else can. Instead the conflict is detected
+      -- and used to DEMOTE — see "rankTier" below.
+      SELECT i."key", i."inDate", i."amount", i."vendor", l.*, 0 AS "arm"
       FROM input i
       JOIN live l ON l."orderId" = i."orderId"
       WHERE i."orderId" IS NOT NULL
@@ -249,7 +265,7 @@ export const matchExpenses = async (
       --
       -- Null cost and null date fall out of these comparisons by plain SQL
       -- semantics. That is intended, and asserted in the tests.
-      SELECT i."key", i."inDate", i."amount", l.*, 1 AS "arm"
+      SELECT i."key", i."inDate", i."amount", i."vendor", l.*, 1 AS "arm"
       FROM input i
       JOIN live l
         ON l."cost" >= CASE WHEN i."amount" >= 0
@@ -269,6 +285,23 @@ export const matchExpenses = async (
       FROM arms
       ORDER BY "key", "expenseId", "arm"
     ),
+    -- Does the ledger row's vendor contradict the one on the export line?
+    --
+    -- Three states, and the difference matters: NULL when the export carried no
+    -- vendor or the ledger row has no charge (nothing to compare — unknown, not
+    -- clean), true when both are present and agree, false when they disagree.
+    -- Compared case-folded and trimmed, which is looser than the roster's own
+    -- exact matching on purpose: a case difference is a spelling variant, not a
+    -- different counterparty.
+    flagged AS (
+      SELECT
+        *,
+        CASE
+          WHEN "vendor" IS NULL OR "vendorName" IS NULL THEN NULL
+          ELSE lower(btrim("vendor")) = lower(btrim("vendorName"))
+        END AS "vendorMatchRaw"
+      FROM deduped
+    ),
     ranked AS (
       SELECT
         *,
@@ -277,11 +310,21 @@ export const matchExpenses = async (
         ROW_NUMBER() OVER (
           PARTITION BY "key"
           ORDER BY
-            "arm",
+            -- Tier, not raw "arm". An order-id hit earns the top slot because an
+            -- identifier beats a guess — but ONLY while its vendor doesn't
+            -- contradict the export line. A cross-vendor order-id collision is
+            -- almost certainly the wrong row, so it sorts BELOW every amount+date
+            -- candidate instead of above them. It is still returned, flagged, and
+            -- never silently dropped: the vendor spellings may simply differ.
+            CASE
+              WHEN "arm" = 0 AND "vendorMatchRaw" IS NOT FALSE THEN 0
+              WHEN "arm" = 1 THEN 1
+              ELSE 2
+            END,
             abs("date" - "inDate") NULLS LAST,
             abs("cost" - "amount") NULLS LAST
         ) AS "rn"
-      FROM deduped
+      FROM flagged
     )
     SELECT
       "key",
@@ -296,6 +339,7 @@ export const matchExpenses = async (
       "projectName",
       "productName",
       CASE WHEN "arm" = 0 THEN 'order_id' ELSE 'amount_date' END AS "matchedOn",
+      "vendorMatchRaw"                      AS "vendorMatch",
       "dayDeltaRaw"::int                    AS "dayDelta",
       "amountDeltaRaw"::double precision    AS "amountDelta",
       "rn"::int                             AS "rn"
@@ -331,6 +375,7 @@ export const matchExpenses = async (
       projectName: raw.projectName,
       productName: raw.productName,
       matchedOn: raw.matchedOn,
+      vendorMatch: raw.vendorMatch,
       dayDelta: raw.dayDelta === null ? null : Number(raw.dayDelta),
       amountDelta,
       ratio,

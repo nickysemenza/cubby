@@ -844,6 +844,7 @@ describe("household tracker synthesis + bulk tools", () => {
       projectName: null,
       productName: null,
       matchedOn: "amount_date",
+      vendorMatch: null,
       dayDelta: 0,
       amountDelta: 0,
       ratio: 1,

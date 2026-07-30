@@ -2890,6 +2890,104 @@ describe("expense repository — matchExpenses", () => {
     expect(result.summary.exactOrderIdHits).toBe(1);
   });
 
+  it("demotes a cross-vendor orderId collision below every amount+date hit", async () => {
+    // An order id is unique only WITHIN a vendor — `Purchase_vendorId_orderId_key`
+    // is UNIQUE(vendorId, orderId), and short ids genuinely collide across
+    // retailers. Without vendor scoping the collision would take the top slot,
+    // since the order-id arm ignores the day window and normally ranks first.
+    const collidingId = "#11325";
+    const wrongVendor = await line("metal supermarkets bar stock", {
+      cost: 8000,
+      date: "2020-01-01",
+      vendor: "Matcher Metal Supermarkets",
+      orderId: collidingId,
+    });
+    const rightVendor = await line("tool nirvana order line", {
+      cost: 60,
+      date: "2026-06-02",
+      vendor: "Matcher Tool Nirvana",
+      orderId: collidingId,
+    });
+
+    const result = await run([
+      {
+        key: "tn",
+        date: "2026-06-01",
+        amount: 60,
+        orderId: collidingId,
+        vendor: "Matcher Tool Nirvana",
+      },
+    ]);
+    const candidates = result.matches[0]?.candidates ?? [];
+    const rank = (id: string) =>
+      candidates.findIndex((c) => c.expenseId === id);
+
+    // The right vendor's row keeps the top slot and reads as a clean order-id hit.
+    expect(candidates[0]).toMatchObject({
+      expenseId: rightVendor.id,
+      matchedOn: "order_id",
+      vendorMatch: true,
+    });
+
+    // The collision is still RETURNED — spellings may merely differ, and silently
+    // dropping it is how a true match gets lost — but flagged and ranked last.
+    const collision = candidates.find((c) => c.expenseId === wrongVendor.id);
+    expect(collision).toMatchObject({
+      matchedOn: "order_id",
+      vendorMatch: false,
+    });
+    expect(rank(wrongVendor.id)).toBeGreaterThan(rank(rightVendor.id));
+  });
+
+  it("treats a case/whitespace vendor difference as agreement, not a conflict", async () => {
+    // Roster names are matched EXACTLY elsewhere, so an export spelled
+    // "AMAZON " must not read as a different counterparty here — that would
+    // demote a true order-id hit.
+    const row = await line("amazon order line", {
+      cost: 42,
+      date: "2026-06-10",
+      vendor: "Matcher Amazon",
+      orderId: "111-CASE-TEST",
+    });
+
+    const result = await run([
+      {
+        key: "amz",
+        date: "2026-06-10",
+        amount: 42,
+        orderId: "111-CASE-TEST",
+        vendor: "  matcher AMAZON  ",
+      },
+    ]);
+
+    expect(result.matches[0]?.candidates[0]).toMatchObject({
+      expenseId: row.id,
+      matchedOn: "order_id",
+      vendorMatch: true,
+    });
+  });
+
+  it("reports vendorMatch: null when there is nothing to compare", async () => {
+    // Unknown, NOT clean: the export line carried no vendor. An order-id hit
+    // keeps its top slot here, since nothing contradicts it.
+    const row = await line("no vendor on the export line", {
+      cost: 15,
+      date: "2026-06-20",
+      vendor: "Matcher Somewhere",
+      orderId: "NV-1",
+    });
+
+    const result = await run([
+      { key: "nv", date: "2026-06-20", amount: 15, orderId: "NV-1" },
+    ]);
+
+    expect(result.matches[0]?.candidates[0]).toMatchObject({
+      expenseId: row.id,
+      matchedOn: "order_id",
+      vendorMatch: null,
+    });
+  });
+
   it("explains each hit instead of enumerating tax hypotheses", async () => {
     const exact = await line("exact", { cost: 100, date: "2026-05-01" });
     const plusTax = await line("plus tax", {
