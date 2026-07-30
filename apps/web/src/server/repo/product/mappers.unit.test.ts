@@ -58,6 +58,7 @@ const baseProduct = {
   price: 4.5,
   usdaUnavailable: null,
   expenseCount: 0,
+  expenseTotal: 42.5,
 };
 
 const baseImage = {
@@ -263,7 +264,29 @@ describe("product mappers", () => {
     expect(result.inventoryEntry[0]?.location).not.toHaveProperty("images");
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
+    // Net basis rollup: a plain number, not the bigint-string union
+    // expenseCount tolerates.
+    expect(result.expenseTotal).toEqual(42.5);
     expect(productListItemOut.parse(result)).toEqual(result);
+  });
+
+  it("coerces expenseTotal the same way as expenseCount", () => {
+    const row = {
+      ...baseProduct,
+      ingredient: null,
+      unitMappings: [],
+      externalIds: [],
+      images: [],
+      inventoryEntry: [],
+      expenseCount: 3,
+      expenseTotal: -12.75,
+    } satisfies ProductListDB;
+
+    const result = dbProductToListAPI(row);
+
+    // A net-negative product (refunds/disposals outweighing acquisitions) is
+    // real in this ledger and must survive the mapper untouched.
+    expect(result.expenseTotal).toEqual(-12.75);
   });
 
   it("maps full product detail rows exactly", () => {

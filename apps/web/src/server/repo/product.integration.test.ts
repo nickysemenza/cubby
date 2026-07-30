@@ -749,6 +749,223 @@ describe("product repository", () => {
         );
       });
     });
+
+    describe("pricePresenceFilter", () => {
+      it("partitions on whether price is set", async () => {
+        const priced = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Priced Product",
+            upc: "710000000010",
+            price: 19.99,
+          }),
+          ctx.actor,
+        );
+        const unpriced = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Unpriced Product",
+            upc: "710000000011",
+            price: null,
+          }),
+          ctx.actor,
+        );
+
+        const has = await listWith({ pricePresenceFilter: "has" });
+        expect(has.data.map((p) => p.id)).toContain(priced.id);
+        expect(has.data.map((p) => p.id)).not.toContain(unpriced.id);
+
+        const none = await listWith({ pricePresenceFilter: "none" });
+        expect(none.data.map((p) => p.id)).toContain(unpriced.id);
+        expect(none.data.map((p) => p.id)).not.toContain(priced.id);
+      });
+
+      it("a soft-deleted product with a price is excluded from either side", async () => {
+        const product = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Deleted Priced Product",
+            upc: "710000000012",
+            price: 5,
+          }),
+          ctx.actor,
+        );
+        await deleteProducts(ctx.db, [product.id], ctx.actor);
+
+        const has = await listWith({ pricePresenceFilter: "has" });
+        expect(has.data.map((p) => p.id)).not.toContain(product.id);
+        const none = await listWith({ pricePresenceFilter: "none" });
+        expect(none.data.map((p) => p.id)).not.toContain(product.id);
+      });
+
+      /**
+       * The valuation-gap worklist the filter exists for: products physically
+       * in inventory that nobody has priced yet.
+       */
+      it("combines with inventoryPresenceFilter: has for the valuation-gap worklist", async () => {
+        const shelf = await createLocation(
+          ctx.db,
+          makeLocationInput({ name: "Valuation Gap Shelf" }),
+          ctx.actor,
+        );
+        const stockedNoPrice = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Stocked Unpriced",
+            upc: "710000000013",
+            price: null,
+          }),
+          ctx.actor,
+        );
+        const stockedPriced = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Stocked Priced",
+            upc: "710000000014",
+            price: 8,
+          }),
+          ctx.actor,
+        );
+        for (const product of [stockedNoPrice, stockedPriced]) {
+          await createInventoryEntry(
+            ctx.db,
+            {
+              productId: product.id,
+              locationId: shelf.id,
+              amount: { value: 1, unit: "each" },
+            },
+            ctx.actor,
+          );
+        }
+
+        const gap = await listWith({
+          inventoryPresenceFilter: "has",
+          pricePresenceFilter: "none",
+        });
+        const gapIds = gap.data.map((p) => p.id);
+        expect(gapIds).toContain(stockedNoPrice.id);
+        expect(gapIds).not.toContain(stockedPriced.id);
+      });
+    });
+
+    describe("modelFilter", () => {
+      it("matches a model number substring but not the name", async () => {
+        const matching = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Impact Driver",
+            upc: "710000000015",
+            model: "M18 FUEL 2853-20",
+          }),
+          ctx.actor,
+        );
+        const nonMatching = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "2853-20 Style Driver",
+            upc: "710000000016",
+            model: "Other Model",
+          }),
+          ctx.actor,
+        );
+
+        const filtered = await listWith({ modelFilter: "2853-20" });
+        const ids = filtered.data.map((p) => p.id);
+        expect(ids).toContain(matching.id);
+        expect(ids).not.toContain(nonMatching.id);
+      });
+    });
+
+    describe("expenseTotal", () => {
+      it("nets a product's positive and negative expenses", async () => {
+        const product = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Netted Product",
+            upc: "710000000017",
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          {
+            ...makeExpenseInput(),
+            name: "Acquisition",
+            cost: 100,
+            productId: product.id,
+          },
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          {
+            ...makeExpenseInput(),
+            name: "Refund",
+            cost: -30,
+            productId: product.id,
+          },
+          ctx.actor,
+        );
+
+        const found = await listWith({ nameFilter: "Netted Product" });
+        const row = found.data.find((p) => p.id === product.id);
+        expect(row).toBeDefined();
+        expect(row?.expenseTotal).toEqual(70);
+      });
+
+      it("reads 0, not null, for a product with no expenses", async () => {
+        const product = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "No Expense Product",
+            upc: "710000000018",
+          }),
+          ctx.actor,
+        );
+
+        const found = await listWith({ nameFilter: "No Expense Product" });
+        const row = found.data.find((p) => p.id === product.id);
+        expect(row).toBeDefined();
+        expect(row?.expenseTotal).toEqual(0);
+      });
+
+      it("excludes a soft-deleted expense from the total", async () => {
+        const product = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Refunded Away Product",
+            upc: "710000000019",
+          }),
+          ctx.actor,
+        );
+        const live = await createExpense(
+          ctx.db,
+          {
+            ...makeExpenseInput(),
+            name: "Live",
+            cost: 50,
+            productId: product.id,
+          },
+          ctx.actor,
+        );
+        const deleted = await createExpense(
+          ctx.db,
+          {
+            ...makeExpenseInput(),
+            name: "Deleted",
+            cost: 999,
+            productId: product.id,
+          },
+          ctx.actor,
+        );
+        await deleteExpenses(ctx.db, [deleted.id], ctx.actor);
+
+        const found = await listWith({ nameFilter: "Refunded Away Product" });
+        const row = found.data.find((p) => p.id === product.id);
+        expect(row).toBeDefined();
+        expect(row?.expenseTotal).toEqual(live.cost);
+      });
+    });
   });
 
   describe("findProductByNameFuzzyManufacturer", () => {

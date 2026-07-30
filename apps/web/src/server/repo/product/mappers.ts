@@ -228,6 +228,9 @@ export const dbProductToListAPI = (
     // count() returns bigint (string over the wire), so coerce — mirrors the
     // ingredient list's appearsInRecipes/recipeCount handling.
     expenseCount: Number(productData.expenseCount),
+    // Net basis: SUM(expense.cost), 0 for a product with no expenses (never
+    // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
+    expenseTotal: Number(productData.expenseTotal),
   };
 
   return parseWithContext(productListItemOut, result, {

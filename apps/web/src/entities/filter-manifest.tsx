@@ -417,6 +417,14 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter by upc...",
     },
     {
+      // Model number is a tool's real identity when the name is generic
+      // ("Impact Driver" vs "M18 FUEL 2853-20").
+      columnId: "model",
+      field: "modelFilter",
+      kind: "text",
+      placeholder: "Filter by model...",
+    },
+    {
       columnId: "category",
       field: "categoryFilter",
       kind: "multiselect",
@@ -444,6 +452,16 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "presence",
       placeholder: "Filter expenses...",
       options: presenceFilterOptions("expenses"),
+    },
+    {
+      // Combined with `inventoryPresenceFilter: "has"` this is the
+      // valuation-gap worklist: products physically on a shelf that nobody
+      // has priced yet.
+      columnId: "price",
+      field: "pricePresenceFilter",
+      kind: "presence",
+      placeholder: "Filter price...",
+      options: presenceFilterOptions("price"),
     },
     {
       // "USDA key", not "USDA food" — the predicate is `fdc_id IS NOT NULL OR

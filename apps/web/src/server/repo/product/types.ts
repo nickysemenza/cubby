@@ -56,4 +56,9 @@ export type ProductListDB = ProductSelect & {
   // Scalar extras from `relations.product.list.extras` — count() returns
   // bigint, which comes back as a string over the wire, hence the union.
   expenseCount: number | string;
+  // `::double precision` cast in the extras SQL comes back as a plain
+  // number (unlike the bigint count() above), but the mapper still coerces
+  // with Number() defensively — same as `purchaseExpenseTotal` in
+  // repo/purchase.ts.
+  expenseTotal: number;
 };
