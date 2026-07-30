@@ -308,10 +308,20 @@ list, and then routinely forgotten. It still needs:
    any product in inventory whose only expense is inside an aggregate has **no cost basis at all**.
    This is `split_expense` now (below) — not a row-naming convention.
 
-Real case: `scaffolding` $434.47 was correctly identified as covering a 2-line MetalTech order and
-then dropped. Months later both MetalTech products still sat in inventory with zero purchases, and
-**11 of 14** aggregate rows had neither a vendor nor an `orderId`. Treat the aggregate bucket as a
-worklist, not a dead end.
+Real case, now **closed** — read it for the shape of the failure, not as an open item. A
+`scaffolding` $434.47 row was correctly identified as covering a 2-line MetalTech order and then
+dropped; months later both MetalTech products still sat in inventory with no cost basis at all. The
+2026-07 pass finished it: that row is gone, replaced by `MetalTech Baker scaffold` $282.41 and
+`MetalTech 6ft guardrail system` $152.06 (summing to $434.47), each carrying its own `productId`,
+both on one charge for Amazon order `113-3195277-6006629`. Don't go hunting for the $434.47 row.
+
+Treat the aggregate bucket as a worklist, not a dead end. There is no query for "is this row an
+aggregate" — that's a judgement about whether a name covers more than one thing — so measure the
+proxies rather than trusting a remembered count. As of **2026-07-30** the ledger holds **1112**
+expenses, of which **193** have no charge attached (`vendorPresenceFilter: "none"`) and **557** no
+order id (`orderIdPresenceFilter: "none"`). Re-run those two filters instead of quoting these
+numbers back: they are a snapshot, and the point of having the filters is that a fresh one costs a
+single call.
 
 ## Phase 4 — writing
 
