@@ -2,8 +2,15 @@ import type { ProductFilters } from "@cubby/schemas/product";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { location } from "~/server/db/schema";
-import { getDb } from "./database-helpers";
+import {
+  image,
+  location,
+  productExternalId,
+  productImage,
+  productUnitMappings,
+} from "~/server/db/schema";
+import { PRODUCT_EDGE_ROLES } from "~/server/repo/product/edge-roles";
+import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
@@ -986,5 +993,182 @@ describe("product repository", () => {
         code: "NOT_FOUND",
       });
     });
+  });
+
+  /**
+   * Regression backstop for the completeness guarantee `PRODUCT_EDGE_ROLES`
+   * (repo/product/edge-roles.ts) buys: every edge classified "acquisition"
+   * must actually block `deleteProducts`, and every edge classified
+   * "metadata" must NOT block it — and must itself be cascade-soft-deleted
+   * once the product it's attached to is gone. A wrong classification, a
+   * wrong column, or a silently-dropped predicate in either
+   * `PRODUCT_ACQUISITION_DEPENDENTS` (product/crud.ts) or
+   * `PRODUCT_ACQUISITION_NOT_EXISTS` (problems/detectors-product.ts) fails a
+   * test here instead of shipping — declaring an edge's role only forces each
+   * consumer to have *an entry* for it, not that the entry is correct.
+   *
+   * Scoped to `product` alone — NOT written as a fully generic "loop every
+   * entity's edge-role plan" test. See the TODO at the end of this block for
+   * what a future entity needs before that generalization is worth building.
+   */
+  describe("PRODUCT_EDGE_ROLES backstop", () => {
+    it("has exactly the five edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
+      expect(Object.keys(PRODUCT_EDGE_ROLES).sort()).toEqual(
+        [
+          "Expense.productId",
+          "InventoryEntry.productId",
+          "ProductExternalId.productId",
+          "ProductImage.productId",
+          "ProductUnitMappings.productId",
+        ].sort(),
+      );
+    });
+
+    it("blocks delete while inventory is live, and allows it once the entry is gone", async () => {
+      const testLocation = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Backstop Location" }),
+        ctx.actor,
+      );
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Backstop Inventory Product" }),
+        ctx.actor,
+      );
+      const entry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: prod.id,
+          locationId: testLocation.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [prod.id], ctx.actor),
+      ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_INVENTORY" } });
+
+      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+
+      await expect(
+        deleteProducts(ctx.db, [prod.id], ctx.actor),
+      ).resolves.toBeUndefined();
+    });
+
+    it("blocks delete while an expense is live, and allows it once the expense is gone", async () => {
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Backstop Expense Product" }),
+        ctx.actor,
+      );
+      const exp = await createExpense(
+        ctx.db,
+        { ...makeExpenseInput(), name: "backstop expense", productId: prod.id },
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [prod.id], ctx.actor),
+      ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_EXPENSES" } });
+
+      await deleteExpenses(ctx.db, [exp.id], ctx.actor);
+
+      await expect(
+        deleteProducts(ctx.db, [prod.id], ctx.actor),
+      ).resolves.toBeUndefined();
+    });
+
+    it("allows delete — and cascade-soft-deletes — when only metadata edges (external id, unit mapping, image) are live", async () => {
+      const pendingImage = await insertAndReturn(ctx.db, image, {
+        key: "test-products/backstop-metadata.png",
+        url: "https://example.com/backstop-metadata.png",
+        filename: "backstop-metadata.png",
+        contentType: "image/png",
+        size: 10,
+        status: "PENDING",
+      });
+
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Backstop Metadata Product",
+          externalIds: [{ source: "amazon", externalId: "B000BACKSTOP" }],
+          unitMappings: [
+            {
+              a: { value: 1, unit: "cup" },
+              b: { value: 120, unit: "g" },
+              source: null,
+            },
+          ],
+          pendingImageIds: [pendingImage.id],
+        }),
+        ctx.actor,
+      );
+
+      // Sanity: every metadata edge is actually live before the delete —
+      // otherwise a broken `createProduct` call would make the assertions
+      // below vacuously pass.
+      const extIdBefore = await getDb(ctx.db).query.productExternalId.findFirst(
+        {
+          where: eq(productExternalId.productId, prod.id),
+        },
+      );
+      const mappingBefore = await getDb(
+        ctx.db,
+      ).query.productUnitMappings.findFirst({
+        where: eq(productUnitMappings.productId, prod.id),
+      });
+      const imageJoinBefore = await getDb(ctx.db).query.productImage.findFirst({
+        where: eq(productImage.productId, prod.id),
+      });
+      expect(extIdBefore).toBeDefined();
+      expect(mappingBefore).toBeDefined();
+      expect(imageJoinBefore).toBeDefined();
+
+      await expect(
+        deleteProducts(ctx.db, [prod.id], ctx.actor),
+      ).resolves.toBeUndefined();
+
+      // Cascade: the metadata rows are soft-deleted along with the product,
+      // not left live and pointing at a gone parent.
+      const extIdAfter = await getDb(ctx.db).query.productExternalId.findFirst({
+        where: eq(productExternalId.id, extIdBefore!.id),
+      });
+      const mappingAfter = await getDb(
+        ctx.db,
+      ).query.productUnitMappings.findFirst({
+        where: eq(productUnitMappings.id, mappingBefore!.id),
+      });
+      const imageJoinAfter = await getDb(ctx.db).query.productImage.findFirst({
+        where: eq(productImage.id, imageJoinBefore!.id),
+      });
+      expect(extIdAfter?.deletedAt).not.toBeNull();
+      expect(mappingAfter?.deletedAt).not.toBeNull();
+      expect(imageJoinAfter?.deletedAt).not.toBeNull();
+    });
+
+    // TODO(generic cascade backstop): this describe block is deliberately
+    // product-only, not the fully generic "loop every entity's edge-role
+    // plan, create a parent + one child per cascade edge, delete the parent,
+    // assert no live children" test sketched in the ethereal-drifting-wilkes
+    // plan (PR 5). Generalizing needs two things a future entity's plan must
+    // supply that `product`'s doesn't uniformly share with `image`'s yet:
+    //   1. A single edge-role/disposition map with a UNIFORM value shape
+    //      across entities. `product`'s axis is acquisition-vs-metadata
+    //      (blocks delete vs. doesn't); `image`'s IMAGE_HARD_DELETE
+    //      (repo/image.ts) is deleteRow-vs-clearFk (how a child is detached).
+    //      Those aren't the same boolean yet, so a generic runner can't ask
+    //      "is this edge cascaded away on delete?" of both without an
+    //      entity-specific branch — which defeats the point of a generic test.
+    //   2. A per-edge fixture factory (create one live dependent row of that
+    //      edge's shape, given a parent id). This block's own
+    //      createInventoryEntry / createExpense /
+    //      createProduct({unitMappings,externalIds,pendingImageIds}) calls
+    //      ARE exactly that, but hand-written per entity, not a lookup table
+    //      a generic runner could dispatch through.
+    // Extend this block by hand for each entity that gets its own edge-role
+    // map (`recipe` is next per the plan) and revisit genericizing once
+    // there are three real examples to generalize from, not two.
   });
 });

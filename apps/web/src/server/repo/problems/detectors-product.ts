@@ -27,11 +27,12 @@ import {
   isNull,
   ne,
   notExists,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
   image,
@@ -44,6 +45,10 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  PRODUCT_EDGE_ROLES,
+  type ProductAcquisitionEdgeKey,
+} from "~/server/repo/product/edge-roles";
 
 // ProductWithBetterUpcData is re-exported from the package barrel for the
 // Problems-page components that import it from there.
@@ -105,6 +110,52 @@ export const findDuplicateUniqueProducts = async (
     }));
 };
 
+/**
+ * Correlated `notExists` builder per acquisition edge, keyed off
+ * `ProductAcquisitionEdgeKey` (derived from `PRODUCT_EDGE_ROLES`, see
+ * `~/server/repo/product/edge-roles`). `Record` over that type requires an
+ * entry for every acquisition edge, so adding one to `PRODUCT_EDGE_ROLES` is
+ * a compile error here until it's wired up — mirroring
+ * `PRODUCT_ACQUISITION_DEPENDENTS` in `product/crud.ts`'s `deleteProducts`,
+ * which reads the same map to build a different shape (`inArray` fetch +
+ * `assertNoDependents`) over the same two edges. That's the guarantee this
+ * file replaces a prose "must agree on both" comment with: the *set* of
+ * edges can't drift between the two consumers, even though their SQL does.
+ *
+ * Each builder stays a literal `.from(<table>)` (not a generic `column.table`
+ * walk) on purpose — `scripts/check-soft-delete-filters.mjs` matches incoming
+ * edges by literal table identifier, so a fully-generic loop here would be
+ * invisible to that guard.
+ */
+const PRODUCT_ACQUISITION_NOT_EXISTS: Record<
+  ProductAcquisitionEdgeKey,
+  (dbClient: DrizzleClient) => SQL
+> = {
+  "InventoryEntry.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(inventoryEntry)
+        .where(
+          and(
+            eq(inventoryEntry.productId, product.id),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    ),
+  // Unlike the `productIdsWithExpenses` subquery in product/crud.ts, this
+  // needs no `isNotNull(expense.productId)`: that one is an uncorrelated
+  // NOT IN list, where a single NULL makes the whole predicate UNKNOWN. A
+  // correlated `eq` simply never matches NULL.
+  "Expense.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(expense)
+        .where(and(eq(expense.productId, product.id), notDeleted(expense))),
+    ),
+};
+
 // Find products nothing points at — no live inventory, no live expense, no
 // ingredient link. This drives a one-click Delete on the Problems page, so a
 // false positive here is an executable data loss, not just a noisy list.
@@ -125,9 +176,10 @@ export const findDuplicateUniqueProducts = async (
 //     catch (2) — a missing subquery is invisible to it.
 //
 // Inventory and expenses are the two *acquisition* edges, so they're the ones
-// that disqualify. The metadata edges (productExternalId, productUnitMappings,
-// productImage) deliberately don't: an ASIN or a hand-entered conversion says
-// nothing about whether the thing was ever owned.
+// that disqualify (see `PRODUCT_EDGE_ROLES`). The metadata edges
+// (productExternalId, productUnitMappings, productImage) deliberately don't:
+// an ASIN or a hand-entered conversion says nothing about whether the thing
+// was ever owned.
 export const findOrphanedProducts = async (
   db: Database,
 ): Promise<OrphanedProduct[]> => {
@@ -145,27 +197,13 @@ export const findOrphanedProducts = async (
       and(
         notDeleted(product),
         isNull(product.ingredientId),
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(inventoryEntry)
-            .where(
-              and(
-                eq(inventoryEntry.productId, product.id),
-                notDeleted(inventoryEntry),
-              ),
+        ...Object.entries(PRODUCT_EDGE_ROLES)
+          .filter(([, role]) => role.kind === "acquisition")
+          .map(([key]) =>
+            PRODUCT_ACQUISITION_NOT_EXISTS[key as ProductAcquisitionEdgeKey](
+              dbClient,
             ),
-        ),
-        // Unlike the `productIdsWithExpenses` subquery in product/crud.ts, this
-        // needs no `isNotNull(expense.productId)`: that one is an uncorrelated
-        // NOT IN list, where a single NULL makes the whole predicate UNKNOWN. A
-        // correlated `eq` simply never matches NULL.
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(expense)
-            .where(and(eq(expense.productId, product.id), notDeleted(expense))),
-        ),
+          ),
       ),
     );
 

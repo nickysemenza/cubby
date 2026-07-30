@@ -40,7 +40,7 @@ import {
   sum,
 } from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   image,
@@ -82,7 +82,10 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
-
+import {
+  PRODUCT_EDGE_ROLES,
+  type ProductAcquisitionEdgeKey,
+} from "./edge-roles";
 import {
   dbProductToAPI,
   dbProductToListAPI,
@@ -926,9 +929,42 @@ export const quickCreateProduct = async (
 };
 
 /**
+ * Per-acquisition-edge dependent fetch for {@link deleteProducts}, keyed off
+ * `ProductAcquisitionEdgeKey` (derived from {@link PRODUCT_EDGE_ROLES}, see
+ * `./edge-roles`). `Record` over that type requires an entry for every
+ * acquisition edge, so adding one to `PRODUCT_EDGE_ROLES` is a compile error
+ * here until it's wired up — the same completeness guarantee
+ * `IMAGE_HARD_DELETE` gives `deleteImages` in `repo/image.ts`, extended to a
+ * shape (a `.query.<table>.findMany` call) a flat disposition string can't
+ * express, since each acquisition edge lives on a different table.
+ */
+const PRODUCT_ACQUISITION_DEPENDENTS: Record<
+  ProductAcquisitionEdgeKey,
+  (
+    tx: DrizzleTransaction,
+    ids: ProductId[],
+  ) => Promise<Array<{ productId: ProductId | null }>>
+> = {
+  "InventoryEntry.productId": (tx, ids) =>
+    tx.query.inventoryEntry.findMany({
+      where: and(
+        inArray(inventoryEntry.productId, ids),
+        notDeleted(inventoryEntry),
+      ),
+      columns: { productId: true },
+    }),
+  "Expense.productId": (tx, ids) =>
+    tx.query.expense.findMany({
+      where: and(inArray(expense.productId, ids), notDeleted(expense)),
+      columns: { productId: true },
+    }),
+};
+
+/**
  * Soft delete products by setting deletedAt timestamp.
  * Also soft deletes related unit mappings and images.
- * Throws if any product has inventory entries.
+ * Throws if any product has live acquisition evidence (inventory or
+ * expenses — see `PRODUCT_EDGE_ROLES` in `./edge-roles`).
  */
 export const deleteProducts = async (
   db: Database,
@@ -942,50 +978,38 @@ export const deleteProducts = async (
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, product, ids, "Product");
 
-    // Safety check: don't delete if any product has inventory entries
-    const withInventory = await tx.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.productId, ids),
-        notDeleted(inventoryEntry),
-      ),
-      columns: { productId: true },
-    });
-    await assertNoDependents({
-      offendingParentIds: withInventory.map((e) => e.productId),
-      fetchNames: (failedIds) =>
-        tx.query.product.findMany({
-          where: inArray(product.id, failedIds),
-          columns: { name: true },
-        }),
-      reason: "PRODUCT_HAS_INVENTORY",
-      message: (count, names) =>
-        `Cannot delete ${count} product(s): ${names} have inventory entries. Remove inventory items first.`,
-    });
-
-    // Safety check: don't delete if any product is referenced by an expense.
-    //
-    // This used to be permitted deliberately — the dangling link degraded to a
-    // null display name via resolveLiveJoinName. That was reversed: the ledger's
-    // net cost and owned/sold window are derived from these rows, and a
-    // nameless product silently degrades that derivation with no restore path.
-    // Inventory and expenses are Product's two acquisition edges, so
-    // findOrphanedProducts and this guard must agree on both — checking only
-    // inventory here is what made that detector's false positives executable.
-    const withExpenses = await tx.query.expense.findMany({
-      where: and(inArray(expense.productId, ids), notDeleted(expense)),
-      columns: { productId: true },
-    });
-    await assertNoDependents({
-      offendingParentIds: withExpenses.map((p) => p.productId),
-      fetchNames: (failedIds) =>
-        tx.query.product.findMany({
-          where: inArray(product.id, failedIds),
-          columns: { name: true },
-        }),
-      reason: "PRODUCT_HAS_EXPENSES",
-      message: (count, names) =>
-        `Cannot delete ${count} product(s): ${names} have expenses. Unlink the expenses first.`,
-    });
+    // Safety check: don't delete a product with live acquisition evidence.
+    // This used to be two hand-written checks (inventory, then expenses) kept
+    // in sync with `findOrphanedProducts` (repo/problems/detectors-product.ts)
+    // only by a prose comment — "Inventory and expenses are Product's two
+    // acquisition edges, so findOrphanedProducts and this guard must agree on
+    // both" — which is exactly the kind of agreement a reviewer can miss
+    // (checking only inventory here once made that detector's false
+    // positives executable). Both now read `PRODUCT_EDGE_ROLES`, so which
+    // edges block a delete can't drift between the two call sites: adding an
+    // acquisition edge there is a compile error in both until each is wired
+    // up. Permitting an expense-linked delete used to be deliberate too — the
+    // dangling link degraded to a null display name via
+    // resolveLiveJoinName — but that was reversed: the ledger's net cost and
+    // owned/sold window are derived from these rows, and a nameless product
+    // silently corrupts that derivation with no restore path.
+    for (const [key, role] of Object.entries(PRODUCT_EDGE_ROLES)) {
+      if (role.kind !== "acquisition") continue;
+      const fetchDependents =
+        PRODUCT_ACQUISITION_DEPENDENTS[key as ProductAcquisitionEdgeKey];
+      const dependents = await fetchDependents(tx, ids);
+      await assertNoDependents({
+        offendingParentIds: dependents.map((d) => d.productId),
+        fetchNames: (failedIds) =>
+          tx.query.product.findMany({
+            where: inArray(product.id, failedIds),
+            columns: { name: true },
+          }),
+        reason: role.reason,
+        message: (count, names) =>
+          `Cannot delete ${count} product(s): ${names} have ${role.label}. Remove them first.`,
+      });
+    }
 
     const now = new Date();
 
