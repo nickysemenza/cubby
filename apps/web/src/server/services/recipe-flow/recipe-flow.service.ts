@@ -1,10 +1,14 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
+  type RecipeFlowAiPlan,
   type RecipeFlowArtifact,
   type RecipeFlowGenerateInput,
+  type RecipeFlowPlan,
   type RecipeFlowState,
+  type RecipeFlowWarning,
   recipeFlowArtifactSchema,
+  safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
 import {
   RECIPE_FLOW_FALLBACK_FEATURE,
@@ -52,6 +56,42 @@ interface RecipeFlowPromptInput {
       text: string;
     }>;
   }>;
+}
+
+type RecipeFlowCandidateAssessment =
+  | {
+      ok: true;
+      plan: RecipeFlowPlan;
+      warnings: RecipeFlowWarning[];
+    }
+  | {
+      ok: false;
+      issues: string[];
+    };
+
+function assessRecipeFlowCandidate(
+  recipe: RecipeOut,
+  candidate: RecipeFlowAiPlan,
+): RecipeFlowCandidateAssessment {
+  const normalized = safeNormalizeRecipeFlowAiPlan(candidate);
+  if (!normalized.success) {
+    return {
+      ok: false,
+      issues: normalized.error.issues.map((issue) => {
+        const path = issue.path.join(".");
+        return path ? `${path}: ${issue.message}` : issue.message;
+      }),
+    };
+  }
+
+  const validation = validateRecipeFlowPlan(recipe, normalized.data);
+  return validation.ok
+    ? {
+        ok: true,
+        plan: normalized.data,
+        warnings: validation.warnings,
+      }
+    : validation;
 }
 
 function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
@@ -244,7 +284,7 @@ export async function generateRecipeFlow(
   }
 
   const client = getAnthropicClient();
-  const primaryPlan = await client.generateRecipeFlow(
+  const primaryCandidate = await client.generateRecipeFlow(
     JSON.stringify(promptInput, null, 2),
     guidance,
     undefined,
@@ -257,21 +297,21 @@ export async function generateRecipeFlow(
       entity: { entityType: "recipe", entityId: input.id },
     },
   );
-  const primaryValidation = validateRecipeFlowPlan(recipe, primaryPlan);
-  if (primaryValidation.ok) {
+  const primaryAssessment = assessRecipeFlowCandidate(recipe, primaryCandidate);
+  if (primaryAssessment.ok) {
     return await persistFlowArtifact(db, input.id, {
       feature: RECIPE_FLOW_PRIMARY_FEATURE,
       fingerprint,
       guidance,
-      plan: primaryPlan,
-      warnings: primaryValidation.warnings,
+      plan: primaryAssessment.plan,
+      warnings: primaryAssessment.warnings,
     });
   }
 
-  const fallbackPlan = await client.generateRecipeFlow(
+  const fallbackCandidate = await client.generateRecipeFlow(
     JSON.stringify(promptInput, null, 2),
     guidance,
-    { candidate: primaryPlan, issues: primaryValidation.issues },
+    { candidate: primaryCandidate, issues: primaryAssessment.issues },
     {
       db,
       feature: RECIPE_FLOW_FALLBACK_FEATURE.feature,
@@ -281,17 +321,20 @@ export async function generateRecipeFlow(
       entity: { entityType: "recipe", entityId: input.id },
     },
   );
-  const fallbackValidation = validateRecipeFlowPlan(recipe, fallbackPlan);
-  if (!fallbackValidation.ok) {
+  const fallbackAssessment = assessRecipeFlowCandidate(
+    recipe,
+    fallbackCandidate,
+  );
+  if (!fallbackAssessment.ok) {
     throw new Error(
-      `Recipe flow remained invalid after repair: ${fallbackValidation.issues.join("; ")}`,
+      `Recipe flow remained invalid after repair: ${fallbackAssessment.issues.join("; ")}`,
     );
   }
   return await persistFlowArtifact(db, input.id, {
     feature: RECIPE_FLOW_FALLBACK_FEATURE,
     fingerprint,
     guidance,
-    plan: fallbackPlan,
-    warnings: fallbackValidation.warnings,
+    plan: fallbackAssessment.plan,
+    warnings: fallbackAssessment.warnings,
   });
 }
