@@ -21,12 +21,14 @@ describe("project resource URLs", () => {
     ).toBe(accountPrefixed);
   });
 
-  it("accepts notion.so/notion.site pages and their subdomains", () => {
+  it("accepts and preserves supported Notion page URLs", () => {
     const urls = [
       "https://notion.so/Project-0123456789abcdef",
       "https://www.notion.so/workspace/Project-0123456789abcdef?pvs=4",
       "https://cubby.notion.site/Project-0123456789abcdef#section",
       "https://docs.team.notion.site/Project-0123456789abcdef",
+      "https://app.notion.com/p/nickysemenza/d4ffaba2e4b240ebb4aa8b7d80a7aabb",
+      "https://app.notion.com/p/nickysemenza/Backyard-Project-Main-Page-d4ffaba2e4b240ebb4aa8b7d80a7aabb?source=copy_link",
     ];
 
     for (const notionPageUrl of urls) {
@@ -48,6 +50,8 @@ describe("project resource URLs", () => {
       "http://notion.so/Project-0123456789abcdef",
       "https://notion.so/",
       "https://notion.so.evil.example/Project-0123456789abcdef",
+      "https://notion.com/Project-0123456789abcdef",
+      "https://evil.notion.com/Project-0123456789abcdef",
       "https://drive.google.com/drive/folders/abc123",
     ];
 

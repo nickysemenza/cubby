@@ -79,13 +79,14 @@ const notionPageUrl = z
           url.hostname === "notion.so" ||
           url.hostname.endsWith(".notion.so") ||
           url.hostname === "notion.site" ||
-          url.hostname.endsWith(".notion.site");
+          url.hostname.endsWith(".notion.site") ||
+          url.hostname === "app.notion.com";
         return notionHost && url.pathname.split("/").some(Boolean);
       }),
     "Enter a valid Notion page URL",
   )
   .describe(
-    "Complete HTTPS notion.so/notion.site page URL (including subdomains); empty input clears the field",
+    "Complete HTTPS notion.so/notion.site page URL (including subdomains) or app.notion.com page URL; empty input clears the field",
   );
 
 // ---------------------------------------------------------------------------
