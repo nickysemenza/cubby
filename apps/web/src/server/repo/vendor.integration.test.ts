@@ -1,4 +1,5 @@
 import type { PurchaseId, VendorId } from "@cubby/schemas/identifiers";
+import { unsafeVendorId } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
@@ -154,6 +155,92 @@ describe("vendor repository — roster CRUD and list filters", () => {
 
     const plumbing = await vendorList(ctx.db, { search: "plumb" }, [], page);
     expect(plumbing.data.map((v) => v.name)).toEqual(["Flow Form Plumbing"]);
+  });
+
+  it("refuses to update a vendor that does not exist or has been deleted", async () => {
+    const gone = await createVendor(
+      ctx.db,
+      vendorCreateInput.parse({ name: "Shuttered Supply" }),
+      ctx.actor,
+    );
+    await deleteVendors(ctx.db, [gone.id], ctx.actor);
+
+    // A tombstoned row still satisfies the id, so the update has to check
+    // `deletedAt` itself — otherwise a rename would silently resurrect it into
+    // every name-based lookup.
+    await expect(
+      updateVendor(
+        ctx.db,
+        { id: gone.id, data: { name: "Reopened" } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "VENDOR_NOT_FOUND" },
+    });
+
+    await expect(
+      updateVendor(
+        ctx.db,
+        {
+          id: unsafeVendorId("00000000-0000-0000-0000-000000000000"),
+          data: { name: "Never Existed" },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "VENDOR_NOT_FOUND" },
+    });
+  });
+
+  /**
+   * `resolveVendorSort` — neither rollup is a column on `Vendor`, so the generic
+   * column path can't order by them; a regression falls back to the default
+   * order instead of erroring.
+   */
+  it("sorts by the purchaseCount and spend rollups in both directions", async () => {
+    const quiet = await findOrCreateVendor(ctx.db, "One Charge Vendor");
+    const busy = await findOrCreateVendor(ctx.db, "Two Charge Vendor");
+
+    const quietCharge = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: quiet, orderId: "Q-1" }),
+      ctx.actor,
+    );
+    for (const orderId of ["B-1", "B-2"]) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({ vendorId: busy, orderId }),
+        ctx.actor,
+      );
+    }
+    // Spend ranks the OPPOSITE way to charge count — one big charge vs. two
+    // empty ones — so neither sort key can be read for the other.
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "the only spend",
+          cost: 500,
+          purchaseId: quietCharge.id,
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const idsBy = async (
+      orderBy: "purchaseCount" | "spend",
+      direction: "asc" | "desc",
+    ) =>
+      (await vendorList(ctx.db, {}, [{ orderBy, direction }], page)).data.map(
+        (v) => v.id,
+      );
+
+    expect(await idsBy("purchaseCount", "desc")).toEqual([busy, quiet]);
+    expect(await idsBy("purchaseCount", "asc")).toEqual([quiet, busy]);
+    expect(await idsBy("spend", "desc")).toEqual([quiet, busy]);
+    expect(await idsBy("spend", "asc")).toEqual([busy, quiet]);
   });
 });
 

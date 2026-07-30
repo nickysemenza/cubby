@@ -1,4 +1,5 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
+import { unsafePurchaseId } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
 import {
@@ -59,7 +60,7 @@ import {
   updatePurchase,
 } from "./purchase";
 import { makeExpenseInput, makeProductInput } from "./repo.fixtures";
-import { findOrCreateVendor, getVendorByID } from "./vendor";
+import { deleteVendors, findOrCreateVendor, getVendorByID } from "./vendor";
 
 /**
  * `Purchase` is ONE vendor transaction. All money lives on `Expense`; a charge
@@ -378,6 +379,48 @@ describe("purchase repository — linkExpensesToPurchase", () => {
 
     expect((await getExpenseByID(ctx.db, line.id)).purchaseId).toBe(target.id);
     expect(await getPurchaseExpenses(ctx.db, originalCharge!)).toHaveLength(0);
+  });
+
+  it("refuses an unknown charge, and no-ops on a selection with no live lines", async () => {
+    const line = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "link guard line", cost: 9 }),
+      ),
+      ctx.actor,
+    );
+
+    // An FK would accept any existing row; this is the tombstone/nonexistent check.
+    await expect(
+      linkExpensesToPurchase(
+        ctx.db,
+        {
+          purchaseId: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+          expenseIds: [line.id],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
+
+    const vendorId = await findOrCreateVendor(ctx.db, "Link Guard Vendor");
+    const target = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "LG-1" }),
+      ctx.actor,
+    );
+    await deleteExpenses(ctx.db, [line.id], ctx.actor);
+
+    // Every named line is soft-deleted, so the write is skipped entirely rather
+    // than running an unbounded update — and the charge is returned untouched.
+    const unchanged = await linkExpensesToPurchase(
+      ctx.db,
+      { purchaseId: target.id, expenseIds: [line.id] },
+      ctx.actor,
+    );
+    expect(unchanged.expenseCount).toBe(0);
   });
 });
 
@@ -786,6 +829,135 @@ describe("purchase repository — mergePurchases", () => {
     expect((await getPurchaseByID(ctx.db, keeper.id)).orderId).toBe("ORD-1");
     expect((await getPurchaseByID(ctx.db, loser.id)).orderId).toBe("ORD-2");
   });
+
+  it("a self-merge (or an empty merge set) returns the keeper untouched", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Self Merge Charge");
+    const keeper = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "SELF-1" }),
+      ctx.actor,
+    );
+
+    // `losers` is `mergeIds` minus `keepId`, so both of these come back before
+    // the transaction opens — the keeper must NOT be folded into itself.
+    for (const mergeIds of [[keeper.id], []]) {
+      const result = await mergePurchases(
+        ctx.db,
+        { keepId: keeper.id, mergeIds },
+        ctx.actor,
+      );
+      expect(result.id).toBe(keeper.id);
+      expect(result.orderId).toBe("SELF-1");
+    }
+  });
+});
+
+/**
+ * `updatePurchase` is the one writer that can move BOTH halves of the
+ * partial-unique `(vendorId, orderId)` key, so it is the one that can collide
+ * with an existing charge. It pre-checks with a SELECT rather than letting 23505
+ * surface as an untyped 500 — a failed statement would also poison the
+ * transaction.
+ */
+describe("purchase repository — updatePurchase collision + liveness guards", () => {
+  const ctx = withTestDb();
+
+  it("raises PURCHASE_MERGE_ORDER_COLLISION when the target (vendor, orderId) slot is taken", async () => {
+    const toolNirvana = await findOrCreateVendor(ctx.db, "Tool Nirvana");
+    const homeDepot = await findOrCreateVendor(ctx.db, "Home Depot");
+    // Order ids are only unique PER VENDOR, so "#11325" legitimately exists at
+    // both retailers — which is exactly how a vendor move can collide.
+    const held = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "#11325" }),
+      ctx.actor,
+    );
+    const moving = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: toolNirvana, orderId: "#11325" }),
+      ctx.actor,
+    );
+
+    await expect(
+      updatePurchase(
+        ctx.db,
+        { id: moving.id, data: { vendorId: homeDepot } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+    });
+    // Refused, not partially applied.
+    expect((await getPurchaseByID(ctx.db, moving.id)).vendorId).toBe(
+      toolNirvana,
+    );
+
+    // Same collision reached by moving the OTHER half of the key: retyping this
+    // charge's order id onto one its own vendor already holds.
+    const sibling = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "WN-1" }),
+      ctx.actor,
+    );
+    await expect(
+      updatePurchase(
+        ctx.db,
+        { id: sibling.id, data: { orderId: "#11325" } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+    });
+    expect((await getPurchaseByID(ctx.db, held.id)).orderId).toBe("#11325");
+
+    // The check is scoped to LIVE charges and to the key actually changing: a
+    // move to a vendor that doesn't hold this order id still goes through.
+    const moved = await updatePurchase(
+      ctx.db,
+      { id: moving.id, data: { orderId: "TN-99" } },
+      ctx.actor,
+    );
+    expect(moved.orderId).toBe("TN-99");
+  });
+
+  it("refuses a soft-deleted vendorId and an unknown charge id", async () => {
+    const live = await findOrCreateVendor(ctx.db, "Still Trading");
+    const gone = await findOrCreateVendor(ctx.db, "Out Of Business");
+    const charge = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: live, orderId: "LIV-1" }),
+      ctx.actor,
+    );
+    // Deleting a vendor with zero charges is allowed, which is exactly how a
+    // tombstoned id stays reachable to a direct API caller.
+    await deleteVendors(ctx.db, [gone], ctx.actor);
+
+    await expect(
+      updatePurchase(
+        ctx.db,
+        { id: charge.id, data: { vendorId: gone } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "VENDOR_NOT_FOUND" },
+    });
+    expect((await getPurchaseByID(ctx.db, charge.id)).vendorId).toBe(live);
+
+    await expect(
+      updatePurchase(
+        ctx.db,
+        {
+          id: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+          data: { notes: "no such charge" },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
+  });
 });
 
 describe("purchase repository — deletion cascades", () => {
@@ -913,6 +1085,75 @@ describe("purchase repository — deletion cascades", () => {
  * The load-bearing guard: attaching charges to expenses must be invisible to
  * every spend number in the app, and `statedTotal` must never reach one.
  */
+/**
+ * `resolvePurchaseSort` — the three sort keys that are NOT columns on
+ * `Purchase`: the joined vendor name and the two correlated rollups. The generic
+ * column path can't produce them, so a regression here silently falls back to
+ * the default order rather than erroring.
+ */
+describe("purchase repository — sorting over the joined name and rollups", () => {
+  const ctx = withTestDb();
+
+  const seed = async () => {
+    const aaa = await findOrCreateVendor(ctx.db, "AAA Supply");
+    const zzz = await findOrCreateVendor(ctx.db, "ZZZ Supply");
+    const small = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: aaa, orderId: "SORT-SMALL" }),
+      ctx.actor,
+    );
+    const big = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: zzz, orderId: "SORT-BIG" }),
+      ctx.actor,
+    );
+    // One line at $5 vs. two lines totalling $300 — so count and total rank the
+    // two charges the same way, and either could be read for the other.
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "small line", cost: 5, purchaseId: small.id }),
+      ),
+      ctx.actor,
+    );
+    for (const cost of [100, 200]) {
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: `big line ${cost}`,
+            cost,
+            purchaseId: big.id,
+          }),
+        ),
+        ctx.actor,
+      );
+    }
+    return { small: small.id, big: big.id };
+  };
+
+  const idsSortedBy = async (
+    orderBy: "vendor" | "expenseCount" | "expenseTotal",
+    direction: "asc" | "desc",
+  ) =>
+    (await purchaseList(ctx.db, {}, [{ orderBy, direction }], page)).data.map(
+      (row) => row.id,
+    );
+
+  it("sorts by vendor name, expense count, and expense total in both directions", async () => {
+    const { small, big } = await seed();
+
+    expect(await idsSortedBy("vendor", "asc")).toEqual([small, big]);
+    expect(await idsSortedBy("vendor", "desc")).toEqual([big, small]);
+
+    expect(await idsSortedBy("expenseCount", "desc")).toEqual([big, small]);
+    expect(await idsSortedBy("expenseCount", "asc")).toEqual([small, big]);
+
+    expect(await idsSortedBy("expenseTotal", "desc")).toEqual([big, small]);
+    expect(await idsSortedBy("expenseTotal", "asc")).toEqual([small, big]);
+  });
+});
+
 describe("purchase repository — rollups never see a charge", () => {
   const ctx = withTestDb();
 

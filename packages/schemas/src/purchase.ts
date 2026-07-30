@@ -175,12 +175,26 @@ export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
 /** Dollars of slack tolerated before `statedTotal` reads as a mismatch. */
 export const RECONCILIATION_TOLERANCE = 0.01;
 
+/**
+ * Compared in **cents**, not in floats.
+ *
+ * `Math.abs(100 - 99.99)` is `0.010000000000005116`, so a plain
+ * `<= RECONCILIATION_TOLERANCE` made a nominal one-cent gap read `mismatch` at
+ * `statedTotal: 100` and `match` at other magnitudes — the verdict depended on
+ * where binary floating point happened to land, which is not something a
+ * human-facing cue should do. Both operands are dollar amounts from
+ * `double precision` columns, and the unit that matters is the cent, so rounding
+ * to cents before comparing makes the boundary mean what it says.
+ */
 export const reconcilePurchase = (p: {
   statedTotal: number | null;
   expenseTotal: number;
 }): PurchaseReconciliation => {
   if (p.statedTotal === null) return "unknown";
-  return Math.abs(p.statedTotal - p.expenseTotal) <= RECONCILIATION_TOLERANCE
+  const gapInCents = Math.abs(
+    Math.round(p.statedTotal * 100) - Math.round(p.expenseTotal * 100),
+  );
+  return gapInCents <= Math.round(RECONCILIATION_TOLERANCE * 100)
     ? "match"
     : "mismatch";
 };

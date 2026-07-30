@@ -1,6 +1,15 @@
-import type { PurchaseId, VendorId } from "@cubby/schemas/identifiers";
-import { unsafeExpenseId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import type {
+  ExpenseId,
+  PurchaseId,
+  VendorId,
+} from "@cubby/schemas/identifiers";
 import {
+  unsafeExpenseId,
+  unsafeProjectId,
+  unsafePurchaseId,
+} from "@cubby/schemas/identifiers";
+import {
+  type ExpenseCreateInput,
   type ExpenseOut,
   expenseCreateInput,
   projectCreateInput,
@@ -21,14 +30,18 @@ import {
   expenseList,
   getExpenseByID,
   moveExpenses,
+  setExpensesCostType,
+  setExpensesTrade,
   updateExpense,
 } from "~/server/repo/expense";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
 import {
+  deletePurchases,
   getPurchaseByID,
   getPurchaseExpenses,
   purchaseList,
+  updatePurchase,
 } from "~/server/repo/purchase";
 import {
   makeExpenseInput,
@@ -966,6 +979,117 @@ describe("expense repository — moveExpenses", () => {
       ctx.actor,
     );
     expect(moved).toEqual([]);
+  });
+});
+
+/**
+ * The two bulk enum writers behind the ledger's selection toolbar
+ * (`expense-bulk-actions.tsx` → `bulkSetTrade` / `bulkSetCostType`). Same shape
+ * as `moveExpenses` minus the FK assert — a plain audited column write over
+ * `ids` — so what's worth pinning is the part that isn't the column write: the
+ * audit entry fires only for rows whose value actually CHANGED, and a
+ * soft-deleted id is skipped rather than resurrected.
+ */
+describe("expense repository — bulk trade / cost-type writes", () => {
+  const ctx = withTestDb();
+
+  const line = (name: string, overrides: Partial<ExpenseCreateInput> = {}) =>
+    createExpense(
+      ctx.db,
+      expenseCreateInput.parse(makeExpenseInput({ name, ...overrides })),
+      ctx.actor,
+    );
+
+  /** `update` audit entries for one expense. */
+  const updateEntries = async (id: ExpenseId) =>
+    (
+      await getAuditLog(ctx.db, {
+        entityType: "expense",
+        entityId: id,
+        limit: 50,
+      })
+    ).entries.filter((e) => e.action === "update");
+
+  const changeOf = (
+    entry: { changes: unknown } | undefined,
+    field: "trade" | "costType",
+  ) =>
+    (entry?.changes as Record<string, { from: unknown; to: unknown }> | null)?.[
+      field
+    ];
+
+  it("setExpensesTrade writes the trade over the listed ids only, and audits just the rows that changed", async () => {
+    const a = await line("bulk trade a", { trade: "other" });
+    const b = await line("bulk trade b", { trade: "other" });
+    // Already carries the target value: it must be written (harmlessly) but NOT
+    // audited — `computeChanges` returns null, so the `if (changes)` arm skips it.
+    const already = await line("bulk trade already electrical", {
+      trade: "electrical",
+    });
+    const untouched = await line("bulk trade bystander", { trade: "plumbing" });
+
+    const updated = await setExpensesTrade(
+      ctx.db,
+      { ids: [a.id, b.id, already.id], trade: "electrical" },
+      ctx.actor,
+    );
+
+    expect(updated.map((row) => row.trade)).toEqual([
+      "electrical",
+      "electrical",
+      "electrical",
+    ]);
+    // Not in `ids` — a bulk write must never widen past its selection.
+    expect((await getExpenseByID(ctx.db, untouched.id)).trade).toBe("plumbing");
+
+    expect(changeOf((await updateEntries(a.id))[0], "trade")).toEqual({
+      from: "other",
+      to: "electrical",
+    });
+    expect(await updateEntries(already.id)).toHaveLength(0);
+  });
+
+  it("setExpensesTrade skips soft-deleted ids and returns [] when nothing live matches", async () => {
+    const live = await line("bulk trade live", { trade: "other" });
+    const deleted = await line("bulk trade deleted", { trade: "other" });
+    await deleteExpenses(ctx.db, [deleted.id], ctx.actor);
+
+    const updated = await setExpensesTrade(
+      ctx.db,
+      { ids: [live.id, deleted.id], trade: "flooring" },
+      ctx.actor,
+    );
+    expect(updated.map((row) => row.id)).toEqual([live.id]);
+
+    // `before.length === 0` returns before any write, so an all-dead selection is
+    // a silent no-op rather than an error.
+    expect(
+      await setExpensesTrade(
+        ctx.db,
+        { ids: [deleted.id], trade: "flooring" },
+        ctx.actor,
+      ),
+    ).toEqual([]);
+  });
+
+  it("setExpensesCostType writes the cost type and audits only the changed rows", async () => {
+    const a = await line("bulk costType a", { costType: "materials" });
+    const already = await line("bulk costType already tools", {
+      costType: "tools",
+    });
+
+    const updated = await setExpensesCostType(
+      ctx.db,
+      { ids: [a.id, already.id], costType: "tools" },
+      ctx.actor,
+    );
+    expect(updated.map((row) => row.costType)).toEqual(["tools", "tools"]);
+
+    expect(changeOf((await updateEntries(a.id))[0], "costType")).toEqual({
+      from: "materials",
+      to: "tools",
+    });
+    expect(await updateEntries(already.id)).toHaveLength(0);
   });
 });
 
@@ -2090,6 +2214,127 @@ describe("expense repository — charge resolution on update", () => {
     expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(
       chargesBefore,
     );
+  });
+
+  // The OTHER half of door 2. The sibling test above ("adopts an order id
+  // written on its own") drives `renameChargeOrderId` into its collision arm and
+  // falls through to the existing charge; this one drives the arm that actually
+  // renames, which is the COMMON path — correcting a typo'd order number on a
+  // charge whose only line is the row being edited.
+  it("corrects a typo'd order id IN PLACE on a single-line charge, keeping its statedTotal", async () => {
+    const typo = await createExpense(
+      ctx.db,
+      line("receipt with a typo", "Home Depot", "WN6344646"),
+      ctx.actor,
+    );
+    const chargeId = purchaseIdOf(typo);
+    const vendorId = vendorIdOf(typo);
+    // The two things a re-minted charge would strand. `statedTotal` is the
+    // reconciliation cue the whole Purchase table exists to hold.
+    await updatePurchase(
+      ctx.db,
+      { id: chargeId, data: { statedTotal: 10, notes: "invoice on file" } },
+      ctx.actor,
+    );
+
+    const fixed = await updateExpense(
+      ctx.db,
+      typo.id,
+      { orderId: "WN63446464" },
+      ctx.actor,
+    );
+
+    // SAME charge, renamed — not a fresh one with the old left behind.
+    expect(fixed.purchaseId).toBe(chargeId);
+    expect(fixed.orderId).toBe("WN63446464");
+    expect(await chargeCount(vendorId)).toBe(1);
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    expect(charge.statedTotal).toBe(10);
+    expect(charge.notes).toBe("invoice on file");
+
+    // Audited on the CHARGE: the rename returns `undefined` to `resolveCharge`,
+    // so `expenseCrud.update` sees no column change and emits nothing — without
+    // `renameChargeOrderId`'s own entry the edit would leave no trace anywhere.
+    const chargeAudit = await getAuditLog(ctx.db, {
+      entityType: "purchase",
+      entityId: chargeId,
+      limit: 20,
+    });
+    expect(
+      chargeAudit.entries.some(
+        (e) =>
+          e.action === "update" &&
+          (e.changes as { orderId?: { from: unknown; to: unknown } } | null)
+            ?.orderId?.to === "WN63446464",
+      ),
+    ).toBe(true);
+
+    // Clearing it is the same in-place rename with no collision check to make —
+    // `(vendorId, null)` isn't in the partial-unique index at all.
+    const cleared = await updateExpense(
+      ctx.db,
+      typo.id,
+      { orderId: null },
+      ctx.actor,
+    );
+    expect(cleared.purchaseId).toBe(chargeId);
+    expect(cleared.orderId).toBeNull();
+    expect(await chargeCount(vendorId)).toBe(1);
+  });
+
+  it("refuses an explicit purchaseId that points at a soft-deleted charge", async () => {
+    // An FK proves the charge row exists, not that it isn't tombstoned, and an
+    // explicit `purchaseId` skips `resolveCharge` entirely — so
+    // `assertPurchaseLive` is the only thing between a direct API call and spend
+    // filed against a dead charge.
+    const anchor = await createExpense(
+      ctx.db,
+      line("line on a doomed charge", "eBay", "eb-tombstone-1"),
+      ctx.actor,
+    );
+    const deadChargeId = purchaseIdOf(anchor);
+    await deletePurchases(ctx.db, [deadChargeId], ctx.actor);
+
+    await expect(
+      createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: "aimed at a dead charge",
+          cost: 5,
+          purchaseId: deadChargeId,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
+
+    // Same guard on the update short-circuit: `rest.purchaseId` never passes
+    // through `resolveCharge`, so it is checked separately or it goes in unchecked.
+    const stray = await createExpense(ctx.db, line("stray", null), ctx.actor);
+    await expect(
+      updateExpense(ctx.db, stray.id, { purchaseId: deadChargeId }, ctx.actor),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
+    expect((await getExpenseByID(ctx.db, stray.id)).purchaseId).toBeNull();
+
+    // A charge id that never existed is refused by the same assert.
+    await expect(
+      updateExpense(
+        ctx.db,
+        stray.id,
+        {
+          purchaseId: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
   });
 });
 

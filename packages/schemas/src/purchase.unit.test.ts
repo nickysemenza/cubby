@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { RECONCILIATION_TOLERANCE, reconcilePurchase } from "./purchase";
+
+/**
+ * The single verdict function behind the charge list column, the charge detail
+ * reconciliation strip, and the Problems detector — so all three agree by
+ * construction. Nothing here rejects a write or back-computes a cost: a mismatch
+ * is a SOFT flag, and is often correct (a partial refund reduces a line without
+ * changing what the paperwork claimed).
+ */
+describe("reconcilePurchase", () => {
+  it('is "unknown" when no statedTotal has been recorded', () => {
+    // Distinct from a $0 stated total, which IS a claim and gets compared.
+    expect(reconcilePurchase({ statedTotal: null, expenseTotal: 0 })).toBe(
+      "unknown",
+    );
+    expect(reconcilePurchase({ statedTotal: null, expenseTotal: 149.99 })).toBe(
+      "unknown",
+    );
+    expect(reconcilePurchase({ statedTotal: 0, expenseTotal: 0 })).toBe(
+      "match",
+    );
+  });
+
+  it("matches an exact agreement and flags a real disagreement", () => {
+    expect(reconcilePurchase({ statedTotal: 2516, expenseTotal: 2516 })).toBe(
+      "match",
+    );
+    expect(reconcilePurchase({ statedTotal: 2516, expenseTotal: 2400 })).toBe(
+      "mismatch",
+    );
+    // Direction-agnostic — the lines may overshoot the stated total too.
+    expect(reconcilePurchase({ statedTotal: 2400, expenseTotal: 2516 })).toBe(
+      "mismatch",
+    );
+  });
+
+  it("absorbs sub-penny float drift and flags anything past the tolerance", () => {
+    // Why the tolerance exists at all: summing float line costs rarely lands
+    // exactly on the vendor's stated total.
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 100 - RECONCILIATION_TOLERANCE / 2,
+      }),
+    ).toBe("match");
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 100 + RECONCILIATION_TOLERANCE / 2,
+      }),
+    ).toBe("match");
+
+    // The boundary IS inclusive, at every magnitude. This is only assertable
+    // because `reconcilePurchase` compares in cents — the raw float difference
+    // `Math.abs(100 - (100 - 0.01))` is 0.010000000000005116 and would fail a
+    // plain `<= 0.01`, which used to make the verdict depend on magnitude. Both
+    // cases below are a nominal one-cent gap and both must match.
+    expect(Math.abs(100 - (100 - RECONCILIATION_TOLERANCE))).toBeGreaterThan(
+      RECONCILIATION_TOLERANCE,
+    );
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 100 - RECONCILIATION_TOLERANCE,
+      }),
+    ).toBe("match");
+    expect(
+      reconcilePurchase({ statedTotal: 431.24, expenseTotal: 431.23 }),
+    ).toBe("match");
+
+    // Anything a human would call a discrepancy is flagged.
+    expect(reconcilePurchase({ statedTotal: 100, expenseTotal: 99.97 })).toBe(
+      "mismatch",
+    );
+  });
+});

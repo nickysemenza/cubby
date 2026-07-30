@@ -359,12 +359,51 @@ its own table rather than a receipt hanging off the ledger row, so `Vendor` is a
 roster and `Purchase` holds the order id, charge date, `statedTotal`, notes, and its
 documents (`PurchaseImage`, `attach_file` with `entityType: "purchase"`). The emailed
 PDF invoice finally has a home, and reconciling one charge against N rows is a
-single-row comparison (`statedTotal` vs `SUM(expense.cost)`, soft-flagged by
-`purchase.notReconciling`) instead of a reconstructed `GROUP BY (vendor, orderId)`.
+single-row comparison (`statedTotal` vs `SUM(expense.cost)`, surfaced as the
+`chargesNotReconciling` Problems detector) instead of a reconstructed
+`GROUP BY (vendor, orderId)`.
 Also landed: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`, and the
 deletion of two now-unrepresentable Problems detectors
 (`findOrdersWithPartialVendor`, `findVendorSpellingVariants`). No `splitPurchase` and
 no `Payment` axis — see `packages/schemas/src/purchase.ts` for why.
+
+Follow-ups the split itself generated (small, none blocking):
+
+- [ ] **Key vendor logo assets by `vendor.id`, not the name slug.** Renaming a vendor
+  changes `vendorSlug(name)` and silently orphans its uploaded R2 logo — it demotes to
+  a monogram with no error anywhere. `vendor.id` is immutable and now exists. Cost:
+  every `VendorMark` call site must carry an id (some render from a bare name string),
+  plus a one-time R2 re-key or re-seed. TODO marker is in `src/lib/vendor-logo.ts`.
+- [ ] **`purchaseId` on `expenseFilterFields`.** Its absence is why MCP has a bespoke
+  `get_purchase_expenses` tool: `{vendorId, orderId}` is the only way to reach a
+  charge's lines, and that fails for the ~40% of charges with no order id. Adding the
+  filter lets that tool be deleted and gives the ledger a "lines of this charge" deep
+  link. Repo + filter-manifest work.
+- [ ] **`findDuplicateVendors` only catches spelling drift, not abbreviation drift.**
+  `B&H` vs `B&H Photo` normalize to different keys (`bh` / `bhphoto`) and are not
+  reported — that real pair was found by eye while filling in websites. Trigram
+  similarity on `Vendor.name` would catch it; exact-key normalization can't.
+  **Trigger**: a second abbreviation pair showing up.
+- [ ] **Reject near-white vendor logos in the seeder.** `seed-vendor-logos` hashes
+  against the two favicon services' generic-globe placeholders, but has no CONTRAST
+  check — so a white-on-transparent favicon passes and then renders as blank against
+  the warm-paper background once `grayscale(1)` is applied at rest. Measured 2026-07-30
+  across all 70 uploaded assets (mean luminance of the 32px transformed variant,
+  alpha flattened onto white): **10 are above 0.85** — `veradek` 0.988,
+  `the-growers-exchange` 0.965, `walmart` 0.923, `visual-comfort` 0.910,
+  `jacquemus` 0.894, `ebay` 0.890, `supplyhouse` 0.879, `ace-hardware` 0.870,
+  `sherwin-williams` 0.864, `rubio-monocoat` 0.859. Pre-existing (`ebay` and
+  `sherwin-williams` were in the original 52). Fix: a mean-luminance ceiling beside
+  the placeholder-hash guard, so these fall through to the monogram tile — which is
+  strictly more readable than an invisible mark. Repro is a `curl` of the
+  `/cdn-cgi/image/width=32,…` URL piped to `magick -alpha remove -background white
+  -format '%[fx:mean]'`; note plain `urllib` is UA-blocked by Cloudflare.
+
+- [ ] **Rename `ProductManuals`.** It serves a charge's PDF invoices now, not just
+  product manuals; its prop type was already widened to `ViewableDocument`. Cosmetic.
+- [ ] **`Vendor.kind` was removed** after shipping — nothing branched on it and it was
+  null on 111 of 114 rows. Contractor metadata (license number, COI expiry) would
+  bring it back as additive columns plus a discriminator; don't re-add it decoratively.
 
 Deferred phases — each purely additive on top of v1, with its promotion trigger:
 
