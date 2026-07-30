@@ -49,6 +49,7 @@ import {
   slimExpense,
   slimProject,
   slimTask,
+  strictFilterInput,
   WRITE_CLOSED,
 } from "./_shared";
 
@@ -346,7 +347,14 @@ export function registerProjectTools(server: McpServer) {
     name: "get_expense_analytics",
     description:
       'Spend aggregates over the expense ledger, under the SAME filters as list_expenses (costType/trade/projectId/includeSubProjects/future/search/notesSearch/urlSearch/dateFrom/dateTo/costMin/costMax/costPresenceFilter/projectPresenceFilter/vendorId/orderId), so ledger and analytics totals always agree. Returns summary (actual/committed/credits/net + counts), byCostType, byTrade, the trade x costType matrix, monthly totals, a cumulative net curve, byProject, and byVendor. Answers "what did we spend on X / where did the money go" without paging the ledger. Note: credits are real (refunds, family contributions) — net = actual + committed − credits, and cost bounds are signed, so costMax: 0 is the credits-only window. byProject and byVendor are INNER joins and deliberately do NOT sum to summary.net: byProject drops expenses with no project, byVendor drops the ~193 with no charge attached (no vendor recorded). Read each gap as the size of that unattributed tail, not as a bug.',
-    inputSchema: expenseFilterFields,
+    // Strict: this tool takes `expenseFilterFields` directly rather than going
+    // through registerEntityListTool, so it needs its own guard against a
+    // silently-ignored filter key. No reserved keys — there's no pagination here.
+    inputSchema: strictFilterInput(
+      "get_expense_analytics",
+      expenseFilterFields,
+      expenseFilterFields,
+    ),
     outputSchema: expenseAnalyticsOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.expense.analytics(params),

@@ -666,6 +666,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
   project: [
     {
       columnId: "name",
+      // `columnId` is what the client-side filter matches (the Name column);
+      // `field` is what would reach the server if this table ever moves to
+      // `useEntityList`. They differ here — `projectFilterFields` calls it
+      // `search`, not `name` — so without this the filter would silently do
+      // nothing on that day, which is exactly the wrong-but-plausible failure
+      // the manifest-vs-schema test now pins.
+      field: "search",
       kind: "text",
       placeholder: "Filter by project name...",
     },

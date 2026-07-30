@@ -1,6 +1,21 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity";
+import { imageFilterFields } from "@cubby/schemas/image";
+import { ingredientFilterFields } from "@cubby/schemas/ingredient";
+import { inventoryFilterFields } from "@cubby/schemas/inventory";
+import { locationFilterFields } from "@cubby/schemas/location";
+import { productFilterFields } from "@cubby/schemas/product";
+import {
+  expenseFilterFields,
+  projectFilterFields,
+  taskFilterFields,
+} from "@cubby/schemas/project";
+import { purchaseFilterFields } from "@cubby/schemas/purchase";
+import { recipeFilterFields } from "@cubby/schemas/recipe";
+import { vendorFilterFields } from "@cubby/schemas/vendor";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import type { FilterSpec } from "./filter-manifest";
 import {
   entityFilterSearchFields,
   getEntityFilters,
@@ -619,5 +634,77 @@ describe("manifest search fields survive JSON-parsed values", () => {
     // URL form is indistinguishable from a JSON boolean.
     expect(parse({ future: true })).toMatchObject({ future: "true" });
     expect(parse({ future: false })).toMatchObject({ future: "false" });
+  });
+});
+
+/**
+ * Every field a manifest spec can emit must exist on that entity's
+ * `*FilterFields`.
+ *
+ * `buildFiltersFromManifest` returns a bare `Record<string, unknown>` that
+ * callers cast to the entity's filters type, and the server strips keys it
+ * doesn't know — so a spec naming a field that doesn't exist produces a filter
+ * that silently does nothing. That is the same wrong-but-plausible failure the
+ * MCP surface now rejects outright (`strictFilterInput`); the web side can't
+ * reject at runtime without breaking the page, so it's pinned here instead.
+ *
+ * A spec emits `field ?? columnId`, plus `nullable.field`, plus — for a `range`
+ * kind — whatever its `expand()` returns. Range options are static, so every
+ * emitted key is enumerable by calling `expand` for each declared option.
+ */
+describe("manifest fields exist on the server schema", () => {
+  const filterFieldsByEntity: Partial<Record<Entity, Record<string, unknown>>> =
+    {
+      expense: expenseFilterFields,
+      task: taskFilterFields,
+      project: projectFilterFields,
+      product: productFilterFields,
+      inventory: inventoryFilterFields,
+      purchase: purchaseFilterFields,
+      vendor: vendorFilterFields,
+      location: locationFilterFields,
+      ingredient: ingredientFilterFields,
+      recipe: recipeFilterFields,
+      image: imageFilterFields,
+    };
+
+  const emittedFields = (spec: FilterSpec): string[] => {
+    // A `range` spec emits ONLY what its expander returns — `buildFiltersFromManifest`'s
+    // range arm never touches `field`/`columnId`, which is why `expense.date`'s
+    // columnId is `date` while the fields it writes are `dateFrom`/`dateTo`.
+    if (spec.kind === "range") {
+      const expand = spec.expand;
+      if (!expand) return [];
+      return (spec.options ?? []).flatMap((option) =>
+        Object.keys(expand(option.value)),
+      );
+    }
+    const fields = [spec.field ?? spec.columnId];
+    if (spec.nullable) fields.push(spec.nullable.field);
+    return fields;
+  };
+
+  it("covers every entity that has manifest specs", () => {
+    // Guards the map above against a new entity silently skipping this check.
+    const withSpecs = entitySchema.options.filter(
+      (entity) => getEntityFilters(entity).length > 0,
+    );
+    expect(withSpecs.sort()).toEqual(
+      Object.keys(filterFieldsByEntity).sort() as Entity[],
+    );
+  });
+
+  it("emits no field the server does not declare", () => {
+    const violations: string[] = [];
+    for (const [entity, fields] of Object.entries(filterFieldsByEntity)) {
+      for (const spec of getEntityFilters(entity as Entity)) {
+        for (const field of emittedFields(spec)) {
+          if (!(field in fields)) {
+            violations.push(`${entity}.${spec.columnId} emits "${field}"`);
+          }
+        }
+      }
+    }
+    expect(violations).toEqual([]);
   });
 });
