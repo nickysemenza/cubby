@@ -56,8 +56,8 @@ export const searchColumns = [
   columnHelper.accessor("name", {
     header: "Name",
     enableSorting: true,
-    // Under the table's `fillWidth` this is the name's SHARE of the surplus,
-    // not its size — it's the widest column because the name is what you scan.
+    // A share of the table's width, not a fixed size (surplus is distributed
+    // proportionally) — the widest column, because the name is what you scan.
     meta: { className: "min-w-0 w-80" },
     cell: ({ row }) => (
       <Row align="center" gap="sm">

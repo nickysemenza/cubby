@@ -488,10 +488,11 @@
     background: var(--row-zebra);
   }
 
-  /* Width-slack spacer cell (trailing): absorbs table-fixed surplus width so
-     the width-specified columns don't balloon. It renders AFTER the actions
-     column — the content block ends with the actions column's own border-right
-     as the terminating ledger rule, and the leftover reads as page margin. */
+  /* Trailing gutter cell. It renders AFTER the actions column, so the content
+     block ends with the actions column's own border-right as the terminating
+     ledger rule. The header copy is pinned to `w-0` (see Table.tsx) — left
+     unsized it's the only auto cell under table-fixed and swallows the table's
+     entire surplus width, leaving dead space beside clipping columns. */
   .table-grid-lines th[data-spacer],
   .table-grid-lines td[data-spacer] {
     border-right: 0;

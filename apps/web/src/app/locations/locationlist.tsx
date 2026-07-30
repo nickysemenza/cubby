@@ -80,7 +80,7 @@ export function LocationList() {
         // auto-width name would split the leftover with the slack spacer —
         // but an auto column under table-fixed absorbs the squeeze in the
         // other direction too, collapsing toward 0 on a narrow window. The
-        // table's `fillWidth` gets the same no-dead-space result safely.
+        // zero-width trailing gutter gets the same no-dead-space result safely.
         mobile: { slot: "title", priority: 0 },
         filterConfig: { placeholder: "Filter by location name..." },
         editable: {
@@ -298,7 +298,6 @@ export function LocationList() {
     <>
       <RTable
         table={table}
-        fillWidth
         isLoading={isLoading}
         error={error}
         ariaLabel="Locations Table"

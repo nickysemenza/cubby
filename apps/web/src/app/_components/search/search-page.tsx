@@ -235,7 +235,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
             sizingKey="search"
             // Eight narrow columns left ~550px of dead space to the right of
             // the actions menu while names truncated after a few characters.
-            fillWidth
             onRowClick={onRowClick}
             onRowHover={onRowHover}
           />

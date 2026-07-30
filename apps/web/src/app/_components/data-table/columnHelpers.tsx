@@ -225,10 +225,9 @@ export function createNameColumn<T extends BaseRow>(
      * table layout IGNORES `min-width` on cells (only `width` counts), so a
      * `min-w-*` floor does nothing — an explicit width is the only lever.
      * `w-64` holds a readable 16rem on dense tables (many columns) instead of
-     * collapsing to a few characters. It does NOT absorb leftover space: the
-     * trailing slack spacer takes that, unless the table opts into `fillWidth`
-     * (see `RTable`) — there this width becomes the column's *share* of the
-     * table rather than its size.
+     * collapsing to a few characters. On a table with room to spare it also
+     * grows: leftover width is distributed across the sized columns in
+     * proportion to their widths, so this reads as a *share* as much as a size.
      */
     className?: string;
     /** Enable inline editing */

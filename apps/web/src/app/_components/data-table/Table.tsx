@@ -136,21 +136,6 @@ interface TTableProps<TItem> {
    * neither `entity` nor `sizingKey` simply isn't resizable.
    */
   sizingKey?: string;
-  /**
-   * Spend the table's leftover width on the columns instead of parking it in
-   * the trailing slack spacer. Under `table-fixed` that spacer is normally the
-   * only unsized cell, so it swallows every surplus pixel and the columns stay
-   * at exactly their declared `w-*` — which is why a sparse table can leave
-   * several hundred px of dead space next to columns that are clipping. With
-   * this on, the surplus is distributed across the sized columns in proportion
-   * to their widths, so each `w-*` reads as a *share*.
-   *
-   * Distribution is deliberately proportional rather than "one column absorbs
-   * it all". An auto-width column takes the whole squeeze in the other
-   * direction too: on the search table it measured 0px wide at a 900px
-   * viewport, where sized columns instead overflow the container and scroll.
-   */
-  fillWidth?: boolean;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -176,7 +161,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     embedded = false,
     showColumnMenu = false,
     sizingKey,
-    fillWidth = false,
   } = props;
 
   // Column widths are owned here rather than threaded through table meta, so
@@ -642,14 +626,24 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               Debug
                             </TableHead>
                           )}
-                          {/* Only the HEADER spacer needs the width — under
+                          {/* Trailing gutter, pinned to zero so the COLUMNS get
+                            the table's leftover width. Left unsized it's the
+                            only auto cell under `table-fixed`, so it swallows
+                            every surplus pixel and the columns sit at exactly
+                            their declared `w-*` — that's what left several
+                            hundred px of dead space beside columns that were
+                            clipping. At w-0 the surplus spreads across the
+                            sized columns in proportion to their widths, so each
+                            `w-*` reads as a share.
+
+                            Only the HEADER spacer needs this — under
                             table-fixed the first row sizes every column, so the
                             body spacer (DesktopDataRow) stays untouched and row
                             memoization is unaffected. */}
                           <TableHead
                             data-spacer
                             aria-hidden
-                            className={cn(styles.header, fillWidth && "w-0")}
+                            className={cn(styles.header, "w-0")}
                           />
                         </TableRow>
 

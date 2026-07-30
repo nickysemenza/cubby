@@ -207,7 +207,6 @@ export function PurchaseList() {
       </Grid>
       <RTable
         table={table}
-        fillWidth
         isLoading={isLoading}
         error={error}
         ariaLabel="Purchases Table"
