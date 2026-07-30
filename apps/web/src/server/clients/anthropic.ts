@@ -26,8 +26,7 @@ import {
   productCategoryValues,
 } from "@cubby/schemas/product";
 import {
-  normalizeRecipeFlowAiPlan,
-  type RecipeFlowPlan,
+  type RecipeFlowAiPlan,
   recipeFlowAiPlanSchema,
 } from "@cubby/schemas/recipe-flow";
 import { chat, type ImagePart } from "@tanstack/ai";
@@ -374,12 +373,12 @@ Do not list the storage crate/bin/drawer itself. Do not list vague clutter, pack
     guidance: string | null,
     repair:
       | {
-          candidate: RecipeFlowPlan;
+          candidate: RecipeFlowAiPlan;
           issues: string[];
         }
       | undefined,
     usage?: AnthropicUsageContext,
-  ): Promise<RecipeFlowPlan> {
+  ): Promise<RecipeFlowAiPlan> {
     const adapter = this.getStructuredAdapter(undefined, usage?.model);
     const guidanceText = guidance
       ? `\nPersistent user guidance:\n${guidance}`
@@ -393,7 +392,7 @@ Invalid candidate:
 ${JSON.stringify(repair.candidate)}`
       : "";
 
-    const candidate = await chat({
+    return await chat({
       adapter,
       middleware: aiGatewayUsageMiddleware(
         anthropicUsageWithDefaults(usage, {
@@ -431,7 +430,6 @@ ${recipeJson}${guidanceText}${repairText}`,
       ],
       outputSchema: recipeFlowAiPlanSchema,
     });
-    return normalizeRecipeFlowAiPlan(candidate);
   }
 
   async identifyProduct(

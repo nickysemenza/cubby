@@ -1,6 +1,7 @@
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import type {
+  RecipeFlowAiPlan,
   RecipeFlowArtifact,
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
@@ -79,6 +80,20 @@ const validPlan = (): RecipeFlowPlan => ({
   outputOperationIds: ["toast"],
 });
 
+const validCandidate = (): RecipeFlowAiPlan => ({
+  ...validPlan(),
+  sources: [
+    {
+      id: "bread",
+      kind: "usage",
+      usageId: USAGE_ID,
+      role: null,
+      label: null,
+      instructionRefs: [],
+    },
+  ],
+});
+
 const artifact = (
   fingerprint: string,
   guidance: string | null = null,
@@ -128,7 +143,7 @@ describe("recipe-flow service", () => {
   });
 
   it("persists a valid primary-model graph", async () => {
-    mocks.generate.mockResolvedValue(validPlan());
+    mocks.generate.mockResolvedValue(validCandidate());
 
     const result = await generateRecipeFlow(db, {
       id: RECIPE_ID,
@@ -141,12 +156,12 @@ describe("recipe-flow service", () => {
   });
 
   it("repairs a contextually invalid graph with the fallback model", async () => {
-    const invalid = validPlan();
+    const invalid = validCandidate();
     invalid.sources = [];
     invalid.operations[0]!.inputs = [{ kind: "source", id: "missing-bread" }];
     mocks.generate
       .mockResolvedValueOnce(invalid)
-      .mockResolvedValueOnce(validPlan());
+      .mockResolvedValueOnce(validCandidate());
 
     const result = await generateRecipeFlow(db, {
       id: RECIPE_ID,
@@ -163,6 +178,28 @@ describe("recipe-flow service", () => {
     });
   });
 
+  it("repairs a provider candidate that fails canonical schema validation", async () => {
+    const invalid = validCandidate();
+    invalid.operations[0]!.inputs = [];
+    mocks.generate
+      .mockResolvedValueOnce(invalid)
+      .mockResolvedValueOnce(validCandidate());
+
+    const result = await generateRecipeFlow(db, {
+      id: RECIPE_ID,
+      force: true,
+    });
+
+    expect(result.model).toBe("claude-sonnet-4-6");
+    expect(mocks.generate).toHaveBeenCalledTimes(2);
+    expect(mocks.generate.mock.calls[1]?.[2]).toMatchObject({
+      candidate: invalid,
+      issues: expect.arrayContaining([
+        expect.stringContaining("operations.0.inputs"),
+      ]),
+    });
+  });
+
   it("reuses persistent guidance after the recipe becomes stale", async () => {
     const stale = artifact("a".repeat(64), "keep the crust branch separate");
     mocks.listAnalyses.mockResolvedValue([
@@ -174,7 +211,7 @@ describe("recipe-flow service", () => {
         updatedAt: stale.generatedAt,
       },
     ]);
-    mocks.generate.mockResolvedValue(validPlan());
+    mocks.generate.mockResolvedValue(validCandidate());
 
     await generateRecipeFlow(db, { id: RECIPE_ID, force: false });
 

@@ -130,10 +130,8 @@ export const recipeFlowAiPlanSchema = z.object({
 });
 export type RecipeFlowAiPlan = z.infer<typeof recipeFlowAiPlanSchema>;
 
-export function normalizeRecipeFlowAiPlan(
-  candidate: RecipeFlowAiPlan,
-): RecipeFlowPlan {
-  return recipeFlowPlanSchema.parse({
+function canonicalRecipeFlowAiPlan(candidate: RecipeFlowAiPlan) {
+  return {
     ...candidate,
     sources: candidate.sources.map((source) =>
       source.kind === "usage"
@@ -150,7 +148,17 @@ export function normalizeRecipeFlowAiPlan(
             instructionRefs: source.instructionRefs,
           },
     ),
-  });
+  };
+}
+
+export function normalizeRecipeFlowAiPlan(
+  candidate: RecipeFlowAiPlan,
+): RecipeFlowPlan {
+  return recipeFlowPlanSchema.parse(canonicalRecipeFlowAiPlan(candidate));
+}
+
+export function safeNormalizeRecipeFlowAiPlan(candidate: RecipeFlowAiPlan) {
+  return recipeFlowPlanSchema.safeParse(canonicalRecipeFlowAiPlan(candidate));
 }
 
 export const recipeFlowWarningCode = z.enum([
