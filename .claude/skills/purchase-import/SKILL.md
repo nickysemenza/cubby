@@ -25,14 +25,19 @@ Vendor ──< Purchase ──< Expense
   `orderId`, `date`, optional `statedTotal`, notes, and its documents. It holds **no** money.
 - **`Vendor`** is a real roster (`name` unique, `website`, `notes`), not a text column.
 
-**`create_purchase` does not exist any more.** Neither do `get_purchase`, `list_purchases`,
-`update_purchase`, `delete_purchases`, `bulk_move_purchases`, `bulk_set_purchase_trade`,
-`bulk_set_purchase_cost_type`, or `get_purchase_analytics`. The stale instinct here writes the wrong
-entity, so the rename is the guardrail: a call to an old name **hard-errors as an unknown tool** — it
-does not silently create a charge where you meant a line. If you see that error, you reached for the
-old model; re-read this block.
+**`create_purchase` / `get_purchase` / `list_purchases` / `update_purchase` still exist — but they
+mean the CHARGE now, not the ledger line.** The names were reused when `Purchase` was re-pointed. So
+the failure mode here is *not* an unknown-tool error: it is writing the wrong entity. What actually
+stops you is the schema. `purchaseCreateInput` requires `vendorId` (a uuid) and has no
+`name`/`cost`/`trade`/`costType`, so a stale caller passing the old ledger shape gets a **zod
+validation error on `vendorId`**. Read that error as "you reached for the old model" and re-read this
+block.
 
-| Old tool | New tool |
+These four are genuinely gone and *do* hard-error as unknown tools: `delete_purchases`,
+`bulk_move_purchases`, `bulk_set_purchase_trade`, `bulk_set_purchase_cost_type`, and
+`get_purchase_analytics`.
+
+| Old tool | New tool (for a LEDGER LINE) |
 | --- | --- |
 | `create_purchase` | `create_expense` |
 | `get_purchase` | `get_expense` |
@@ -70,9 +75,23 @@ Four consequences that bite:
   operation in v1**. `Amazon` / `amazon` / `Amazon.com` become three roster rows. Spell a vendor the
   way the ledger already spells it — check the roster before inventing a spelling.
 
-`Vendor` and `Purchase` have **no MCP tools** (`mcp: []`). Read them with SQL; write them through the
-web UI or ask the operator. `attach_file` is the one exception — it takes
-`entityType: "purchase"`.
+**`Vendor` and `Purchase` have a full MCP toolset.** You do not need SQL or the web UI to read the
+roster, open a charge, or set a `statedTotal`:
+
+| | Vendor | Purchase (charge) |
+| --- | --- | --- |
+| read | `list_vendors`, `get_vendor` | `list_purchases`, `get_purchase` |
+| write | `create_vendor`, `update_vendor` | `create_purchase`, `update_purchase` |
+
+- `list_vendors` is where a `vendorId` comes from — `list_expenses`, `list_purchases` and
+  `create_purchase` all filter/write by vendor **id**, and a uuid is the only form they accept. It
+  also returns `purchaseCount` and `spend` per vendor.
+- `list_purchases` filters on `vendorId`, `orderId`, `search` (substring on order id),
+  `dateFrom`/`dateTo`, `orderIdPresenceFilter` and `statedTotalPresenceFilter` — the last is the
+  not-yet-reconciled worklist.
+- **Delete is deliberately withheld for both.** Deleting a vendor refuses while live charges point at
+  it; deleting a charge nulls `purchaseId` on real money. Those stay UI-only.
+- `attach_file` files the invoice — it takes `entityType: "purchase"`.
 
 ## Ground rules
 
@@ -118,9 +137,12 @@ web UI or ask the operator. `attach_file` is the one exception — it takes
 | ui.com-style confirmation | *no prices at all* — invoice is a separate download | needs the status page |
 | **Marketplace/listing exports** | **asking prices and a "Sold" flag** | **weakest — see Phase 4** |
 
-`~/Documents/personal/backups/random data dumps/` holds both the Amazon takeout and
-`eBay-OrdersReport-*.csv`. Check for a seller report before doing any Gmail sweep for disposals: it
-is one grep versus twenty subagent minutes, and it carries real numbers.
+`~/Documents/personal/backups/random data dumps/purchases/` holds the exports — note the
+`purchases/` subdirectory, one level below where this file used to point. Currently:
+`amazon-orders-july-27-2026/`, `eBay-OrdersReport-*.csv`, the Home Depot
+`Purchase_History_*.csv`, and `Facebook marketplace order history.pdf`. Check for a seller report
+before doing any Gmail sweep for disposals: it is one grep versus twenty subagent minutes, and it
+carries real numbers.
 
 ## Phase 2 — match, strongest key first
 
@@ -264,28 +286,25 @@ worklist, not a dead end.
   - `statedTotal` is what the paperwork *claims*, in dollars. It is **never summed into spend** —
     spend is always `SUM(expense.cost)` — and a mismatch is frequently correct (a partial refund
     reduces a line without changing what the charge stated). Nothing rejects a write over it and
-    nothing back-computes a cost from it. There is no MCP tool for it in v1: set it in the web UI, or
-    hand the operator the list.
+    nothing back-computes a cost from it. **`update_purchase` is how you set it** (`create_purchase`
+    can carry it too) — no web-UI detour, and no reason to leave it blank on a charge you imported.
   - The PDF invoice / receipt photo now has a home: `attach_file` with
     `entityType: "purchase"`, `entityId: <purchaseId from the expense row>`, `contentType:
     "application/pdf"`. One `Image` can be filed against several charges (a statement covering both).
-- Per-charge queries are one row each now — no reconstructing groups from `(vendor, orderId)` strings:
-  ```sql
-  -- charges whose lines don't add up to what the charge said it was
-  SELECT v.name, p."orderId", p.date, p."statedTotal",
-         count(e.id) AS lines, coalesce(sum(e.cost), 0) AS lines_total
-  FROM "Purchase" p
-  JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
-  LEFT JOIN "Expense" e ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
-  WHERE p."deletedAt" IS NULL AND p."statedTotal" IS NOT NULL
-  GROUP BY v.name, p.id, p."orderId", p.date, p."statedTotal"
-  HAVING abs(p."statedTotal" - coalesce(sum(e.cost), 0)) > 0.01;
-
-  -- every multi-line charge (aggregates, split siblings, buy/return pairs):
-  -- same query, HAVING count(e.id) > 1 and no statedTotal predicate.
-  ```
-  The same worklist exists server-side as `purchase.notReconciling` (a soft flag — a read, never a
-  write path).
+- Per-charge queries are one row each now — no reconstructing groups from `(vendor, orderId)` strings,
+  and **no SQL**:
+  - **Charges whose lines don't add up to what the charge said it was** is
+    `list_problems` with `type: "chargesNotReconciling"`. It returns vendor name, `orderId`, date,
+    `statedTotal`, `expenseTotal` and `expenseCount` per offending charge, ordered by the size of the
+    discrepancy (largest first — a $400 gap before a $2 one). This is the server-side detector
+    `findChargesNotReconciling`; it applies the shared `RECONCILIATION_TOLERANCE` rather than a
+    hand-typed `0.01`, so it can't drift from what the rest of the app calls a match. A **soft** flag:
+    a worklist, not an error list.
+  - **Every multi-line charge** (aggregates, split siblings, buy/return pairs) comes off
+    `list_purchases`, which returns `expenseCount` and `expenseTotal` on every row.
+    `statedTotalPresenceFilter: "none"` is the charges-with-nothing-to-reconcile-against worklist.
+  - **The lines of one charge** are `list_expenses` filtered by that charge's `purchaseId` — the exact
+    scope, needing no `vendorId`/`orderId` cross-reference.
 - Canonical product link: `https://www.amazon.com/dp/<ASIN>`.
 - Vendor identifiers for a *product* go in **`ProductExternalId`** (`source`/`externalId`/`url`) —
   never a new column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces
@@ -391,9 +410,10 @@ export's lines by order *and check their dates* — a return line booked weeks l
 
 Two checks, in order:
 
-1. **Charge vs. its lines** — `statedTotal` against `SUM(expense.cost)`, per the SQL in Phase 4. This
-   is now a single-row comparison for every charge that has a stated total, which is the reason to
-   record one while you're importing. It is a **soft** flag: a worklist, not an error list.
+1. **Charge vs. its lines** — `statedTotal` against `SUM(expense.cost)`. Do not hand-write this:
+   it is `list_problems` with `type: "chargesNotReconciling"` (see Phase 4). A single-row comparison
+   for every charge that has a stated total, which is the reason to record one while you're
+   importing. It is a **soft** flag: a worklist, not an error list.
 2. **Charge vs. the export** — for each charge with an `orderId`, compare its lines against that
    order's total and its individual lines in the export. In the 2026-07 pass this flagged
    **3 mismatches out of 162** — and caught a row recorded at $49.51 that was really $123.51, whose
