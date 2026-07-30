@@ -1,6 +1,11 @@
 /**
  * Image repository — the single data-access boundary for the `image` entity and
- * its product / location / recipe association join tables.
+ * its product / location / recipe / project / purchase association join
+ * tables. The full set of incoming edges is declared once, in
+ * `~/server/db/entity-incoming-edges.ts` (`INCOMING_EDGES.image`), and
+ * cross-checked against schema.ts by entity-manifest-fk.unit.test.ts — that's
+ * what stops a new join table from silently repeating the gap that broke
+ * `PurchaseImage` (see `deleteImages` and `findCullablePendingImages` below).
  *
  * Public API (consumed by routers + services; keep these signatures stable):
  * - {@link imageList}                         — paginated/sorted/filtered list with entity associations
@@ -33,8 +38,9 @@ import { imageSortableFields } from "@cubby/schemas/image";
 import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
+import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
-  cookbook,
   image,
   location,
   locationImage,
@@ -121,6 +127,13 @@ type ImageWithRelations = typeof image.$inferSelect & {
   projectImages: Array<{
     projectId: string;
     project: { name: string; deletedAt: Date | null };
+  }>;
+  purchaseImages: Array<{
+    purchaseId: string;
+    // Purchase has no `name` column (see purchase-label.ts) — orderId is the
+    // closest thing to a display label, and null on the ~40% of charges the
+    // vendor never issued one for.
+    purchase: { orderId: string | null; deletedAt: Date | null };
   }>;
 };
 
@@ -216,6 +229,30 @@ const imageWithRelationsToAPI = (
     };
   }
 
+  // Check purchase associations (a charge's documents — join table filtered,
+  // but still check entity). No `notDeleted(purchase)` guard is needed beyond
+  // that: `deletePurchases` refuses while live expenses reference the charge,
+  // unlike the four entities above whose deletion always leaves images behind.
+  const purchaseAssoc = imageData.purchaseImages.find((assoc) =>
+    isNotDeleted(assoc.purchase),
+  );
+  if (purchaseAssoc) {
+    return {
+      id: imageData.id,
+      url: imageData.url,
+      key: imageData.key,
+      filename: imageData.filename,
+      size: imageData.size,
+      contentType: imageData.contentType,
+      status: imageData.status,
+      createdAt: imageData.createdAt,
+      updatedAt: imageData.updatedAt,
+      entityType: "PURCHASE",
+      entityId: purchaseAssoc.purchaseId,
+      entityName: purchaseAssoc.purchase.orderId,
+    };
+  }
+
   // No entity association found
   return {
     id: imageData.id,
@@ -270,6 +307,15 @@ const imageEntityRelations = {
       },
     },
     columns: { projectId: true },
+  },
+  purchaseImages: {
+    where: notDeleted(purchaseImage),
+    with: {
+      purchase: {
+        columns: { orderId: true, deletedAt: true },
+      },
+    },
+    columns: { purchaseId: true },
   },
 } as const;
 
@@ -426,64 +472,36 @@ const findCullablePendingImages = async (
   const cutoffDate = new Date();
   cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
-  // Find all images that have associations
-  const imagesWithProductAssociations = dbClient
-    .select({ imageId: productImage.imageId })
-    .from(productImage);
-
-  const imagesWithLocationAssociations = dbClient
-    .select({ imageId: locationImage.imageId })
-    .from(locationImage);
-
-  const imagesWithRecipeAssociations = dbClient
-    .select({ imageId: recipeImage.imageId })
-    .from(recipeImage);
-
-  const imagesWithProjectAssociations = dbClient
-    .select({ imageId: projectImage.imageId })
-    .from(projectImage);
-
-  // A cookbook cover is a DIRECT FK, not a join row, so enumerating only the
-  // four join tables misses it — and this feeds a HARD delete wired to the
-  // one-click auto-fix. `deleteImages` below already handles this edge
-  // explicitly; that asymmetry was the omission, not a decision. Currently
-  // unreachable (upsertCookbook flips a cover to UPLOADED in the same txn that
-  // writes coverImageId, and this only looks at PENDING), but nothing enforces
-  // that pairing and the failure mode is a raw FK violation aborting the whole
-  // cull *after* the caller has dropped the R2 objects.
+  // Every incoming edge on `image` (INCOMING_EDGES.image), checked uniformly
+  // in one loop. `isNotNull` is harmlessly always-true on the five join
+  // tables' NOT NULL `imageId` column and does the real work on the one direct
+  // FK (`Cookbook.coverImageId`) — a cookbook cover is a DIRECT FK, not a join
+  // row, so enumerating only join tables would miss it, and this feeds a HARD
+  // delete wired to the one-click auto-fix. `deleteImages` below handles the
+  // same edge set (via `IMAGE_HARD_DELETE`, keyed off this same map), so a new
+  // edge added to one but not the other — the asymmetry that broke
+  // `PurchaseImage` originally — is no longer possible: both read from
+  // `INCOMING_EDGES.image`.
   //
-  // Deliberately NOT filtered by `notDeleted(cookbook)`: deleteCookbook
+  // Deliberately NOT filtered by `notDeleted(...)`: e.g. deleteCookbook
   // tombstones the row without nulling coverImageId, so a soft-deleted cookbook
   // still holds a live FK. The constraint doesn't care about deletedAt, and this
   // cull is a hard delete — filtering here would cull exactly the images that
-  // then blow up on Cookbook_coverImageId_fkey.
-  const imagesUsedAsCookbookCovers = dbClient
-    .select({ imageId: cookbook.coverImageId })
-    .from(cookbook)
-    .where(isNotNull(cookbook.coverImageId));
-
-  // Get all image IDs that have any association
-  const [
-    productAssocs,
-    locationAssocs,
-    recipeAssocs,
-    projectAssocs,
-    cookbookCovers,
-  ] = await Promise.all([
-    imagesWithProductAssociations,
-    imagesWithLocationAssociations,
-    imagesWithRecipeAssociations,
-    imagesWithProjectAssociations,
-    imagesUsedAsCookbookCovers,
-  ]);
-
-  const associatedImageIds = new Set([
-    ...productAssocs.map((a) => a.imageId),
-    ...locationAssocs.map((a) => a.imageId),
-    ...recipeAssocs.map((a) => a.imageId),
-    ...projectAssocs.map((a) => a.imageId),
-    ...cookbookCovers.map((a) => a.imageId),
-  ]);
+  // then blow up on the FK constraint when the hard delete runs.
+  const associationQueries = Object.values(INCOMING_EDGES.image).map(
+    ({ column }) =>
+      dbClient
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+        .select({ imageId: column as any })
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for from()
+        .from(column.table as any)
+        // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for isNotNull()
+        .where(isNotNull(column as any)) as Promise<Array<{ imageId: string }>>,
+  );
+  const associationResults = await Promise.all(associationQueries);
+  const associatedImageIds = new Set(
+    associationResults.flatMap((rows) => rows.map((row) => row.imageId)),
+  );
 
   // Find pending images older than the cutoff date
   const allPendingImages = await dbClient.query.image.findMany({
@@ -537,6 +555,27 @@ export const cullPendingImages = async (
 };
 
 /**
+ * How to clear each of `image`'s incoming edges (`INCOMING_EDGES.image`)
+ * before the hard delete below. `Record` over that literal-union key type
+ * requires every declared edge to have an entry, so a new edge on `image` is a
+ * compile error here until it's dispositioned — the guard that would have
+ * caught `PurchaseImage` shipping with no disposition in the first place.
+ *
+ * - `deleteRow` — a join table: delete the association row, detaching the
+ *   image from whatever product/location/recipe/project/purchase owned it.
+ * - `clearFk` — a direct FK column (`Cookbook.coverImageId` today): null it so
+ *   the parent row survives, just without a cover.
+ */
+const IMAGE_HARD_DELETE = {
+  "Cookbook.coverImageId": "clearFk",
+  "ProductImage.imageId": "deleteRow",
+  "LocationImage.imageId": "deleteRow",
+  "RecipeImage.imageId": "deleteRow",
+  "ProjectImage.imageId": "deleteRow",
+  "PurchaseImage.imageId": "deleteRow",
+} satisfies Record<IncomingEdgeKey<"image">, "deleteRow" | "clearFk">;
+
+/**
  * Hard-delete image rows and return their R2 keys so the caller can drop the
  * objects too.
  *
@@ -547,9 +586,10 @@ export const cullPendingImages = async (
  * restore was never implemented for any entity, so "delete" here means the row
  * is gone — matching how the pending cull already works. Reads still go through
  * `notDeleted(image)` so the column stays honest if that ever changes.
- * The join rows are deleted first (they FK the image), which
- * also detaches the image from whatever product/location/recipe/project owned
- * it. Missing ids are skipped; the returned keys are only those actually removed.
+ * Every incoming edge is cleared first, per {@link IMAGE_HARD_DELETE}'s
+ * disposition — they FK the image, so this also detaches it from whatever
+ * entity owned it. Missing ids are skipped; the returned keys are only those
+ * actually removed.
  */
 export const deleteImages = async (
   db: Database,
@@ -566,18 +606,23 @@ export const deleteImages = async (
 
     const ids = rows.map((row) => row.id);
 
-    // Join rows reference the image — clear them before the image itself.
-    await tx.delete(productImage).where(inArray(productImage.imageId, ids));
-    await tx.delete(locationImage).where(inArray(locationImage.imageId, ids));
-    await tx.delete(recipeImage).where(inArray(recipeImage.imageId, ids));
-    await tx.delete(projectImage).where(inArray(projectImage.imageId, ids));
-
-    // Cookbook covers are a direct FK (not a join row) — drop the reference so
-    // the delete can't violate it; the cookbook simply loses its cover.
-    await tx
-      .update(cookbook)
-      .set({ coverImageId: null })
-      .where(inArray(cookbook.coverImageId, ids));
+    for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
+      const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
+      if (disposition === "deleteRow") {
+        await tx
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for delete()
+          .delete(column.table as any)
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+          .where(inArray(column as any, ids));
+      } else {
+        await tx
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for update()
+          .update(column.table as any)
+          .set({ [column.name]: null })
+          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+          .where(inArray(column as any, ids));
+      }
+    }
 
     await tx.delete(image).where(inArray(image.id, ids));
 
