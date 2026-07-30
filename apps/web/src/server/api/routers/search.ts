@@ -28,8 +28,18 @@ const global = protectedProcedure
   .output(globalSearchOut)
   .query(async ({ ctx, input }): Promise<SearchResultItem[]> => {
     return input.mode === "lexical"
-      ? await lexicalGlobalSearch(ctx.db, input.query, input.limit)
-      : await hybridGlobalSearch(ctx.db, input.query, input.limit);
+      ? await lexicalGlobalSearch(
+          ctx.db,
+          input.query,
+          input.limit,
+          input.entityType,
+        )
+      : await hybridGlobalSearch(
+          ctx.db,
+          input.query,
+          input.limit,
+          input.entityType,
+        );
   });
 
 export const searchRouter = createTRPCRouter({
@@ -45,7 +55,12 @@ export const searchRouter = createTRPCRouter({
     .input(globalSearchInputSchema)
     .output(searchDebugOutSchema)
     .query(async ({ ctx, input }) => {
-      return await debugHybridSearch(ctx.db, input.query, input.limit);
+      return await debugHybridSearch(
+        ctx.db,
+        input.query,
+        input.limit,
+        input.entityType,
+      );
     }),
   backfillEmbeddings: protectedProcedure
     .input(semanticBackfillInputSchema)

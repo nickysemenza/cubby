@@ -1,11 +1,15 @@
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTRPC } from "~/integrations/trpc/react";
 import { type QuickAction, quickActions } from "./quick-actions";
+import {
+  COMMAND_SEARCH_RESULT_LIMIT,
+  takeCommandSearchResults,
+} from "./search-results";
 
 const DEBOUNCE_MS = 300;
-const RESULT_LIMIT = 5;
 // Mirrors SEMANTIC_MIN_QUERY_LENGTH on the server (~/server/semantic/constants):
 // below this the hybrid endpoint returns lexical-only results anyway, so the
 // second request would just duplicate the lexical one.
@@ -21,7 +25,10 @@ interface UseGlobalSearchResult {
   isEmpty: boolean;
 }
 
-export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
+export function useGlobalSearch(
+  searchQuery: string,
+  entityType?: SearchableEntity,
+): UseGlobalSearchResult {
   const api = useTRPC();
   const [debouncedQuery] = useDebouncedValue(searchQuery, {
     wait: DEBOUNCE_MS,
@@ -37,8 +44,9 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
   const lexical = useQuery({
     ...api.search.global.queryOptions({
       query: debouncedQuery,
-      limit: RESULT_LIMIT,
+      limit: COMMAND_SEARCH_RESULT_LIMIT,
       mode: "lexical",
+      entityType,
     }),
     enabled: shouldSearch,
     staleTime: 30_000,
@@ -50,8 +58,9 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
   const hybrid = useQuery({
     ...api.search.global.queryOptions({
       query: debouncedQuery,
-      limit: RESULT_LIMIT,
+      limit: COMMAND_SEARCH_RESULT_LIMIT,
       mode: "hybrid",
+      entityType,
     }),
     enabled: shouldSearch && shouldSemantic,
     staleTime: 30_000,
@@ -63,6 +72,17 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
   // fresher lexical results.
   const data =
     hybrid.data && !hybrid.isPlaceholderData ? hybrid.data : lexical.data;
+  const results = useMemo(
+    () =>
+      data
+        ? takeCommandSearchResults(
+            data.filter(
+              (item) => !entityType || item.entityType === entityType,
+            ),
+          )
+        : undefined,
+    [data, entityType],
+  );
 
   // True only before the very first results ever arrive (no placeholder to
   // show); refetches keep the previous list rendered instead.
@@ -71,6 +91,7 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
 
   // Filter quick actions client-side
   const filteredActions = useMemo(() => {
+    if (entityType) return [];
     if (!searchQuery) return quickActions;
     const lowerQuery = searchQuery.toLowerCase();
     return quickActions.filter(
@@ -78,7 +99,7 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
         action.name.toLowerCase().includes(lowerQuery) ||
         action.keywords?.some((k) => k.toLowerCase().includes(lowerQuery)),
     );
-  }, [searchQuery]);
+  }, [entityType, searchQuery]);
 
   // Determine empty state — only once both stages for the current query are
   // in, so "Nothing matched" never flashes while semantic results (which often
@@ -86,13 +107,13 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
   const isEmpty = useMemo(() => {
     if (!shouldSearch) return false;
     if (isLoading || isFetching) return false;
-    const hasResults = data && data.length > 0;
+    const hasResults = results && results.length > 0;
     const hasActions = filteredActions.length > 0;
     return !hasResults && !hasActions;
-  }, [shouldSearch, isLoading, isFetching, data, filteredActions]);
+  }, [shouldSearch, isLoading, isFetching, results, filteredActions]);
 
   return {
-    results: shouldSearch ? data : undefined,
+    results: shouldSearch ? results : undefined,
     filteredActions,
     isLoading,
     isFetching,

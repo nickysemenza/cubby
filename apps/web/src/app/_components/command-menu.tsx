@@ -14,13 +14,14 @@ import {
   Settings,
   Sparkles,
   Wrench,
+  X,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -37,6 +38,7 @@ import { cn } from "~/lib/utils";
 import { AgentAnswer, AgentSourceContent } from "./agent/AgentAnswer";
 import { quickActions } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
+import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { useAgentStream } from "./hooks/useAgentStream";
@@ -46,7 +48,6 @@ import {
   getEnrichmentText,
   getSearchMatchText,
   getSearchResultRoute,
-  groupSearchResults,
   rememberSearchResult,
   SearchResultMedia,
 } from "./search/search-utils";
@@ -77,13 +78,17 @@ export function GlobalCommandMenu({
   const open = externalOpen ?? internalOpen;
   const setOpen = externalOnOpenChange ?? setInternalOpen;
   const [search, setSearch] = React.useState("");
+  const [searchScope, setSearchScope] = React.useState<SearchableEntity | null>(
+    null,
+  );
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { isDevtoolsVisible, toggleDevtools } = useDebug();
   const perfOverlayOn = useFlag("perfOverlay");
 
   const { results, filteredActions, isLoading, isFetching, isEmpty } =
-    useGlobalSearch(search);
-  const conversion = useConversionAnswer(search);
+    useGlobalSearch(search, searchScope ?? undefined);
+  const conversion = useConversionAnswer(searchScope ? "" : search);
 
   const trpc = useTRPC();
 
@@ -109,7 +114,7 @@ export function GlobalCommandMenu({
     if (agentError) toast.error(agentError);
   }, [agentError]);
   // Shortcode detection and lookup
-  const parsedShortcode = parseShortcode(search);
+  const parsedShortcode = searchScope ? null : parseShortcode(search);
   const locationQuery = useQuery({
     ...trpc.location.getByShortcode.queryOptions({
       shortcode: search.toUpperCase(),
@@ -174,6 +179,7 @@ export function GlobalCommandMenu({
   React.useEffect(() => {
     if (!open) {
       setSearch("");
+      setSearchScope(null);
       setAnswerMode(false);
       agent.reset();
     }
@@ -217,12 +223,26 @@ export function GlobalCommandMenu({
   // Determine what to show based on search state
   const hasSearch = search.length > 0;
   const hasResults = results && results.length > 0;
+  const scopeLabel = searchScope
+    ? entities[entityTypeMap[searchScope]].pluralLabel
+    : null;
 
-  // Group search results by entity type for section headers
-  const groupedResults = React.useMemo(
-    () => groupSearchResults(results ?? []),
-    [results],
-  );
+  const handleSearchChange = (value: string) => {
+    if (!searchScope) {
+      const parsed = parseCommandSearchScope(value);
+      if (parsed.entityType) {
+        setSearchScope(parsed.entityType);
+        setSearch(parsed.query);
+        return;
+      }
+    }
+    setSearch(value);
+  };
+
+  const clearSearchScope = () => {
+    setSearchScope(null);
+    searchInputRef.current?.focus();
+  };
 
   return (
     <CommandDialog
@@ -232,9 +252,37 @@ export function GlobalCommandMenu({
       className="sm:max-w-2xl"
     >
       <CommandInput
-        placeholder="Search, jump to a page, or ask Cubby…"
+        ref={searchInputRef}
+        placeholder={
+          scopeLabel
+            ? `Search ${scopeLabel}…`
+            : "Search, jump to a page, or ask Cubby…"
+        }
         value={search}
-        onValueChange={setSearch}
+        onValueChange={handleSearchChange}
+        onKeyDown={(event) => {
+          if (event.key === "Backspace" && search.length === 0 && searchScope) {
+            event.preventDefault();
+            clearSearchScope();
+          }
+        }}
+        startAdornment={
+          searchScope && scopeLabel ? (
+            <Badge
+              variant="secondary"
+              render={
+                <button
+                  type="button"
+                  aria-label={`Clear ${scopeLabel} scope`}
+                  onClick={clearSearchScope}
+                />
+              }
+            >
+              {scopeLabel}
+              <X data-icon="inline-end" />
+            </Badge>
+          ) : undefined
+        }
       />
       <CommandList className="max-h-96">
         {answerMode ? (
@@ -281,23 +329,6 @@ export function GlobalCommandMenu({
               </CommandGroup>
             )}
 
-            {/* Ask Cubby — opt-in agent, pinned at top while searching */}
-            {hasSearch && (
-              <CommandGroup>
-                <CommandItem
-                  value={`ask-cubby-${search}`}
-                  onSelect={() => runAsk(search)}
-                  className="flex items-center gap-2"
-                >
-                  <Sparkles className="size-4 text-primary" />
-                  <span className="truncate">
-                    Ask Cubby:{" "}
-                    <span className="text-muted-foreground">"{search}"</span>
-                  </span>
-                </CommandItem>
-              </CommandGroup>
-            )}
-
             {/* Loading state — first results only; refetches keep the
                 previous list rendered (dimmed) instead of blanking it */}
             {isLoading && (
@@ -308,7 +339,23 @@ export function GlobalCommandMenu({
 
             {/* Empty state */}
             {isEmpty && !isLoading && !shortcodeResult && (
-              <CommandEmpty>Nothing matched — try another word.</CommandEmpty>
+              <div
+                role="status"
+                className="py-6 text-center text-muted-foreground text-xs/relaxed"
+              >
+                {scopeLabel
+                  ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
+                  : "Nothing matched — try another word."}
+              </div>
+            )}
+
+            {searchScope && !hasSearch && (
+              <div
+                role="status"
+                className="py-6 text-center text-muted-foreground text-xs/relaxed"
+              >
+                Type to search {scopeLabel}.
+              </div>
             )}
 
             {/* Shortcode result - appears at top when typing a valid shortcode */}
@@ -333,51 +380,62 @@ export function GlobalCommandMenu({
               </CommandGroup>
             )}
 
-            {/* Search Results - grouped by entity type with icon placeholders */}
+            {/* Search results — preserve the server's global rank order. */}
             {hasResults && !isLoading && (
               <div
                 className={cn("transition-opacity", isFetching && "opacity-60")}
               >
-                {groupedResults.map((group) => (
-                  <CommandGroup key={group.entityType} heading={group.label}>
-                    {group.items.map((item) => {
-                      const enrichment = getEnrichmentText(item);
-                      const matchText = getSearchMatchText(item);
+                <CommandGroup
+                  heading={
+                    scopeLabel ? `${scopeLabel} matches` : "Best matches"
+                  }
+                >
+                  {results.map((item) => {
+                    const enrichment = getEnrichmentText(item);
+                    const matchText = getSearchMatchText(item);
 
-                      return (
-                        <CommandItem
-                          key={`${item.entityType}-${item.id}`}
-                          onSelect={() => goToSearchResult(item)}
-                          className="flex items-center gap-2"
-                        >
-                          <SearchResultMedia item={item} />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm">{item.name}</div>
-                            {(item.subtitle || enrichment) && (
-                              <div className="truncate text-muted-foreground text-xs">
-                                {[item.subtitle, enrichment]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </div>
-                            )}
-                            {matchText && (
-                              <div
-                                className="truncate text-2xs text-muted-foreground"
-                                title={item.matchReason}
-                              >
-                                {matchText}
-                              </div>
-                            )}
-                          </div>
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                ))}
+                    return (
+                      <CommandItem
+                        key={`${item.entityType}-${item.id}`}
+                        onSelect={() => goToSearchResult(item)}
+                        className="flex items-center gap-2"
+                      >
+                        <SearchResultMedia item={item} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm">{item.name}</div>
+                          {(item.subtitle || enrichment) && (
+                            <div className="truncate text-muted-foreground text-xs">
+                              {[item.subtitle, enrichment]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          )}
+                          {isDevtoolsVisible && matchText && (
+                            <div
+                              className="truncate text-2xs text-muted-foreground"
+                              title={item.matchReason}
+                            >
+                              {matchText}
+                            </div>
+                          )}
+                        </div>
+                        <span className="shrink-0 self-start pt-1 font-mono text-2xs text-slate uppercase tracking-wider">
+                          {item.entityType}
+                        </span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
                 <CommandGroup>
                   <CommandItem
                     onSelect={() => {
-                      navigate({ to: "/search", search: { q: search } });
+                      navigate({
+                        to: "/search",
+                        search: {
+                          q: search,
+                          type: searchScope ?? undefined,
+                        },
+                      });
                       setOpen(false);
                     }}
                     className="justify-center text-muted-foreground"
@@ -407,8 +465,25 @@ export function GlobalCommandMenu({
               </>
             )}
 
+            {/* Agent is available after direct navigation results and actions. */}
+            {hasSearch && !isLoading && (
+              <CommandGroup>
+                <CommandItem
+                  value={`ask-cubby-${search}`}
+                  onSelect={() => runAsk(search)}
+                  className="flex items-center gap-2"
+                >
+                  <Sparkles className="size-4 text-primary" />
+                  <span className="truncate">
+                    Ask Cubby:{" "}
+                    <span className="text-muted-foreground">"{search}"</span>
+                  </span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+
             {/* Default view when not searching */}
-            {!hasSearch && !isLoading && (
+            {!hasSearch && !searchScope && !isLoading && (
               <>
                 {recents.length > 0 && (
                   <CommandGroup heading="Jump back">

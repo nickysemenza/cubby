@@ -100,9 +100,11 @@ export async function lexicalGlobalSearch(
   db: Database,
   query: string,
   limit: number,
+  entityType?: SearchableEntity,
 ): Promise<SearchResultItem[]> {
-  const lexical = await globalSearch(db, query, limit);
-  const mergedLimit = limit * ALL_SEARCHABLE_ENTITIES.length;
+  const entityTypes = entityType ? [entityType] : ALL_SEARCHABLE_ENTITIES;
+  const lexical = await globalSearch(db, query, limit, entityTypes);
+  const mergedLimit = limit * entityTypes.length;
   return mergeHybridSearchResults(query, lexical, [], mergedLimit);
 }
 
@@ -110,20 +112,22 @@ export async function hybridGlobalSearch(
   db: Database,
   query: string,
   limit: number,
+  entityType?: SearchableEntity,
 ): Promise<SearchResultItem[]> {
   return withTrace(
     TraceNames.service("semanticSearch", "global"),
     async (span) => {
+      const entityTypes = entityType ? [entityType] : ALL_SEARCHABLE_ENTITIES;
       // Independent I/O — run the lexical DB fan-out and the semantic
       // (embed + vector) path concurrently.
       const [lexical, semantic] = await Promise.all([
-        globalSearch(db, query, limit),
-        semanticSearchCandidates(db, query, limit),
+        globalSearch(db, query, limit, entityTypes),
+        semanticSearchCandidates(db, query, limit, entityTypes),
       ]);
       // Keep unified score ranking, but cap the merged list generously (room for
       // ~`limit` of each entity type) so a low-scoring category isn't crowded out
       // of a flat result list by one dominant type.
-      const mergedLimit = limit * ALL_SEARCHABLE_ENTITIES.length;
+      const mergedLimit = limit * entityTypes.length;
       const results = mergeHybridSearchResults(
         query,
         lexical,
@@ -144,9 +148,16 @@ export async function debugHybridSearch(
   db: Database,
   query: string,
   limit: number,
+  entityType?: SearchableEntity,
 ): Promise<SearchDebugOut> {
-  const lexical = await globalSearch(db, query, limit);
-  const semantic = await semanticSearchCandidates(db, query, limit);
+  const entityTypes = entityType ? [entityType] : ALL_SEARCHABLE_ENTITIES;
+  const lexical = await globalSearch(db, query, limit, entityTypes);
+  const semantic = await semanticSearchCandidates(
+    db,
+    query,
+    limit,
+    entityTypes,
+  );
   return {
     query,
     lexical,
