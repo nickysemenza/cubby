@@ -360,7 +360,8 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       <CreateTaskDialog
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
-        presetSubjectProduct={{ id: product.id, name: product.name }}
+        presetSubjectProductId={product.id}
+        presetSubjectProductName={product.name}
       />
     </Page>
   );

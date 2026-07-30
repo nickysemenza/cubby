@@ -499,14 +499,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         presetName={task.name}
         presetProjectId={task.projectId}
         presetTrade={task.trade}
-        presetSubjectProduct={
-          task.subjectProductId && task.subjectProductName
-            ? {
-                id: task.subjectProductId,
-                name: task.subjectProductName,
-              }
-            : null
-        }
+        presetSubjectProductId={task.subjectProductId}
+        presetSubjectProductName={task.subjectProductName}
       />
       {deleteDialog}
     </Page>

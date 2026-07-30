@@ -9,7 +9,6 @@ import {
 } from "@cubby/schemas/project";
 import { useMemo } from "react";
 import { z } from "zod";
-import type { ComboboxItem as ComboboxItemType } from "~/app/_components/combobox/combobox-types";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
@@ -53,7 +52,8 @@ interface CreateTaskDialogProps {
   presetTrade?: Trade;
   presetDate?: string;
   presetName?: string;
-  presetSubjectProduct?: ComboboxItemType<ProductId> | null;
+  presetSubjectProductId?: ProductId | null;
+  presetSubjectProductName?: string | null;
 }
 
 export function CreateTaskDialog({
@@ -64,7 +64,8 @@ export function CreateTaskDialog({
   presetTrade,
   presetDate,
   presetName,
-  presetSubjectProduct,
+  presetSubjectProductId,
+  presetSubjectProductName,
 }: CreateTaskDialogProps) {
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
@@ -76,14 +77,21 @@ export function CreateTaskDialog({
       status: presetStatus ?? "not_started",
       dueDate: presetDate ?? null,
       trade: presetTrade ?? null,
-      subjectProduct: presetSubjectProduct ?? null,
+      subjectProduct:
+        presetSubjectProductId && presetSubjectProductName
+          ? {
+              id: presetSubjectProductId,
+              name: presetSubjectProductName,
+            }
+          : null,
     }),
     [
       presetDate,
       presetName,
       presetProjectId,
       presetStatus,
-      presetSubjectProduct,
+      presetSubjectProductId,
+      presetSubjectProductName,
       presetTrade,
     ],
   );
