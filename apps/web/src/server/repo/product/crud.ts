@@ -455,33 +455,64 @@ export const productList = async (
   // Execute queries in parallel and transform results. The aggregate query
   // shares whereClause, so the footer's price total covers the FULL filtered
   // set (the client only holds a page).
-  const [{ data: results, count: totalCount }, aggregates] = await Promise.all([
-    executeListQueryWithCount(
-      getDb(db).query.product.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-        ...relations.product.list,
-      }),
-      countWhere(db, product, whereClause),
-    ),
-    getDb(db)
-      .select({ priceSum: sum(product.price) })
-      .from(product)
-      .where(whereClause),
-  ]);
+  const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =
+    await Promise.all([
+      executeListQueryWithCount(
+        getDb(db).query.product.findMany({
+          where: whereClause,
+          orderBy: orderByArray,
+          limit: take,
+          offset: skip,
+          ...relations.product.list,
+        }),
+        countWhere(db, product, whereClause),
+      ),
+      getDb(db)
+        .select({ priceSum: sum(product.price) })
+        .from(product)
+        .where(whereClause),
+      // Net-basis total for the Net basis column's footer, over the FULL filtered
+      // set — without it `createCurrencyColumn` falls back to reducing the loaded
+      // rows only, which silently under-reports on an infinite-scrolled list.
+      //
+      // An uncorrelated `IN` sub-select over the same where clause, NOT a
+      // correlated `sum((SELECT …))` in the select field: interpolating
+      // `product.id` there hits the `buildSelection` prefix-stripping trap that
+      // has cost this repo four bugs (see the warning block in repo/purchase.ts).
+      // Summing `Expense` directly also reads plainly — this is money, and money
+      // lives on `Expense`.
+      getDb(db)
+        .select({ expenseTotalSum: sum(expense.cost) })
+        .from(expense)
+        .where(
+          and(
+            notDeleted(expense),
+            inArray(
+              expense.productId,
+              getDb(db)
+                .select({ id: product.id })
+                .from(product)
+                .where(whereClause),
+            ),
+          ),
+        ),
+    ]);
 
   const products = results.map((prod: ProductListDB) =>
     dbProductToListAPI(prod),
   );
 
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);
+  // `sum()` returns null over an empty set, and a string otherwise.
+  const expenseTotalSum = Number(expenseAggregates[0]?.expenseTotalSum ?? 0);
 
   return {
     data: products,
     count: totalCount,
-    sums: { price: Number.isNaN(priceSum) ? 0 : priceSum },
+    sums: {
+      price: Number.isNaN(priceSum) ? 0 : priceSum,
+      expenseTotal: Number.isNaN(expenseTotalSum) ? 0 : expenseTotalSum,
+    },
   };
 };
 

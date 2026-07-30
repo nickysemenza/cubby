@@ -266,6 +266,25 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
+      // Net cost basis — SUM(cost) over this product's live expenses, so an
+      // exit (a sale booked as a negative row) telescopes against its
+      // acquisition. Hidden by default via `initialColumnVisibility`: the table
+      // is already wide and `price` covers the common case, but it's a real
+      // column so the number is visible rather than only sortable.
+      //
+      // `zeroAsEmpty: false` is load-bearing, not a style choice. The helper
+      // defaults it true because "a zero price means unset" — but
+      // `productListItemOut.expenseTotal` is 0 for a product with no expenses
+      // and never null, so the default would dash every expense-less product as
+      // though the value were missing. Same opt-out as `expenseTotal` on the
+      // purchase list and `spend` on the vendor list.
+      createCurrencyColumn(columnHelper, "expenseTotal", {
+        header: "Net basis",
+        className: "w-28",
+        zeroAsEmpty: false,
+        signedTone: true,
+        mobile: { slot: "trailing", priority: 5 },
+      }),
       columnHelper.display({
         id: "food",
         header: "USDA Food",
@@ -350,6 +369,13 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       columnHelper.accessor("expenseCount", {
         id: "expenses",
         header: "Expenses",
+        // The column id is `expenses`, which is NOT in `productSortableFields`
+        // — so `buildOrderBy` silently discards any sort on it. Without this the
+        // header renders a clickable sort affordance that does nothing. The id
+        // can't be renamed to `expenseCount` to fix it the other way: it's
+        // persisted per-user in the `table-columns:product` localStorage key,
+        // and renaming would reset everyone's column layout for a count.
+        enableSorting: false,
         meta: {
           numeric: true,
           className: "w-24",
@@ -456,6 +482,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       manufacturer: false,
       createdAt: false,
       notes: false,
+      expenseTotal: false,
     },
     groupConfig,
   });

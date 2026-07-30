@@ -965,6 +965,85 @@ describe("product repository", () => {
         expect(row).toBeDefined();
         expect(row?.expenseTotal).toEqual(live.cost);
       });
+
+      /**
+       * The footer total behind the Net basis column.
+       *
+       * `createCurrencyColumn` renders `sums[column.id]` when the server
+       * supplies it and otherwise reduces only the LOADED rows — so without
+       * this aggregate an infinite-scrolled list would silently under-report,
+       * which is the same wrong-but-plausible failure the column exists to
+       * make visible.
+       */
+      describe("sums.expenseTotal", () => {
+        const seed = async (name: string, upc: string, costs: number[]) => {
+          const created = await createProduct(
+            ctx.db,
+            makeProductInput({ name, upc }),
+            ctx.actor,
+          );
+          for (const cost of costs) {
+            await createExpense(
+              ctx.db,
+              {
+                ...makeExpenseInput(),
+                name: `${name} line`,
+                cost,
+                productId: created.id,
+              },
+              ctx.actor,
+            );
+          }
+          return created;
+        };
+
+        it("nets across the filtered set, and is scoped BY the filter", async () => {
+          await seed("SumScoped Alpha", "710000000031", [100, -30]);
+          await seed("SumScoped Beta", "710000000032", [25]);
+          // Outside the filter — its cost must not leak into the total.
+          await seed("SumOther Gamma", "710000000033", [9999]);
+
+          const scoped = await listWith({ nameFilter: "SumScoped" });
+          expect(scoped.data).toHaveLength(2);
+          // 100 - 30 + 25. Negative rows telescope; the total is a NET basis.
+          expect(scoped.sums?.expenseTotal).toEqual(95);
+
+          // The aggregate is computed over the where clause, not the table —
+          // if it ignored the filter this would pick up the 9999.
+          expect(scoped.sums?.expenseTotal).not.toEqual(10094);
+        });
+
+        it("reads 0 over a filtered set with no expenses at all", async () => {
+          await seed("SumEmpty Delta", "710000000034", []);
+
+          const found = await listWith({ nameFilter: "SumEmpty" });
+          expect(found.data).toHaveLength(1);
+          // `sum()` returns NULL over an empty set — coerced, not passed through.
+          expect(found.sums?.expenseTotal).toEqual(0);
+        });
+
+        it("excludes a soft-deleted expense from the total", async () => {
+          const created = await seed(
+            "SumDeleted Epsilon",
+            "710000000035",
+            [40],
+          );
+          const doomed = await createExpense(
+            ctx.db,
+            {
+              ...makeExpenseInput(),
+              name: "doomed",
+              cost: 500,
+              productId: created.id,
+            },
+            ctx.actor,
+          );
+          await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
+
+          const found = await listWith({ nameFilter: "SumDeleted" });
+          expect(found.sums?.expenseTotal).toEqual(40);
+        });
+      });
     });
   });
 
