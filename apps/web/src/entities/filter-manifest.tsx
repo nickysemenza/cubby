@@ -4,6 +4,7 @@ import {
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
+  unsafePurchaseId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
@@ -188,6 +189,17 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       urlKey: "order",
       kind: "id",
       placeholder: "Filter by order id...",
+    },
+    {
+      // URL-only, like `productId`/`orderIdExact` above — seeded by a deep
+      // link from a charge's own detail page, surfaced as a ScopeChip. Its
+      // `columnId` is distinct from both of those (and from `orderId`'s
+      // presence control): two specs may not share a slot.
+      columnId: "purchaseId",
+      urlOnly: true,
+      kind: "id",
+      brand: unsafePurchaseId,
+      placeholder: "Filter by purchase id...",
     },
   ],
 

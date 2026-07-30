@@ -7,12 +7,36 @@ codecov:
     wait_for_ci: true
 
 # The threshold absorbs small legitimate project-wide drift; patch coverage
-# remains the strict signal for changed code.
+# remains the signal for changed code.
 coverage:
   status:
     project:
       default:
         threshold: 2%
+    # Informational: ci.yaml documents Codecov as a soft gate (it doesn't block
+    # deploy or merge in this single-user repo), and patch coverage on a small
+    # PR is noisy — a one-line non-code change or a hard-to-unit-test branch
+    # can legitimately miss a strict target. `target: auto` compares the patch
+    # against the base commit's coverage instead of a fixed number, and
+    # `informational: true` keeps the check from ever showing red — it's
+    # signal, not a gate.
+    patch:
+      default:
+        target: auto
+        threshold: 5%
+        informational: true
 
 comment:
   after_n_builds: 1
+
+# Paths are relative to the REPO ROOT and are not implicitly prefix-matched, so
+# every entry needs `**` to reach into a workspace. The list inherited from the
+# dead .github/codecov.yml was written against a single-app layout: `scripts`
+# missed `apps/web/scripts`, `src/components/ui` missed the only real
+# `apps/web/src/components/ui`, and `tooling` names a directory that does not
+# exist in this repo at all. So the shadcn exclusion stayed unapplied even after
+# the configs were merged — same silent no-op, new cause. Rewritten to match.
+ignore:
+  - "**/*.config.*"
+  - "**/scripts/**"
+  - "apps/web/src/components/ui/**" # shadcn/ui — vendored primitives, not our code

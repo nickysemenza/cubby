@@ -30,6 +30,10 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
+import {
+  DocumentViewerList,
+  type DocumentViewTarget,
+} from "../DocumentViewerList";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
@@ -42,7 +46,6 @@ import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
-import { type ManualViewTarget, ProductManuals } from "./product-manuals";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
 
@@ -91,7 +94,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const { images, documents } = partitionEntityFiles(product.images);
 
   // Wiki links in the notes ([[manual#page=N]]) jump the inline viewer here.
-  const [manualTarget, setManualTarget] = useState<ManualViewTarget | null>(
+  const [manualTarget, setManualTarget] = useState<DocumentViewTarget | null>(
     null,
   );
   const handleManualLink = useCallback((documentId: string, page: number) => {
@@ -175,7 +178,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             icon: FileText,
             zone: "main" as const,
             content: (
-              <ProductManuals documents={documents} target={manualTarget} />
+              <DocumentViewerList documents={documents} target={manualTarget} />
             ),
           },
         ]

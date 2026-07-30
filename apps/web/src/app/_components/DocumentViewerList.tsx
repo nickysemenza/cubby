@@ -1,4 +1,10 @@
 import type { ImageOut } from "@cubby/schemas/image";
+import { ExternalLink } from "lucide-react";
+import prettyBytes from "pretty-bytes";
+import { type FC, useEffect, useRef } from "react";
+import { Row, Stack } from "~/components/layout";
+import { buttonVariants } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 
 /**
  * The minimum a PDF viewer actually needs. Deliberately NOT the full `ImageOut`:
@@ -11,18 +17,11 @@ export type ViewableDocument = Pick<ImageOut, "id" | "url" | "filename"> & {
   size?: number;
 };
 
-import { ExternalLink } from "lucide-react";
-import prettyBytes from "pretty-bytes";
-import { type FC, useEffect, useRef } from "react";
-import { Row, Stack } from "~/components/layout";
-import { buttonVariants } from "~/components/ui/button";
-import { cn } from "~/lib/utils";
-
 /**
  * A wiki-link jump request from the notes (see ProductNotesMarkdown). `nonce`
  * makes repeat clicks on the same link re-trigger the scroll effect.
  */
-export interface ManualViewTarget {
+export interface DocumentViewTarget {
   documentId: string;
   page: number;
   nonce: number;
@@ -30,9 +29,9 @@ export interface ManualViewTarget {
 
 const BASE_VIEWER_PARAMS = "toolbar=0&navpanes=0&view=FitH&zoom=page-width";
 
-const ManualViewer: FC<{
+const DocumentViewer: FC<{
   doc: ViewableDocument;
-  target: ManualViewTarget | null;
+  target: DocumentViewTarget | null;
 }> = ({ doc, target }) => {
   const containerRef = useRef<HTMLElement>(null);
   const active = target?.documentId === doc.id ? target : null;
@@ -97,7 +96,8 @@ const ManualViewer: FC<{
 };
 
 /**
- * Inline viewers for a product's attached PDF manuals.
+ * Inline viewers for a set of attached PDF documents — originally a product's
+ * manuals, now also a purchase's filed charge invoices (see `ViewableDocument`).
  *
  * <iframe> over <object>/<embed>: all three invoke the same native PDF viewer
  * on desktop, but <object>'s fallback detection is unreliable in Chromium and
@@ -110,14 +110,14 @@ const ManualViewer: FC<{
  * viewer; never navigate top-level to the PDF — standalone mode has no back
  * bar, which would strand the user).
  */
-export const ProductManuals: FC<{
+export const DocumentViewerList: FC<{
   documents: ViewableDocument[];
-  target?: ManualViewTarget | null;
+  target?: DocumentViewTarget | null;
 }> = ({ documents, target = null }) => {
   return (
     <Stack gap="md">
       {documents.map((doc) => (
-        <ManualViewer key={doc.id} doc={doc} target={target} />
+        <DocumentViewer key={doc.id} doc={doc} target={target} />
       ))}
     </Stack>
   );

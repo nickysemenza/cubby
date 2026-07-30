@@ -20,6 +20,7 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { StatTile } from "~/components/ui/stat-tile";
 import { useTRPC } from "~/integrations/trpc/react";
+import { purchaseLabel } from "~/lib/purchase-label";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -329,11 +330,39 @@ export function ExpenseList() {
     <ScopeChip name="Order" value={scopedOrderId} onClear={clearOrderScope} />
   ) : undefined;
 
+  // `?purchaseId=` (a deep link from the charge's own detail page) is the same
+  // invisible-filter situation as `?productId=` above — the manifest's
+  // `purchaseId` spec has no column, so it needs its own visible surface. Like
+  // `productScopeChip`, this resolves a display label via a lookup query rather
+  // than showing the raw id — `purchaseLabel` over the fetched `PurchaseOut`,
+  // the same helper `link-expenses-dialog.tsx` uses for a charge's identity.
+  const scopedPurchaseId = expensesSearch.purchaseId;
+  const scopedPurchaseQuery = useQuery({
+    // Bare scalar id, not `{ id }` — see routers/purchase.ts.
+    ...api.purchase.getByID.queryOptions(scopedPurchaseId ?? ""),
+    enabled: Boolean(scopedPurchaseId),
+  });
+  const clearPurchaseScope = useCallback(() => {
+    void expensesNavigate({
+      search: (prev) => ({ ...prev, purchaseId: undefined }),
+      replace: true,
+    });
+  }, [expensesNavigate]);
+  const purchaseScopeChip =
+    scopedPurchaseId && scopedPurchaseQuery.data ? (
+      <ScopeChip
+        name="Purchase"
+        value={purchaseLabel(scopedPurchaseQuery.data)}
+        onClear={clearPurchaseScope}
+      />
+    ) : undefined;
+
   const scopeChips =
-    productScopeChip || orderScopeChip ? (
+    productScopeChip || orderScopeChip || purchaseScopeChip ? (
       <Row align="center" gap="xs">
         {productScopeChip}
         {orderScopeChip}
+        {purchaseScopeChip}
       </Row>
     ) : undefined;
 

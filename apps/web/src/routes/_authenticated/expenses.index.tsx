@@ -94,6 +94,9 @@ const searchSchema = z
     order: urlStringParam,
     vendor: urlStringParam,
     orderId: urlStringParam,
+    // Deep link from a charge's own detail page — the exact-charge scope,
+    // same treatment as `productId` above.
+    purchaseId: urlStringParam,
     // Quick-capture deep link (navbar "+" / command palette) — there is no
     // /expenses/new route, so the create dialog is opened by this param.
     create: z.boolean().optional().catch(undefined),
@@ -124,6 +127,7 @@ const searchDefaults = {
   order: undefined,
   vendor: undefined,
   orderId: undefined,
+  purchaseId: undefined,
   create: undefined,
 } as const;
 

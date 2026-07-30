@@ -186,6 +186,9 @@ export const buildExpenseWhereClause = async (
       // through `purchaseId`, and `(vendorId, orderId)` is partial-unique, so a
       // short id like Tool Nirvana's "#11325" can't drag in another retailer's.
       chargeCondition(db, eqAny(purchase.orderId, filters.orderId)),
+      // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
+      // `expense` — no `chargeCondition` sub-select hop needed.
+      eqAny(expense.purchaseId, filters.purchaseId),
     ],
   );
 };

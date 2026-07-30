@@ -2,12 +2,12 @@ import { partitionEntityFiles } from "@cubby/schemas/image";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { FileText } from "lucide-react";
 import { type FC, useMemo, useState } from "react";
+import { DocumentViewerList } from "~/app/_components/DocumentViewerList";
 import EntityImageList from "~/app/_components/EntityImageList";
 import {
   type PendingDocument,
   PendingDocumentUpload,
 } from "~/app/_components/PendingDocumentUpload";
-import { ProductManuals } from "~/app/_components/products/product-manuals";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import {
@@ -26,7 +26,7 @@ import { useActionMutation } from "../_components/hooks/useActionMutation";
  * PDFs and images share one relation (`PurchaseImage`), so `partitionEntityFiles`
  * splits them on `contentType` — a PDF handed to the image grid renders as a
  * broken thumbnail. Documents get the same inline `<iframe>` viewer a product's
- * manuals do (`ProductManuals`), reused rather than re-derived; its
+ * manuals do (`DocumentViewerList`), reused rather than re-derived; its
  * `ViewableDocument` prop takes the minimal `{id,url,filename}` shape
  * `purchaseOut.images` already carries, so nothing has to be hydrated first.
  *
@@ -86,7 +86,7 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
 
   return (
     <Stack gap="md">
-      {documents.length > 0 && <ProductManuals documents={documents} />}
+      {documents.length > 0 && <DocumentViewerList documents={documents} />}
 
       {images.length > 0 && (
         <EntityImageList
