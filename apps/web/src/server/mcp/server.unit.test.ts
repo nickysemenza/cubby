@@ -806,6 +806,25 @@ describe("unknown filter keys are rejected", () => {
     expect(analytics).not.toHaveBeenCalled();
   });
 
+  it("still reports a normal validation error for a KNOWN filter's bad value", async () => {
+    // The custom message is scoped to `unrecognized_keys` and must not swallow
+    // other issues — a wrong-typed value on a real filter has to say so, not
+    // come back as "unknown filter".
+    const list = vi.fn();
+    const result = await callTool(
+      createMcpServer(),
+      "list_expenses",
+      { costPresenceFilter: "sometimes" },
+      { expense: { list } },
+    );
+
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result.content);
+    expect(text).toContain("costPresenceFilter");
+    expect(text).not.toContain("Unknown filter");
+    expect(list).not.toHaveBeenCalled();
+  });
+
   it("advertises the rule in the published JSON Schema, not just at runtime", async () => {
     // additionalProperties:false tells a well-behaved client up front instead
     // of letting it discover the rule by failing.

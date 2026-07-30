@@ -299,16 +299,18 @@ Roughly priority order.
     `buildExpenseWhereClause`, so `costMin`/`costMax`/`notesSearch`/`urlSearch`
     and the OR-search are invisible to it. Stated as a known limit rather than
     fixed; the fix is to route it through the shared builder.
-  - **Unknown filter params are silently ignored, not rejected.** Zod strips
-    unknown keys, so `list_expenses({costMin: 500})` against a server that
-    doesn't have `costMin` returns the *entire ledger* presented as a filtered
-    result — wrong data that looks right, rather than an error. Observed for
-    real during this pass, in the window between the docs merging and the code
-    deploying. Any client/server skew (a stale MCP tool catalog, a mid-deploy
-    request) degrades this way. Options: `.strict()` on the filter schemas so
-    unknown keys throw, or accept it as a known hazard — but decide, because
-    "the filter silently did nothing" is the exact failure mode the MCP surface
-    exists to prevent.
+  - ~~**Unknown filter params are silently ignored, not rejected.**~~ **Decided
+    and shipped** — an unknown filter key now fails loudly. `strictFilterInput`
+    (`mcp/tools/_shared.ts`) builds each list tool's input with
+    `z.strictObject`, whose custom error names the offending key *and* lists the
+    valid ones, and which publishes `additionalProperties: false` so a client
+    learns the rule before failing. Note the `.strict()`-on-the-filter-schemas
+    option recorded here would **not** have worked: the MCP payload is stripped
+    twice before `expenseFiltersSchema` is reached, and the SDK hands the
+    handler the already-parsed object, so the rejection has to live in the tool
+    input schema itself. The web half — where rejecting at runtime would just
+    break the page — is pinned instead by a manifest-vs-schema test, which found
+    a live one (`project.name` emitted `name` against a schema with `search`).
 - [ ] **Surface the tracker to the rest of the app** (2026-07 audit) — mostly
   shipped; what remains is the two UI entry points.
   **Shipped:** the attention rules are a first-class Problems group
