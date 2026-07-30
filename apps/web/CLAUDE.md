@@ -108,6 +108,13 @@ Three layers — pick by what the surface is, never hand-roll table styling:
   - Two defaults are tuned for `<RTable>`'s explicitly-sized columns: `<Table>` is **`table-fixed`** and `<TableCell>` is **`whitespace-nowrap`**. For content-sized columns pass `className="table-auto"`; for wrapping prose cells add `whitespace-normal`. Suppress an unwanted row divider with `border-b-0` (e.g. grouped/`rowSpan` clusters). Keep the bordered-card wrapper via `containerClassName`.
 - **Raw `<table>`** only when those defaults actively fight the layout: **matrices / cross-tabs** (entities as columns, sticky panes, per-cell heatmap/stat styling — e.g. `RecipeCompareGrid`, `IngredientComponentGrid`), **dev/debug-only** surfaces (`perf-overlay`, costing-debug card), and **external-content** rendering (`markdown.tsx`).
 
+### Column widths
+
+- **`<RTable>` owns column sizing** — it calls `useTableColumnSizing` itself, so every table it renders is drag-resizable and persists widths to `table-sizes:{key}`. The key is `sizingKey ?? entity`; pass **`sizingKey`** for a table with no single `entity` (`"search"` — polymorphic rows) or for a second table over the same entity with a different column set (`"task:embedded"`, matching that table's `useTableColumnVisibility` scope). Don't re-thread sizing through `useTableConfig` or table meta — that plumbing was deleted precisely because a hand-wired table could silently miss it.
+- **Widths are Tailwind `w-*` on `meta.className`**, never TanStack's `size`/`minSize`. Under `table-fixed` only `width` counts — a `min-w-*`/`max-w-*` floor on a cell does nothing.
+- **A trailing slack spacer absorbs all surplus width**, so columns never grow past their declared `w-*` — which is why a sparse table can show several hundred px of dead space next to columns that are clipping. Pass **`fillWidth`** to `<RTable>` to spend that surplus on the columns instead; it distributes proportionally, so each `w-*` becomes a *share*. Used by the global search table.
+- **Don't make a column auto-width to let it "flex".** Under `table-fixed` an unsized column absorbs the squeeze in the narrow direction too, all the way to zero — measured on search, the name column rendered **0px wide at a 900px viewport**, where sized columns instead overflow the container and scroll. `min-width` on a cell can't save it (fixed layout ignores min/max-width on cells; only `width` counts). A floor would have to go on the `<table>` element, which is why `fillWidth` is proportional rather than one-column-takes-all.
+
 ## Entity names are always readable and always clickable
 
 Every entity in `entities.tsx` has a detail route, so **a rendered entity name is never plain truncated text.** Two acceptable shapes:

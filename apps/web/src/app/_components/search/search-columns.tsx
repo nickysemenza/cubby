@@ -46,7 +46,9 @@ export const searchColumns = [
   columnHelper.accessor("name", {
     header: "Name",
     enableSorting: true,
-    meta: { className: "min-w-0 w-40 max-w-56" },
+    // Under the table's `fillWidth` this is the name's SHARE of the surplus,
+    // not its size — it's the widest column because the name is what you scan.
+    meta: { className: "min-w-0 w-80" },
     cell: ({ row }) => (
       <Row align="center" gap="sm">
         <SearchResultItemIcon item={row.original} />
@@ -60,7 +62,9 @@ export const searchColumns = [
     header: "Type",
     enableSorting: true,
     meta: {
-      className: "w-28",
+      // Wide enough for the longest entity label ("Inventory Item") plus its
+      // icon — at w-28 it clipped mid-word on every inventory row.
+      className: "w-36",
       filterConfig: {
         filterType: "select",
         placeholder: "All types",
@@ -83,11 +87,13 @@ export const searchColumns = [
   columnHelper.accessor("subtitle", {
     header: "Info",
     enableSorting: false,
-    meta: { className: "w-32" },
+    meta: { className: "w-44" },
     cell: ({ getValue }) => {
       const value = getValue();
       return value ? (
-        <Description as="span">{value}</Description>
+        <Description as="span" className="block truncate" title={value}>
+          {value}
+        </Description>
       ) : (
         <NoneValue />
       );
@@ -98,11 +104,16 @@ export const searchColumns = [
   columnHelper.display({
     id: "details",
     header: "Details",
-    meta: { className: "w-28" },
+    meta: { className: "w-40" },
     cell: ({ row }) => {
       const enrichment = getEnrichmentText(row.original);
       return enrichment ? (
-        <Description as="span" size="xs">
+        <Description
+          as="span"
+          size="xs"
+          className="block truncate"
+          title={enrichment}
+        >
           {enrichment}
         </Description>
       ) : (
@@ -114,11 +125,24 @@ export const searchColumns = [
   columnHelper.display({
     id: "match",
     header: "Match",
-    meta: { className: "w-40" },
+    meta: { className: "w-48" },
     cell: ({ row }) => {
       const matchText = getSearchMatchText(row.original);
+      // Title the visible text, not `matchReason` — that's undefined on most
+      // rows (it's only appended when there are no matchTerms), so the widest,
+      // most-likely-to-clip cell had no tooltip at all.
+      const reason = row.original.matchReason;
       return matchText ? (
-        <Description as="span" size="xs" title={row.original.matchReason}>
+        <Description
+          as="span"
+          size="xs"
+          className="block truncate"
+          title={
+            reason && !matchText.includes(reason)
+              ? `${matchText} · ${reason}`
+              : matchText
+          }
+        >
           {matchText}
         </Description>
       ) : (

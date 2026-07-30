@@ -462,6 +462,10 @@ export function TaskList({
     <>
       <RTable
         table={table}
+        // Same scope as this table's column visibility: the embedded task
+        // table's column set differs from the main task list's, so their
+        // widths must not share a store either.
+        sizingKey="task:embedded"
         embedded
         showColumnMenu
         bulkActionBar={bulkActionBar}
@@ -1152,6 +1156,7 @@ export function ExpenseList({
     <>
       <RTable
         table={table}
+        sizingKey="expense:embedded"
         embedded
         showColumnMenu
         bulkActionBar={bulkActionBar}

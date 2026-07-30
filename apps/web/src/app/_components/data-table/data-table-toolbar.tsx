@@ -20,6 +20,8 @@ interface DataTableToolbarProps<TData> {
   bulkActionBar?: ReactNode;
   /** Show desktop view options dropdown (column toggles) */
   showViewOptions?: boolean;
+  /** Clear this table's persisted column widths (see DataTableViewOptions). */
+  onResetColumnWidths?: () => void;
   /** Additional className for styling */
   className?: string;
 }
@@ -31,12 +33,18 @@ export function DataTableToolbar<TData>({
   actions,
   bulkActionBar,
   showViewOptions = true,
+  onResetColumnWidths,
   className,
 }: DataTableToolbarProps<TData>) {
   return (
     <Row align="center" justify="between" gap="sm" className={className}>
       <Row align="center" gap="sm">
-        {showViewOptions && <DataTableViewOptions table={table} />}
+        {showViewOptions && (
+          <DataTableViewOptions
+            table={table}
+            onResetColumnWidths={onResetColumnWidths}
+          />
+        )}
         <DataTableViews table={table} entity={entity} />
         {bulkActionBar}
       </Row>

@@ -48,6 +48,7 @@ import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
+import { useTableColumnSizing } from "./useTableColumnSizing";
 
 // Sticky top nav height: the h-12 (48px) nav bar + its 3px ink bottom-rule =
 // 51px (see __root.tsx). The sticky toolbar pins flush below it; if these drift
@@ -127,6 +128,29 @@ interface TTableProps<TItem> {
    * Ignored when not embedded — the full toolbar already shows the menu.
    */
   showColumnMenu?: boolean;
+  /**
+   * localStorage key for this table's persisted column widths. Defaults to
+   * `entity`, which covers every list page; pass it explicitly for a table with
+   * no single entity (the global search table) or for a second table over the
+   * same entity with a different column set (`"task:embedded"`). A table with
+   * neither `entity` nor `sizingKey` simply isn't resizable.
+   */
+  sizingKey?: string;
+  /**
+   * Spend the table's leftover width on the columns instead of parking it in
+   * the trailing slack spacer. Under `table-fixed` that spacer is normally the
+   * only unsized cell, so it swallows every surplus pixel and the columns stay
+   * at exactly their declared `w-*` — which is why a sparse table can leave
+   * several hundred px of dead space next to columns that are clipping. With
+   * this on, the surplus is distributed across the sized columns in proportion
+   * to their widths, so each `w-*` reads as a *share*.
+   *
+   * Distribution is deliberately proportional rather than "one column absorbs
+   * it all". An auto-width column takes the whole squeeze in the other
+   * direction too: on the search table it measured 0px wide at a 900px
+   * viewport, where sized columns instead overflow the container and scroll.
+   */
+  fillWidth?: boolean;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -151,7 +175,15 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     verticalAlign = "middle",
     embedded = false,
     showColumnMenu = false,
+    sizingKey,
+    fillWidth = false,
   } = props;
+
+  // Column widths are owned here rather than threaded through table meta, so
+  // every RTable surface is resizable — including the hand-wired ones that
+  // don't go through useEntityList.
+  const { columnSizing, setColumnSize, resetColumnSize, resetAllColumnSizes } =
+    useTableColumnSizing(sizingKey ?? entity);
 
   const {
     cellSelectionContainerProps,
@@ -409,6 +441,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 <DataTableToolbar
                   table={table}
                   entity={entity}
+                  onResetColumnWidths={
+                    resetAllColumnSizes && Object.keys(columnSizing).length > 0
+                      ? resetAllColumnSizes
+                      : undefined
+                  }
                   additionalContent={
                     <div className="flex items-center gap-2">
                       {additionalToolbarContent}
@@ -529,10 +566,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
                             // User-resized width (persisted): under table-fixed,
                             // sizing the header cell drives the whole column.
-                            const resizedWidth =
-                              table.options.meta?.columnSizing?.[
-                                header.column.id
-                              ];
+                            const resizedWidth = columnSizing[header.column.id];
                             const isResizable =
                               header.column.id !== "select" &&
                               header.column.id !== "actions";
@@ -548,7 +582,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                       : "none"
                                 }
                                 className={cn(
-                                  "relative",
+                                  // group/th: the resize handle only inks up
+                                  // when its own header is hovered.
+                                  "group/th relative",
                                   styles.header,
                                   numeric && "text-right",
                                   header.column.columnDef.meta?.className,
@@ -594,7 +630,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                 {isResizable && (
                                   <ColumnResizeHandle
                                     columnId={header.column.id}
-                                    meta={table.options.meta}
+                                    onCommit={setColumnSize}
+                                    onReset={resetColumnSize}
                                   />
                                 )}
                               </TableHead>
@@ -605,10 +642,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               Debug
                             </TableHead>
                           )}
+                          {/* Only the HEADER spacer needs the width — under
+                            table-fixed the first row sizes every column, so the
+                            body spacer (DesktopDataRow) stays untouched and row
+                            memoization is unaffected. */}
                           <TableHead
                             data-spacer
                             aria-hidden
-                            className={styles.header}
+                            className={cn(styles.header, fillWidth && "w-0")}
                           />
                         </TableRow>
 

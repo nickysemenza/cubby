@@ -16,7 +16,6 @@ import {
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { GroupConfig } from "../data-table/useGroupedList";
-import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import {
@@ -358,10 +357,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const { columnVisibility, onColumnVisibilityChange } =
     useTableColumnVisibility(entity, initialColumnVisibility);
 
-  // Persisted per-entity column widths (localStorage). Only user-resized
-  // columns are stored; the rest keep their code-defined width classes.
-  const { columnSizing, setColumnSize, resetColumnSize } =
-    useTableColumnSizing(entity);
+  // Column widths are NOT wired here — `RTable` owns them, keyed off its
+  // `entity`/`sizingKey` prop, so a hand-wired table can't miss out.
 
   // Feed all accumulated rows as a single "page" so TanStack Table doesn't
   // try to paginate the infinite result.
@@ -379,9 +376,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     columnVisibility,
     onColumnVisibilityChange,
     serverTotals,
-    columnSizing,
-    setColumnSize,
-    resetColumnSize,
   });
 
   // "Select all N matching": pull every remaining page into memory (bulk

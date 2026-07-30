@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
-import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -172,11 +171,10 @@ export function useClientEntityList<TData extends BaseListRow>({
     [listBulkActions.enableRowSelection],
   );
 
-  // Persisted per-entity column visibility + widths (same stores as useEntityList).
+  // Persisted per-entity column visibility (same store as useEntityList).
+  // Column widths live in `RTable`, keyed off its `entity`/`sizingKey` prop.
   const { columnVisibility, onColumnVisibilityChange } =
     useTableColumnVisibility(entity);
-  const { columnSizing, setColumnSize, resetColumnSize } =
-    useTableColumnSizing(entity);
 
   // Client-side everything: manual* all false. Expansion wired only when a
   // tree config is provided (getSubRows presence gates getExpandedRowModel).
@@ -194,9 +192,6 @@ export function useClientEntityList<TData extends BaseListRow>({
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     columnVisibility,
     onColumnVisibilityChange,
-    columnSizing,
-    setColumnSize,
-    resetColumnSize,
     getSubRows: tree?.getSubRows,
     filterFromLeafRows: tree?.filterFromLeafRows,
     paginateExpandedRows: tree?.paginateExpandedRows,
