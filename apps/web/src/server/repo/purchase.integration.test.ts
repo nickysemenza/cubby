@@ -1191,17 +1191,36 @@ describe("purchase repository — rollups never see a charge", () => {
       );
     }
 
-    const snapshot = async () => ({
-      analytics: await expenseAnalytics(ctx.db, {}),
-      rollups: Object.fromEntries(await projectRollups(ctx.db, [project.id])),
-      dashboard: await projectDashboardSummary(ctx.db, {}),
-      portfolio: await projectPortfolioAnalytics(ctx.db, {}),
-    });
+    // `byVendor` is held OUT of the byte-identical snapshot, and only that one
+    // field. It is the single analytics output that is charge-aware BY DESIGN —
+    // it groups spend by the vendor reached through `expense.purchaseId`, so it
+    // necessarily goes from empty to populated the moment these lines land on a
+    // charge. That is a new GROUPING of the same money, not money moving, which
+    // is what this guard is about. It gets its own assertions below: the bucket
+    // must equal the summary net exactly, and must ignore `statedTotal` like
+    // everything else.
+    const snapshot = async () => {
+      const { byVendor: _byVendor, ...analytics } = await expenseAnalytics(
+        ctx.db,
+        {},
+      );
+      return {
+        analytics,
+        rollups: Object.fromEntries(await projectRollups(ctx.db, [project.id])),
+        dashboard: await projectDashboardSummary(ctx.db, {}),
+        portfolio: await projectPortfolioAnalytics(ctx.db, {}),
+      };
+    };
+
+    const vendorBuckets = async () =>
+      (await expenseAnalytics(ctx.db, {})).byVendor;
 
     const before = await snapshot();
     // Sanity: the baseline is not vacuously empty.
     expect(before.analytics.summary.net).toBe(100);
     expect(before.rollups[project.id]?.spent).toBe(100);
+    // No charge yet, so nothing to group by vendor.
+    expect(await vendorBuckets()).toEqual([]);
 
     // Now attach every one of those expenses to a real charge.
     const vendorId = await findOrCreateVendor(ctx.db, "Rollup Guard Vendor");
@@ -1226,6 +1245,21 @@ describe("purchase repository — rollups never see a charge", () => {
     // A charge is a grouping, not money: not one number may move.
     expect(await snapshot()).toEqual(before);
 
+    // The one thing that DOES change is the vendor grouping — and it regroups
+    // exactly the same money. All four lines (including the credit and the
+    // undated one) now sit under one vendor, summing to the unchanged net.
+    expect(await vendorBuckets()).toEqual([
+      {
+        vendorId,
+        vendorName: "Rollup Guard Vendor",
+        actual: 125,
+        committed: 50,
+        credits: 75,
+        net: 100,
+        count: 4,
+      },
+    ]);
+
     // Now make the charge's OWN stated total disagree wildly with its lines.
     // `statedTotal` is a reconciliation cue and nothing else; if it could ever
     // reach spend, this is where 99999 would show up.
@@ -1235,6 +1269,9 @@ describe("purchase repository — rollups never see a charge", () => {
       ctx.actor,
     );
     expect(await snapshot()).toEqual(before);
+    // ...including in the vendor bucket, which is the newest way spend could
+    // have picked up a statedTotal by accident.
+    expect((await vendorBuckets())[0]?.net).toBe(100);
 
     // And the vendor's spend is SUM(expense.cost) over the charge's lines —
     // never its statedTotal.
