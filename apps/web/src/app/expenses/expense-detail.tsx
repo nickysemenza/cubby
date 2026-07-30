@@ -19,6 +19,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
+import { persistedVendorId } from "~/lib/vendor-logo-lookup";
 import {
   type DetailSection,
   DetailSections,
@@ -269,7 +270,14 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }}
           SearchProvider={WithVendorSearch}
           renderValue={(v) =>
-            v ? <VendorCell vendor={v.name} /> : <NoneValue />
+            v ? (
+              <VendorCell
+                vendor={v.name}
+                vendorId={persistedVendorId(v.name, expense)}
+              />
+            ) : (
+              <NoneValue />
+            )
           }
         />
       ),

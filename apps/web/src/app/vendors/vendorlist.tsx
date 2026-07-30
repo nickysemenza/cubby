@@ -31,7 +31,7 @@ const VENDOR_TABLE_STATE = { initialSort: "spend" } as const;
  * every render.
  */
 const VENDOR_NAME_PREFIX = (row: VendorOut): ReactNode => (
-  <VendorMark vendor={row.name} />
+  <VendorMark vendor={row.name} vendorId={row.id} />
 );
 
 export function VendorList() {

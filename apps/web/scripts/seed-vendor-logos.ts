@@ -16,9 +16,14 @@
  * budget (`scripts/build-sw.mjs`).
  *
  * Everything is normalized to PNG on the way in, so the committed manifest
- * (`src/lib/vendor-logos.generated.ts`) is a flat set of slugs rather than a
- * slug → extension map. Without that manifest the render path can't know which
- * vendors have a logo and would fire a 404 per logo-less vendor on every load.
+ * (`src/lib/vendor-logos.generated.ts`) maps id → slug rather than needing a
+ * slug → extension lookup too. Keyed by vendor id, not by a freshly recomputed
+ * name-slug: renaming a vendor after it's been seeded must not orphan its
+ * uploaded logo (see `src/lib/vendor-logo-lookup.ts`'s `vendorLogoSlug`). The
+ * R2 object key itself is still the name-derived slug — only the manifest that
+ * points at it changed. Without the manifest at all, the render path can't
+ * know which vendors have a logo and would fire a 404 per logo-less vendor on
+ * every load.
  *
  * Usage: pnpm --filter web seed-vendor-logos [--dry-run]
  */
@@ -68,8 +73,16 @@ const SOURCES: { name: string; url: (domain: string) => string }[] = [
 ];
 
 interface Candidate {
+  /**
+   * Raw bytes exactly as fetched, before PNG normalization. This is what the
+   * placeholder-hash guard must describe — `toPng` gives a placeholder a fresh
+   * hash on the way to becoming `buf`, so hashing the normalized bytes instead
+   * would let a converted placeholder slip past the filter unnoticed.
+   */
+  raw: Buffer;
+  /** PNG-normalized bytes, the ones actually uploaded. */
   buf: Buffer;
-  /** Longest edge in px, read from the PNG header. */
+  /** Longest edge in px, read from `buf`'s PNG header. */
   size: number;
   source: string;
 }
@@ -127,6 +140,19 @@ async function toPng(buf: Buffer): Promise<Buffer | null> {
   });
 }
 
+/**
+ * All usable candidates for a domain: fetched and normalized to PNG, before the
+ * caller picks the largest.
+ *
+ * **No contrast/near-white filtering, deliberately.** An earlier revision gated
+ * candidates on mean-composited-onto-white to drop all-white marks (which render
+ * as a blank tile against the warm-paper background once `grayscale(1)` applies
+ * at rest). That was dropped: on the live roster it demoted 10 real brands to
+ * monograms — including the single largest vendor by spend — and a faint real
+ * logo still carries more identity than an initial. The blank-tile problem is a
+ * RENDER concern and belongs in the render path (give the mark a neutral chip
+ * behind it), not in what we're willing to store. See `docs/todos.md`.
+ */
 async function candidatesFor(domain: string): Promise<Candidate[]> {
   const fetched = await Promise.all(
     SOURCES.map(async ({ name, url }) => {
@@ -134,7 +160,9 @@ async function candidatesFor(domain: string): Promise<Candidate[]> {
       if (!raw) return null;
       const png = await toPng(raw);
       const size = png && pngSize(png);
-      return png && size ? { buf: png, size, source: name } : null;
+      if (!png || !size) return null;
+
+      return { raw, buf: png, size, source: name };
     }),
   );
   return fetched.filter((c): c is Candidate => c !== null);
@@ -161,10 +189,6 @@ async function upload(key: string, buf: Buffer, dir: string) {
 }
 
 interface VendorRow {
-  /**
-   * Unused: logo assets are keyed by the name-derived slug, not the vendor id —
-   * see the header note in `src/lib/vendor-logo.ts` for why, and what it costs.
-   */
   id: string;
   name: string;
   website: string | null;
@@ -255,8 +279,26 @@ const placeholderHashes = new Set(
     .map(md5),
 );
 
+// The probe is expected to fail with 404 from both services rather than
+// serving their placeholder body for a domain that plainly does not exist —
+// `fetchBinary` returns null on any non-2xx, so that 404 yields nothing to
+// hash and this set is likely empty on a normal run. That makes the guard
+// below INERT in practice, not a defense-in-depth no-op, and without this
+// warning that degradation is invisible. Since the near-white gate was
+// removed, an empty set means there is NO automated defense left against a
+// generic globe shipping as a brand — the `noIcon` report at the end of the
+// run, read by a human, is the only backstop.
+if (placeholderHashes.size === 0) {
+  console.log(
+    "⚠ placeholder probe yielded 0 hashes (both favicon services likely 404 the nonexistent-domain probe rather than serving a placeholder body) — the placeholder-hash guard is INERT this run. Nothing automated is now filtering a generic-globe placeholder; skim the per-vendor table below.",
+  );
+}
+
 const tmp = await mkdtemp(path.join(tmpdir(), "vendor-logos-"));
-const slugs: string[] = [];
+/** vendor id -> slug, the shape written to the manifest. */
+const manifest: Record<string, string> = {};
+/** slug -> the first vendor that claimed it, to detect two vendors colliding. */
+const slugOwners = new Map<string, VendorRow>();
 const report: string[] = [];
 /** Has a website, but no real icon came back — the domain may be wrong or dead. */
 const noIcon: VendorRow[] = [];
@@ -280,10 +322,10 @@ try {
       continue;
     }
 
-    // Hash the raw response, not the PNG-normalized one — conversion would give
-    // the placeholder a fresh hash and slip it past the filter.
+    // Hash the RAW response, not the PNG-normalized one — `toPng` would give a
+    // placeholder a fresh hash and slip it past this filter.
     const candidates = (await candidatesFor(domain)).filter(
-      (c) => !placeholderHashes.has(md5(c.buf)),
+      (c) => !placeholderHashes.has(md5(c.raw)),
     );
     const best = candidates.sort((a, b) => b.size - a.size)[0];
     if (!best) {
@@ -292,10 +334,26 @@ try {
     }
 
     const slug = vendorSlug(vendor.name);
+
+    // Two different vendors slugging identically would otherwise share one R2
+    // object silently — one vendor's logo overwrites the other's on upload,
+    // and only the last-written one is ever seen again. This can't be an
+    // exception thrown mid-run (a slow-to-notice typo shouldn't abort every
+    // vendor after it), so it's a loud, operator-visible warning instead; see
+    // the header note in `src/lib/vendor-logo.ts` for the id-re-key escape
+    // hatch if this ever actually fires.
+    const owner = slugOwners.get(slug);
+    if (owner && owner.id !== vendor.id) {
+      console.log(
+        `⚠ slug collision: "${vendor.name}" and "${owner.name}" both slug to "${slug}" — they will SHARE one R2 object (${VENDOR_LOGO_PREFIX}/${slug}.png), and whichever uploads last wins.`,
+      );
+    }
+    slugOwners.set(slug, vendor);
+
     if (!DRY_RUN) {
       await upload(`${VENDOR_LOGO_PREFIX}/${slug}.png`, best.buf, tmp);
     }
-    slugs.push(slug);
+    manifest[vendor.id] = slug;
     report.push(
       `${vendor.name.padEnd(26)} ${domain.padEnd(30)} ${best.source.padEnd(17)} ${best.size}px`,
     );
@@ -306,16 +364,28 @@ try {
 
 const contents = `// GENERATED by scripts/seed-vendor-logos.ts — do not edit by hand.
 //
-// Every vendor slug with a logo in R2 under \`vendors/<slug>.png\`. Its purpose is
-// negative as much as positive: a vendor absent here renders its monogram tile
-// immediately, rather than costing a failed request first.
+// Every vendor with a logo in R2 under \`vendors/<slug>.png\`, keyed by vendor id
+// so a rename doesn't orphan the logo (see \`~/lib/vendor-logo-lookup\`'s
+// \`vendorLogoSlug\`). Absence is as meaningful as presence: a vendor id absent
+// here renders its monogram tile immediately, rather than costing a failed
+// request first.
 
-export const VENDOR_LOGO_SLUGS: ReadonlySet<string> = new Set([
-${[...slugs]
-  .sort()
-  .map((s) => `  "${s}",`)
+export const VENDOR_LOGO_BY_ID: Readonly<Record<string, string>> = {
+${Object.entries(manifest)
+  .sort(([, a], [, b]) => a.localeCompare(b))
+  .map(([id, slug]) => `  "${id}": "${slug}",`)
   .join("\n")}
-]);
+};
+
+/**
+ * Fallback for the rare miss: a vendor id absent from the table above (newer
+ * than the last seed run) still needs to know whether its NAME-derived slug
+ * happens to have a logo. Derived from the table above, not re-emitted from
+ * the seeder's own loop, so it can never drift from it.
+ */
+export const VENDOR_LOGO_SLUGS: ReadonlySet<string> = new Set(
+  Object.values(VENDOR_LOGO_BY_ID),
+);
 `;
 
 if (!DRY_RUN) await writeFile(MANIFEST_PATH, contents);
@@ -378,12 +448,11 @@ if (noSpend > 0) {
 }
 
 const totalRows = vendors.reduce((sum, v) => sum + v.spendRows, 0);
-const loggedSlugs = new Set(slugs);
 const coveredRows = vendors
-  .filter((v) => loggedSlugs.has(vendorSlug(v.name)))
+  .filter((v) => manifest[v.id])
   .reduce((sum, v) => sum + v.spendRows, 0);
 console.log(
   `\nledger coverage: ${coveredRows}/${totalRows} rows (${
     totalRows === 0 ? 0 : Math.round((coveredRows / totalRows) * 100)
-  }%) across ${slugs.length}/${vendors.length} vendors`,
+  }%) across ${Object.keys(manifest).length}/${vendors.length} vendors`,
 );

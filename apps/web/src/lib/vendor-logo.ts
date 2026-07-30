@@ -1,17 +1,16 @@
 // Vendor brand-logo identity: the pure string → asset-key mapping shared by the
-// render path (`VendorMark`) and the seeding script (`scripts/seed-vendor-logos.ts`).
+// render path (`VendorMark`, via `~/lib/vendor-logo-lookup`) and the seeding
+// script (`scripts/seed-vendor-logos.ts`).
 //
-// The asset key is derived from the vendor's NAME, not its id, so `VendorMark`
-// needs only a name to render — no id, no query, usable anywhere a vendor string
-// is in hand. Both sides MUST derive it identically or the generated manifest and
-// the runtime lookup silently disagree, which is why this lives in one alias-free
-// module instead of being reimplemented per call site.
-//
-// TODO: key these assets by `Vendor.id` instead. A vendor id now exists (the
-// `Vendor ──< Purchase ──< Expense` split), and it is the stabler key: renaming a
-// vendor today changes its slug and orphans its uploaded logo, silently demoting it
-// to a monogram until the seeding script is re-run. Not done here because it costs
-// every `VendorMark` call site an id it doesn't currently have.
+// The asset KEY on disk (R2's `vendors/<slug>.png`) is still derived from the
+// vendor's NAME — that part never changed. What changed is the manifest that
+// maps a vendor to that key: `vendor-logos.generated.ts` now keys by
+// `Vendor.id`, not by a freshly computed name-slug, so renaming a vendor no
+// longer orphans its uploaded logo (see `vendor-logo-lookup.ts`'s
+// `vendorLogoSlug`). This module stays the single, alias-free place both sides
+// derive a NAME's slug identically — the seeder still needs it to know which
+// R2 object to write, and the lookup still needs it as the fallback for a
+// vendor id that predates the last seed run.
 
 /**
  * R2 key prefix for vendor logos. Deliberately outside `R2_KEY_PREFIX`
