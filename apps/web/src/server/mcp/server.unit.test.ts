@@ -1,7 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { unsafeExpenseId } from "@cubby/schemas/identifiers";
+import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
 import {
   expenseOut,
+  MATCH_MAX_ROWS,
   projectDashboardSummaryOut,
   projectOut,
   taskOut,
@@ -824,6 +827,110 @@ describe("household tracker synthesis + bulk tools", () => {
       "subjectProductName",
       "trade",
     ]);
+  });
+
+  it("match_expenses applies schema defaults, passes rows through, and preserves candidate order", async () => {
+    const candidate = (
+      overrides: Partial<ExpenseMatchCandidate>,
+    ): ExpenseMatchCandidate => ({
+      expenseId: unsafeExpenseId(EXPENSE_A),
+      name: "dust extractor",
+      cost: 599,
+      date: "2024-06-10",
+      future: false,
+      notes: null,
+      vendorName: null,
+      orderId: null,
+      projectName: null,
+      productName: null,
+      matchedOn: "amount_date",
+      vendorMatch: null,
+      dayDelta: 0,
+      amountDelta: 0,
+      ratio: 1,
+      ratioLabel: "exact",
+      tokenOverlap: 0,
+      ...overrides,
+    });
+
+    const ordered = [
+      candidate({ matchedOn: "order_id", orderId: "1121197219" }),
+      candidate({
+        expenseId: unsafeExpenseId(PROJECT_B),
+        name: "coincidence",
+        matchedOn: "amount_date",
+      }),
+    ];
+    const match = vi.fn().mockResolvedValue({
+      matches: [{ key: "export-1", candidates: ordered }],
+      unmatched: ["export-2"],
+      summary: { rowsIn: 2, rowsWithCandidates: 1, exactOrderIdHits: 1 },
+    });
+
+    const result = await callTool(
+      createMcpServer(),
+      "match_expenses",
+      {
+        rows: [
+          {
+            key: "export-1",
+            date: "2024-06-10",
+            amount: 599,
+            label: "Festool Vacuum",
+          },
+          { key: "export-2", date: "2024-06-10", amount: 1 },
+        ],
+      },
+      { expense: { match } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    // Every tuning knob has a schema default, so a caller passing only `rows`
+    // still reaches the repo with a fully-resolved option set.
+    expect(match).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dayWindow: 30,
+        amountToleranceLow: 0.1,
+        amountToleranceHigh: 0.15,
+        amountFloor: 1,
+        taxRate: 0.08625,
+        maxCandidatesPerRow: 10,
+      }),
+    );
+    expect(match.mock.calls[0]?.[0]?.rows).toHaveLength(2);
+
+    const structured = result.structuredContent as {
+      matches: Array<{ key: string; candidates: Array<{ matchedOn: string }> }>;
+      unmatched: string[];
+      summary: Record<string, number>;
+    };
+    // The repo already ranked these; the tool must not re-sort or trim them.
+    expect(structured.matches[0]?.key).toBe("export-1");
+    expect(structured.matches[0]?.candidates.map((c) => c.matchedOn)).toEqual([
+      "order_id",
+      "amount_date",
+    ]);
+    expect(structured.unmatched).toEqual(["export-2"]);
+    expect(structured.summary.exactOrderIdHits).toBe(1);
+  });
+
+  it("match_expenses rejects a batch over the row cap rather than silently truncating", async () => {
+    const match = vi.fn();
+    const result = await callTool(
+      createMcpServer(),
+      "match_expenses",
+      {
+        rows: Array.from({ length: MATCH_MAX_ROWS + 1 }, (_, i) => ({
+          key: `k${i}`,
+          date: "2026-01-01",
+          amount: 10,
+        })),
+      },
+      { expense: { match } },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(match).not.toHaveBeenCalled();
   });
 
   it("get_project_budget derives overrun fields, sorts worst-first, and totals", async () => {

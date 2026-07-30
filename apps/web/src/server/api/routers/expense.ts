@@ -12,6 +12,8 @@ import {
   expenseCreateInput,
   expenseFiltersSchema,
   expenseListAndSideEffectsOut,
+  expenseMatchInput,
+  expenseMatchOut,
   expenseOut,
   expenseSortableFields,
   expenseTradeAffinityOut,
@@ -26,6 +28,7 @@ import {
   expenseList,
   expenseTradeAffinity,
   getExpenseByID,
+  matchExpenses,
   moveExpenses,
   setExpensesCostType,
   setExpensesTrade,
@@ -142,6 +145,18 @@ const tradeAffinity = protectedProcedure
   .output(z.array(expenseTradeAffinityOut))
   .query(({ ctx }) => expenseTradeAffinity(ctx.db));
 
+/**
+ * Rank vendor-export lines against the ledger. **Read-only — ranks, never
+ * applies.** Direct-repo: no orchestration to own, so no service (and a
+ * pass-through service would be an empty layer). See repo/expense/match.ts for
+ * why the matcher is one wide window plus an explained residual rather than a
+ * set of discrete tax hypotheses.
+ */
+const match = protectedProcedure
+  .input(expenseMatchInput)
+  .output(expenseMatchOut)
+  .query(({ ctx, input }) => matchExpenses(ctx.db, input));
+
 // Bulk "move to project" — projectId: null moves every listed expense to the
 // inbox. Mirrors inventory.bulkMove/task.bulkMove's shape: one repo call
 // inside a transaction, then one wave-wide runMutationSideEffectsForEntities
@@ -206,6 +221,7 @@ export const expenseRouter = createTRPCRouter({
   chartData,
   analytics,
   tradeAffinity,
+  match,
   vendorOptions,
   chargeSiblings,
   bulkMove,

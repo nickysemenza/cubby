@@ -172,7 +172,12 @@ export type PurchaseListResponse = z.infer<typeof purchaseListResponse>;
 export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
 export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
 
-/** Dollars of slack tolerated before `statedTotal` reads as a mismatch. */
+/**
+ * Dollars of slack tolerated before `statedTotal` reads as a mismatch.
+ *
+ * Its reconciliation twin on the ledger side is `HOUSE_TAX_RATE` in ./project,
+ * which lives there rather than here because this module imports from that one.
+ */
 export const RECONCILIATION_TOLERANCE = 0.01;
 
 /**
