@@ -413,9 +413,11 @@ async function getTaskEmbeddingTexts(
       status: task.status,
       trade: task.trade,
       projectName: project.name,
+      subjectProductName: product.name,
     })
     .from(task)
     .leftJoin(project, eq(task.projectId, project.id))
+    .leftJoin(product, eq(task.subjectProductId, product.id))
     .where(
       and(
         notDeleted(task),

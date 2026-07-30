@@ -1,4 +1,5 @@
 import type { ProductFilters } from "@cubby/schemas/product";
+import { taskCreateInput } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -28,6 +29,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "./repo.fixtures";
+import { createTask, deleteTasks } from "./task";
 
 describe("product repository", () => {
   const ctx = withTestDb();
@@ -993,17 +995,47 @@ describe("product repository", () => {
         code: "NOT_FOUND",
       });
     });
+
+    it("rejects a product used as a live task subject, then succeeds after the task is deleted", async () => {
+      const furnace = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Task-Blocked Furnace" }),
+        ctx.actor,
+      );
+      const maintenance = await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "Replace furnace filter",
+          trade: "mechanical",
+          subjectProductId: furnace.id,
+        }),
+        ctx.actor,
+      );
+
+      await expect(
+        deleteProducts(ctx.db, [furnace.id], ctx.actor),
+      ).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        cause: { reason: "PRODUCT_HAS_TASKS" },
+        message: expect.stringContaining("have tasks"),
+      });
+
+      await deleteTasks(ctx.db, [maintenance.id], ctx.actor);
+      await expect(
+        deleteProducts(ctx.db, [furnace.id], ctx.actor),
+      ).resolves.toBeUndefined();
+    });
   });
 
   /**
    * Regression backstop for the completeness guarantee `PRODUCT_EDGE_ROLES`
-   * (repo/product/edge-roles.ts) buys: every edge classified "acquisition"
-   * must actually block `deleteProducts`, and every edge classified
+   * (repo/product/edge-roles.ts) buys: every edge classified "acquisition" or
+   * "history" must actually block `deleteProducts`, and every edge classified
    * "metadata" must NOT block it — and must itself be cascade-soft-deleted
    * once the product it's attached to is gone. A wrong classification, a
    * wrong column, or a silently-dropped predicate in either
-   * `PRODUCT_ACQUISITION_DEPENDENTS` (product/crud.ts) or
-   * `PRODUCT_ACQUISITION_NOT_EXISTS` (problems/detectors-product.ts) fails a
+   * `PRODUCT_RETAINING_DEPENDENTS` (product/crud.ts) or
+   * `PRODUCT_RETAINING_NOT_EXISTS` (problems/detectors-product.ts) fails a
    * test here instead of shipping — declaring an edge's role only forces each
    * consumer to have *an entry* for it, not that the entry is correct.
    *
@@ -1012,7 +1044,7 @@ describe("product repository", () => {
    * what a future entity needs before that generalization is worth building.
    */
   describe("PRODUCT_EDGE_ROLES backstop", () => {
-    it("has exactly the five edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
+    it("has exactly the six edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
       expect(Object.keys(PRODUCT_EDGE_ROLES).sort()).toEqual(
         [
           "Expense.productId",
@@ -1020,6 +1052,7 @@ describe("product repository", () => {
           "ProductExternalId.productId",
           "ProductImage.productId",
           "ProductUnitMappings.productId",
+          "Task.subjectProductId",
         ].sort(),
       );
     });

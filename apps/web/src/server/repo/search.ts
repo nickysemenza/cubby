@@ -361,6 +361,7 @@ const searchQueries = {
       or(
         formatSearchTerm(task.name, query),
         formatSearchTerm(task.trade, query),
+        formatSearchTerm(product.name, query),
       ),
     idCondition: (ids) => idIn(task.id, ids),
     load: (client, condition, limit) =>
@@ -375,11 +376,17 @@ const searchQueries = {
           createdAt: task.createdAt,
           status: task.status,
           projectName: project.name,
+          subjectProductId: task.subjectProductId,
+          subjectProductName: product.name,
         })
         .from(task)
         .leftJoin(
           project,
           and(eq(task.projectId, project.id), notDeleted(project)),
+        )
+        .leftJoin(
+          product,
+          and(eq(task.subjectProductId, product.id), notDeleted(product)),
         )
         .where(and(notDeleted(task), condition))
         .limit(limit) as Promise<TaskSearchResult[]>,

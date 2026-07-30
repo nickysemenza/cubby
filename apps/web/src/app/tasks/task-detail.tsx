@@ -1,9 +1,13 @@
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Info, Link2, ListChecks } from "lucide-react";
+import { CalendarPlus, Info, Link2, ListChecks } from "lucide-react";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
-import { WithTaskSearch } from "~/app/_components/combobox/with-search-hook";
+import {
+  WithProductSearch,
+  WithTaskSearch,
+} from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   formatDateRange,
@@ -27,10 +31,12 @@ import {
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { CreateTaskDialog } from "./create-task-dialog";
 import {
   TASK_STATUS_LABELS,
   taskStatusBadgeVariant,
@@ -153,6 +159,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
 
 export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
   const api = useTRPC();
+  const [followUpOpen, setFollowUpOpen] = useState(false);
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -321,6 +328,41 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           />
         ) : undefined,
     },
+    {
+      label: "For",
+      value: (
+        <EditableEntityCell<ProductId>
+          value={
+            task.subjectProductId && task.subjectProductName
+              ? {
+                  id: task.subjectProductId,
+                  name: task.subjectProductName,
+                }
+              : null
+          }
+          label="product"
+          clearable
+          trigger="pencil"
+          onSave={async (subjectProductId) => {
+            await updateMutation.mutateAsync({
+              id: task.id,
+              data: { subjectProductId },
+            });
+          }}
+          SearchProvider={WithProductSearch}
+          renderValue={(value) =>
+            value ? (
+              <EntityInlineLink
+                entity="product"
+                data={{ id: value.id, name: value.name }}
+              />
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+    },
   ];
 
   const sections: DetailSection[] = [
@@ -440,9 +482,26 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               : "ink",
       }}
       heroStats={heroStats}
-      actions={deleteButton}
+      actions={
+        <Row gap="sm">
+          <Button variant="outline" onClick={() => setFollowUpOpen(true)}>
+            <CalendarPlus />
+            Schedule follow-up
+          </Button>
+          {deleteButton}
+        </Row>
+      }
     >
       <DetailSections sections={sections} rawData={task} />
+      <CreateTaskDialog
+        open={followUpOpen}
+        onOpenChange={setFollowUpOpen}
+        presetName={task.name}
+        presetProjectId={task.projectId}
+        presetTrade={task.trade}
+        presetSubjectProductId={task.subjectProductId}
+        presetSubjectProductName={task.subjectProductName}
+      />
       {deleteDialog}
     </Page>
   );

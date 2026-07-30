@@ -82,6 +82,8 @@ const houseStatusTask = taskOut.pick({
   status: true,
   projectId: true,
   projectName: true,
+  subjectProductId: true,
+  subjectProductName: true,
   dueDate: true,
   dueEndDate: true,
   trade: true,
@@ -256,12 +258,12 @@ export function registerProjectTools(server: McpServer) {
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
-      list: 'List project tasks with status, due dates, trade, project name, parent task, and subtask counts. Filter by status/projectId/trade/search/topLevelOnly/parentTaskId/includeSubProjects/projectPresenceFilter. Pass topLevelOnly=true to exclude checklist subtasks; pass includeSubProjects=true with projectId to also match tasks in that project\'s live descendant sub-projects. projectPresenceFilter="none" is the Inbox (tasks with no project) and "has" is filed work; combined with projectId it WIDENS rather than narrows — {projectId, projectPresenceFilter:"none"} means that project OR unassigned.',
-      get: "Get a task by ID, including blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
+      list: 'List project tasks with status, due dates, trade, project name, optional subject product ("what this task is for"), parent task, and subtask counts. Filter by status/projectId/subjectProductId/trade/search/topLevelOnly/parentTaskId/includeSubProjects/projectPresenceFilter/subjectProductPresenceFilter. Search matches both task and subject-product names. Pass topLevelOnly=true to exclude checklist subtasks; pass includeSubProjects=true with projectId to also match tasks in that project\'s live descendant sub-projects. Presence filters widen an accompanying id selection: {subjectProductId, subjectProductPresenceFilter:"none"} means that product OR no product.',
+      get: "Get a task by ID, including its optional subject product, blocked-by/blocking task ids, parent task (if a subtask), and subtask counts.",
       create:
-        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project. Set parentTaskId to create it as a checklist subtask of another task — one level only (a subtask can't itself have subtasks), and projectId is inherited from the parent when omitted. A subtask's own status is independent — the parent never auto-completes.",
+        "Create a task (status not_started|later|in_progress|blocked|done), optionally attached to a project and/or a subjectProductId describing what the work is for. Set parentTaskId to create it as a checklist subtask of another task — one level only; projectId and subjectProductId are each inherited from the parent when omitted. A subtask can later change either relation independently. A subtask's own status is independent — the parent never auto-completes.",
       update:
-        "Update a task's fields; `blockedByIds` replaces the full set of tasks blocking this one. `parentTaskId` can be set/changed/cleared, subject to the one-level rule (a task with subtasks can't become a subtask, and a subtask can't itself be a parent).",
+        "Update a task's fields, including setting or clearing subjectProductId; `blockedByIds` replaces the full set of tasks blocking this one. `parentTaskId` can be set/changed/cleared, subject to the one-level rule (a task with subtasks can't become a subtask, and a subtask can't itself be a parent).",
       delete:
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },

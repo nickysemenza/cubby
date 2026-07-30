@@ -889,6 +889,12 @@ export const task = pgTable(
     projectId: uuid("projectId")
       .$type<ProjectId>()
       .references(() => project.id),
+    // Optional subject of the work — the product/item this task acts on.
+    // This is deliberately singular: one task may concern one product, while
+    // a product can accumulate a chronological history of many tasks.
+    subjectProductId: uuid("subjectProductId")
+      .$type<ProductId>()
+      .references(() => product.id),
     // One level of checklist subtasks — a subtask's own parentTaskId must be
     // null (enforced in repo/task/crud.ts, not the schema). Parent status
     // stays fully manual; an all-done checklist never auto-completes it.
@@ -913,6 +919,7 @@ export const task = pgTable(
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Task_projectId_idx").on(table.projectId),
+    index("Task_subjectProductId_idx").on(table.subjectProductId),
     index("Task_status_idx").on(table.status),
     index("Task_dueDate_idx").on(table.dueDate),
     index("Task_parentTaskId_idx").on(table.parentTaskId),
@@ -1297,6 +1304,10 @@ export const taskRelations = relations(task, ({ one, many }) => ({
   project: one(project, {
     fields: [task.projectId],
     references: [project.id],
+  }),
+  subjectProduct: one(product, {
+    fields: [task.subjectProductId],
+    references: [product.id],
   }),
   parentTask: one(task, {
     fields: [task.parentTaskId],

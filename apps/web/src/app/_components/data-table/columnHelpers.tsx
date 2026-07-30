@@ -1682,6 +1682,13 @@ interface ProductRefRow {
   productName: string | null;
 }
 
+/** A task's product subject uses explicit field names so it cannot be confused
+ * with an expense's purchased product in shared row types. */
+interface SubjectProductRefRow {
+  subjectProductId: string | null;
+  subjectProductName: string | null;
+}
+
 /**
  * Creates a column linking to a row's associated product (expense
  * `productId`/`productName`). Mirrors {@link createProjectLinkColumn} — see
@@ -1719,6 +1726,89 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     {
       id: "product",
       header: options?.header ?? "Product",
+      sortingFn: entityRefSortingFn,
+      meta: {
+        className: options?.className,
+        mobile: options?.mobile,
+        filterConfig: options?.filterConfig,
+        cellData,
+      },
+      cell: (info) => {
+        const { id, name } = info.getValue();
+
+        if (options?.editable) {
+          const current: ComboboxItem<ProductId> | null =
+            id && name ? { id: unsafeProductId(id), name } : null;
+          const row = info.row.original;
+          return (
+            <EditableEntityCell
+              value={current}
+              label="product"
+              clearable
+              trigger="pencil"
+              onSave={(newId) => options.editable!.onSave(newId, row)}
+              clipboard={specFromCellData(cellData, row)}
+              SearchProvider={WithProductSearch}
+              renderValue={(v) => {
+                if (!v) return <NoneValue />;
+                return (
+                  <TableLink
+                    to="/products/$id"
+                    params={{ id: v.id }}
+                    variant="muted"
+                  >
+                    {v.name}
+                  </TableLink>
+                );
+              }}
+            />
+          );
+        }
+
+        if (!id || !name) return <NoneValue />;
+        return (
+          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+        );
+      },
+    },
+  );
+}
+
+/**
+ * Creates the task list's "For" column. This deliberately mirrors
+ * {@link createProductLinkColumn}, while preserving the domain-specific
+ * `subjectProduct*` field names all the way to the mutation boundary.
+ */
+export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
+  columnHelper: ColumnHelper<T>,
+  options?: {
+    className?: string;
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+    editable?: {
+      onSave: (newProductId: ProductId | null, row: T) => Promise<void>;
+    };
+  },
+) {
+  const cellData = entityCellData<T>(
+    "product",
+    (row) =>
+      row.subjectProductId && row.subjectProductName
+        ? { id: row.subjectProductId, name: row.subjectProductName }
+        : null,
+    options?.editable
+      ? (row, id) => options.editable!.onSave(unsafeProductId(id), row)
+      : undefined,
+  );
+
+  return columnHelper.accessor(
+    (row) => ({
+      id: row.subjectProductId,
+      name: row.subjectProductName,
+    }),
+    {
+      id: "subjectProduct",
+      header: "For",
       sortingFn: entityRefSortingFn,
       meta: {
         className: options?.className,

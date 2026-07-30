@@ -1,17 +1,24 @@
 import type { TaskCompletion, TaskOut } from "@cubby/schemas/project";
+import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import {
   taskDueColumn,
   taskStatusColumn,
   taskTradeColumn,
 } from "~/app/projects/shared";
+import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
-import { createProjectLinkColumn } from "../_components/data-table/columnHelpers";
+import {
+  createProjectLinkColumn,
+  createSubjectProductLinkColumn,
+} from "../_components/data-table/columnHelpers";
+import { ScopeChip } from "../_components/data-table/ScopeChip";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -37,6 +44,8 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
       {row.doneSubtaskCount}/{row.subtaskCount}
     </Badge>
   ) : undefined;
+
+const tasksRoute = getRouteApi("/_authenticated/tasks/");
 
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
@@ -118,6 +127,18 @@ export function TaskList({
           },
         },
       }),
+      createSubjectProductLinkColumn(columnHelper, {
+        className: "w-40",
+        mobile: { slot: "meta", priority: 35, interactive: true },
+        editable: {
+          onSave: async (subjectProductId, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { subjectProductId },
+            });
+          },
+        },
+      }),
       taskDueColumn(
         columnHelper,
         async (dueDate, task) => {
@@ -144,6 +165,36 @@ export function TaskList({
 
   const tableStateOptions = useSeededFilter("name", initialSearch);
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("task");
+
+  // Exact product scopes arrive from a product detail page and do not belong
+  // to TanStack column state. Keep the scope visible and independently
+  // clearable, matching the expense ledger's product deep link.
+  const tasksSearch = tasksRoute.useSearch();
+  const tasksNavigate = tasksRoute.useNavigate();
+  const scopedProductId = tasksSearch.productId;
+  const scopedProductQuery = useQuery({
+    ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
+    enabled: Boolean(scopedProductId),
+  });
+  const clearProductScope = useCallback(() => {
+    void tasksNavigate({
+      search: (prev) => ({ ...prev, productId: undefined }),
+      replace: true,
+    });
+  }, [tasksNavigate]);
+  const toolbarActions =
+    scopedProductId && scopedProductQuery.data ? (
+      <Row gap="sm" align="center">
+        <ScopeChip
+          name="Product"
+          value={scopedProductQuery.data.name}
+          onClear={clearProductScope}
+        />
+        {actions}
+      </Row>
+    ) : (
+      actions
+    );
 
   const {
     table,
@@ -178,7 +229,7 @@ export function TaskList({
         ariaLabel="Tasks Table"
         timing={timing}
         entity="task"
-        actions={actions}
+        actions={toolbarActions}
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}

@@ -50,6 +50,7 @@ import {
   productExternalId,
   productImage,
   productUnitMappings,
+  task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -82,10 +83,7 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
-import {
-  PRODUCT_EDGE_ROLES,
-  type ProductAcquisitionEdgeKey,
-} from "./edge-roles";
+import { PRODUCT_EDGE_ROLES, type ProductRetainingEdgeKey } from "./edge-roles";
 import {
   dbProductToAPI,
   dbProductToListAPI,
@@ -929,17 +927,17 @@ export const quickCreateProduct = async (
 };
 
 /**
- * Per-acquisition-edge dependent fetch for {@link deleteProducts}, keyed off
- * `ProductAcquisitionEdgeKey` (derived from {@link PRODUCT_EDGE_ROLES}, see
+ * Per-retaining-edge dependent fetch for {@link deleteProducts}, keyed off
+ * `ProductRetainingEdgeKey` (derived from {@link PRODUCT_EDGE_ROLES}, see
  * `./edge-roles`). `Record` over that type requires an entry for every
- * acquisition edge, so adding one to `PRODUCT_EDGE_ROLES` is a compile error
- * here until it's wired up — the same completeness guarantee
+ * acquisition/history edge, so adding one to `PRODUCT_EDGE_ROLES` is a
+ * compile error here until it's wired up — the same completeness guarantee
  * `IMAGE_HARD_DELETE` gives `deleteImages` in `repo/image.ts`, extended to a
  * shape (a `.query.<table>.findMany` call) a flat disposition string can't
  * express, since each acquisition edge lives on a different table.
  */
-const PRODUCT_ACQUISITION_DEPENDENTS: Record<
-  ProductAcquisitionEdgeKey,
+const PRODUCT_RETAINING_DEPENDENTS: Record<
+  ProductRetainingEdgeKey,
   (
     tx: DrizzleTransaction,
     ids: ProductId[],
@@ -958,13 +956,23 @@ const PRODUCT_ACQUISITION_DEPENDENTS: Record<
       where: and(inArray(expense.productId, ids), notDeleted(expense)),
       columns: { productId: true },
     }),
+  "Task.subjectProductId": async (tx, ids) => {
+    const rows = await tx.query.task.findMany({
+      where: and(inArray(task.subjectProductId, ids), notDeleted(task)),
+      columns: { subjectProductId: true },
+    });
+    return rows.map(({ subjectProductId }) => ({
+      productId: subjectProductId,
+    }));
+  },
 };
 
 /**
  * Soft delete products by setting deletedAt timestamp.
  * Also soft deletes related unit mappings and images.
- * Throws if any product has live acquisition evidence (inventory or
- * expenses — see `PRODUCT_EDGE_ROLES` in `./edge-roles`).
+ * Throws if any product has live acquisition evidence or durable work history
+ * (inventory, expenses, or tasks — see `PRODUCT_EDGE_ROLES` in
+ * `./edge-roles`).
  */
 export const deleteProducts = async (
   db: Database,
@@ -978,7 +986,8 @@ export const deleteProducts = async (
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, product, ids, "Product");
 
-    // Safety check: don't delete a product with live acquisition evidence.
+    // Safety check: don't delete a product with live acquisition evidence or
+    // durable work history.
     // This used to be two hand-written checks (inventory, then expenses) kept
     // in sync with `findOrphanedProducts` (repo/problems/detectors-product.ts)
     // only by a prose comment — "Inventory and expenses are Product's two
@@ -987,16 +996,16 @@ export const deleteProducts = async (
     // (checking only inventory here once made that detector's false
     // positives executable). Both now read `PRODUCT_EDGE_ROLES`, so which
     // edges block a delete can't drift between the two call sites: adding an
-    // acquisition edge there is a compile error in both until each is wired
-    // up. Permitting an expense-linked delete used to be deliberate too — the
+    // acquisition/history edge there is a compile error in both until each is
+    // wired up. Permitting an expense-linked delete used to be deliberate too — the
     // dangling link degraded to a null display name via
     // resolveLiveJoinName — but that was reversed: the ledger's net cost and
     // owned/sold window are derived from these rows, and a nameless product
     // silently corrupts that derivation with no restore path.
     for (const [key, role] of Object.entries(PRODUCT_EDGE_ROLES)) {
-      if (role.kind !== "acquisition") continue;
+      if (role.kind === "metadata") continue;
       const fetchDependents =
-        PRODUCT_ACQUISITION_DEPENDENTS[key as ProductAcquisitionEdgeKey];
+        PRODUCT_RETAINING_DEPENDENTS[key as ProductRetainingEdgeKey];
       const dependents = await fetchDependents(tx, ids);
       await assertNoDependents({
         offendingParentIds: dependents.map((d) => d.productId),

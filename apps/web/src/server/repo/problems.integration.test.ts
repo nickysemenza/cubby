@@ -332,6 +332,43 @@ describe("problems repo", () => {
       );
       expect(after.orphanedProducts.some((p) => p.id === bought.id)).toBe(true);
     });
+
+    it("does not flag a product used as a live task subject, and flags it once the task is deleted", async () => {
+      const maintained = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Maintained Furnace" }),
+        ctx.actor,
+      );
+      const task = await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: "Replace furnace filter",
+          trade: "mechanical",
+          subjectProductId: maintained.id,
+        }),
+        ctx.actor,
+      );
+
+      const before = await findAllProblems(
+        ctx.db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(before.orphanedProducts.some((p) => p.id === maintained.id)).toBe(
+        false,
+      );
+
+      await deleteTasks(ctx.db, [task.id], ctx.actor);
+
+      const after = await findAllProblems(
+        ctx.db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(after.orphanedProducts.some((p) => p.id === maintained.id)).toBe(
+        true,
+      );
+    });
   });
 
   describe("findProductsMissingPrice", () => {

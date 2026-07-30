@@ -7,7 +7,7 @@
  * rows) inside the same transaction as the column update.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { TaskId } from "@cubby/schemas/identifiers";
+import type { ProductId, TaskId } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkDueDateInput,
   TaskBulkMoveInput,
@@ -20,7 +20,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { task, taskDependency } from "~/server/db/schema";
+import { product, task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -131,11 +131,17 @@ async function validateParentTask(
 ): Promise<{
   id: TaskId;
   projectId: TaskOut["projectId"];
+  subjectProductId: TaskOut["subjectProductId"];
   parentTaskId: TaskOut["parentTaskId"];
 }> {
   const parent = await tx.query.task.findFirst({
     where: and(eq(task.id, parentId), notDeleted(task)),
-    columns: { id: true, projectId: true, parentTaskId: true },
+    columns: {
+      id: true,
+      projectId: true,
+      subjectProductId: true,
+      parentTaskId: true,
+    },
   });
   if (!parent) {
     throw createAppError("TASK_NOT_FOUND", `Parent task ${parentId} not found`);
@@ -147,6 +153,20 @@ async function validateParentTask(
     );
   }
   return parent;
+}
+
+/** A task can only target a live product; stale picker/API ids fail clearly. */
+async function assertSubjectProductLive(
+  tx: DrizzleTransaction,
+  id: ProductId,
+): Promise<void> {
+  const subject = await tx.query.product.findFirst({
+    where: and(eq(product.id, id), notDeleted(product)),
+    columns: { id: true },
+  });
+  if (!subject) {
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
+  }
 }
 
 /** Reject giving a parent to a task that already has live subtasks of its own. */
@@ -233,17 +253,25 @@ export const createTask = async (
     // "inherit the parent's project", which covers both cases and lets an
     // explicit non-null projectId still win.
     let projectId = data.projectId;
+    let subjectProductId = data.subjectProductId;
     if (data.parentTaskId) {
       const parent = await validateParentTask(tx, data.parentTaskId);
       if (projectId == null) {
         projectId = parent.projectId;
       }
+      if (subjectProductId == null) {
+        subjectProductId = parent.subjectProductId;
+      }
+    }
+    if (subjectProductId) {
+      await assertSubjectProductLive(tx, subjectProductId);
     }
 
     const created = await insertAndReturn(tx, task, {
       name: data.name,
       status: data.status,
       projectId,
+      subjectProductId,
       parentTaskId: data.parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
@@ -263,6 +291,7 @@ const AUDIT_FIELDS = [
   "name",
   "status",
   "projectId",
+  "subjectProductId",
   "parentTaskId",
   "dueDate",
   "dueEndDate",
@@ -295,11 +324,15 @@ export const updateTask = async (
       await validateParentTask(tx, data.parentTaskId);
       await assertNoLiveSubtasks(tx, id);
     }
+    if (data.subjectProductId) {
+      await assertSubjectProductLive(tx, data.subjectProductId);
+    }
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
       projectId: data.projectId,
+      subjectProductId: data.subjectProductId,
       parentTaskId: data.parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,

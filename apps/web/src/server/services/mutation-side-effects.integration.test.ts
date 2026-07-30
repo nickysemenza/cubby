@@ -37,7 +37,7 @@ import { cleanupOrphanedEntityEmbeddings } from "./problems.service";
 describe("mutation side effects integration", () => {
   const ctx = withTestDb();
 
-  it("product update enqueues product and related inventory embedding refreshes", async () => {
+  it("product update enqueues product and related inventory/task embedding refreshes", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Manifest tarp" }),
@@ -55,6 +55,16 @@ describe("mutation side effects integration", () => {
         locationId: location.id,
         amount: { value: 1, unit: "each" },
       },
+      ctx.actor,
+    );
+    const task = await createTask(
+      ctx.db,
+      mock(taskCreateInput, {
+        overrides: {
+          name: "Maintain manifest tarp",
+          subjectProductId: product.id,
+        },
+      }),
       ctx.actor,
     );
 
@@ -85,6 +95,9 @@ describe("mutation side effects integration", () => {
         }),
         expect.objectContaining({
           payload: { entityType: "inventory", entityId: inventory.id },
+        }),
+        expect.objectContaining({
+          payload: { entityType: "task", entityId: task.id },
         }),
       ]),
     );

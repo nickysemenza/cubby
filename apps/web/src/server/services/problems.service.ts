@@ -318,8 +318,9 @@ export async function* reparseStaleIngredientParses(
 // Delete unused ingredients (per-card or bulk). When `alsoDeleteProducts`, each
 // ingredient's non-deleted products are deleted FIRST so deleteIngredients'
 // linked-product guard passes. Processed per ingredient so one failure (a
-// product with inventory → PRODUCT_HAS_INVENTORY, or with a ledger row →
-// PRODUCT_HAS_EXPENSES) is reported, not fatal to the batch.
+// product with inventory → PRODUCT_HAS_INVENTORY, with a ledger row →
+// PRODUCT_HAS_EXPENSES, or used as a task subject → PRODUCT_HAS_TASKS) is
+// reported, not fatal to the batch.
 export const deleteUnusedIngredients = async (
   db: Database,
   ingredientIds: IngredientId[],

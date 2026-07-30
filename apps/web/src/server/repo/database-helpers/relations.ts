@@ -31,14 +31,17 @@ import {
 import { notDeleted } from "./query";
 
 /**
- * A task's parent `project` plus its own parent task, each as the
- * `{ name, deletedAt }` projection `resolveLiveJoinName` (transform.ts) needs
- * to derive `projectName` / `parentTaskName` — without pulling the rest of
- * either row. Task-only (expense has no self-relation).
+ * A task's parent `project`, optional subject `product`, and own parent task,
+ * each as the `{ name, deletedAt }` projection `resolveLiveJoinName`
+ * (transform.ts) needs to derive the public relation names — without pulling
+ * the rest of either row. Task-only (expense has no self-relation).
  */
 const withProjectAndParentTaskNameOnly = {
   with: {
     project: {
+      columns: { name: true, deletedAt: true },
+    },
+    subjectProduct: {
       columns: { name: true, deletedAt: true },
     },
     parentTask: {

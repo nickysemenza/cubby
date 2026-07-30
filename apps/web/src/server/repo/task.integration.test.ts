@@ -1,4 +1,8 @@
-import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
+import {
+  unsafeProductId,
+  unsafeProjectId,
+  unsafeTaskId,
+} from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   projectCreateInput,
@@ -10,6 +14,7 @@ import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { taskRouter } from "~/server/api/routers/task";
 import { createTestCaller } from "~/server/api/trpc";
 import { getAuditLog } from "~/server/repo/audit-log";
+import { createProduct, deleteProducts } from "~/server/repo/product";
 import {
   createProject,
   deleteProjects,
@@ -27,6 +32,7 @@ import {
   updateTask,
 } from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
+import { makeProductInput } from "./repo.fixtures";
 
 describe("task repository — listActionableTasks", () => {
   const ctx = withTestDb();
@@ -908,6 +914,148 @@ describe("task repository — subtasks (parentTaskId)", () => {
     const parentRow = result.next.find((r) => r.id === parent.id);
     expect(parentRow?.subtaskCount).toBe(2);
     expect(parentRow?.doneSubtaskCount).toBe(1);
+  });
+
+  it("inherits the parent's subject product once, while an explicit product remains independent", async () => {
+    const furnace = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Furnace" }),
+      ctx.actor,
+    );
+    const airHandler = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Air Handler" }),
+      ctx.actor,
+    );
+    const parent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "mechanical",
+        name: "Service furnace",
+        subjectProductId: furnace.id,
+      }),
+      ctx.actor,
+    );
+
+    const inherited = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "mechanical",
+        name: "Replace filter",
+        parentTaskId: parent.id,
+      }),
+      ctx.actor,
+    );
+    const independent = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "mechanical",
+        name: "Inspect air handler",
+        parentTaskId: parent.id,
+        subjectProductId: airHandler.id,
+      }),
+      ctx.actor,
+    );
+
+    expect(inherited).toMatchObject({
+      subjectProductId: furnace.id,
+      subjectProductName: furnace.name,
+    });
+    expect(independent).toMatchObject({
+      subjectProductId: airHandler.id,
+      subjectProductName: airHandler.name,
+    });
+
+    const cleared = await updateTask(
+      ctx.db,
+      inherited.id,
+      { subjectProductId: null },
+      ctx.actor,
+    );
+    expect(cleared.subjectProductId).toBeNull();
+    expect(cleared.subjectProductName).toBeNull();
+  });
+
+  it("rejects nonexistent and soft-deleted subject products", async () => {
+    const bogus = unsafeProductId("00000000-0000-0000-0000-000000000000");
+    await expect(
+      createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          trade: "other",
+          name: "Impossible product task",
+          subjectProductId: bogus,
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/product.*not found/i);
+
+    const deleted = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Deleted appliance" }),
+      ctx.actor,
+    );
+    await deleteProducts(ctx.db, [deleted.id], ctx.actor);
+
+    const taskWithoutProduct = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "Needs a product",
+      }),
+      ctx.actor,
+    );
+    await expect(
+      updateTask(
+        ctx.db,
+        taskWithoutProduct.id,
+        { subjectProductId: deleted.id },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/product.*not found/i);
+  });
+});
+
+describe("task repository — subject product filters and search", () => {
+  const ctx = withTestDb();
+
+  it("filters by exact product or presence and searches the linked product name", async () => {
+    const furnace = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Basement Furnace" }),
+      ctx.actor,
+    );
+    const linked = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "mechanical",
+        name: "Replace pleated media",
+        subjectProductId: furnace.id,
+      }),
+      ctx.actor,
+    );
+    const unlinked = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "Unrelated chore" }),
+      ctx.actor,
+    );
+    const list = (filters: Parameters<typeof taskList>[1]) =>
+      taskList(ctx.db, filters, [], { pageIndex: 0, pageSize: 500 }).then(
+        ({ data }) => data.map((row) => row.id),
+      );
+
+    await expect(list({ subjectProductId: furnace.id })).resolves.toEqual([
+      linked.id,
+    ]);
+    await expect(
+      list({ subjectProductPresenceFilter: "has" }),
+    ).resolves.toContain(linked.id);
+    await expect(
+      list({ subjectProductPresenceFilter: "none" }),
+    ).resolves.toContain(unlinked.id);
+    await expect(list({ search: "Basement Furnace" })).resolves.toContain(
+      linked.id,
+    );
   });
 });
 

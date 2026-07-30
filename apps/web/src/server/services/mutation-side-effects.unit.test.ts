@@ -1,6 +1,6 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import { unsafeInventoryId, unsafeProductId } from "@cubby/schemas/identifiers";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 import {
   mutationSideEffectEventSchema,
@@ -12,6 +12,9 @@ const dispatchLocationValuationRecomputeMock = vi.hoisted(() => vi.fn());
 const findInventoryEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
 const findInventoryEmbeddingRefsForLocationsMock = vi.hoisted(() => vi.fn());
 const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
+const findTaskEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
+const findMealEmbeddingRefsForRecipesMock = vi.hoisted(() => vi.fn());
+const findTrackerEmbeddingRefsForProjectsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("~/server/background-dispatch", () => ({
   dispatchBackgroundJobs: dispatchBackgroundJobsMock,
@@ -25,6 +28,9 @@ vi.mock("~/server/repo/entity-embedding", () => ({
     findInventoryEmbeddingRefsForLocationsMock,
   findRecipeEmbeddingRefsForIngredients:
     findRecipeEmbeddingRefsForIngredientsMock,
+  findTaskEmbeddingRefsForProducts: findTaskEmbeddingRefsForProductsMock,
+  findMealEmbeddingRefsForRecipes: findMealEmbeddingRefsForRecipesMock,
+  findTrackerEmbeddingRefsForProjects: findTrackerEmbeddingRefsForProjectsMock,
 }));
 
 function fakeBatchRef(overrides: Partial<BackgroundBatchRef> = {}) {
@@ -42,12 +48,24 @@ function fakeBatchRef(overrides: Partial<BackgroundBatchRef> = {}) {
 describe("runMutationSideEffectsForEntities batching", () => {
   const db = {} as Database;
 
+  beforeEach(() => {
+    findInventoryEmbeddingRefsForProductsMock.mockResolvedValue([]);
+    findInventoryEmbeddingRefsForLocationsMock.mockResolvedValue([]);
+    findRecipeEmbeddingRefsForIngredientsMock.mockResolvedValue([]);
+    findTaskEmbeddingRefsForProductsMock.mockResolvedValue([]);
+    findMealEmbeddingRefsForRecipesMock.mockResolvedValue([]);
+    findTrackerEmbeddingRefsForProjectsMock.mockResolvedValue([]);
+  });
+
   afterEach(() => {
     dispatchBackgroundJobsMock.mockReset();
     dispatchLocationValuationRecomputeMock.mockReset();
     findInventoryEmbeddingRefsForProductsMock.mockReset();
     findInventoryEmbeddingRefsForLocationsMock.mockReset();
     findRecipeEmbeddingRefsForIngredientsMock.mockReset();
+    findTaskEmbeddingRefsForProductsMock.mockReset();
+    findMealEmbeddingRefsForRecipesMock.mockReset();
+    findTrackerEmbeddingRefsForProjectsMock.mockReset();
   });
 
   it("dispatches one entity-embedding batch per wave, not one per entity", async () => {

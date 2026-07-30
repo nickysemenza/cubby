@@ -43,11 +43,12 @@ import {
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  task,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   PRODUCT_EDGE_ROLES,
-  type ProductAcquisitionEdgeKey,
+  type ProductRetainingEdgeKey,
 } from "~/server/repo/product/edge-roles";
 
 // ProductWithBetterUpcData is re-exported from the package barrel for the
@@ -111,14 +112,14 @@ export const findDuplicateUniqueProducts = async (
 };
 
 /**
- * Correlated `notExists` builder per acquisition edge, keyed off
- * `ProductAcquisitionEdgeKey` (derived from `PRODUCT_EDGE_ROLES`, see
+ * Correlated `notExists` builder per retaining edge, keyed off
+ * `ProductRetainingEdgeKey` (derived from `PRODUCT_EDGE_ROLES`, see
  * `~/server/repo/product/edge-roles`). `Record` over that type requires an
- * entry for every acquisition edge, so adding one to `PRODUCT_EDGE_ROLES` is
- * a compile error here until it's wired up — mirroring
- * `PRODUCT_ACQUISITION_DEPENDENTS` in `product/crud.ts`'s `deleteProducts`,
+ * entry for every acquisition/history edge, so adding one to
+ * `PRODUCT_EDGE_ROLES` is a compile error here until it's wired up — mirroring
+ * `PRODUCT_RETAINING_DEPENDENTS` in `product/crud.ts`'s `deleteProducts`,
  * which reads the same map to build a different shape (`inArray` fetch +
- * `assertNoDependents`) over the same two edges. That's the guarantee this
+ * `assertNoDependents`) over the same retaining edges. That's the guarantee this
  * file replaces a prose "must agree on both" comment with: the *set* of
  * edges can't drift between the two consumers, even though their SQL does.
  *
@@ -127,8 +128,8 @@ export const findDuplicateUniqueProducts = async (
  * edges by literal table identifier, so a fully-generic loop here would be
  * invisible to that guard.
  */
-const PRODUCT_ACQUISITION_NOT_EXISTS: Record<
-  ProductAcquisitionEdgeKey,
+const PRODUCT_RETAINING_NOT_EXISTS: Record<
+  ProductRetainingEdgeKey,
   (dbClient: DrizzleClient) => SQL
 > = {
   "InventoryEntry.productId": (dbClient) =>
@@ -154,11 +155,18 @@ const PRODUCT_ACQUISITION_NOT_EXISTS: Record<
         .from(expense)
         .where(and(eq(expense.productId, product.id), notDeleted(expense))),
     ),
+  "Task.subjectProductId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(task)
+        .where(and(eq(task.subjectProductId, product.id), notDeleted(task))),
+    ),
 };
 
-// Find products nothing points at — no live inventory, no live expense, no
-// ingredient link. This drives a one-click Delete on the Problems page, so a
-// false positive here is an executable data loss, not just a noisy list.
+// Find products nothing meaningful points at — no live inventory, expense,
+// task subject, or ingredient link. This drives a one-click Delete on the
+// Problems page, so a false positive here is executable data loss, not noise.
 //
 // Two distinct traps, both of which this predicate got wrong at some point:
 //
@@ -168,18 +176,17 @@ const PRODUCT_ACQUISITION_NOT_EXISTS: Record<
 //     case, since emptying a shelf soft-deletes instead of removing. That blind
 //     spot hid 18 of the 20 genuinely-uninventoried products.
 //
-//  2. *Completeness* — Product has five incoming FK edges, and checking only
+//  2. *Completeness* — Product has several incoming FK edges, and checking only
 //     some of them yields a confident wrong answer. Omitting `expense` made 32
 //     of 40 flagged "orphans" false positives: a tool that was bought, logged in
 //     the ledger, and later sold looks exactly like one that was never real.
 //     Note the soft-delete guard script can catch (1) but by construction cannot
 //     catch (2) — a missing subquery is invisible to it.
 //
-// Inventory and expenses are the two *acquisition* edges, so they're the ones
-// that disqualify (see `PRODUCT_EDGE_ROLES`). The metadata edges
+// Inventory/expenses prove acquisition; a task subject proves the product is
+// still part of a useful work history. Those disqualify it. Metadata edges
 // (productExternalId, productUnitMappings, productImage) deliberately don't:
-// an ASIN or a hand-entered conversion says nothing about whether the thing
-// was ever owned.
+// an ASIN or a conversion says nothing about whether the thing was ever owned.
 export const findOrphanedProducts = async (
   db: Database,
 ): Promise<OrphanedProduct[]> => {
@@ -198,9 +205,9 @@ export const findOrphanedProducts = async (
         notDeleted(product),
         isNull(product.ingredientId),
         ...Object.entries(PRODUCT_EDGE_ROLES)
-          .filter(([, role]) => role.kind === "acquisition")
+          .filter(([, role]) => role.kind !== "metadata")
           .map(([key]) =>
-            PRODUCT_ACQUISITION_NOT_EXISTS[key as ProductAcquisitionEdgeKey](
+            PRODUCT_RETAINING_NOT_EXISTS[key as ProductRetainingEdgeKey](
               dbClient,
             ),
           ),

@@ -130,6 +130,9 @@ export const inventoryMutationInvalidateKeys = [
 
 export const productMutationInvalidateKeys = [
   queryKeys.product.all,
+  // Task rows embed their subject product's display name. A product rename
+  // must not leave the task list/detail cache showing the old name.
+  queryKeys.task.all,
 ] as const satisfies readonly QueryKey[];
 
 export const productRecipeMutationInvalidateKeys = [

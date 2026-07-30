@@ -820,6 +820,8 @@ describe("household tracker synthesis + bulk tools", () => {
       "projectId",
       "projectName",
       "status",
+      "subjectProductId",
+      "subjectProductName",
       "trade",
     ]);
   });

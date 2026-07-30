@@ -27,6 +27,7 @@ import {
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
   findRecipeEmbeddingRefsForIngredients,
+  findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
 } from "~/server/repo/entity-embedding";
 
@@ -139,6 +140,15 @@ const collectInventoryEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectTaskEmbeddingRefsForProduct: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "product") return [];
+  return await findTaskEmbeddingRefsForProducts(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
 const collectInventoryEmbeddingRefsForLocation: EmbeddingRefCollector = async (
   ctx,
 ) => {
@@ -196,6 +206,13 @@ async function refreshInventoryEmbeddingsForProduct(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
+async function refreshTaskEmbeddingsForProduct(
+  ctx: HandlerContext,
+): Promise<BackgroundBatchRef[]> {
+  const refs = await collectTaskEmbeddingRefsForProduct(ctx);
+  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+}
+
 async function refreshInventoryEmbeddingsForLocation(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
@@ -238,6 +255,7 @@ const embeddingRefCollectorByHandler = new Map<
     refreshInventoryEmbeddingsForProduct,
     collectInventoryEmbeddingRefsForProduct,
   ],
+  [refreshTaskEmbeddingsForProduct, collectTaskEmbeddingRefsForProduct],
   [
     refreshInventoryEmbeddingsForLocation,
     collectInventoryEmbeddingRefsForLocation,
@@ -297,7 +315,11 @@ async function enqueueLocationAiRefresh(
 export const mutationSideEffectManifest = {
   product: {
     onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
-    onUpdate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
+    onUpdate: [
+      refreshOwnEmbedding,
+      refreshInventoryEmbeddingsForProduct,
+      refreshTaskEmbeddingsForProduct,
+    ],
     onDelete: [],
   },
   location: {

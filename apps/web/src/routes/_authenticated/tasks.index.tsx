@@ -52,6 +52,10 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 
 const searchSchema = z.object({
   q: urlStringParam,
+  // Declared by name as well as through the manifest so typed links can set an
+  // exact product scope and the visible "For" presence filter.
+  productId: urlStringParam,
+  subjectProduct: urlStringParam,
   view: z.enum(viewOptions).optional().catch(undefined),
   // Board layout: column axis + swimlane axis. `lane` is normalized to only
   // apply when `cols === "status"` inside TasksBoardView.
@@ -66,6 +70,8 @@ const searchSchema = z.object({
 
 const searchDefaults = {
   q: undefined,
+  productId: undefined,
+  subjectProduct: undefined,
   view: undefined,
   cols: undefined,
   lane: undefined,

@@ -13,13 +13,16 @@ import {
   HandCoins,
   Info,
   Link2,
+  ListChecks,
   MapPin,
   Package,
+  Plus,
   Receipt,
   Scale,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
+import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -48,6 +51,7 @@ import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
+import { ProductTaskHistory } from "./product-task-history";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -103,6 +107,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const [addToInventoryOpen, setAddToInventoryOpen] = useState(false);
   const [recordSaleOpen, setRecordSaleOpen] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
 
   const sections: DetailSection[] = [
     editableDetailSection({
@@ -158,6 +163,26 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
       content: <ProductExpenseHistory product={product} />,
     },
+    ...(isNonFood
+      ? [
+          {
+            title: "Tasks",
+            icon: ListChecks,
+            zone: "main" as const,
+            headerAction: (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateTaskOpen(true)}
+              >
+                <Plus />
+                New task
+              </Button>
+            ),
+            content: <ProductTaskHistory product={product} />,
+          },
+        ]
+      : []),
     // Custom section: Fits With — the other products sharing a tag. Sidebar
     // zone and tags-only: on an untagged product it would be a permanently
     // empty panel, and most of the catalog is untagged food.
@@ -331,6 +356,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         onOpenChange={setRecordSaleOpen}
         presetProductId={product.id}
         intent="disposition"
+      />
+      <CreateTaskDialog
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+        presetSubjectProductId={product.id}
+        presetSubjectProductName={product.name}
       />
     </Page>
   );

@@ -103,6 +103,8 @@ function task(params: {
     trade: "other",
     sortOrder: null,
     projectName: null,
+    subjectProductId: null,
+    subjectProductName: null,
     parentTaskName: null,
     blockedByIds: [],
     blockingIds: [],
