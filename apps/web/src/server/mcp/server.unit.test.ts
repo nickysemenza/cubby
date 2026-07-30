@@ -747,6 +747,8 @@ describe("household tracker synthesis + bulk tools", () => {
         status: "in_progress",
         notes: "# a long markdown page body",
         icon: "🔨",
+        googleDriveFolderUrl: "https://drive.google.com/drive/folders/kitchen",
+        notionPageUrl: "https://cubby.notion.site/Kitchen-0123456789abcdef",
       },
     });
     const task = mock(taskOut, {
@@ -805,6 +807,8 @@ describe("household tracker synthesis + bulk tools", () => {
       name: "Kitchen",
     });
     expect(structured.projects[0]).not.toHaveProperty("notes");
+    expect(structured.projects[0]).not.toHaveProperty("googleDriveFolderUrl");
+    expect(structured.projects[0]).not.toHaveProperty("notionPageUrl");
     expect(structured.projects[0]).not.toHaveProperty("blockedByIds");
     expect(structured.projects[0]).not.toHaveProperty("createdAt");
     expect(structured.projects[0]?.rollup).toBeDefined();

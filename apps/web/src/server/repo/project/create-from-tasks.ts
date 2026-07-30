@@ -51,6 +51,8 @@ export async function createProjectFromTasks(
       endDate: input.project.endDate,
       icon: input.project.icon,
       notes: input.project.notes,
+      googleDriveFolderUrl: input.project.googleDriveFolderUrl,
+      notionPageUrl: input.project.notionPageUrl,
     });
     await logAuditEntry(tx, actor, {
       entityType: "project",

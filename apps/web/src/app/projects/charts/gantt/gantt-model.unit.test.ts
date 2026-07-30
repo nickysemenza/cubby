@@ -38,6 +38,8 @@ function project(params: {
     endDate: params.endDate ?? null,
     icon: null,
     notes: null,
+    googleDriveFolderUrl: null,
+    notionPageUrl: null,
     // The Gantt reads `dates.effectiveStart/End` (see gantt-model.ts's
     // `ownStartDay`/`ownEndDay`), not the raw override columns above — these
     // fixtures only ever exercise an explicit override, so `effective*`

@@ -32,6 +32,62 @@ export const plainDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
   .describe('Calendar day as "YYYY-MM-DD"');
 
+/**
+ * Parse a complete provider URL without canonicalizing it. URL is used only
+ * for validation; the original trimmed string is what the schema returns, so
+ * pasted sharing query params/fragments survive unchanged.
+ */
+function isProviderUrl(value: string, matches: (url: URL) => boolean): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && matches(url);
+  } catch {
+    return false;
+  }
+}
+
+const googleDriveFolderUrl = z
+  .string()
+  .trim()
+  .transform((value) => (value === "" ? null : value))
+  .nullable()
+  .refine(
+    (value) =>
+      value === null ||
+      isProviderUrl(
+        value,
+        (url) =>
+          url.hostname === "drive.google.com" &&
+          /^\/drive\/(?:u\/\d+\/)?folders\/[^/]+\/?$/.test(url.pathname),
+      ),
+    "Enter a valid Google Drive folder URL",
+  )
+  .describe(
+    "Complete HTTPS drive.google.com folder URL; empty input clears the field",
+  );
+
+const notionPageUrl = z
+  .string()
+  .trim()
+  .transform((value) => (value === "" ? null : value))
+  .nullable()
+  .refine(
+    (value) =>
+      value === null ||
+      isProviderUrl(value, (url) => {
+        const notionHost =
+          url.hostname === "notion.so" ||
+          url.hostname.endsWith(".notion.so") ||
+          url.hostname === "notion.site" ||
+          url.hostname.endsWith(".notion.site");
+        return notionHost && url.pathname.split("/").some(Boolean);
+      }),
+    "Enter a valid Notion page URL",
+  )
+  .describe(
+    "Complete HTTPS notion.so/notion.site page URL (including subdomains); empty input clears the field",
+  );
+
 // ---------------------------------------------------------------------------
 // Option sets
 // ---------------------------------------------------------------------------
@@ -183,6 +239,8 @@ const projectFields = {
   endDate: plainDate.nullable().describe("Manual end override; usually null"),
   icon: z.string().nullable().describe("Emoji shown next to the name"),
   notes: z.string().nullable().describe("Freeform markdown"),
+  googleDriveFolderUrl,
+  notionPageUrl,
 };
 
 const projectCreateShape = {
@@ -196,6 +254,8 @@ const projectCreateShape = {
   endDate: plainDate.nullable().default(null),
   icon: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
+  googleDriveFolderUrl: googleDriveFolderUrl.default(null),
+  notionPageUrl: notionPageUrl.default(null),
 };
 
 export const projectCreateInput = z.object(projectCreateShape);

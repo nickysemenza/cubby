@@ -334,6 +334,94 @@ test.describe("Project tracker", () => {
     );
   });
 
+  test("project detail: resource links validate, render safely, and can be removed", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    const name = `e2e resource project ${Date.now()}`;
+    const driveUrl =
+      "https://drive.google.com/drive/u/1/folders/e2e-drive?usp=sharing";
+    const notionUrl =
+      "https://cubby.notion.site/E2E-Resource-0123456789abcdef?pvs=4";
+
+    await page.goto("/projects");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "New Project" }).click();
+
+    const createDialog = page.getByRole("dialog");
+    await createDialog.getByLabel("Name").fill(name);
+    await createDialog.getByRole("button", { name: /^Create$/ }).click();
+    await expect(createDialog).not.toBeVisible({ timeout: 10000 });
+
+    await page.getByRole("button", { name: "Data view" }).click();
+    await page.getByRole("link", { name, exact: true }).last().click();
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
+      timeout: 10000,
+    });
+
+    const resourcesCard = page.locator('[data-slot="card"]').filter({
+      has: page.getByText("Resources", { exact: true }),
+    });
+    await expect(resourcesCard).toBeVisible();
+    const overviewTitle = page.getByText("Overview", { exact: true });
+    const resourcesTitle = page.getByText("Resources", { exact: true });
+    await expect(overviewTitle).toBeVisible();
+    await expect(resourcesTitle).toBeVisible();
+
+    const driveRow = resourcesCard
+      .getByText("Google Drive folder", { exact: true })
+      .locator("..");
+    const notionRow = resourcesCard
+      .getByText("Notion page", { exact: true })
+      .locator("..");
+
+    // Both fixed rows are present before either optional URL has been set.
+    await expect(driveRow.getByText("Add", { exact: true })).toBeVisible();
+    await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
+
+    await driveRow.getByRole("button", { name: "Edit value" }).click();
+    await page.locator("input:focus").fill(driveUrl);
+    await page.locator("input:focus").press("Enter");
+
+    await notionRow.getByRole("button", { name: "Edit value" }).click();
+    await page.locator("input:focus").fill(notionUrl);
+    await page.locator("input:focus").press("Enter");
+
+    const driveLink = driveRow.getByRole("link", { name: "Open folder" });
+    const notionLink = notionRow.getByRole("link", { name: "Open page" });
+    await expect(driveLink).toHaveAttribute("href", driveUrl);
+    await expect(driveLink).toHaveAttribute("target", "_blank");
+    await expect(driveLink).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(notionLink).toHaveAttribute("href", notionUrl);
+    await expect(notionLink).toHaveAttribute("target", "_blank");
+    await expect(notionLink).toHaveAttribute("rel", "noopener noreferrer");
+
+    // A provider mismatch is rejected and leaves the last valid anchor intact.
+    await driveRow.getByRole("button", { name: "Edit value" }).click();
+    await page
+      .locator("input:focus")
+      .fill("https://notion.so/Wrong-provider-0123456789abcdef");
+    await page.locator("input:focus").press("Enter");
+    await expect(
+      page.getByText("Enter a valid Google Drive folder URL").first(),
+    ).toBeVisible({ timeout: 10000 });
+    await page.keyboard.press("Escape");
+    await expect(driveLink).toHaveAttribute("href", driveUrl);
+
+    // Clearing the shared inline text editor removes each optional URL.
+    await driveRow.getByRole("button", { name: "Edit value" }).click();
+    await page.locator("input:focus").fill("");
+    await page.locator("input:focus").press("Enter");
+    await expect(driveLink).toHaveCount(0);
+    await expect(driveRow.getByText("Add", { exact: true })).toBeVisible();
+
+    await notionRow.getByRole("button", { name: "Edit value" }).click();
+    await page.locator("input:focus").fill("");
+    await page.locator("input:focus").press("Enter");
+    await expect(notionLink).toHaveCount(0);
+    await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
+  });
+
   test("mobile viewport: expense quick-add renders as a bottom sheet and still submits", async ({
     page,
   }) => {
