@@ -203,9 +203,12 @@ export const entityManifest = {
     searchable: false,
     countable: true,
     references: ["vendor", "image"],
-    // No delete: soft-deleting a charge nulls `purchaseId` on real money. The
-    // restructuring ops (split/link/merge) stay UI-only for the same reason —
-    // subtle refusal semantics an agent can't be trusted with yet.
+    // No delete: soft-deleting a charge nulls `purchaseId` on real money —
+    // stays UI-only. The restructuring ops (split/link/merge) are NOT missing
+    // from this list because they're withheld — they aren't CRUD ops at all, so
+    // this roster (get/list/create/update) doesn't cover them. They're exposed
+    // as their own MCP tools (split_expense, link_expenses_to_purchase,
+    // merge_purchases) registered directly in purchase.tools.ts.
     mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
   },

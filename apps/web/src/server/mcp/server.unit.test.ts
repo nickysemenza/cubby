@@ -9,6 +9,7 @@ import {
   projectOut,
   taskOut,
 } from "@cubby/schemas/project";
+import { purchaseOut } from "@cubby/schemas/purchase";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -35,6 +36,7 @@ import {
   slimRecipe,
   stripMockFromJsonSchema,
   WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
 } from "./tools/_shared";
 import { registerRecipeTools } from "./tools/recipe.tools";
 
@@ -1073,6 +1075,108 @@ describe("household tracker synthesis + bulk tools", () => {
     expect(structured.updated).toBe(1);
     expect(structured.items[0]?.id).toBe(EXPENSE_A);
     expect(result.structuredContent).not.toHaveProperty("sideEffects");
+  });
+});
+
+describe("purchase restructuring tools (split/link/merge)", () => {
+  const EXPENSE_A = "77777777-7777-4777-8777-777777777771";
+  const EXPENSE_B = "77777777-7777-4777-8777-777777777772";
+  const PURCHASE_A = "88888888-8888-4888-8888-888888888881";
+  const PURCHASE_B = "88888888-8888-4888-8888-888888888882";
+
+  it("split_expense is WRITE_CLOSED, wraps the array result in items, and passes params through", async () => {
+    const server = createMcpServer();
+    expect(getRegisteredTool(server, "split_expense")?.annotations).toEqual(
+      WRITE_CLOSED,
+    );
+
+    const parts = [
+      mock(expenseOut, { seed: 10, overrides: { id: EXPENSE_A, name: "Saw" } }),
+      mock(expenseOut, {
+        seed: 11,
+        overrides: { id: EXPENSE_B, name: "Blade" },
+      }),
+    ];
+    const split = vi.fn().mockResolvedValue(parts);
+
+    const input = {
+      expenseId: EXPENSE_A,
+      parts: [
+        {
+          name: "Saw",
+          cost: 80,
+          costType: "materials",
+          trade: "other",
+          projectId: null,
+          productId: null,
+        },
+        {
+          name: "Blade",
+          cost: 20,
+          costType: "materials",
+          trade: "other",
+          projectId: null,
+          productId: null,
+        },
+      ],
+    };
+
+    const result = await callTool(server, "split_expense", input, {
+      purchase: { split },
+    });
+
+    expect(split).toHaveBeenCalledWith(input);
+    expect(result.isError).not.toBe(true);
+    const structured = result.structuredContent as {
+      items: Array<Record<string, unknown>>;
+    };
+    expect(structured.items).toHaveLength(2);
+    expect(structured.items[0]?.id).toBe(EXPENSE_A);
+    expect(structured.items[1]?.id).toBe(EXPENSE_B);
+  });
+
+  it("link_expenses_to_purchase is WRITE_CLOSED and passes params through to purchase.link", async () => {
+    const server = createMcpServer();
+    expect(
+      getRegisteredTool(server, "link_expenses_to_purchase")?.annotations,
+    ).toEqual(WRITE_CLOSED);
+
+    const linked = mock(purchaseOut, {
+      seed: 12,
+      overrides: { id: PURCHASE_A },
+    });
+    const link = vi.fn().mockResolvedValue(linked);
+
+    const input = {
+      purchaseId: PURCHASE_A,
+      expenseIds: [EXPENSE_A, EXPENSE_B],
+    };
+    const result = await callTool(server, "link_expenses_to_purchase", input, {
+      purchase: { link },
+    });
+
+    expect(link).toHaveBeenCalledWith(input);
+    expect(result.isError).not.toBe(true);
+    expect((result.structuredContent as { id: string }).id).toBe(PURCHASE_A);
+  });
+
+  it("merge_purchases is WRITE_DESTRUCTIVE_CLOSED and passes params through to purchase.merge", async () => {
+    const server = createMcpServer();
+    expect(getRegisteredTool(server, "merge_purchases")?.annotations).toEqual(
+      WRITE_DESTRUCTIVE_CLOSED,
+    );
+
+    const kept = mock(purchaseOut, { seed: 13, overrides: { id: PURCHASE_A } });
+    const merge = vi.fn().mockResolvedValue(kept);
+
+    const input = { keepId: PURCHASE_A, mergeIds: [PURCHASE_B] };
+    const result = await callTool(server, "merge_purchases", input, {
+      purchase: { merge },
+    });
+
+    expect(merge).toHaveBeenCalledWith(input);
+    expect(result.isError).not.toBe(true);
+    expect((result.structuredContent as { id: string }).id).toBe(PURCHASE_A);
   });
 });
 

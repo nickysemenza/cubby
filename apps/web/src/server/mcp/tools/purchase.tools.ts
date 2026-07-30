@@ -24,18 +24,26 @@
  * - **delete** for either entity. `deleteVendors` refuses while live charges
  *   reference the vendor and an agent has no way to resolve that; deleting a
  *   charge nulls `purchaseId` on real money. Both stay UI-only.
- * - **`purchase.split` / `.link` / `.merge`** — destructive restructuring with
- *   subtle refusal semantics (merge refuses across vendors, split replaces one
- *   expense with N). UI-only for now.
+ *
+ * `purchase.split` / `.link` / `.merge` are NOT in that list anymore — they are
+ * registered below as `split_expense`, `link_expenses_to_purchase` and
+ * `merge_purchases`. Their refusal semantics (merge refuses across vendors and
+ * across two order ids, split refuses an expense with no charge attached) are
+ * carried in full in each tool's own description, since that description is the
+ * agent's error path when a refusal fires.
  */
 
 import { unsafePurchaseId, unsafeVendorId } from "@cubby/schemas/identifiers";
+import { expenseOut } from "@cubby/schemas/project";
 import {
+  linkExpensesToPurchaseInput,
+  mergePurchasesInput,
   purchaseCreateInput,
   purchaseFilterFields,
   purchaseListResponse,
   purchaseOut,
   purchaseUpdateData,
+  splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
   vendorCreateInput,
@@ -45,7 +53,27 @@ import {
   vendorUpdateData,
 } from "@cubby/schemas/vendor";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerEntityCrudToolset, slimPurchase, slimVendor } from "./_shared";
+import { z } from "zod";
+import {
+  registerEntityCrudToolset,
+  registerRouterTool,
+  slimPurchase,
+  slimVendor,
+  WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
+} from "./_shared";
+
+/**
+ * `purchase.split` returns the created parts as a bare array; every other
+ * array-shaped MCP output in this codebase wraps in `{ items }` so the
+ * advertised JSON Schema is object-shaped (a top-level `z.array` has no
+ * `properties` key, which trips the "advertises real JSON Schema properties"
+ * regression guard in server.unit.test.ts). Mirrors `expenseBulkMcpOut` in
+ * project.tools.ts.
+ */
+const splitExpenseMcpOut = z.object({
+  items: z.array(expenseOut),
+});
 
 /**
  * `pendingImageIds` is the browser upload handshake — the widget PUTs to R2,
@@ -106,5 +134,46 @@ export function registerPurchaseTools(server: McpServer) {
         "Update a vendor CHARGE: a `purchase` is ONE vendor transaction, NOT a line of spend, so nothing here changes any money — to correct a cost, trade, costType or project, use update_expense on the ledger line. This is the ONLY way to set `statedTotal`, the dollar total the charge itself claimed: it is recorded for reconciliation against `expenseTotal` (SUM(cost) over the charge's live expenses) and is NEVER summed into spend, nothing back-computes a cost from it, and a mismatch is a soft flag rather than a rejected write. Also writable: vendorId (moves the whole charge and every line's attributed vendor with it), orderId, date, notes, plus `removeImageIds` to detach filed documents and `imageOrder` to reorder them (both take the image ids returned by get_purchase). To ADD a document, use attach_file, not this tool.",
     },
     create: (caller, params) => caller.purchase.create(params),
+  });
+
+  registerRouterTool(server, {
+    name: "split_expense",
+    description:
+      "Split ONE expense into ≥2 parts on the SAME charge — the way an aggregate ledger row (a combo kit, a multi-line receipt entered as one expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only expense is inside an aggregate has NO cost basis at all until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId (projectId/productId default to null) — a combo-kit line can become a `tools` part with one productId and a `materials` part with another. " +
+      "This REPLACES the old `(combo, saw portion)` naming convention that used to encode a split inside a single expense's name — do not invent names like that anymore; give each part its own real name instead. " +
+      "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing here validates the sum, and a deliberately mismatched total is DISPLAYED (as a purchase-reconciliation mismatch against the charge's statedTotal/expenseTotal), never rejected. " +
+      "The original expense is soft-deleted and every part is created on the SAME charge (`purchaseId`) the original had — this only re-labels how one existing charge's money is attributed; it never creates a new charge and never moves money to a different vendor. If that charge had no `statedTotal` yet, one is seeded from the original expense's cost so the parts have something to reconcile against; if it already had one, it is left alone. " +
+      "REFUSES when the expense has no charge attached (`purchaseId` is null) — there is nothing to attach the parts to and nothing here can invent a vendor. Call update_expense first with a `vendor` (and `orderId` if known) to give the expense a charge, then split it.",
+    inputSchema: splitExpenseInput.shape,
+    outputSchema: splitExpenseMcpOut,
+    annotations: WRITE_CLOSED,
+    call: async (caller, params) => {
+      const items = await caller.purchase.split(params);
+      return { items };
+    },
+  });
+
+  registerRouterTool(server, {
+    name: "link_expenses_to_purchase",
+    description:
+      "Re-parent existing expenses onto ONE existing charge (purchase) — e.g. one plumbing invoice that legitimately spans both rough-in and fixtures: link both expense lines to the single charge that paid for both. This only rewrites `purchaseId` on the given expenses; it creates no money, changes no cost/trade/costType/project on any expense, and leaves the target charge's own identity (vendorId/orderId/date/statedTotal/documents) untouched aside from gaining these lines. " +
+      "NOT for payment schedules: a contractor's progress payments (e.g. 11 payments on one job) are 11 REAL, separate transactions and therefore 11 separate purchases — do not link them onto one charge just because they share a project or a vendor. The contract-level rollup across those payments already exists and is a `project`, not a merged purchase; use list_expenses/list_purchases filtered by projectId, or get_project_budget, for that view. " +
+      "REFUSES when `purchaseId` does not resolve to a live (non-deleted) charge.",
+    inputSchema: linkExpensesToPurchaseInput.shape,
+    outputSchema: purchaseOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => caller.purchase.link(params),
+  });
+
+  registerRouterTool(server, {
+    name: "merge_purchases",
+    description:
+      "Merge one or more purchase CHARGES (`mergeIds`) into a single keeper charge (`keepId`) — for the order-less singletons a backfill could not group (grouping by vendor+date alone would have falsely merged unrelated charges). Every expense that belonged to a merged-away charge is re-parented onto the keeper, and each merged-away charge is then SOFT-DELETED — its own identity, statedTotal and filed documents are gone once merged; only its expenses survive, by moving to the keeper. This is genuinely destructive to the merged-away purchase rows (not to any expense or money), so choose `keepId` deliberately before calling. " +
+      "REFUSES across vendors — merging charges from two different vendors would silently rewrite who was paid, and this tool only groups charges that already share one vendor; it never corrects a mistaken vendor. REFUSES when more than one of the charges involved (keeper included) carries a non-null `orderId` — two real order ids are two real transactions, not a duplicate to fold together; a loser's null orderId is fine, and a loser's own orderId is adopted by the keeper when the keeper has none. " +
+      "There is deliberately NO inverse operation — no `splitPurchase` exists, because one order is one charge by construction, so a merge cannot be undone by calling this tool differently. Because of that irreversibility, this is a user action: confirm the correct `keepId` (and which charges are really duplicates of it, e.g. via list_purchases/get_purchase) before calling — never guess a merge on your own initiative.",
+    inputSchema: mergePurchasesInput.shape,
+    outputSchema: purchaseOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.purchase.merge(params),
   });
 }
