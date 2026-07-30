@@ -7,6 +7,8 @@ import type { z } from "zod";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { NoneValue } from "~/components/ui/none-value";
+import { multiSelectFilterFn } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -31,6 +33,8 @@ import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
+import { CategoryLabel } from "../_components/products/CategoryLabel";
+import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -201,6 +205,38 @@ export function InventoryItemList() {
           },
         },
       }),
+      // Product-attribute columns — hidden by default (toggle via the View
+      // menu) since the qty/valuation/product/location set covers the common
+      // case, but real columns so "show me the Milwaukee stuff" is a header
+      // filter, not an agent-only capability (see manufacturerFilter /
+      // categoryFilter in inventoryFilterFields).
+      columnHelper.accessor((row) => row.product.manufacturer, {
+        id: "manufacturer",
+        header: "Manufacturer",
+        enableSorting: false,
+        meta: {
+          className: "min-w-0 w-40 truncate",
+          mobile: { slot: "meta", priority: 70 },
+          filterConfig: { placeholder: "Filter by manufacturer..." },
+        },
+        cell: (info) => info.getValue() || <NoneValue />,
+      }),
+      columnHelper.accessor((row) => row.product.category, {
+        id: "category",
+        header: "Category",
+        enableSorting: false,
+        filterFn: multiSelectFilterFn,
+        meta: {
+          className: "w-32",
+          mobile: { slot: "meta", priority: 75 },
+          filterConfig: {
+            placeholder: "Filter by category...",
+            filterType: "multiselect",
+            options: productCategoryOptionsWithTheme,
+          },
+        },
+        cell: (info) => <CategoryLabel category={info.getValue()} />,
+      }),
       // Last deliberate recount — the only honest freshness signal for a count
       // (`updatedAt` moves on a price-driven valuation recompute). Dash = never
       // verified; sortable so the oldest bins surface first.
@@ -237,6 +273,8 @@ export function InventoryItemList() {
     // still toggleable via the View menu.
     initialColumnVisibility: {
       createdAt: false,
+      manufacturer: false,
+      category: false,
     },
   });
   usePageCount(totalCount);

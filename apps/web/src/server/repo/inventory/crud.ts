@@ -11,6 +11,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
+import type { ProductCategory } from "@cubby/schemas/product";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -26,6 +27,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
+  eqAny,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -182,6 +184,8 @@ interface InventoryFilters {
   productNameFilter?: string;
   locationNameFilter?: string;
   locationIdFilter?: LocationId;
+  manufacturerFilter?: string;
+  categoryFilter?: ProductCategory | ProductCategory[];
 }
 
 /**
@@ -260,11 +264,13 @@ export const inventoryentryList = async (
     [
       { column: product.name, term: filters.productNameFilter },
       { column: location.name, term: filters.locationNameFilter },
+      { column: product.manufacturer, term: filters.manufacturerFilter },
     ],
     [
       filters.locationIdFilter
         ? eq(inventoryEntry.locationId, filters.locationIdFilter)
         : undefined,
+      eqAny(product.category, filters.categoryFilter),
     ],
   );
 

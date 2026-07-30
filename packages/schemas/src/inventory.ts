@@ -18,6 +18,7 @@ import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
+  oneOrMany,
 } from "./pagination";
 import { unitMappingOut } from "./unitmapping";
 
@@ -36,6 +37,13 @@ export const inventoryFilterFields = {
   locationIdFilter: locationId
     .optional()
     .describe("Filter by exact location ID"),
+  manufacturerFilter: z
+    .string()
+    .optional()
+    .describe("Filter by product manufacturer (substring)"),
+  categoryFilter: oneOrMany(productCategory)
+    .optional()
+    .describe("Filter by product category"),
 };
 
 export const inventoryFiltersSchema = z.object(inventoryFilterFields);
@@ -282,6 +290,8 @@ const inventoryMcpProductFields = {
   name: z.string(),
   manufacturer: z.string(),
   shortcode: productShortcode,
+  category: productCategory.nullable(),
+  model: z.string().nullable(),
 };
 
 const inventoryMcpLocationFields = {

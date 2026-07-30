@@ -594,6 +594,19 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "text",
       placeholder: "Filter by location...",
     },
+    {
+      columnId: "manufacturer",
+      field: "manufacturerFilter",
+      kind: "text",
+      placeholder: "Filter by manufacturer...",
+    },
+    {
+      columnId: "category",
+      field: "categoryFilter",
+      kind: "multiselect",
+      placeholder: "Filter by category...",
+      options: productCategoryOptionsWithTheme,
+    },
   ],
 
   location: [

@@ -439,6 +439,8 @@ type InventoryRow = Pick<InventoryMcpOut, "id" | "amount" | "valuation"> & {
     name: string;
     manufacturer: string;
     shortcode: string | null;
+    category: string | null;
+    model: string | null;
   } | null;
   location?: { id: string; name: string } | null;
 };
@@ -454,6 +456,8 @@ export const slimInventory = defineSlim(inventoryMcpOut, (entryRow: Row) => {
           name: entry.product.name,
           manufacturer: entry.product.manufacturer,
           shortcode: entry.product.shortcode,
+          category: entry.product.category,
+          model: entry.product.model,
         }
       : null,
     location: entry.location
