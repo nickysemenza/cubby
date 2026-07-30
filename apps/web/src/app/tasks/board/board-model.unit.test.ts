@@ -31,6 +31,8 @@ function task(params: {
     projectId:
       params.projectId != null ? unsafeProjectId(params.projectId) : null,
     projectName: params.projectName ?? null,
+    subjectProductId: null,
+    subjectProductName: null,
     parentTaskId: null,
     parentTaskName: null,
     dueDate: params.dueDate ?? null,

@@ -122,6 +122,20 @@ export async function findInventoryEmbeddingRefsForProducts(
   return rows.map((row) => ({ entityType: "inventory", entityId: row.id }));
 }
 
+/** Tasks embed their subject product's name, so a product rename must refresh
+ * every live task that points at it. */
+export async function findTaskEmbeddingRefsForProducts(
+  db: Database,
+  productIds: ProductId[],
+): Promise<SearchableEntityRef[]> {
+  if (productIds.length === 0) return [];
+  const rows = await getDb(db).query.task.findMany({
+    where: and(inArray(task.subjectProductId, productIds), notDeleted(task)),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({ entityType: "task", entityId: row.id }));
+}
+
 export async function findInventoryEmbeddingRefsForLocations(
   db: Database,
   locationIds: LocationId[],

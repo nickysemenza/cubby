@@ -427,6 +427,8 @@ const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
   projectId: projectId.nullable(),
+  /** The optional product/item this task acts on. */
+  subjectProductId: productId.nullable(),
   // One level of checklist subtasks — a subtask's own parentTaskId must be
   // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
   // an all-done checklist never auto-completes it.
@@ -444,9 +446,10 @@ const taskCreateShape = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
   projectId: projectId.nullable().default(null),
-  // If set and `projectId` is omitted, the created task inherits the
-  // parent's projectId (see repo/task/crud.ts's createTask) — one-time at
-  // create, no ongoing sync afterwards.
+  subjectProductId: productId.nullable().default(null),
+  // If set and either relation is omitted/null, the created task inherits the
+  // parent's projectId and subjectProductId (see repo/task/crud.ts's
+  // createTask) — one-time at create, no ongoing sync afterwards.
   parentTaskId: taskId.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
@@ -541,6 +544,7 @@ export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 export const taskFilterFields = {
   status: oneOrMany(taskStatusSchema).optional(),
   projectId: oneOrMany(projectId).optional(),
+  subjectProductId: oneOrMany(productId).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
@@ -568,6 +572,8 @@ export const taskFilterFields = {
    * unassigned". That's what the header filter's `(none)` sentinel produces.
    */
   projectPresenceFilter: presenceFilter,
+  /** Presence of a subject-product relationship. */
+  subjectProductPresenceFilter: presenceFilter,
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -579,6 +585,8 @@ export const taskSortableFields = [
   "trade",
   // Joined project name — see the resolver in repo/task/lookup.ts.
   "project",
+  // Joined subject-product name — see the resolver in repo/task/lookup.ts.
+  "subjectProduct",
   "createdAt",
 ] as const;
 export type TaskSortField = (typeof taskSortableFields)[number];
@@ -587,6 +595,8 @@ export const taskOut = z.object({
   id: taskId,
   ...taskFields,
   projectName: z.string().nullable(),
+  /** Null when there is no subject product, or it is gone/soft-deleted. */
+  subjectProductName: z.string().nullable(),
   /** Null when the task has no parent, or the parent is gone/soft-deleted. */
   parentTaskName: z.string().nullable(),
   blockedByIds: z.array(taskId),
@@ -660,6 +670,7 @@ export const actionableTaskOut = z.object({
   id: taskId,
   ...taskFields,
   projectName: z.string().nullable(),
+  subjectProductName: z.string().nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
   // Re-declares taskOut's shape rather than extending it (see taskOut) — kept

@@ -44,7 +44,7 @@ export function registerProductTools(server: McpServer) {
       update:
         "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
       delete:
-        "Soft-delete products by IDs. Fails if products have inventory entries.",
+        "Soft-delete products by IDs. Fails while live inventory entries, expenses, or tasks still reference a product.",
     },
     create: async (caller, params) => {
       const unitMappings = (

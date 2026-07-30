@@ -167,7 +167,8 @@ export const entityManifest = {
     searchable: true,
     countable: true,
     // task→task: Blocked-by/Blocking dependency edges (TaskDependency).
-    references: ["project", "task"],
+    // task→product: optional subject — the thing this work is for.
+    references: ["project", "product", "task"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },

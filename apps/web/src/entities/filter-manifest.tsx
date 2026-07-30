@@ -328,6 +328,25 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       optionsKey: "project",
       nullable: { field: "projectPresenceFilter", label: "project" },
     },
+    {
+      // Product-detail task history deep-links here. The unbounded product
+      // catalog makes a synchronous header picklist impractical, so the exact
+      // id stays URL-only while the visible "For" column offers has/none.
+      columnId: "productId",
+      urlOnly: true,
+      field: "subjectProductId",
+      urlKey: "productId",
+      kind: "id",
+      brand: unsafeProductId,
+      placeholder: "Filter by product id...",
+    },
+    {
+      columnId: "subjectProduct",
+      field: "subjectProductPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter by product...",
+      options: presenceFilterOptions("product"),
+    },
   ],
 
   product: [

@@ -19,6 +19,7 @@ type TaskRow = {
   name: string;
   status: TaskOut["status"];
   projectId: TaskOut["projectId"];
+  subjectProductId: TaskOut["subjectProductId"];
   parentTaskId: TaskOut["parentTaskId"];
   dueDate: string | null;
   dueEndDate: string | null;
@@ -27,6 +28,7 @@ type TaskRow = {
   createdAt: Date;
   updatedAt: Date;
   project: { name: string; deletedAt: Date | null } | null;
+  subjectProduct: { name: string; deletedAt: Date | null } | null;
   parentTask?: { name: string; deletedAt: Date | null } | null;
 };
 
@@ -41,6 +43,7 @@ export const dbTaskToAPI = (
   name: row.name,
   status: row.status,
   projectId: row.projectId,
+  subjectProductId: row.subjectProductId,
   parentTaskId: row.parentTaskId,
   dueDate: row.dueDate,
   dueEndDate: row.dueEndDate,
@@ -50,6 +53,7 @@ export const dbTaskToAPI = (
   // deletion (see project/crud.ts's PROJECT_HAS_TASKS guard) — but
   // resolveLiveJoinName still backstops a soft-deleted parent's name leaking.
   projectName: resolveLiveJoinName(row.project),
+  subjectProductName: resolveLiveJoinName(row.subjectProduct),
   parentTaskName: row.parentTask ? resolveLiveJoinName(row.parentTask) : null,
   blockedByIds,
   blockingIds,

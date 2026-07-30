@@ -6,6 +6,7 @@ import { SEMANTIC_SEARCH_EVALS } from "./search-evals";
 import {
   buildLocationEmbeddingText,
   buildProductEmbeddingText,
+  buildTaskEmbeddingText,
   normalizeSearchText,
 } from "./text";
 
@@ -34,6 +35,19 @@ describe("semantic search text builders", () => {
     expect(text).toContain("location: tarps cloths blankets");
     expect(text).toContain("path: garage / shelf");
     expect(text).toContain("ai description: Contains folded drop cloths");
+  });
+
+  it("includes the subject product in task embedding text", () => {
+    const text = buildTaskEmbeddingText({
+      name: "Replace filter",
+      status: "not_started",
+      trade: "mechanical",
+      projectName: "Home routines",
+      subjectProductName: "Basement furnace",
+    });
+
+    expect(text).toContain("task: Replace filter");
+    expect(text).toContain("product: Basement furnace");
   });
 });
 

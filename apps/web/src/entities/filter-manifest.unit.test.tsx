@@ -39,6 +39,7 @@ describe("manifestFilterConfig", () => {
   it.each([
     // Complements — selecting both would mean "no filter".
     ["expense", "product"],
+    ["task", "subjectProduct"],
     ["product", "ingredient"],
     // The cross-entity presence filters. These also pin the exact `columnId`
     // each one hangs on: a spec whose id matches no column renders NOTHING,
@@ -110,6 +111,45 @@ describe("manifestFilterConfig", () => {
     // `cost` now HAS a spec (the presence filter added alongside this test) —
     // `createdAt` is a real expenses column that genuinely has none.
     expect(manifestFilterConfig("expense", "createdAt")).toBeUndefined();
+  });
+});
+
+describe("task subject-product filters", () => {
+  const build = (search: Record<string, unknown>) => {
+    const specs = getEntityFilters("task");
+    return buildFiltersFromManifest(
+      specs,
+      filterGetterFromSearch(specs, search),
+    );
+  };
+
+  it("routes an exact ?productId= scope to subjectProductId", () => {
+    expect(
+      build({ productId: "11111111-1111-4111-8111-111111111111" }),
+    ).toEqual({
+      subjectProductId: "11111111-1111-4111-8111-111111111111",
+    });
+  });
+
+  it("keeps the visible For-column presence filter independent", () => {
+    expect(build({ subjectProduct: "none" })).toEqual({
+      subjectProductPresenceFilter: "none",
+    });
+    expect(
+      build({
+        productId: "11111111-1111-4111-8111-111111111111",
+        subjectProduct: "has",
+      }),
+    ).toEqual({
+      subjectProductId: "11111111-1111-4111-8111-111111111111",
+      subjectProductPresenceFilter: "has",
+    });
+  });
+
+  it("declares both URL keys so the router does not strip either state", () => {
+    expect(Object.keys(entityFilterSearchFields("task"))).toEqual(
+      expect.arrayContaining(["productId", "subjectProduct"]),
+    );
   });
 });
 

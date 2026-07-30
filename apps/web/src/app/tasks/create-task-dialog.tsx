@@ -1,5 +1,5 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
+import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   plainDate,
   type TaskStatus,
@@ -9,6 +9,9 @@ import {
 } from "@cubby/schemas/project";
 import { useMemo } from "react";
 import { z } from "zod";
+import type { ComboboxItem as ComboboxItemType } from "~/app/_components/combobox/combobox-types";
+import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { tradeOptions } from "~/app/projects/shared";
@@ -33,6 +36,7 @@ const quickAddTaskSchema = z.object({
   status: taskStatusSchema,
   dueDate: plainDate.nullable(),
   trade: tradeSchema.nullable(),
+  subjectProduct: ComboboxItem.nullable(),
 });
 type QuickAddTaskValues = z.infer<typeof quickAddTaskSchema>;
 
@@ -48,6 +52,8 @@ interface CreateTaskDialogProps {
   presetProjectId?: ProjectId | null;
   presetTrade?: Trade;
   presetDate?: string;
+  presetName?: string;
+  presetSubjectProduct?: ComboboxItemType<ProductId> | null;
 }
 
 export function CreateTaskDialog({
@@ -57,19 +63,29 @@ export function CreateTaskDialog({
   presetProjectId,
   presetTrade,
   presetDate,
+  presetName,
+  presetSubjectProduct,
 }: CreateTaskDialogProps) {
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
 
   const defaultValues = useMemo<QuickAddTaskValues>(
     () => ({
-      name: "",
+      name: presetName ?? "",
       projectId: presetProjectId ?? null,
       status: presetStatus ?? "not_started",
       dueDate: presetDate ?? null,
       trade: presetTrade ?? null,
+      subjectProduct: presetSubjectProduct ?? null,
     }),
-    [presetDate, presetProjectId, presetStatus, presetTrade],
+    [
+      presetDate,
+      presetName,
+      presetProjectId,
+      presetStatus,
+      presetSubjectProduct,
+      presetTrade,
+    ],
   );
 
   return (
@@ -79,7 +95,7 @@ export function CreateTaskDialog({
       schema={quickAddTaskSchema}
       defaultValues={defaultValues}
       title="New Task"
-      description="Add a step to work through — optionally attach it to a project."
+      description="Add a step to work through — optionally attach it to a project or product."
       mutationFn={api.task.create.mutationOptions}
       successMessage={(task) => `Added "${task.name}"`}
       invalidateKeys={taskMutationInvalidateKeys}
@@ -89,6 +105,9 @@ export function CreateTaskDialog({
         status: values.status,
         dueDate: values.dueDate,
         dueEndDate: null,
+        subjectProductId: values.subjectProduct?.id
+          ? unsafeProductId(values.subjectProduct.id)
+          : null,
         // Default when the trade field is left unset — see the schema note.
         trade: values.trade ?? "other",
       })}
@@ -121,6 +140,12 @@ export function CreateTaskDialog({
             label="Project"
             options={projectOptions}
             nullable
+          />
+          <ComboboxFieldWithSearch
+            form={form}
+            name="subjectProduct"
+            label="For"
+            searchType="product"
           />
           <PlainDateField form={form} name="dueDate" label="Due date" />
         </>

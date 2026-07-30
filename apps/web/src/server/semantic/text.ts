@@ -197,6 +197,7 @@ const taskSearchTextInputSchema = z.object({
   status: nullableText,
   trade: nullableText,
   projectName: nullableText,
+  subjectProductName: nullableText,
 });
 type TaskSearchTextInput = z.infer<typeof taskSearchTextInputSchema>;
 
@@ -207,6 +208,7 @@ export function buildTaskEmbeddingText(task: TaskSearchTextInput) {
     field("status", parsed.status),
     field("trade", parsed.trade),
     field("project", parsed.projectName),
+    field("product", parsed.subjectProductName),
   ]);
 }
 

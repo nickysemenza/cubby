@@ -8,6 +8,8 @@ import {
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { taskSortableFields } from "@cubby/schemas/project";
 import {
+  type AnyColumn,
+  and,
   eq,
   gte,
   inArray,
@@ -20,14 +22,17 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
-import { task } from "~/server/db/schema";
+import { product, task } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
   eqAny,
+  eqAnyOrPresence,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
+  notDeleted,
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
@@ -84,16 +89,29 @@ export async function buildTaskProjectCondition(
  * keeps `taskList` a relational `findMany`. Soft-delete guarded and NULLS LAST
  * in both directions, matching `buildOrderBy`'s convention.
  */
-const resolveTaskSort = (sort: SortParams) => {
-  if (sort.orderBy !== "project") return null;
+const joinedNameSort = (
+  sort: SortParams,
+  tableName: string,
+  foreignKey: AnyColumn,
+) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
   return [
     sql.raw(
-      `(SELECT p."name" FROM "Project" p ` +
-        `WHERE p."id" = "task"."projectId" AND p."deletedAt" IS NULL) ${dirSql}`,
+      `(SELECT j."name" FROM "${tableName}" j ` +
+        `WHERE j."id" = "task"."${foreignKey.name}" AND j."deletedAt" IS NULL) ${dirSql}`,
     ),
   ];
+};
+
+const resolveTaskSort = (sort: SortParams) => {
+  if (sort.orderBy === "project") {
+    return joinedNameSort(sort, "Project", task.projectId);
+  }
+  if (sort.orderBy === "subjectProduct") {
+    return joinedNameSort(sort, "Product", task.subjectProductId);
+  }
+  return null;
 };
 
 export const taskList = async (
@@ -102,22 +120,48 @@ export const taskList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: TaskOut[]; count: number }> => {
+  const dbClient = getDb(db);
   const projectCondition = await buildTaskProjectCondition(
     db,
     filters.projectId,
     filters.includeSubProjects,
     filters.projectPresenceFilter,
   );
+  const subjectProductNameMatches = filters.search
+    ? dbClient
+        .select({ id: product.id })
+        .from(product)
+        .where(
+          and(
+            notDeleted(product),
+            formatSearchTerm(product.name, filters.search),
+          ),
+        )
+    : undefined;
+  const searchCondition = filters.search
+    ? or(
+        formatSearchTerm(task.name, filters.search),
+        subjectProductNameMatches
+          ? inArray(task.subjectProductId, subjectProductNameMatches)
+          : undefined,
+      )
+    : undefined;
 
   const whereClause = buildSearchConditions(
     task,
-    [{ column: task.name, term: filters.search }],
+    [],
     [
+      searchCondition,
       eqAny(task.status, filters.status),
       // Carries `projectPresenceFilter` too — it ORs with the id selection, so
       // it can't be a sibling condition here (that AND is what made
       // "project A or unassigned" inexpressible).
       projectCondition,
+      eqAnyOrPresence(
+        task.subjectProductId,
+        filters.subjectProductId,
+        filters.subjectProductPresenceFilter,
+      ),
       eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       filters.parentTaskId
@@ -153,7 +197,7 @@ export const taskList = async (
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount(
-    getDb(db).query.task.findMany({
+    dbClient.query.task.findMany({
       where: whereClause,
       orderBy: orderByArray,
       limit: take,
