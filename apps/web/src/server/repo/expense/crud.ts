@@ -243,6 +243,14 @@ export const updateExpense = async (
   if (!needsResolve) {
     // `rest` can carry an explicit `purchaseId` that never passes through
     // `resolveCharge`, so validate it here or it goes in unchecked.
+    //
+    // The check and the write below are separate transactions for the same
+    // reason the resolve path splits (see the note under this branch): the
+    // factory owns its own boundary. So a purchase soft-deleted in the window
+    // between them would still be adopted. Not closable from here — the
+    // factory's generic `update` isn't transactional either — and the cost is a
+    // repairable dangling `purchaseId`, not lost money, so it stays a guard
+    // against the ordinary case rather than a lock.
     if (rest.purchaseId) {
       const target = rest.purchaseId;
       await withTransaction(db, (tx) => assertPurchaseLive(tx, target));
