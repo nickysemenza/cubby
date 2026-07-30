@@ -1,4 +1,5 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditSource } from "@cubby/schemas/context";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
 import { Row } from "~/components/layout";
@@ -19,6 +20,7 @@ import { AuditLogEntryComponent } from "./audit-log-entry";
 interface AuditLogListProps {
   entityType?: AuditEntityType;
   entityId?: string;
+  source?: AuditSource;
   showEntityLink?: boolean;
   /** Number of entries per page (default 20) */
   limit?: number;
@@ -29,6 +31,7 @@ interface AuditLogListProps {
 export function AuditLogList({
   entityType,
   entityId,
+  source,
   showEntityLink = true,
   limit = 20,
   variant = "default",
@@ -47,6 +50,7 @@ export function AuditLogList({
         {
           entityType,
           entityId,
+          source,
           limit,
         },
         {

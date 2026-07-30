@@ -10,6 +10,9 @@ export const auditLogRouter = createTRPCRouter({
       getAuditLog(ctx.db, {
         entityType: input.entityType,
         entityId: input.entityId,
+        source: input.source,
+        createdAtFrom: input.createdAtFrom,
+        createdAtTo: input.createdAtTo,
         limit: input.limit,
         cursor: input.cursor,
       }),

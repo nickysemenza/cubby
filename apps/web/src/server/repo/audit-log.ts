@@ -1,9 +1,9 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { ActorContext, AuditSource } from "@cubby/schemas/context";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
-import { unwrapDb } from "~/server/repo/database-helpers";
+import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
 
 // Action types for audit entries
 type AuditAction = "create" | "update" | "delete";
@@ -157,11 +157,16 @@ export async function getAuditLog(
   params: {
     entityType?: AuditEntityType;
     entityId?: string;
+    source?: AuditSource | AuditSource[];
+    // Both ISO date strings, same encoding as `cursor` below — inclusive
+    // bounds on `createdAt`.
+    createdAtFrom?: string;
+    createdAtTo?: string;
     limit: number;
     cursor?: string; // ISO date string for cursor-based pagination
   },
 ): Promise<{ entries: AuditLogRow[]; nextCursor?: string }> {
-  const conditions: ReturnType<typeof eq>[] = [];
+  const conditions: SQL[] = [];
 
   if (params.entityType) {
     conditions.push(eq(auditLog.entityType, params.entityType));
@@ -171,7 +176,23 @@ export async function getAuditLog(
     conditions.push(eq(auditLog.entityId, params.entityId));
   }
 
-  // Cursor-based pagination: get entries older than cursor
+  const sourceCondition = eqAny(auditLog.source, params.source);
+  if (sourceCondition) {
+    conditions.push(sourceCondition);
+  }
+
+  if (params.createdAtFrom) {
+    conditions.push(gte(auditLog.createdAt, new Date(params.createdAtFrom)));
+  }
+
+  if (params.createdAtTo) {
+    conditions.push(lte(auditLog.createdAt, new Date(params.createdAtTo)));
+  }
+
+  // Cursor-based pagination: get entries older than cursor. ANDs with
+  // `createdAtTo` above rather than reconciling the two — both are upper
+  // bounds on the same indexed column, so the extra predicate is index-served
+  // and simply narrows the window further.
   if (params.cursor) {
     conditions.push(lt(auditLog.createdAt, new Date(params.cursor)));
   }
