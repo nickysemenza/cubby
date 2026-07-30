@@ -369,38 +369,48 @@ no `Payment` axis — see `packages/schemas/src/purchase.ts` for why.
 
 Follow-ups the split itself generated (small, none blocking):
 
-- [ ] **Key vendor logo assets by `vendor.id`, not the name slug.** Renaming a vendor
-  changes `vendorSlug(name)` and silently orphans its uploaded R2 logo — it demotes to
-  a monogram with no error anywhere. `vendor.id` is immutable and now exists. Cost:
-  every `VendorMark` call site must carry an id (some render from a bare name string),
-  plus a one-time R2 re-key or re-seed. TODO marker is in `src/lib/vendor-logo.ts`.
-- [ ] **`purchaseId` on `expenseFilterFields`.** Its absence is why MCP has a bespoke
-  `get_purchase_expenses` tool: `{vendorId, orderId}` is the only way to reach a
-  charge's lines, and that fails for the ~40% of charges with no order id. Adding the
-  filter lets that tool be deleted and gives the ledger a "lines of this charge" deep
-  link. Repo + filter-manifest work.
-- [ ] **`findDuplicateVendors` only catches spelling drift, not abbreviation drift.**
-  `B&H` vs `B&H Photo` normalize to different keys (`bh` / `bhphoto`) and are not
-  reported — that real pair was found by eye while filling in websites. Trigram
-  similarity on `Vendor.name` would catch it; exact-key normalization can't.
-  **Trigger**: a second abbreviation pair showing up.
-- [ ] **Reject near-white vendor logos in the seeder.** `seed-vendor-logos` hashes
-  against the two favicon services' generic-globe placeholders, but has no CONTRAST
-  check — so a white-on-transparent favicon passes and then renders as blank against
-  the warm-paper background once `grayscale(1)` is applied at rest. Measured 2026-07-30
-  across all 70 uploaded assets (mean luminance of the 32px transformed variant,
-  alpha flattened onto white): **10 are above 0.85** — `veradek` 0.988,
-  `the-growers-exchange` 0.965, `walmart` 0.923, `visual-comfort` 0.910,
-  `jacquemus` 0.894, `ebay` 0.890, `supplyhouse` 0.879, `ace-hardware` 0.870,
-  `sherwin-williams` 0.864, `rubio-monocoat` 0.859. Pre-existing (`ebay` and
-  `sherwin-williams` were in the original 52). Fix: a mean-luminance ceiling beside
-  the placeholder-hash guard, so these fall through to the monogram tile — which is
-  strictly more readable than an invisible mark. Repro is a `curl` of the
-  `/cdn-cgi/image/width=32,…` URL piped to `magick -alpha remove -background white
-  -format '%[fx:mean]'`; note plain `urllib` is UA-blocked by Cloudflare.
+- **`findDuplicateVendors` will not catch abbreviation drift — closed, not deferred.**
+  `B&H` vs `B&H Photo` normalize to different keys (`bh` / `bhphoto`) and go
+  unreported; that real pair was found by eye while filling in websites. Two
+  candidate signals were considered and **both are dead**, so don't reopen this
+  without a third idea:
+  - *Trigram similarity on `Vendor.name`* — already measured on the live ledger and
+    recorded in the detector's own header comment
+    ([detectors-label-variants.ts](../apps/web/src/server/repo/problems/detectors-label-variants.ts)):
+    at `> 0.3` it flags 13 pairs, **all false positives** (`Ace Hardware`/`DK Hardware`,
+    `Home Depot`/`Office Depot`, `Tool Nirvana`/`Tool Nut`), and the real drift
+    (`Amazon.com`, 0.636) does not separate from the noise (`Festool`/`Festool Recon`,
+    0.571). Brand names share industry nouns, so the score measures the shared noun.
+  - *Prefix containment on the canonical key* — the tighter signal, and it fails for a
+    structural reason rather than a tuning one: it flags `festool ⊂ festoolrecon`
+    exactly as it flags `bh ⊂ bhphoto`, and those are **two different vendors** (a brand
+    and its outlet store). `X` vs `X <qualifier>` is lexically identical whether it's a
+    duplicate or a separate business, so no threshold separates them.
 
-- [ ] **Rename `ProductManuals`.** It serves a charge's PDF invoices now, not just
-  product manuals; its prop type was already widened to `ViewableDocument`. Cosmetic.
+  The roster is 113 rows and human-scale; merging a duplicate found by eye is a UI
+  operation. Accept the gap.
+- [ ] **Near-white vendor logos need a RENDER fix, not a seeder filter.** A
+  white-on-transparent favicon renders as a blank tile against warm paper once
+  `grayscale(1)` applies at rest. Measured 2026-07-30 (mean channel value of the 32px
+  transformed variant, alpha composited onto white via `magick -alpha remove
+  -background white -format '%[fx:mean]'` — note plain `urllib` is UA-blocked by
+  Cloudflare, and `-alpha remove` is not interchangeable with `-flatten`: `veradek`
+  reads .9876 vs .9907): `veradek` .988, `the-growers-exchange` .965, `walmart` .923,
+  `visual-comfort` .911, `jacquemus` .895, `ebay` .892, `supplyhouse` .879,
+  `ace-hardware` .870, `sherwin-williams` .864, `rubio-monocoat` .859.
+
+  **A seeder-side rejection gate was built and then removed — don't rebuild it.** At
+  `NEAR_WHITE_MAX = 0.9` it demoted **10 real brands** to monograms, including
+  `Masseria Calderisi`, the single largest vendor by spend ($142k). A faint real mark
+  still carries more identity than an initial, and the gate also conflated two
+  opposite operator signals: "this domain is dead, fix the field" and "this domain is
+  fine, the brand's mark is just white" both surfaced as *check the domain*. The
+  problem is that we render a light mark on a light ground — so fix it where it is:
+  give the mark a neutral chip/plate behind it in `vendor-cell.tsx`, or skip
+  `grayscale(1)` at rest below a luminance threshold **computed at render time**. That
+  keeps every logo stored and lets the display adapt, instead of deciding at seed time
+  that a brand has no logo at all.
+
 - [ ] **`Vendor.kind` was removed** after shipping — nothing branched on it and it was
   null on 111 of 114 rows. Contractor metadata (license number, COI expiry) would
   bring it back as additive columns plus a discriminator; don't re-add it decoratively.

@@ -906,6 +906,18 @@ export const expenseFilterFields = {
    * The two together are the group key.
    */
   orderId: oneOrMany(z.string()).optional(),
+  /**
+   * Exact match on the charge itself — the "show me the rest of this charge"
+   * scope, seeded from the URL only (a deep link from the charge's own detail
+   * page), same shape as `productId` above. Simpler than either
+   * `vendorId`/`orderId`: `purchaseId` is a column ON `expense`, not resolved
+   * through `Purchase` like they are, so the repo needs no `chargeCondition`
+   * sub-select hop for this one — a plain `eqAny`.
+   *
+   * No dedicated presence field: `vendorPresenceFilter` already means
+   * `purchaseId IS NULL`, since `purchase.vendorId` is NOT NULL (see above).
+   */
+  purchaseId: purchaseId.optional(),
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;

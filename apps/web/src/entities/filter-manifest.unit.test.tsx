@@ -484,6 +484,7 @@ describe("expense URL-only scopes", () => {
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
       "productId",
       "orderIdExact",
+      "purchaseId",
     ]);
     expect(columnBacked.some((spec) => spec.urlOnly)).toBe(false);
   });
@@ -498,12 +499,22 @@ describe("expense URL-only scopes", () => {
     ).toMatchObject({ productId: "prod-1" });
   });
 
+  it("still routes ?purchaseId= to the server filter", () => {
+    const specs = getEntityFilters("expense");
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { purchaseId: "purchase-1" }),
+      ),
+    ).toMatchObject({ purchaseId: "purchase-1" });
+  });
+
   it("still declares a search field for every URL-only key", () => {
     // Without these the route's strict schema strips the params before
     // anything can read them back.
     const fields = entityFilterSearchFields("expense");
     expect(Object.keys(fields)).toEqual(
-      expect.arrayContaining(["productId", "order"]),
+      expect.arrayContaining(["productId", "order", "purchaseId"]),
     );
   });
 });

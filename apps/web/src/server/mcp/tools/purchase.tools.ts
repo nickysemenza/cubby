@@ -30,7 +30,6 @@
  */
 
 import { unsafePurchaseId, unsafeVendorId } from "@cubby/schemas/identifiers";
-import { expenseOut } from "@cubby/schemas/project";
 import {
   purchaseCreateInput,
   purchaseFilterFields,
@@ -46,14 +45,7 @@ import {
   vendorUpdateData,
 } from "@cubby/schemas/vendor";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import {
-  READ_ONLY_CLOSED,
-  registerEntityCrudToolset,
-  registerRouterTool,
-  slimPurchase,
-  slimVendor,
-} from "./_shared";
+import { registerEntityCrudToolset, slimPurchase, slimVendor } from "./_shared";
 
 /**
  * `pendingImageIds` is the browser upload handshake — the widget PUTs to R2,
@@ -68,9 +60,6 @@ const purchaseMcpCreateInput = purchaseCreateInput.omit({
 const purchaseMcpUpdateShape = purchaseUpdateData.omit({
   pendingImageIds: true,
 }).shape;
-
-/** `purchase.expenses` returns a bare array; MCP structured output needs an object. */
-const purchaseExpensesOut = z.object({ items: z.array(expenseOut) });
 
 export function registerPurchaseTools(server: McpServer) {
   registerEntityCrudToolset(server, {
@@ -110,24 +99,12 @@ export function registerPurchaseTools(server: McpServer) {
     operations: { delete: false },
     descriptions: {
       list: 'List vendor CHARGES: a `purchase` is ONE vendor transaction (vendorId + optional orderId + charge date), NOT a line of spend — if you want ledger rows carrying cost/trade/costType/project, use list_expenses instead. Each row returns vendorId/vendorName, orderId, date, notes, `expenseCount`, `expenseTotal` (SUM(cost) over the charge\'s live expenses — THIS is the charge\'s spend), `statedTotal` (what the paperwork itself claimed, in dollars, NEVER summed into spend), and the filed documents. Comparing statedTotal against expenseTotal is the reconciliation cue: a mismatch is a soft flag, not an error, and is often correct (a partial refund reduces a line without changing what the charge stated). Filter by vendorId (from list_vendors), orderId, search (substring on order id), dateFrom/dateTo (inclusive YYYY-MM-DD on charge date), orderIdPresenceFilter ("none" = the ~40% of charges the vendor never issued an order id for) and statedTotalPresenceFilter ("none" = charges with no stated total recorded yet, i.e. the not-yet-reconciled worklist). Sorted newest charge first.',
-      get: "Get one vendor CHARGE by id: a `purchase` is ONE vendor transaction, NOT a line of spend — for a ledger line's cost/trade/costType/project use get_expense or list_expenses instead. Returns vendorId/vendorName, orderId, date, notes, `expenseCount`, `expenseTotal` (SUM(cost) over its live expenses — the charge's actual spend), `statedTotal` (the charge's own claimed total, never summed into spend, present purely to reconcile against expenseTotal), and the filed documents with their real image ids, which are what `removeImageIds` / `imageOrder` on update_purchase take. Call get_purchase_expenses with the same id to read the lines this charge is made of.",
+      get: "Get one vendor CHARGE by id: a `purchase` is ONE vendor transaction, NOT a line of spend — for a ledger line's cost/trade/costType/project use get_expense or list_expenses instead. Returns vendorId/vendorName, orderId, date, notes, `expenseCount`, `expenseTotal` (SUM(cost) over its live expenses — the charge's actual spend), `statedTotal` (the charge's own claimed total, never summed into spend, present purely to reconcile against expenseTotal), and the filed documents with their real image ids, which are what `removeImageIds` / `imageOrder` on update_purchase take. To read the individual ledger lines this charge is made of, call list_expenses filtered by this charge's id (purchaseId) — the exact scope, needing no vendorId/orderId cross-reference.",
       create:
         "Create a vendor CHARGE: a `purchase` is ONE vendor transaction, NOT a line of spend, so this books no money at all — the ledger lines that carry cost/trade/costType/project are created with create_expense. `vendorId` is required and must be a uuid from list_vendors (there is no create-by-vendor-name path on this tool); `orderId` (the vendor's own free-text order/receipt id), `date`, `notes` and `statedTotal` are optional. `statedTotal` is what the charge itself said it was, in dollars, and is NEVER summed into spend — a charge's spend is SUM(cost) over its expenses, and statedTotal exists only as a reconciliation cue against them. Usually you do NOT need this tool: create_expense accepts `vendor` by NAME plus `orderId` and find-or-creates the vendor and the charge in the same transaction. Reach for create_purchase when the charge must exist before its lines do, or to record a statedTotal create_expense cannot carry. One purchase = one vendor transaction, never a contract: a contractor's 11 progress payments are 11 purchases, and the contract-level rollup you may actually want is a `project`.",
       update:
         "Update a vendor CHARGE: a `purchase` is ONE vendor transaction, NOT a line of spend, so nothing here changes any money — to correct a cost, trade, costType or project, use update_expense on the ledger line. This is the ONLY way to set `statedTotal`, the dollar total the charge itself claimed: it is recorded for reconciliation against `expenseTotal` (SUM(cost) over the charge's live expenses) and is NEVER summed into spend, nothing back-computes a cost from it, and a mismatch is a soft flag rather than a rejected write. Also writable: vendorId (moves the whole charge and every line's attributed vendor with it), orderId, date, notes, plus `removeImageIds` to detach filed documents and `imageOrder` to reorder them (both take the image ids returned by get_purchase). To ADD a document, use attach_file, not this tool.",
     },
     create: (caller, params) => caller.purchase.create(params),
-  });
-
-  registerRouterTool(server, {
-    name: "get_purchase_expenses",
-    description:
-      "The ledger lines of one vendor charge — the expenses whose `purchaseId` is this purchase, with their name/cost/trade/costType/project, in the same shape list_expenses returns. This is the way in: list_expenses has no purchaseId filter, and scoping by {vendorId, orderId} only works for the ~60% of charges that carry an order id. Use it after list_purchases flags a charge whose `expenseTotal` disagrees with its `statedTotal`, to see which line is wrong before fixing it with update_expense.",
-    inputSchema: { id: z.string().describe("Purchase ID") },
-    outputSchema: purchaseExpensesOut,
-    annotations: READ_ONLY_CLOSED,
-    call: async (caller, params) => ({
-      items: await caller.purchase.expenses(unsafePurchaseId(params.id)),
-    }),
   });
 }

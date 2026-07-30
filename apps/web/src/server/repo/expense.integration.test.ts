@@ -1644,6 +1644,55 @@ describe("expense repository — product bridge", () => {
     ]);
   });
 
+  it("filters by purchase (charge) id directly, no vendor hop needed", async () => {
+    const orderId = "111-purchaseid-filter-0000001";
+    const first = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "line one of the charge",
+        vendor: "Amazon",
+        orderId,
+      }),
+      ctx.actor,
+    );
+    const second = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "line two of the charge",
+        vendor: "Amazon",
+        orderId,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        trade: "other",
+        costType: "materials",
+        name: "unrelated charge",
+        vendor: "Home Depot",
+      }),
+      ctx.actor,
+    );
+    // Both lines resolved onto the same `Purchase` via `(vendor, orderId)`.
+    expect(purchaseIdOf(second)).toBe(purchaseIdOf(first));
+
+    const { data } = await expenseList(
+      ctx.db,
+      { purchaseId: purchaseIdOf(first) },
+      [],
+      pagination,
+    );
+    expect(data.map((p) => p.name).sort()).toEqual([
+      "line one of the charge",
+      "line two of the charge",
+    ]);
+  });
+
   it("finds chargeless rows via vendorPresenceFilter, and ORs with a selection", async () => {
     await createExpense(
       ctx.db,
