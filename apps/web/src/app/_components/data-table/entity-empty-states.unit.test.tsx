@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { hasActiveFilters, isNarrowed } from "./entity-empty-states";
 
 /**
- * A URL-only scope (`/purchases?productId=…`) narrows the rows without ever
+ * A URL-only scope (`/expenses?productId=…`) narrows the rows without ever
  * entering `columnFilters` — every entry there has to resolve to a real column.
  * `useTableConfig` reports the count through table meta so an empty result set
  * under a scope still reads as "no matches" rather than "you have nothing yet".

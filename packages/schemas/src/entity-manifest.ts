@@ -171,15 +171,52 @@ export const entityManifest = {
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
+  // A thin roster of the places money goes. Deliberately minimal in v1 —
+  // contractor metadata (license, COI expiry) and vendor-level documents (W-9,
+  // contracts) are the natural follow-ons once the roster exists.
+  vendor: {
+    dbTable: "Vendor",
+    idBrand: "VendorId",
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    // Out of the embedding pipeline in v1: a vendor is a name, and the ledger
+    // rows that mention it are already indexed.
+    searchable: false,
+    countable: true,
+    references: [],
+    // No delete: `deleteVendors` refuses while live charges still reference the
+    // vendor, and an agent has no way to rehome them.
+    mcp: ["get", "list", "create", "update"],
+    routerStyle: "custom",
+  },
+  // ONE vendor transaction — identity (`vendorId` + optional `orderId`), the
+  // charge date, an optional `statedTotal` that is never summed into spend, and
+  // its documents. Money lives on the expenses below it.
   purchase: {
     dbTable: "Purchase",
     idBrand: "PurchaseId",
     softDelete: true,
     auditable: true,
+    hasImages: true,
+    searchable: false,
+    countable: true,
+    references: ["vendor", "image"],
+    // No delete: soft-deleting a charge nulls `purchaseId` on real money. The
+    // restructuring ops (split/link/merge) stay UI-only for the same reason —
+    // subtle refusal semantics an agent can't be trusted with yet.
+    mcp: ["get", "list", "create", "update"],
+    routerStyle: "custom",
+  },
+  expense: {
+    dbTable: "Expense",
+    idBrand: "ExpenseId",
+    softDelete: true,
+    auditable: true,
     hasImages: false,
     searchable: true,
     countable: true,
-    references: ["project", "product"],
+    references: ["purchase", "project", "product"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },

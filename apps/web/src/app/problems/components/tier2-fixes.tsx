@@ -1,3 +1,4 @@
+import type { DuplicateVendor } from "@cubby/schemas/problems";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -15,7 +16,7 @@ import {
 
 /**
  * Delete an orphaned product. findOrphanedProducts and deleteProducts' safety
- * checks agree on the same two acquisition edges (inventory, purchases), so a
+ * checks agree on the same two acquisition edges (inventory, expenses), so a
  * product surfaced here can't trip either guard.
  */
 export function OrphanedDeleteFix({
@@ -39,7 +40,7 @@ export function OrphanedDeleteFix({
     <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Delete <span className="font-medium">{name}</span>? It has no inventory,
-        no purchases, and isn't linked to an ingredient.
+        no expenses, and isn't linked to an ingredient.
       </p>
       <Button
         size="sm"
@@ -53,36 +54,38 @@ export function OrphanedDeleteFix({
   );
 }
 
+/** `1 charge` / `4 charges` — a vendor's weight in the merge decision. */
+const charges = (n: number) => `${n} charge${n === 1 ? "" : "s"}`;
+
 /**
- * Backfill the missing vendor on an order whose rows disagree about it.
+ * Fold a duplicate vendor into the spelling that carries more charges.
  *
- * Sends only the order id — the server re-derives the vendor from the order's
- * own rows, so this can't write a stale value, and re-running it after it's
- * applied resolves to nothing rather than writing again. Only rendered when the
- * order's populated rows agree on exactly one vendor; two distinct vendors is a
- * real collision the card reports without offering a fix.
+ * The one Problems fix that RETIRES an entity rather than editing a field, so it
+ * spells out both sides and which one survives before offering the button —
+ * `mergeVendors` soft-deletes the loser, and there is no restore.
+ *
+ * All of the actual work belongs to `mergeVendors` (repo/vendor.ts): it carries
+ * `website`/`notes` over only when the keeper lacks them, and folds any charges
+ * the two vendors hold under the same order id, which the partial-unique
+ * `(vendorId, orderId)` index would otherwise reject. Nothing here re-derives any
+ * of that; it passes two ids.
+ *
+ * Invalidates the PURCHASE key set, not just the vendor one: folding a charge
+ * re-parents its expenses, so the expense/project/dashboard rollups go stale too
+ * — the same reason `purchaseMutationInvalidateKeys` is a superset of
+ * `vendorMutationInvalidateKeys`.
  */
-export function OrderVendorBackfillFix({
-  orderId,
-  vendor,
-  missingCount,
+export function DuplicateVendorMergeFix({
+  variant,
   close,
 }: {
-  orderId: string;
-  vendor: string;
-  missingCount: number;
+  variant: DuplicateVendor;
   close: () => void;
 }) {
   const api = useTRPC();
-  const backfill = useProblemCardMutation({
-    mutationFn: api.problems.backfillOrderVendor.mutationOptions,
-    // Reports what actually happened, including the no-op: the server re-derives
-    // the vendor, so a card left open while the order was fixed elsewhere
-    // resolves to nothing rather than silently claiming a write.
-    success: (data) =>
-      data.vendor
-        ? `Vendor set on ${data.updated} row${data.updated === 1 ? "" : "s"}`
-        : "Order already consistent",
+  const merge = useProblemCardMutation({
+    mutationFn: api.vendor.merge.mutationOptions,
+    success: (vendor) => `Merged into ${vendor.name}`,
     invalidateKeys: purchaseMutationInvalidateKeys,
     onSuccess: close,
   });
@@ -90,17 +93,24 @@ export function OrderVendorBackfillFix({
   return (
     <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
-        Set vendor <span className="font-medium">{vendor}</span> on{" "}
-        {missingCount} row{missingCount === 1 ? "" : "s"} of order{" "}
-        <span className="font-mono">{orderId}</span>? Until then the order reads
-        as two separate groups.
+        Merge <span className="font-medium">{variant.value}</span> (
+        {charges(variant.count)}) into{" "}
+        <span className="font-medium">{variant.canonical}</span> (
+        {charges(variant.canonicalCount)})? Every charge moves to{" "}
+        {variant.canonical} and {variant.value} leaves the roster. Its website
+        and notes carry over only where {variant.canonical} has none.
       </p>
       <Button
         size="sm"
-        onClick={() => backfill.mutate({ orderId })}
-        disabled={backfill.isPending}
+        onClick={() =>
+          merge.mutate({
+            keepId: variant.canonicalSampleId,
+            mergeIds: [variant.sampleId],
+          })
+        }
+        disabled={merge.isPending}
       >
-        Backfill vendor
+        {merge.isPending ? "Merging…" : `Merge into ${variant.canonical}`}
       </Button>
     </Stack>
   );

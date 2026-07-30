@@ -1,10 +1,17 @@
 // Vendor brand-logo identity: the pure string → asset-key mapping shared by the
 // render path (`VendorMark`) and the seeding script (`scripts/seed-vendor-logos.ts`).
 //
-// `Purchase.vendor` is free text, so there is no id to key an asset off — the
-// vendor string itself is the key. Both sides MUST derive it the same way or the
-// generated manifest and the runtime lookup silently disagree, which is why this
-// lives in one alias-free module instead of being reimplemented per call site.
+// The asset key is derived from the vendor's NAME, not its id, so `VendorMark`
+// needs only a name to render — no id, no query, usable anywhere a vendor string
+// is in hand. Both sides MUST derive it identically or the generated manifest and
+// the runtime lookup silently disagree, which is why this lives in one alias-free
+// module instead of being reimplemented per call site.
+//
+// TODO: key these assets by `Vendor.id` instead. A vendor id now exists (the
+// `Vendor ──< Purchase ──< Expense` split), and it is the stabler key: renaming a
+// vendor today changes its slug and orphans its uploaded logo, silently demoting it
+// to a monogram until the seeding script is re-run. Not done here because it costs
+// every `VendorMark` call site an id it doesn't currently have.
 
 /**
  * R2 key prefix for vendor logos. Deliberately outside `R2_KEY_PREFIX`
@@ -30,8 +37,8 @@ export function vendorSlug(vendor: string): string {
 /**
  * Fallback mark for a vendor with no logo — the initials of the first two words
  * ("Direct Tools Outlet" → "DT"), or the first two letters of a single-word
- * vendor ("Zoro" → "ZO"). 45 of the ledger's 67 vendors appear exactly once and
- * are one-off local suppliers, so this is the common path, not an edge case.
+ * vendor ("Zoro" → "ZO"). Most vendors are one-off local suppliers with a single
+ * charge and no `website`, so this is the common path, not an edge case.
  */
 export function vendorMonogram(vendor: string): string {
   const words = deaccent(vendor)

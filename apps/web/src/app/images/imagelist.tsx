@@ -34,13 +34,14 @@ const IMAGE_INVALIDATE_KEYS = [queryKeys.image.list] as const;
  */
 const IMAGE_ENTITY_LINK_KIND: Record<
   EntityImage,
-  "product" | "location" | "recipe" | "project" | null
+  "product" | "location" | "recipe" | "project" | "purchase" | null
 > = {
   PRODUCT: "product",
   LOCATION: "location",
   RECIPE: "recipe",
   PROJECT: "project",
   COOKBOOK: null,
+  PURCHASE: "purchase",
 };
 
 export default function ImageList() {
@@ -142,6 +143,20 @@ export default function ImageList() {
               // Owner kind without an EntityInlineLink arm (COOKBOOK today) —
               // show the name as plain text rather than crashing the page.
               return <span className="truncate">{entityName}</span>;
+            }
+
+            // A purchase has no `name` column, so its inline-link arm takes the
+            // charge's identity fields instead. The image row's `entityName` is
+            // already the resolved charge label (the vendor's order id), so it
+            // feeds `orderId` — `purchaseLabel` then renders it verbatim.
+            if (entity === "purchase") {
+              return (
+                <EntityInlineLink
+                  entity="purchase"
+                  data={{ id: entityId, orderId: entityName }}
+                  compact
+                />
+              );
             }
 
             return (

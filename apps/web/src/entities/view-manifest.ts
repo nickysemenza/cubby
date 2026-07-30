@@ -6,7 +6,7 @@ import { FILTER_NONE } from "./filters";
  * table.
  *
  * These used to be view-switcher tabs whose filters lived in a
- * `Partial<PurchaseFilters>` spread into `useEntityList`'s `extraFilters`.
+ * `Partial<ExpenseFilters>` spread into `useEntityList`'s `extraFilters`.
  * That spread wins over the manifest-derived filters, so on a preset tab the
  * matching header control stayed interactive but inert — you could pick a
  * trade and nothing happened. The preset was also invisible in the URL, so a
@@ -46,13 +46,13 @@ export interface ViewDefinition {
 }
 
 /**
- * Only `purchase` has views today. Tasks' `history` tab is deliberately NOT
+ * Only `expense` has views today. Tasks' `history` tab is deliberately NOT
  * here: it pins `completion: "done"`, a schema enum with no column and no
  * manifest spec, so it isn't expressible as column-filter state without
  * inventing a column for it. It keeps its tab.
  */
 export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
-  purchase: [
+  expense: [
     {
       id: "planned",
       label: "Planned",

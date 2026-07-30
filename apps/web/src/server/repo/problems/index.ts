@@ -20,16 +20,16 @@
  *   COVERAGE    → `detectors-coverage.ts`   (population denominators for the
  *                                            coverage meters — the only module
  *                                            here that counts *healthy* rows)
- *   PURCHASE    → `detectors-purchase.ts`   (orders whose rows disagree about
- *                                            their vendor — the (vendor,
- *                                            orderId) group-key guardrail)
+ *   PURCHASE    → `detectors-purchase.ts`   (charges whose lines don't add up to
+ *                                            their stated total — ADVISORY, since
+ *                                            a partial refund makes that correct)
  *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
  *                                            sub-recipe while marked fresh —
  *                                            derived-data-on-removal guardrail)
  *   LABELS      → `detectors-label-variants.ts`
- *                                           (one brand spelled two ways in a
- *                                            free-text column — vendor,
- *                                            manufacturer)
+ *                                           (one name spelled two ways — in the
+ *                                            free-text manufacturer column, or as
+ *                                            two `Vendor` roster rows)
  *   EMBEDDING   → `detectors-embedding.ts`  (live entities with no embedding row
  *                                            — invisible to semantic search)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
@@ -60,10 +60,10 @@ export {
   findNeverVerifiedInventory,
   findUnknownParkedItems,
 } from "./detectors-inventory";
-// Free-text brand-label drift (one name, two spellings)
+// Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
+  findDuplicateVendors,
   findManufacturerSpellingVariants,
-  findVendorSpellingVariants,
 } from "./detectors-label-variants";
 // Location-centric detectors (+ EmptyLocation type re-export)
 export {
@@ -85,11 +85,8 @@ export {
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
-// Purchase-centric detectors (the (vendor, orderId) group-key guardrail)
-export {
-  findOrdersWithPartialVendor,
-  resolveOrderVendorBackfill,
-} from "./detectors-purchase";
+// Purchase-centric detectors (the soft stated-total-vs-lines worklist)
+export { findChargesNotReconciling } from "./detectors-purchase";
 // Recipe-centric detectors (derived-data-on-removal guardrail)
 export {
   findParentRecipesWithDeletedSubRecipes,

@@ -354,7 +354,7 @@ const categoryDistribution = protectedProcedure
 /**
  * Tag roster for the product list's Tags filter picklist — one grouped query
  * (see `getProductTagOptions`), same "cheap options query" shape as
- * `purchase.vendorOptions`.
+ * `expense.vendorOptions`.
  */
 const tagOptions = protectedProcedure
   .output(productTagOptionsOut)

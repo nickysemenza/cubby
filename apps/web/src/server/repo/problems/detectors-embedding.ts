@@ -26,13 +26,13 @@ import type { Database } from "~/server/db";
 import {
   cookbook,
   entityEmbedding,
+  expense,
   ingredient,
   inventoryEntry,
   location,
   meal,
   product,
   project,
-  purchase,
   recipe,
   task,
 } from "~/server/db/schema";
@@ -130,10 +130,10 @@ const embeddingSources = {
     deletedAtColumn: project.deletedAt,
   },
   task: { table: task, idColumn: task.id, deletedAtColumn: task.deletedAt },
-  purchase: {
-    table: purchase,
-    idColumn: purchase.id,
-    deletedAtColumn: purchase.deletedAt,
+  expense: {
+    table: expense,
+    idColumn: expense.id,
+    deletedAtColumn: expense.deletedAt,
   },
 } satisfies Record<SearchableEntity, EmbeddingSource>;
 

@@ -58,7 +58,7 @@ describe("ReUI month span packing", () => {
       addDays(rowStart, 3),
     );
     const later = occurrence(
-      "purchase",
+      "expense",
       addDays(rowStart, 5),
       addDays(rowStart, 6),
     );
@@ -90,7 +90,7 @@ describe("ReUI month span packing", () => {
       bars.find((bar) => bar.occurrence.eventId === "task-range")?.lane,
     ).toBe(1);
     expect(
-      bars.find((bar) => bar.occurrence.eventId === "purchase")?.lane,
+      bars.find((bar) => bar.occurrence.eventId === "expense")?.lane,
     ).toBe(0);
   });
 });

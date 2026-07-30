@@ -21,6 +21,7 @@ import {
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
+  unsafePurchaseId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -41,6 +42,8 @@ import {
   productImage,
   project,
   projectImage,
+  purchase,
+  purchaseImage,
   recipe,
   recipeImage,
 } from "~/server/db/schema";
@@ -680,6 +683,13 @@ export const assertAttachableEntityExists = async (
         and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
       ),
     )
+    .with("purchase", () =>
+      countWhere(
+        db,
+        purchase,
+        and(eq(purchase.id, unsafePurchaseId(entityId)), notDeleted(purchase)),
+      ),
+    )
     .exhaustive();
   if (count === 0) {
     throw createAppError(
@@ -718,6 +728,11 @@ const associateImageWithEntity = async (
     )
     .with("project", () =>
       associatePendingImages(dbc, projectImage, "projectId", entityId, [
+        imageId,
+      ]),
+    )
+    .with("purchase", () =>
+      associatePendingImages(dbc, purchaseImage, "purchaseId", entityId, [
         imageId,
       ]),
     )

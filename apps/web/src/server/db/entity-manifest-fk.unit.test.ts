@@ -7,13 +7,18 @@ import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import {
   cookbook,
+  expense,
   image,
   ingredient,
   inventoryEntry,
   location,
   meal,
   product,
+  project,
+  purchase,
   recipe,
+  task,
+  vendor,
 } from "~/server/db/schema";
 
 // The Drizzle table backing each entity that has a local table.
@@ -26,6 +31,14 @@ const ENTITY_TABLE: Partial<Record<Entity, PgTable>> = {
   inventory: inventoryEntry,
   meal,
   image,
+  // The tracker side, added with the Vendor ──< Purchase ──< Expense split. The
+  // `expense → purchase → vendor` chain is exactly the kind of edge that is easy
+  // to add as a column and forget in the manifest, which is what this guards.
+  project,
+  task,
+  vendor,
+  purchase,
+  expense,
 };
 
 // pgTable name -> entity (e.g. "InventoryEntry" -> "inventory"); cross-checked

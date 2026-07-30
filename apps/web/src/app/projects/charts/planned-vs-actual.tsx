@@ -1,4 +1,4 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { ExpenseOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
@@ -29,14 +29,14 @@ const SERIES_LABELS: Record<string, string> = {
 };
 
 /**
- * Committed spend vs future-flagged purchases, grouped by cost type — not by
- * month, because planned purchases usually have no date and a time axis
+ * Committed spend vs future-flagged expenses, grouped by cost type — not by
+ * month, because planned expenses usually have no date and a time axis
  * would silently drop them.
  */
-export function PlannedVsActual({ purchases }: { purchases: PurchaseOut[] }) {
+export function PlannedVsActual({ expenses }: { expenses: ExpenseOut[] }) {
   const data = useMemo(() => {
     const buckets = new Map<string, { actual: number; planned: number }>();
-    for (const p of purchases) {
+    for (const p of expenses) {
       const costType = p.costType ?? "uncategorized";
       const entry = buckets.get(costType) ?? { actual: 0, planned: 0 };
       entry[p.future ? "planned" : "actual"] += p.cost ?? 0;
@@ -52,10 +52,10 @@ export function PlannedVsActual({ purchases }: { purchases: PurchaseOut[] }) {
       )
       .filter((d) => d.actual > 0 || d.planned > 0)
       .sort((a, b) => a.actual + a.planned - (b.actual + b.planned));
-  }, [purchases]);
+  }, [expenses]);
 
   if (data.length === 0) {
-    return <ChartEmpty icon={CalendarClock} title="No purchase data." />;
+    return <ChartEmpty icon={CalendarClock} title="No expense data." />;
   }
 
   const chartHeight = Math.max(220, data.length * 56 + 80);

@@ -1,207 +1,154 @@
 /**
- * Purchase Router — project spend ledger (migrated from Notion).
- * Pure crud-factory shape; no children, no rollups of its own.
+ * Purchase Router — ONE vendor transaction per row.
+ *
+ * `list` comes from the shared factory; the rest is hand-rolled for the same two
+ * reasons as `vendor.ts` (correlated rollups the factory can't produce, and
+ * purchase is not searchable in v1), plus the three operations that have no
+ * factory analogue at all: `link`, `split` and `merge`.
+ *
+ * There is deliberately no `splitPurchase` — one order is one purchase by
+ * construction (the partial-unique `(vendorId, orderId)` index), so there is
+ * nothing to split. `split` here splits an *expense* into lines of one charge.
  */
 
-import { type PurchaseId, purchaseId } from "@cubby/schemas/identifiers";
+import { purchaseId } from "@cubby/schemas/identifiers";
+import { expenseOut } from "@cubby/schemas/project";
 import {
-  purchaseAnalyticsOut,
-  purchaseBulkCostTypeInput,
-  purchaseBulkMoveInput,
-  purchaseBulkTradeInput,
+  linkExpensesToPurchaseInput,
+  mergePurchasesInput,
   purchaseCreateInput,
   purchaseFiltersSchema,
-  purchaseListAndSideEffectsOut,
   purchaseOut,
   purchaseSortableFields,
-  purchaseTradeAffinityOut,
-  purchaseUpdateData,
-  purchaseVendorOptionsOut,
-} from "@cubby/schemas/project";
+  purchaseUpdateInput,
+  splitExpenseInput,
+} from "@cubby/schemas/purchase";
 import { z } from "zod";
 import {
   createPurchase,
   deletePurchases,
   getPurchaseByID,
-  getPurchaseOrderSiblings,
-  movePurchases,
-  purchaseAnalytics,
+  getPurchaseExpenses,
+  linkExpensesToPurchase,
+  mergePurchases,
   purchaseList,
-  purchaseTradeAffinity,
-  purchaseVendorOptions,
-  setPurchasesCostType,
-  setPurchasesTrade,
+  splitExpense,
   updatePurchase,
 } from "~/server/repo/purchase";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import { createEntityListProcedure } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const {
-  getByID,
-  list,
-  create,
-  update,
-  delete: deleteItem,
-} = createSearchableEntityCrudProcedures({
+const { list } = createEntityListProcedure({
   schemas: {
-    createInput: purchaseCreateInput,
-    updateInput: purchaseUpdateData,
     output: purchaseOut,
     filters: purchaseFiltersSchema,
     sort: {
       sortableFields: purchaseSortableFields,
       defaultSort: "date",
-      // No grouping on this table; an empty roster keeps the new joined-name
-      // sort keys from being accepted as group keys that do nothing.
-      groupableFields: ["costType"] as const,
     },
-    idSchema: purchaseId,
   },
   repository: {
-    getByID: async (services, id: PurchaseId) =>
-      getPurchaseByID(services.db, id),
-    list: async (services, filters, sort, pagination) =>
-      purchaseList(services.db, filters, sort, pagination),
-    create: async (services, data) =>
-      createPurchase(services.db, data, services.actorContext),
-    update: async (services, id: PurchaseId, data) =>
-      updatePurchase(services.db, id, data, services.actorContext),
-    delete: async (services, ids) => {
-      await deletePurchases(services.db, ids, services.actorContext);
-      return undefined;
-    },
+    list: (ctx, filters, sorts, pagination) =>
+      purchaseList(ctx.db, filters, sorts, pagination),
   },
   entityName: "purchase",
 });
 
+const getByID = protectedProcedure
+  .input(purchaseId)
+  .output(purchaseOut)
+  .query(({ ctx, input }) => getPurchaseByID(ctx.db, input));
+
+/** This charge's lines — the expense table on a purchase detail page. */
+const expenses = protectedProcedure
+  .input(purchaseId)
+  .output(z.array(expenseOut))
+  .query(({ ctx, input }) => getPurchaseExpenses(ctx.db, input));
+
+const create = protectedProcedure
+  .input(purchaseCreateInput)
+  .output(purchaseOut)
+  .mutation(({ ctx, input }) =>
+    createPurchase(ctx.db, input, ctx.actorContext),
+  );
+
+const update = protectedProcedure
+  .input(purchaseUpdateInput)
+  .output(purchaseOut)
+  .mutation(({ ctx, input }) =>
+    updatePurchase(ctx.db, input, ctx.actorContext),
+  );
+
 /**
- * Every purchase matching the filters, in one round trip — chart aggregates
- * happen client-side, and `list`'s 500-row page cap would silently truncate
- * them (same fetch-all convention as project.dashboard).
+ * Attach existing expenses to a charge — one invoice spanning trades. The moved
+ * expenses ARE searchable, so their embeddings refresh in one wave-wide dispatch
+ * (same shape as `expense.bulkMove`); the charge itself is not indexed.
  */
-const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
-const chartData = protectedProcedure
-  .input(purchaseFiltersSchema)
-  .output(z.array(purchaseOut))
-  .query(async ({ ctx, input }) => {
-    const { data } = await purchaseList(
+const link = protectedProcedure
+  .input(linkExpensesToPurchaseInput)
+  .output(purchaseOut)
+  .mutation(async ({ ctx, input }) => {
+    const result = await linkExpensesToPurchase(
       ctx.db,
       input,
-      [{ orderBy: "date", direction: "asc" }],
-      FETCH_ALL,
+      ctx.actorContext,
     );
-    return data;
-  });
-
-/**
- * Server-side chart aggregates — grouped SQL sums/counts over the SAME
- * filter shape as `list`/`chartData`, replacing the client-side grouping
- * that ran over `chartData`'s fetch-all. See repo/purchase/analytics.ts for
- * the SQL; `chartData` stays in place for whatever else still fetches raw rows.
- */
-const analytics = protectedProcedure
-  .input(purchaseFiltersSchema)
-  .output(purchaseAnalyticsOut)
-  .query(({ ctx, input }) => purchaseAnalytics(ctx.db, input));
-
-/**
- * Vendor roster for the ledger's Vendor filter picklist — a single grouped
- * query (see `purchaseVendorOptions`), same "cheap options query" shape as
- * `project.options`.
- */
-const vendorOptions = protectedProcedure
-  .output(purchaseVendorOptionsOut)
-  .query(({ ctx }) => purchaseVendorOptions(ctx.db));
-
-/**
- * The rest of this purchase's order — the "Same Order" detail section.
- *
- * Separate from `getByID` so the detail page's main payload doesn't grow a
- * lookup only one section reads, and so it re-fetches on its own when the
- * order id or vendor is edited.
- */
-const orderSiblings = protectedProcedure
-  .input(purchaseId)
-  .output(z.array(purchaseOut))
-  .query(({ ctx, input }) => getPurchaseOrderSiblings(ctx.db, input));
-
-/**
- * The project x trade purchase-count matrix behind project suggestions. One
- * grouped aggregate for the whole ledger, fetched once and ranked against
- * client-side for many purchases — see rankProjectSuggestions.
- */
-const tradeAffinity = protectedProcedure
-  .output(z.array(purchaseTradeAffinityOut))
-  .query(({ ctx }) => purchaseTradeAffinity(ctx.db));
-
-// Bulk "move to project" — projectId: null moves every listed purchase to the
-// inbox. Mirrors inventory.bulkMove/task.bulkMove's shape: one repo call
-// inside a transaction, then one wave-wide runMutationSideEffectsForEntities
-// so the embedding refresh for every moved purchase batches into a single
-// dispatch.
-const bulkMove = protectedProcedure
-  .input(purchaseBulkMoveInput)
-  .output(purchaseListAndSideEffectsOut)
-  .mutation(async ({ ctx, input }) => {
-    const items = await movePurchases(ctx.db, input, ctx.actorContext);
-    const backgroundBatches = await runMutationSideEffectsForEntities(
+    await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      input.expenseIds.map((id) => ({
         action: "updated" as const,
-        entity: { entityType: "purchase" as const, entityId: item.id },
-        source: "purchase.bulkMove",
+        entity: { entityType: "expense" as const, entityId: id },
+        source: "purchase.link",
       })),
     );
-    return { items, sideEffects: { backgroundBatches } };
+    return result;
   });
 
-// Bulk trade write, same wave-wide side-effect shape as bulkMove above.
-const bulkSetTrade = protectedProcedure
-  .input(purchaseBulkTradeInput)
-  .output(purchaseListAndSideEffectsOut)
+/** Split one expense into lines of the same charge. */
+const split = protectedProcedure
+  .input(splitExpenseInput)
+  .output(z.array(expenseOut))
   .mutation(async ({ ctx, input }) => {
-    const items = await setPurchasesTrade(ctx.db, input, ctx.actorContext);
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      items.map((item) => ({
-        action: "updated" as const,
-        entity: { entityType: "purchase" as const, entityId: item.id },
-        source: "purchase.bulkSetTrade",
+    const items = await splitExpense(ctx.db, input, ctx.actorContext);
+    await runMutationSideEffectsForEntities(ctx.db, [
+      // The original is gone and each part is new, so both sides need indexing.
+      {
+        action: "deleted" as const,
+        entity: { entityType: "expense" as const, entityId: input.expenseId },
+        source: "purchase.split",
+      },
+      ...items.map((item) => ({
+        action: "created" as const,
+        entity: { entityType: "expense" as const, entityId: item.id },
+        source: "purchase.split",
       })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
+    ]);
+    return items;
   });
 
-// Bulk cost-type write, same shape as bulkSetTrade.
-const bulkSetCostType = protectedProcedure
-  .input(purchaseBulkCostTypeInput)
-  .output(purchaseListAndSideEffectsOut)
+/** Merge charges the backfill couldn't group. Refuses across vendors. */
+const merge = protectedProcedure
+  .input(mergePurchasesInput)
+  .output(purchaseOut)
+  .mutation(({ ctx, input }) =>
+    mergePurchases(ctx.db, input, ctx.actorContext),
+  );
+
+const deleteItem = protectedProcedure
+  .input(z.object({ ids: z.array(purchaseId).min(1) }))
   .mutation(async ({ ctx, input }) => {
-    const items = await setPurchasesCostType(ctx.db, input, ctx.actorContext);
-    const backgroundBatches = await runMutationSideEffectsForEntities(
-      ctx.db,
-      items.map((item) => ({
-        action: "updated" as const,
-        entity: { entityType: "purchase" as const, entityId: item.id },
-        source: "purchase.bulkSetCostType",
-      })),
-    );
-    return { items, sideEffects: { backgroundBatches } };
+    await deletePurchases(ctx.db, input.ids, ctx.actorContext);
   });
 
 export const purchaseRouter = createTRPCRouter({
   getByID,
   list,
+  expenses,
   create,
   update,
+  link,
+  split,
+  merge,
   delete: deleteItem,
-  chartData,
-  analytics,
-  tradeAffinity,
-  vendorOptions,
-  orderSiblings,
-  bulkMove,
-  bulkSetTrade,
-  bulkSetCostType,
 });

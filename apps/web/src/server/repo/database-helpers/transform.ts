@@ -109,11 +109,11 @@ export function buildPartialUpdateValues<T extends Record<string, unknown>>(
 }
 
 /**
- * Resolve a to-one joined parent's (e.g. task/purchase → project) display
+ * Resolve a to-one joined parent's (e.g. task/expense → project) display
  * name, treating a soft-deleted parent as if it weren't joined at all. A
  * to-one relation can't carry a `where` (see relations.ts's doc comment on
  * to-many vs to-one), so this transform-layer check is the backstop — in
- * practice unreachable for task/purchase since a live child always blocks its
+ * practice unreachable for task/expense since a live child always blocks its
  * parent project's deletion, but kept defensive.
  */
 export const resolveLiveJoinName = (

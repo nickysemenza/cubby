@@ -45,6 +45,8 @@ const ROUTE_NOUN: Record<string, string> = {
   "/recipes/$id": "recipe",
   "/inventory/$id": "inventory entry",
   "/locations/$id": "location",
+  "/purchases/$id": "charge",
+  "/vendors/$id": "vendor",
 };
 
 // Icon can be either a LucideIcon component or an entity key

@@ -2,18 +2,18 @@
 // projects dashboard. Kept alias-free and React-free so it runs under the
 // `*.unit.test.ts` vitest project (see vitest.config.ts).
 //
-// The core problem this solves: a naive `sumBy(purchases, (p) => p.cost)` blends
+// The core problem this solves: a naive `sumBy(expenses, (p) => p.cost)` blends
 // three economically distinct quantities into one "spent" number —
 //   - actual: money already out the door (cost > 0, not future-flagged)
-//   - committed: planned/future purchases (cost > 0, future-flagged)
-//   - contributions: negative purchases (e.g. family wedding contributions) that
+//   - committed: planned/future expenses (cost > 0, future-flagged)
+//   - contributions: negative expenses (e.g. family wedding contributions) that
 //     offset spend rather than being spend
 // `net` deliberately equals that old blended figure (== `rollup.spent`) so nothing
 // downstream regresses; the split fields are purely additive.
 
 // Structural input — anything with a nullable cost and a future flag. Accepting a
-// minimal shape (rather than PurchaseOut) keeps this trivially testable.
-export interface SpendablePurchase {
+// minimal shape (rather than ExpenseOut) keeps this trivially testable.
+export interface SpendableExpense {
   cost: number | null;
   future: boolean;
 }
@@ -29,11 +29,11 @@ export interface SpendSplit {
   net: number;
 }
 
-export function splitPurchaseSpend(purchases: SpendablePurchase[]): SpendSplit {
+export function splitExpenseSpend(expenses: SpendableExpense[]): SpendSplit {
   let actual = 0;
   let committed = 0;
   let contributions = 0;
-  for (const { cost, future } of purchases) {
+  for (const { cost, future } of expenses) {
     if (cost == null || cost === 0) continue;
     if (cost < 0) {
       contributions += -cost;

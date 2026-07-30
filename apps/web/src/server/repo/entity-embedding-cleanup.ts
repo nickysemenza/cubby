@@ -7,13 +7,13 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeCookbookId,
+  unsafeExpenseId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
-  unsafePurchaseId,
   unsafeRecipeId,
   unsafeTaskId,
 } from "@cubby/schemas/identifiers";
@@ -28,6 +28,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   entityEmbedding,
+  expense,
   ingredient,
   inventoryEntry,
   location,
@@ -35,7 +36,6 @@ import {
   mealRecipe,
   product,
   project,
-  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -185,21 +185,21 @@ export async function findMealEmbeddingRefsForRecipes(
 }
 
 /**
- * Tasks and purchases embed their project's NAME, so a project rename must
- * refresh every live task/purchase embedding under it.
+ * Tasks and expenses embed their project's NAME, so a project rename must
+ * refresh every live task/expense embedding under it.
  */
 export async function findTrackerEmbeddingRefsForProjects(
   db: Database,
   projectIds: ProjectId[],
 ): Promise<SearchableEntityRef[]> {
   if (projectIds.length === 0) return [];
-  const [tasks, purchases] = await Promise.all([
+  const [tasks, expenses] = await Promise.all([
     getDb(db).query.task.findMany({
       where: and(inArray(task.projectId, projectIds), notDeleted(task)),
       columns: { id: true },
     }),
-    getDb(db).query.purchase.findMany({
-      where: and(inArray(purchase.projectId, projectIds), notDeleted(purchase)),
+    getDb(db).query.expense.findMany({
+      where: and(inArray(expense.projectId, projectIds), notDeleted(expense)),
       columns: { id: true },
     }),
   ]);
@@ -207,9 +207,9 @@ export async function findTrackerEmbeddingRefsForProjects(
     ...tasks.map(
       (row): SearchableEntityRef => ({ entityType: "task", entityId: row.id }),
     ),
-    ...purchases.map(
+    ...expenses.map(
       (row): SearchableEntityRef => ({
-        entityType: "purchase",
+        entityType: "expense",
         entityId: row.id,
       }),
     ),
@@ -278,11 +278,11 @@ const liveIdLoaders = {
     unsafeProjectId,
   ),
   task: createLiveIdLoader(task, task.id, task.deletedAt, unsafeTaskId),
-  purchase: createLiveIdLoader(
-    purchase,
-    purchase.id,
-    purchase.deletedAt,
-    unsafePurchaseId,
+  expense: createLiveIdLoader(
+    expense,
+    expense.id,
+    expense.deletedAt,
+    unsafeExpenseId,
   ),
 } satisfies Record<SearchableEntity, LiveIdLoader>;
 

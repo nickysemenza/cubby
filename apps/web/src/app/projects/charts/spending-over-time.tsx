@@ -1,4 +1,4 @@
-import type { PurchaseOut, Trade } from "@cubby/schemas/project";
+import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -19,7 +19,7 @@ import { ChartEmpty } from "./chart-empty";
 import {
   buildCumulativeSpendPoints,
   buildStackedCumulativeSpend,
-  type PurchaseSeries,
+  type ExpenseSeries,
 } from "./project-chart-data";
 
 /**
@@ -27,14 +27,14 @@ import {
  * SpendingOverTime + CostBurnup + CategoryTrend trio (which all plotted the
  * same cumulative curve, just un-split / split-by-cost-type):
  *
- * - **Total** — per-purchase daily cumulative line with Cost Burnup's
+ * - **Total** — per-expense daily cumulative line with Cost Burnup's
  *   budget-crossing mechanics (negative-safe y-min, estimate marker that
  *   colors positive/warning/destructive, over-estimate point coloring).
  * - **By category** — monthly stacked cumulative areas per cost type.
  * - **By trade** — same monthly stacked shape grouped by trade, with the top
  *   6 trades on the warm categorical ramp and the rest folded into "Other".
  *
- * Negative purchases are real (refunds, the large negative family
+ * Negative expenses are real (refunds, the large negative family
  * contributions) — never filter to `cost > 0`, or the curve stops
  * reconciling with the project's actual spend.
  */
@@ -61,20 +61,20 @@ const OTHER_LABEL = "Other";
 const OTHER_COLOR = "var(--chart-neutral)";
 
 export function SpendingOverTime({
-  purchases,
+  expenses,
   costEstimate,
 }: {
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
   costEstimate: number | null;
 }) {
   const [mode, setMode] = useState<SpendMode>("total");
 
   const categorySeries = useMemo(
     () =>
-      buildStackedCumulativeSpend(purchases, (p) =>
+      buildStackedCumulativeSpend(expenses, (p) =>
         normalizeCostTypeKey(p.costType),
       ),
-    [purchases],
+    [expenses],
   );
 
   // Trade lens: rank trades by absolute total, keep the top 6 on the ramp,
@@ -82,7 +82,7 @@ export function SpendingOverTime({
   // series labels (TRADE_LABELS / "Other") to their tokens.
   const { tradeSeries, tradeColorById } = useMemo(() => {
     const totals = new Map<Trade, number>();
-    for (const p of purchases) {
+    for (const p of expenses) {
       if (!p.date || p.cost == null) continue;
       totals.set(p.trade, (totals.get(p.trade) ?? 0) + Math.abs(p.cost));
     }
@@ -97,11 +97,11 @@ export function SpendingOverTime({
     });
     if (ranked.length > TRADE_RAMP.length) colorById[OTHER_LABEL] = OTHER_COLOR;
 
-    const series = buildStackedCumulativeSpend(purchases, (p) =>
+    const series = buildStackedCumulativeSpend(expenses, (p) =>
       topTrades.has(p.trade) ? TRADE_LABELS[p.trade] : OTHER_LABEL,
     );
     return { tradeSeries: series, tradeColorById: colorById };
-  }, [purchases]);
+  }, [expenses]);
 
   return (
     <Stack gap="sm">
@@ -114,7 +114,7 @@ export function SpendingOverTime({
         />
       </Row>
       {mode === "total" ? (
-        <TotalSpend purchases={purchases} costEstimate={costEstimate} />
+        <TotalSpend expenses={expenses} costEstimate={costEstimate} />
       ) : mode === "category" ? (
         <StackedSpend
           series={categorySeries}
@@ -133,26 +133,26 @@ export function SpendingOverTime({
 }
 
 /**
- * Per-purchase daily cumulative line against `costEstimate`. The reference
+ * Per-expense daily cumulative line against `costEstimate`. The reference
  * line and the points switch from positive/warning to destructive once
  * cumulative spend passes the estimate, so "did this blow the budget, and
  * when" reads at a glance. The cumulative curve isn't monotonic (negatives
  * are real), so the y-min clamps to the lowest point.
  */
 function TotalSpend({
-  purchases,
+  expenses,
   costEstimate,
 }: {
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
   costEstimate: number | null;
 }) {
   const points = useMemo(
-    () => buildCumulativeSpendPoints(purchases),
-    [purchases],
+    () => buildCumulativeSpendPoints(expenses),
+    [expenses],
   );
 
   if (points.length === 0) {
-    return <ChartEmpty icon={TrendingUp} title="No dated purchase data." />;
+    return <ChartEmpty icon={TrendingUp} title="No dated expense data." />;
   }
 
   const data = [{ id: "Cumulative Spend", data: points }];
@@ -163,7 +163,7 @@ function TotalSpend({
   const finalSpend = points[points.length - 1]!.y;
 
   // Thin the x-axis to the date span — a fixed "every 2 weeks" turns ~100
-  // overlapping rotated ticks when the data spans years (the whole-purchases
+  // overlapping rotated ticks when the data spans years (the whole-expenses
   // view). Show the year once the range crosses one.
   const firstX = String(points[0]!.x);
   const lastX = String(points[points.length - 1]!.x);
@@ -286,7 +286,7 @@ function StackedSpend({
   colorFor,
   costEstimate,
 }: {
-  series: PurchaseSeries[];
+  series: ExpenseSeries[];
   colorFor: (id: string) => string;
   costEstimate: number | null;
 }) {

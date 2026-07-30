@@ -18,20 +18,20 @@
  * project subtree. */
 const PROJECT_SCOPED_PAGE_SIZE = 500;
 
-/** The task/purchase `chartData` endpoints take the bare filters object (no
+/** The task/expense `chartData` endpoints take the bare filters object (no
  * sort/pagination wrapper — they fetch-all). One subtree fetch feeds the
  * Gantt, the Task Timeline, the Task Board view, and the Budget/spend
  * charts — all of which need the whole (incl. done/past) subtree picture.
- * The Tasks/Purchases *list* views intentionally do NOT read from this
- * fetch (see `openTaskFilters`/`plannedPurchaseFilters` in
+ * The Tasks/Expenses *list* views intentionally do NOT read from this
+ * fetch (see `openTaskFilters`/`plannedExpenseFilters` in
  * `project-detail-page.tsx`) — a completed project with hundreds of historical
  * rows shouldn't pull them all in just to render its default (open-tasks /
- * recent-purchases) view. */
+ * recent-expenses) view. */
 export function projectSubtreeTasksFilters(projectId: string) {
   return { projectId, includeSubProjects: true };
 }
 
-export function projectSubtreePurchasesFilters(projectId: string) {
+export function projectSubtreeExpensesFilters(projectId: string) {
   return { projectId, includeSubProjects: true };
 }
 

@@ -37,7 +37,7 @@ import {
  *
  * Two queries, not one: the dates it carries are the EFFECTIVE window, so it
  * pays for `projectContentDates` on top of the project scan. That cost buys
- * correct purchase→project suggestions (`rankProjectSuggestions` ranks by
+ * correct expense→project suggestions (`rankProjectSuggestions` ranks by
  * "was this project running on that date?", and a stale hand-typed window is
  * exactly what made it miss); the fold itself is pure TS over rows already in
  * hand. Still nowhere near the `list` call it replaced.
@@ -118,7 +118,7 @@ export const projectList = async (
   // `startDate` is an override that is usually null now that the window is
   // derived, so sorting on the raw column would sink most of the table into a
   // null bucket. Sort on the effective start instead: the override when set,
-  // else the project's own earliest dated task/purchase.
+  // else the project's own earliest dated task/expense.
   //
   // APPROXIMATION: non-recursive. A parent with no override and no own content
   // still sorts as null even when its children are dated — matching the true
@@ -132,7 +132,7 @@ export const projectList = async (
   // reason `buildDashboardProjectWhere` had to drop correlated `EXISTS`
   // (dashboard-shared.ts). This is fed to `query.project.findMany`, whose
   // alias mapper rewrites EVERY column ref inside the clause — including ones
-  // belonging to Task/Purchase — to the root alias, emitting
+  // belonging to Task/Expense — to the root alias, emitting
   // `min("project"."dueDate") from "Task"` and a self-referential
   // `"project"."projectId" = "project"."id"`. That is not a subtle ordering
   // bug: the query throws, and `startDate` is this table's DEFAULT sort.
@@ -143,9 +143,9 @@ export const projectList = async (
   // `exists`/`notExists` bodies, so it cannot see them.
   //
   // The two content sources are combined with LEAST, not chained into the
-  // coalesce: a project with both tasks and purchases must sort by the
-  // EARLIER of the two, and `coalesce(taskMin, purchaseMin)` would take the
-  // task min whenever any task exists — silently ignoring an earlier purchase
+  // coalesce: a project with both tasks and expenses must sort by the
+  // EARLIER of the two, and `coalesce(taskMin, expenseMin)` would take the
+  // task min whenever any task exists — silently ignoring an earlier expense
   // and disagreeing with the `dates.effectiveStart` the row displays.
   // (LEAST ignores NULL args and is NULL only when all of them are.)
   const effectiveStartSortSql = (direction: SortParams["direction"]) =>
@@ -153,7 +153,7 @@ export const projectList = async (
       `coalesce("project"."startDate", LEAST(` +
         `(SELECT min(t."dueDate") FROM "Task" t ` +
         `WHERE t."projectId" = "project"."id" AND t."deletedAt" IS NULL), ` +
-        `(SELECT min(pu."date") FROM "Purchase" pu ` +
+        `(SELECT min(pu."date") FROM "Expense" pu ` +
         `WHERE pu."projectId" = "project"."id" AND pu."deletedAt" IS NULL))) ` +
         `${direction === "asc" ? "asc" : "desc"} nulls last`,
     );

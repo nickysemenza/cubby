@@ -8,7 +8,7 @@
  *
  *   CRUD      → `crud.ts`      (create / update / delete + by-id read; update
  *                                handles the `blockedByIds` full-replacement
- *                                set, delete guards on live tasks/purchases)
+ *                                set, delete guards on live tasks/expenses)
  *   LOOKUP    → `lookup.ts`    (filtered/sorted/paginated list, id→name lookup)
  *   ANALYTICS → `analytics.ts` (batched cost/progress OWN rollups + dependency-
  *                                edge reads, shared by crud.ts and lookup.ts)
@@ -30,7 +30,7 @@
  *                                Attention detector) and `dashboard-shared.ts`
  *                                (their common filter-scope SQL)
  *
- * Sibling relationships: referenced by `task.projectId` and `purchase.projectId`
+ * Sibling relationships: referenced by `task.projectId` and `expense.projectId`
  * (both nullable); `projectDependency` self-references `project` for the
  * blocked-by/blocking graph; `project.parentProjectId` self-references
  * `project` for the sub-project tree (see `subtree.ts`). `helpers.ts` and

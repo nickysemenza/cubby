@@ -11,6 +11,10 @@ export const entityImage = z.enum([
   "RECIPE",
   "COOKBOOK",
   "PROJECT",
+  // A charge's documents — the emailed PDF invoice and/or a photo of the paper
+  // slip. Same join-table machinery as the galleries above; the PDF renders in
+  // an iframe rather than as a thumbnail (see `isDocumentFile`).
+  "PURCHASE",
 ]);
 export type EntityImage = z.infer<typeof entityImage>;
 
@@ -25,7 +29,12 @@ export const entitySchema = z.enum([
   "meal",
   "project",
   "task",
+  // Vendor ──< Purchase ──< Expense. A `purchase` is ONE vendor transaction
+  // (identified by its `orderId` when the vendor issues one); an `expense` is
+  // one categorized line of spend, and all money lives there.
+  "vendor",
   "purchase",
+  "expense",
   "usda-food",
   "image",
 ]);

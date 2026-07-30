@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
+  type ChargeNotReconciling,
   type CoverageTotals,
   type LabelVariant,
   type ProductMissingPrice,
@@ -31,6 +32,10 @@ import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { formatDate } from "~/app/projects/project-formatting";
+import {
+  ReconciliationBadge,
+  reconciliationDelta,
+} from "~/app/purchases/purchase-reconciliation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
@@ -52,7 +57,7 @@ import {
   type RenderedProblemItem,
 } from "./problem-section";
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
-import { OrderVendorBackfillFix, OrphanedDeleteFix } from "./tier2-fixes";
+import { DuplicateVendorMergeFix, OrphanedDeleteFix } from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
   CoverageChips,
@@ -321,8 +326,8 @@ function searchableEntityRoute(entityRef: SearchableEntityRef) {
       to: "/tasks/$id" as const,
       params: { id: e.entityId },
     }))
-    .with({ entityType: "purchase" }, (e) => ({
-      to: "/purchases/$id" as const,
+    .with({ entityType: "expense" }, (e) => ({
+      to: "/expenses/$id" as const,
       params: { id: e.entityId },
     }))
     .exhaustive();
@@ -339,9 +344,9 @@ const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
   { type: "overdue_task", title: "Overdue tasks" },
   { type: "blocked_work", title: "Blocked with no next action" },
   { type: "stalled_project", title: "Stalled projects" },
-  { type: "past_due_planned_purchase", title: "Planned purchases past due" },
+  { type: "past_due_planned_expense", title: "Planned expenses past due" },
   { type: "missing_budget", title: "Missing a cost estimate" },
-  { type: "unclassified_purchase", title: "Unclassified purchases" },
+  { type: "unclassified_expense", title: "Unclassified expenses" },
   { type: "date_window_drift", title: "Date window drift" },
 ];
 
@@ -359,8 +364,8 @@ const trackerRoute = (item: ProjectAttentionItem) =>
       to: "/tasks/$id" as const,
       params: { id: item.entityId },
     }))
-    .with("purchase", () => ({
-      to: "/purchases/$id" as const,
+    .with("expense", () => ({
+      to: "/expenses/$id" as const,
       params: { id: item.entityId },
     }))
     .exhaustive();
@@ -423,29 +428,14 @@ function RecountLink({ locationId }: { locationId: string }) {
 }
 
 /**
- * "Show every row spelled this way" — the list page filtered to the variant.
+ * "Show every row spelled this way" — the products list filtered to the
+ * variant.
  *
  * The card's own `route` can only be an entity DETAIL route, so it links to one
- * sample record; this is the affordance for seeing the whole set. On purchases
- * the vendor filter is an exact match, so the link isolates the variant
- * precisely; on products `manufacturer` is a substring filter, which lands you
- * on both spellings side by side — arguably the more useful view when you're
- * about to reconcile them.
+ * sample record; this is the affordance for seeing the whole set. `manufacturer`
+ * is a substring filter, which lands you on both spellings side by side —
+ * arguably the more useful view when you're about to reconcile them.
  */
-function VendorVariantLink({ vendor }: { vendor: string }) {
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      render={<Link to="/purchases" search={{ vendor }} />}
-      nativeButton={false}
-    >
-      <ListFilter className="mr-1 size-3" />
-      Show purchases
-    </Button>
-  );
-}
-
 function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
   return (
     <Button
@@ -461,8 +451,9 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
 }
 
 /**
- * `1 product — "Ryobi" has 12`. Shared by both spelling-variant sections, which
- * differ only in the noun and the routes.
+ * `1 product — "Ryobi" has 12`. Takes the noun as a parameter rather than
+ * hardcoding "product" so a second free-text brand column's spelling-variant
+ * section could reuse it.
  *
  * Phrased around the canonical rather than a verb ("12 use …") so the tie case
  * reads properly: with no majority the counts are 1 and 1, and "1 uses" is
@@ -603,6 +594,29 @@ function locationBadges(
   ));
 }
 
+/** `Stated $431.24 · lines $416.24 across 3 lines` — the charge card's subtitle. */
+function chargeSubtitle(charge: ChargeNotReconciling): string {
+  const lines = `${charge.expenseCount} ${charge.expenseCount === 1 ? "line" : "lines"}`;
+  return `Stated ${formatCurrency(charge.statedTotal)} · lines ${formatCurrency(charge.expenseTotal)} across ${lines}`;
+}
+
+/**
+ * Names the discrepancy and its most likely innocent explanation, per direction.
+ *
+ * Deliberately not phrased as a fault: the lines coming in UNDER the stated total
+ * is the partial-refund shape, which is correct as it stands, and the reverse can
+ * simply be a stated total recorded before a line was added. `reconciliationDelta`
+ * is the shared derivation (lines − stated), so this can't drift from the badge.
+ */
+function chargeDeltaHint(charge: ChargeNotReconciling): string | null {
+  const delta = reconciliationDelta(charge);
+  if (delta === null) return null;
+  const gap = formatCurrency(Math.abs(delta));
+  return delta < 0
+    ? `Lines come in ${gap} under the stated total — the shape a partial refund leaves, or a line not recorded yet.`
+    : `Lines come in ${gap} over the stated total — an extra line, or a stated total captured before one was added.`;
+}
+
 /**
  * The Problems page in declaration order — the summary chips and the section
  * list both derive from this, so adding a check is a single entry here.
@@ -647,7 +661,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     entity: "product",
     title: "Orphaned Products",
     description:
-      "Products with no inventory, no purchase history, and not linked to an ingredient. These may be unused and can potentially be deleted.",
+      "Products with no inventory, no expense history, and not linked to an ingredient. These may be unused and can potentially be deleted.",
     emptyMessage:
       "No orphaned products found. Every product is stocked, purchased, or linked to an ingredient.",
     renderItem: (product) => ({
@@ -900,27 +914,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
-    id: "vendor-spellings",
-    label: "Vendor spellings",
-    select: (p) => p.vendorSpellingVariants,
-    entity: "purchase",
-    title: "One vendor, two spellings",
-    description:
-      "Vendor is free text, so the same store can be entered two ways — and the ledger's filter matches exactly, which splits it into two picklist rows and two sets of totals. Rename the odd one out to the spelling already in use.",
-    emptyMessage: "Every vendor on the ledger is spelled one way.",
-    renderItem: (v) => ({
-      // The default title-plus-id key would collide when one canonical name has
-      // several variants: they'd share a title only by accident, but the sample
-      // id is the discriminator and the spelling is the real identity.
-      key: v.value,
-      title: v.value,
-      subtitle: variantSubtitle(v, "purchase"),
-      route: { to: "/purchases/$id", params: { id: v.sampleId } },
-      editLabel: "Open purchase",
-      customActions: <VendorVariantLink vendor={v.value} />,
-    }),
-  }),
-  section({
     id: "manufacturer-spellings",
     label: "Manufacturer spellings",
     select: (p) => p.manufacturerSpellingVariants,
@@ -936,6 +929,33 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       route: { to: "/products/$id", params: { id: v.sampleId } },
       editLabel: "Open product",
       customActions: <ManufacturerVariantLink manufacturer={v.value} />,
+    }),
+  }),
+  section({
+    id: "duplicate-vendors",
+    label: "Duplicate vendors",
+    select: (p) => p.duplicateVendors,
+    entity: "vendor",
+    title: "One vendor, two roster rows",
+    description:
+      "Vendor names are matched exactly when a charge is imported, so the same vendor entered two ways becomes two roster rows — and that vendor's spend splits across both. Merging folds one into the other, charges and all. Only spellings that normalize to the same name are compared, so a genuine abbreviation (B&H vs B&H Photo) is never guessed at here.",
+    emptyMessage: "Every vendor on the roster is spelled one way.",
+    renderItem: (v) => ({
+      // Names are unique among live vendors, so the variant spelling is a stable
+      // per-card key.
+      key: v.value,
+      title: v.value,
+      // Weighed by charges, not by roster rows — a duplicate is 1 row either way,
+      // so the charge count is what says which spelling is the real one.
+      subtitle: variantSubtitle(v, "charge"),
+      route: { to: "/vendors/$id", params: { id: v.sampleId } },
+      editLabel: "Open vendor",
+      inlineFix: {
+        label: "Merge",
+        render: (close) => (
+          <DuplicateVendorMergeFix variant={v} close={close} />
+        ),
+      },
     }),
   }),
   section({
@@ -1064,9 +1084,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     select: (p) =>
       TRACKER_GROUPS.flatMap((g) => p[TRACKER_PROBLEM_KEY_BY_TYPE[g.type]]),
     icon: AlertTriangle,
-    title: "Projects, tasks & purchases needing attention",
+    title: "Projects, tasks & expenses needing attention",
     description:
-      "Household-tracker items that need a decision: overdue tasks, blocked or stalled projects, planned purchases past their date, spend with no budget or trade recorded, and a manual date override narrower than the work it hides.",
+      "Household-tracker items that need a decision: overdue tasks, blocked or stalled projects, planned expenses past their date, spend with no budget or trade recorded, and a manual date override narrower than the work it hides.",
     emptyMessage: "Nothing in the tracker needs attention.",
     groupBy: (items) => groupBy(items, (i) => TRACKER_GROUP_TITLE[i.type]),
     renderItem: renderTrackerItem,
@@ -1136,54 +1156,52 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     },
   }),
   section({
-    id: "partial-vendor-orders",
-    label: "Split orders",
-    select: (p) => p.ordersWithPartialVendor,
+    id: "charges-not-reconciling",
+    label: "Stated totals",
+    select: (p) => p.chargesNotReconciling,
+    // Advisory, so it declares `coverage` — that marker is what keeps it out of
+    // the defect list, out of the red, and out of `totalProblems`. No meter: a
+    // discrepancy isn't a fraction of a population, and "N of M charges
+    // reconcile" would read as a score to drive to 100%, which this isn't.
+    coverage: {},
     entity: "purchase",
-    title: "Orders Split by a Missing Vendor",
+    title: "Stated Totals That Don't Match the Lines",
     description:
-      "An order is grouped by vendor AND order id together, so when only some of its rows record a vendor the order silently splits in two and each half looks complete. Backfilling the vendor rejoins them.",
+      "What the paperwork claimed, next to what the charge's lines actually add up to. A cue, not a fault: a partial refund reduces a line without changing what the charge originally stated, so plenty of these are correct exactly as they are. Stated totals are never summed into spend — spend is always the lines — so nothing here needs doing unless a line is genuinely wrong or missing.",
     emptyMessage:
-      "No orders are split by a missing vendor. Every order id agrees with itself on the vendor.",
-    renderItem: (order) => {
-      // One card per order id, and `route` points at one of its member rows —
-      // so the default `title`-`route.params.id` key would collide across two
-      // orders that happen to lead with the same purchase. The order id is the
-      // card's real identity.
-      const soleVendor = order.vendors.length === 1 ? order.vendors[0] : null;
+      "Every charge with a stated total agrees with its lines. Charges with no stated total recorded aren't compared.",
+    renderItem: (charge) => {
+      const hint = chargeDeltaHint(charge);
       return {
-        key: `partial-vendor:${order.orderId}`,
-        title: order.orderId,
-        subtitle: soleVendor
-          ? `${order.missingCount} of ${order.rowCount} rows missing "${soleVendor}"`
-          : `${order.rowCount} rows across conflicting vendors: ${order.vendors.join(", ")}`,
+        // A charge has no name, and two charges from one vendor would otherwise
+        // share a card key by way of the title.
+        key: charge.id,
+        title: charge.vendorName ?? "Vendor deleted",
+        subtitle: chargeSubtitle(charge),
+        details: hint
+          ? [
+              <div key="hint" className="text-muted-foreground text-sm">
+                {hint}
+              </div>,
+            ]
+          : [],
         badges: [
-          <Badge key="rows" variant="outline">
-            {order.rowCount} rows
-          </Badge>,
+          // The same soft `warning`-tone verdict the ledger column and the charge
+          // page show, from the same `reconcilePurchase` — never a defect red.
+          <ReconciliationBadge key="reconciliation" purchase={charge} />,
+          ...(charge.orderId
+            ? [<CodeChip key="order">{charge.orderId}</CodeChip>]
+            : []),
+          ...(charge.date
+            ? [
+                <Badge key="date" variant="outline">
+                  {formatDate(charge.date)}
+                </Badge>,
+              ]
+            : []),
         ],
-        // Lands on one of the vendorless rows, whose "Same Order" section shows
-        // exactly the truncated half this card is reporting.
-        route: {
-          to: "/purchases/$id" as const,
-          params: { id: order.purchaseIds[0] ?? "" },
-        },
-        editLabel: "Open purchase",
-        // No fix for the ambiguous case: two real retailers sharing an id
-        // format is not something a backfill can adjudicate.
-        inlineFix: soleVendor
-          ? {
-              label: "Backfill vendor",
-              render: (close) => (
-                <OrderVendorBackfillFix
-                  orderId={order.orderId}
-                  vendor={soleVendor}
-                  missingCount={order.missingCount}
-                  close={close}
-                />
-              ),
-            }
-          : undefined,
+        route: { to: "/purchases/$id", params: { id: charge.id } },
+        editLabel: "Open charge",
       };
     },
   }),

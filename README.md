@@ -23,6 +23,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 2. **`fdc_id` belongs to the product, not the ingredient.** A USDA link describes a specific purchasable thing, not the abstract "flour". Ingredient nutrition resolves through the product (`ingredient → product → fdc_id`) — always one hop away, on purpose. Don't add a per-ingredient USDA column to shorten the hop.
 3. **Rare and interactive work stays interactive.** Cookbook/EPUB import runs a few times a year with a human watching; it needs no queue, retries, or DLQ. The background queue is for work that is frequent, unattended, or slow enough to break a request (embeddings, valuation, recompute) — not for making rare work look industrial.
 4. **One user, one household.** Every trade-off resolves toward one person's taste: no multi-user coordination, no restore/undo, no reservations or locking. Speed and recoverability beat correctness ceremony.
+5. **All money lives on `Expense`.** Spend is `SUM(expense.cost)`, always — the `Vendor ──< Purchase ──< Expense` header carries *identity* (who, which order, which date) and at most a `statedTotal` that is **never summed into spend**. `statedTotal` is a soft reconciliation cue whose mismatch is frequently correct, so nothing may reject a write over it or back-compute a cost from it. Don't propose a second place money is stored or a rollup that adds header totals to line totals.
 
 ## ✨ Capabilities
 
@@ -56,9 +57,9 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Suggestions — *"what can I make tonight?"* from what's on hand
 
 **Planning calendar**
-- One month view for meals, due tasks, purchases, and multi-day project spans
+- One month view for meals, due tasks, expenses, and multi-day project spans
 - Source and project-kind filters, date drawers with daily totals, and quick-add flows
-- Drag-to-reschedule for meals, tasks, and planned purchases; actual purchases and project spans stay read-only
+- Drag-to-reschedule for meals, tasks, and planned expenses; actual expenses and project spans stay read-only
 
 **USDA**
 - Full USDA FoodData Central database loaded into a sibling service
@@ -72,10 +73,11 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 **Images**
 - S3/R2-backed image upload with presigned URLs
-- Linked to products, locations, recipes, or projects
+- Linked to products, locations, recipes, projects, or a purchase (a charge's invoice/receipt)
 
 **Project Tracker**
-- Household projects, tasks, and purchases (the spend ledger) — migrated from Notion into first-class entities
+- Household projects, tasks, and expenses (the spend ledger) — migrated from Notion into first-class entities
+- Vendor roster and per-charge `Purchase` records: order id, charge date, stated total, and the invoice PDF, with split/link/merge operations over the lines
 - Blocked-by dependency edges between projects and between tasks
 - Dashboard with overview/charts/data/gallery views (spending, timelines, task heatmaps, dependency graph)
 - Detail pages with full inline editing, markdown notes, and image galleries
@@ -156,7 +158,9 @@ See [CLAUDE.md](CLAUDE.md) for the prescriptive rules (branded IDs, soft delete,
 
 Products can be inventoried — an **Inventory Entry** specifies the amount of a given **Product** at a given **Location**.
 
-The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Purchases** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
+The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Expenses** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
+
+Spend itself is three entities, `Vendor ──< Purchase ──< Expense`: a **Vendor** is the roster of places money goes (identity only), a **Purchase** is **one vendor transaction** — its `orderId`, charge date, an optional `statedTotal`, and its invoice documents — and an **Expense** is a categorized line of that charge. **All money lives on `Expense`**: every `SUM(cost)` reads it alone, and `purchase.statedTotal` is never summed into spend (it's a soft reconciliation cue, and a mismatch is often correct). A partial-unique `(vendorId, orderId)` index makes one order exactly one charge. ⚠️ `Purchase` **changed meaning** in this split — the old flat ledger row is now `Expense`; see [docs/terminology.md](docs/terminology.md#vendor-vs-purchase-vs-expense).
 
 ```mermaid
 erDiagram
@@ -177,10 +181,15 @@ erDiagram
     Product }o--o| usda_food : "linked by UPC/NDB"
 
     Project ||--o{ Task : "has"
-    Project ||--o{ Purchase : "has"
+    Project ||--o{ Expense : "has"
     Project }o--o{ Project : "blocked by"
     Task }o--o{ Task : "blocked by"
     Image ||--o{ Project : "linked to"
+
+    Vendor ||--o{ Purchase : "issued"
+    Purchase ||--o{ Expense : "has lines"
+    Image ||--o{ Purchase : "documents"
+    Product ||--o{ Expense : "bought as"
 ```
 
 ## 🛠️ Development Setup
@@ -451,8 +460,9 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Recently shipped
 
-- **Project tracker migration + maturation** — the household projects/tasks/purchases databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/purchases`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
-- **Unified planning calendar** — meals, task ranges, planned/actual purchases, and project spans share a filterable month view with a day drawer, quick-add flows, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
+- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is one vendor transaction, holding the order id, charge date, an optional never-summed `statedTotal`, and the invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight, so importers didn't change. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`. Two Problems detectors became unrepresentable and were deleted (`findOrdersWithPartialVendor`, `findVendorSpellingVariants`).
+- **Project tracker migration + maturation** — the household projects/tasks/expenses databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/expenses`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
+- **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share a filterable month view with a day drawer, quick-add flows, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
 - **Meal planning v1** — plan recipes onto a calendar (month + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
 - **Location arrange** — drag-drop reparenting of locations and items across a tree view and a Miller-column board, with an Unknown dock for unplaced items.
 
@@ -462,7 +472,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Next
 
-- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations) and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) — estimate envelopes live on a sub-project's single-point `costEstimate`, not on ranged purchases (see docs/todos.md's Rejected list) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
+- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: an expense ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations) and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) — estimate envelopes live on a sub-project's single-point `costEstimate`, not on ranged expenses (see docs/todos.md's Rejected list) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 
 ### Later

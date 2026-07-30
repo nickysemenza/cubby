@@ -44,7 +44,7 @@ export interface FilterSpecCore {
   field?: string;
   /**
    * URL search-param key. Defaults to `columnId`; override only to keep an
-   * established link shape working (purchases' name filter is `?q=`).
+   * established link shape working (expenses' name filter is `?q=`).
    */
   urlKey?: string;
   kind: FilterKind;
@@ -54,7 +54,7 @@ export interface FilterSpecCore {
   expand?: (value: string) => Record<string, unknown>;
   /**
    * No table column renders this spec — it's URL state only: a deep link's
-   * scope (purchases' `?productId=` and `?order=`), surfaced as a `ScopeChip`
+   * scope (expenses' `?productId=` and `?order=`), surfaced as a `ScopeChip`
    * and cleared by the page that owns the param.
    *
    * Such a spec is kept OUT of `columnFilters`. TanStack resolves every entry
@@ -120,7 +120,7 @@ const single = (value: FilterValue): string | undefined =>
  * That normalization is load-bearing, not defensive: a scalar `"a"` and an
  * array `["a"]` are the same filter but produce DIFFERENT React Query keys.
  * Callers that derive filters through different paths (the ledger table and
- * the analytics view both build `PurchaseFilters`) would otherwise open two
+ * the analytics view both build `ExpenseFilters`) would otherwise open two
  * cache entries holding identical results, and the UI flashes between them.
  * Everything funnels through here so one shape reaches the wire.
  */
@@ -274,7 +274,7 @@ export const isMultiFilterKind = (kind: FilterKind): boolean =>
 /**
  * The single value of a `oneOrMany` filter, or undefined when it holds a set.
  *
- * For UI that can only mirror one value — the purchases analytics matrix
+ * For UI that can only mirror one value — the expenses analytics matrix
  * highlights a single (trade, costType) cell, so a multi-trade filter has no
  * cell to light up.
  */

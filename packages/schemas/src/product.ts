@@ -116,7 +116,7 @@ const productCreateShape = {
     .nullable()
     .optional()
     .describe(
-      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention purchase.cost uses.",
+      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention expense.cost uses.",
     ),
   unitMappings: z
     .array(unitMappingInput)
@@ -218,8 +218,8 @@ export const productFilterFields = {
    * OR-ed with `categoryFilter` — see `taskFilterFields.projectPresenceFilter`.
    */
   categoryPresenceFilter: presenceFilter,
-  purchasePresenceFilter: presenceFilter.describe(
-    "Filter to products that do / don't have at least one purchase in the ledger. Both acquisitions and exits (negative rows) count.",
+  expensePresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
   ),
   /**
    * A *key* filter, not a resolution filter. The USDA link is resolved at read
@@ -394,10 +394,10 @@ export const productListItemOut = z.object({
   unitMappings: z.array(unitMappingOut),
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
-  // Live purchases (acquisitions + negative exit rows) linked to this
-  // product — backs the list's "Purchases" column + its deep link to
-  // `/purchases?productId=`.
-  purchaseCount: z.number().int(),
+  // Live expenses (acquisitions + negative exit rows) linked to this
+  // product — backs the list's "Expenses" column + its deep link to
+  // `/expenses?productId=`.
+  expenseCount: z.number().int(),
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 
@@ -539,7 +539,7 @@ export const mcpProductCreateInput = z.object({
     .nullable()
     .optional()
     .describe(
-      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention purchase.cost uses.",
+      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention expense.cost uses.",
     ),
   unitMappings: z
     .array(unitMappingInput)

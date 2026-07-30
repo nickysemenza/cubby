@@ -99,6 +99,8 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   };
   /** Extra content rendered inline after the standard name column's name. */
   nameSuffix?: (row: TData) => ReactNode;
+  /** Leading content on the name cell — see `createNameColumn`'s `namePrefix`. */
+  namePrefix?: (row: TData) => ReactNode;
   /**
    * Column ids to render with no filter control — for a page that pins that
    * column's value via `extraFilters` (which wins over the manifest-derived
@@ -129,7 +131,7 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
   /**
    * The filter object the list query is running with (manifest-derived state
    * plus `extraFilters`). For a page that must call a second procedure over
-   * the SAME filtered set — the purchases ledger's totals row — so it can't
+   * the SAME filtered set — the expenses ledger's totals row — so it can't
    * drift from the table's own.
    */
   currentFilters: TFilters;
@@ -199,6 +201,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   nameClassName,
   nameEditable,
   nameSuffix,
+  namePrefix,
   hiddenFilterColumns,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<
@@ -286,8 +289,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;
 
   // The exact filter object the list query runs with. Returned so a page
-  // needing the same set (the purchases ledger's totals row calls
-  // `purchase.analytics` with it) reads it rather than rebuilding it from
+  // needing the same set (the expenses ledger's totals row calls
+  // `expense.analytics` with it) reads it rather than rebuilding it from
   // table state — two builds that disagree by so much as a scalar-vs-array
   // shape open a second React Query cache entry for identical results.
   const currentFilters = useMemo(
@@ -339,6 +342,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     nameClassName,
     nameEditable,
     nameSuffix,
+    namePrefix,
     hiddenFilterColumns,
   });
 

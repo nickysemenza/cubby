@@ -2,7 +2,7 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 
 /**
  * Builds `{value,label}` options for a filter/inline-edit select from a fixed
- * enum's values plus a label lookup. Shared by task/purchase status/category
+ * enum's values plus a label lookup. Shared by task/expense status/category
  * option lists so the mapping isn't hand-rolled per enum.
  */
 export function buildSelectOptions<T extends string>(

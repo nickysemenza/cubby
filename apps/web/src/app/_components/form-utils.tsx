@@ -324,7 +324,7 @@ export function RequiredTextareaField<
 }
 
 /**
- * A plain "YYYY-MM-DD" calendar-date field (task due date, purchase date,
+ * A plain "YYYY-MM-DD" calendar-date field (task due date, expense date,
  * project start/end date) — backed by the shared `DatePickerInput`, which
  * speaks the same "YYYY-MM-DD" string end to end (see `add-to-meal.tsx` for
  * the raw `<input type="date">` pattern this intentionally doesn't share —

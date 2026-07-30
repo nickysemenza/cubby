@@ -19,7 +19,7 @@ import { FormWrapper } from "../form-utils";
 
 /**
  * Shared shell for a "quick add" entity dialog — the shape every
- * create-task/purchase/project dialog needs: a `useForm` + `zodResolver`
+ * create-task/expense/project dialog needs: a `useForm` + `zodResolver`
  * around a small local schema, a single create mutation via
  * {@link useActionMutation}, and a Dialog > FormWrapper body that resets and
  * closes on success. Entity-specific bits (fields, defaults, payload mapping,
@@ -55,7 +55,7 @@ export function QuickAddDialog<
   schema: z.ZodType<TFieldValues, TFieldValues>;
   /**
    * Initial form values. Pass a thunk (not a value) when a default needs to be
-   * re-evaluated each time the dialog opens/resets — e.g. a purchase's date
+   * re-evaluated each time the dialog opens/resets — e.g. an expense's date
    * defaulting to "today".
    */
   defaultValues: TFieldValues | (() => TFieldValues);

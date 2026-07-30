@@ -34,7 +34,7 @@ import { notDeleted } from "./query";
  * A task's parent `project` plus its own parent task, each as the
  * `{ name, deletedAt }` projection `resolveLiveJoinName` (transform.ts) needs
  * to derive `projectName` / `parentTaskName` — without pulling the rest of
- * either row. Task-only (purchase has no self-relation).
+ * either row. Task-only (expense has no self-relation).
  */
 const withProjectAndParentTaskNameOnly = {
   with: {
@@ -48,9 +48,17 @@ const withProjectAndParentTaskNameOnly = {
 } as const;
 
 /**
- * A purchase's parent `project` plus its optionally-linked `product`, same
+ * An expense's parent `project` plus its optionally-linked `product`, same
  * `{ name, deletedAt }` projection — resolves `projectName` / `productName`.
- * Purchase-only.
+ * Expense-only.
+ *
+ * Also walks `purchase → vendor`, which is what keeps `expenseOut` exposing
+ * `vendor` and `orderId` after those stopped being columns on `Expense`: the
+ * charge owns them now, so every read resolves them through this join (see
+ * `dbExpenseToAPI`). Two extra `{name, deletedAt}`-shaped hops, both on indexed
+ * FKs. `purchase.deletedAt` comes along so a soft-deleted charge reads as no
+ * vendor rather than a live one, matching how `resolveLiveJoinName` treats every
+ * other join here.
  */
 const withProjectAndProductNameOnly = {
   with: {
@@ -59,6 +67,14 @@ const withProjectAndProductNameOnly = {
     },
     product: {
       columns: { name: true, deletedAt: true },
+    },
+    purchase: {
+      columns: { id: true, orderId: true, vendorId: true, deletedAt: true },
+      with: {
+        vendor: {
+          columns: { name: true, deletedAt: true },
+        },
+      },
     },
   },
 } as const;
@@ -187,7 +203,7 @@ export const relations = {
           },
         },
       },
-      // Uncorrelated-per-row scalar: how many live purchases (acquisitions +
+      // Uncorrelated-per-row scalar: how many live expenses (acquisitions +
       // negative exit rows) point at this product. Mirrors the ingredient
       // list's `appearsInRecipes` extras — a raw string hand-qualified to the
       // relational query builder's root alias ("product"), since a
@@ -195,9 +211,9 @@ export const relations = {
       // anyway for a same-table column, but a cross-table correlated
       // reference must stay a literal string to survive the rewrite.
       extras: {
-        purchaseCount:
-          sql<number>`(SELECT count(*) FROM "Purchase" pu WHERE pu."productId" = "product"."id" AND pu."deletedAt" IS NULL)`.as(
-            "purchaseCount",
+        expenseCount:
+          sql<number>`(SELECT count(*) FROM "Expense" pu WHERE pu."productId" = "product"."id" AND pu."deletedAt" IS NULL)`.as(
+            "expenseCount",
           ),
       },
     },
@@ -356,9 +372,9 @@ export const relations = {
      */
     withProject: withProjectAndParentTaskNameOnly,
   },
-  purchase: {
+  expense: {
     /**
-     * Purchase row + its parent project's and linked product's
+     * Expense row + its parent project's and linked product's
      * `{name, deletedAt}` — see `withProjectAndProductNameOnly`.
      */
     withProject: withProjectAndProductNameOnly,

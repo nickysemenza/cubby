@@ -4,17 +4,18 @@ import {
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
+  unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
-import { tradeOptions } from "~/app/projects/trade-options";
 import {
   costTypeOptions,
   dateRangeOptions,
   futureFilterOptions,
   resolveDateRange,
-} from "~/app/purchases/purchase-options";
+} from "~/app/expenses/expense-options";
+import { tradeOptions } from "~/app/projects/trade-options";
 import {
   dueRangeOptions,
   resolveDueRange,
@@ -61,7 +62,7 @@ const filterTypeForKind = (
   kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
 
 const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
-  purchase: [
+  expense: [
     {
       columnId: "name",
       field: "search",
@@ -69,7 +70,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       // "see all in ledger" links), kept working across the URL-sync move.
       urlKey: "q",
       kind: "text",
-      placeholder: "Search purchases...",
+      placeholder: "Search expenses...",
     },
     {
       columnId: "date",
@@ -134,18 +135,36 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("product"),
     },
     {
-      // Free text on the row, but a bounded roster in practice — options come
-      // from `purchase.vendorOptions` at runtime, carrying each vendor's brand
-      // mark and row count. `(none)` is the where-did-this-come-from worklist;
-      // vendor is null on most rows.
+      // Vendor **ids**, not the free-text name that used to sit on the row: a
+      // vendor is a real entity now, reached through the charge
+      // (`expense.purchaseId → Purchase.vendorId`). So this is `idMulti` on
+      // `vendorId`, modelled on `project` above — the column still RENDERS the
+      // name, but the roster and the filter trade in ids, which is what makes
+      // "Amazon (254)" unable to drag in "Amazon Business".
+      //
+      // Options come from `expense.vendorOptions` at runtime (`{id, name,
+      // count}`): a bounded roster, but a DB one, so it can't be static module
+      // data. Each option keeps the vendor's brand mark and row count.
+      //
+      // The URL key stays `vendor` and now holds an id — same shape as
+      // `?project=<projectId>`. A stale bookmark carrying a vendor NAME simply
+      // matches nothing; there's no name→id fallback, since resolving one would
+      // mean guessing at a roster the URL can't see.
+      //
+      // `(none)` is the where-did-this-come-from worklist: `purchase.vendorId`
+      // is NOT NULL, so "no vendor" and "no charge attached" are one predicate.
       columnId: "vendor",
-      kind: "multiselect",
+      field: "vendorId",
+      kind: "idMulti",
+      brand: unsafeVendorId,
       placeholder: "Filter by vendor...",
       optionsKey: "vendor",
       nullable: { field: "vendorPresenceFilter", label: "vendor" },
     },
     {
-      // "none" is the unreconciled worklist — no vendor order id recorded.
+      // "none" is the unreconciled worklist — no order id recorded. The id lives
+      // on the CHARGE now, so this covers both "a charge with no order id" and
+      // "no charge at all"; both have always read as "no order id" here.
       columnId: "orderId",
       field: "orderIdPresenceFilter",
       kind: "presence",
@@ -153,18 +172,109 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("order id"),
     },
     {
-      // URL-only, like `productId` above — seeded by the "Same Order" section's
-      // header badge and the ledger's Order # cell, surfaced as a ScopeChip.
+      // URL-only, like `productId` above — seeded by the charge section's header
+      // and the ledger's Order # cell, surfaced as a ScopeChip.
       // Its `columnId` can't be `orderId`: that one is the presence control,
       // and a second spec on the same id would read the same filter slot.
-      // Always paired with `vendor` (or `vendor=(none)`) by its callers, since
-      // an order id is only unique within a vendor.
+      //
+      // No longer paired with a vendor. The order id resolves through
+      // `purchaseId`, and `(vendorId, orderId)` is partial-unique on the charge,
+      // so a short id like Tool Nirvana's "#11325" can't reach another
+      // retailer's — the pairing existed only because the old key was two loose
+      // string columns on the ledger row.
       columnId: "orderIdExact",
       urlOnly: true,
       field: "orderId",
       urlKey: "order",
       kind: "id",
       placeholder: "Filter by order id...",
+    },
+  ],
+
+  // The roster of places money goes. One spec, covering all of
+  // `vendorFiltersSchema` (packages/schemas/src/vendor.ts) — just `search`. The
+  // rollup columns (`purchaseCount`, `spend`) are correlated subqueries the repo
+  // computes for display and sorting; there is no server filter behind either,
+  // so neither gets a spec.
+  vendor: [
+    {
+      // `?q=`, like the ledger's name search and purchases' `q` — the money
+      // family's search key. `field: "search"` because the server matches it as
+      // a substring of the vendor NAME (`vendorFilterFields.search`).
+      columnId: "name",
+      field: "search",
+      urlKey: "q",
+      kind: "text",
+      placeholder: "Search vendors...",
+    },
+  ],
+
+  // One row per vendor charge. Five specs, covering `purchaseFiltersSchema`
+  // (packages/schemas/src/purchase.ts) apart from its exact `orderId` match —
+  // nothing deep-links a charge by order id (a charge has its own detail route),
+  // so there's no `orderIdExact`-style URL-only scope here the way expense has.
+  purchase: [
+    {
+      // `?q=`, the money family's search key — and it hangs on `charge`, not
+      // `orderId`. `charge` IS purchase's name column (`standardColumns` is
+      // `[]`, so there's no hook-prepended `name`): a bespoke accessor over
+      // `purchaseLabel`, which is why it's absent from `purchaseSortableFields`
+      // and stays unsortable. Server-side the term is a substring match on the
+      // ORDER ID; the `orderId` column's own control is the presence worklist
+      // below, and two specs can't share a `columnId` — they'd read the same
+      // filter slot.
+      columnId: "charge",
+      field: "search",
+      urlKey: "q",
+      kind: "text",
+      placeholder: "Search order id...",
+    },
+    {
+      // Id-based, like the ledger's vendor filter: the column RENDERS
+      // `vendorName`, but the roster and the filter trade in ids.
+      //
+      // No `nullable` sentinels — `Purchase.vendorId` is NOT NULL, so there is
+      // no "(none)" cohort to offer. (Expense's vendor filter does have them,
+      // because there "no vendor" means "no charge attached".)
+      //
+      // `optionsKey: "vendor"` names the same key as expense's spec but is fed a
+      // DIFFERENT roster: this page injects `vendor.options` (charge counts),
+      // the ledger injects `expense.vendorOptions` (ledger-row counts). Rosters
+      // stay page-fed per `filterOptions`; they must not be collapsed into one
+      // shared options hook.
+      columnId: "vendor",
+      field: "vendorId",
+      kind: "idMulti",
+      brand: unsafeVendorId,
+      placeholder: "Filter by vendor...",
+      optionsKey: "vendor",
+    },
+    {
+      // "(none)" is the reconciliation worklist: the ~40% of charges the vendor
+      // never issued an order id for.
+      columnId: "orderId",
+      field: "orderIdPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter by order id...",
+      options: presenceFilterOptions("order id"),
+    },
+    {
+      // Same presets and expander as the ledger's date filter — one `?date=30d`
+      // means the same window on both money tables.
+      columnId: "date",
+      kind: "range",
+      placeholder: "Filter by date...",
+      options: dateRangeOptions,
+      expand: resolveDateRange,
+    },
+    {
+      // "(none)" is the charges with no paperwork total recorded yet — the ones
+      // `ReconciliationBadge` has nothing to reconcile against.
+      columnId: "statedTotal",
+      field: "statedTotalPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter by stated total...",
+      options: presenceFilterOptions("stated total"),
     },
   ],
 
@@ -250,11 +360,11 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("ingredient"),
     },
     {
-      columnId: "purchases",
-      field: "purchasePresenceFilter",
+      columnId: "expenses",
+      field: "expensePresenceFilter",
       kind: "presence",
-      placeholder: "Filter purchases...",
-      options: presenceFilterOptions("purchases"),
+      placeholder: "Filter expenses...",
+      options: presenceFilterOptions("expenses"),
     },
     {
       // "USDA key", not "USDA food" — the predicate is `fdc_id IS NOT NULL OR

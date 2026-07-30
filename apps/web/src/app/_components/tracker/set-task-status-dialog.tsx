@@ -21,7 +21,7 @@ interface SetTaskStatusDialogProps {
 /**
  * Bulk "set status" dialog for the tasks list page — same shell as
  * {@link MoveToProjectDialog} (a `BulkActionDialog` + a single picker), swapping
- * the project combobox for the task status enum. Purchases have no status
+ * the project combobox for the task status enum. Expenses have no status
  * field, so this stays task-only (unlike the shared move dialog).
  */
 export function SetTaskStatusDialog({

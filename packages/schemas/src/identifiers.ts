@@ -72,6 +72,14 @@ export type ProjectId = z.infer<typeof projectId>;
 export const [taskId, unsafeTaskId] = brandedId("TaskId");
 export type TaskId = z.infer<typeof taskId>;
 
+export const [expenseId, unsafeExpenseId] = brandedId("ExpenseId");
+export type ExpenseId = z.infer<typeof expenseId>;
+
+export const [vendorId, unsafeVendorId] = brandedId("VendorId");
+export type VendorId = z.infer<typeof vendorId>;
+
+// The charge an expense belongs to. `PurchaseId` used to brand the ledger row
+// itself; that row is now `ExpenseId` and this brands the vendor transaction.
 export const [purchaseId, unsafePurchaseId] = brandedId("PurchaseId");
 export type PurchaseId = z.infer<typeof purchaseId>;
 

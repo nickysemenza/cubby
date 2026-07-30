@@ -33,12 +33,12 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import {
+  expense,
   image,
   inventoryEntry,
   product,
   productImage,
   productUnitMappings,
-  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -105,7 +105,7 @@ export const findDuplicateUniqueProducts = async (
     }));
 };
 
-// Find products nothing points at — no live inventory, no live purchase, no
+// Find products nothing points at — no live inventory, no live expense, no
 // ingredient link. This drives a one-click Delete on the Problems page, so a
 // false positive here is an executable data loss, not just a noisy list.
 //
@@ -118,13 +118,13 @@ export const findDuplicateUniqueProducts = async (
 //     spot hid 18 of the 20 genuinely-uninventoried products.
 //
 //  2. *Completeness* — Product has five incoming FK edges, and checking only
-//     some of them yields a confident wrong answer. Omitting `purchase` made 32
+//     some of them yields a confident wrong answer. Omitting `expense` made 32
 //     of 40 flagged "orphans" false positives: a tool that was bought, logged in
 //     the ledger, and later sold looks exactly like one that was never real.
 //     Note the soft-delete guard script can catch (1) but by construction cannot
 //     catch (2) — a missing subquery is invisible to it.
 //
-// Inventory and purchases are the two *acquisition* edges, so they're the ones
+// Inventory and expenses are the two *acquisition* edges, so they're the ones
 // that disqualify. The metadata edges (productExternalId, productUnitMappings,
 // productImage) deliberately don't: an ASIN or a hand-entered conversion says
 // nothing about whether the thing was ever owned.
@@ -156,17 +156,15 @@ export const findOrphanedProducts = async (
               ),
             ),
         ),
-        // Unlike the `productIdsWithPurchases` subquery in product/crud.ts, this
-        // needs no `isNotNull(purchase.productId)`: that one is an uncorrelated
+        // Unlike the `productIdsWithExpenses` subquery in product/crud.ts, this
+        // needs no `isNotNull(expense.productId)`: that one is an uncorrelated
         // NOT IN list, where a single NULL makes the whole predicate UNKNOWN. A
         // correlated `eq` simply never matches NULL.
         notExists(
           dbClient
             .select({ id: sql`1` })
-            .from(purchase)
-            .where(
-              and(eq(purchase.productId, product.id), notDeleted(purchase)),
-            ),
+            .from(expense)
+            .where(and(eq(expense.productId, product.id), notDeleted(expense))),
         ),
       ),
     );

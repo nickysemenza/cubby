@@ -1,7 +1,7 @@
 import { unsafeProductId } from "@cubby/schemas/identifiers";
 import {
+  expenseCreateInput,
   projectCreateInput,
-  purchaseCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
@@ -13,11 +13,11 @@ import {
   getEntityEmbeddingDeletedAtForRef,
   upsertEntityEmbedding,
 } from "~/server/repo/entity-embedding";
+import { createExpense } from "~/server/repo/expense";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import { createProject, updateProject } from "~/server/repo/project";
-import { createPurchase } from "~/server/repo/purchase";
 import {
   makeLocationInput,
   makeProductInput,
@@ -90,7 +90,7 @@ describe("mutation side effects integration", () => {
     );
   });
 
-  it("project rename enqueues project and related task/purchase embedding refreshes", async () => {
+  it("project rename enqueues project and related task/expense embedding refreshes", async () => {
     const project = await createProject(
       ctx.db,
       mock(projectCreateInput, {
@@ -105,18 +105,18 @@ describe("mutation side effects integration", () => {
       }),
       ctx.actor,
     );
-    const purchase = await createPurchase(
+    const expense = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
+      mock(expenseCreateInput, {
         overrides: {
-          name: "Manifest Tracker Purchase",
+          name: "Manifest Tracker Expense",
           projectId: project.id,
         },
       }),
       ctx.actor,
     );
 
-    // Tasks/purchases embed their project's name, so a rename must fan out
+    // Tasks/expenses embed their project's name, so a rename must fan out
     // (see refreshTrackerEmbeddingsForProject / findTrackerEmbeddingRefsForProjects).
     await updateProject(
       ctx.db,
@@ -153,7 +153,7 @@ describe("mutation side effects integration", () => {
           payload: { entityType: "task", entityId: task.id },
         }),
         expect.objectContaining({
-          payload: { entityType: "purchase", entityId: purchase.id },
+          payload: { entityType: "expense", entityId: expense.id },
         }),
       ]),
     );

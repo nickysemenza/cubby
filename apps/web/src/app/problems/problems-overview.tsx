@@ -168,13 +168,14 @@ export function ProblemsOverview() {
           {AUTO_FIXABLE_SECTIONS.map(renderSection)}
         </AutoFixableGroup>
 
-        {/* Backlog, not defects. Kept on this page (it's the same housekeeping
-            headspace) but below the issues and visually distinct: these never
-            reach zero, so counting them as problems is what made the badge
-            permanently red and taught everyone to ignore it. */}
+        {/* Backlog and advisory cues, not defects. Kept on this page (it's the
+            same housekeeping headspace) but below the issues and visually
+            distinct: these never reach zero, so counting them as problems is
+            what made the badge permanently red and taught everyone to ignore
+            it. */}
         <Section
-          title="Coverage"
-          description="How much of the house has been itemized, photographed and counted. These don't reach zero — new things arrive faster than they get filed — so they're progress, not problems."
+          title="Coverage & cues"
+          description="How much of the house has been itemized, photographed and counted, plus soft cues that are often correct as they stand. These don't reach zero — new things arrive faster than they get filed — so they're progress and prompts, not problems."
         >
           {COVERAGE_SECTIONS.map(renderSection)}
         </Section>

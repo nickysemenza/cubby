@@ -4,6 +4,7 @@ import { auditLogRouter } from "./routers/audit-log";
 import { backgroundJobsRouter } from "./routers/background-jobs";
 import { calendarRouter } from "./routers/calendar";
 import { dashboardRouter } from "./routers/dashboard";
+import { expenseRouter } from "./routers/expense";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
 import { inventoryRouter } from "./routers/inventory";
@@ -21,6 +22,7 @@ import { suggestionsRouter } from "./routers/suggestions";
 import { taskRouter } from "./routers/task";
 import { upcRouter } from "./routers/upc";
 import { usdaRouter } from "./routers/usda";
+import { vendorRouter } from "./routers/vendor";
 
 /** Routers available to internal MCP/agent callers (the agent excludes itself). */
 export const domainRouterRecord = {
@@ -36,6 +38,8 @@ export const domainRouterRecord = {
   meal: mealRouter,
   project: projectRouter,
   task: taskRouter,
+  expense: expenseRouter,
+  vendor: vendorRouter,
   purchase: purchaseRouter,
   mcp: mcpRouter,
   oauth: oauthRouter,

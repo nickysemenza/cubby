@@ -38,7 +38,7 @@ function proj(id: string, parentProjectId?: string): ProjectOut {
       actualSpent: 0,
       committedSpent: 0,
       contributions: 0,
-      purchaseCount: 0,
+      expenseCount: 0,
       taskCount: 0,
       doneTaskCount: 0,
       subtree: {
@@ -46,7 +46,7 @@ function proj(id: string, parentProjectId?: string): ProjectOut {
         actualSpent: 0,
         committedSpent: 0,
         contributions: 0,
-        purchaseCount: 0,
+        expenseCount: 0,
         taskCount: 0,
         doneTaskCount: 0,
         projectCount: 0,

@@ -1,9 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import {
+  expenseOut,
   projectDashboardSummaryOut,
   projectOut,
-  purchaseOut,
   taskOut,
 } from "@cubby/schemas/project";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
@@ -401,6 +401,12 @@ describe("listMcpToolCatalog", () => {
       meal: ["meal", "meals"],
       project: ["project", "projects"],
       task: ["task", "tasks"],
+      expense: ["expense", "expenses"],
+      // vendor/purchase expose get/list/create/update but NOT delete, so the
+      // loop below never asks for delete_vendors / delete_purchases. Note that
+      // `purchase` here is the vendor CHARGE, not the old flat ledger row —
+      // that one is `expense` above, and it is the one that owns money.
+      vendor: ["vendor", "vendors"],
       purchase: ["purchase", "purchases"],
       "usda-food": ["usda_food", "usda_foods", { list: "search_usda_foods" }],
       image: ["image", "images"],
@@ -409,14 +415,36 @@ describe("listMcpToolCatalog", () => {
       (await listMcpToolCatalog()).tools.map(({ name }) => name),
     );
 
+    const OPERATIONS: Operation[] = [
+      "list",
+      "get",
+      "create",
+      "update",
+      "delete",
+    ];
+
     for (const entity of allEntities) {
       const [singular, plural, overrides = {}] = slugs[entity];
-      for (const operation of entityManifest[entity].mcp) {
+      const declared = new Set<Operation>(entityManifest[entity].mcp);
+      // Both directions: a declared op must be registered, and an UNDECLARED op
+      // must not be. The negative half is what guards the deliberate omissions —
+      // vendor/purchase have no delete tool on purpose (see the manifest), and
+      // without this a stray registration would pass unnoticed.
+      for (const operation of OPERATIONS) {
         const defaultSlug =
           operation === "list" || operation === "delete" ? plural : singular;
-        expect(
-          catalog.has(overrides[operation] ?? `${operation}_${defaultSlug}`),
-        ).toBe(true);
+        const toolName = overrides[operation] ?? `${operation}_${defaultSlug}`;
+        expect({
+          entity,
+          operation,
+          toolName,
+          registered: catalog.has(toolName),
+        }).toEqual({
+          entity,
+          operation,
+          toolName,
+          registered: declared.has(operation),
+        });
       }
     }
   });
@@ -561,25 +589,25 @@ describe("listMcpToolCatalog", () => {
 });
 
 describe("find_similar_entities pair allowlist", () => {
-  const PURCHASE_A = "77777777-7777-4777-8777-777777777771";
+  const EXPENSE_A = "77777777-7777-4777-8777-777777777771";
 
   it("passes an allowlisted pair through to search.similar", async () => {
     const similar = vi.fn().mockResolvedValue({
-      source: { entityType: "purchase", entityId: PURCHASE_A },
+      source: { entityType: "expense", entityId: EXPENSE_A },
       results: [],
     });
 
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "purchase_to_product", sourceId: PURCHASE_A, limit: 3 },
+      { pair: "expense_to_product", sourceId: EXPENSE_A, limit: 3 },
       { search: { similar } },
     );
 
     expect(result.isError).not.toBe(true);
     expect(similar).toHaveBeenCalledWith({
-      pair: "purchase_to_product",
-      sourceId: PURCHASE_A,
+      pair: "expense_to_product",
+      sourceId: EXPENSE_A,
       limit: 3,
     });
   });
@@ -590,7 +618,7 @@ describe("find_similar_entities pair allowlist", () => {
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "purchase_to_recipe", sourceId: PURCHASE_A },
+      { pair: "expense_to_recipe", sourceId: EXPENSE_A },
       { search: { similar } },
     );
 
@@ -708,7 +736,7 @@ describe("household tracker synthesis + bulk tools", () => {
   const PROJECT_B = "44444444-4444-4444-8444-444444444442";
   const PROJECT_C = "44444444-4444-4444-8444-444444444443";
   const TASK_A = "55555555-5555-4555-8555-555555555551";
-  const PURCHASE_A = "66666666-6666-4666-8666-666666666661";
+  const EXPENSE_A = "66666666-6666-4666-8666-666666666661";
 
   it("get_house_status passes filters through and trims UI-only + heavy fields", async () => {
     const project = mock(projectOut, {
@@ -903,10 +931,10 @@ describe("household tracker synthesis + bulk tools", () => {
     expect(result.structuredContent).not.toHaveProperty("sideEffects");
   });
 
-  it("bulk purchase writes drop sideEffects and report an updated count", async () => {
-    const updated = mock(purchaseOut, {
+  it("bulk expense writes drop sideEffects and report an updated count", async () => {
+    const updated = mock(expenseOut, {
       seed: 5,
-      overrides: { id: PURCHASE_A, projectId: PROJECT_A },
+      overrides: { id: EXPENSE_A, projectId: PROJECT_A },
     });
     const bulkMove = vi.fn().mockResolvedValue({
       items: [updated],
@@ -915,13 +943,13 @@ describe("household tracker synthesis + bulk tools", () => {
 
     const result = await callTool(
       createMcpServer(),
-      "bulk_move_purchases",
-      { ids: [PURCHASE_A], projectId: PROJECT_A },
-      { purchase: { bulkMove } },
+      "bulk_move_expenses",
+      { ids: [EXPENSE_A], projectId: PROJECT_A },
+      { expense: { bulkMove } },
     );
 
     expect(bulkMove).toHaveBeenCalledWith({
-      ids: [PURCHASE_A],
+      ids: [EXPENSE_A],
       projectId: PROJECT_A,
     });
     expect(result.isError).not.toBe(true);
@@ -930,7 +958,7 @@ describe("household tracker synthesis + bulk tools", () => {
       items: Array<Record<string, unknown>>;
     };
     expect(structured.updated).toBe(1);
-    expect(structured.items[0]?.id).toBe(PURCHASE_A);
+    expect(structured.items[0]?.id).toBe(EXPENSE_A);
     expect(result.structuredContent).not.toHaveProperty("sideEffects");
   });
 });

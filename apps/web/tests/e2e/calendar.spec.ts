@@ -13,7 +13,7 @@ test("calendar opens a date drawer and prefills quick creation", async ({
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Meals" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Tasks" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Purchases" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Expenses" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Projects" })).toBeVisible();
 
   const july14 = page

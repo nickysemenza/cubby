@@ -1,0 +1,214 @@
+/**
+ * Expense Router — project spend ledger (migrated from Notion).
+ * Pure crud-factory shape; no children, no rollups of its own.
+ */
+
+import { type ExpenseId, expenseId } from "@cubby/schemas/identifiers";
+import {
+  expenseAnalyticsOut,
+  expenseBulkCostTypeInput,
+  expenseBulkMoveInput,
+  expenseBulkTradeInput,
+  expenseCreateInput,
+  expenseFiltersSchema,
+  expenseListAndSideEffectsOut,
+  expenseOut,
+  expenseSortableFields,
+  expenseTradeAffinityOut,
+  expenseUpdateData,
+} from "@cubby/schemas/project";
+import { vendorOptionsOut } from "@cubby/schemas/vendor";
+import { z } from "zod";
+import {
+  createExpense,
+  deleteExpenses,
+  expenseAnalytics,
+  expenseList,
+  expenseTradeAffinity,
+  getExpenseByID,
+  moveExpenses,
+  setExpensesCostType,
+  setExpensesTrade,
+  updateExpense,
+} from "~/server/repo/expense";
+import { getPurchaseExpenses } from "~/server/repo/purchase";
+import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
+import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import { createSearchableEntityCrudProcedures } from "../crud-factory";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+const {
+  getByID,
+  list,
+  create,
+  update,
+  delete: deleteItem,
+} = createSearchableEntityCrudProcedures({
+  schemas: {
+    createInput: expenseCreateInput,
+    updateInput: expenseUpdateData,
+    output: expenseOut,
+    filters: expenseFiltersSchema,
+    sort: {
+      sortableFields: expenseSortableFields,
+      defaultSort: "date",
+      // No grouping on this table; an empty roster keeps the new joined-name
+      // sort keys from being accepted as group keys that do nothing.
+      groupableFields: ["costType"] as const,
+    },
+    idSchema: expenseId,
+  },
+  repository: {
+    getByID: async (services, id: ExpenseId) => getExpenseByID(services.db, id),
+    list: async (services, filters, sort, pagination) =>
+      expenseList(services.db, filters, sort, pagination),
+    create: async (services, data) =>
+      createExpense(services.db, data, services.actorContext),
+    update: async (services, id: ExpenseId, data) =>
+      updateExpense(services.db, id, data, services.actorContext),
+    delete: async (services, ids) => {
+      await deleteExpenses(services.db, ids, services.actorContext);
+      return undefined;
+    },
+  },
+  entityName: "expense",
+});
+
+/**
+ * Every expense matching the filters, in one round trip — chart aggregates
+ * happen client-side, and `list`'s 500-row page cap would silently truncate
+ * them (same fetch-all convention as project.dashboard).
+ */
+const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
+const chartData = protectedProcedure
+  .input(expenseFiltersSchema)
+  .output(z.array(expenseOut))
+  .query(async ({ ctx, input }) => {
+    const { data } = await expenseList(
+      ctx.db,
+      input,
+      [{ orderBy: "date", direction: "asc" }],
+      FETCH_ALL,
+    );
+    return data;
+  });
+
+/**
+ * Server-side chart aggregates — grouped SQL sums/counts over the SAME
+ * filter shape as `list`/`chartData`, replacing the client-side grouping
+ * that ran over `chartData`'s fetch-all. See repo/expense/analytics.ts for
+ * the SQL; `chartData` stays in place for whatever else still fetches raw rows.
+ */
+const analytics = protectedProcedure
+  .input(expenseFiltersSchema)
+  .output(expenseAnalyticsOut)
+  .query(({ ctx, input }) => expenseAnalytics(ctx.db, input));
+
+/**
+ * Vendor roster for the ledger's Vendor filter picklist. Kept on THIS router
+ * (rather than moving to `vendor.options`) so the ledger's filter wiring didn't
+ * have to change alongside everything else; it's a thin re-export of
+ * `repo/vendor.ts`'s query, which is the single source of truth.
+ */
+const vendorOptions = protectedProcedure
+  .output(vendorOptionsOut)
+  .query(({ ctx }) => loadVendorOptions(ctx.db));
+
+/**
+ * The other lines of this expense's charge — the "this charge" detail section
+ * that replaced #475's "Same Order".
+ *
+ * Shows whenever a charge exists, not only when there's an order id: 33% of
+ * vendor-bearing rows have none, and those rows still belong to a real
+ * transaction. Separate from `getByID` so the detail page's main payload doesn't
+ * grow a lookup only one section reads.
+ */
+const chargeSiblings = protectedProcedure
+  .input(expenseId)
+  .output(z.array(expenseOut))
+  .query(async ({ ctx, input }) => {
+    const self = await getExpenseByID(ctx.db, input);
+    if (!self.purchaseId) return [];
+    const lines = await getPurchaseExpenses(ctx.db, self.purchaseId);
+    return lines.filter((row) => row.id !== input);
+  });
+
+/**
+ * The project x trade expense-count matrix behind project suggestions. One
+ * grouped aggregate for the whole ledger, fetched once and ranked against
+ * client-side for many expenses — see rankProjectSuggestions.
+ */
+const tradeAffinity = protectedProcedure
+  .output(z.array(expenseTradeAffinityOut))
+  .query(({ ctx }) => expenseTradeAffinity(ctx.db));
+
+// Bulk "move to project" — projectId: null moves every listed expense to the
+// inbox. Mirrors inventory.bulkMove/task.bulkMove's shape: one repo call
+// inside a transaction, then one wave-wide runMutationSideEffectsForEntities
+// so the embedding refresh for every moved expense batches into a single
+// dispatch.
+const bulkMove = protectedProcedure
+  .input(expenseBulkMoveInput)
+  .output(expenseListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await moveExpenses(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "expense" as const, entityId: item.id },
+        source: "expense.bulkMove",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
+// Bulk trade write, same wave-wide side-effect shape as bulkMove above.
+const bulkSetTrade = protectedProcedure
+  .input(expenseBulkTradeInput)
+  .output(expenseListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setExpensesTrade(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "expense" as const, entityId: item.id },
+        source: "expense.bulkSetTrade",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
+// Bulk cost-type write, same shape as bulkSetTrade.
+const bulkSetCostType = protectedProcedure
+  .input(expenseBulkCostTypeInput)
+  .output(expenseListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const items = await setExpensesCostType(ctx.db, input, ctx.actorContext);
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      items.map((item) => ({
+        action: "updated" as const,
+        entity: { entityType: "expense" as const, entityId: item.id },
+        source: "expense.bulkSetCostType",
+      })),
+    );
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
+export const expenseRouter = createTRPCRouter({
+  getByID,
+  list,
+  create,
+  update,
+  delete: deleteItem,
+  chartData,
+  analytics,
+  tradeAffinity,
+  vendorOptions,
+  chargeSiblings,
+  bulkMove,
+  bulkSetTrade,
+  bulkSetCostType,
+});

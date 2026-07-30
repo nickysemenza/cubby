@@ -1,1708 +1,1437 @@
-import { unsafeProjectId, unsafePurchaseId } from "@cubby/schemas/identifiers";
+import type { PurchaseId } from "@cubby/schemas/identifiers";
+import { unsafePurchaseId } from "@cubby/schemas/identifiers";
+import { isDocumentFile } from "@cubby/schemas/image";
+import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
 import {
-  projectCreateInput,
   purchaseCreateInput,
-} from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+  reconcilePurchase,
+  splitExpenseInput,
+} from "@cubby/schemas/purchase";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
-import { purchaseRouter } from "~/server/api/routers/purchase";
-import { createTestCaller } from "~/server/api/trpc";
-import { product } from "~/server/db/schema";
-import { getAuditLog } from "~/server/repo/audit-log";
-import { getDb } from "~/server/repo/database-helpers";
-import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
-import { createProduct, deleteProducts } from "~/server/repo/product";
-import { createProject, deleteProjects } from "~/server/repo/project";
+import { describe, expect, it, vi } from "vitest";
+
+// The only stubbed seam in this file: the R2 network PUT. Everything else in
+// `attachFileToEntity` (target validation, PDF classification, key generation,
+// the row + join insert) runs for real against the test database — mirroring
+// image-storage.service.unit.test.ts, which mocks the same two functions.
+vi.mock("~/server/utils/s3", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/server/utils/s3")>()),
+  uploadToS3: vi.fn(async () => undefined),
+  deleteS3Object: vi.fn(async () => undefined),
+}));
+
+import {
+  expense,
+  image,
+  purchase,
+  purchaseImage,
+  vendor,
+} from "~/server/db/schema";
+import {
+  attachFileToEntity,
+  initiateDocumentUpload,
+} from "~/server/services/image-storage.service";
+import { getDb, insertAndReturn } from "./database-helpers";
+import {
+  createExpense,
+  deleteExpenses,
+  expenseAnalytics,
+  expenseList,
+  getExpenseByID,
+} from "./expense";
+import { createProduct } from "./product";
+import {
+  createProject,
+  projectDashboardSummary,
+  projectPortfolioAnalytics,
+} from "./project";
+import { projectRollups } from "./project/analytics";
 import {
   createPurchase,
   deletePurchases,
+  findOrCreatePurchase,
   getPurchaseByID,
-  getPurchaseOrderSiblings,
-  movePurchases,
-  purchaseAnalytics,
+  getPurchaseExpenses,
+  linkExpensesToPurchase,
+  mergePurchases,
   purchaseList,
+  splitExpense,
   updatePurchase,
-} from "~/server/repo/purchase";
-import { makeProductInput } from "~/server/repo/repo.fixtures";
+} from "./purchase";
+import { makeExpenseInput, makeProductInput } from "./repo.fixtures";
+import { deleteVendors, findOrCreateVendor, getVendorByID } from "./vendor";
 
-// NB: project rollup contribution (spend/purchaseCount/subtree) and
-// project-delete-blocking-on-live-purchases are already covered in
-// project.integration.test.ts ("rolls up spend..." and "blocks deletion
-// while live tasks or purchases still reference the project") — not
-// re-asserted here.
+/**
+ * `Purchase` is ONE vendor transaction. All money lives on `Expense`; a charge
+ * only carries identity (`vendorId` + optional `orderId`), a date, documents,
+ * and `statedTotal` — a reconciliation cue that is NEVER summed into spend.
+ *
+ * The load-bearing constraint under most of this file is the partial-unique
+ * `(vendorId, orderId) WHERE orderId IS NOT NULL AND live` index: one order is
+ * one charge, while many `(vendorId, null)` charges coexist.
+ */
 
-describe("purchase repository — CRUD", () => {
+const page = { pageIndex: 0, pageSize: 100 };
+
+describe("purchase repository — findOrCreatePurchase", () => {
   const ctx = withTestDb();
 
-  it("creates, reads (with projectName join), updates (incl. clearing date/projectId), and deletes", async () => {
-    const project = await createProject(
+  it("is idempotent for one (vendorId, orderId) pair", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Amazon");
+
+    const first = await findOrCreatePurchase(ctx.db, {
+      vendorId,
+      orderId: "111-1234567-1234567",
+      date: "2024-03-01",
+    });
+    const again = await findOrCreatePurchase(ctx.db, {
+      vendorId,
+      orderId: "111-1234567-1234567",
+    });
+    // Trimmed before matching, so a padded id from a scraped receipt resolves to
+    // the charge already on file rather than creating a second one.
+    const padded = await findOrCreatePurchase(ctx.db, {
+      vendorId,
+      orderId: "  111-1234567-1234567  ",
+    });
+
+    expect(again).toBe(first);
+    expect(padded).toBe(first);
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
+    // Re-resolution never rewrites the charge it found — the date from the
+    // first sighting survives.
+    expect((await getPurchaseByID(ctx.db, first)).date).toBe("2024-03-01");
+  });
+
+  it("never merges two vendors that share an order-id string", async () => {
+    // An order id is only unique WITHIN a vendor. Short ones — Tool Nirvana's
+    // "#11325" — genuinely collide with other retailers, which is exactly what
+    // the two-column partial-unique index exists to keep apart.
+    const toolNirvana = await findOrCreateVendor(ctx.db, "Tool Nirvana");
+    const otherStore = await findOrCreateVendor(ctx.db, "Metal Supermarkets");
+
+    const a = await findOrCreatePurchase(ctx.db, {
+      vendorId: toolNirvana,
+      orderId: "#11325",
+    });
+    const b = await findOrCreatePurchase(ctx.db, {
+      vendorId: otherStore,
+      orderId: "#11325",
+    });
+
+    expect(b).not.toBe(a);
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(2);
+
+    const chargeA = await getPurchaseByID(ctx.db, a);
+    const chargeB = await getPurchaseByID(ctx.db, b);
+    expect(chargeA.vendorId).toBe(toolNirvana);
+    expect(chargeB.vendorId).toBe(otherStore);
+    // Each charge resolves its OWN vendor name through the join.
+    expect(chargeA.vendorName).toBe("Tool Nirvana");
+    expect(chargeB.vendorName).toBe("Metal Supermarkets");
+  });
+
+  it("two concurrent calls for one order produce exactly one purchase", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Home Depot");
+
+    // This is what `findOrCreate`'s `ON CONFLICT DO NOTHING` + re-select is FOR:
+    // two concurrent imports of one order must land on a single charge instead of
+    // 500ing on `Purchase_vendorId_orderId_key`.
+    const [a, b] = await Promise.all([
+      findOrCreatePurchase(ctx.db, { vendorId, orderId: "WN63446464" }),
+      findOrCreatePurchase(ctx.db, { vendorId, orderId: "WN63446464" }),
+    ]);
+
+    expect(a).toBe(b);
+    const rows = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.orderId, "WN63446464"));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("orderId: null ALWAYS creates a new charge", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Masseria Calderisi");
+
+    const first = await findOrCreatePurchase(ctx.db, {
+      vendorId,
+      orderId: null,
+      date: "2024-05-01",
+    });
+    const second = await findOrCreatePurchase(ctx.db, {
+      vendorId,
+      orderId: null,
+      date: "2024-05-01",
+    });
+    // Empty string is order-id-absent, not an order id — same "always new" rule.
+    const blank = await findOrCreatePurchase(ctx.db, {
+      vendorId,
+      orderId: "  ",
+    });
+
+    // DELIBERATE, and not a bug to "fix" later: `(vendorId, null)` is not
+    // unique, and grouping by `(vendor, date)` instead would have falsely merged
+    // 71 real ledger rows across 31 groups. Two progress payments to one
+    // contractor on one day are TWO charges. Merging near-duplicates is
+    // `mergePurchases` — a user action, never a guess on the write path.
+    expect(second).not.toBe(first);
+    expect(blank).not.toBe(first);
+    expect(blank).not.toBe(second);
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(3);
+    for (const id of [first, second, blank]) {
+      expect((await getPurchaseByID(ctx.db, id)).orderId).toBeNull();
+    }
+  });
+});
+
+describe("purchase repository — charge resolution from {vendor, orderId}", () => {
+  const ctx = withTestDb();
+
+  it("creates the vendor + charge on first use and REUSES both on the second", async () => {
+    // The unchanged input shape is the point of the split: MCP, quick-add and
+    // the purchase-import skill never learned about vendor or purchase ids.
+    const first = await createExpense(
       ctx.db,
-      projectCreateInput.parse({ name: "purchase crud project" }),
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "reuse line one",
+          cost: 40,
+          vendor: "Direct Tools Outlet",
+          orderId: "DTO-9001",
+        }),
+      ),
+      ctx.actor,
+    );
+    const second = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "reuse line two",
+          cost: 60,
+          vendor: "Direct Tools Outlet",
+          orderId: "DTO-9001",
+        }),
+      ),
       ctx.actor,
     );
 
-    const created = await createPurchase(
+    expect(first.purchaseId).not.toBeNull();
+    expect(first.vendorId).not.toBeNull();
+    expect(second.purchaseId).toBe(first.purchaseId);
+    expect(second.vendorId).toBe(first.vendorId);
+
+    // `vendor` / `orderId` are no longer columns — they read back through the
+    // charge join, under the same output keys they always had.
+    expect(first.vendor).toBe("Direct Tools Outlet");
+    expect(first.orderId).toBe("DTO-9001");
+    expect(second.vendor).toBe("Direct Tools Outlet");
+    expect(second.orderId).toBe("DTO-9001");
+
+    // One vendor, one charge, two lines.
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
+    const lines = await getPurchaseExpenses(ctx.db, first.purchaseId!);
+    expect(lines.map((l) => l.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it("a vendor with NO orderId gets its own charge each time", async () => {
+    const walkInA = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "counter sale a", vendor: "Tool Nirvana" }),
+      ),
+      ctx.actor,
+    );
+    const walkInB = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "counter sale b", vendor: "Tool Nirvana" }),
+      ),
+      ctx.actor,
+    );
+
+    expect(walkInA.purchaseId).not.toBeNull();
+    expect(walkInB.purchaseId).not.toBeNull();
+    expect(walkInB.purchaseId).not.toBe(walkInA.purchaseId);
+    // Same vendor either way — only the charge differs.
+    expect(walkInB.vendorId).toBe(walkInA.vendorId);
+    expect(walkInA.orderId).toBeNull();
+  });
+
+  it("no vendor at all gets purchaseId: null, and a lone orderId is dropped", async () => {
+    const chargeless = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "cash, no receipt", vendor: null }),
+      ),
+      ctx.actor,
+    );
+    expect(chargeless.purchaseId).toBeNull();
+    expect(chargeless.vendorId).toBeNull();
+
+    // An order id ALONE can't name a transaction (they're unique only per
+    // vendor), so it is dropped rather than half-recorded as a charge nobody
+    // could identify.
+    const orphanOrderId = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "order id, no vendor",
+          vendor: null,
+          orderId: "WN-no-vendor",
+        }),
+      ),
+      ctx.actor,
+    );
+    expect(orphanOrderId.purchaseId).toBeNull();
+    expect(orphanOrderId.vendorId).toBeNull();
+    expect(orphanOrderId.orderId).toBeNull();
+    // Nothing was created on the side either.
+    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(0);
+  });
+});
+
+describe("purchase repository — linkExpensesToPurchase", () => {
+  const ctx = withTestDb();
+
+  it("attaches order-less expenses to one charge (the contractor case)", async () => {
+    // Flow Form Plumbing's single invoice covering rough-in AND fixtures: one
+    // charge, two trades, and no order id anywhere — the shape this whole model
+    // exists to serve.
+    const roughIn = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "plumbing rough-in",
+          cost: 1516,
+          trade: "plumbing",
+        }),
+      ),
+      ctx.actor,
+    );
+    const fixtures = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "fixtures", cost: 1000, trade: "plumbing" }),
+      ),
+      ctx.actor,
+    );
+    expect(roughIn.purchaseId).toBeNull();
+    expect(fixtures.orderId).toBeNull();
+
+    const vendorId = await findOrCreateVendor(ctx.db, "Flow Form Plumbing");
+    const charge = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "test faucet",
-        projectId: project.id,
-        cost: 42.5,
-        date: "2026-01-15",
-        url: "https://example.com/faucet",
-        notes: "brushed nickel",
-        future: false,
+        vendorId,
+        date: "2024-04-10",
+        statedTotal: 2516,
       }),
       ctx.actor,
     );
 
-    const read = await getPurchaseByID(ctx.db, created.id);
-    expect(read).toMatchObject({
-      name: "test faucet",
-      cost: 42.5,
-      date: "2026-01-15",
-      costType: "materials",
-      trade: "plumbing",
-      url: "https://example.com/faucet",
-      notes: "brushed nickel",
-      future: false,
-      projectId: project.id,
-      projectName: project.name,
-    });
-
-    const updated = await updatePurchase(
+    const after = await linkExpensesToPurchase(
       ctx.db,
-      created.id,
-      { name: "updated faucet", cost: 55, date: null, projectId: null },
+      { purchaseId: charge.id, expenseIds: [roughIn.id, fixtures.id] },
       ctx.actor,
     );
-    expect(updated.name).toBe("updated faucet");
-    expect(updated.cost).toBe(55);
-    expect(updated.date).toBeNull();
-    expect(updated.projectId).toBeNull();
-    expect(updated.projectName).toBeNull();
 
-    await deletePurchases(ctx.db, [created.id], ctx.actor);
+    const lines = await getPurchaseExpenses(ctx.db, charge.id);
+    expect(lines.map((l) => l.id).sort()).toEqual(
+      [roughIn.id, fixtures.id].sort(),
+    );
 
-    await expect(getPurchaseByID(ctx.db, created.id)).rejects.toMatchObject({
+    // Both lines now read the vendor through the charge, still with no order id.
+    const reread = await getExpenseByID(ctx.db, roughIn.id);
+    expect(reread.purchaseId).toBe(charge.id);
+    expect(reread.vendor).toBe("Flow Form Plumbing");
+    expect(reread.orderId).toBeNull();
+
+    // The charge's own rollup sees both lines, and the invoice reconciles.
+    expect(after.expenseCount).toBe(2);
+    expect(after.expenseTotal).toBe(2516);
+    expect(reconcilePurchase(after)).toBe("match");
+  });
+
+  it("re-points a line that already had a different charge", async () => {
+    const line = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "misfiled line", cost: 12, vendor: "Amazon" }),
+      ),
+      ctx.actor,
+    );
+    const originalCharge = line.purchaseId;
+    expect(originalCharge).not.toBeNull();
+
+    const vendorId = await findOrCreateVendor(ctx.db, "Amazon Business");
+    const target = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "AB-1" }),
+      ctx.actor,
+    );
+
+    await linkExpensesToPurchase(
+      ctx.db,
+      { purchaseId: target.id, expenseIds: [line.id] },
+      ctx.actor,
+    );
+
+    expect((await getExpenseByID(ctx.db, line.id)).purchaseId).toBe(target.id);
+    expect(await getPurchaseExpenses(ctx.db, originalCharge!)).toHaveLength(0);
+  });
+
+  it("refuses an unknown charge, and no-ops on a selection with no live lines", async () => {
+    const line = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "link guard line", cost: 9 }),
+      ),
+      ctx.actor,
+    );
+
+    // An FK would accept any existing row; this is the tombstone/nonexistent check.
+    await expect(
+      linkExpensesToPurchase(
+        ctx.db,
+        {
+          purchaseId: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+          expenseIds: [line.id],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
       cause: { reason: "PURCHASE_NOT_FOUND" },
     });
 
-    const { data } = await purchaseList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 50,
-    });
-    expect(data.map((p) => p.id)).not.toContain(created.id);
+    const vendorId = await findOrCreateVendor(ctx.db, "Link Guard Vendor");
+    const target = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "LG-1" }),
+      ctx.actor,
+    );
+    await deleteExpenses(ctx.db, [line.id], ctx.actor);
+
+    // Every named line is soft-deleted, so the write is skipped entirely rather
+    // than running an unbounded update — and the charge is returned untouched.
+    const unchanged = await linkExpensesToPurchase(
+      ctx.db,
+      { purchaseId: target.id, expenseIds: [line.id] },
+      ctx.actor,
+    );
+    expect(unchanged.expenseCount).toBe(0);
   });
 });
 
-describe("purchase repository — purchaseList filters", () => {
+describe("purchase repository — splitExpense", () => {
   const ctx = withTestDb();
-  const pagination = { pageIndex: 0, pageSize: 50 };
 
-  it("filters by search, costType, trade, future", async () => {
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "copper pipe",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "electrical",
-        costType: "tools",
-        name: "wire strippers",
-        future: true,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "services",
-        name: "plumber visit",
-        future: false,
-      }),
-      ctx.actor,
-    );
-
-    const bySearch = await purchaseList(
-      ctx.db,
-      { search: "copper" },
-      [],
-      pagination,
-    );
-    expect(bySearch.data.map((p) => p.name)).toEqual(["copper pipe"]);
-
-    const byCostType = await purchaseList(
-      ctx.db,
-      { costType: "tools" },
-      [],
-      pagination,
-    );
-    expect(byCostType.data.map((p) => p.name)).toEqual(["wire strippers"]);
-
-    const byTrade = await purchaseList(
-      ctx.db,
-      { trade: "plumbing" },
-      [],
-      pagination,
-    );
-    expect(new Set(byTrade.data.map((p) => p.name))).toEqual(
-      new Set(["copper pipe", "plumber visit"]),
-    );
-
-    const futureOnly = await purchaseList(
-      ctx.db,
-      { future: true },
-      [],
-      pagination,
-    );
-    expect(futureOnly.data.map((p) => p.name)).toEqual(["wire strippers"]);
-
-    const notFuture = await purchaseList(
-      ctx.db,
-      { future: false },
-      [],
-      pagination,
-    );
-    expect(new Set(notFuture.data.map((p) => p.name))).toEqual(
-      new Set(["copper pipe", "plumber visit"]),
-    );
-  });
-
-  it("filters by projectId, and projectId + includeSubProjects over a 3-level chain", async () => {
-    const parent = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "filter parent" }),
-      ctx.actor,
-    );
-    const child = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "filter child",
-        parentProjectId: parent.id,
-      }),
-      ctx.actor,
-    );
-    const grandchild = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "filter grandchild",
-        parentProjectId: child.id,
-      }),
-      ctx.actor,
-    );
-    const other = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "unrelated project" }),
-      ctx.actor,
-    );
-
-    for (const [proj, name] of [
-      [parent, "parent purchase"],
-      [child, "child purchase"],
-      [grandchild, "grandchild purchase"],
-      [other, "unrelated purchase"],
-    ] as const) {
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          trade: "other",
-          costType: "materials",
-          name,
-          projectId: proj.id,
-        }),
-        ctx.actor,
-      );
-    }
-
-    const directOnly = await purchaseList(
-      ctx.db,
-      { projectId: parent.id },
-      [],
-      pagination,
-    );
-    expect(directOnly.data.map((p) => p.name)).toEqual(["parent purchase"]);
-
-    const subtree = await purchaseList(
-      ctx.db,
-      { projectId: parent.id, includeSubProjects: true },
-      [],
-      pagination,
-    );
-    expect(new Set(subtree.data.map((p) => p.name))).toEqual(
-      new Set(["parent purchase", "child purchase", "grandchild purchase"]),
-    );
-    expect(subtree.data.map((p) => p.name)).not.toContain("unrelated purchase");
-  });
-
-  it("filters by dateFrom/dateTo (inclusive boundary, outside window, null-date excluded)", async () => {
-    const inWindow = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "in window",
-        date: "2026-02-15",
-      }),
-      ctx.actor,
-    );
-    const lowerBoundary = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "on lower boundary",
-        date: "2026-02-01",
-      }),
-      ctx.actor,
-    );
-    const upperBoundary = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "on upper boundary",
-        date: "2026-02-28",
-      }),
-      ctx.actor,
-    );
-    const beforeWindow = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "before window",
-        date: "2026-01-01",
-      }),
-      ctx.actor,
-    );
-    const afterWindow = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "after window",
-        date: "2026-03-01",
-      }),
-      ctx.actor,
-    );
-    const nullDate = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "no date (future)",
-        future: true,
-      }),
-      ctx.actor,
-    );
-    expect(nullDate.date).toBeNull();
-
-    const windowed = await purchaseList(
-      ctx.db,
-      { dateFrom: "2026-02-01", dateTo: "2026-02-28" },
-      [],
-      pagination,
-    );
-    expect(new Set(windowed.data.map((p) => p.id))).toEqual(
-      new Set([inWindow.id, lowerBoundary.id, upperBoundary.id]),
-    );
-    expect(windowed.data.map((p) => p.id)).not.toContain(beforeWindow.id);
-    expect(windowed.data.map((p) => p.id)).not.toContain(afterWindow.id);
-    expect(windowed.data.map((p) => p.id)).not.toContain(nullDate.id);
-
-    // dateFrom alone — open upper bound.
-    const fromOnly = await purchaseList(
-      ctx.db,
-      { dateFrom: "2026-02-28" },
-      [],
-      pagination,
-    );
-    expect(new Set(fromOnly.data.map((p) => p.id))).toEqual(
-      new Set([upperBoundary.id, afterWindow.id]),
-    );
-
-    // dateTo alone — open lower bound.
-    const toOnly = await purchaseList(
-      ctx.db,
-      { dateTo: "2026-02-01" },
-      [],
-      pagination,
-    );
-    expect(new Set(toOnly.data.map((p) => p.id))).toEqual(
-      new Set([beforeWindow.id, lowerBoundary.id]),
-    );
-  });
-
-  it("combines filters with AND semantics", async () => {
+  it("files the parts against the same charge, soft-deletes the original, and seeds statedTotal", async () => {
     const project = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "combined filter project" }),
+      projectCreateInput.parse({ name: "split project" }),
       ctx.actor,
     );
-    const matches = await createPurchase(
+    const product = await createProduct(
       ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "matches everything",
-        projectId: project.id,
-        date: "2026-05-10",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    // Right project, wrong trade.
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "electrical",
-        costType: "materials",
-        name: "wrong trade",
-        projectId: project.id,
-        date: "2026-05-10",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    // Right everything, wrong date.
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "wrong date",
-        projectId: project.id,
-        date: "2026-01-01",
-        future: false,
-      }),
+      makeProductInput({ name: "Combo Saw", manufacturer: "test" }),
       ctx.actor,
     );
 
-    const result = await purchaseList(
+    const combo = await createExpense(
       ctx.db,
-      {
-        projectId: project.id,
-        trade: "plumbing",
-        costType: "materials",
-        future: false,
-        dateFrom: "2026-05-01",
-        dateTo: "2026-05-31",
-      },
-      [],
-      pagination,
-    );
-    expect(result.data.map((p) => p.id)).toEqual([matches.id]);
-  });
-});
-
-describe("purchase repository — sorting/pagination", () => {
-  const ctx = withTestDb();
-
-  it("defaults to sorting by date, supports multi-sort, and reports correct total count with a small page size", async () => {
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "b purchase",
-        cost: 10,
-        date: "2026-01-02",
-      }),
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "combo kit",
+          cost: 100,
+          date: "2024-06-01",
+          vendor: "Direct Tools Outlet",
+          orderId: "DTO-SPLIT",
+        }),
+      ),
       ctx.actor,
     );
-    await createPurchase(
+    const chargeId = combo.purchaseId!;
+    // `findOrCreatePurchase` records no stated total, so the split has something
+    // to seed.
+    expect((await getPurchaseByID(ctx.db, chargeId)).statedTotal).toBeNull();
+
+    const parts = await splitExpense(
       ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "a purchase",
-        cost: 20,
-        date: "2026-01-01",
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "a purchase second",
-        cost: 5,
-        date: "2026-01-01",
-      }),
-      ctx.actor,
-    );
-
-    // Default sort: date.
-    const byDate = await purchaseList(
-      ctx.db,
-      {},
-      [{ orderBy: "date", direction: "asc" }],
-      { pageIndex: 0, pageSize: 50 },
-    );
-    expect(byDate.data[0]?.date).toBe("2026-01-01");
-    expect(byDate.data[2]?.date).toBe("2026-01-02");
-
-    // Multi-sort: date asc, then cost desc as a tiebreak among the two
-    // same-day rows.
-    const multiSort = await purchaseList(
-      ctx.db,
-      {},
-      [
-        { orderBy: "date", direction: "asc" },
-        { orderBy: "cost", direction: "desc" },
-      ],
-      { pageIndex: 0, pageSize: 50 },
-    );
-    expect(multiSort.data.map((p) => p.name)).toEqual([
-      "a purchase",
-      "a purchase second",
-      "b purchase",
-    ]);
-
-    // Small page size — count still reflects the full unpaginated total.
-    const { data: page, count } = await purchaseList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 2,
-    });
-    expect(page).toHaveLength(2);
-    expect(count).toBe(3);
-  });
-});
-
-describe("purchase router", () => {
-  const ctx = withTestDb();
-
-  it("chartData returns the filtered set", async () => {
-    const caller = createTestCaller(purchaseRouter, ctx.db);
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "chart match",
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "electrical",
-        costType: "materials",
-        name: "chart non-match",
-      }),
-      ctx.actor,
-    );
-
-    const result = await caller.chartData({ trade: "plumbing" });
-    expect(result.map((p) => p.name)).toEqual(["chart match"]);
-  });
-
-  describe("projectPresenceFilter", () => {
-    /** One assigned purchase, one unassigned, plus a decoy in another project. */
-    const seedProjectMix = async () => {
-      const [projA, projB] = await Promise.all([
-        createProject(
-          ctx.db,
-          projectCreateInput.parse({ name: "assigned home" }),
-          ctx.actor,
-        ),
-        createProject(
-          ctx.db,
-          projectCreateInput.parse({ name: "other home" }),
-          ctx.actor,
-        ),
-      ]);
-      for (const [name, projectId] of [
-        ["has a project", projA.id],
-        ["other project", projB.id],
-        ["needs a project", undefined],
-      ] as const) {
-        await createPurchase(
-          ctx.db,
-          purchaseCreateInput.parse({
-            trade: "drywall",
+      splitExpenseInput.parse({
+        expenseId: combo.id,
+        parts: [
+          {
+            name: "saw portion",
+            cost: 70,
             costType: "tools",
-            name,
-            ...(projectId ? { projectId } : {}),
+            trade: "cabinetry",
+            projectId: project.id,
+            productId: product.id,
+          },
+          {
+            name: "blade portion",
+            cost: 30,
+            costType: "materials",
+            trade: "other",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    expect(parts).toHaveLength(2);
+    // Every part lands on the SAME charge — parts of one purchase must share one
+    // parent.
+    for (const part of parts) {
+      expect(part.purchaseId).toBe(chargeId);
+      expect(part.vendor).toBe("Direct Tools Outlet");
+      expect(part.orderId).toBe("DTO-SPLIT");
+      // Non-part fields are inherited from the original.
+      expect(part.date).toBe("2024-06-01");
+    }
+
+    // Each part keeps its OWN trade / costType / project / product — that's the
+    // point: a combo-kit charge's saw half is `tools` and its blade half is
+    // `materials`.
+    const saw = parts.find((p) => p.name === "saw portion");
+    const blade = parts.find((p) => p.name === "blade portion");
+    expect(saw).toBeDefined();
+    expect(blade).toBeDefined();
+    expect(saw?.costType).toBe("tools");
+    expect(saw?.trade).toBe("cabinetry");
+    expect(saw?.projectId).toBe(project.id);
+    expect(saw?.productId).toBe(product.id);
+    expect(blade?.costType).toBe("materials");
+    expect(blade?.trade).toBe("other");
+    expect(blade?.projectId).toBeNull();
+    expect(blade?.productId).toBeNull();
+
+    // The original row is gone from every read path.
+    const [originalRow] = await getDb(ctx.db)
+      .select({ deletedAt: expense.deletedAt })
+      .from(expense)
+      .where(eq(expense.id, combo.id));
+    expect(originalRow?.deletedAt).not.toBeNull();
+    const lines = await getPurchaseExpenses(ctx.db, chargeId);
+    expect(lines.map((l) => l.id).sort()).toEqual(
+      parts.map((p) => p.id).sort(),
+    );
+
+    // `statedTotal` is seeded from the original cost so the parts have something
+    // to reconcile against.
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    expect(charge.statedTotal).toBe(100);
+    expect(charge.expenseTotal).toBe(100);
+    expect(reconcilePurchase(charge)).toBe("match");
+  });
+
+  it("does not overwrite a statedTotal the charge already had", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Stated Total Vendor");
+    const charge = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, statedTotal: 431.24 }),
+      ctx.actor,
+    );
+    const line = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "one line",
+          cost: 431.24,
+          purchaseId: charge.id,
+        }),
+      ),
+      ctx.actor,
+    );
+
+    await splitExpense(
+      ctx.db,
+      splitExpenseInput.parse({
+        expenseId: line.id,
+        parts: [
+          { name: "part a", cost: 200, costType: "materials", trade: "other" },
+          {
+            name: "part b",
+            cost: 231.24,
+            costType: "materials",
+            trade: "other",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    expect((await getPurchaseByID(ctx.db, charge.id)).statedTotal).toBe(431.24);
+  });
+
+  it("ACCEPTS a deliberately mismatched sum and merely reports it", async () => {
+    const combo = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "mismatch source",
+          cost: 100,
+          vendor: "Mismatch Depot",
+          orderId: "MM-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const chargeId = combo.purchaseId!;
+
+    // 60 + 25 = 85 against a $100 charge. Nothing validates that the parts add
+    // up, so this write must SUCCEED — a partial refund reduces a line without
+    // changing what the charge stated, so a mismatch is frequently correct.
+    const parts = await splitExpense(
+      ctx.db,
+      splitExpenseInput.parse({
+        expenseId: combo.id,
+        parts: [
+          {
+            name: "kept portion",
+            cost: 60,
+            costType: "materials",
+            trade: "other",
+          },
+          {
+            name: "refunded portion",
+            cost: 25,
+            costType: "materials",
+            trade: "other",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    expect(parts.map((p) => p.cost).sort()).toEqual([25, 60]);
+
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    // Nothing back-computed a cost: the stated total is still the original 100
+    // and the lines still sum to 85. The disagreement is REPORTED, not fixed.
+    expect(charge.statedTotal).toBe(100);
+    expect(
+      (await getPurchaseExpenses(ctx.db, chargeId)).reduce(
+        (sum, l) => sum + (l.cost ?? 0),
+        0,
+      ),
+    ).toBe(85);
+    expect(charge.expenseTotal).toBe(85);
+    expect(reconcilePurchase(charge)).toBe("mismatch");
+
+    // The soft worklist that surfaces this now lives in Problems
+    // (`findChargesNotReconciling`), which does the comparison in SQL — see
+    // problems.integration.test.ts. `reconcilePurchase` above is the shared
+    // verdict both sides use, so asserting it here is asserting the same rule.
+  });
+
+  it("refuses to split an expense with no charge attached", async () => {
+    const chargeless = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "no vendor line", cost: 50 }),
+      ),
+      ctx.actor,
+    );
+
+    await expect(
+      splitExpense(
+        ctx.db,
+        splitExpenseInput.parse({
+          expenseId: chargeless.id,
+          parts: [
+            { name: "a", cost: 25, costType: "materials", trade: "other" },
+            { name: "b", cost: 25, costType: "materials", trade: "other" },
+          ],
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "PURCHASE_NOT_FOUND" } });
+  });
+});
+
+describe("purchase repository — mergePurchases", () => {
+  const ctx = withTestDb();
+
+  /** An UPLOADED image + its `PurchaseImage` join row, filed against `id`. */
+  const attachDocumentRow = async (purchaseId: PurchaseId, label: string) => {
+    const img = await insertAndReturn(ctx.db, image, {
+      key: `test-documents/${label}.pdf`,
+      url: `https://example.com/${label}.pdf`,
+      filename: `${label}.pdf`,
+      contentType: "application/pdf",
+      size: 100,
+      status: "UPLOADED",
+    });
+    const join = await insertAndReturn(ctx.db, purchaseImage, {
+      purchaseId,
+      imageId: img.id,
+    });
+    return { imageId: img.id, joinId: join.id };
+  };
+
+  it("re-points expenses, moves documents, and soft-deletes the loser", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Merge Vendor");
+    const keeper = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, date: "2024-01-01" }),
+      ctx.actor,
+    );
+    const loser = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, date: "2024-01-02" }),
+      ctx.actor,
+    );
+
+    const keeperLine = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "keeper line",
+          cost: 10,
+          purchaseId: keeper.id,
+        }),
+      ),
+      ctx.actor,
+    );
+    const loserLine = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "loser line",
+          cost: 20,
+          purchaseId: loser.id,
+        }),
+      ),
+      ctx.actor,
+    );
+    const loserDoc = await attachDocumentRow(loser.id, "loser-invoice");
+
+    const merged = await mergePurchases(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [loser.id] },
+      ctx.actor,
+    );
+
+    expect(merged.id).toBe(keeper.id);
+
+    const lines = await getPurchaseExpenses(ctx.db, keeper.id);
+    expect(lines.map((l) => l.id).sort()).toEqual(
+      [keeperLine.id, loserLine.id].sort(),
+    );
+
+    // Documents follow their charge: a new join row against the keeper, and the
+    // loser's own row tombstoned in the same transaction.
+    const keeperDocs = await getDb(ctx.db).query.purchaseImage.findMany({
+      where: and(
+        eq(purchaseImage.purchaseId, keeper.id),
+        eq(purchaseImage.imageId, loserDoc.imageId),
+      ),
+    });
+    expect(keeperDocs).toHaveLength(1);
+    expect(keeperDocs[0]?.deletedAt).toBeNull();
+
+    const [oldJoin] = await getDb(ctx.db)
+      .select({ deletedAt: purchaseImage.deletedAt })
+      .from(purchaseImage)
+      .where(eq(purchaseImage.id, loserDoc.joinId));
+    expect(oldJoin?.deletedAt).not.toBeNull();
+
+    await expect(getPurchaseByID(ctx.db, loser.id)).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
+
+    // The keeper's rollup now covers both sides' money.
+    expect(merged.expenseCount).toBe(2);
+    expect(merged.expenseTotal).toBe(30);
+  });
+
+  it("lets the keeper ADOPT a loser's order id when it had none", async () => {
+    // The common shape: a hand-entered charge later matched to a vendor export.
+    const vendorId = await findOrCreateVendor(ctx.db, "Adopt Vendor");
+    const keeper = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: null }),
+      ctx.actor,
+    );
+    const loser = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "ADOPT-1" }),
+      ctx.actor,
+    );
+
+    const merged = await mergePurchases(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [loser.id] },
+      ctx.actor,
+    );
+
+    expect(merged.orderId).toBe("ADOPT-1");
+    expect((await getPurchaseByID(ctx.db, keeper.id)).orderId).toBe("ADOPT-1");
+  });
+
+  it("refuses to merge across vendors", async () => {
+    const vendorA = await findOrCreateVendor(ctx.db, "Vendor A");
+    const vendorB = await findOrCreateVendor(ctx.db, "Vendor B");
+    const keeper = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: vendorA }),
+      ctx.actor,
+    );
+    const other = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: vendorB }),
+      ctx.actor,
+    );
+
+    // Re-pointing a charge to another vendor would silently rewrite who was
+    // paid. Merging is a grouping operation, not a correction.
+    await expect(
+      mergePurchases(
+        ctx.db,
+        { keepId: keeper.id, mergeIds: [other.id] },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_MERGE_VENDOR_MISMATCH" },
+    });
+
+    // Nothing moved.
+    expect((await getPurchaseByID(ctx.db, other.id)).vendorId).toBe(vendorB);
+  });
+
+  it("refuses when both sides carry a non-null order id", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Two Orders Vendor");
+    const keeper = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "ORD-1" }),
+      ctx.actor,
+    );
+    const loser = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "ORD-2" }),
+      ctx.actor,
+    );
+
+    // The partial-unique index means both can't survive, and two real order ids
+    // are two real transactions — a no-op, not a merge.
+    await expect(
+      mergePurchases(
+        ctx.db,
+        { keepId: keeper.id, mergeIds: [loser.id] },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+    });
+
+    expect((await getPurchaseByID(ctx.db, keeper.id)).orderId).toBe("ORD-1");
+    expect((await getPurchaseByID(ctx.db, loser.id)).orderId).toBe("ORD-2");
+  });
+
+  it("a self-merge (or an empty merge set) returns the keeper untouched", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Self Merge Charge");
+    const keeper = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "SELF-1" }),
+      ctx.actor,
+    );
+
+    // `losers` is `mergeIds` minus `keepId`, so both of these come back before
+    // the transaction opens — the keeper must NOT be folded into itself.
+    for (const mergeIds of [[keeper.id], []]) {
+      const result = await mergePurchases(
+        ctx.db,
+        { keepId: keeper.id, mergeIds },
+        ctx.actor,
+      );
+      expect(result.id).toBe(keeper.id);
+      expect(result.orderId).toBe("SELF-1");
+    }
+  });
+});
+
+/**
+ * `updatePurchase` is the one writer that can move BOTH halves of the
+ * partial-unique `(vendorId, orderId)` key, so it is the one that can collide
+ * with an existing charge. It pre-checks with a SELECT rather than letting 23505
+ * surface as an untyped 500 — a failed statement would also poison the
+ * transaction.
+ */
+describe("purchase repository — updatePurchase collision + liveness guards", () => {
+  const ctx = withTestDb();
+
+  it("raises PURCHASE_MERGE_ORDER_COLLISION when the target (vendor, orderId) slot is taken", async () => {
+    const toolNirvana = await findOrCreateVendor(ctx.db, "Tool Nirvana");
+    const homeDepot = await findOrCreateVendor(ctx.db, "Home Depot");
+    // Order ids are only unique PER VENDOR, so "#11325" legitimately exists at
+    // both retailers — which is exactly how a vendor move can collide.
+    const held = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "#11325" }),
+      ctx.actor,
+    );
+    const moving = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: toolNirvana, orderId: "#11325" }),
+      ctx.actor,
+    );
+
+    await expect(
+      updatePurchase(
+        ctx.db,
+        { id: moving.id, data: { vendorId: homeDepot } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+    });
+    // Refused, not partially applied.
+    expect((await getPurchaseByID(ctx.db, moving.id)).vendorId).toBe(
+      toolNirvana,
+    );
+
+    // Same collision reached by moving the OTHER half of the key: retyping this
+    // charge's order id onto one its own vendor already holds.
+    const sibling = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "WN-1" }),
+      ctx.actor,
+    );
+    await expect(
+      updatePurchase(
+        ctx.db,
+        { id: sibling.id, data: { orderId: "#11325" } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "PURCHASE_MERGE_ORDER_COLLISION" },
+    });
+    expect((await getPurchaseByID(ctx.db, held.id)).orderId).toBe("#11325");
+
+    // The check is scoped to LIVE charges and to the key actually changing: a
+    // move to a vendor that doesn't hold this order id still goes through.
+    const moved = await updatePurchase(
+      ctx.db,
+      { id: moving.id, data: { orderId: "TN-99" } },
+      ctx.actor,
+    );
+    expect(moved.orderId).toBe("TN-99");
+  });
+
+  it("refuses a soft-deleted vendorId and an unknown charge id", async () => {
+    const live = await findOrCreateVendor(ctx.db, "Still Trading");
+    const gone = await findOrCreateVendor(ctx.db, "Out Of Business");
+    const charge = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: live, orderId: "LIV-1" }),
+      ctx.actor,
+    );
+    // Deleting a vendor with zero charges is allowed, which is exactly how a
+    // tombstoned id stays reachable to a direct API caller.
+    await deleteVendors(ctx.db, [gone], ctx.actor);
+
+    await expect(
+      updatePurchase(
+        ctx.db,
+        { id: charge.id, data: { vendorId: gone } },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "VENDOR_NOT_FOUND" },
+    });
+    expect((await getPurchaseByID(ctx.db, charge.id)).vendorId).toBe(live);
+
+    await expect(
+      updatePurchase(
+        ctx.db,
+        {
+          id: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+          data: { notes: "no such charge" },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      cause: { reason: "PURCHASE_NOT_FOUND" },
+    });
+  });
+});
+
+describe("purchase repository — deletion cascades", () => {
+  const ctx = withTestDb();
+
+  it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {
+    const line = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "surviving spend",
+          cost: 250,
+          vendor: "Delete Me Vendor",
+          orderId: "DEL-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const chargeId = line.purchaseId!;
+
+    const img = await insertAndReturn(ctx.db, image, {
+      key: "test-documents/deleted-charge.pdf",
+      url: "https://example.com/deleted-charge.pdf",
+      filename: "deleted-charge.pdf",
+      contentType: "application/pdf",
+      size: 100,
+      status: "UPLOADED",
+    });
+    const join = await insertAndReturn(ctx.db, purchaseImage, {
+      purchaseId: chargeId,
+      imageId: img.id,
+    });
+
+    await deletePurchases(ctx.db, [chargeId], ctx.actor);
+
+    // An expense IS the money — deleting a charge must never delete spend. The
+    // line survives at full cost and falls back to reading as "no vendor
+    // recorded", which is exactly what it is once the charge is gone.
+    const after = await getExpenseByID(ctx.db, line.id);
+    expect(after.cost).toBe(250);
+    expect(after.purchaseId).toBeNull();
+    expect(after.vendorId).toBeNull();
+    expect(after.vendor).toBeNull();
+    expect(after.orderId).toBeNull();
+
+    // Removal-path invariant: the join rows go in the SAME transaction.
+    const [joinRow] = await getDb(ctx.db)
+      .select({ deletedAt: purchaseImage.deletedAt })
+      .from(purchaseImage)
+      .where(eq(purchaseImage.id, join.id));
+    expect(joinRow?.deletedAt).not.toBeNull();
+  });
+
+  it("deleting ONE expense leaves the charge intact", async () => {
+    const keep = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "kept line",
+          cost: 30,
+          vendor: "Amazon",
+          orderId: "AMZ-KEEP",
+        }),
+      ),
+      ctx.actor,
+    );
+    const doomed = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "doomed line",
+          cost: 70,
+          vendor: "Amazon",
+          orderId: "AMZ-KEEP",
+        }),
+      ),
+      ctx.actor,
+    );
+    const chargeId = keep.purchaseId!;
+    expect(await getPurchaseExpenses(ctx.db, chargeId)).toHaveLength(2);
+
+    await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
+
+    // The charge survives its line's deletion — only that line's money leaves.
+    expect(
+      (await getPurchaseExpenses(ctx.db, chargeId)).map((l) => l.id),
+    ).toEqual([keep.id]);
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    expect(charge.expenseCount).toBe(1);
+    expect(charge.expenseTotal).toBe(30);
+  });
+
+  it("a charge with no lines left totals 0, not null", async () => {
+    const only = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "only line",
+          cost: 431.24,
+          vendor: "Empty Charge Vendor",
+          orderId: "EC-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const chargeId = only.purchaseId!;
+    await updatePurchase(
+      ctx.db,
+      { id: chargeId, data: { statedTotal: 431.24 } },
+      ctx.actor,
+    );
+
+    await deleteExpenses(ctx.db, [only.id], ctx.actor);
+
+    // 0 rather than null so the reconciliation cue reads "stated $431.24, lines
+    // $0" instead of going blank.
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    expect(charge.expenseCount).toBe(0);
+    expect(charge.expenseTotal).toBe(0);
+    expect(reconcilePurchase(charge)).toBe("mismatch");
+  });
+});
+
+/**
+ * The load-bearing guard: attaching charges to expenses must be invisible to
+ * every spend number in the app, and `statedTotal` must never reach one.
+ */
+/**
+ * `resolvePurchaseSort` — the three sort keys that are NOT columns on
+ * `Purchase`: the joined vendor name and the two correlated rollups. The generic
+ * column path can't produce them, so a regression here silently falls back to
+ * the default order rather than erroring.
+ */
+describe("purchase repository — sorting over the joined name and rollups", () => {
+  const ctx = withTestDb();
+
+  const seed = async () => {
+    const aaa = await findOrCreateVendor(ctx.db, "AAA Supply");
+    const zzz = await findOrCreateVendor(ctx.db, "ZZZ Supply");
+    const small = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: aaa, orderId: "SORT-SMALL" }),
+      ctx.actor,
+    );
+    const big = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId: zzz, orderId: "SORT-BIG" }),
+      ctx.actor,
+    );
+    // One line at $5 vs. two lines totalling $300 — so count and total rank the
+    // two charges the same way, and either could be read for the other.
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "small line", cost: 5, purchaseId: small.id }),
+      ),
+      ctx.actor,
+    );
+    for (const cost of [100, 200]) {
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: `big line ${cost}`,
+            cost,
+            purchaseId: big.id,
           }),
-          ctx.actor,
-        );
-      }
-      return { projA, projB };
-    };
-
-    it("'none' returns only unassigned purchases", async () => {
-      const caller = createTestCaller(purchaseRouter, ctx.db);
-      await seedProjectMix();
-
-      const rows = await caller.chartData({ projectPresenceFilter: "none" });
-      const names = rows.map((p) => p.name);
-      expect(names).toContain("needs a project");
-      expect(names).not.toContain("has a project");
-      expect(names).not.toContain("other project");
-    });
-
-    it("'has' returns only assigned purchases", async () => {
-      const caller = createTestCaller(purchaseRouter, ctx.db);
-      await seedProjectMix();
-
-      const names = (
-        await caller.chartData({ projectPresenceFilter: "has" })
-      ).map((p) => p.name);
-      expect(names).toEqual(
-        expect.arrayContaining(["has a project", "other project"]),
-      );
-      expect(names).not.toContain("needs a project");
-    });
-
-    // The case the old `noProject` boolean could not express at all: it AND-ed
-    // with projectId, so this pair matched nothing. Presence now ORs.
-    it("combines with projectId as OR — that project plus the unassigned", async () => {
-      const caller = createTestCaller(purchaseRouter, ctx.db);
-      const { projA } = await seedProjectMix();
-
-      const names = (
-        await caller.chartData({
-          projectId: [projA.id],
-          projectPresenceFilter: "none",
-        })
-      ).map((p) => p.name);
-      expect(names).toEqual(
-        expect.arrayContaining(["has a project", "needs a project"]),
-      );
-      expect(names).not.toContain("other project");
-    });
-
-    // buildPurchaseWhereClause backs BOTH the ledger list and the analytics
-    // aggregates; this pins that they still agree through the new OR branch.
-    it("keeps ledger totals and analytics totals in agreement", async () => {
-      const caller = createTestCaller(purchaseRouter, ctx.db);
-      const { projA } = await seedProjectMix();
-      const filters = {
-        projectId: [projA.id],
-        projectPresenceFilter: "none" as const,
-      };
-
-      const [listed, analytics] = await Promise.all([
-        caller.list({ filters }),
-        caller.analytics(filters),
-      ]);
-
-      expect(analytics.summary.count).toBe(listed.items.length);
-      expect(analytics.summary.net).toBeCloseTo(
-        listed.items.reduce((sum, p) => sum + (p.cost ?? 0), 0),
-        2,
-      );
-    });
-  });
-
-  it("tradeAffinity counts assigned purchases per project and trade", async () => {
-    const caller = createTestCaller(purchaseRouter, ctx.db);
-    const proj = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "affinity project" }),
-      ctx.actor,
-    );
-    for (const trade of ["drywall", "drywall", "electrical"] as const) {
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          trade,
-          costType: "materials",
-          name: `affinity ${trade}`,
-          projectId: proj.id,
-        }),
+        ),
         ctx.actor,
       );
     }
-    // Unassigned rows have no project to weight, so they must not appear.
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "drywall",
-        costType: "materials",
-        name: "affinity unassigned",
-      }),
-      ctx.actor,
+    return { small: small.id, big: big.id };
+  };
+
+  const idsSortedBy = async (
+    orderBy: "vendor" | "expenseCount" | "expenseTotal",
+    direction: "asc" | "desc",
+  ) =>
+    (await purchaseList(ctx.db, {}, [{ orderBy, direction }], page)).data.map(
+      (row) => row.id,
     );
 
-    const matrix = await caller.tradeAffinity();
-    const forProject = matrix.filter((row) => row.projectId === proj.id);
-    expect(forProject.find((row) => row.trade === "drywall")?.count).toBe(2);
-    expect(forProject.find((row) => row.trade === "electrical")?.count).toBe(1);
-  });
+  it("sorts by vendor name, expense count, and expense total in both directions", async () => {
+    const { small, big } = await seed();
 
-  it("bulkMove moves purchases to another project and to the inbox (null), returning items + sideEffects", async () => {
-    const caller = createTestCaller(purchaseRouter, ctx.db);
-    const projectA = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "bulk move a" }),
-      ctx.actor,
-    );
-    const projectB = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "bulk move b" }),
-      ctx.actor,
-    );
-    const p1 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "bulk move purchase 1",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-    const p2 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "bulk move purchase 2",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
+    expect(await idsSortedBy("vendor", "asc")).toEqual([small, big]);
+    expect(await idsSortedBy("vendor", "desc")).toEqual([big, small]);
 
-    const toB = await caller.bulkMove({
-      ids: [p1.id, p2.id],
-      projectId: projectB.id,
-    });
-    expect(toB.items.map((i) => i.projectId)).toEqual([
-      projectB.id,
-      projectB.id,
-    ]);
-    expect(toB.sideEffects).toBeDefined();
+    expect(await idsSortedBy("expenseCount", "desc")).toEqual([big, small]);
+    expect(await idsSortedBy("expenseCount", "asc")).toEqual([small, big]);
 
-    // purchaseBulkMoveInput allows a null projectId — moves to the inbox.
-    const toInbox = await caller.bulkMove({
-      ids: [p1.id, p2.id],
-      projectId: null,
-    });
-    expect(toInbox.items.every((i) => i.projectId === null)).toBe(true);
-    expect(toInbox.sideEffects).toBeDefined();
+    expect(await idsSortedBy("expenseTotal", "desc")).toEqual([big, small]);
+    expect(await idsSortedBy("expenseTotal", "asc")).toEqual([small, big]);
   });
 });
 
-describe("purchase repository — movePurchases", () => {
+describe("purchase repository — rollups never see a charge", () => {
   const ctx = withTestDb();
 
-  it("moves rows to the new projectId and writes an audit entry per changed row", async () => {
-    const projectA = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "move purchases a" }),
-      ctx.actor,
-    );
-    const projectB = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "move purchases b" }),
-      ctx.actor,
-    );
-    const p1 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "move me 1",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-    const p2 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "move me 2",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-
-    const moved = await movePurchases(
-      ctx.db,
-      { ids: [p1.id, p2.id], projectId: projectB.id },
-      ctx.actor,
-    );
-    expect(moved.map((p) => p.projectId)).toEqual([projectB.id, projectB.id]);
-
-    const auditP1 = await getAuditLog(ctx.db, {
-      entityType: "purchase",
-      entityId: p1.id,
-      limit: 20,
-    });
-    expect(
-      auditP1.entries.some(
-        (e) =>
-          e.action === "update" &&
-          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectB.id,
-      ),
-    ).toBe(true);
-  });
-
-  it("leaves soft-deleted ids in the input untouched", async () => {
-    const projectA = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "move purchases untouched a" }),
-      ctx.actor,
-    );
-    const projectB = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "move purchases untouched b" }),
-      ctx.actor,
-    );
-    const live = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "still live",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-    const deleted = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "soon deleted",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-    await deletePurchases(ctx.db, [deleted.id], ctx.actor);
-
-    const moved = await movePurchases(
-      ctx.db,
-      { ids: [live.id, deleted.id], projectId: projectB.id },
-      ctx.actor,
-    );
-    // Only the live row comes back — the soft-deleted id is silently excluded,
-    // not moved.
-    expect(moved.map((p) => p.id)).toEqual([live.id]);
-  });
-
-  it("rejects a nonexistent or soft-deleted target project with PROJECT_NOT_FOUND", async () => {
+  it("every rollup is byte-identical with and without charges, and ignores statedTotal", async () => {
     const project = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "move purchases reject source" }),
-      ctx.actor,
-    );
-    const purchaseRow = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "reject target",
-        projectId: project.id,
-      }),
-      ctx.actor,
-    );
-    const bogusProjectId = unsafeProjectId(
-      "00000000-0000-0000-0000-000000000000",
-    );
-
-    await expect(
-      movePurchases(
-        ctx.db,
-        { ids: [purchaseRow.id], projectId: bogusProjectId },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      cause: { reason: "PROJECT_NOT_FOUND" },
-    });
-
-    const deletedProject = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "soon-deleted target" }),
-      ctx.actor,
-    );
-    await deleteProjects(ctx.db, [deletedProject.id], ctx.actor);
-
-    await expect(
-      movePurchases(
-        ctx.db,
-        { ids: [purchaseRow.id], projectId: deletedProject.id },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      cause: { reason: "PROJECT_NOT_FOUND" },
-    });
-  });
-
-  it("no-op on an id list with only nonexistent ids (returns empty, no error)", async () => {
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "move purchases noop project" }),
-      ctx.actor,
-    );
-    const bogusId = unsafePurchaseId("00000000-0000-0000-0000-000000000000");
-
-    const moved = await movePurchases(
-      ctx.db,
-      { ids: [bogusId], projectId: project.id },
-      ctx.actor,
-    );
-    expect(moved).toEqual([]);
-  });
-});
-
-describe("purchase repository — purchaseAnalytics", () => {
-  const ctx = withTestDb();
-
-  it("aggregates match manual arithmetic, omits empty categories, and stays consistent with purchaseList under the same filter", async () => {
-    const projectA = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "analytics project a" }),
-      ctx.actor,
-    );
-    const projectB = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "analytics project b" }),
-      ctx.actor,
-    );
-
-    // p1: actual spend, plumbing/materials, projectA, dated Jan.
-    const p1 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "analytics p1 actual",
-        projectId: projectA.id,
-        cost: 100,
-        date: "2026-01-10",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    // p2: committed (future) spend, plumbing/materials, projectA, no date yet.
-    const p2 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "analytics p2 committed",
-        projectId: projectA.id,
-        cost: 50,
-        future: true,
-      }),
-      ctx.actor,
-    );
-    // p3: a credit/refund (negative cost), electrical/materials, no project (inbox), dated Jan.
-    const p3 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "electrical",
-        costType: "materials",
-        name: "analytics p3 credit",
-        cost: -20,
-        date: "2026-01-15",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    // p4: actual spend, electrical/services, projectB, dated Feb.
-    const p4 = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "electrical",
-        costType: "services",
-        name: "analytics p4 actual",
-        projectId: projectB.id,
-        cost: 30,
-        date: "2026-02-01",
-        future: false,
+      projectCreateInput.parse({
+        name: "rollup guard project",
+        costEstimate: 500,
       }),
       ctx.actor,
     );
 
-    const filters = { search: "analytics p" };
-    const result = await purchaseAnalytics(ctx.db, filters);
-
-    // --- summary: actual=100+30, committed=50, credits=20, net=160 ---
-    expect(result.summary).toEqual({
-      actual: 130,
-      committed: 50,
-      credits: 20,
-      net: 160,
-      count: 4,
-      actualCount: 3, // p1, p3, p4 (future: false)
-      plannedCount: 1, // p2
-    });
-
-    // --- byCostType: only materials/services appear (no other costType seeded) ---
-    expect(result.byCostType).toEqual(
-      expect.arrayContaining([
-        {
-          costType: "materials",
-          actual: 100,
-          committed: 50,
-          credits: 20,
-          net: 130,
-          count: 3,
-        },
-        {
-          costType: "services",
-          actual: 30,
-          committed: 0,
-          credits: 0,
-          net: 30,
-          count: 1,
-        },
-      ]),
-    );
-    expect(result.byCostType).toHaveLength(2);
-
-    // --- byTrade: plumbing + electrical only ---
-    expect(result.byTrade).toEqual(
-      expect.arrayContaining([
-        {
-          trade: "plumbing",
-          actual: 100,
-          committed: 50,
-          credits: 0,
-          net: 150,
-          count: 2,
-        },
-        {
-          trade: "electrical",
-          actual: 30,
-          committed: 0,
-          credits: 20,
-          net: 10,
-          count: 2,
-        },
-      ]),
-    );
-    expect(result.byTrade).toHaveLength(2);
-
-    // --- tradeCostMatrix: the 3 combos actually present, not the full cross product ---
-    expect(result.tradeCostMatrix).toHaveLength(3);
-    expect(result.tradeCostMatrix).toEqual(
-      expect.arrayContaining([
-        {
-          trade: "plumbing",
-          costType: "materials",
-          actual: 100,
-          committed: 50,
-          credits: 0,
-          net: 150,
-          count: 2,
-        },
-        {
-          trade: "electrical",
-          costType: "materials",
-          actual: 0,
-          committed: 0,
-          credits: 20,
-          net: -20,
-          count: 1,
-        },
-        {
-          trade: "electrical",
-          costType: "services",
-          actual: 30,
-          committed: 0,
-          credits: 0,
-          net: 30,
-          count: 1,
-        },
-      ]),
-    );
-
-    // --- monthly: p2 (no date) excluded; Jan (p1, p3) and Feb (p4) only ---
-    expect(result.monthly).toEqual([
-      {
-        month: "2026-01",
-        actual: 100,
-        committed: 0,
-        credits: 20,
-        net: 80,
-        count: 2,
-      },
-      {
-        month: "2026-02",
-        actual: 30,
-        committed: 0,
-        credits: 0,
-        net: 30,
-        count: 1,
-      },
-    ]);
-
-    // --- cumulative: running sum of monthly.net, ascending ---
-    expect(result.cumulative).toEqual([
-      { month: "2026-01", cumulativeNet: 80 },
-      { month: "2026-02", cumulativeNet: 110 },
-    ]);
-
-    // --- byProject: p3 (no project) excluded ---
-    expect(result.byProject).toEqual(
-      expect.arrayContaining([
-        {
-          projectId: projectA.id,
-          projectName: projectA.name,
-          actual: 100,
-          committed: 50,
-          credits: 0,
-          net: 150,
-          count: 2,
-        },
-        {
-          projectId: projectB.id,
-          projectName: projectB.name,
-          actual: 30,
-          committed: 0,
-          credits: 0,
-          net: 30,
-          count: 1,
-        },
-      ]),
-    );
-    expect(result.byProject).toHaveLength(2);
-
-    // --- core invariant: analytics totals agree with purchaseList's visible
-    // rows under the SAME filter — sum purchaseList's `cost` column and
-    // compare against summary.net (both should equal 160). ---
-    const { data: listedRows } = await purchaseList(ctx.db, filters, [], {
-      pageIndex: 0,
-      pageSize: 100,
-    });
-    expect(listedRows.map((p) => p.id).sort()).toEqual(
-      [p1.id, p2.id, p3.id, p4.id].sort(),
-    );
-    const summedCost = listedRows.reduce((sum, p) => sum + (p.cost ?? 0), 0);
-    expect(summedCost).toBe(result.summary.net);
-  });
-
-  it("applies the same filters as purchaseList (e.g. trade) so a scoped analytics call only sees the matching rows", async () => {
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "analytics filter match",
-        cost: 10,
-        future: false,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "electrical",
-        costType: "materials",
-        name: "analytics filter non-match",
-        cost: 999,
-        future: false,
-      }),
-      ctx.actor,
-    );
-
-    const result = await purchaseAnalytics(ctx.db, {
-      search: "analytics filter",
-      trade: "plumbing",
-    });
-    expect(result.summary).toMatchObject({ net: 10, count: 1 });
-    expect(result.byTrade).toEqual([
-      {
-        trade: "plumbing",
-        actual: 10,
-        committed: 0,
-        credits: 0,
-        net: 10,
-        count: 1,
-      },
-    ]);
-  });
-});
-
-describe("purchase repository — embedding cascade invariant", () => {
-  const ctx = withTestDb();
-
-  // Full cascade coverage (seeded embedding row -> soft-deleted + orphan
-  // check) lives in
-  // repo/inventory/embedding-cascade-invariant.integration.test.ts's
-  // "deletePurchases leaves no orphan" case. This just re-confirms the
-  // no-orphan invariant holds from this file's own delete path too.
-  it("deletePurchases leaves no orphaned EntityEmbedding rows", async () => {
-    const purchaseRow = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "embedding cascade check",
-      }),
-      ctx.actor,
-    );
-
-    await deletePurchases(ctx.db, [purchaseRow.id], ctx.actor);
-
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
-  });
-});
-
-// The product bridge: a purchase optionally points at the product it bought,
-// and a *negative* purchase on the same product records the exit (sale, return,
-// or a 0-cost disposal). Money and ownership have deliberately separate
-// authorities — these cases pin the read side of that.
-describe("purchase repository — product bridge", () => {
-  const ctx = withTestDb();
-  const pagination = { pageIndex: 0, pageSize: 50 };
-
-  it("round-trips productId/vendor and resolves productName", async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "bridge miter saw" }),
-      ctx.actor,
-    );
-
-    const created = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "millwork",
-        costType: "tools",
-        name: "miter saw",
-        productId: product.id,
-        vendor: "Home Depot",
-        cost: 180,
-      }),
-      ctx.actor,
-    );
-
-    const read = await getPurchaseByID(ctx.db, created.id);
-    expect(read).toMatchObject({
-      productId: product.id,
-      productName: "bridge miter saw",
-      vendor: "Home Depot",
-    });
-
-    const cleared = await updatePurchase(
-      ctx.db,
-      created.id,
-      { productId: null, vendor: null },
-      ctx.actor,
-    );
-    expect(cleared.productId).toBeNull();
-    expect(cleared.productName).toBeNull();
-    expect(cleared.vendor).toBeNull();
-  });
-
-  it("filters by productId — acquisition and disposal rows, nothing else", async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "bridge tile saw" }),
-      ctx.actor,
-    );
-
-    const bought = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "flooring",
-        costType: "tools",
-        name: "tile saw",
-        productId: product.id,
-        cost: 180,
-      }),
-      ctx.actor,
-    );
-    const sold = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "flooring",
-        costType: "tools",
-        name: "sold tile saw",
-        productId: product.id,
-        cost: -150,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "flooring",
-        costType: "materials",
-        name: "unrelated thinset",
-      }),
-      ctx.actor,
-    );
-
-    const { data, count } = await purchaseList(
-      ctx.db,
-      { productId: product.id },
-      [],
-      pagination,
-    );
-    expect(count).toBe(2);
-    expect(data.map((p) => p.id).sort()).toEqual([bought.id, sold.id].sort());
-    // Net basis is the sum of the linked rows — the derivation the product page
-    // renders, with nothing stored.
-    expect(data.reduce((sum, p) => sum + (p.cost ?? 0), 0)).toBe(30);
-  });
-
-  it("deleteProducts rejects a product still referenced by a live purchase", async () => {
-    // This used to be permitted deliberately — a product referenced only by
-    // purchases deleted fine, and the dangling link degraded to a null
-    // display name via resolveLiveJoinName. That was reversed
-    // (PRODUCT_HAS_PURCHASES, mirroring PRODUCT_HAS_INVENTORY): the ledger's
-    // net cost and owned/sold window are derived from these rows, and a
-    // nameless product would silently corrupt that derivation with no
-    // restore path. See purchase repository — productPresenceFilter's "has"
-    // still counts a purchase whose linked product was later soft-deleted"
-    // below for the (still-real) dangling-link read path, produced by writing
-    // deletedAt directly rather than through this now-blocked guard.
-    const bridgeDoomedDrill = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "bridge doomed drill" }),
-      ctx.actor,
-    );
-    const created = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name: "doomed drill",
-        productId: bridgeDoomedDrill.id,
-      }),
-      ctx.actor,
-    );
-
-    await expect(
-      deleteProducts(ctx.db, [bridgeDoomedDrill.id], ctx.actor),
-    ).rejects.toMatchObject({
-      code: "PRECONDITION_FAILED",
-      cause: { reason: "PRODUCT_HAS_PURCHASES" },
-    });
-
-    const read = await getPurchaseByID(ctx.db, created.id);
-    expect(read.productId).toBe(bridgeDoomedDrill.id);
-    expect(read.productName).toBe("bridge doomed drill");
-  });
-
-  it("still matches name search when vendor is null", async () => {
-    // Regression gate: vendor must never join the `search` term, because
-    // buildSearchConditions ANDs its searchFilters — `name ILIKE q AND vendor
-    // ILIKE q` would return nothing for the (overwhelming) null-vendor rows.
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "vendorless grommets",
-      }),
-      ctx.actor,
-    );
-
-    const { data } = await purchaseList(
-      ctx.db,
-      { search: "grommets" },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.name)).toContain("vendorless grommets");
-  });
-
-  it("filters by vendor independently of search", async () => {
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "lumber run",
-        vendor: "Ganahl Lumber",
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "screws",
-        vendor: "Home Depot",
-      }),
-      ctx.actor,
-    );
-
-    const { data } = await purchaseList(
-      ctx.db,
-      { vendor: "Ganahl Lumber" },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.name)).toEqual(["lumber run"]);
-  });
-
-  it("matches a vendor exactly, not as a substring", async () => {
-    // The control is a picklist over the real `vendorOptions` roster, so a
-    // substring match let an option's own count disagree with the rows it
-    // returned — "Amazon (254)" would also drag in an "Amazon Business".
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "prime order",
-        vendor: "Amazon",
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "bulk order",
-        vendor: "Amazon Business",
-      }),
-      ctx.actor,
-    );
-
-    const { data } = await purchaseList(
-      ctx.db,
-      { vendor: "Amazon" },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.name)).toEqual(["prime order"]);
-  });
-
-  it("matches any of a set of vendors", async () => {
-    for (const [name, vendor] of [
-      ["socket set", "eBay"],
-      ["deck screws", "Home Depot"],
-      ["paint", "Lowe's"],
+    const seeded = [];
+    for (const [name, cost, future, date] of [
+      ["guard actual", 100, false, "2024-02-10"],
+      ["guard committed", 50, true, "2024-03-05"],
+      ["guard credit", -75, false, "2024-03-20"],
+      ["guard undated", 25, false, null],
     ] as const) {
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          trade: "other",
-          costType: "materials",
-          name,
-          vendor,
-        }),
-        ctx.actor,
+      seeded.push(
+        await createExpense(
+          ctx.db,
+          expenseCreateInput.parse(
+            makeExpenseInput({
+              name,
+              cost,
+              future,
+              date,
+              projectId: project.id,
+            }),
+          ),
+          ctx.actor,
+        ),
       );
     }
 
-    const { data } = await purchaseList(
-      ctx.db,
-      { vendor: ["eBay", "Home Depot"] },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.name).sort()).toEqual([
-      "deck screws",
-      "socket set",
-    ]);
-  });
-
-  it("finds vendorless rows via vendorPresenceFilter, and ORs with a selection", async () => {
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "cash at the yard",
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "tile saw",
-        vendor: "Tool Nirvana",
-      }),
-      ctx.actor,
-    );
-
-    const none = await purchaseList(
-      ctx.db,
-      { vendorPresenceFilter: "none" },
-      [],
-      pagination,
-    );
-    expect(none.data.map((p) => p.name)).toEqual(["cash at the yard"]);
-
-    // OR, not AND — "Tool Nirvana or nothing recorded" is one filter.
-    const both = await purchaseList(
-      ctx.db,
-      { vendor: "Tool Nirvana", vendorPresenceFilter: "none" },
-      [],
-      pagination,
-    );
-    expect(both.data.map((p) => p.name).sort()).toEqual([
-      "cash at the yard",
-      "tile saw",
-    ]);
-  });
-});
-
-describe("purchase repository — productPresenceFilter", () => {
-  const ctx = withTestDb();
-  const pagination = { pageIndex: 0, pageSize: 50 };
-
-  it('"has" returns only purchases with a linked product', async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "presence linked drill" }),
-      ctx.actor,
-    );
-    const linked = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name: "linked purchase",
-        productId: product.id,
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name: "unlinked purchase",
-      }),
-      ctx.actor,
-    );
-
-    const { data } = await purchaseList(
-      ctx.db,
-      { productPresenceFilter: "has" },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.id)).toContain(linked.id);
-    expect(data.map((p) => p.name)).not.toContain("unlinked purchase");
-  });
-
-  it('"none" returns only purchases with no linked product', async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "presence linked sander" }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name: "linked sander purchase",
-        productId: product.id,
-      }),
-      ctx.actor,
-    );
-    const unlinked = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name: "unlinked sander purchase",
-      }),
-      ctx.actor,
-    );
-
-    const { data } = await purchaseList(
-      ctx.db,
-      { productPresenceFilter: "none" },
-      [],
-      pagination,
-    );
-    expect(data.map((p) => p.id)).toContain(unlinked.id);
-    expect(data.map((p) => p.name)).not.toContain("linked sander purchase");
-  });
-
-  it('"has" still counts a purchase whose linked product was later soft-deleted', async () => {
-    // This is the documented semantic decision (buildPurchaseWhereClause,
-    // repo/purchase/lookup.ts): "linked" means productId IS NOT NULL, which
-    // deliberately includes rows whose product was soft-deleted afterward —
-    // those read back with productId set and productName null.
-    //
-    // The state is written directly (mirrors location.integration.test.ts's
-    // "a shelf holding only a soft-deleted product counts as empty") because
-    // `deleteProducts` now refuses a product with a live purchase
-    // (PRODUCT_HAS_PURCHASES), so the single-delete path can't produce this
-    // dangling link anymore. It's still a real state worth covering — a
-    // sync/import path or a future admin tool could soft-delete a product out
-    // from under its purchases — so the read-side degradation stays pinned.
-    const doomedRouter = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "presence doomed router" }),
-      ctx.actor,
-    );
-    const purchase = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name: "doomed router purchase",
-        productId: doomedRouter.id,
-      }),
-      ctx.actor,
-    );
-
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, doomedRouter.id));
-
-    const hasFiltered = await purchaseList(
-      ctx.db,
-      { productPresenceFilter: "has" },
-      [],
-      pagination,
-    );
-    expect(hasFiltered.data.map((p) => p.id)).toContain(purchase.id);
-    const stillLinked = hasFiltered.data.find((p) => p.id === purchase.id);
-    expect(stillLinked?.productId).toBe(doomedRouter.id);
-    expect(stillLinked?.productName).toBeNull();
-
-    const noneFiltered = await purchaseList(
-      ctx.db,
-      { productPresenceFilter: "none" },
-      [],
-      pagination,
-    );
-    expect(noneFiltered.data.map((p) => p.id)).not.toContain(purchase.id);
-  });
-});
-
-describe("purchase repository — getPurchaseOrderSiblings", () => {
-  const ctx = withTestDb();
-
-  // Every row here shares one order id; what varies is the vendor, which is
-  // the half of the group key that makes or breaks the match.
-  const orderRow = (name: string, vendor: string | null, orderId: string) =>
-    purchaseCreateInput.parse({
-      trade: "other",
-      costType: "materials",
-      name,
-      cost: 10,
-      vendor,
-      orderId,
+    const snapshot = async () => ({
+      analytics: await expenseAnalytics(ctx.db, {}),
+      rollups: Object.fromEntries(await projectRollups(ctx.db, [project.id])),
+      dashboard: await projectDashboardSummary(ctx.db, {}),
+      portfolio: await projectPortfolioAnalytics(ctx.db, {}),
     });
 
-  it("matches on vendor AND order id together, and excludes the source row", async () => {
-    const orderId = "111-siblings-0000001";
-    const first = await createPurchase(
-      ctx.db,
-      orderRow("order line one", "Amazon", orderId),
-      ctx.actor,
-    );
-    const second = await createPurchase(
-      ctx.db,
-      orderRow("order line two", "Amazon", orderId),
-      ctx.actor,
-    );
-    // Same order id, different vendor — the collision the strict rule exists
-    // to prevent. Must NOT come back as a sibling.
-    const collision = await createPurchase(
-      ctx.db,
-      orderRow("same id, other retailer", "Home Depot", orderId),
-      ctx.actor,
-    );
-    // Same vendor, different order — the other axis.
-    const otherOrder = await createPurchase(
-      ctx.db,
-      orderRow("different order", "Amazon", "111-siblings-0000002"),
-      ctx.actor,
-    );
+    const before = await snapshot();
+    // Sanity: the baseline is not vacuously empty.
+    expect(before.analytics.summary.net).toBe(100);
+    expect(before.rollups[project.id]?.spent).toBe(100);
 
-    const siblings = await getPurchaseOrderSiblings(ctx.db, first.id);
-    const ids = siblings.map((p) => p.id);
-
-    expect(ids).toEqual([second.id]);
-    expect(ids).not.toContain(first.id);
-    expect(ids).not.toContain(collision.id);
-    expect(ids).not.toContain(otherOrder.id);
-  });
-
-  it("groups vendorless rows with each other, not with the vendored half", async () => {
-    const orderId = "WN-siblings-null-vendor";
-    const nullA = await createPurchase(
-      ctx.db,
-      orderRow("no vendor a", null, orderId),
-      ctx.actor,
-    );
-    const nullB = await createPurchase(
-      ctx.db,
-      orderRow("no vendor b", null, orderId),
-      ctx.actor,
-    );
-    const vendored = await createPurchase(
-      ctx.db,
-      orderRow("has vendor", "Home Depot", orderId),
-      ctx.actor,
-    );
-
-    // A null vendor is its own group — this is the split the
-    // half-filled-vendor sweep reports, asserted from the matching side.
-    expect(
-      (await getPurchaseOrderSiblings(ctx.db, nullA.id)).map((p) => p.id),
-    ).toEqual([nullB.id]);
-    expect(
-      (await getPurchaseOrderSiblings(ctx.db, vendored.id)).map((p) => p.id),
-    ).toEqual([]);
-  });
-
-  it("returns nothing for a purchase with no order id", async () => {
-    const loose = await createPurchase(
+    // Now attach every one of those expenses to a real charge.
+    const vendorId = await findOrCreateVendor(ctx.db, "Rollup Guard Vendor");
+    const charge = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "no order id",
-        vendor: "Amazon",
+        vendorId,
+        orderId: "RG-1",
+        date: "2024-02-10",
       }),
       ctx.actor,
     );
-    // Not "every other vendorless-order Amazon row" — a null order id is not a
-    // group, so an empty result is the only correct answer.
-    expect(await getPurchaseOrderSiblings(ctx.db, loose.id)).toEqual([]);
+    await linkExpensesToPurchase(
+      ctx.db,
+      { purchaseId: charge.id, expenseIds: seeded.map((e) => e.id) },
+      ctx.actor,
+    );
+    // The lines really did land on the charge (the `purchaseId` column write —
+    // asserted before the charge's own rollup, which is a separate concern).
+    expect(await getPurchaseExpenses(ctx.db, charge.id)).toHaveLength(4);
+
+    // A charge is a grouping, not money: not one number may move.
+    expect(await snapshot()).toEqual(before);
+
+    // Now make the charge's OWN stated total disagree wildly with its lines.
+    // `statedTotal` is a reconciliation cue and nothing else; if it could ever
+    // reach spend, this is where 99999 would show up.
+    await updatePurchase(
+      ctx.db,
+      { id: charge.id, data: { statedTotal: 99999 } },
+      ctx.actor,
+    );
+    expect(await snapshot()).toEqual(before);
+
+    // And the vendor's spend is SUM(expense.cost) over the charge's lines —
+    // never its statedTotal.
+    const vendorRow = await getVendorByID(ctx.db, vendorId);
+    expect(vendorRow.spend).toBe(100);
+    expect(vendorRow.spend).not.toBe(99999);
+
+    // Last, the charge's own reconciliation cue: the lines still sum to 100 and
+    // the stated total is the 99999 nobody should ever believe.
+    const wild = await getPurchaseByID(ctx.db, charge.id);
+    expect(wild.statedTotal).toBe(99999);
+    expect(wild.expenseTotal).toBe(100);
+    expect(reconcilePurchase(wild)).toBe("mismatch");
+  });
+});
+
+describe("purchase repository — a soft-deleted charge reads as absent", () => {
+  const ctx = withTestDb();
+
+  it("resolves vendor/orderId to null and stops matching the vendorId filter", async () => {
+    const line = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "orphaned by a deleted charge",
+          cost: 60,
+          vendor: "Ghost Vendor",
+          orderId: "GHOST-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const chargeId = line.purchaseId!;
+    const vendorId = line.vendorId!;
+
+    // Tombstone the charge DIRECTLY, leaving the expense's `purchaseId` pointing
+    // at it. `deletePurchases` also nulls that column, so this reconstructs the
+    // state a future write path could produce — the same white-box approach
+    // image.integration.test.ts uses for its cull guards. This is the
+    // EXISTS-matches-soft-deleted-rows bug class: a tombstoned charge still
+    // satisfies a bare EXISTS.
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchase.id, chargeId));
+
+    const reread = await getExpenseByID(ctx.db, line.id);
+    expect(reread.vendor).toBeNull();
+    expect(reread.orderId).toBeNull();
+    expect(reread.purchaseId).toBeNull();
+    expect(reread.vendorId).toBeNull();
+    // The money is untouched.
+    expect(reread.cost).toBe(60);
+
+    const filtered = await expenseList(ctx.db, { vendorId }, [], page);
+    expect(filtered.data.map((e) => e.id)).not.toContain(line.id);
+    expect(filtered.count).toBe(0);
+
+    // Same for the order-id scope — both hop through the charge.
+    const byOrder = await expenseList(ctx.db, { orderId: "GHOST-1" }, [], page);
+    expect(byOrder.count).toBe(0);
   });
 
-  it("excludes a soft-deleted order-mate", async () => {
-    const orderId = "111-siblings-deleted";
-    const keep = await createPurchase(
+  it("a soft-deleted VENDOR blanks the name while the charge and its money survive", async () => {
+    const line = await createExpense(
       ctx.db,
-      orderRow("surviving line", "Amazon", orderId),
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "vendor tombstoned",
+          cost: 15,
+          vendor: "Soon Gone Vendor",
+          orderId: "SG-1",
+        }),
+      ),
       ctx.actor,
     );
-    const doomed = await createPurchase(
+    const chargeId = line.purchaseId!;
+    const vendorId = line.vendorId!;
+
+    // `deleteVendors` refuses while live charges point at the vendor
+    // (`VENDOR_HAS_PURCHASES`), and `assertVendorLive` now stops a charge being
+    // POINTED at a tombstoned vendor — but neither closes the door completely: a
+    // vendor with no charges deletes fine, and any pre-existing row predating the
+    // guard can still be in this state. So the read-side fallback stays
+    // load-bearing, and this pins it: `vendorName` goes null rather than
+    // resolving a deleted row. The tombstone is written directly here because
+    // that is now the only way to reach the state.
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendor.id, vendorId));
+
+    const charge = await getPurchaseByID(ctx.db, chargeId);
+    expect(charge.vendorName).toBeNull();
+    // The charge itself still exists and still points at the (tombstoned) vendor.
+    expect(charge.vendorId).toBe(vendorId);
+
+    const reread = await getExpenseByID(ctx.db, line.id);
+    expect(reread.vendor).toBeNull();
+    // The charge is still live, so its id and order id still resolve.
+    expect(reread.purchaseId).toBe(chargeId);
+    expect(reread.orderId).toBe("SG-1");
+    // ...and the money is untouched.
+    expect(reread.cost).toBe(15);
+    expect(charge.expenseTotal).toBe(15);
+  });
+});
+
+describe("purchase repository — documents", () => {
+  const ctx = withTestDb();
+
+  it("attaches a PDF to a charge and reads it back as a document", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Metal Supermarkets");
+    const charge = await createPurchase(
       ctx.db,
-      orderRow("deleted line", "Amazon", orderId),
+      purchaseCreateInput.parse({ vendorId, orderId: "MS-INVOICE-1" }),
       ctx.actor,
     );
 
-    expect(
-      (await getPurchaseOrderSiblings(ctx.db, keep.id)).map((p) => p.id),
-    ).toEqual([doomed.id]);
+    const result = await attachFileToEntity(ctx.db, {
+      entityType: "purchase",
+      entityId: charge.id,
+      data: Buffer.from("%PDF-1.4 metal invoice").toString("base64"),
+      contentType: "application/pdf",
+      filename: "metal-invoice.pdf",
+    });
 
-    await deletePurchases(ctx.db, [doomed.id], ctx.actor);
+    expect(result.kind).toBe("document");
+    expect(result.entityType).toBe("purchase");
+    expect(result.entityId).toBe(charge.id);
+    expect(isDocumentFile({ contentType: result.contentType })).toBe(true);
 
-    expect(await getPurchaseOrderSiblings(ctx.db, keep.id)).toEqual([]);
+    // The R2 object lands under the documents/ prefix (not images/). NB:
+    // `attachFileToEntity` calls `generateDocumentKey(filename)` with NO folder,
+    // so there is no purchase-scoped folder segment on this path — the
+    // `folder` argument is only supplied by the browser's two-phase
+    // `initiateDocumentUpload` flow.
+    const [row] = await getDb(ctx.db)
+      .select({
+        key: image.key,
+        contentType: image.contentType,
+        status: image.status,
+      })
+      .from(image)
+      .where(eq(image.id, result.imageId));
+    expect(row?.key).toContain("/documents/");
+    expect(row?.key).toContain("metal-invoice.pdf");
+    expect(row?.contentType).toBe("application/pdf");
+    expect(row?.status).toBe("UPLOADED");
+
+    // ...and it's filed against the charge through `PurchaseImage`.
+    const joins = await getDb(ctx.db).query.purchaseImage.findMany({
+      where: eq(purchaseImage.purchaseId, charge.id),
+    });
+    expect(joins).toHaveLength(1);
+    expect(joins[0]?.imageId).toBe(result.imageId);
+    expect(joins[0]?.deletedAt).toBeNull();
+  });
+
+  it("the browser's two-phase document upload files the object under a purchase-scoped folder", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Folder Vendor");
+    const charge = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "FV-1" }),
+      ctx.actor,
+    );
+
+    // `folder` is the only way a document key gets a per-entity segment (see
+    // `generateDocumentKey`) — `attachFileToEntity` above never passes one, so
+    // the purchase-scoped layout lives on THIS path.
+    const initiated = await initiateDocumentUpload(ctx.db, {
+      filename: "flow-form-invoice.pdf",
+      contentType: "application/pdf",
+      size: 2048,
+      entityType: "PURCHASE",
+      folder: charge.id,
+    });
+
+    expect(initiated.key).toContain(`/documents/${charge.id}/`);
+    expect(initiated.key).toContain("flow-form-invoice.pdf");
+    // Still PENDING until the client finishes its PUT and finalizes.
+    const pending = await getDb(ctx.db)
+      .select({ status: image.status })
+      .from(image)
+      .where(eq(image.id, initiated.imageId));
+    expect(pending[0]?.status).toBe("PENDING");
+  });
+
+  it("rejects a document aimed at a charge that does not exist", async () => {
+    // Fails BEFORE anything reaches R2, so a bad id can never orphan an object.
+    await expect(
+      attachFileToEntity(ctx.db, {
+        entityType: "purchase",
+        entityId: "00000000-0000-0000-0000-000000000000",
+        data: Buffer.from("%PDF-1.4").toString("base64"),
+        contentType: "application/pdf",
+      }),
+    ).rejects.toMatchObject({ cause: { reason: "IMAGE_ATTACH_FAILED" } });
   });
 });

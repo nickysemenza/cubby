@@ -1,20 +1,29 @@
-import type { CostType, PurchaseOut, Trade } from "@cubby/schemas/project";
-import { ExternalLink, Info, PackagePlus, Receipt } from "lucide-react";
-import { type FC, useState } from "react";
+import type { ExpenseOut } from "@cubby/schemas/project";
+import type { PurchaseOut } from "@cubby/schemas/purchase";
+import { reconcilePurchase } from "@cubby/schemas/purchase";
+import { useQuery } from "@tanstack/react-query";
 import {
-  WithProductSearch,
-  WithProjectSearch,
-} from "~/app/_components/combobox/with-search-hook";
+  Clock,
+  FileText,
+  Info,
+  Link2,
+  Merge,
+  ReceiptText,
+  Scale,
+} from "lucide-react";
+import { type FC, useMemo, useState } from "react";
+import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { TradeBadge, tradeOptions } from "~/app/projects/shared";
+import { ExpenseList } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
-import { VendorCell } from "~/components/entity/vendor-cell";
+import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
+import { purchaseLabel } from "~/lib/purchase-label";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -22,28 +31,45 @@ import {
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
-import { entityCellClipboard } from "../_components/data-table/inventory-column-helpers";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
-import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { ProjectSuggestionChips } from "./project-suggestion-chips";
+import { LinkExpensesDialog } from "./link-expenses-dialog";
+import { MergePurchasesDialog } from "./merge-purchases-dialog";
+import { PurchaseDocuments } from "./purchase-documents";
 import {
-  costTypeBadgeVariant,
-  costTypeLabels,
-  costTypeOptions,
-  futureFilterOptions,
-} from "./purchase-options";
-import { PurchaseOrderSiblings } from "./purchase-order-siblings";
-import { ReceivePurchaseDialog } from "./receive-purchase-dialog";
+  ReconciliationBadge,
+  ReconciliationNote,
+  reconciliationDelta,
+} from "./purchase-reconciliation";
 
-interface PurchaseDetailProps {
-  purchase: PurchaseOut;
-}
+const NO_EXPENSES: ExpenseOut[] = [];
+const NO_VENDOR_OPTIONS: Array<{ value: string; label: string }> = [];
 
-export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
+/**
+ * One vendor transaction: what the paperwork said (`statedTotal`, documents) and
+ * what it actually cost (its expense lines). The two are compared but never
+ * reconciled INTO each other — stated totals are a cue, spend is always the
+ * lines.
+ */
+export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const api = useTRPC();
-  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+
+  const { data: expenses = NO_EXPENSES } = useQuery(
+    api.purchase.expenses.queryOptions(purchase.id),
+  );
+
+  // Bounded roster — the vendor is a required FK, so this is a swap, never a clear.
+  const vendorOptionsQuery = useQuery(api.vendor.options.queryOptions());
+  const vendorOptions = useMemo(
+    () =>
+      vendorOptionsQuery.data?.map(({ id, name }) => ({
+        value: id,
+        label: name,
+      })) ?? NO_VENDOR_OPTIONS,
+    [vendorOptionsQuery.data],
+  );
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -51,59 +77,76 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
 
-  // Common sections from entity config (History) — editMode/mappings unused
-  // here since Overview is edited via inline EditableCell fields, not a Form.
-  const { commonSections } = useEntityDetail<PurchaseOut, never>({
-    entity: "purchase",
-    data: purchase,
-    mutationOptions: api.purchase.update.mutationOptions(),
-    invalidateKeys: purchaseMutationInvalidateKeys,
-  });
-
-  // Record-level delete lives on the detail plate, not in a section header —
-  // Overview's headerAction is the constructive "Receive into inventory".
+  // `deletePurchases` NULLs `purchaseId` on the charge's expenses rather than
+  // deleting them — the lines survive as unattached ledger rows — so this needs
+  // no dependency guard, but the copy should say where the money goes.
   const { deleteButton, deleteDialog } = useEntityDelete({
     id: purchase.id,
-    name: purchase.name,
+    name: purchaseLabel(purchase),
     entityLabel: "Purchase",
     mutationOptions: (callbacks) =>
-      api.purchase.delete.mutationOptions(callbacks),
+      // Purchase's delete is hand-rolled and returns void rather than the crud
+      // factory's side-effect summary, so there's nothing to forward into the
+      // hook's "saved with background work" toast.
+      api.purchase.delete.mutationOptions({
+        onSuccess: () => callbacks.onSuccess({}),
+        onError: callbacks.onError,
+      }),
     invalidateKeys: purchaseMutationInvalidateKeys,
     redirectTo: "/purchases",
+    description:
+      "The charge and its documents go; its expense lines stay in the ledger, unattached to any charge.",
   });
+
+  const status = reconcilePurchase(purchase);
+  const delta = reconciliationDelta(purchase);
 
   const fields: BasicInfoField[] = [
     {
-      label: "Name",
+      label: "Vendor",
       value: (
         <EditableCell
-          value={purchase.name}
-          config={{ type: "text" }}
-          onSave={async (name) => {
-            if (!name) return;
+          value={purchase.vendorId}
+          config={{ type: "select", options: vendorOptions }}
+          onSave={async (vendorId) => {
+            // Required field — a cleared select is a no-op, not a null write.
+            if (!vendorId) return;
+            // Already a `VendorId`: the cell's value came off
+            // `purchase.vendorId`, so the branded type rides through onSave.
             await updateMutation.mutateAsync({
               id: purchase.id,
-              data: { name },
+              data: { vendorId },
             });
           }}
-          renderValue={(v) => v ?? <NoneValue />}
+          renderValue={(value) =>
+            value && purchase.vendorName ? (
+              <EntityInlineLink
+                entity="vendor"
+                data={{ id: value, name: purchase.vendorName }}
+                compact
+              />
+            ) : (
+              <NoneValue />
+            )
+          }
         />
       ),
     },
     {
-      label: "Cost",
+      label: "Order #",
       value: (
         <EditableCell
-          value={purchase.cost}
-          config={{ type: "currency" }}
-          onSave={async (cost) => {
+          value={purchase.orderId}
+          config={{ type: "text", placeholder: "Vendor order / receipt #" }}
+          onSave={async (orderId) => {
             await updateMutation.mutateAsync({
               id: purchase.id,
-              data: { cost },
+              data: { orderId },
             });
           }}
+          // Opaque identifier, not prose — mono so it reads exactly as stored.
           renderValue={(v) =>
-            v != null ? formatCurrency(v, 0) : <NoneValue />
+            v ? <span className="font-mono">{v}</span> : <NoneValue />
           }
         />
       ),
@@ -125,101 +168,18 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
       ),
     },
     {
-      label: "Cost Type",
+      label: "Stated total",
       value: (
         <EditableCell
-          value={purchase.costType}
-          config={{ type: "select", options: costTypeOptions }}
-          onSave={async (costType) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!costType) return;
+          value={purchase.statedTotal}
+          config={{ type: "currency" }}
+          onSave={async (statedTotal) => {
             await updateMutation.mutateAsync({
               id: purchase.id,
-              data: { costType: costType as CostType },
+              data: { statedTotal },
             });
           }}
-          renderValue={(ct) =>
-            ct ? (
-              <Badge variant={costTypeBadgeVariant[ct as CostType]}>
-                {costTypeLabels[ct as CostType]}
-              </Badge>
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-    },
-    {
-      label: "Trade",
-      value: (
-        <EditableCell
-          value={purchase.trade}
-          config={{ type: "select", options: tradeOptions }}
-          onSave={async (trade) => {
-            // Required field — a cleared select is a no-op, not a null write.
-            if (!trade) return;
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { trade: trade as Trade },
-            });
-          }}
-          renderValue={(v) =>
-            v ? <TradeBadge trade={v as Trade} /> : <NoneValue />
-          }
-        />
-      ),
-    },
-    {
-      label: "Planned",
-      value: (
-        <EditableCell
-          value={String(purchase.future)}
-          config={{ type: "select", options: futureFilterOptions }}
-          onSave={async (value) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { future: value === "true" },
-            });
-          }}
-          renderValue={(v) =>
-            v === "true" ? (
-              <Badge variant="warning">Planned</Badge>
-            ) : (
-              <Badge variant="positive">Already made</Badge>
-            )
-          }
-        />
-      ),
-    },
-    {
-      label: "URL",
-      value: (
-        <EditableCell
-          value={purchase.url}
-          config={{ type: "text", placeholder: "https://…" }}
-          onSave={async (url) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { url },
-            });
-          }}
-          renderValue={(v) =>
-            v ? (
-              <a
-                href={v}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1 hover:underline"
-              >
-                {v}
-                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-              </a>
-            ) : (
-              <NoneValue />
-            )
-          }
+          renderValue={(v) => (v != null ? formatCurrency(v) : <NoneValue />)}
         />
       ),
     },
@@ -239,193 +199,122 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
         />
       ),
     },
-    {
-      label: "Vendor",
-      value: (
-        <EditableCell
-          value={purchase.vendor}
-          config={{ type: "text", placeholder: "Where from?" }}
-          onSave={async (vendor) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { vendor },
-            });
-          }}
-          renderValue={(v) => (v ? <VendorCell vendor={v} /> : <NoneValue />)}
-        />
-      ),
-    },
-    {
-      label: "Order #",
-      value: (
-        <EditableCell
-          value={purchase.orderId}
-          config={{ type: "text", placeholder: "Vendor order #" }}
-          onSave={async (orderId) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { orderId },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    },
-    {
-      label: "Project",
-      value: (
-        <EditableEntityCell
-          value={
-            purchase.projectId && purchase.projectName
-              ? { id: purchase.projectId, name: purchase.projectName }
-              : null
-          }
-          label="project"
-          clearable
-          trigger="pencil"
-          onSave={async (newProjectId) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { projectId: newProjectId },
-            });
-          }}
-          clipboard={entityCellClipboard(
-            "project",
-            purchase.projectId && purchase.projectName
-              ? { id: purchase.projectId, name: purchase.projectName }
-              : null,
-            async (newProjectId) => {
-              await updateMutation.mutateAsync({
-                id: purchase.id,
-                data: { projectId: newProjectId },
-              });
-            },
-          )}
-          SearchProvider={WithProjectSearch}
-          renderValue={(v) =>
-            v ? (
-              <EntityInlineLink
-                entity="project"
-                data={{ id: v.id, name: v.name }}
-              />
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-    },
-    {
-      label: "Product",
-      value: (
-        <EditableEntityCell
-          value={
-            purchase.productId && purchase.productName
-              ? { id: purchase.productId, name: purchase.productName }
-              : null
-          }
-          label="product"
-          clearable
-          trigger="pencil"
-          onSave={async (newProductId) => {
-            await updateMutation.mutateAsync({
-              id: purchase.id,
-              data: { productId: newProductId },
-            });
-          }}
-          clipboard={entityCellClipboard(
-            "product",
-            purchase.productId && purchase.productName
-              ? { id: purchase.productId, name: purchase.productName }
-              : null,
-            async (newProductId) => {
-              await updateMutation.mutateAsync({
-                id: purchase.id,
-                data: { productId: newProductId },
-              });
-            },
-          )}
-          SearchProvider={WithProductSearch}
-          renderValue={(v) =>
-            v ? (
-              <EntityInlineLink
-                entity="product"
-                data={{ id: v.id, name: v.name }}
-              />
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-    },
   ];
 
   const sections: DetailSection[] = [
+    // The lines ARE the charge's money, so they lead the wide column.
+    {
+      title: "Lines",
+      icon: ReceiptText,
+      zone: "main",
+      headerAction: (
+        <Row align="center" gap="sm">
+          {purchase.expenseCount > 0 && (
+            <Badge variant="outline">{purchase.expenseCount}</Badge>
+          )}
+          <span className="font-mono text-sm tabular-nums">
+            {formatCurrency(purchase.expenseTotal)}
+          </span>
+          {/* Sits with the lines rather than in the page actions: it edits THIS
+              section's contents, unlike Merge (which consumes other charges). */}
+          <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
+            <Link2 />
+            Attach existing expenses
+          </Button>
+        </Row>
+      ),
+      content: <ExpenseList expenses={expenses} />,
+    },
+    {
+      title: "Documents",
+      icon: FileText,
+      zone: "main",
+      content: <PurchaseDocuments purchase={purchase} />,
+    },
     {
       title: "Overview",
       icon: Info,
+      content: <BasicInfo fields={fields} />,
+    },
+    {
+      title: "Reconciliation",
+      icon: Scale,
       content: (
-        <BasicInfo
-          fields={fields}
-          // In the footer, not beside the Project row: InfoRow's value span is
-          // right-aligned and capped at 65%, which would crush the chips.
-          footer={
-            <ProjectSuggestionChips
-              purchase={purchase}
-              isPending={updateMutation.isPending}
-              onAssign={async (projectId) => {
-                await updateMutation.mutateAsync({
-                  id: purchase.id,
-                  data: { projectId },
-                });
-              }}
-            />
-          }
+        <Stack gap="sm">
+          <Row align="center" justify="between" gap="sm">
+            <span className="text-muted-foreground text-sm">Stated</span>
+            <span className="font-mono text-sm tabular-nums">
+              {purchase.statedTotal != null ? (
+                formatCurrency(purchase.statedTotal)
+              ) : (
+                <NoneValue />
+              )}
+            </span>
+          </Row>
+          <Row align="center" justify="between" gap="sm">
+            <span className="text-muted-foreground text-sm">Lines</span>
+            <span className="font-mono text-sm tabular-nums">
+              {formatCurrency(purchase.expenseTotal)}
+            </span>
+          </Row>
+          <Row
+            align="center"
+            justify="between"
+            gap="sm"
+            className="border-[var(--border)] border-t pt-2"
+          >
+            <ReconciliationBadge purchase={purchase} />
+            {delta !== null && delta !== 0 && (
+              <span className="font-mono text-sm tabular-nums">
+                {formatCurrency(delta)}
+              </span>
+            )}
+          </Row>
+          <ReconciliationNote status={status} />
+        </Stack>
+      ),
+    },
+    {
+      // Rendered inline rather than through `useEntityDetail`'s commonSections.
+      // `purchase.images` would now satisfy that hook's `images` section, but
+      // that section hands the WHOLE list to `EntityImageList` unpartitioned —
+      // so a filed PDF invoice would render as a broken thumbnail, in a second
+      // card duplicating Documents above. This is the same content the helper
+      // produces for `history`, minus that.
+      title: "History",
+      icon: Clock,
+      content: (
+        <AuditLogList
+          entityType="purchase"
+          entityId={purchase.id}
+          showEntityLink={false}
         />
       ),
-      // Receiving is deliberately a separate, explicit act — linking a product
-      // records what was bought, it never moves inventory on its own.
-      headerAction: purchase.productId ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setReceiveOpen(true)}
-        >
-          <PackagePlus />
-          Receive into inventory
-        </Button>
-      ) : undefined,
     },
-    // Tags-style sibling hop, gated on having an order id at all — most of the
-    // ledger has none, and an unconditional panel would be permanently empty.
-    ...(purchase.orderId
-      ? [
-          {
-            title: "Same Order",
-            icon: Receipt,
-            content: <PurchaseOrderSiblings purchase={purchase} />,
-          },
-        ]
-      : []),
-    ...commonSections,
   ];
 
   const heroStats: DetailHeroStat[] = [
     {
-      label: "Cost",
-      value: purchase.cost != null ? formatCurrency(purchase.cost, 0) : "—",
-    },
-    { label: "Date", value: purchase.date ?? "—" },
-    {
-      label: "Cost Type",
-      value: purchase.costType ? (
-        <Badge variant={costTypeBadgeVariant[purchase.costType]}>
-          {costTypeLabels[purchase.costType]}
-        </Badge>
+      label: "Vendor",
+      value: purchase.vendorName ? (
+        <EntityInlineLink
+          entity="vendor"
+          data={{ id: purchase.vendorId, name: purchase.vendorName }}
+          truncate
+        />
       ) : (
         "—"
       ),
+    },
+    { label: "Date", value: purchase.date ?? "—" },
+    { label: "Lines", value: purchase.expenseCount },
+    { label: "Line total", value: formatCurrency(purchase.expenseTotal, 0) },
+    {
+      label: "Stated",
+      value:
+        purchase.statedTotal != null
+          ? formatCurrency(purchase.statedTotal, 0)
+          : "—",
     },
   ];
 
@@ -433,24 +322,44 @@ export const PurchaseDetail: FC<PurchaseDetailProps> = ({ purchase }) => {
     <Page
       variant="detail"
       entity="purchase"
-      title={purchase.name}
+      title={purchaseLabel(purchase)}
       rawData={purchase}
-      heroStamp={{
-        label: purchase.future ? "Planned" : "Purchased",
-        tone: purchase.future ? "ink" : "green",
-      }}
+      // Never a "red"/error tone: a charge whose lines disagree with its stated
+      // total is frequently correct (a partial refund), so the strongest signal
+      // this page gives is the warning-toned badge in the Reconciliation card.
+      heroStamp={
+        status === "unknown"
+          ? undefined
+          : status === "match"
+            ? { label: "Reconciles", tone: "green" }
+            : { label: "Check total", tone: "ink" }
+      }
       heroStats={heroStats}
-      actions={deleteButton}
+      actions={
+        <Row align="center" gap="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMergeOpen(true)}
+          >
+            <Merge />
+            Merge charges
+          </Button>
+          {deleteButton}
+        </Row>
+      }
     >
       <DetailSections sections={sections} rawData={purchase} />
-      {purchase.productId ? (
-        <ReceivePurchaseDialog
-          open={receiveOpen}
-          onOpenChange={setReceiveOpen}
-          productId={purchase.productId}
-          purchaseName={purchase.name}
-        />
-      ) : null}
+      <MergePurchasesDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        purchase={purchase}
+      />
+      <LinkExpensesDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        purchase={purchase}
+      />
       {deleteDialog}
     </Page>
   );

@@ -25,7 +25,7 @@ export function DashboardFilters({
   onFiltersChange: (filters: Filters) => void;
   availableKinds: string[];
   availableLocations: string[];
-  /** Distinct years present in purchase/task dates, newest first. */
+  /** Distinct years present in expense/task dates, newest first. */
   availableYears: string[];
 }) {
   // Compares against `defaultFilters` (the live-three statuses, nothing
@@ -76,7 +76,7 @@ export function DashboardFilters({
           onToggle={(v) => toggle("locations", v)}
         />
         {/* Single-select: a union of date ranges isn't meaningful. Narrows
-            purchases (by date), tasks (by due date), and the project set (by
+            expenses (by date), tasks (by due date), and the project set (by
             interval overlap) — undated projects drop out of that last one
             while a window is set. */}
         <SingleSelectChipGroup
@@ -85,7 +85,7 @@ export function DashboardFilters({
           value={filters.dateRange}
           onChange={(dateRange) => onFiltersChange({ ...filters, dateRange })}
           formatLabel={(v) => DATE_PRESET_LABELS.get(v) ?? v}
-          hint="narrows purchases, tasks & projects by date"
+          hint="narrows expenses, tasks & projects by date"
         />
       </Row>
       {hasFilters && (

@@ -7,7 +7,7 @@ import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 // critical path of every page load.
 import {
   projectGanttSubtreeQueryParams,
-  projectSubtreePurchasesFilters,
+  projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "~/app/projects/project-query-params";
 import { Page } from "~/components/page/Page";
@@ -36,8 +36,8 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
       ),
     );
     void context.queryClient.prefetchQuery(
-      context.trpc.purchase.chartData.queryOptions(
-        projectSubtreePurchasesFilters(params.id),
+      context.trpc.expense.chartData.queryOptions(
+        projectSubtreeExpensesFilters(params.id),
       ),
     );
     void context.queryClient.prefetchQuery(

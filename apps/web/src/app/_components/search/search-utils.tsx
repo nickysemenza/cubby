@@ -26,7 +26,7 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   meal: "meal",
   project: "project",
   task: "task",
-  purchase: "purchase",
+  expense: "expense",
 };
 
 type SearchResultGroup = {
@@ -205,7 +205,7 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
         : null,
     )
     .with({ entityType: "task" }, (item) => item.projectName)
-    .with({ entityType: "purchase" }, (item) => {
+    .with({ entityType: "expense" }, (item) => {
       const parts: string[] = [];
       if (item.cost != null) parts.push(formatCurrency(item.cost));
       if (item.projectName) parts.push(item.projectName);

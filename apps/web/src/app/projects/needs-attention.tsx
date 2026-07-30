@@ -50,10 +50,10 @@ const ATTENTION_GROUPS: Array<{
       `${n} stalled project${n !== 1 ? "s" : ""} (no activity in 30 days)`,
   },
   {
-    type: "past_due_planned_purchase",
+    type: "past_due_planned_expense",
     icon: Clock,
     iconClassName: "size-3.5 text-warning",
-    title: (n) => `${n} planned purchase${n !== 1 ? "s" : ""} past due`,
+    title: (n) => `${n} planned expense${n !== 1 ? "s" : ""} past due`,
   },
   {
     type: "missing_budget",
@@ -62,10 +62,10 @@ const ATTENTION_GROUPS: Array<{
     title: (n) => `${n} project${n !== 1 ? "s" : ""} missing a cost estimate`,
   },
   {
-    type: "unclassified_purchase",
+    type: "unclassified_expense",
     icon: Tag,
     iconClassName: "size-3.5 text-muted-foreground",
-    title: (n) => `${n} unclassified purchase${n !== 1 ? "s" : ""}`,
+    title: (n) => `${n} unclassified expense${n !== 1 ? "s" : ""}`,
   },
 ];
 
@@ -75,7 +75,7 @@ const ATTENTION_GROUPS: Array<{
  * household-local "today" used for overdue/stalled detection. This component
  * only groups by `type` and renders; no date math or entity lookups happen
  * here anymore (the old client-side UTC-day workaround is gone along with
- * the raw projects/tasks/purchases props it needed).
+ * the raw projects/tasks/expenses props it needed).
  */
 export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
   if (items.length === 0) return null;

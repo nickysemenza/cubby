@@ -3,6 +3,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
 import type { useTRPC } from "~/integrations/trpc/react";
 import {
+  expenseMutationInvalidateKeys,
   ingredientAllMutationInvalidateKeys,
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
@@ -13,6 +14,7 @@ import {
   queryKeys,
   recipeAllMutationInvalidateKeys,
   taskMutationInvalidateKeys,
+  vendorMutationInvalidateKeys,
 } from "~/lib/query-keys";
 
 type Api = ReturnType<typeof useTRPC>;
@@ -55,10 +57,11 @@ export const usdaRouteId = (fdcId: number): string => String(fdcId);
 
 const listParams = (params: ListParams) => params as never;
 
-// The 9 core entities share a mechanically-identical contract whose only axes are
-// the router key (== entity key), the invalidation-key list, and (product only) a
-// picker-search query. image / usda-food / cookbook genuinely diverge (different
-// router keys, fdc_id coercion, list-backed detail) and stay spelled out below.
+// The 11 core entities share a mechanically-identical contract whose only axes
+// are the router key (== entity key), the invalidation-key list, how `getByID`
+// takes its id, and (product only) a picker-search query. image / usda-food /
+// cookbook genuinely diverge (different router keys, fdc_id coercion,
+// list-backed detail) and stay spelled out below.
 export const standardEntities = [
   "product",
   "ingredient",
@@ -68,6 +71,8 @@ export const standardEntities = [
   "meal",
   "project",
   "task",
+  "expense",
+  "vendor",
   "purchase",
 ] as const;
 type StandardEntity = (typeof standardEntities)[number];
@@ -84,13 +89,26 @@ type StandardRouter = {
   delete: { mutationOptions: (input: never) => unknown };
 };
 
+/**
+ * How a router's `getByID` takes its id. Most of the crud-factory routers wrap it
+ * in `{ id }`; the hand-rolled vendor/purchase routers take the branded id as a
+ * bare scalar (`.input(vendorId)` — see server/api/routers/vendor.ts), and
+ * wrapping that in an object would fail zod at the tRPC boundary at runtime
+ * rather than here.
+ */
+type DetailIdShape = "object" | "scalar";
+
 function standardContract(
   entity: StandardEntity,
   invalidationKeys: readonly QueryKey[],
-  pickerSearch?: EntityQueryContract["pickerSearch"],
+  options?: {
+    pickerSearch?: EntityQueryContract["pickerSearch"];
+    detailId?: DetailIdShape;
+  },
 ): EntityContract {
   const router = (api: Api): StandardRouter =>
     api[entity] as unknown as StandardRouter;
+  const { pickerSearch, detailId = "object" } = options ?? {};
   return {
     entity,
     route: entities[entity].routes,
@@ -100,7 +118,10 @@ function standardContract(
     invalidationKeys,
     query: {
       list: (api, params) => router(api).list.queryOptions(listParams(params)),
-      detail: (api, id) => router(api).getByID.queryOptions({ id } as never),
+      detail: (api, id) =>
+        router(api).getByID.queryOptions(
+          (detailId === "scalar" ? id : { id }) as never,
+        ),
       ...(pickerSearch ? { pickerSearch } : {}),
     },
     mutation: {
@@ -113,11 +134,10 @@ function standardContract(
 }
 
 const entityContracts = {
-  product: standardContract(
-    "product",
-    productMutationInvalidateKeys,
-    (api, params) => api.product.search.queryOptions(listParams(params)),
-  ),
+  product: standardContract("product", productMutationInvalidateKeys, {
+    pickerSearch: (api, params) =>
+      api.product.search.queryOptions(listParams(params)),
+  }),
   ingredient: standardContract(
     "ingredient",
     ingredientAllMutationInvalidateKeys,
@@ -178,7 +198,19 @@ const entityContracts = {
   },
   project: standardContract("project", projectMutationInvalidateKeys),
   task: standardContract("task", taskMutationInvalidateKeys),
-  purchase: standardContract("purchase", purchaseMutationInvalidateKeys),
+  expense: standardContract("expense", expenseMutationInvalidateKeys),
+  // Vendor and purchase are ordinary standard contracts now that `api.vendor.*`
+  // / `api.purchase.*` exist. They're `canPreview: true` because both have a
+  // detail route and a hovercard arm (EntityPreviewContent) — NOT because
+  // they're searchable; neither is in the embedding pipeline in v1, so nothing
+  // routes a *search result* to them. `detailId: "scalar"` is the one real
+  // divergence: both routers are hand-rolled and take the branded id directly.
+  vendor: standardContract("vendor", vendorMutationInvalidateKeys, {
+    detailId: "scalar",
+  }),
+  purchase: standardContract("purchase", purchaseMutationInvalidateKeys, {
+    detailId: "scalar",
+  }),
 } satisfies Record<Entity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

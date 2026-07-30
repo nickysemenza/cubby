@@ -42,6 +42,7 @@ import {
 import { countBy, uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
+  expense,
   image,
   inventoryEntry,
   location,
@@ -49,7 +50,6 @@ import {
   productExternalId,
   productImage,
   productUnitMappings,
-  purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -329,13 +329,13 @@ export const productList = async (
     )
     .where(notDeleted(inventoryEntry));
 
-  // `purchase.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL
+  // `expense.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL
   // inside a NOT IN list makes the whole predicate UNKNOWN and `notInArray`
-  // would match zero rows instead of "products with no purchases".
-  const productIdsWithPurchases = dbClient
-    .select({ productId: purchase.productId })
-    .from(purchase)
-    .where(and(notDeleted(purchase), isNotNull(purchase.productId)));
+  // would match zero rows instead of "products with no expenses".
+  const productIdsWithExpenses = dbClient
+    .select({ productId: expense.productId })
+    .from(expense)
+    .where(and(notDeleted(expense), isNotNull(expense.productId)));
 
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
@@ -397,8 +397,8 @@ export const productList = async (
       ),
       idSetPresence(
         product.id,
-        filters.purchasePresenceFilter,
-        productIdsWithPurchases,
+        filters.expensePresenceFilter,
+        productIdsWithExpenses,
       ),
       idSetPresence(
         product.id,
@@ -962,29 +962,29 @@ export const deleteProducts = async (
         `Cannot delete ${count} product(s): ${names} have inventory entries. Remove inventory items first.`,
     });
 
-    // Safety check: don't delete if any product is referenced by a purchase.
+    // Safety check: don't delete if any product is referenced by an expense.
     //
     // This used to be permitted deliberately — the dangling link degraded to a
     // null display name via resolveLiveJoinName. That was reversed: the ledger's
     // net cost and owned/sold window are derived from these rows, and a
     // nameless product silently degrades that derivation with no restore path.
-    // Inventory and purchases are Product's two acquisition edges, so
+    // Inventory and expenses are Product's two acquisition edges, so
     // findOrphanedProducts and this guard must agree on both — checking only
     // inventory here is what made that detector's false positives executable.
-    const withPurchases = await tx.query.purchase.findMany({
-      where: and(inArray(purchase.productId, ids), notDeleted(purchase)),
+    const withExpenses = await tx.query.expense.findMany({
+      where: and(inArray(expense.productId, ids), notDeleted(expense)),
       columns: { productId: true },
     });
     await assertNoDependents({
-      offendingParentIds: withPurchases.map((p) => p.productId),
+      offendingParentIds: withExpenses.map((p) => p.productId),
       fetchNames: (failedIds) =>
         tx.query.product.findMany({
           where: inArray(product.id, failedIds),
           columns: { name: true },
         }),
-      reason: "PRODUCT_HAS_PURCHASES",
+      reason: "PRODUCT_HAS_EXPENSES",
       message: (count, names) =>
-        `Cannot delete ${count} product(s): ${names} have purchases. Unlink the purchases first.`,
+        `Cannot delete ${count} product(s): ${names} have expenses. Unlink the expenses first.`,
     });
 
     const now = new Date();

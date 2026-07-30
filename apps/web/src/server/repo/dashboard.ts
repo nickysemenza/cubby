@@ -7,6 +7,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import {
   cookbook,
+  expense,
   image,
   ingredient,
   inventoryEntry,
@@ -17,6 +18,7 @@ import {
   purchase,
   recipe,
   task,
+  vendor,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -42,7 +44,9 @@ const COUNT_SOURCES = {
   meal: { table: meal, where: notDeleted(meal) },
   project: { table: project, where: notDeleted(project) },
   task: { table: task, where: notDeleted(task) },
+  vendor: { table: vendor, where: notDeleted(vendor) },
   purchase: { table: purchase, where: notDeleted(purchase) },
+  expense: { table: expense, where: notDeleted(expense) },
   image: { table: image, where: notDeleted(image) },
 } satisfies Record<CountableEntity, { table: PgTable; where: SQL | undefined }>;
 

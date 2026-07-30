@@ -227,7 +227,7 @@ export const dbProductToListAPI = (
     ),
     // count() returns bigint (string over the wire), so coerce — mirrors the
     // ingredient list's appearsInRecipes/recipeCount handling.
-    purchaseCount: Number(productData.purchaseCount),
+    expenseCount: Number(productData.expenseCount),
   };
 
   return parseWithContext(productListItemOut, result, {

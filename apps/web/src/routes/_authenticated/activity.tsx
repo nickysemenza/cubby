@@ -83,7 +83,7 @@ function ActivityPage() {
       <Stack className="max-w-3xl">
         <Row justify="between" align="center" gap="sm" wrap>
           {/* Every auditable entity writes here (products through projects,
-              tasks and purchases) — kept generic rather than listing a subset
+              tasks and expenses) — kept generic rather than listing a subset
               that drifts as the manifest grows. */}
           <p className="text-muted-foreground">
             Recent changes across all entities.

@@ -1,6 +1,6 @@
 [README.md](README.md) is the canonical source of truth for the project — architecture, monorepo layout, deploy targets, commands, entities, environment, and the roadmap. Read it first. This file contains only rules and anti-patterns for the Claude agent. When you need context that isn't a rule, go to README rather than embedding the answer here.
 
-The **[Tenets](README.md#tenets)** there are binding on design proposals: inventory never auto-decrements (no cook-and-consume), `fdc_id` is product-only (nutrition goes `ingredient → product → fdc_id`), and rare interactive work stays off the background queue. Don't propose a feature that contradicts one — say it's out of scope and why.
+The **[Tenets](README.md#tenets)** there are binding on design proposals: inventory never auto-decrements (no cook-and-consume), `fdc_id` is product-only (nutrition goes `ingredient → product → fdc_id`), rare interactive work stays off the background queue, and all money lives on `Expense` (`purchase.statedTotal` is never summed into spend). Don't propose a feature that contradicts one — say it's out of scope and why.
 
 ## Where logic lives (layering)
 
@@ -65,7 +65,7 @@ The `Database` type is opaque (branded) — you can't call methods on it outside
 
 ## Soft Delete
 
-All major entities (products, recipes, locations, ingredients, inventory, projects, tasks, purchases) use soft delete with a `deletedAt` timestamp column. Deleted items are retained in the database but hidden from normal queries.
+All major entities (products, recipes, locations, ingredients, inventory, projects, tasks, vendors, purchases, expenses) use soft delete with a `deletedAt` timestamp column. Deleted items are retained in the database but hidden from normal queries.
 
 - Always use `notDeleted(table)` helper to filter out deleted records in queries
 - **This applies *inside* `exists()` / `notExists()` subqueries too — guard-enforced.** A soft-deleted row still satisfies `EXISTS`, so `notExists(select().from(inventoryEntry).where(eq(...)))` reads as "has no inventory" but silently matches products whose inventory was merely emptied. Since emptying a shelf soft-deletes rather than removes, that's the *common* path: this exact omission made `findOrphanedProducts` miss 18 of 20 real hits (#428), and the same bug sat unnoticed in two more subqueries in the same file. `scripts/check-soft-delete-filters.mjs` (runs in `pnpm check`, so CI) fails any `exists`/`notExists` subquery over a soft-deletable table that has neither `notDeleted(…)` nor an explicit `deletedAt` predicate. For the rare subquery that genuinely must see deleted rows (cleanup/orphan sweeps), put an `includes-deleted: <reason>` comment above the call.
@@ -79,7 +79,7 @@ All major entities (products, recipes, locations, ingredients, inventory, projec
 
 Use branded ID schemas from `@cubby/schemas/identifiers` (e.g., `locationId`, `productId`) instead of plain `z.string()`. This prevents mixing up entity IDs at compile time.
 
-DB id columns are branded with `.$type<XxxId>()` in `schema.ts` (PKs + FK refs to core entities: recipe, ingredient, product, location, inventory, cookbook, user, project, task, purchase), so Drizzle queries return branded ids **natively** — no cast needed when reading or writing entity ids. Relation reads inherit column brands, so nested `.id`s are branded too.
+DB id columns are branded with `.$type<XxxId>()` in `schema.ts` (PKs + FK refs to core entities: recipe, ingredient, product, location, inventory, cookbook, user, project, task, vendor, purchase, expense), so Drizzle queries return branded ids **natively** — no cast needed when reading or writing entity ids. Relation reads inherit column brands, so nested `.id`s are branded too.
 
 The `unsafe*Id()` / `unsafe*Shortcode()` converters are for genuine `string → brand` boundaries only: untyped external strings, synthetic ids (e.g. `"_root"`), and tests. They are **type-guarded** — passing an already-branded value is a compile error (the cast would be a no-op; brand it upstream instead). This is the lint rule (Biome has no custom-rule support at the pinned version, so the type system enforces it via `pnpm typecheck`).
 

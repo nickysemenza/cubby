@@ -1,4 +1,4 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { ExpenseOut } from "@cubby/schemas/project";
 import type { CSSProperties, ReactNode } from "react";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -34,16 +34,16 @@ export function ChartTooltip({
 }
 
 /**
- * The top 3 purchases behind a donut slice / bar segment (by cost desc) with a
+ * The top 3 expenses behind a donut slice / bar segment (by cost desc) with a
  * "+N more" roll-up — a shared breakdown row-list for the nivo tooltips.
  */
-export function TooltipPurchaseBreakdown({
-  purchases,
+export function TooltipExpenseBreakdown({
+  expenses,
 }: {
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
 }) {
-  if (purchases.length === 0) return null;
-  const sorted = [...purchases].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
+  if (expenses.length === 0) return null;
+  const sorted = [...expenses].sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0));
   const top = sorted.slice(0, 3);
   const remaining = sorted.length - top.length;
 

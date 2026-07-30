@@ -10,6 +10,7 @@ import type {
 import type { Amount } from "@cubby/schemas/codec";
 import type {
   CookbookId,
+  ExpenseId,
   IngredientId,
   InventoryId,
   LocationId,
@@ -21,6 +22,7 @@ import type {
   RecipeId,
   TaskId,
   UserId,
+  VendorId,
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
@@ -817,7 +819,7 @@ export const project = pgTable(
     // cents above ~$16k, which the import reconciliation actually caught.
     costEstimate: doublePrecision("costEstimate"),
     // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
-    // is its budget envelope; purchases/tasks attribute to it via their
+    // is its budget envelope; expenses/tasks attribute to it via their
     // existing `projectId`, not a new relation. Cycle/self-parent guards live
     // in repo/project/crud.ts (schema self-FK alone can't express "no cycle").
     parentProjectId: uuid("parentProjectId")
@@ -939,10 +941,116 @@ export const taskDependency = pgTable(
   ],
 );
 
+/**
+ * The roster of places money goes. `Vendor ──< Purchase ──< Expense`: this was
+ * a free-text `vendor` column repeated on every ledger row until the charge got
+ * its own table, which is why a vendor's documents and contractor metadata had
+ * nowhere to live.
+ */
+export const vendor = pgTable(
+  "Vendor",
+  {
+    id: pkUuid<VendorId>(),
+    name: text("name").notNull(),
+    website: text("website"),
+    notes: text("notes"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("Vendor_name_key")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Vendor_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+  ],
+);
+
+/**
+ * ONE vendor transaction — the home for charge-level truth (its stated total,
+ * its documents, its identity). See packages/schemas/src/purchase.ts for the
+ * domain doc, including why 11 progress payments are 11 purchases and not one.
+ *
+ * **No money is summed from this table.** Spend is `SUM(expense.cost)`.
+ */
 export const purchase = pgTable(
   "Purchase",
   {
     id: pkUuid<PurchaseId>(),
+    vendorId: uuid("vendorId")
+      .notNull()
+      .$type<VendorId>()
+      .references(() => vendor.id),
+    // The vendor's own order/receipt identifier. Free text — every retailer
+    // formats these differently. Null on the ~40% of charges the vendor never
+    // issued one for (a contractor's progress payment, a farmers-market run).
+    orderId: text("orderId"),
+    // The charge date. Distinct from `expense.date`, which stays the LEDGER date
+    // driving monthly buckets and project date windows — an invoice dated the
+    // 3rd can clear on the 8th.
+    date: date("date", { mode: "string" }),
+    // What the charge itself says it was. NEVER summed into spend: it's a
+    // reconciliation cue against this charge's expenses, and a mismatch is often
+    // correct (a partial refund reduces a line without changing what the charge
+    // stated). See project.costEstimate on why dollars need double precision.
+    statedTotal: doublePrecision("statedTotal"),
+    notes: text("notes"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
+    // lets the many `(vendorId, null)` charges coexist — a contractor's 11
+    // progress payments are 11 rows against one vendor with no order id between
+    // them. This index is also what makes `findOrCreatePurchase` unambiguous
+    // (no "which charge?" branch on the import hot path) and why no
+    // `splitPurchase` operation is needed at all.
+    uniqueIndex("Purchase_vendorId_orderId_key")
+      .on(table.vendorId, table.orderId)
+      .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    index("Purchase_vendorId_idx").on(table.vendorId),
+    index("Purchase_date_idx").on(table.date),
+    // Order ids are searched as substrings via repo/search.ts.
+    index("Purchase_orderId_gin_idx").using(
+      "gin",
+      sql`${table.orderId} gin_trgm_ops`,
+    ),
+  ],
+);
+
+/**
+ * A charge's documents — the emailed PDF invoice, a photo of the paper slip, or
+ * both. A join table rather than a direct `imageId?` on `purchase` so it reuses
+ * `associatePendingImages` and the `attach_file` path, and so one statement
+ * `Image` can be filed against several charges. Mirrors `projectImage` below.
+ */
+export const purchaseImage = pgTable(
+  "PurchaseImage",
+  {
+    id: pkUuid(),
+    purchaseId: uuid("purchaseId")
+      .notNull()
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    imageId: uuid("imageId")
+      .notNull()
+      .references(() => image.id),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("PurchaseImage_purchaseId_imageId_key")
+      .on(table.purchaseId, table.imageId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("PurchaseImage_purchaseId_idx").on(table.purchaseId),
+    index("PurchaseImage_imageId_idx").on(table.imageId),
+  ],
+);
+
+export const expense = pgTable(
+  "Expense",
+  {
+    id: pkUuid<ExpenseId>(),
     name: text("name").notNull(),
     // See project.costEstimate — dollars need double precision, not float4.
     cost: doublePrecision("cost"),
@@ -951,14 +1059,14 @@ export const purchase = pgTable(
     trade: text("trade", { enum: tradeValues }).notNull(),
     url: text("url"),
     notes: text("notes"),
-    // Planned/not-yet-made purchase (kept out of spend rollups' "actuals" views).
+    // Planned/not-yet-made expense (kept out of spend rollups' "actuals" views).
     future: boolean("future").notNull().default(false),
     projectId: uuid("projectId")
       .$type<ProjectId>()
       .references(() => project.id),
-    // Optional link to the thing this purchase bought. Sparse by design: most
+    // Optional link to the thing this expense bought. Sparse by design: most
     // material runs stay unlinked, and only inventoried goods (tools, mainly)
-    // get a product. A *negative* purchase carrying the same productId is how
+    // get a product. A *negative* expense carrying the same productId is how
     // an exit is recorded — sale at sale price, return at full price, and a
     // broken/gifted item as cost 0 (never null: `cost IS NULL` is already the
     // Unclassified predicate). Net cost, ownership window and owned/sold status
@@ -966,40 +1074,27 @@ export const purchase = pgTable(
     productId: uuid("productId")
       .$type<ProductId>()
       .references(() => product.id),
-    vendor: text("vendor"),
-    // Vendor's own order/receipt identifier, scoped by `vendor` — Amazon
-    // "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325".
-    // Deliberately free text: every retailer formats these differently and
-    // validating them would only reject real data. Previously lived in `notes`
-    // as prose, which made reconciliation a per-vendor regex; a typed column
-    // lets sibling rows from one order be grouped (`GROUP BY vendor, orderId`),
-    // which is how duplicate rows and multi-line "aggregate" rows are found.
-    orderId: text("orderId"),
+    // The charge this line belongs to. Nullable: the 193 rows with no vendor
+    // recorded have nothing to attach to, and forcing a synthetic charge on them
+    // would invent a transaction that never happened. `vendor` and `orderId`
+    // resolve THROUGH this join now — see `dbExpenseToAPI`.
+    purchaseId: uuid("purchaseId")
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
     notionPageId: text("notionPageId"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
-    uniqueIndex("Purchase_notionPageId_key")
+    uniqueIndex("Expense_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
-    index("Purchase_projectId_idx").on(table.projectId),
-    index("Purchase_productId_idx").on(table.productId),
-    index("Purchase_date_idx").on(table.date),
-    index("Purchase_costType_idx").on(table.costType),
-    index("Purchase_name_gin_idx").using(
-      "gin",
-      sql`${table.name} gin_trgm_ops`,
-    ),
-    // The grouping the `orderId` comment above describes, finally indexed.
-    // `orderId` leads (not `vendor`): both columns are equality-constrained in
-    // the sibling lookup so either order serves it, but orderId-first also
-    // serves the half-filled-vendor sweep's `GROUP BY orderId`. Partial —
-    // ~75% of rows carry no order id, and `orderId = $1` implies NOT NULL, so
-    // the planner can still use it.
-    index("Purchase_orderId_vendor_idx")
-      .on(table.orderId, table.vendor)
-      .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    index("Expense_projectId_idx").on(table.projectId),
+    index("Expense_productId_idx").on(table.productId),
+    index("Expense_date_idx").on(table.date),
+    index("Expense_costType_idx").on(table.costType),
+    index("Expense_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+    index("Expense_purchaseId_idx").on(table.purchaseId),
   ],
 );
 
@@ -1109,7 +1204,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   externalIds: many(productExternalId),
   inventoryEntry: many(inventoryEntry),
   images: many(productImage),
-  purchases: many(purchase),
+  expenses: many(expense),
 }));
 
 export const productExternalIdRelations = relations(
@@ -1161,11 +1256,12 @@ export const imageRelations = relations(image, ({ many }) => ({
   locationImages: many(locationImage),
   recipeImages: many(recipeImage),
   projectImages: many(projectImage),
+  purchaseImages: many(purchaseImage),
 }));
 
 export const projectRelations = relations(project, ({ one, many }) => ({
   tasks: many(task),
-  purchases: many(purchase),
+  expenses: many(expense),
   images: many(projectImage),
   parentProject: one(project, {
     fields: [project.parentProjectId],
@@ -1225,14 +1321,42 @@ export const taskDependencyRelations = relations(taskDependency, ({ one }) => ({
   }),
 }));
 
-export const purchaseRelations = relations(purchase, ({ one }) => ({
+export const expenseRelations = relations(expense, ({ one }) => ({
+  purchase: one(purchase, {
+    fields: [expense.purchaseId],
+    references: [purchase.id],
+  }),
   project: one(project, {
-    fields: [purchase.projectId],
+    fields: [expense.projectId],
     references: [project.id],
   }),
   product: one(product, {
-    fields: [purchase.productId],
+    fields: [expense.productId],
     references: [product.id],
+  }),
+}));
+
+export const vendorRelations = relations(vendor, ({ many }) => ({
+  purchases: many(purchase),
+}));
+
+export const purchaseRelations = relations(purchase, ({ one, many }) => ({
+  vendor: one(vendor, {
+    fields: [purchase.vendorId],
+    references: [vendor.id],
+  }),
+  expenses: many(expense),
+  images: many(purchaseImage),
+}));
+
+export const purchaseImageRelations = relations(purchaseImage, ({ one }) => ({
+  purchase: one(purchase, {
+    fields: [purchaseImage.purchaseId],
+    references: [purchase.id],
+  }),
+  image: one(image, {
+    fields: [purchaseImage.imageId],
+    references: [image.id],
   }),
 }));
 

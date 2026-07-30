@@ -14,6 +14,7 @@ import { registerMealTools } from "./tools/meal.tools";
 import { registerProblemsTools } from "./tools/problems.tools";
 import { registerProductTools } from "./tools/product.tools";
 import { registerProjectTools } from "./tools/project.tools";
+import { registerPurchaseTools } from "./tools/purchase.tools";
 import { registerRecipeTools } from "./tools/recipe.tools";
 import { registerSearchTools } from "./tools/search.tools";
 import { registerUsdaTools } from "./tools/usda.tools";
@@ -35,7 +36,8 @@ Workflow tips:
 - Products: usdaFdcId reflects either an explicit fdc_id or a UPC-resolved USDA link.
 - Recipes: prefer create_recipe_from_text for pasted prep sheets; use create_recipe when you already have ingredient ids.
 - Problems: list_problems countsOnly=true for cheap triage; reparse_stale_parses recovers mis-merged ingredient lines.
-- Projects: list_projects/list_tasks/list_purchases are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
+- Projects: list_projects/list_tasks/list_expenses are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
+- Ledger shape: \`Vendor ──< Purchase ──< Expense\`. ALL money lives on \`expense\` — list_expenses/create_expense are the spend ledger. A \`purchase\` is ONE vendor charge (it used to mean the ledger row; it no longer does), and its \`statedTotal\` is a reconciliation cue that is never summed into spend.
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
@@ -51,6 +53,7 @@ function registerTools(server: McpServer) {
   registerRecipeTools(server);
   registerProblemsTools(server);
   registerProjectTools(server);
+  registerPurchaseTools(server);
   registerMealTools(server);
   registerUsdaTools(server);
   registerImageTools(server);

@@ -1,7 +1,7 @@
 import {
   type CostType,
   costTypeValues,
-  type PurchaseOut,
+  type ExpenseOut,
   type Trade,
 } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
@@ -29,10 +29,10 @@ const emptyCells = (): Record<PivotCostKey, number> => ({
   services: 0,
 });
 
-export function buildTradeCostPivot(purchases: PurchaseOut[]): TradeCostPivot {
+export function buildTradeCostPivot(expenses: ExpenseOut[]): TradeCostPivot {
   const grouped = new Map<Trade, Record<PivotCostKey, number>>();
 
-  for (const p of purchases) {
+  for (const p of expenses) {
     const trade = p.trade;
     const costType = p.costType;
     const cost = p.cost ?? 0;

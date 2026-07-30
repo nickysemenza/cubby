@@ -12,7 +12,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 // Data source IDs (collection:// URLs). Only the Recipes database remains —
-// the projects/tasks/purchases trackers were migrated into cubby tables and
+// the projects/tasks/expenses trackers were migrated into cubby tables and
 // deleted from Notion.
 const DATA_SOURCE_IDS = {
   // The "Recipes" database under Food → Recipes. Synced into Cubby recipes.

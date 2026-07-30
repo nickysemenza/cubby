@@ -4,7 +4,7 @@ import { VendorCell } from "./vendor-cell";
 
 /**
  * Both regressions here come from the same place: this cell is never remounted
- * when a purchase's vendor is edited inline — `purchaseVendorColumn` and the
+ * when an expense's vendor is edited inline — `expenseVendorColumn` and the
  * detail page's Vendor field both just hand the same component instance a new
  * `vendor` prop.
  */

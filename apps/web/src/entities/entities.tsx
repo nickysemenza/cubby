@@ -8,12 +8,14 @@ import { locationSortableFields } from "@cubby/schemas/location";
 import { mealSortableFields } from "@cubby/schemas/meal";
 import { productSortableFields } from "@cubby/schemas/product";
 import {
+  expenseSortableFields,
   projectSortableFields,
-  purchaseSortableFields,
   taskSortableFields,
 } from "@cubby/schemas/project";
+import { purchaseSortableFields } from "@cubby/schemas/purchase";
 import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { usdaFoodSortableFields } from "@cubby/schemas/usda";
+import { vendorSortableFields } from "@cubby/schemas/vendor";
 import {
   Apple,
   Barcode,
@@ -27,7 +29,9 @@ import {
   type LucideProps,
   MapPin,
   Package,
+  Receipt,
   ReceiptText,
+  Store,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
@@ -248,21 +252,63 @@ const entityDefinitions = {
       sortableFields: taskSortableFields,
     },
   },
+  vendor: {
+    label: "Vendor",
+    pluralLabel: "Vendors",
+    basePath: "vendors",
+    lucideIcon: Store,
+    color: entityColor("vendor", {
+      bg: "bg-slate/20",
+      text: "text-slate",
+      border: "border-l-slate",
+    }),
+    routes: {
+      detail: "/vendors/$id",
+      list: "/vendors",
+    },
+    detail: { commonSections: ["history"] },
+    list: {
+      defaultSort: "name",
+      standardColumns: ["name", "createdAt"],
+      sortableFields: vendorSortableFields,
+    },
+  },
   purchase: {
     label: "Purchase",
     pluralLabel: "Purchases",
     basePath: "purchases",
-    lucideIcon: ReceiptText,
+    lucideIcon: Receipt,
     color: entityColor("purchase", { bg: "bg-primary/10" }),
     routes: {
       detail: "/purchases/$id",
       list: "/purchases",
     },
+    // A purchase carries the charge's documents (invoices/receipts), like
+    // project's photos — same commonSections shape.
+    detail: { commonSections: ["images", "history"] },
+    // No `name` column — a purchase's identity is (vendor, orderId, date), not
+    // a free-text name, so the list defines its columns explicitly (like location).
+    list: {
+      defaultSort: "date",
+      standardColumns: [],
+      sortableFields: purchaseSortableFields,
+    },
+  },
+  expense: {
+    label: "Expense",
+    pluralLabel: "Expenses",
+    basePath: "expenses",
+    lucideIcon: ReceiptText,
+    color: entityColor("expense", { bg: "bg-primary/10" }),
+    routes: {
+      detail: "/expenses/$id",
+      list: "/expenses",
+    },
     detail: { commonSections: ["history"] },
     list: {
       defaultSort: "date",
       standardColumns: ["name", "createdAt"],
-      sortableFields: purchaseSortableFields,
+      sortableFields: expenseSortableFields,
     },
   },
   "usda-food": {

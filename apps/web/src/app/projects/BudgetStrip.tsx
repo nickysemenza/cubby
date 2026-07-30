@@ -4,7 +4,7 @@ import { budgetRemaining, type SpendSplit } from "./spend";
 
 /**
  * Reconciles the four money quantities a single "Spent" figure hides — estimate,
- * actual, committed (future), and contributions (negative purchases) — over a
+ * actual, committed (future), and contributions (negative expenses) — over a
  * burn bar. Actual + committed stack against the estimate envelope; a marker sits
  * at 100% of estimate; the Remaining figure nets out contributions and turns
  * `destructive` when net spend exceeds the estimate.

@@ -13,7 +13,7 @@ const SERIES_COLORS: Record<string, string> = {
  * `data` is `portfolioAnalytics`'s `monthlySpend` — actual vs committed spend
  * per month, across every project matching the dashboard's filter scope (see
  * repo/project/portfolio-analytics.ts). This replaces the old per-project
- * stacked series (`buildProjectMonthlySeries` over raw purchases) — the
+ * stacked series (`buildProjectMonthlySeries` over raw expenses) — the
  * server aggregate has no per-project breakdown, only actual/committed
  * totals, so the chart now reads as "when did money move" rather than "which
  * project was spending".

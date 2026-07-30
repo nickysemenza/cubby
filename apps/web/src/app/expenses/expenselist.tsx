@@ -1,0 +1,448 @@
+import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
+import { createColumnHelper } from "@tanstack/react-table";
+import { ArrowRightLeft, CheckCircle2, ExternalLink } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import {
+  expenseCostColumn,
+  expenseCostTypeColumn,
+  expenseDateColumn,
+  expenseFutureColumn,
+  expenseOrderIdColumn,
+  expenseTradeColumn,
+  expenseVendorColumn,
+} from "~/app/projects/shared";
+import { VendorMark } from "~/components/entity/vendor-cell";
+import { Grid, Row } from "~/components/layout";
+import { usePageCount } from "~/components/page/Page";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { StatTile } from "~/components/ui/stat-tile";
+import { useTRPC } from "~/integrations/trpc/react";
+import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
+import { formatCurrency } from "~/lib/utils";
+import {
+  createProductLinkColumn,
+  createProjectLinkColumn,
+} from "../_components/data-table/columnHelpers";
+import { ScopeChip } from "../_components/data-table/ScopeChip";
+import RTable from "../_components/data-table/Table";
+import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
+import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useFilterOptions } from "../_components/hooks/useFilterOptions";
+import { useNameEditable } from "../_components/hooks/useNameEditable";
+import { useProjectOptions } from "../_components/hooks/useProjectOptions";
+import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import {
+  ExpenseBulkActionDialogs,
+  useExpenseBulkActions,
+} from "../_components/tracker/expense-bulk-actions";
+import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import { SettleExpenseDialog } from "./settle-expense-dialog";
+
+// Scoped rather than a plain `useNavigate()` so `search` stays typed to this
+// route's schema (which is where `productId` is declared) without importing
+// the `Route` object itself — that would be circular, since this route file
+// renders `ExpenseList`. Same idiom as `expense-analytics-view.tsx`'s
+// `route`.
+const expensesRoute = getRouteApi("/_authenticated/expenses/");
+
+// Stable empty default — see apps/web/CLAUDE.md's `unstable-hook-default` rule:
+// an inline `?? []` would allocate a fresh array every render while the query
+// is loading, destabilizing the `useFilterOptions`/`useMemo` chain below it.
+const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
+
+export function ExpenseList() {
+  const api = useTRPC();
+  const columnHelper = useMemo(() => createColumnHelper<ExpenseOut>(), []);
+  const { options: projectOptions } = useProjectOptions();
+  // Runtime picklist for the manifest's `vendor` spec (optionsKey: "vendor"),
+  // ranked by frequency so the most-used vendors sort to the top (the roster
+  // comes from `repo/vendor.ts`'s `vendorOptions`, re-exported on this router).
+  //
+  // The option's VALUE is the vendor id — the manifest's spec is `idMulti` on
+  // `vendorId` now, so a name here would be branded into a lie and match
+  // nothing. The label is the name, and the count rides in `hint`, NOT the
+  // label: the label is what filter chips and the collapsed multi-select
+  // summary interpolate, and what the type-ahead matches on.
+  const vendorOptionsQuery = useQuery(api.expense.vendorOptions.queryOptions());
+  const vendorOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      vendorOptionsQuery.data?.map(({ id, name, count }) => ({
+        value: id,
+        label: name,
+        hint: String(count),
+        icon: <VendorMark vendor={name} />,
+      })) ?? NO_VENDOR_OPTIONS,
+    [vendorOptionsQuery.data],
+  );
+  const expenseBulkActions = useExpenseBulkActions();
+  const [moveTarget, setMoveTarget] = useState<ExpenseOut | null>(null);
+  const [settleTarget, setSettleTarget] = useState<ExpenseOut | null>(null);
+
+  const updateExpenseMutation = useUpdateMutation({
+    mutationFn: api.expense.update.mutationOptions,
+    entity: "expense",
+    invalidateKeys: expenseMutationInvalidateKeys,
+  });
+
+  const nameEditable = useNameEditable<ExpenseOut>(
+    updateExpenseMutation.mutateAsync,
+  );
+
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.expense.delete.mutationOptions,
+    entityLabel: "Expense",
+    invalidateKeys: expenseMutationInvalidateKeys,
+  });
+
+  const moveMutation = useUpdateMutation({
+    mutationFn: api.expense.update.mutationOptions,
+    entity: "expense",
+    invalidateKeys: expenseMutationInvalidateKeys,
+  });
+
+  // Settle a planned expense without leaving the table, and move a single one
+  // to a project. Reschedule / change-estimate aren't duplicated here — the
+  // Date and Cost columns are already inline-editable.
+  //
+  // Keyed on the ROW, not the view: "mark purchased" / "move to project" are
+  // meaningful for any planned expense, whichever filters got you to it.
+  // They used to be gated on the `planned` tab, which meant the same row
+  // offered different actions depending on how you'd navigated to it.
+  const extraActions = useCallback(
+    (row: ExpenseOut) =>
+      row.future ? (
+        <>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              setSettleTarget(row);
+            }}
+          >
+            <CheckCircle2 className="mr-2 size-4" />
+            Mark purchased
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              setMoveTarget(row);
+            }}
+          >
+            <ArrowRightLeft className="mr-2 size-4" />
+            Move to project...
+          </DropdownMenuItem>
+        </>
+      ) : null,
+    [],
+  );
+
+  // Runtime picklists for the manifest's `project`/`vendor` specs (optionsKey).
+  const projectFilterOptions = useFilterOptions({
+    project: projectOptions,
+    vendor: vendorOptions,
+  });
+
+  // The cost / date / costType / trade / future columns come from the shared
+  // factories in `~/app/projects/shared.tsx`, also used by the embedded
+  // expenses table on the project detail page — so the two can't drift. This
+  // page passes its own mobile projections + filter configs and keeps default
+  // cents (no `decimals`/`signedTone`); the project + name + url columns stay
+  // inline here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
+  const columns = useMemo(
+    () => [
+      expenseCostColumn(
+        columnHelper,
+        async (cost, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { cost },
+          });
+        },
+        { mobile: { slot: "trailing", priority: 10, interactive: true } },
+      ),
+      expenseDateColumn(
+        columnHelper,
+        async (date, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { date },
+          });
+        },
+        {
+          mobile: { slot: "subtitle", priority: 15 },
+        },
+      ),
+      expenseCostTypeColumn(
+        columnHelper,
+        async (costType, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { costType },
+          });
+        },
+        { mobile: { slot: "meta", priority: 20 } },
+      ),
+      expenseTradeColumn(
+        columnHelper,
+        async (trade, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { trade },
+          });
+        },
+        { mobile: { slot: "meta", priority: 60 } },
+      ),
+      createProjectLinkColumn(columnHelper, {
+        className: "w-40",
+        mobile: { slot: "meta", priority: 40, interactive: true },
+        editable: {
+          onSave: async (newProjectId, expense) => {
+            await updateExpenseMutation.mutateAsync({
+              id: expense.id,
+              data: { projectId: newProjectId },
+            });
+          },
+        },
+      }),
+      createProductLinkColumn(columnHelper, {
+        className: "w-40",
+        mobile: { slot: "meta", priority: 45, interactive: true },
+        editable: {
+          onSave: async (newProductId, expense) => {
+            await updateExpenseMutation.mutateAsync({
+              id: expense.id,
+              data: { productId: newProductId },
+            });
+          },
+        },
+      }),
+      expenseFutureColumn(
+        columnHelper,
+        async (future, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { future },
+          });
+        },
+        {
+          mobile: { slot: "meta", priority: 50 },
+        },
+      ),
+      // Hidden by default (see `initialColumnVisibility` below) — revealed via
+      // the column-visibility toggle when a vendor-heavy view (e.g. an Amazon
+      // reconciliation pass) actually wants them.
+      expenseVendorColumn(
+        columnHelper,
+        async (vendor, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { vendor },
+          });
+        },
+        { mobile: { slot: "meta", priority: 70 } },
+      ),
+      expenseOrderIdColumn(
+        columnHelper,
+        async (orderId, expense) => {
+          await updateExpenseMutation.mutateAsync({
+            id: expense.id,
+            data: { orderId },
+          });
+        },
+        { mobile: { slot: "meta", priority: 80 } },
+      ),
+      columnHelper.accessor((row) => row.url, {
+        id: "url",
+        header: "",
+        enableSorting: false,
+        meta: { className: "w-10" },
+        cell: (info) => {
+          const url = info.getValue();
+          if (!url) return null;
+          return (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground transition-colors hover:text-primary"
+            >
+              <ExternalLink className="size-3.5" />
+              <span className="sr-only">Open link</span>
+            </a>
+          );
+        },
+      }),
+    ],
+    [columnHelper],
+  );
+
+  // `?productId=` (the product detail page's "See all in ledger" link) scopes
+  // the ledger to one product via the manifest's `productId` spec — but no
+  // column has that id, so it renders no header control and would otherwise
+  // be an invisible-but-active filter with Reset as the only way out. This is
+  // its one visible surface: a removable chip showing the resolved product
+  // name (never the raw id). `getByID` is the same query every other
+  // id→product-name lookup in the app uses (e.g. `ProductPreviewContent`),
+  // reused rather than duplicated.
+  const expensesSearch = expensesRoute.useSearch();
+  const expensesNavigate = expensesRoute.useNavigate();
+  const scopedProductId = expensesSearch.productId;
+  const scopedProductQuery = useQuery({
+    ...api.product.getByID.queryOptions({ id: scopedProductId ?? "" }),
+    enabled: Boolean(scopedProductId),
+  });
+  const clearProductScope = useCallback(() => {
+    void expensesNavigate({
+      search: (prev) => ({ ...prev, productId: undefined }),
+      replace: true,
+    });
+  }, [expensesNavigate]);
+  const productScopeChip =
+    scopedProductId && scopedProductQuery.data ? (
+      <ScopeChip
+        name="Product"
+        value={scopedProductQuery.data.name}
+        onClear={clearProductScope}
+      />
+    ) : undefined;
+
+  // `?order=` (the ledger's Order # cell) is the same invisible-filter
+  // situation as `?productId=` above — `orderIdExact` has no column, so it needs
+  // its own visible surface. No lookup query: the order id IS the display value.
+  // It no longer arrives paired with a `vendor` (an order id resolves through
+  // the charge, where `(vendorId, orderId)` is partial-unique), so clearing it
+  // drops `order` and nothing else; a Vendor selection is a real column filter
+  // with its own chip.
+  const scopedOrderId = expensesSearch.order;
+  const clearOrderScope = useCallback(() => {
+    void expensesNavigate({
+      search: (prev) => ({ ...prev, order: undefined }),
+      replace: true,
+    });
+  }, [expensesNavigate]);
+  const orderScopeChip = scopedOrderId ? (
+    <ScopeChip name="Order" value={scopedOrderId} onClear={clearOrderScope} />
+  ) : undefined;
+
+  const scopeChips =
+    productScopeChip || orderScopeChip ? (
+      <Row align="center" gap="xs">
+        {productScopeChip}
+        {orderScopeChip}
+      </Row>
+    ) : undefined;
+
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("expense");
+
+  // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
+  // whose input is a union with tRPC's `skipToken` symbol, so it would land on
+  // `unknown` — and `currentFilters` goes straight to `expense.analytics`,
+  // which wants the real shape.
+  const {
+    table,
+    currentFilters,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+    refreshControls,
+    totalCount,
+  } = useEntityList<ExpenseOut, ExpenseFilters>({
+    entity: "expense",
+    queryOptions: api.expense.list.queryOptions,
+    filterOptions: projectFilterOptions,
+    columns,
+    deletable: deletableConfig,
+    nameEditable,
+    bulkActions: expenseBulkActions.config,
+    extraActions,
+    // Newly added columns default VISIBLE unless declared here (see
+    // useTableColumnVisibility's `{ ...initial, ...stored }` merge) — vendor
+    // and order id are niche enough (mostly an Amazon-reconciliation need) to
+    // stay opt-in via the column toggle rather than clutter the default view.
+    initialColumnVisibility: { vendor: false, orderId: false },
+  });
+  usePageCount(totalCount);
+
+  // `currentFilters` is the ledger query's own filter object — including the
+  // URL-only `?productId=` / `?order=` scopes, which never enter the table's
+  // column filters. Reusing it (rather than rebuilding from table state) is
+  // what keeps this compact totals row reporting on exactly the rows below it.
+  const analyticsQuery = useQuery({
+    ...api.expense.analytics.queryOptions(currentFilters),
+    placeholderData: keepPreviousData,
+  });
+  const summary = analyticsQuery.data?.summary;
+
+  return (
+    <div>
+      <Grid cols="summary" className="mb-4">
+        <StatTile label="Actual">
+          {formatCurrency(summary?.actual ?? 0, 0)}
+        </StatTile>
+        <StatTile label="Committed">
+          {formatCurrency(summary?.committed ?? 0, 0)}
+        </StatTile>
+        <StatTile label="Credits">
+          {formatCurrency(summary?.credits ?? 0, 0)}
+        </StatTile>
+        <StatTile label="Net">{formatCurrency(summary?.net ?? 0, 0)}</StatTile>
+        <StatTile label="Count">{summary?.count ?? 0}</StatTile>
+      </Grid>
+      <RTable
+        table={table}
+        additionalToolbarContent={scopeChips}
+        isLoading={isLoading}
+        error={error}
+        ariaLabel="Expenses Table"
+        timing={timing}
+        entity="expense"
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
+        bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
+      />
+      <PreviewSheet />
+      {deleteDialog}
+      <ExpenseBulkActionDialogs
+        controller={expenseBulkActions}
+        onComplete={() => table.resetRowSelection()}
+      />
+      {moveTarget && (
+        <MoveToProjectDialog
+          open={moveTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setMoveTarget(null);
+          }}
+          items={[moveTarget]}
+          entityLabel="Expense"
+          isPending={moveMutation.isPending}
+          onConfirm={async (projectId) => {
+            await moveMutation.mutateAsync({
+              id: moveTarget.id,
+              data: { projectId },
+            });
+            setMoveTarget(null);
+          }}
+        />
+      )}
+      {settleTarget && (
+        <SettleExpenseDialog
+          open={settleTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setSettleTarget(null);
+          }}
+          expense={settleTarget}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Sparkles } from "lucide-react";
@@ -9,10 +9,10 @@ import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/integrations/trpc/react";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
-import { suggestPriceFromPurchases } from "./suggest-price";
+import { suggestPriceFromExpenses } from "./suggest-price";
 
 // Module-level so the fallback keeps a stable reference across renders.
-const EMPTY_PURCHASES: PurchaseOut[] = [];
+const EMPTY_EXPENSES: ExpenseOut[] = [];
 
 interface PriceSuggestionProps {
   product: ProductWithFoodOut;
@@ -28,7 +28,7 @@ interface PriceSuggestionProps {
  * maintained as list/replacement value, so an existing figure is a deliberate
  * choice — the same never-clobber rule the UPC apply path follows.
  *
- * Shares `purchase.chartData` with the Purchase History section on this page;
+ * Shares `expense.chartData` with the Expense History section on this page;
  * react-query dedupes the identical key, so this costs no extra request.
  */
 export function PriceSuggestion({
@@ -39,8 +39,8 @@ export function PriceSuggestion({
   const api = useTRPC();
   const unpriced = product.price == null;
 
-  const { data = EMPTY_PURCHASES } = useQuery({
-    ...api.purchase.chartData.queryOptions({ productId: product.id }),
+  const { data = EMPTY_EXPENSES } = useQuery({
+    ...api.expense.chartData.queryOptions({ productId: product.id }),
     enabled: unpriced,
   });
 
@@ -50,7 +50,7 @@ export function PriceSuggestion({
     (sum, entry) => sum + entry.amount.value,
     0,
   );
-  const suggestion = suggestPriceFromPurchases(data, onHand);
+  const suggestion = suggestPriceFromExpenses(data, onHand);
   if (!suggestion) return null;
 
   const provenance = [
@@ -85,7 +85,7 @@ export function PriceSuggestion({
         </Button>
       </Row>
       <Description>
-        {/* Show the division rather than just its result — a purchase row is an
+        {/* Show the division rather than just its result — an expense row is an
             order total, so a silent divide would be an unauditable guess. */}
         {suggestion.quantity > 1
           ? `${formatCurrency(suggestion.paid)} split across ${suggestion.quantity} units on hand`

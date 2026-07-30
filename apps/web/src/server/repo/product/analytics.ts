@@ -104,7 +104,7 @@ export const findProductsWithNoImages = async (
  *
  * Grouped SQL over `unnest`, not recipe/queries.ts's `getAllTags`, which loads
  * every row's tags and de-dupes into a Set in JS. Same "cheap options query"
- * shape as `purchaseVendorOptions`.
+ * shape as `vendorOptions` (repo/vendor.ts).
  */
 export const getProductTagOptions = async (
   db: Database,

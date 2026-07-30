@@ -135,7 +135,7 @@ export const importImageFromUrlSchema = z.object({
 
 // The image-bearing entities exposed as attach targets. A subset of
 // `entityImage` (uppercase storage keys) — cookbook is excluded because it uses
-// a single write-once `coverImageId` (replace, not append), unlike these four
+// a single write-once `coverImageId` (replace, not append), unlike these five
 // gallery join tables. Lowercase to match the `entitySchema` slug convention the
 // rest of the MCP surface uses; mapped to the join dispatch server-side.
 export const attachableImageEntity = z.enum([
@@ -143,6 +143,9 @@ export const attachableImageEntity = z.enum([
   "recipe",
   "location",
   "project",
+  // The point of `PurchaseImage`: filing the metal store's emailed PDF invoice
+  // against the charge it documents.
+  "purchase",
 ]);
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 

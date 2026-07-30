@@ -1,23 +1,23 @@
-import type { PurchaseOut } from "@cubby/schemas/project";
+import type { ExpenseOut } from "@cubby/schemas/project";
 import { monthKey, monthLabel } from "../shared";
 
-export interface PurchaseSeries {
+export interface ExpenseSeries {
   id: string;
   data: Array<{ x: string; y: number }>;
 }
 
-export function buildPurchaseCalendar(purchases: PurchaseOut[]) {
-  const itemsByDay = new Map<string, PurchaseOut[]>();
-  for (const purchase of purchases) {
+export function buildExpenseCalendar(expenses: ExpenseOut[]) {
+  const itemsByDay = new Map<string, ExpenseOut[]>();
+  for (const expense of expenses) {
     // Match the existing heatmap: zero-value rows do not create a clickable day.
-    if (!purchase.date || !purchase.cost) continue;
-    const items = itemsByDay.get(purchase.date) ?? [];
-    items.push(purchase);
-    itemsByDay.set(purchase.date, items);
+    if (!expense.date || !expense.cost) continue;
+    const items = itemsByDay.get(expense.date) ?? [];
+    items.push(expense);
+    itemsByDay.set(expense.date, items);
   }
   const data = Array.from(itemsByDay, ([day, items]) => ({
     day,
-    value: items.reduce((total, purchase) => total + (purchase.cost ?? 0), 0),
+    value: items.reduce((total, expense) => total + (expense.cost ?? 0), 0),
   }));
   const dates = data.map(({ day }) => day).sort();
   return {
@@ -28,32 +28,32 @@ export function buildPurchaseCalendar(purchases: PurchaseOut[]) {
   };
 }
 
-export function buildCumulativeSpendPoints(purchases: PurchaseOut[]) {
+export function buildCumulativeSpendPoints(expenses: ExpenseOut[]) {
   let cumulative = 0;
-  return purchases
-    .filter((purchase) => purchase.date && purchase.cost != null)
+  return expenses
+    .filter((expense) => expense.date && expense.cost != null)
     .sort((a, b) => a.date!.localeCompare(b.date!))
-    .map((purchase) => {
-      cumulative += purchase.cost!;
-      return { x: purchase.date!, y: cumulative };
+    .map((expense) => {
+      cumulative += expense.cost!;
+      return { x: expense.date!, y: cumulative };
     });
 }
 
 function buildMonthlySeries(
-  purchases: PurchaseOut[],
-  groupFor: (purchase: PurchaseOut) => string,
+  expenses: ExpenseOut[],
+  groupFor: (expense: ExpenseOut) => string,
   cumulative: boolean,
   minimumMonths: number,
-): PurchaseSeries[] {
+): ExpenseSeries[] {
   const months = new Set<string>();
   const grouped = new Map<string, Map<string, number>>();
-  for (const purchase of purchases) {
-    if (!purchase.date || purchase.cost == null) continue;
-    const group = groupFor(purchase);
-    const month = monthKey(purchase.date);
+  for (const expense of expenses) {
+    if (!expense.date || expense.cost == null) continue;
+    const group = groupFor(expense);
+    const month = monthKey(expense.date);
     months.add(month);
     const totals = grouped.get(group) ?? new Map<string, number>();
-    totals.set(month, (totals.get(month) ?? 0) + purchase.cost);
+    totals.set(month, (totals.get(month) ?? 0) + expense.cost);
     grouped.set(group, totals);
   }
   const sortedMonths = Array.from(months).sort();
@@ -77,10 +77,10 @@ function buildMonthlySeries(
 }
 
 export function buildStackedCumulativeSpend(
-  purchases: PurchaseOut[],
-  groupFor: (purchase: PurchaseOut) => string,
+  expenses: ExpenseOut[],
+  groupFor: (expense: ExpenseOut) => string,
 ) {
-  return buildMonthlySeries(purchases, groupFor, true, 1).sort(
+  return buildMonthlySeries(expenses, groupFor, true, 1).sort(
     (a, b) => (b.data.at(-1)?.y ?? 0) - (a.data.at(-1)?.y ?? 0),
   );
 }

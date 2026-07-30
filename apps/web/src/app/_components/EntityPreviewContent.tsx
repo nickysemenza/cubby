@@ -16,6 +16,7 @@ import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
   capitalize,
   formatDate,
@@ -23,12 +24,12 @@ import {
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,
 } from "~/app/projects/project-formatting";
-import { costTypeLabels } from "~/app/purchases/purchase-options";
 import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { EntityIcon } from "~/entities/entities";
 import { fdcIdFromParam } from "~/entities/entity-query";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { formatCurrency } from "~/lib/utils";
 import { tryFormatAmount } from "./inventory/format-amount";
@@ -80,7 +81,9 @@ export function EntityPreviewContent({
     .with("meal", () => <MealPreviewContent mealId={id} />)
     .with("project", () => <ProjectPreviewContent projectId={id} />)
     .with("task", () => <TaskPreviewContent taskId={id} />)
+    .with("expense", () => <ExpensePreviewContent expenseId={id} />)
     .with("purchase", () => <PurchasePreviewContent purchaseId={id} />)
+    .with("vendor", () => <VendorPreviewContent vendorId={id} />)
     .exhaustive();
 }
 
@@ -741,7 +744,7 @@ export function MealPreviewContent({ mealId }: { mealId: string }) {
 
 // ── Project ─────────────────────────────────────────────────────────────────
 
-// Cross-link to a task/purchase's parent project (built identically for both).
+// Cross-link to a task/expense's parent project (built identically for both).
 const projectCrossLink = (id: string, name: string): CrossLink => ({
   to: "/projects/$id",
   params: { id },
@@ -760,7 +763,7 @@ export type ProjectPreview = {
   costEstimate?: number | null;
   taskCount: number;
   doneTaskCount: number;
-  purchaseCount: number;
+  expenseCount: number;
   // The EFFECTIVE window (derived rollup or manual override, whichever
   // wins) — see `projectDateWindow` in packages/schemas/src/project.ts.
   // Never the raw `startDate`/`endDate` override columns. Optional (like
@@ -803,7 +806,7 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
                 : undefined,
           },
           { label: "Tasks", value: `${vm.doneTaskCount}/${vm.taskCount}` },
-          { label: "Purchases", value: vm.purchaseCount },
+          { label: "Expenses", value: vm.expenseCount },
           {
             label: "Dates",
             value: formatDateRange(
@@ -836,7 +839,7 @@ export function ProjectPreviewContent({ projectId }: { projectId: string }) {
             costEstimate: data.costEstimate,
             taskCount: data.rollup.taskCount,
             doneTaskCount: data.rollup.doneTaskCount,
-            purchaseCount: data.rollup.purchaseCount,
+            expenseCount: data.rollup.expenseCount,
             effectiveStart: data.dates.effectiveStart,
             effectiveEnd: data.dates.effectiveEnd,
           })}
@@ -917,9 +920,9 @@ export function TaskPreviewContent({ taskId }: { taskId: string }) {
   );
 }
 
-// ── Purchase ────────────────────────────────────────────────────────────────
+// ── Expense ────────────────────────────────────────────────────────────────
 
-export type PurchasePreview = {
+export type ExpensePreview = {
   id: string;
   name: string;
   cost: number | null;
@@ -933,7 +936,7 @@ export type PurchasePreview = {
   projectName?: string | null;
 };
 
-export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
+export function toExpenseCard(vm: ExpensePreview): ManifestCardProps {
   const identity =
     [
       vm.costType ? costTypeLabels[vm.costType] : null,
@@ -954,11 +957,11 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
     });
 
   return {
-    entity: "purchase",
+    entity: "expense",
     routeParam: vm.id,
-    icon: <EntityIcon entity="purchase" size={14} colored />,
+    icon: <EntityIcon entity="expense" size={14} colored />,
     name: vm.name,
-    tag: "purchase",
+    tag: "expense",
     identity: identity || undefined,
     crossLinks:
       vm.projectId && vm.projectName
@@ -968,18 +971,16 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
   };
 }
 
-export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
+export function ExpensePreviewContent({ expenseId }: { expenseId: string }) {
   const trpc = useTRPC();
-  const query = useQuery(
-    trpc.purchase.getByID.queryOptions({ id: purchaseId }),
-  );
+  const query = useQuery(trpc.expense.getByID.queryOptions({ id: expenseId }));
 
   return (
-    <PreviewQuery query={query} label="Purchase">
+    <PreviewQuery query={query} label="Expense">
       {(data) => (
         <ManifestCard
-          {...toPurchaseCard({
-            id: purchaseId,
+          {...toExpenseCard({
+            id: expenseId,
             name: data.name,
             cost: data.cost,
             date: data.date,
@@ -990,6 +991,149 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
             orderId: data.orderId,
             projectId: data.projectId,
             projectName: data.projectName,
+          })}
+        />
+      )}
+    </PreviewQuery>
+  );
+}
+
+// ── Purchase ────────────────────────────────────────────────────────────────
+
+/** Cross-link to the vendor that issued a charge — the charge's primary context. */
+const vendorCrossLink = (id: string, name: string): CrossLink => ({
+  to: "/vendors/$id",
+  params: { id },
+  icon: <EntityIcon entity="vendor" size={12} colored />,
+  label: name,
+});
+
+export type PurchasePreview = {
+  id: string;
+  orderId: string | null;
+  date: string | null;
+  statedTotal: number | null;
+  expenseCount: number;
+  expenseTotal: number;
+  vendorId?: string | null;
+  vendorName?: string | null;
+};
+
+export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
+  return {
+    entity: "purchase",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="purchase" size={14} colored />,
+    // No `name` column on a charge — the shared label ladder owns this so the
+    // hovercard and every inline link read the same charge the same way.
+    name: purchaseLabel(vm),
+    tag: "purchase",
+    identity: vm.date ? formatDate(vm.date) : undefined,
+    crossLinks:
+      vm.vendorId && vm.vendorName
+        ? [vendorCrossLink(vm.vendorId, vm.vendorName)]
+        : undefined,
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          {
+            // The charge's real spend. `statedTotal` rides along as a caption
+            // rather than a peer stat — it is what the paperwork claimed, never
+            // money (see purchase.ts), and the two legitimately disagree.
+            label: "Line total",
+            value: formatCurrency(vm.expenseTotal),
+            caption:
+              vm.statedTotal != null
+                ? `of ${formatCurrency(vm.statedTotal, 0)} stated`
+                : undefined,
+          },
+          { label: "Lines", value: vm.expenseCount },
+          {
+            label: "Order #",
+            value: vm.orderId ? (
+              <span className="font-mono text-xs">{vm.orderId}</span>
+            ) : (
+              "—"
+            ),
+          },
+          { label: "Date", value: vm.date ? formatDate(vm.date) : "—" },
+        ],
+      },
+    ],
+  };
+}
+
+export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
+  const trpc = useTRPC();
+  // `purchase.getByID` takes the branded id as a bare scalar, not `{ id }` —
+  // see routers/purchase.ts.
+  const query = useQuery(trpc.purchase.getByID.queryOptions(purchaseId));
+
+  return (
+    <PreviewQuery query={query} label="Purchase">
+      {(data) => (
+        <ManifestCard
+          {...toPurchaseCard({
+            id: purchaseId,
+            orderId: data.orderId,
+            date: data.date,
+            statedTotal: data.statedTotal,
+            expenseCount: data.expenseCount,
+            expenseTotal: data.expenseTotal,
+            vendorId: data.vendorId,
+            vendorName: data.vendorName,
+          })}
+        />
+      )}
+    </PreviewQuery>
+  );
+}
+
+// ── Vendor ──────────────────────────────────────────────────────────────────
+
+export type VendorPreview = {
+  id: string;
+  name: string;
+  purchaseCount: number;
+  spend: number;
+};
+
+export function toVendorCard(vm: VendorPreview): ManifestCardProps {
+  return {
+    entity: "vendor",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="vendor" size={14} colored />,
+    name: vm.name,
+    tag: "vendor",
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          // `spend` is SUM(expense.cost) over this vendor's charges' lines — a
+          // rollup, never a column on the vendor row.
+          { label: "Spend", value: formatCurrency(vm.spend, 0) },
+          { label: "Charges", value: vm.purchaseCount },
+        ],
+      },
+    ],
+  };
+}
+
+export function VendorPreviewContent({ vendorId }: { vendorId: string }) {
+  const trpc = useTRPC();
+  // Bare scalar id, like `purchase.getByID` above.
+  const query = useQuery(trpc.vendor.getByID.queryOptions(vendorId));
+
+  return (
+    <PreviewQuery query={query} label="Vendor">
+      {(data) => (
+        <ManifestCard
+          {...toVendorCard({
+            id: vendorId,
+            name: data.name,
+            purchaseCount: data.purchaseCount,
+            spend: data.spend,
           })}
         />
       )}

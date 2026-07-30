@@ -4,10 +4,12 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
+import { ExpenseDetail } from "~/app/expenses/expense-detail";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
 import { TaskDetail } from "~/app/tasks/task-detail";
+import { VendorDetail } from "~/app/vendors/vendor-detail";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
@@ -121,8 +123,8 @@ export function EntityPreviewPanel({
           .with("task", () =>
             data ? <TaskDetail task={data as never} /> : null,
           )
-          .with("purchase", () =>
-            data ? <PurchaseDetail purchase={data as never} /> : null,
+          .with("expense", () =>
+            data ? <ExpenseDetail expense={data as never} /> : null,
           )
           .with("project", () =>
             data ? <ProjectDetailPage project={data as never} /> : null,
@@ -130,6 +132,15 @@ export function EntityPreviewPanel({
           // Like meal, the cookbook card fetches its own data (there is no
           // cookbook getByID — it reads the cached browse index).
           .with("cookbook", () => <CookbookPreviewContent cookbookId={id} />)
+          .with("vendor", () =>
+            data ? <VendorDetail vendor={data as never} /> : null,
+          )
+          // Neither is searchable in v1 (entity-manifest.ts), so no search result
+          // resolves to either — but both rosters open this panel on row click,
+          // which is why both arms are real rather than null.
+          .with("purchase", () =>
+            data ? <PurchaseDetail purchase={data as never} /> : null,
+          )
           .exhaustive()}
       </div>
     </div>

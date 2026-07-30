@@ -1,6 +1,6 @@
 import {
+  expenseCreateInput,
   projectCreateInput,
-  purchaseCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
 import {
@@ -18,13 +18,13 @@ import {
   getEmbeddingTextForEntity,
   getEmbeddingTextsForEntityTypes,
 } from "./entity-embedding";
+import { createExpense } from "./expense";
 import { createIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
 import { createMeal } from "./meal";
 import { createProduct } from "./product";
 import { createProject } from "./project";
-import { createPurchase } from "./purchase";
 import { createRecipe } from "./recipe";
 import {
   makeLocationInput,
@@ -81,10 +81,10 @@ describe("searchable entity loader maps", () => {
       }),
       ctx.actor,
     );
-    const purchase = await createPurchase(
+    const expense = await createExpense(
       ctx.db,
-      mock(purchaseCreateInput, {
-        overrides: { name: "Loader purchase", projectId: project.id },
+      mock(expenseCreateInput, {
+        overrides: { name: "Loader expense", projectId: project.id },
       }),
       ctx.actor,
     );
@@ -118,7 +118,7 @@ describe("searchable entity loader maps", () => {
       meal: meal.id,
       project: project.id,
       task: task.id,
-      purchase: purchase.id,
+      expense: expense.id,
     } satisfies Record<SearchableEntity, string>;
 
     const batch = await getEmbeddingTextsForEntityTypes(ctx.db, [

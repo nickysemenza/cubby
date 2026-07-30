@@ -102,6 +102,15 @@ export function ImageDetail({ image }: ImageDetailProps) {
           {entityName}
         </a>
       ))
+      .with("PURCHASE", () => (
+        <Link
+          to="/purchases/$id"
+          params={{ id: entityId }}
+          className="font-medium text-sm hover:underline"
+        >
+          {entityName}
+        </Link>
+      ))
       .exhaustive();
   };
 

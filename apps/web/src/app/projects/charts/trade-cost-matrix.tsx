@@ -1,4 +1,4 @@
-import type { PurchaseOut, Trade } from "@cubby/schemas/project";
+import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { Fragment, type ReactElement, useMemo } from "react";
@@ -25,11 +25,11 @@ const activeCellRing = "ring-2 ring-primary ring-inset";
 
 export type TradeCostCell = { trade: Trade; costType: PivotCostKey | null };
 
-/** The purchases behind one cell, top 8 by magnitude + a "+N more" roll-up. */
-function CellPreview({ purchases }: { purchases: PurchaseOut[] }) {
+/** The expenses behind one cell, top 8 by magnitude + a "+N more" roll-up. */
+function CellPreview({ expenses }: { expenses: ExpenseOut[] }) {
   // Sort by absolute value so a large-magnitude negative (e.g. the −$75k family
   // contribution) surfaces at the top instead of sinking into the rest bucket.
-  const sorted = [...purchases].sort(
+  const sorted = [...expenses].sort(
     (a, b) => Math.abs(b.cost ?? 0) - Math.abs(a.cost ?? 0),
   );
   const top = sorted.slice(0, 8);
@@ -61,55 +61,55 @@ function CellPreview({ purchases }: { purchases: PurchaseOut[] }) {
 }
 
 export function TradeCostMatrix({
-  purchases,
+  expenses,
   onCellClick,
   activeCell,
 }: {
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
   /** `costType: null` is a row-total click (filter by trade alone). */
   onCellClick?: (trade: Trade, costType: PivotCostKey | null) => void;
   activeCell?: TradeCostCell | null;
 }) {
   const { rows, columnTotals, grandTotal, maxCell } = useMemo(
-    () => buildTradeCostPivot(purchases),
-    [purchases],
+    () => buildTradeCostPivot(expenses),
+    [expenses],
   );
 
-  // Per-cell purchase lists behind the hover previews: `trade|costType` for
+  // Per-cell expense lists behind the hover previews: `trade|costType` for
   // the body cells, `trade|total` for the row-total cells.
-  const purchasesByCell = useMemo(() => {
-    const map = new Map<string, PurchaseOut[]>();
-    const push = (key: string, p: PurchaseOut) => {
+  const expensesByCell = useMemo(() => {
+    const map = new Map<string, ExpenseOut[]>();
+    const push = (key: string, p: ExpenseOut) => {
       const list = map.get(key);
       if (list) list.push(p);
       else map.set(key, [p]);
     };
-    for (const p of purchases) {
+    for (const p of expenses) {
       push(`${p.trade}|${p.costType}`, p);
       push(`${p.trade}|total`, p);
     }
     return map;
-  }, [purchases]);
+  }, [expenses]);
 
   const isActive = (trade: Trade, costType: PivotCostKey | null) =>
     activeCell?.trade === trade && activeCell.costType === costType;
 
-  // Wrap a cell's trigger element in the hover preview when it has purchases.
+  // Wrap a cell's trigger element in the hover preview when it has expenses.
   const withPreview = (trigger: ReactElement, key: string) => {
-    const cellPurchases = purchasesByCell.get(key);
-    if (!cellPurchases || cellPurchases.length === 0) return trigger;
+    const cellExpenses = expensesByCell.get(key);
+    if (!cellExpenses || cellExpenses.length === 0) return trigger;
     return (
       <PreviewCard>
         <PreviewCardTrigger render={trigger} />
         <PreviewCardContent align="start" side="bottom">
-          <CellPreview purchases={cellPurchases} />
+          <CellPreview expenses={cellExpenses} />
         </PreviewCardContent>
       </PreviewCard>
     );
   };
 
   if (rows.length === 0) {
-    return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
+    return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
   }
 
   const columns: readonly PivotCostKey[] = PIVOT_COST_KEYS;

@@ -13,7 +13,7 @@ import { Skeleton } from "~/components/ui/skeleton";
  * and padding can't drift — they already had (this was still on
  * `border-border/30` after the row moved to `/60`).
  *
- * `metaLines` shapes it to the entity being loaded: a purchases list settles
+ * `metaLines` shapes it to the entity being loaded: an expenses list settles
  * into ~5 spec lines per row, so a fixed two-line skeleton would make the list
  * jump the moment real rows arrive.
  */

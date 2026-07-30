@@ -21,6 +21,7 @@ const IMAGE_KEY: Record<string, string> = {
   cookbook: "COOKBOOK",
   location: "LOCATION",
   project: "PROJECT",
+  purchase: "PURCHASE",
 };
 
 describe("entity manifest", () => {
@@ -62,7 +63,9 @@ describe("entity manifest", () => {
       "meal",
       "project",
       "task",
+      "vendor",
       "purchase",
+      "expense",
     ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
       sorted(auditableEntities),
@@ -80,7 +83,9 @@ describe("entity manifest", () => {
       "meal",
       "project",
       "task",
+      "vendor",
       "purchase",
+      "expense",
       "image",
     ]);
   });
@@ -92,6 +97,7 @@ describe("entity manifest", () => {
       "cookbook",
       "location",
       "project",
+      "purchase",
     ]);
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
       sorted(entityImage.options),
@@ -109,7 +115,7 @@ describe("entity manifest", () => {
       "meal",
       "project",
       "task",
-      "purchase",
+      "expense",
     ]);
   });
 

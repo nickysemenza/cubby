@@ -130,8 +130,8 @@ export const taskList = async (
       // A task with BOTH due columns null falls out of any window by plain SQL
       // comparison semantics — `coalesce(NULL, NULL) >= x` is NULL, not true —
       // that's intended, not a bug to work around (the identical rule is
-      // documented for `purchase.date` in `purchase/lookup.ts`'s
-      // `buildPurchaseWhereClause`). The dashboard surfaces the count of rows
+      // documented for `expense.date` in `expense/lookup.ts`'s
+      // `buildExpenseWhereClause`). The dashboard surfaces the count of rows
       // hidden this way as `hiddenByDate.tasks`.
       filters.dueFrom
         ? gte(effectiveTaskDueDateSql(), filters.dueFrom)

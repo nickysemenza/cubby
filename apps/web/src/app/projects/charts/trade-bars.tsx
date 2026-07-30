@@ -1,4 +1,4 @@
-import type { PurchaseOut, Trade } from "@cubby/schemas/project";
+import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
@@ -11,7 +11,7 @@ import {
   nivoCurrencyAxis,
   TRADE_LABELS,
 } from "../shared";
-import { ChartTooltip, TooltipPurchaseBreakdown } from "./ChartTooltip";
+import { ChartTooltip, TooltipExpenseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 import { buildTradeCostPivot, PIVOT_COST_KEYS } from "./trade-cost-pivot";
 
@@ -26,9 +26,9 @@ type BarDatum = {
 const tradeLabel = (value: string): string =>
   TRADE_LABELS[value as Trade] ?? value;
 
-export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
-  const { data, hiddenCount, purchasesByCell } = useMemo(() => {
-    const { rows } = buildTradeCostPivot(purchases);
+export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
+  const { data, hiddenCount, expensesByCell } = useMemo(() => {
+    const { rows } = buildTradeCostPivot(expenses);
     // Stacked bars can't render negative-net rows — drop them here (the
     // matrix keeps them). The helper sorts total DESC, but nivo horizontal
     // bars render bottom-up — reverse to keep the biggest-on-top visual.
@@ -41,19 +41,19 @@ export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
     // above — surface the count so their absence isn't silent.
     const hiddenCount = rows.filter((row) => row.total <= 0).length;
 
-    // Purchases behind each `trade|costType` segment, for the tooltip.
-    const purchasesByCell = new Map<string, PurchaseOut[]>();
-    for (const p of purchases) {
+    // Expenses behind each `trade|costType` segment, for the tooltip.
+    const expensesByCell = new Map<string, ExpenseOut[]>();
+    for (const p of expenses) {
       const key = `${p.trade}|${p.costType}`;
-      const list = purchasesByCell.get(key);
+      const list = expensesByCell.get(key);
       if (list) list.push(p);
-      else purchasesByCell.set(key, [p]);
+      else expensesByCell.set(key, [p]);
     }
-    return { data, hiddenCount, purchasesByCell };
-  }, [purchases]);
+    return { data, hiddenCount, expensesByCell };
+  }, [expenses]);
 
   if (data.length === 0) {
-    return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
+    return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
   }
 
   const chartHeight = Math.max(300, data.length * 32 + 60);
@@ -87,8 +87,8 @@ export function TradeBars({ purchases }: { purchases: PurchaseOut[] }) {
             <ChartTooltip>
               <strong>{tradeLabel(String(indexValue))}</strong> — {id}:{" "}
               <span style={{ color }}>{formatCurrency(value, 0)}</span>
-              <TooltipPurchaseBreakdown
-                purchases={purchasesByCell.get(`${indexValue}|${id}`) ?? []}
+              <TooltipExpenseBreakdown
+                expenses={expensesByCell.get(`${indexValue}|${id}`) ?? []}
               />
             </ChartTooltip>
           )}

@@ -1,8 +1,8 @@
 import type {
+  ExpenseOut,
   ProjectDashboardSummaryOut,
   ProjectOut,
   ProjectPortfolioAnalyticsOut,
-  PurchaseOut,
   TaskOut,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
@@ -60,11 +60,11 @@ import { NeedsAttention } from "./needs-attention";
 import { ProjectActions } from "./project-actions";
 import {
   capitalize,
+  ExpenseList,
   formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
   ProjectTable,
-  PurchaseList,
   StatusIcon,
   TaskList,
 } from "./shared";
@@ -121,7 +121,7 @@ type CoverImages = RouterOutputs["image"]["imagesByProjectIds"];
 const NO_PROJECT_IDS: string[] = [];
 const NO_PROJECTS: ProjectOut[] = [];
 const NO_TASKS: TaskOut[] = [];
-const NO_PURCHASES: PurchaseOut[] = [];
+const NO_EXPENSES: ExpenseOut[] = [];
 const NO_KINDS: string[] = [];
 const NO_LOCATIONS: string[] = [];
 const NO_YEARS: string[] = [];
@@ -201,7 +201,7 @@ function DashboardErrorState({
  * rollups, task-status breakdown, upcoming tasks, Needs Attention, filter
  * options), and Data/Gallery reuse its `projects` list rather than issuing
  * their own query. Only `portfolioAnalytics` (chart aggregates) and the
- * Data view's raw task/purchase fetch-alls are gated behind their own view,
+ * Data view's raw task/expense fetch-alls are gated behind their own view,
  * per the whole point of splitting the old fetch-all `project.dashboard`.
  */
 function MainDashboard({
@@ -260,7 +260,7 @@ function MainDashboard({
     enabled: view === "analytics",
   });
 
-  // Data view's raw task/purchase tables — also gated to their own tab, not
+  // Data view's raw task/expense tables — also gated to their own tab, not
   // fetched on every dashboard load. Date bounds apply server-side; the
   // kind/location/status chips (which only project.dashboardSummary
   // understands) are applied client-side below via the resulting project id
@@ -273,8 +273,8 @@ function MainDashboard({
     }),
     enabled: dataViewActive,
   });
-  const { data: allPurchases = NO_PURCHASES } = useQuery({
-    ...api.purchase.chartData.queryOptions({
+  const { data: allExpenses = NO_EXPENSES } = useQuery({
+    ...api.expense.chartData.queryOptions({
       dateFrom: scopeInput.dateFrom,
       dateTo: scopeInput.dateTo,
     }),
@@ -283,23 +283,23 @@ function MainDashboard({
 
   const projects = dashboardQuery.data?.projects ?? NO_PROJECTS;
 
-  const { scopedTasks, scopedPurchases } = useMemo(() => {
+  const { scopedTasks, scopedExpenses } = useMemo(() => {
     if (!dataViewActive) {
-      return { scopedTasks: NO_TASKS, scopedPurchases: NO_PURCHASES };
+      return { scopedTasks: NO_TASKS, scopedExpenses: NO_EXPENSES };
     }
     // Keyed by id, not name — project names aren't unique, so a name-keyed
-    // join here would cross-contaminate tasks/purchases across same-named
+    // join here would cross-contaminate tasks/expenses across same-named
     // projects.
     const projectIds = new Set(projects.map((p) => p.id));
     return {
       scopedTasks: allTasks.filter(
         (t) => !t.projectId || projectIds.has(t.projectId),
       ),
-      scopedPurchases: allPurchases.filter(
+      scopedExpenses: allExpenses.filter(
         (p) => !p.projectId || projectIds.has(p.projectId),
       ),
     };
-  }, [dataViewActive, projects, allTasks, allPurchases]);
+  }, [dataViewActive, projects, allTasks, allExpenses]);
 
   // Overview's project cards and Gallery both show cover images; the other
   // views don't render any project cards, so skip the query entirely there.
@@ -361,7 +361,7 @@ function MainDashboard({
             <DataViewContent
               projects={projects}
               tasks={scopedTasks}
-              purchases={scopedPurchases}
+              expenses={scopedExpenses}
               projectPreview={projectPreview}
               hiddenByDate={data.hiddenByDate}
               onClearDate={() =>
@@ -492,7 +492,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
 /**
  * Every chart here is sourced from `portfolioAnalytics`'s pre-aggregated
  * fields (see repo/project/portfolio-analytics.ts) — never raw
- * projects/tasks/purchases, which this endpoint deliberately doesn't return.
+ * projects/tasks/expenses, which this endpoint deliberately doesn't return.
  * Charts whose old raw-data shape has no server aggregate equivalent
  * (Project Timeline/Gantt, Project Dependencies, Category Breakdown,
  * Spending Heatmap, Spend-by-Trade pivot matrix) were dropped rather than
@@ -535,7 +535,7 @@ function AnalyticsView({
 
         <Section
           title="Planned vs Actual"
-          description="Committed spend vs future-flagged purchases, by month"
+          description="Committed spend vs future-flagged expenses, by month"
         >
           <PlannedVsActualByMonth data={data.plannedVsActual} />
         </Section>
@@ -563,14 +563,14 @@ function AnalyticsView({
 function DataViewContent({
   projects,
   tasks,
-  purchases,
+  expenses,
   projectPreview,
   hiddenByDate,
   onClearDate,
 }: {
   projects: ProjectOut[];
   tasks: TaskOut[];
-  purchases: PurchaseOut[];
+  expenses: ExpenseOut[];
   projectPreview: ReturnType<typeof useEntityPreview>;
   hiddenByDate: ProjectDashboardSummaryOut["hiddenByDate"];
   onClearDate: () => void;
@@ -603,11 +603,11 @@ function DataViewContent({
       </Stack>
 
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Purchases</h2>
-        <PurchaseList purchases={purchases} />
+        <h2 className="font-heading font-semibold text-xl">Expenses</h2>
+        <ExpenseList expenses={expenses} />
         <HiddenByDateNote
-          count={hiddenByDate.purchases}
-          label="purchases"
+          count={hiddenByDate.expenses}
+          label="expenses"
           onClear={onClearDate}
         />
       </Stack>
@@ -631,7 +631,7 @@ function HiddenByDateNote({
   onClear,
 }: {
   count: number;
-  /** Plural entity noun, e.g. "tasks", "purchases", "projects". */
+  /** Plural entity noun, e.g. "tasks", "expenses", "projects". */
   label: string;
   onClear: () => void;
 }) {

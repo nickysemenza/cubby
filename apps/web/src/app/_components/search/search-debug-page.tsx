@@ -107,9 +107,9 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         compact
       />
     ))
-    .with({ entityType: "purchase" }, (i) => (
+    .with({ entityType: "expense" }, (i) => (
       <EntityInlineLink
-        entity="purchase"
+        entity="expense"
         data={{
           id: i.id,
           name: i.name,
