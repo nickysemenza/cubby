@@ -8,6 +8,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   ingredient,
   product,
@@ -26,6 +27,14 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+
+export const INGREDIENT_DELETE_EDGE_POLICY = {
+  "RecipeSectionIngredient.ingredientId": "block-live-recipe-usage",
+  "Product.ingredientId": "block-live-product",
+} as const satisfies IncomingEdgePolicy<
+  "ingredient",
+  "block-live-recipe-usage" | "block-live-product"
+>;
 
 /**
  * Soft delete ingredients by setting deletedAt timestamp.

@@ -38,7 +38,10 @@ import { imageSortableFields } from "@cubby/schemas/image";
 import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
+import type {
+  IncomingEdgeKey,
+  IncomingEdgePolicy,
+} from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   image,
@@ -566,14 +569,14 @@ export const cullPendingImages = async (
  * - `clearFk` — a direct FK column (`Cookbook.coverImageId` today): null it so
  *   the parent row survives, just without a cover.
  */
-const IMAGE_HARD_DELETE = {
+export const IMAGE_HARD_DELETE = {
   "Cookbook.coverImageId": "clearFk",
   "ProductImage.imageId": "deleteRow",
   "LocationImage.imageId": "deleteRow",
   "RecipeImage.imageId": "deleteRow",
   "ProjectImage.imageId": "deleteRow",
   "PurchaseImage.imageId": "deleteRow",
-} satisfies Record<IncomingEdgeKey<"image">, "deleteRow" | "clearFk">;
+} satisfies IncomingEdgePolicy<"image", "deleteRow" | "clearFk">;
 
 /**
  * Hard-delete image rows and return their R2 keys so the caller can drop the

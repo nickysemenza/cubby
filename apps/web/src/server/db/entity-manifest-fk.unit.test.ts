@@ -72,6 +72,7 @@ const NON_ENTITY_FK_TARGETS: Record<string, string> = {
 interface IntrospectedEdge {
   /** `${sourceTableName}.${sourceColumnName}`, e.g. "PurchaseImage.imageId". */
   key: string;
+  sourceEntity: Entity | undefined;
   targetTableName: string;
   targetEntity: Entity | undefined;
 }
@@ -81,6 +82,7 @@ function introspectFkEdges(): IntrospectedEdge[] {
   const edges: IntrospectedEdge[] = [];
   for (const table of ALL_TABLES) {
     const sourceTableName = getTableConfig(table).name;
+    const sourceEntity = ENTITY_BY_TABLE.get(sourceTableName);
     for (const fk of getTableConfig(table).foreignKeys) {
       const ref = fk.reference();
       const targetTableName = getTableConfig(ref.foreignTable).name;
@@ -88,6 +90,7 @@ function introspectFkEdges(): IntrospectedEdge[] {
       for (const column of ref.columns) {
         edges.push({
           key: `${sourceTableName}.${column.name}`,
+          sourceEntity,
           targetTableName,
           targetEntity,
         });
@@ -152,5 +155,29 @@ describe("entity manifest FK guard", () => {
           `\`${e.key}\` references ${e.targetTableName}, which is neither an entity table nor in NON_ENTITY_FK_TARGETS — add it there with a one-line reason, or point it at an entity.`,
       );
     expect(unexplained).toEqual([]);
+  });
+
+  it("every direct entity-to-entity FK is declared in the source entity's references", () => {
+    const missing = introspectFkEdges()
+      .filter(
+        (
+          edge,
+        ): edge is IntrospectedEdge & {
+          sourceEntity: Entity;
+          targetEntity: Entity;
+        } => edge.sourceEntity !== undefined && edge.targetEntity !== undefined,
+      )
+      .filter(
+        (edge) =>
+          !(
+            entityManifest[edge.sourceEntity].references as readonly Entity[]
+          ).includes(edge.targetEntity),
+      )
+      .map(
+        (edge) =>
+          `\`${edge.key}\` points from ${edge.sourceEntity} to ${edge.targetEntity}, but \`entityManifest.${edge.sourceEntity}.references\` does not include "${edge.targetEntity}".`,
+      );
+
+    expect(missing).toEqual([]);
   });
 });

@@ -37,6 +37,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { purchase, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -58,6 +59,14 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { foldChargeInto } from "~/server/repo/purchase";
+
+export const VENDOR_DELETE_EDGE_POLICY = {
+  "Purchase.vendorId": "block-live-purchase",
+} as const satisfies IncomingEdgePolicy<"vendor", "block-live-purchase">;
+
+export const VENDOR_MERGE_EDGE_POLICY = {
+  "Purchase.vendorId": "repoint-or-fold-by-order",
+} as const satisfies IncomingEdgePolicy<"vendor", "repoint-or-fold-by-order">;
 
 /**
  * `purchaseCount` and `spend`, as correlated scalar subqueries rather than a

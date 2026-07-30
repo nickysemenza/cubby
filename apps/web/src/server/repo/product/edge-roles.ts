@@ -49,7 +49,7 @@
  */
 
 import type { AppErrorReason } from "@cubby/shared";
-import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 
 export type ProductEdgeRole =
   | {
@@ -94,7 +94,7 @@ export const PRODUCT_EDGE_ROLES = {
     kind: "metadata",
     why: "a photo or manual attachment says nothing about ownership",
   },
-} as const satisfies Record<IncomingEdgeKey<"product">, ProductEdgeRole>;
+} as const satisfies IncomingEdgePolicy<"product", ProductEdgeRole>;
 
 /**
  * The subset of `product`'s incoming edges whose role retains the product —

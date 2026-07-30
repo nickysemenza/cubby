@@ -13,12 +13,14 @@
  * it entirely) is not a property of the edge itself: `image`'s six edges
  * disposition differently under a hard delete (`deleteRow`/`clearFk` — see
  * `IMAGE_HARD_DELETE` in repo/image.ts) than they would under some other
- * operation, and `product`'s five edges split into "acquisition" vs "metadata"
+ * operation, and `product`'s six edges split into acquisition/history/metadata
  * roles differently again depending on which predicate is asking. A per-edge
  * global disposition would be wrong on the facts, not merely weak. Each
- * predicate that cares owns its own `Record<IncomingEdgeKey<E>, ...>` keyed off
- * this map, so a new edge here is a compile error at every predicate until it's
- * been given a disposition there.
+ * operation that cares owns an `IncomingEdgePolicy<E, ...>` (or a stable role
+ * map keyed by it), so a new edge here is a compile error at every operation
+ * until it has been given a disposition there. The runtime key-set guard lives
+ * in `repo/entity-edge-operation-policies.unit.test.ts`; the corresponding
+ * repository integration tests backstop the actual SQL behavior.
  *
  * Cross-checked against schema.ts by entity-manifest-fk.unit.test.ts, which
  * introspects every `pgTable` in schema.ts and asserts:
@@ -181,3 +183,16 @@ export const INCOMING_EDGES = {
 /** The declared incoming-edge keys for entity `E` — e.g. `IncomingEdgeKey<"image">`. */
 export type IncomingEdgeKey<E extends Entity> =
   keyof (typeof INCOMING_EDGES)[E];
+
+/**
+ * An operation-specific decision for every incoming edge of `E`.
+ *
+ * Keep the disposition type local to the operation: deleting a purchase
+ * detaches its expenses, while merging one re-points those same rows. This
+ * alias supplies exhaustiveness without pretending the edge has one global
+ * behavior.
+ */
+export type IncomingEdgePolicy<E extends Entity, Disposition> = Record<
+  IncomingEdgeKey<E>,
+  Disposition
+>;

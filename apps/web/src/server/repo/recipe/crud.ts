@@ -35,6 +35,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { countBy } from "es-toolkit";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   image,
   ingredient,
@@ -74,6 +75,18 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+export const RECIPE_DELETE_EDGE_POLICY = {
+  "RecipeSection.recipeId": "soft-delete-owned-row",
+  "Ingredient.recipeId": "preserve-sub-recipe-pointer",
+  "MealRecipe.recipeId": "soft-delete-association",
+  "RecipeImage.recipeId": "soft-delete-association",
+} as const satisfies IncomingEdgePolicy<
+  "recipe",
+  | "soft-delete-owned-row"
+  | "preserve-sub-recipe-pointer"
+  | "soft-delete-association"
+>;
 
 import {
   dbRecipeToAPI,

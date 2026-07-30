@@ -14,6 +14,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import type { Database } from "~/server/db";
+import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { meal, mealRecipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries, logAuditEntry } from "~/server/repo/audit-log";
@@ -32,6 +33,10 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { dbMealToAPI } from "./helpers";
+
+export const MEAL_DELETE_EDGE_POLICY = {
+  "MealRecipe.mealId": "soft-delete-association",
+} as const satisfies IncomingEdgePolicy<"meal", "soft-delete-association">;
 
 const fetchMealById = async (db: Database, id: MealId) => {
   const row = await getDb(db).query.meal.findFirst({
