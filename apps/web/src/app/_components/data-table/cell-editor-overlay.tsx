@@ -127,6 +127,7 @@ export function CellEditorOverlay({
     // biome-ignore lint/a11y/noStaticElementInteractions: propagation guards for row click + table row-nav keys
     <div
       ref={overlayRef}
+      data-slot="cell-editor-overlay"
       style={style}
       className="w-max rounded-md border bg-popover px-2 py-1"
       onClick={(e) => e.stopPropagation()}

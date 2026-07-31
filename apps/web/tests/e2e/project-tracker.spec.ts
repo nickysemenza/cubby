@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { fillCellEditor, openCommandPalette } from "./e2e-helpers";
 
 /**
  * Coverage for the new (DB-backed) project-tracker surfaces: /projects
@@ -211,10 +212,7 @@ test.describe("Project tracker", () => {
       has: page.getByRole("link", { name, exact: true }),
     });
     await nameCell.getByRole("button", { name: "Edit value" }).dblclick();
-    const nameInput = page.locator("input:focus");
-    await expect(nameInput).toBeVisible({ timeout: 5000 });
-    await nameInput.fill(editedName);
-    await nameInput.press("Enter");
+    await fillCellEditor(page, editedName);
 
     // Assert the edited value renders (react-query invalidation round trip) —
     // more stable than a full page reload, and still proves the mutation
@@ -246,11 +244,9 @@ test.describe("Project tracker", () => {
 
     // Open the palette via the header's search trigger — same affordance as
     // Cmd/Ctrl+K (owned by __root.tsx), stabler to drive headlessly than a
-    // synthetic key chord.
-    await page.getByRole("button", { name: "Search" }).click();
-
-    const palette = page.getByRole("dialog");
-    await expect(palette).toBeVisible({ timeout: 10000 });
+    // synthetic key chord. openCommandPalette waits out the just-closed create
+    // dialog's fading backdrop before clicking (see helper).
+    const palette = await openCommandPalette(page);
     const searchInput = palette.getByPlaceholder(
       "Search, jump to a page, or ask Cubby…",
     );
@@ -269,10 +265,13 @@ test.describe("Project tracker", () => {
     await searchInput.fill(`tasks:${name}`);
 
     // Target the search-result name node specifically; the Ask Cubby action
-    // below the results also contains the literal query.
-    const resultName = palette.locator("div.truncate.text-sm", {
-      hasText: name,
-    });
+    // below the results also contains the literal query. `.first()` because the
+    // two-stage search (lexical → hybrid) can render the same task in two rows;
+    // both open the same detail page, so either is a valid target and picking
+    // one keeps the visibility check + click from tripping strict mode.
+    const resultName = palette
+      .locator("div.truncate.text-sm", { hasText: name })
+      .first();
     await expect(resultName).toBeVisible({ timeout: 10000 });
     const resultItem = resultName.locator("xpath=ancestor::*[@cmdk-item]");
     await expect(resultItem.getByText("task", { exact: true })).toBeVisible();
@@ -296,8 +295,7 @@ test.describe("Project tracker", () => {
     });
 
     // The exhaustive search page receives the clean query and selected type.
-    await page.getByRole("button", { name: "Search" }).click();
-    const reopenedPalette = page.getByRole("dialog");
+    const reopenedPalette = await openCommandPalette(page);
     await reopenedPalette
       .getByPlaceholder("Search, jump to a page, or ask Cubby…")
       .fill(`task:${name}`);
@@ -417,12 +415,10 @@ test.describe("Project tracker", () => {
     await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
 
     await driveRow.getByRole("button", { name: "Edit value" }).click();
-    await page.locator("input:focus").fill(driveUrl);
-    await page.locator("input:focus").press("Enter");
+    await fillCellEditor(page, driveUrl);
 
     await notionRow.getByRole("button", { name: "Edit value" }).click();
-    await page.locator("input:focus").fill(notionUrl);
-    await page.locator("input:focus").press("Enter");
+    await fillCellEditor(page, notionUrl);
 
     const driveLink = driveRow.getByRole("link", { name: "Open folder" });
     const notionLink = notionRow.getByRole("link", { name: "Open page" });
@@ -435,10 +431,10 @@ test.describe("Project tracker", () => {
 
     // A provider mismatch is rejected and leaves the last valid anchor intact.
     await driveRow.getByRole("button", { name: "Edit value" }).click();
-    await page
-      .locator("input:focus")
-      .fill("https://notion.so/Wrong-provider-0123456789abcdef");
-    await page.locator("input:focus").press("Enter");
+    await fillCellEditor(
+      page,
+      "https://notion.so/Wrong-provider-0123456789abcdef",
+    );
     await expect(
       page.getByText("Enter a valid Google Drive folder URL").first(),
     ).toBeVisible({ timeout: 10000 });
@@ -447,14 +443,12 @@ test.describe("Project tracker", () => {
 
     // Clearing the shared inline text editor removes each optional URL.
     await driveRow.getByRole("button", { name: "Edit value" }).click();
-    await page.locator("input:focus").fill("");
-    await page.locator("input:focus").press("Enter");
+    await fillCellEditor(page, "");
     await expect(driveLink).toHaveCount(0);
     await expect(driveRow.getByText("Add", { exact: true })).toBeVisible();
 
     await notionRow.getByRole("button", { name: "Edit value" }).click();
-    await page.locator("input:focus").fill("");
-    await page.locator("input:focus").press("Enter");
+    await fillCellEditor(page, "");
     await expect(notionLink).toHaveCount(0);
     await expect(notionRow.getByText("Add", { exact: true })).toBeVisible();
   });

@@ -81,6 +81,63 @@ export async function fillInput(
   await input.blur();
 }
 
+/**
+ * Locate the inline cell editor's input.
+ *
+ * `EditableCell`'s editor is portaled to <body> via `CellEditorOverlay`, so it
+ * is NOT under the row it edits. Scope by the overlay's stable `data-slot`
+ * instead of `input:focus` — the editor's `autoFocus` is a race (the trigger
+ * can keep focus after the opening click, and the input is briefly
+ * `disabled={isPending}` during a commit), so `input:focus` intermittently
+ * matches nothing and hangs `.fill()` for the full test timeout. Only one
+ * editor overlay is mounted at a time (`edit.isEditing`), so no row scoping is
+ * needed.
+ */
+function cellEditorInput(page: Page): Locator {
+  return page.locator('[data-slot="cell-editor-overlay"] input');
+}
+
+/**
+ * Fill the open inline cell editor and commit with Enter.
+ *
+ * The caller opens the editor first (clicking "Edit value"). `.fill()` focuses
+ * the element itself, so this never depends on `autoFocus` landing; the
+ * `toBeEnabled` wait rides out the `disabled={isPending}` window.
+ */
+export async function fillCellEditor(page: Page, value: string) {
+  const input = cellEditorInput(page);
+  await expect(input).toBeVisible();
+  await expect(input).toBeEnabled();
+  await input.fill(value);
+  await input.press("Enter");
+}
+
+/**
+ * Open the global command palette via the header "Search" trigger and return
+ * its dialog.
+ *
+ * `exact: true` is load-bearing: a non-exact name is a substring match, and the
+ * ProblemsBadge renders an "N missing a search embedding — Click to view" link
+ * (role=button) whenever a freshly-created entity hasn't been embedded yet —
+ * that "search" substring collides with the trigger and trips strict mode
+ * intermittently. This was the shard-2 command-palette flake.
+ *
+ * The overlay-count wait is secondary hardening: a dialog that just closed
+ * (e.g. a quick-add form) keeps its Base UI backdrop (`data-slot="dialog-overlay"`,
+ * `fixed inset-0 z-50`) mounted for its ~100ms fade-out, and that backdrop can
+ * intercept pointer events over the trigger while `expect(dialog).not.toBeVisible()`
+ * (which only checks the dialog *panel*) has already passed.
+ */
+export async function openCommandPalette(page: Page): Promise<Locator> {
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0);
+  const trigger = page.getByRole("button", { name: "Search", exact: true });
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  const palette = page.getByRole("dialog");
+  await expect(palette).toBeVisible({ timeout: 10000 });
+  return palette;
+}
+
 // Helper to create a location via UI. Asserts the id-bearing detail URL and
 // that the name renders, so callers (and the create-location spec) get the same
 // coverage the inline flow used to.
