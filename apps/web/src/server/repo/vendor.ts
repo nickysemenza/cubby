@@ -12,6 +12,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { PurchaseId, VendorId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -61,12 +62,22 @@ import {
 import { foldChargeInto } from "~/server/repo/purchase";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
-  "Purchase.vendorId": "block-live-purchase",
-} as const satisfies IncomingEdgePolicy<"vendor", "block-live-purchase">;
+  "Purchase.vendorId": {
+    code: "block-live-purchase",
+    effect: "block",
+    description:
+      "A vendor with charges still pointing at it can't be deleted — a vendor with purchases is load-bearing history.",
+  },
+} as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
-  "Purchase.vendorId": "repoint-or-fold-by-order",
-} as const satisfies IncomingEdgePolicy<"vendor", "repoint-or-fold-by-order">;
+  "Purchase.vendorId": {
+    code: "repoint-or-fold-by-order",
+    effect: "repoint",
+    description:
+      "A merged vendor's charges re-point onto the surviving vendor; charges that collide on the same order id are folded into one instead.",
+  },
+} as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 /**
  * `purchaseCount` and `spend`, as correlated scalar subqueries rather than a

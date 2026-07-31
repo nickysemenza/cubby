@@ -34,10 +34,48 @@ describe("entity manifest", () => {
     }
   });
 
-  it("references only valid entities", () => {
+  it("relates only to valid entities", () => {
     for (const entity of allEntities) {
-      for (const ref of entityManifest[entity].references) {
-        expect(entitySchema.options).toContain(ref);
+      for (const rel of entityManifest[entity].relationships) {
+        expect(entitySchema.options).toContain(rel.target);
+      }
+    }
+  });
+
+  it("gives each of an entity's relationships a unique key", () => {
+    // Two relationships can share a target (project's `parent` and
+    // `blocked-by` both reach project), so the key — not the target — is what
+    // identifies one. A duplicate key would silently collapse them everywhere
+    // downstream.
+    for (const entity of allEntities) {
+      const keys = entityManifest[entity].relationships.map((r) => r.key);
+      expect(sorted(keys)).toEqual(sorted([...new Set(keys)]));
+    }
+  });
+
+  it("only claims a delete lifecycle for entities with a table", () => {
+    for (const entity of allEntities) {
+      const { dbTable, lifecycle } = entityManifest[entity];
+      expect(lifecycle.delete === null).toBe(dbTable === null);
+    }
+  });
+
+  it("hard-deletes exactly `image`", () => {
+    // `softDelete` (does the table carry a `deletedAt` column?) and
+    // `lifecycle.delete.mode` (what does the delete OPERATION do?) are
+    // independent, and `image` is where they disagree: the Image table has a
+    // `deletedAt`, but `deleteImages` removes the row and the R2 object
+    // outright, because a tombstoned image whose bytes are gone is worse than
+    // no row at all. Asserting the hard set by value keeps that deliberate
+    // mismatch from being "corrected" into agreement later.
+    const hard = allEntities.filter(
+      (e) => entityManifest[e].lifecycle.delete?.mode === "hard",
+    );
+    expect(hard).toEqual(["image"]);
+    // A soft delete still requires the column that makes it possible.
+    for (const entity of allEntities) {
+      if (entityManifest[entity].lifecycle.delete?.mode === "soft") {
+        expect(entityManifest[entity].softDelete).toBe(true);
       }
     }
   });

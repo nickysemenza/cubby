@@ -2,6 +2,7 @@ import { cookbookId } from "@cubby/schemas/identifiers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
 import { z } from "zod";
+import { EntityIntegrityTab } from "~/app/_components/entities/EntityIntegrityTab";
 import { EntityManifestGrid } from "~/app/_components/entities/EntityManifestGrid";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import { RecipeDependencyGraph } from "~/app/_components/visualizations/recipe-dependency-graph";
@@ -15,7 +16,7 @@ const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
   // it preserves the pre-merge /entities content (and its zero-query cost);
   // the recipe graph is opt-in via ?tab=recipes (the recipes-list Graph button).
-  tab: z.enum(["recipes", "schema"]).optional().catch(undefined),
+  tab: z.enum(["recipes", "schema", "integrity"]).optional().catch(undefined),
   // Recipe-graph filters (migrated from the old /recipes/graph route). Branded
   // at the route boundary so garbage ?cookbookId= values are rejected here.
   cookbookId: cookbookId.optional().catch(undefined),
@@ -41,10 +42,16 @@ function EntitiesRoute() {
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
         <TabsList variant="line">
           <TabsTrigger value="schema">Schema</TabsTrigger>
+          <TabsTrigger value="integrity">Integrity</TabsTrigger>
           <TabsTrigger value="recipes">Recipe graph</TabsTrigger>
         </TabsList>
         <TabsContent value="schema">
           <EntityManifestGrid />
+        </TabsContent>
+        {/* Same reasoning as the recipe graph below: the catalog query and the
+            Problems audit it cross-references only fire once this tab opens. */}
+        <TabsContent value="integrity">
+          <EntityIntegrityTab />
         </TabsContent>
         {/* Filters + graph live inside the tab content so their queries
             (listCookbooks, getDependencyGraph) fire only when this tab opens. */}

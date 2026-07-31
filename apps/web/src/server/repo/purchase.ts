@@ -15,6 +15,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   ExpenseId,
   PurchaseId,
@@ -81,20 +82,34 @@ import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { assertVendorLive } from "~/server/repo/vendor";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
-  "Expense.purchaseId": "clear-live-fk-with-audit",
-  "PurchaseImage.purchaseId": "soft-delete-association",
-} as const satisfies IncomingEdgePolicy<
-  "purchase",
-  "clear-live-fk-with-audit" | "soft-delete-association"
->;
+  "Expense.purchaseId": {
+    code: "clear-live-fk-with-audit",
+    effect: "detach",
+    description:
+      "Deleting a charge nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a charge must never delete spend. Each detach is logged to the audit trail.",
+  },
+  "PurchaseImage.purchaseId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the purchase; the underlying images are not.",
+  },
+} as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
-  "Expense.purchaseId": "repoint-live-fk-with-audit",
-  "PurchaseImage.purchaseId": "move-dedupe-and-soft-delete-source",
-} as const satisfies IncomingEdgePolicy<
-  "purchase",
-  "repoint-live-fk-with-audit" | "move-dedupe-and-soft-delete-source"
->;
+  "Expense.purchaseId": {
+    code: "repoint-live-fk-with-audit",
+    effect: "repoint",
+    description:
+      "Merging a charge re-points its expenses onto the surviving charge, logged to the audit trail.",
+  },
+  "PurchaseImage.purchaseId": {
+    code: "move-dedupe-and-soft-delete-source",
+    effect: "move-dedupe",
+    description:
+      "The absorbed charge's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
+  },
+} as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 /**
  * A charge's line count and line total, as correlated scalar subqueries.

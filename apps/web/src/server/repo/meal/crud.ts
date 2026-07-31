@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -35,8 +36,13 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { dbMealToAPI } from "./helpers";
 
 export const MEAL_DELETE_EDGE_POLICY = {
-  "MealRecipe.mealId": "soft-delete-association",
-} as const satisfies IncomingEdgePolicy<"meal", "soft-delete-association">;
+  "MealRecipe.mealId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Deleting a meal soft-deletes its planned recipes; the recipes themselves are untouched.",
+  },
+} as const satisfies IncomingEdgePolicy<"meal", OperationDisposition>;
 
 const fetchMealById = async (db: Database, id: MealId) => {
   const row = await getDb(db).query.meal.findFirst({

@@ -157,7 +157,7 @@ describe("entity manifest FK guard", () => {
     expect(unexplained).toEqual([]);
   });
 
-  it("every direct entity-to-entity FK is declared in the source entity's references", () => {
+  it("every direct entity-to-entity FK is covered by a relationship path", () => {
     const missing = introspectFkEdges()
       .filter(
         (
@@ -169,15 +169,175 @@ describe("entity manifest FK guard", () => {
       )
       .filter(
         (edge) =>
-          !(
-            entityManifest[edge.sourceEntity].references as readonly Entity[]
-          ).includes(edge.targetEntity),
+          !entityManifest[edge.sourceEntity].relationships.some(
+            (rel) =>
+              rel.target === edge.targetEntity &&
+              rel.provenance.kind === "local-path" &&
+              rel.provenance.steps.some(
+                (step) =>
+                  step.edge === edge.key && step.direction === "outgoing",
+              ),
+          ),
       )
       .map(
         (edge) =>
-          `\`${edge.key}\` points from ${edge.sourceEntity} to ${edge.targetEntity}, but \`entityManifest.${edge.sourceEntity}.references\` does not include "${edge.targetEntity}".`,
+          `\`${edge.key}\` points from ${edge.sourceEntity} to ${edge.targetEntity}, but no \`entityManifest.${edge.sourceEntity}.relationships\` entry walks it outgoing to "${edge.targetEntity}".`,
       );
 
     expect(missing).toEqual([]);
+  });
+});
+
+/**
+ * The claim `relationships` makes that the old flat `references: Entity[]`
+ * could not: not just THAT recipe reaches ingredient, but through exactly which
+ * foreign keys, in which direction. That turns a doc comment into something
+ * Drizzle's own metadata can adjudicate — the join-table and multi-hop entries
+ * were previously unguarded by any test at all.
+ */
+describe("relationship provenance", () => {
+  /** `Table.column` -> the table that FK points AT. Every FK in schema.ts. */
+  const FK_TARGET = new Map<string, string>();
+  for (const edge of introspectFkEdges()) {
+    FK_TARGET.set(edge.key, edge.targetTableName);
+  }
+
+  /** The table a step's edge lives ON — the left half of its `Table.column` key. */
+  const sourceTableOf = (edgeKey: string): string => {
+    const [table] = edgeKey.split(".");
+    return table ?? "";
+  };
+
+  it("walks every local path across real FKs, landing on the declared target", () => {
+    const failures: string[] = [];
+
+    for (const entity of entities) {
+      const startTable = entityManifest[entity].dbTable;
+      for (const rel of entityManifest[entity].relationships) {
+        if (rel.provenance.kind !== "local-path") continue;
+        const where = `${entity}.${rel.key}`;
+
+        if (!startTable) {
+          failures.push(
+            `${where}: source entity has no dbTable to start from.`,
+          );
+          continue;
+        }
+
+        // Walk it. `at` is the table we are standing on; each step must be an
+        // FK that actually touches it, and moves us to the other end.
+        let at: string = startTable;
+        let broke = false;
+        for (const step of rel.provenance.steps) {
+          const target = FK_TARGET.get(step.edge);
+          if (target === undefined) {
+            failures.push(`${where}: \`${step.edge}\` is not a real FK.`);
+            broke = true;
+            break;
+          }
+          const holder = sourceTableOf(step.edge);
+
+          if (step.direction === "outgoing") {
+            // Walk the FK forwards: must start on the table holding it.
+            if (holder !== at) {
+              failures.push(
+                `${where}: step \`${step.edge}\` outgoing expects to be on ${holder}, but the path is on ${at}.`,
+              );
+              broke = true;
+              break;
+            }
+            at = target;
+          } else {
+            // Walk it backwards: must start on the table it points at.
+            if (target !== at) {
+              failures.push(
+                `${where}: step \`${step.edge}\` incoming expects to be on ${target}, but the path is on ${at}.`,
+              );
+              broke = true;
+              break;
+            }
+            at = holder;
+          }
+        }
+        if (broke) continue;
+
+        const declared = entityManifest[rel.target].dbTable;
+        if (at !== declared) {
+          failures.push(
+            `${where}: path ends on ${at}, but target "${rel.target}" is ${declared}.`,
+          );
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  it("backs every unconstrained relationship with an edge marked unconstrained", () => {
+    const failures: string[] = [];
+    for (const entity of entities) {
+      for (const rel of entityManifest[entity].relationships) {
+        if (rel.provenance.kind !== "unconstrained") continue;
+        const { edge } = rel.provenance;
+        // It must NOT be a real FK (that's what unconstrained means) and it
+        // must be declared as such on the target's incoming edges.
+        if (FK_TARGET.has(edge)) {
+          failures.push(
+            `${entity}.${rel.key}: \`${edge}\` IS a real FK — declare it as a local-path instead.`,
+          );
+          continue;
+        }
+        const declared = (
+          INCOMING_EDGES[rel.target] as Record<string, { unconstrained?: true }>
+        )[edge];
+        if (!declared?.unconstrained) {
+          failures.push(
+            `${entity}.${rel.key}: \`${edge}\` is not marked \`unconstrained\` in INCOMING_EDGES.${rel.target}.`,
+          );
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("names real source columns on every external relationship", () => {
+    // No FK to check (the other system has no table here), so the guard is
+    // that the columns carrying the link actually exist.
+    const COLUMNS = new Set<string>();
+    for (const table of ALL_TABLES) {
+      const config = getTableConfig(table);
+      for (const column of config.columns) {
+        COLUMNS.add(`${config.name}.${column.name}`);
+      }
+    }
+
+    const failures: string[] = [];
+    for (const entity of entities) {
+      for (const rel of entityManifest[entity].relationships) {
+        if (rel.provenance.kind !== "external") continue;
+        for (const column of rel.provenance.sourceColumns) {
+          if (!COLUMNS.has(column)) {
+            failures.push(
+              `${entity}.${rel.key}: \`${column}\` is not a real column in schema.ts.`,
+            );
+          }
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("is not vacuous — the multi-hop and join-table paths are actually present", () => {
+    // The traversal above passes trivially if nobody declares a multi-step
+    // path, which is exactly the state this whole change exists to leave.
+    const steps = entities.flatMap((e) =>
+      entityManifest[e].relationships
+        .filter((r) => r.provenance.kind === "local-path")
+        .map((r) =>
+          r.provenance.kind === "local-path" ? r.provenance.steps.length : 0,
+        ),
+    );
+    expect(Math.max(...steps)).toBeGreaterThanOrEqual(4); // recipe → sub-recipes
+    expect(steps.filter((n) => n === 2).length).toBeGreaterThanOrEqual(6); // image galleries
   });
 });

@@ -5,6 +5,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -29,12 +30,19 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
-  "RecipeSectionIngredient.ingredientId": "block-live-recipe-usage",
-  "Product.ingredientId": "block-live-product",
-} as const satisfies IncomingEdgePolicy<
-  "ingredient",
-  "block-live-recipe-usage" | "block-live-product"
->;
+  "RecipeSectionIngredient.ingredientId": {
+    code: "block-live-recipe-usage",
+    effect: "block",
+    description:
+      "An ingredient still used in a live recipe can't be deleted — remove it from every recipe first.",
+  },
+  "Product.ingredientId": {
+    code: "block-live-product",
+    effect: "block",
+    description:
+      "An ingredient linked to a product can't be deleted — unlink or delete the product first.",
+  },
+} as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
 /**
  * Soft delete ingredients by setting deletedAt timestamp.

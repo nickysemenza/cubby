@@ -8,6 +8,7 @@
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import type {
   ProjectCreateInput,
@@ -51,20 +52,43 @@ import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
-  "Project.parentProjectId": "block-live-child",
-  "ProjectDependency.projectId": "hard-delete-dependency",
-  "ProjectDependency.blockedByProjectId": "hard-delete-dependency",
-  "Task.projectId": "block-live-task",
-  "Expense.projectId": "block-live-expense",
-  "ProjectImage.projectId": "soft-delete-association",
-} as const satisfies IncomingEdgePolicy<
-  "project",
-  | "block-live-child"
-  | "hard-delete-dependency"
-  | "block-live-task"
-  | "block-live-expense"
-  | "soft-delete-association"
->;
+  "Project.parentProjectId": {
+    code: "block-live-child",
+    effect: "block",
+    description:
+      "A project with live sub-projects can't be deleted — delete or reparent them first.",
+  },
+  "ProjectDependency.projectId": {
+    code: "hard-delete-dependency",
+    effect: "hard-delete",
+    description:
+      "Blocks/blocked-by dependency rows naming the project are removed outright.",
+  },
+  "ProjectDependency.blockedByProjectId": {
+    code: "hard-delete-dependency",
+    effect: "hard-delete",
+    description:
+      "Blocks/blocked-by dependency rows naming the project are removed outright.",
+  },
+  "Task.projectId": {
+    code: "block-live-task",
+    effect: "block",
+    description:
+      "A project with live tasks can't be deleted — delete or reassign them first.",
+  },
+  "Expense.projectId": {
+    code: "block-live-expense",
+    effect: "block",
+    description:
+      "A project with live expenses can't be deleted — delete or reassign them first.",
+  },
+  "ProjectImage.projectId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the project; the underlying images are not.",
+  },
+} as const satisfies IncomingEdgePolicy<"project", OperationDisposition>;
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
 type ProjectUpdateData = ProjectUpdateInput["data"];

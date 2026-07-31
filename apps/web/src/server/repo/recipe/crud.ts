@@ -4,6 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -77,16 +78,31 @@ import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 export const RECIPE_DELETE_EDGE_POLICY = {
-  "RecipeSection.recipeId": "soft-delete-owned-row",
-  "Ingredient.recipeId": "preserve-sub-recipe-pointer",
-  "MealRecipe.recipeId": "soft-delete-association",
-  "RecipeImage.recipeId": "soft-delete-association",
-} as const satisfies IncomingEdgePolicy<
-  "recipe",
-  | "soft-delete-owned-row"
-  | "preserve-sub-recipe-pointer"
-  | "soft-delete-association"
->;
+  "RecipeSection.recipeId": {
+    code: "soft-delete-owned-row",
+    effect: "soft-delete",
+    description:
+      "A recipe's sections, and their ingredient lines, are soft-deleted along with it.",
+  },
+  "Ingredient.recipeId": {
+    code: "preserve-sub-recipe-pointer",
+    effect: "preserve",
+    description:
+      "A deleted recipe's sub-recipe pointer is left untouched — parent recipes are recomputed and re-resolved rather than having this edge cascaded or guarded.",
+  },
+  "MealRecipe.recipeId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
+  },
+  "RecipeImage.recipeId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the recipe; the underlying images are not.",
+  },
+} as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
 
 import {
   dbRecipeToAPI,

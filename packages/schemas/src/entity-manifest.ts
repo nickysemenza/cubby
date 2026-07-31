@@ -1,6 +1,12 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { z } from "zod";
-import { type Entity, entitySchema } from "./entity";
+import type { Entity } from "./entity";
+import {
+  type EntityRelationship,
+  entityLifecycleSchema,
+  entityRelationshipSchema,
+  type RelationshipPathStep,
+} from "./entity-integrity";
 
 /**
  * The canonical, layer-shared descriptor of every entity in the system. This is
@@ -36,13 +42,20 @@ export const entityDescriptor = z.object({
   /** Non-default count filter, beyond `notDeleted`. */
   countFilter: z.enum(["recipeIdNull"]).optional(),
   /**
-   * Entities this one points AT in the reference graph — via a direct FK column,
-   * a join table (recipe→ingredient through recipeSectionIngredient, product→image
-   * through productImage), or a cross-system id link (product→usda-food through
-   * `fdc_id`, since USDA foods live in a separate worker, not a local FK). Every
-   * image-bearing entity references `image`.
+   * Entities this one points AT in the reference graph, each with the storage
+   * mechanism that realizes it: a direct FK column, a join-table hop, a
+   * multi-hop path, an unconstrained pointer, or a cross-system id link.
+   *
+   * This replaced a flat `Entity[]`. The old shape said *that* recipe reaches
+   * ingredient but not *how*, so nothing could check the claim — the join-table
+   * and cross-system entries were unguarded by any test. Declaring the FK path
+   * makes every local relationship verifiable against Drizzle's own metadata
+   * (see the path-traversal test in entity-manifest-fk.unit.test.ts), which is
+   * the whole reason for the extra structure.
    */
-  references: z.array(entitySchema).readonly(),
+  relationships: z.array(entityRelationshipSchema).readonly(),
+  /** Which removal paths exist for this entity — drives the lifecycle registry. */
+  lifecycle: entityLifecycleSchema,
   /** CRUD operations exposed over MCP. */
   mcp: z.array(mcpOp).readonly(),
   /** Whether the tRPC router is built from the shared crud-factory or hand-rolled. */
@@ -51,6 +64,69 @@ export const entityDescriptor = z.object({
 export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 
 const ALL_MCP = ["get", "list", "create", "update", "delete"] as const;
+
+// --- relationship builders -------------------------------------------------
+// A path starts at the source entity's own table; each step moves to another
+// table. `outgoing` walks an FK from the table HOLDING the column toward the
+// table it points at; `incoming` walks it backwards, from the pointed-at table
+// to the holder. So reaching image from product is two steps: incoming to the
+// ProductImage join row, then outgoing to the Image it names.
+
+const out = (edge: string) => ({ edge, direction: "outgoing" }) as const;
+const inc = (edge: string) => ({ edge, direction: "incoming" }) as const;
+
+/** A relationship realized by one or more real FK hops. */
+const path = (
+  key: string,
+  label: string,
+  target: Entity,
+  ...steps: RelationshipPathStep[]
+): EntityRelationship => ({
+  key,
+  label,
+  target,
+  provenance: { kind: "local-path", steps },
+});
+
+/** A relationship the app walks with no DB-level FK behind it. */
+const unconstrained = (
+  key: string,
+  label: string,
+  target: Entity,
+  edge: string,
+): EntityRelationship => ({
+  key,
+  label,
+  target,
+  provenance: { kind: "unconstrained", edge },
+});
+
+/** A link into a system with no local table. */
+const external = (
+  key: string,
+  label: string,
+  target: Entity,
+  system: string,
+  sourceColumns: string[],
+): EntityRelationship => ({
+  key,
+  label,
+  target,
+  provenance: { kind: "external", system, sourceColumns },
+});
+
+/** The image gallery hop every image-bearing entity has: `<E>Image` join row. */
+const imageGallery = (
+  joinTable: string,
+  fkColumn: string,
+): EntityRelationship =>
+  path(
+    "images",
+    "Images",
+    "image",
+    inc(`${joinTable}.${fkColumn}`),
+    out(`${joinTable}.imageId`),
+  );
 
 export const entityManifest = {
   product: {
@@ -62,7 +138,23 @@ export const entityManifest = {
     hasImages: true,
     searchable: true,
     countable: true,
-    references: ["ingredient", "image", "usda-food"],
+    relationships: [
+      path(
+        "ingredient",
+        "Ingredient",
+        "ingredient",
+        out("Product.ingredientId"),
+      ),
+      imageGallery("ProductImage", "productId"),
+      // Not one column: the USDA link resolves UPC-first and falls back to an
+      // explicit fdc_id (see usda-link-resolved-at-query-time), so declaring
+      // only `fdc_id` would understate how a product actually reaches a food.
+      external("usda-food", "USDA food", "usda-food", "usda-api", [
+        "Product.upc",
+        "Product.fdc_id",
+      ]),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -75,9 +167,37 @@ export const entityManifest = {
     hasImages: true,
     searchable: true,
     countable: true,
-    // recipe→recipe: a recipe can use another recipe as a sub-recipe ingredient
-    // (the sub-recipe dependency the costing/availability engines cascade through).
-    references: ["cookbook", "ingredient", "image", "recipe"],
+    relationships: [
+      path("cookbook", "Cookbook", "cookbook", out("Recipe.cookbookId")),
+      imageGallery("RecipeImage", "recipeId"),
+      // Three hops: down into the recipe's sections, into each section's
+      // ingredient lines, then out to the ingredient the line names.
+      path(
+        "ingredients",
+        "Ingredients",
+        "ingredient",
+        inc("RecipeSection.recipeId"),
+        inc("RecipeSectionIngredient.recipeSectionId"),
+        out("RecipeSectionIngredient.ingredientId"),
+      ),
+      // The sub-recipe dependency the costing/availability engines cascade
+      // through — and the one relationship in the manifest that is genuinely
+      // four hops. It is the ingredient path above plus one more step: a
+      // recipe used as an ingredient is an Ingredient row whose `recipeId`
+      // points back at a Recipe, so the last hop leaves the ingredient graph
+      // and re-enters the recipe graph. Nothing shorter expresses it: there is
+      // no Recipe→Recipe column anywhere in the schema.
+      path(
+        "sub-recipes",
+        "Sub-recipes",
+        "recipe",
+        inc("RecipeSection.recipeId"),
+        inc("RecipeSectionIngredient.recipeSectionId"),
+        out("RecipeSectionIngredient.ingredientId"),
+        out("Ingredient.recipeId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "custom",
   },
@@ -92,7 +212,13 @@ export const entityManifest = {
     // Rows with a non-null recipeId are recipe-as-ingredient pointers, not real
     // ingredients — the list/count surfaces exclude them.
     countFilter: "recipeIdNull",
-    references: ["recipe"],
+    relationships: [
+      // A non-null recipeId makes this row a recipe-as-ingredient pointer.
+      // Deliberately survives the recipe's deletion — see the
+      // `allow-target-deleted` liveness rule on `Ingredient.recipeId`.
+      path("recipe", "Recipe", "recipe", out("Ingredient.recipeId")),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -104,7 +230,12 @@ export const entityManifest = {
     hasImages: true,
     searchable: true,
     countable: true,
-    references: ["image"],
+    relationships: [
+      path("cover", "Cover image", "image", out("Cookbook.coverImageId")),
+    ],
+    // Non-bulk: deleting a cookbook cascades through every recipe it imported,
+    // so it is one at a time and confirmed.
+    lifecycle: { delete: { mode: "soft", bulk: false }, merge: false },
     mcp: ["list"],
     routerStyle: "custom",
   },
@@ -117,7 +248,16 @@ export const entityManifest = {
     hasImages: true,
     searchable: true,
     countable: true,
-    references: ["location", "image"],
+    relationships: [
+      unconstrained(
+        "parent",
+        "Parent location",
+        "location",
+        "Location.parentId",
+      ),
+      imageGallery("LocationImage", "locationId"),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -129,7 +269,16 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    references: ["product", "location"],
+    relationships: [
+      path("product", "Product", "product", out("InventoryEntry.productId")),
+      path(
+        "location",
+        "Location",
+        "location",
+        out("InventoryEntry.locationId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -141,7 +290,16 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    references: ["recipe"],
+    relationships: [
+      path(
+        "recipes",
+        "Recipes",
+        "recipe",
+        inc("MealRecipe.mealId"),
+        out("MealRecipe.recipeId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -153,8 +311,27 @@ export const entityManifest = {
     hasImages: true,
     searchable: true,
     countable: true,
-    // project→project: Blocked-by/Blocking dependency edges (ProjectDependency).
-    references: ["project", "image"],
+    relationships: [
+      path(
+        "parent",
+        "Parent project",
+        "project",
+        out("Project.parentProjectId"),
+      ),
+      // Distinct from the parent hierarchy above: a separate join table, and a
+      // separate meaning. Two relationships to the same target entity, which is
+      // exactly why relationship keys are unique per source rather than keyed
+      // by target.
+      path(
+        "blocked-by",
+        "Blocked by",
+        "project",
+        inc("ProjectDependency.projectId"),
+        out("ProjectDependency.blockedByProjectId"),
+      ),
+      imageGallery("ProjectImage", "projectId"),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "custom",
   },
@@ -166,9 +343,25 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    // task→task: Blocked-by/Blocking dependency edges (TaskDependency).
-    // task→product: optional subject — the thing this work is for.
-    references: ["project", "product", "task"],
+    relationships: [
+      path("project", "Project", "project", out("Task.projectId")),
+      // The optional subject — the thing this work is for.
+      path(
+        "subject",
+        "Subject product",
+        "product",
+        out("Task.subjectProductId"),
+      ),
+      path("parent", "Parent task", "task", out("Task.parentTaskId")),
+      path(
+        "blocked-by",
+        "Blocked by",
+        "task",
+        inc("TaskDependency.taskId"),
+        out("TaskDependency.blockedByTaskId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -185,7 +378,10 @@ export const entityManifest = {
     // rows that mention it are already indexed.
     searchable: false,
     countable: true,
-    references: [],
+    relationships: [],
+    // Deletable in the app (blocked while live charges reference it), and
+    // mergeable — two roster rows for one real vendor is a reported defect.
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     // No delete: `deleteVendors` refuses while live charges still reference the
     // vendor, and an agent has no way to rehome them.
     mcp: ["get", "list", "create", "update"],
@@ -202,7 +398,11 @@ export const entityManifest = {
     hasImages: true,
     searchable: false,
     countable: true,
-    references: ["vendor", "image"],
+    relationships: [
+      path("vendor", "Vendor", "vendor", out("Purchase.vendorId")),
+      imageGallery("PurchaseImage", "purchaseId"),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     // No delete: soft-deleting a charge nulls `purchaseId` on real money —
     // stays UI-only. The restructuring ops (split/link/merge) are NOT missing
     // from this list because they're withheld — they aren't CRUD ops at all, so
@@ -220,7 +420,12 @@ export const entityManifest = {
     hasImages: false,
     searchable: true,
     countable: true,
-    references: ["purchase", "project", "product"],
+    relationships: [
+      path("purchase", "Charge", "purchase", out("Expense.purchaseId")),
+      path("project", "Project", "project", out("Expense.projectId")),
+      path("product", "Product", "product", out("Expense.productId")),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -232,7 +437,9 @@ export const entityManifest = {
     hasImages: false,
     searchable: false,
     countable: false,
-    references: [],
+    relationships: [],
+    // No local table, so nothing to remove.
+    lifecycle: { delete: null, merge: false },
     mcp: ["get", "list"],
     routerStyle: "custom",
   },
@@ -244,7 +451,10 @@ export const entityManifest = {
     hasImages: false,
     searchable: false,
     countable: true,
-    references: [],
+    relationships: [],
+    // The one HARD delete in the system: `deleteImages` removes the row and the
+    // R2 object, so there is no tombstone to reason about.
+    lifecycle: { delete: { mode: "hard", bulk: true }, merge: false },
     mcp: [],
     routerStyle: "custom",
   },
@@ -256,11 +466,16 @@ export type EntityManifest = typeof entityManifest;
 export const allEntities = Object.keys(entityManifest) as Entity[];
 
 /**
- * Outgoing reference edges of an entity, widened from the `as const` manifest
- * tuple to `readonly Entity[]` (so `.includes(someEntity)` typechecks).
+ * The distinct entities `e` points at, derived from its relationships.
+ *
+ * Deliberately lossy: two relationships can share a target (project's `parent`
+ * and `blocked-by` both reach `project`), and this collapses them. It exists
+ * for the graph views, which draw one edge per entity pair; anything that needs
+ * to know *which* relationship, or how it is stored, reads `relationships`.
  */
-export const entityReferences = (e: Entity): readonly Entity[] =>
-  entityManifest[e].references;
+export const entityReferences = (e: Entity): readonly Entity[] => [
+  ...new Set(entityManifest[e].relationships.map((r) => r.target)),
+];
 
 // ---------------------------------------------------------------------------
 // Derived projections — the manifest flags are the only rosters. The conditional

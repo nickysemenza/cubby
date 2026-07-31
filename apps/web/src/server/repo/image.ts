@@ -21,6 +21,7 @@
  * Storage/network orchestration lives in image-storage.service.ts.
  */
 
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProjectId, RecipeId } from "@cubby/schemas/identifiers";
 import {
   unsafeLocationId,
@@ -564,19 +565,50 @@ export const cullPendingImages = async (
  * compile error here until it's dispositioned — the guard that would have
  * caught `PurchaseImage` shipping with no disposition in the first place.
  *
- * - `deleteRow` — a join table: delete the association row, detaching the
- *   image from whatever product/location/recipe/project/purchase owned it.
- * - `clearFk` — a direct FK column (`Cookbook.coverImageId` today): null it so
- *   the parent row survives, just without a cover.
+ * - `hard-delete` (`deleteRow`) — a join table: delete the association row,
+ *   detaching the image from whatever product/location/recipe/project/purchase
+ *   owned it.
+ * - `detach` (`clearFk`) — a direct FK column (`Cookbook.coverImageId` today):
+ *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
-  "Cookbook.coverImageId": "clearFk",
-  "ProductImage.imageId": "deleteRow",
-  "LocationImage.imageId": "deleteRow",
-  "RecipeImage.imageId": "deleteRow",
-  "ProjectImage.imageId": "deleteRow",
-  "PurchaseImage.imageId": "deleteRow",
-} satisfies IncomingEdgePolicy<"image", "deleteRow" | "clearFk">;
+  "Cookbook.coverImageId": {
+    code: "clearFk",
+    effect: "detach",
+    description:
+      "A cookbook's cover image is cleared, not cascaded — the cookbook survives without a cover.",
+  },
+  "ProductImage.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The product's image association is removed along with the image.",
+  },
+  "LocationImage.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The location's image association is removed along with the image.",
+  },
+  "RecipeImage.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The recipe's image association is removed along with the image.",
+  },
+  "ProjectImage.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The project's image association is removed along with the image.",
+  },
+  "PurchaseImage.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The purchase's image association is removed along with the image.",
+  },
+} satisfies IncomingEdgePolicy<"image", OperationDisposition>;
 
 /**
  * Hard-delete image rows and return their R2 keys so the caller can drop the
@@ -611,7 +643,7 @@ export const deleteImages = async (
 
     for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
       const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
-      if (disposition === "deleteRow") {
+      if (disposition.effect === "hard-delete") {
         await tx
           // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for delete()
           .delete(column.table as any)

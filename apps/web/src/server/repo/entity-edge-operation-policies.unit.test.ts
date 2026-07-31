@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { COOKBOOK_DELETE_EDGE_POLICY } from "~/server/repo/cookbook";
+import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
 import { IMAGE_HARD_DELETE } from "~/server/repo/image";
 import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
@@ -118,5 +120,40 @@ describe("product retaining edges", () => {
         .map(([key]) => key)
         .sort(),
     ).toEqual(RETAINING);
+  });
+});
+
+/**
+ * `ENTITY_LIFECYCLE_REGISTRY` is a hand-assembled collection, not a derived
+ * one — nothing forces a new `entityManifest` lifecycle claim to get a
+ * matching registry entry, or a stale registry entry to get removed when a
+ * manifest claim goes away. This is the runtime guard for that: every entity
+ * whose `lifecycle.delete` is non-null must have a `"delete"` entry here (and
+ * vice versa — no entry for an operation the manifest doesn't claim), and
+ * likewise for `lifecycle.merge`.
+ */
+describe("ENTITY_LIFECYCLE_REGISTRY matches entityManifest lifecycle claims", () => {
+  const hasEntry = (entity: Entity, operation: "delete" | "merge") =>
+    ENTITY_LIFECYCLE_REGISTRY.some(
+      (e) => e.entity === entity && e.operation === operation,
+    );
+
+  for (const entity of allEntities) {
+    const { lifecycle } = entityManifest[entity];
+
+    it(`${entity}: "delete" entry presence matches lifecycle.delete`, () => {
+      expect(hasEntry(entity, "delete")).toBe(lifecycle.delete !== null);
+    });
+
+    it(`${entity}: "merge" entry presence matches lifecycle.merge`, () => {
+      expect(hasEntry(entity, "merge")).toBe(lifecycle.merge);
+    });
+  }
+
+  it("has no duplicate (entity, operation) entries", () => {
+    const keys = ENTITY_LIFECYCLE_REGISTRY.map(
+      (e) => `${e.entity}:${e.operation}`,
+    );
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

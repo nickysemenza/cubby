@@ -4,6 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
@@ -67,13 +68,25 @@ import type {
 import { wouldCreateParentCycle } from "./tree";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
-  "InventoryEntry.locationId": "block-live-inventory",
-  "LocationImage.locationId": "soft-delete-association",
-  "Location.parentId": "clear-live-child-parent",
-} as const satisfies IncomingEdgePolicy<
-  "location",
-  "block-live-inventory" | "soft-delete-association" | "clear-live-child-parent"
->;
+  "InventoryEntry.locationId": {
+    code: "block-live-inventory",
+    effect: "block",
+    description:
+      "A location still holding inventory can't be deleted — move or remove the inventory first.",
+  },
+  "LocationImage.locationId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the location; the underlying images are not.",
+  },
+  "Location.parentId": {
+    code: "clear-live-child-parent",
+    effect: "detach",
+    description:
+      "A deleted location's children are orphaned to the root — their parentId is cleared rather than the deletion being blocked.",
+  },
+} as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
 // Verify a proposed parent location actually exists and isn't soft-deleted.
 // Without this, a dangling parentId silently inserts: wouldCreateParentCycle
