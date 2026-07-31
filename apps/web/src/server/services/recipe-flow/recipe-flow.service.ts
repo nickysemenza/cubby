@@ -37,6 +37,12 @@ const FLOW_MODELS = new Set<SupportedChatModel>(
 
 type FlowCandidate = StoredAiAnalysis<RecipeFlowArtifact>;
 
+// The public router accepts a recipe shortcode, then resolves it at its
+// boundary. Flow persistence and AI-usage records intentionally keep the UUID.
+type RecipeFlowGenerateRequest = Omit<RecipeFlowGenerateInput, "id"> & {
+  id: RecipeId;
+};
+
 interface RecipeFlowPromptInput {
   title: string;
   sections: Array<{
@@ -260,7 +266,7 @@ async function persistFlowArtifact(
 
 export async function generateRecipeFlow(
   db: Database,
-  input: RecipeFlowGenerateInput,
+  input: RecipeFlowGenerateRequest,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
     recipeOrThrow(db, input.id),
