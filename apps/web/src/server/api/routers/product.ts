@@ -11,7 +11,6 @@ import {
   type IngredientId,
   type ProductId,
   type ProductShortcode,
-  productId,
   productShortcode,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
@@ -241,7 +240,7 @@ const { list: search } = createEntityListProcedure({
       );
       const semanticIds = semantic
         .filter((candidate) => candidate.similarity >= 0.75)
-        .map((candidate) => productId.parse(candidate.item.id));
+        .map((candidate) => unsafeProductId(candidate.item.entityId));
       const semanticItems = (
         await getProductPickerItemsByIds(services.db, semanticIds)
       ).filter(

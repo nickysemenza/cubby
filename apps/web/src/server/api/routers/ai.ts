@@ -25,7 +25,10 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeLocationId,
+} from "@cubby/schemas/identifiers";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -35,7 +38,10 @@ import { createAppError } from "~/server/errors/app-error";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
 import {
   approveDetectedInventoryItem,
@@ -82,6 +88,20 @@ const suggestLocationType = protectedProcedure
     });
   });
 
+const resolveLocationEntityId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: string,
+) => {
+  const id = await resolveLiveShortcode(db, shortcode, "location");
+  if (!id) {
+    throw createAppError(
+      "LOCATION_NOT_FOUND",
+      `Location ${shortcode} not found`,
+    );
+  }
+  return unsafeLocationId(id);
+};
+
 export const aiRouter = createTRPCRouter({
   suggestCategory,
   suggestLocationType,
@@ -89,13 +109,19 @@ export const aiRouter = createTRPCRouter({
     .input(aiLocationIdInput)
     .output(locationDescriptionSchema)
     .mutation(async ({ ctx, input }) => {
-      return describeLocation(ctx.db, input.locationId);
+      return describeLocation(
+        ctx.db,
+        await resolveLocationEntityId(ctx.db, input.locationId),
+      );
     }),
   detectInventoryItems: protectedProcedure
     .input(aiLocationIdInput)
     .output(detectedInventorySchema)
     .mutation(async ({ ctx, input }) => {
-      return detectInventoryItems(ctx.db, input.locationId);
+      return detectInventoryItems(
+        ctx.db,
+        await resolveLocationEntityId(ctx.db, input.locationId),
+      );
     }),
   approveDetectedInventoryItem: protectedProcedure
     .input(approveDetectedInventoryItemInput)
@@ -103,7 +129,10 @@ export const aiRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return await approveDetectedInventoryItem(
         ctx.db,
-        input,
+        {
+          ...input,
+          locationId: await resolveLocationEntityId(ctx.db, input.locationId),
+        },
         ctx.actorContext,
       );
     }),

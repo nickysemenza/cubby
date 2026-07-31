@@ -4,7 +4,7 @@ import {
   ingredientId,
   ingredientShortcode,
   inventoryShortcode,
-  locationId,
+  locationShortcode,
   productShortcode,
 } from "./identifiers";
 import { locationType } from "./location";
@@ -49,7 +49,7 @@ export const locationTypeSuggestionInput = z.object({
 });
 
 export const aiLocationIdInput = z.object({
-  locationId,
+  locationId: locationShortcode,
 });
 
 // Location description from photo analysis
@@ -132,7 +132,7 @@ export const detectedInventorySchema = z.object({
 export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
 
 export const approveDetectedInventoryItemInput = z.object({
-  locationId,
+  locationId: locationShortcode,
   item: detectedInventoryItemSchema,
   productId: productShortcode.nullable().optional(),
 });

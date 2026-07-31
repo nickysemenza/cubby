@@ -102,7 +102,7 @@ describe("recipeFlowGenerateInputSchema", () => {
   it("defaults force and trims guidance", () => {
     expect(
       recipeFlowGenerateInputSchema.parse({
-        id: "00000000-0000-4000-8000-000000000003",
+        id: "RCP-2345",
         guidance: "  keep sauce separate  ",
       }),
     ).toMatchObject({

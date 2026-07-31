@@ -18,7 +18,11 @@ import {
   getStaleEmbeddingTextsForEntityTypes,
   upsertEntityEmbedding,
 } from "~/server/repo/entity-embedding";
-import { globalSearch, hydrateSearchResultsByRefs } from "~/server/repo/search";
+import {
+  globalSearch,
+  hydrateSearchResultsByRefs,
+  type InternalSearchResult,
+} from "~/server/repo/search";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
@@ -50,7 +54,7 @@ async function semanticSearchCandidates(
   query: string,
   limit: number,
   entityTypes?: SearchableEntity[],
-): Promise<SemanticCandidate[]> {
+): Promise<SemanticCandidate<InternalSearchResult>[]> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH) return [];
   if (!semanticEmbeddingsConfigured()) return [];
 
@@ -330,6 +334,6 @@ export async function semanticProductCandidates(
   db: Database,
   query: string,
   limit: number,
-): Promise<SemanticCandidate[]> {
+): Promise<SemanticCandidate<InternalSearchResult>[]> {
   return semanticSearchCandidates(db, query, limit, ["product"]);
 }

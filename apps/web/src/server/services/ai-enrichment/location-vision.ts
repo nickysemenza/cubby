@@ -84,6 +84,15 @@ interface DetectedProductMatch {
   category: ProductCategory | null;
 }
 
+// Router inputs use a public location shortcode. This service receives the
+// resolved UUID because its repository writes and AI records remain internal.
+type ApproveDetectedInventoryItemRequest = Omit<
+  ApproveDetectedInventoryItemInput,
+  "locationId"
+> & {
+  locationId: LocationId;
+};
+
 function itemProductName(item: DetectedInventoryItem): string {
   if (item.isMisc && !isMiscProduct(item.name)) {
     return `misc: ${item.name}`;
@@ -451,7 +460,7 @@ export async function detectInventoryItems(
 
 export async function approveDetectedInventoryItem(
   db: Database,
-  input: ApproveDetectedInventoryItemInput,
+  input: ApproveDetectedInventoryItemRequest,
   actor: ActorContext,
 ): Promise<ApproveDetectedInventoryItemOut> {
   const productName = itemProductName(input.item);

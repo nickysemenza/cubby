@@ -62,3 +62,25 @@ describe("location.create AI-description side-effect", () => {
     expect(kinds).not.toContain("location-ai.inventory.refresh");
   });
 });
+
+describe("location.bulkUpdateParent", () => {
+  const ctx = withTestDb();
+
+  it("rejects moving a location under its own descendant", async () => {
+    const caller = createTestCaller(locationRouter, ctx.db);
+    const root = await caller.create(makeLocationInput({ name: "Cycle root" }));
+    const child = await caller.create(
+      makeLocationInput({ name: "Cycle child", parentId: root.id }),
+    );
+    const grandchild = await caller.create(
+      makeLocationInput({ name: "Cycle grandchild", parentId: child.id }),
+    );
+
+    await expect(
+      caller.bulkUpdateParent({ ids: [root.id], parentId: grandchild.id }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Cannot set parent: would create a circular reference",
+    });
+  });
+});

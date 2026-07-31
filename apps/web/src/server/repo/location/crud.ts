@@ -225,6 +225,12 @@ export const updateLocation = async (
     if (data.parentId !== undefined) {
       if (options && "resolvedParentId" in options) {
         parentId = options.resolvedParentId;
+        if (parentId && (await wouldCreateParentCycle(tx, id, parentId))) {
+          throw createAppError(
+            "LOCATION_CYCLE_DETECTED",
+            "Cannot set parent: would create a circular reference",
+          );
+        }
       } else if (data.parentId === null) {
         parentId = null;
       } else {

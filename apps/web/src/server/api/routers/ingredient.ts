@@ -303,14 +303,17 @@ const enrichmentWorkbench = protectedProcedure
   .input(z.object({ recipeId: recipeShortcode.optional() }).optional())
   .output(enrichmentRowsOut)
   .query(async ({ ctx, input }) => {
+    const recipeId = input?.recipeId
+      ? await resolveLiveShortcode(ctx.db, input.recipeId, "recipe")
+      : undefined;
+    if (input?.recipeId && !recipeId) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        `Recipe ${input.recipeId} not found`,
+      );
+    }
     return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
-      recipeId: input?.recipeId
-        ? (((await resolveLiveShortcode(
-            ctx.db,
-            input.recipeId,
-            "recipe",
-          )) as RecipeId | null) ?? undefined)
-        : undefined,
+      recipeId: recipeId ? (recipeId as RecipeId) : undefined,
     });
   });
 
