@@ -160,6 +160,10 @@ async function whereFor(
     filters.purchaseId ? [filters.purchaseId].flat() : undefined,
     "purchase",
   );
+  // These filters name specific public ids. When supplied codes resolve to no
+  // ids, the semantic result is an empty set; eqAny([], by design) means "no
+  // constraint" and would otherwise expose the entire transaction roster.
+  if (accountIds?.length === 0 || purchaseIds?.length === 0) return sql`false`;
   return buildSearchConditions(
     financialTransaction,
     [

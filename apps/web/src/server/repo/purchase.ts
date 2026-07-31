@@ -19,7 +19,6 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-transaction";
 import {
   type ExpenseId,
   type PurchaseId,
@@ -99,6 +98,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
+import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   resolveLiveShortcode,
@@ -292,40 +292,6 @@ type PurchaseRow = {
   projectedFinancialTotal: number;
 };
 
-const cents = (value: number) => Math.round(value * 100);
-const financialReconciliation = (
-  row: PurchaseRow,
-): FinancialReconciliationSummary => {
-  const transactionCount = Number(row.financialTransactionCount);
-  const postedTransactionCount = Number(row.postedFinancialTransactionCount);
-  const outstandingTransactionCount = Number(
-    row.outstandingFinancialTransactionCount,
-  );
-  const postedTotal = Number(row.postedFinancialTotal);
-  const projectedTotal = Number(row.projectedFinancialTotal);
-  const comparable = row.unpricedExpenseCount === 0 && transactionCount > 0;
-  const comparisonTotal =
-    outstandingTransactionCount > 0 ? projectedTotal : postedTotal;
-  const delta = comparable ? comparisonTotal - Number(row.expenseTotal) : null;
-  return {
-    status: !comparable
-      ? "unknown"
-      : outstandingTransactionCount > 0 &&
-          cents(projectedTotal) === cents(Number(row.expenseTotal))
-        ? "pending"
-        : outstandingTransactionCount === 0 &&
-            cents(postedTotal) === cents(Number(row.expenseTotal))
-          ? "match"
-          : "mismatch",
-    transactionCount,
-    postedTransactionCount,
-    outstandingTransactionCount,
-    postedTotal,
-    projectedTotal,
-    delta,
-  };
-};
-
 const dbPurchaseToAPI = (
   row: PurchaseRow,
   images: PurchaseOut["images"] = [],
@@ -341,7 +307,15 @@ const dbPurchaseToAPI = (
   unpricedExpenseCount: Number(row.unpricedExpenseCount),
   expenseTotal: Number(row.expenseTotal),
   documentCount: Number(row.documentCount),
-  financialReconciliation: financialReconciliation(row),
+  financialReconciliation: calculateFinancialReconciliation({
+    expenseTotal: row.expenseTotal,
+    unpricedExpenseCount: row.unpricedExpenseCount,
+    transactionCount: row.financialTransactionCount,
+    postedTransactionCount: row.postedFinancialTransactionCount,
+    outstandingTransactionCount: row.outstandingFinancialTransactionCount,
+    postedTotal: row.postedFinancialTotal,
+    projectedTotal: row.projectedFinancialTotal,
+  }),
   images,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,

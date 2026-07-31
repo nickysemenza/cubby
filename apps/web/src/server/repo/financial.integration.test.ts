@@ -1,6 +1,10 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { unsafePurchaseId } from "@cubby/schemas/identifiers";
+import {
+  unsafeFinancialAccountShortcode,
+  unsafePurchaseId,
+  unsafePurchaseShortcode,
+} from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { withTestDb } from "tooling/test-setup";
@@ -13,6 +17,7 @@ import {
 import {
   createFinancialTransaction,
   deleteFinancialTransactions,
+  listFinancialTransactions,
   updateFinancialTransaction,
 } from "./financial-transaction";
 import {
@@ -130,6 +135,17 @@ describe("financial repositories — critical invariants", () => {
       ctx.actor,
     );
     expect(updated.output.purchaseId).toBeNull();
+
+    for (const filters of [
+      { accountId: unsafeFinancialAccountShortcode("FAC-2222") },
+      { purchaseId: unsafePurchaseShortcode("PUR-2222") },
+    ]) {
+      const filtered = await listFinancialTransactions(ctx.db, filters, [], {
+        pageIndex: 0,
+        pageSize: 100,
+      });
+      expect(filtered).toMatchObject({ data: [], count: 0 });
+    }
   });
 
   it("reconciles settlement separately from Expense spend and re-points/detaches transactions", async () => {
