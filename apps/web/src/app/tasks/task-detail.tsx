@@ -370,15 +370,19 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           }}
           SearchProvider={WithProductSearch}
           renderValue={(value) =>
-            value ? (
+            value &&
+            task.subjectProductId &&
+            value.id === task.subjectProductShortcode ? (
               <EntityInlineLink
                 entity="product"
                 data={{
-                  id: value.id,
+                  id: task.subjectProductId,
                   name: value.name,
                   shortcode: value.id,
                 }}
               />
+            ) : value ? (
+              <span>{value.name}</span>
             ) : (
               <NoneValue />
             )

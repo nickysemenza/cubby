@@ -487,7 +487,6 @@ export const updateTask = async (
         : data.subjectProductId === null
           ? null
           : await resolveSubjectProductId(tx, data.subjectProductId);
-    if (subjectProductId) await assertSubjectProductLive(tx, subjectProductId);
 
     // Full-replacement set: resolve every requested shortcode to a live uuid
     // up front — `replaceDependencyEdges`'s own not-found check operates on

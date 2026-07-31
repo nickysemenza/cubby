@@ -382,15 +382,17 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           )}
           SearchProvider={WithProductSearch}
           renderValue={(v) =>
-            v ? (
+            v && expense.productId && v.id === expense.productShortcode ? (
               <EntityInlineLink
                 entity="product"
                 data={{
-                  id: v.id,
+                  id: expense.productId,
                   name: v.name,
                   shortcode: v.id,
                 }}
               />
+            ) : v ? (
+              <span>{v.name}</span>
             ) : (
               <NoneValue />
             )

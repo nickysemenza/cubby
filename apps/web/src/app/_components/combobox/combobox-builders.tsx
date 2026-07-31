@@ -12,6 +12,7 @@ import { LocationIcon } from "~/app/_components/locations/location-icons";
 
 // Builders take minimal structural shapes (not the full *Out types) so both
 // picker results and list-row relation summaries pass without casts.
+/** @lintignore Retained during the shortcode cutover for UUID-only product reads. */
 export const buildProductComboboxItem = (product: {
   id: ProductId;
   name: string;
