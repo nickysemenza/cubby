@@ -19,6 +19,7 @@ import { registerPurchaseTools } from "./tools/purchase.tools";
 import { registerRecipeTools } from "./tools/recipe.tools";
 import { registerSearchTools } from "./tools/search.tools";
 import { registerUsdaTools } from "./tools/usda.tools";
+import { createMcpClientValidator } from "./validation";
 
 /**
  * MCP Server for Cubby inventory and product management.
@@ -105,7 +106,10 @@ async function introspect<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const server = createMcpServer();
-  const client = new Client({ name: "cubby-introspect", version: "1.0.0" });
+  const client = new Client(
+    { name: "cubby-introspect", version: "1.0.0" },
+    { jsonSchemaValidator: createMcpClientValidator() },
+  );
 
   await Promise.all([
     server.connect(serverTransport),
