@@ -1,4 +1,4 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { useMemo, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import {
@@ -12,7 +12,7 @@ import { recipeCookbookMutationInvalidateKeys } from "~/lib/query-keys";
 
 /** The minimal identity `requestDelete` needs — either grid row or detail-page state. */
 export interface CookbookDeleteTarget {
-  id: CookbookId;
+  id: CookbookShortcode;
   name: string;
   /** Undefined while the summary hasn't loaded yet (detail page's first paint). */
   recipeCount?: number;

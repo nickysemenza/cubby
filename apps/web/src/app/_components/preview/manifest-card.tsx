@@ -25,15 +25,10 @@ import { NutrientsSummary } from "../units/NutrientsSummary";
 // ── Declarative shape ───────────────────────────────────────────────────────
 
 export type CrossLink = {
-  // `EntityDetailRoute` for entities whose payload here carries a real
-  // shortcode; a handful of cross-links (project/vendor, from entities whose
-  // getByID output doesn't expose a shortcode yet) still point at the
-  // pre-cutover `$id` path as a known, tracked gap — hence the plain-string
-  // widening rather than the strict union.
-  to: EntityDetailRoute | (string & {});
+  to: EntityDetailRoute;
   // `{ id }` covers usda-food — the one detail route that stays keyed on
-  // something other than a shortcode (`String(fdc_id)`) — and the `$id` gap
-  // links above; every other entity's route wants `{ shortcode }`.
+  // something other than a shortcode (`String(fdc_id)`); every other entity's
+  // route wants `{ shortcode }` containing its canonical public id.
   params: { id: string } | { shortcode: string };
   search?: Record<string, unknown>;
   /** Leading icon — the target entity's icon (or a view icon for self-views). */
@@ -52,7 +47,6 @@ export type BodyBlock =
       kind: "products";
       products: {
         id: string;
-        shortcode: string;
         name: string;
         manufacturer: string;
       }[];

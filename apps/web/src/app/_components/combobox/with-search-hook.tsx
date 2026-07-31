@@ -1,9 +1,9 @@
 import type {
-  IngredientId,
-  LocationId,
+  IngredientShortcode,
+  LocationShortcode,
   ProductShortcode,
   ProjectShortcode,
-  RecipeId,
+  RecipeShortcode,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
@@ -66,7 +66,7 @@ export interface WithEntitySearchProps<TId extends string = string> {
 
 export function WithIngredientSearch({
   children,
-}: WithEntitySearchProps<IngredientId>) {
+}: WithEntitySearchProps<IngredientShortcode>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -77,7 +77,7 @@ export function WithIngredientSearch({
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog<IngredientId>();
+  } = useEntitySearchWithDialog<IngredientShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   const parsedCode = parseShortcode(searchQuery);
@@ -144,7 +144,7 @@ export function WithIngredientSearch({
 
 export function WithLocationSearch({
   children,
-}: WithEntitySearchProps<LocationId>) {
+}: WithEntitySearchProps<LocationShortcode>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -155,7 +155,7 @@ export function WithLocationSearch({
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog<LocationId>();
+  } = useEntitySearchWithDialog<LocationShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   const parsedCode = parseShortcode(searchQuery);
@@ -267,12 +267,7 @@ export function WithProductSearch({
       ),
     invalidateKeys: productMutationInvalidateKeys,
     onSuccess: (newProduct) =>
-      resolveWithEntity({
-        id: newProduct.shortcode,
-        shortcode: newProduct.shortcode,
-        name: newProduct.name,
-        secondary: newProduct.manufacturer,
-      }),
+      resolveWithEntity(buildProductComboboxItem(newProduct)),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
 
@@ -312,7 +307,7 @@ export function WithProductSearch({
 
 export function WithRecipeSearch({
   children,
-}: WithEntitySearchProps<RecipeId>) {
+}: WithEntitySearchProps<RecipeShortcode>) {
   const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);

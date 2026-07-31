@@ -7,8 +7,14 @@
  * engine, AvailabilityService.getAggregatedNeeds). No inventory is ever mutated.
  */
 
-import type { RecipeId } from "@cubby/schemas/identifiers";
-import { type MealId, mealId } from "@cubby/schemas/identifiers";
+import {
+  type MealId,
+  type MealShortcode,
+  mealShortcode,
+  type RecipeId,
+  unsafeMealId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import {
   mealAddRecipeInput,
   mealCreateInput,
@@ -26,16 +32,20 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import {
   addRecipeToMeal,
-  createMeal,
+  createMealWithEntityId,
   deleteMeals,
   getMealByID,
   getMealByShortcode,
   getMealsByDateRange,
   mealList,
-  removeMealRecipe,
+  removeMealRecipeWithEntityId,
   updateMeal,
-  updateMealRecipe,
+  updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -54,10 +64,11 @@ const {
     output: mealOut,
     filters: mealFiltersSchema,
     sort: { sortableFields: mealSortableFields, defaultSort: "date" },
-    idSchema: mealId,
+    idSchema: mealShortcode,
   },
   repository: {
-    getByID: async (services, id: MealId) => {
+    getByID: async (services, shortcode: MealShortcode) => {
+      const id = await resolveMealEntityId(services.db, shortcode);
       const res = await getMealByID(services.db, id);
       if (!res) {
         throw createAppError("MEAL_NOT_FOUND", "Meal not found");
@@ -68,26 +79,51 @@ const {
       getMealByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       mealList(services.db, filters, sort, pagination),
-    create: async (services, data) => {
-      const output = await createMeal(services.db, data, services.actorContext);
-      return { output, entityId: output.id };
-    },
-    update: async (services, id: MealId, data) => {
+    create: (services, data) =>
+      createMealWithEntityId(services.db, data, services.actorContext),
+    update: async (services, shortcode: MealShortcode, data) => {
+      const id = await resolveMealEntityId(services.db, shortcode);
       const output = await updateMeal(
         services.db,
         id,
         data,
         services.actorContext,
       );
-      return { output, entityId: output.id };
+      return { output, entityId: id };
     },
-    delete: async (services, ids) => {
+    delete: async (services, shortcodes: MealShortcode[]) => {
+      const ids = await resolveMealEntityIds(services.db, shortcodes);
       await deleteMeals(services.db, ids, services.actorContext);
       return undefined;
     },
   },
   entityName: "meal",
 });
+
+const resolveMealEntityId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: MealShortcode,
+): Promise<MealId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "meal");
+  if (!id) {
+    throw createAppError("MEAL_NOT_FOUND", `Meal ${shortcode} not found`);
+  }
+  return unsafeMealId(id);
+};
+
+const resolveMealEntityIds = async (
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  shortcodes: MealShortcode[],
+): Promise<MealId[]> => {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "meal");
+  return shortcodes.map((shortcode) => {
+    const id = resolved.get(shortcode);
+    if (!id) {
+      throw createAppError("MEAL_NOT_FOUND", `Meal ${shortcode} not found`);
+    }
+    return unsafeMealId(id);
+  });
+};
 
 // A meal's embedding text is mostly its planned recipes' names, so the child
 // mutations count as an update to the meal itself.
@@ -111,9 +147,10 @@ const addRecipe = protectedProcedure
   .input(mealAddRecipeInput)
   .output(mealOut)
   .mutation(async ({ ctx, input }) => {
+    const mealId = await resolveMealEntityId(ctx.db, input.mealId);
     const updated = await addRecipeToMeal(
       ctx.db,
-      input.mealId,
+      mealId,
       {
         recipeId: input.recipeId,
         scale: input.scale,
@@ -121,7 +158,7 @@ const addRecipe = protectedProcedure
       },
       ctx.actorContext,
     );
-    await refreshMealEmbedding(ctx.db, updated.id, "meal.addRecipe");
+    await refreshMealEmbedding(ctx.db, mealId, "meal.addRecipe");
     return updated;
   });
 
@@ -130,22 +167,27 @@ const updateRecipe = protectedProcedure
   .output(mealOut)
   // Scale/order only — the meal's embedding text doesn't include either, so no
   // embedding refresh here (unlike add/remove, which change the recipe set).
-  .mutation(({ ctx, input }) =>
-    updateMealRecipe(
+  .mutation(async ({ ctx, input }) => {
+    const { output } = await updateMealRecipeWithEntityId(
       ctx.db,
       input.id,
       { scale: input.scale, sortOrder: input.sortOrder },
       ctx.actorContext,
-    ),
-  );
+    );
+    return output;
+  });
 
 const removeRecipe = protectedProcedure
   .input(mealRecipeIdInput)
   .output(mealOut)
   .mutation(async ({ ctx, input }) => {
-    const updated = await removeMealRecipe(ctx.db, input.id, ctx.actorContext);
-    await refreshMealEmbedding(ctx.db, updated.id, "meal.removeRecipe");
-    return updated;
+    const { output, entityId } = await removeMealRecipeWithEntityId(
+      ctx.db,
+      input.id,
+      ctx.actorContext,
+    );
+    await refreshMealEmbedding(ctx.db, entityId, "meal.removeRecipe");
+    return output;
   });
 
 const getShoppingList = protectedProcedure
@@ -156,23 +198,39 @@ const getShoppingList = protectedProcedure
 
     // Flatten meals → planned recipes into `lines` for the aggregation engine,
     // keeping a parallel `lineMeta` so each contribution maps back to its meal.
-    const lines: { recipeId: RecipeId; scale: number }[] = [];
+    const publicLines: { recipeId: string; scale: number }[] = [];
     const lineMeta: Omit<ShoppingListContribution, "needValue">[] = [];
     for (const m of meals) {
       for (const mr of m.recipes) {
-        lines.push({ recipeId: mr.recipeId, scale: mr.scale });
+        publicLines.push({ recipeId: mr.recipeId, scale: mr.scale });
         lineMeta.push({
           mealId: m.id,
-          mealShortcode: m.shortcode,
           mealName: m.name,
           date: m.date,
           recipeId: mr.recipeId,
-          recipeShortcode: mr.recipe.shortcode,
           recipeName: mr.recipe.name,
           scale: mr.scale,
         });
       }
     }
+
+    const recipeIds = await resolveLiveShortcodes(
+      ctx.db,
+      publicLines.map((line) => line.recipeId),
+      "recipe",
+    );
+    const lines: { recipeId: RecipeId; scale: number }[] = publicLines.map(
+      (line) => {
+        const id = recipeIds.get(line.recipeId);
+        if (!id) {
+          throw createAppError(
+            "RECIPE_NOT_FOUND",
+            `Recipe ${line.recipeId} not found`,
+          );
+        }
+        return { recipeId: unsafeRecipeId(id), scale: line.scale };
+      },
+    );
 
     const needs = await ctx.services.availability.getAggregatedNeeds(lines);
 
@@ -181,7 +239,6 @@ const getShoppingList = protectedProcedure
         const have = n.haveValue ?? 0;
         return {
           ingredientId: n.ingredientId,
-          ingredientShortcode: n.ingredientShortcode,
           name: n.name,
           basisUnit: n.basisUnit,
           needValue: n.needValue,

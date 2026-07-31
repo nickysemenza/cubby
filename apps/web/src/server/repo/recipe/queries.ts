@@ -5,7 +5,7 @@
 
 import type { CookbookId, IngredientId } from "@cubby/schemas/identifiers";
 import {
-  unsafeIngredientId,
+  unsafeCookbookShortcode,
   unsafeIngredientShortcode,
   unsafeRecipeId,
   unsafeRecipeShortcode,
@@ -157,12 +157,15 @@ export const getIngredientCooccurrence = async (
     if (data.count >= minEdgeWeight) {
       const [source, target] = key.split("|") as [string, string];
       edges.push({
-        source: unsafeIngredientId(source),
-        target: unsafeIngredientId(target),
+        source: unsafeIngredientShortcode(
+          ingredientShortcodes.get(source) ?? "",
+        ),
+        target: unsafeIngredientShortcode(
+          ingredientShortcodes.get(target) ?? "",
+        ),
         weight: data.count,
         recipes: data.recipes.map((r) => ({
-          id: unsafeRecipeId(r.id),
-          shortcode: unsafeRecipeShortcode(r.shortcode),
+          id: unsafeRecipeShortcode(r.shortcode),
           name: r.name,
         })),
       });
@@ -174,8 +177,7 @@ export const getIngredientCooccurrence = async (
   const nodes: IngredientNode[] = [];
   for (const id of ingredientsWithEdges) {
     nodes.push({
-      id: unsafeIngredientId(id),
-      shortcode: unsafeIngredientShortcode(ingredientShortcodes.get(id) ?? ""),
+      id: unsafeIngredientShortcode(ingredientShortcodes.get(id) ?? ""),
       name: ingredientNames.get(id) ?? "Unknown",
       recipeCount: ingredientRecipeCount.get(id) ?? 0,
     });
@@ -190,12 +192,14 @@ export const getIngredientCooccurrence = async (
 // Map of cookbook id → display name, for labelling/colouring graph nodes.
 const getCookbookNameMap = async (
   db: Database,
-): Promise<Map<CookbookId, string>> => {
+): Promise<Map<CookbookId, { name: string; shortcode: string }>> => {
   const rows = await getDb(db).query.cookbook.findMany({
     where: notDeleted(cookbook),
-    columns: { id: true, name: true },
+    columns: { id: true, shortcode: true, name: true },
   });
-  return new Map(rows.map((c) => [c.id, c.name]));
+  return new Map(
+    rows.map((c) => [c.id, { name: c.name, shortcode: c.shortcode }]),
+  );
 };
 
 /**
@@ -212,7 +216,9 @@ export const getRecipeDependencyGraph = async (
   const dbClient = getDb(db);
   const cookbookNames = await getCookbookNameMap(db);
   const nameFor = (id: CookbookId | null) =>
-    id ? (cookbookNames.get(id) ?? null) : null;
+    id ? (cookbookNames.get(id)?.name ?? null) : null;
+  const shortcodeFor = (id: CookbookId | null) =>
+    id ? unsafeCookbookShortcode(cookbookNames.get(id)?.shortcode ?? "") : null;
 
   const recipes = await dbClient.query.recipe.findMany({
     where: cookbookId
@@ -242,16 +248,15 @@ export const getRecipeDependencyGraph = async (
   const nodes = new Map<string, RecipeDepNode>();
   for (const r of recipes) {
     nodes.set(r.id, {
-      id: r.id,
-      shortcode: unsafeRecipeShortcode(r.shortcode),
+      id: unsafeRecipeShortcode(r.shortcode),
       name: r.name,
-      cookbookId: r.cookbookId,
+      cookbookId: shortcodeFor(r.cookbookId),
       cookbookName: nameFor(r.cookbookId),
       external: false,
     });
   }
 
-  const edges: RecipeDepEdge[] = [];
+  const edges: Array<{ source: string; target: string }> = [];
   const externalSubIds = new Set<string>();
   for (const r of recipes) {
     const seen = new Set<string>();
@@ -280,10 +285,9 @@ export const getRecipeDependencyGraph = async (
     });
     for (const e of externals) {
       nodes.set(e.id, {
-        id: e.id,
-        shortcode: unsafeRecipeShortcode(e.shortcode),
+        id: unsafeRecipeShortcode(e.shortcode),
         name: e.name,
-        cookbookId: e.cookbookId,
+        cookbookId: shortcodeFor(e.cookbookId),
         cookbookName: nameFor(e.cookbookId),
         external: true,
       });
@@ -291,7 +295,11 @@ export const getRecipeDependencyGraph = async (
   }
 
   // Drop edges whose target couldn't be resolved (e.g. soft-deleted sub-recipe).
-  const resolved = edges.filter((e) => nodes.has(e.target));
+  const resolved: RecipeDepEdge[] = edges.flatMap((e) => {
+    const source = nodes.get(e.source)?.id;
+    const target = nodes.get(e.target)?.id;
+    return source && target ? [{ source, target }] : [];
+  });
   return { nodes: [...nodes.values()], edges: resolved };
 };
 
@@ -361,8 +369,9 @@ export const getIngredientUsage = async (
 
   const rows = [...recipeCount.entries()]
     .map(([ingredientId, count]) => ({
-      ingredientId,
-      shortcode: unsafeIngredientShortcode(shortcodes.get(ingredientId) ?? ""),
+      ingredientId: unsafeIngredientShortcode(
+        shortcodes.get(ingredientId) ?? "",
+      ),
       name: names.get(ingredientId) ?? "Unknown",
       recipeCount: count,
     }))

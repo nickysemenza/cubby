@@ -1,7 +1,5 @@
 import {
-  unsafeIngredientId,
   unsafeIngredientShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
@@ -16,21 +14,18 @@ type Partial_ = Parameters<typeof buildUnitCoverageItems>[1][number];
 type Islanded = Parameters<typeof buildUnitCoverageItems>[2][number];
 
 const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
-  id: unsafeProductId("p1"),
-  shortcode: unsafeProductShortcode("PRD-P1"),
+  id: unsafeProductShortcode("PRD-P111"),
   name: "Saffron",
   manufacturer: "generic",
   createdAt: new Date(0),
   isIngredient: true,
   usdaUnavailable: false,
   ingredientId: null,
-  ingredientShortcode: null,
   ...over,
 });
 
 const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
-  id: unsafeProductId("p2"),
-  shortcode: unsafeProductShortcode("PRD-P2"),
+  id: unsafeProductShortcode("PRD-P222"),
   name: "Aji amarillo",
   manufacturer: "generic",
   coverage: {
@@ -40,14 +35,12 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   hasPrice: true,
   hasUsdaLink: false,
   usdaUnavailable: false,
-  ingredientId: unsafeIngredientId("i2"),
-  ingredientShortcode: unsafeIngredientShortcode("ING-I2"),
+  ingredientId: unsafeIngredientShortcode("ING-I222"),
   ...over,
 });
 
 const islandedProduct = (over: Partial<Islanded> = {}): Islanded => ({
-  id: unsafeProductId("p3"),
-  shortcode: unsafeProductShortcode("PRD-P3"),
+  id: unsafeProductShortcode("PRD-P333"),
   name: "Brown sugar",
   manufacturer: "Domino",
   islandCount: 2,
@@ -71,9 +64,9 @@ describe("buildUnitCoverageItems", () => {
     );
 
     expect(items).toHaveLength(3);
-    expect(items[0]).toMatchObject({ kind: "none", id: "p1" });
-    expect(items[1]).toMatchObject({ kind: "partial", id: "p2" });
-    expect(items[2]).toMatchObject({ kind: "islanded", id: "p3" });
+    expect(items[0]).toMatchObject({ kind: "none", id: "PRD-P111" });
+    expect(items[1]).toMatchObject({ kind: "partial", id: "PRD-P222" });
+    expect(items[2]).toMatchObject({ kind: "islanded", id: "PRD-P333" });
   });
 
   it("preserves the source fields under the new discriminant", () => {

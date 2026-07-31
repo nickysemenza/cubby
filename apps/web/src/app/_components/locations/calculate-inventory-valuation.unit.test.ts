@@ -1,9 +1,6 @@
 import {
-  unsafeInventoryId,
   unsafeInventoryShortcode,
-  unsafeLocationId,
   unsafeLocationShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
@@ -27,22 +24,19 @@ function makeInventoryItem(params: {
 }): InventoryItem {
   const now = new Date();
   return {
-    id: unsafeInventoryId(params.id),
-    shortcode: unsafeInventoryShortcode("INV-2345"),
+    id: unsafeInventoryShortcode(params.id),
     createdAt: now,
     updatedAt: now,
     amount: { value: 1, unit: "each" },
     valuation: params.valuation,
     verifiedAt: null,
     location: {
-      id: unsafeLocationId("loc-1"),
-      shortcode: unsafeLocationShortcode("LOC-TEST"),
+      id: unsafeLocationShortcode("LOC-2345"),
       name: "Test Location",
       type: "room",
     },
     product: {
-      id: unsafeProductId(params.product.id),
-      shortcode: unsafeProductShortcode("PRD-TEST"),
+      id: unsafeProductShortcode(params.product.id),
       name: params.product.name,
       manufacturer: params.product.manufacturer ?? "Generic",
       category: null,

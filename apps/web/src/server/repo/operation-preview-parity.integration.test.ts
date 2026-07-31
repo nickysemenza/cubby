@@ -38,18 +38,17 @@ import {
   previewDeleteImages,
 } from "./image";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
-import { createIngredient, deleteIngredients } from "./ingredient";
+import { deleteIngredients } from "./ingredient";
 import { previewDeleteIngredients } from "./ingredient/deletion";
 import { previewMergeIngredientCandidates } from "./ingredient/merge";
 import {
-  createInventoryEntry,
   deleteInventoryEntries,
   previewDeleteInventoryEntries,
 } from "./inventory/crud";
-import { createLocation, deleteLocations } from "./location";
-import { createMeal, deleteMeals } from "./meal";
+import { deleteLocations } from "./location";
+import { deleteMeals } from "./meal";
 import { previewDeleteMeals } from "./meal/crud";
-import { createProduct, deleteProducts } from "./product";
+import { deleteProducts } from "./product";
 import { previewDeleteProducts } from "./product/crud";
 import { createProject, deleteProjects } from "./project";
 import {
@@ -58,10 +57,16 @@ import {
   mergePurchases,
   previewDeletePurchases,
 } from "./purchase";
-import { createRecipe, deleteRecipes } from "./recipe";
+import { deleteRecipes } from "./recipe";
 import { previewDeleteRecipes } from "./recipe/crud";
 import {
   cookbookRecipe,
+  createIngredientFixture as createIngredient,
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createMealFixture as createMeal,
+  createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
   ingredientRef,
   makeExpenseInput,
   makeLocationInput,
@@ -136,13 +141,13 @@ describe("operation preview / mutation parity", () => {
         "InventoryEntry.productId",
       );
       await expect(
-        deleteProducts(ctx.db, [product.id], ctx.actor),
+        deleteProducts(ctx.db, [product.entityId], ctx.actor),
       ).rejects.toMatchObject({
         code: "PRECONDITION_FAILED",
         cause: { reason: "PRODUCT_HAS_INVENTORY" },
       });
 
-      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
 
       const unblocked = await previewOperation(
         ctx.db,
@@ -152,7 +157,7 @@ describe("operation preview / mutation parity", () => {
       expect(unblocked.canProceed).toBe(true);
       expect(unblocked.blockers).toEqual([]);
       await expect(
-        deleteProducts(ctx.db, [product.id], ctx.actor),
+        deleteProducts(ctx.db, [product.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
 
@@ -187,7 +192,7 @@ describe("operation preview / mutation parity", () => {
         "RecipeSectionIngredient.ingredientId",
       );
       await expect(
-        deleteIngredients(ctx.db, [ingredient.id], ctx.actor),
+        deleteIngredients(ctx.db, [ingredient.entityId], ctx.actor),
       ).rejects.toMatchObject({
         code: "PRECONDITION_FAILED",
         cause: { reason: "INGREDIENT_HAS_RECIPES" },
@@ -195,7 +200,7 @@ describe("operation preview / mutation parity", () => {
 
       // Deleting the recipe cascade-soft-deletes its section ingredients,
       // clearing the live usage that was blocking the ingredient.
-      await deleteRecipes(ctx.db, [recipe.id], ctx.actor);
+      await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
       const unblocked = await previewOperation(
         ctx.db,
@@ -205,7 +210,7 @@ describe("operation preview / mutation parity", () => {
       expect(unblocked.canProceed).toBe(true);
       expect(unblocked.blockers).toEqual([]);
       await expect(
-        deleteIngredients(ctx.db, [ingredient.id], ctx.actor),
+        deleteIngredients(ctx.db, [ingredient.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
 
@@ -243,13 +248,13 @@ describe("operation preview / mutation parity", () => {
         "InventoryEntry.locationId",
       );
       await expect(
-        deleteLocations(ctx.db, [location.id], ctx.actor),
+        deleteLocations(ctx.db, [location.entityId], ctx.actor),
       ).rejects.toMatchObject({
         code: "PRECONDITION_FAILED",
         cause: { reason: "LOCATION_HAS_INVENTORY" },
       });
 
-      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
 
       const unblocked = await previewOperation(
         ctx.db,
@@ -259,7 +264,7 @@ describe("operation preview / mutation parity", () => {
       expect(unblocked.canProceed).toBe(true);
       expect(unblocked.blockers).toEqual([]);
       await expect(
-        deleteLocations(ctx.db, [location.id], ctx.actor),
+        deleteLocations(ctx.db, [location.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
 
@@ -536,7 +541,7 @@ describe("operation preview / mutation parity", () => {
       // `recipeId` — the same shape the import path writes.
       const pointer = await insertWithShortcode(ctx.db, "ingredient", {
         name: "Recipe: Sub Sauce",
-        recipeId: subRecipe.id,
+        recipeId: subRecipe.entityId,
       });
 
       const parent = await createRecipe(
@@ -547,20 +552,20 @@ describe("operation preview / mutation parity", () => {
             {
               name: "Main",
               instructions: [{ instruction: "Combine" }],
-              ingredients: [ingredientRef(pointer.id)],
+              ingredients: [ingredientRef(pointer.shortcode)],
             },
           ],
         }),
         ctx.actor,
       );
 
-      const preview = await previewDeleteRecipes(ctx.db, [subRecipe.id]);
+      const preview = await previewDeleteRecipes(ctx.db, [subRecipe.entityId]);
 
       const preserved = preview.sideEffects.find(
         (s) => s.code === "preserve-sub-recipe-pointer",
       );
       expect(preserved?.total).toBe(1);
-      expect(preserved?.byTargetId[subRecipe.id]).toBe(1);
+      expect(preserved?.byTargetId[subRecipe.entityId]).toBe(1);
       // `preserve` — not a delete of any kind. The whole point of the exemption.
       expect(preserved?.effect).toBe("preserve");
 
@@ -568,9 +573,9 @@ describe("operation preview / mutation parity", () => {
         (s) => s.code === "recompute-parent-recipes",
       );
       expect(recompute?.total).toBe(1);
-      expect(recompute?.byTargetId[subRecipe.id]).toBe(1);
+      expect(recompute?.byTargetId[subRecipe.entityId]).toBe(1);
 
-      await deleteRecipes(ctx.db, [subRecipe.id], ctx.actor);
+      await deleteRecipes(ctx.db, [subRecipe.entityId], ctx.actor);
 
       // Parity: the pointer the preview promised to preserve is still live,
       // now dangling at a soft-deleted recipe exactly as intended.
@@ -578,14 +583,14 @@ describe("operation preview / mutation parity", () => {
         where: and(eq(ingredient.id, pointer.id), notDeleted(ingredient)),
         columns: { id: true, recipeId: true },
       });
-      expect(survivingPointer?.recipeId).toBe(subRecipe.id);
+      expect(survivingPointer?.recipeId).toBe(subRecipe.entityId);
 
       // …and the parent it named is still live, holding that line.
       const survivingParent = await getDb(ctx.db).query.recipe.findFirst({
-        where: and(eq(recipe.id, parent.id), notDeleted(recipe)),
+        where: and(eq(recipe.id, parent.entityId), notDeleted(recipe)),
         columns: { id: true },
       });
-      expect(survivingParent?.id).toBe(parent.id);
+      expect(survivingParent?.id).toBe(parent.entityId);
     });
 
     it("recipe delete: predicted section + meal-link cascades match what actually gets soft-deleted", async () => {
@@ -617,7 +622,7 @@ describe("operation preview / mutation parity", () => {
         ctx.actor,
       );
 
-      const preview = await previewDeleteRecipes(ctx.db, [recipe.id]);
+      const preview = await previewDeleteRecipes(ctx.db, [recipe.entityId]);
       const sectionsChange = preview.changes.find(
         (c) => c.edgeKey === "RecipeSection.recipeId",
       );
@@ -627,20 +632,25 @@ describe("operation preview / mutation parity", () => {
       expect(sectionsChange?.total).toBe(1);
       expect(mealLinkChange?.total).toBe(1);
 
-      await deleteRecipes(ctx.db, [recipe.id], ctx.actor);
+      await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
       const liveSections = await getDb(ctx.db)
         .select({ id: recipeSection.id })
         .from(recipeSection)
         .where(
-          and(eq(recipeSection.recipeId, recipe.id), notDeleted(recipeSection)),
+          and(
+            eq(recipeSection.recipeId, recipe.entityId),
+            notDeleted(recipeSection),
+          ),
         );
       expect(liveSections).toHaveLength(0);
 
       const liveMealLinks = await getDb(ctx.db)
         .select({ id: mealRecipe.id })
         .from(mealRecipe)
-        .where(and(eq(mealRecipe.recipeId, recipe.id), notDeleted(mealRecipe)));
+        .where(
+          and(eq(mealRecipe.recipeId, recipe.entityId), notDeleted(mealRecipe)),
+        );
       expect(liveMealLinks).toHaveLength(0);
     });
 
@@ -653,21 +663,21 @@ describe("operation preview / mutation parity", () => {
       );
       const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
         raw[0]!,
-        { id: cb.id, name: "Cascade Book" },
+        { id: cb.entityId, name: "Cascade Book" },
         ctx.db,
         ctx.actor,
       );
 
-      const preview = await previewDeleteCookbooks(ctx.db, [cb.id]);
+      const preview = await previewDeleteCookbooks(ctx.db, [cb.entityId]);
       const recipeChange = preview.changes.find(
         (c) => c.edgeKey === "Recipe.cookbookId",
       );
       expect(recipeChange?.total).toBe(1);
-      expect(recipeChange?.byTargetId[cb.id]).toBe(1);
+      expect(recipeChange?.byTargetId[cb.entityId]).toBe(1);
 
       const { deletedRecipeIds } = await deleteCookbook(
         ctx.db,
-        cb.id,
+        cb.entityId,
         ctx.actor,
       );
       expect(deletedRecipeIds).toEqual([recipeId]);
@@ -763,19 +773,21 @@ describe("operation preview / mutation parity", () => {
         ctx.actor,
       );
 
-      const preview = await previewDeleteMeals(ctx.db, [meal.id]);
+      const preview = await previewDeleteMeals(ctx.db, [meal.entityId]);
       const linkChange = preview.changes.find(
         (c) => c.edgeKey === "MealRecipe.mealId",
       );
       expect(linkChange?.total).toBe(2);
-      expect(linkChange?.byTargetId[meal.id]).toBe(2);
+      expect(linkChange?.byTargetId[meal.entityId]).toBe(2);
 
-      await deleteMeals(ctx.db, [meal.id], ctx.actor);
+      await deleteMeals(ctx.db, [meal.entityId], ctx.actor);
 
       const liveLinks = await getDb(ctx.db)
         .select({ id: mealRecipe.id })
         .from(mealRecipe)
-        .where(and(eq(mealRecipe.mealId, meal.id), notDeleted(mealRecipe)));
+        .where(
+          and(eq(mealRecipe.mealId, meal.entityId), notDeleted(mealRecipe)),
+        );
       expect(liveLinks).toHaveLength(0);
     });
 
@@ -844,25 +856,27 @@ describe("operation preview / mutation parity", () => {
       );
 
       const preview = await previewDeleteProducts(ctx.db, [
-        blockedProduct.id,
-        cleanProduct.id,
+        blockedProduct.entityId,
+        cleanProduct.entityId,
       ]);
       const inventoryBlocker = preview.blockers.find(
         (b) => b.edgeKey === "InventoryEntry.productId",
       );
       expect(inventoryBlocker?.total).toBe(1);
       expect(inventoryBlocker?.byTargetId).toEqual({
-        [blockedProduct.id]: 1,
+        [blockedProduct.entityId]: 1,
       });
-      expect(inventoryBlocker?.byTargetId[cleanProduct.id]).toBeUndefined();
+      expect(
+        inventoryBlocker?.byTargetId[cleanProduct.entityId],
+      ).toBeUndefined();
 
       // The mutation agrees per-target: the clean product deletes fine on its
       // own, while the blocked one alone still throws.
       await expect(
-        deleteProducts(ctx.db, [cleanProduct.id], ctx.actor),
+        deleteProducts(ctx.db, [cleanProduct.entityId], ctx.actor),
       ).resolves.toBeUndefined();
       await expect(
-        deleteProducts(ctx.db, [blockedProduct.id], ctx.actor),
+        deleteProducts(ctx.db, [blockedProduct.entityId], ctx.actor),
       ).rejects.toMatchObject({
         cause: { reason: "PRODUCT_HAS_INVENTORY" },
       });
@@ -934,10 +948,10 @@ describe("operation preview / mutation parity", () => {
       );
 
       const candidates = await previewMergeIngredientCandidates(ctx.db, [
-        usdaLinked.id,
-        productOnly.id,
-        recipeUsageOnly.id,
-        aliasesOnly.id,
+        usdaLinked.entityId,
+        productOnly.entityId,
+        recipeUsageOnly.entityId,
+        aliasesOnly.entityId,
       ]);
 
       const byId = new Map(candidates.map((c) => [c.id, c]));
@@ -1064,7 +1078,9 @@ describe("operation preview / mutation parity", () => {
         ctx.actor,
       );
 
-      const preview = await previewDeleteInventoryEntries(ctx.db, [entry.id]);
+      const preview = await previewDeleteInventoryEntries(ctx.db, [
+        entry.entityId,
+      ]);
       expect(preview.blockers).toEqual([]);
       expect(preview.changes).toEqual([]);
       expect(
@@ -1074,7 +1090,7 @@ describe("operation preview / mutation parity", () => {
       ).toBe(true);
 
       await expect(
-        deleteInventoryEntries(ctx.db, [entry.id], ctx.actor),
+        deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
   });

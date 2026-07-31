@@ -1,5 +1,5 @@
 import type { AmountKind } from "@cubby/recipebridge";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import {
   manualUnitMapping,
   type UnitMapping,
@@ -25,7 +25,7 @@ import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { NutrientsSummary } from "./NutrientsSummary";
 
 interface ServingAliasFieldProps {
-  productId: ProductId;
+  productId: ProductShortcode;
   /** Stored (non-synthesized) mappings on the product — the array this appends
    * a new manual edge to and sends whole to `product.update`. */
   storedMappings: UnitMappingInput[];

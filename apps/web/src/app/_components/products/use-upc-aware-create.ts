@@ -25,7 +25,7 @@ export function useUpcAwareCreate(
         const product = await lookupUpc(parsed.data);
         if (!product) throw new Error("UPC lookup failed");
         return {
-          id: product.shortcode,
+          id: product.id,
           name: `${product.name} (${product.manufacturer})`,
         };
       }

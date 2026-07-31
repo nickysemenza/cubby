@@ -40,7 +40,7 @@ function InventoryShelfCard({ item }: { item: InventoryItem }) {
   return (
     <ShelfCard
       to="/products/$shortcode"
-      params={{ shortcode: item.product.shortcode }}
+      params={{ shortcode: item.product.id }}
       image={images[0]?.url}
       extraCount={images.length - 1}
       title={item.product.name}

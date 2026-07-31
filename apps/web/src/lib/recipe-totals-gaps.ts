@@ -240,7 +240,7 @@ export const deriveRecipeTotalsGaps = (
         source: "recipe",
         rowId: row.id,
         recipeId: row.recipe.id,
-        recipeShortcode: row.recipe.shortcode,
+        recipeShortcode: row.recipe.id,
         name: row.recipe.name,
         lineUnit,
         lineKind: classifyLine(lineUnit),
@@ -270,9 +270,9 @@ export const deriveRecipeTotalsGaps = (
     const lineUnit = row.amounts[0]?.unit ?? null;
     byIngredientId.set(id, {
       name: row.ingredient.name,
-      ingredientShortcode: row.ingredient.shortcode,
+      ingredientShortcode: row.ingredient.id,
       productId: products.length === 1 ? products[0]!.id : null,
-      productShortcode: products.length === 1 ? products[0]!.shortcode : null,
+      productShortcode: products.length === 1 ? products[0]!.id : null,
       lineUnit,
       lineKind: classifyLine(lineUnit),
       products,

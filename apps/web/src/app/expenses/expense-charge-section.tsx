@@ -73,11 +73,7 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
             stated total, and every line at once. Its canonical identity comes
             from Purchase, including the charge date (not this line's ledger
             date), so the shared purchase-label ladder stays truthful. */}
-        <EntityInlineLink
-          entity="purchase"
-          data={{ ...data.purchase, shortcode: data.purchase.id }}
-          truncate
-        />
+        <EntityInlineLink entity="purchase" data={data.purchase} truncate />
         {/* Secondary: the rest of this vendor's spend in the ledger. `vendor`
             is the URL key and carries the vendor shortcode (same shape as
             `?project=`), which is what the id-based filter matches on. */}
@@ -97,11 +93,7 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
         <Stack gap="tight">
           {others.map((line) => (
             <Row key={line.id} align="center" justify="between" gap="sm">
-              <EntityInlineLink
-                entity="expense"
-                data={{ ...line, shortcode: line.id }}
-                truncate
-              />
+              <EntityInlineLink entity="expense" data={line} truncate />
               <Row
                 align="center"
                 gap="sm"

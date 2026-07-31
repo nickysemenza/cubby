@@ -1,5 +1,5 @@
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InventoryItemForTree } from "@cubby/schemas/location";
 import { GripVertical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +11,7 @@ import type { ItemDragData } from "./arrange-types";
 interface ArrangeItemChipProps {
   item: InventoryItemForTree;
   /** The location this item currently lives at (the move's source). */
-  sourceLocationId: LocationId;
+  sourceLocationId: LocationShortcode;
 }
 
 /**

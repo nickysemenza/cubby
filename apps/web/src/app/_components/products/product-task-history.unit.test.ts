@@ -29,7 +29,6 @@ const task = (
   projectName: null,
   subjectProductId: null,
   subjectProductName: null,
-  subjectProductShortcode: null,
   parentTaskId: null,
   parentTaskName: null,
   dueDate: options.dueDate ?? null,

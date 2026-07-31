@@ -1,4 +1,5 @@
 import {
+  unsafeProductId,
   unsafeProductShortcode,
   unsafeProjectShortcode,
   unsafeTaskShortcode,
@@ -20,6 +21,7 @@ import {
   deleteProjects,
   updateProject,
 } from "~/server/repo/project";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createTask,
   deleteTasks,
@@ -932,7 +934,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       taskCreateInput.parse({
         trade: "mechanical",
         name: "Service furnace",
-        subjectProductId: furnace.shortcode,
+        subjectProductId: furnace.id,
       }),
       ctx.actor,
     );
@@ -952,7 +954,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
         trade: "mechanical",
         name: "Inspect air handler",
         parentTaskId: parent.id,
-        subjectProductId: airHandler.shortcode,
+        subjectProductId: airHandler.id,
       }),
       ctx.actor,
     );
@@ -995,7 +997,15 @@ describe("task repository — subtasks (parentTaskId)", () => {
       makeProductInput({ name: "Deleted appliance" }),
       ctx.actor,
     );
-    await deleteProducts(ctx.db, [deleted.id], ctx.actor);
+    await deleteProducts(
+      ctx.db,
+      [
+        unsafeProductId(
+          (await resolveLiveShortcode(ctx.db, deleted.id, "product"))!,
+        ),
+      ],
+      ctx.actor,
+    );
 
     const { output: taskWithoutProduct } = await createTask(
       ctx.db,
@@ -1009,7 +1019,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       updateTask(
         ctx.db,
         taskWithoutProduct.id,
-        { subjectProductId: deleted.shortcode },
+        { subjectProductId: deleted.id },
         ctx.actor,
       ),
     ).rejects.toThrow(/product.*not found/i);
@@ -1030,7 +1040,7 @@ describe("task repository — subject product filters and search", () => {
       taskCreateInput.parse({
         trade: "mechanical",
         name: "Replace pleated media",
-        subjectProductId: furnace.shortcode,
+        subjectProductId: furnace.id,
       }),
       ctx.actor,
     );

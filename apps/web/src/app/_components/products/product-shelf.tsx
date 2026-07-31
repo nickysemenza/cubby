@@ -38,7 +38,7 @@ export function ProductShelf({
           <ShelfCard
             key={product.id}
             to="/products/$shortcode"
-            params={{ shortcode: product.shortcode }}
+            params={{ shortcode: product.id }}
             image={images[0]?.url}
             extraCount={images.length - 1}
             title={product.name}

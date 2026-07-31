@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   assertAttachableEntityExists: vi.fn(),
   createAndAssociateUploadedImage: vi.fn(),
   fetchExternalResponse: vi.fn(),
+  resolveLiveShortcode: vi.fn(),
 }));
 
 vi.mock("~/server/repo/image", () => ({
@@ -20,6 +21,10 @@ vi.mock("~/server/repo/image", () => ({
   getImageByKey: mocks.getImageByKey,
   assertAttachableEntityExists: mocks.assertAttachableEntityExists,
   createAndAssociateUploadedImage: mocks.createAndAssociateUploadedImage,
+}));
+
+vi.mock("~/server/repo/shortcode-resolver", () => ({
+  resolveLiveShortcode: mocks.resolveLiveShortcode,
 }));
 
 vi.mock("~/server/utils/s3", () => ({
@@ -138,11 +143,12 @@ describe("attachFileToEntity", () => {
     mocks.uploadToS3.mockResolvedValue(undefined);
     mocks.deleteS3Object.mockResolvedValue(undefined);
     mocks.createAndAssociateUploadedImage.mockResolvedValue({ id: "img-99" });
+    mocks.resolveLiveShortcode.mockResolvedValue("prod-1");
   });
 
   const base = {
     entityType: "product",
-    entityId: "prod-1",
+    entityId: "PRD-TEST",
   } satisfies Partial<McpAttachFileInput>;
 
   it("stores a base64 image, associates it, and reports kind=image", async () => {
@@ -154,6 +160,7 @@ describe("attachFileToEntity", () => {
 
     expect(result.kind).toBe("image");
     expect(result.imageId).toBe("img-99");
+    expect(result.entityId).toBe("PRD-TEST");
     expect(mocks.uploadToS3).toHaveBeenCalledWith(
       expect.objectContaining({
         key: expect.stringContaining("cubby/images/"),
@@ -209,6 +216,20 @@ describe("attachFileToEntity", () => {
   });
 
   it("rejects a missing target before touching storage", async () => {
+    mocks.resolveLiveShortcode.mockResolvedValue(null);
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("product PRD-TEST not found");
+    expect(mocks.assertAttachableEntityExists).not.toHaveBeenCalled();
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
+  it("rejects a target deleted after shortcode resolution before touching storage", async () => {
     mocks.assertAttachableEntityExists.mockRejectedValue(
       new Error("not found"),
     );

@@ -39,7 +39,7 @@ describe("upsertCookbookRecipe", () => {
   // Create a cookbook row up-front and return the ref recipes link to. rawJson
   // is empty here (reprocess isn't exercised in this suite).
   const mkCookbook = async (name: string): Promise<CookbookRef> => {
-    const { id } = await upsertCookbook(
+    const { entityId: id } = await upsertCookbook(
       db,
       { name, rawJson: [], sourceLabel: name },
       actor,
@@ -289,7 +289,7 @@ describe("upsertCookbookRecipe", () => {
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
     const linked = ingredients.find((ing) => ing.type === "recipe");
     expect(linked).toBeDefined();
-    expect(linked?.recipe?.id).toBe(piecrust.id);
+    expect(linked?.recipe?.id).toBe(piecrust.shortcode);
     // The non-reference line ("3 apples") stays a flat ingredient.
     expect(ingredients.some((ing) => ing.type === "ingredient")).toBe(true);
   });
@@ -404,7 +404,7 @@ describe("upsertCookbookRecipe", () => {
     const full = await getRecipeByID(db, galette.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
     const linked = ingredients.find((ing) => ing.type === "recipe");
-    expect(linked?.recipe?.id).toBe(piecrust.id);
+    expect(linked?.recipe?.id).toBe(piecrust.shortcode);
   });
 
   it("leaves a reference whose target isn't imported as a flat ingredient", async () => {

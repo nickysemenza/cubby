@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { auditSourceSchema } from "./context";
 import { entitySchema } from "./entity";
-import { auditableEntities } from "./entity-manifest";
+import { auditableEntities, type ShortcodeEntity } from "./entity-manifest";
+import { anyShortcodeSchema } from "./identifiers";
 import { oneOrMany } from "./pagination";
 
 /**
@@ -13,9 +14,13 @@ import { oneOrMany } from "./pagination";
 export const auditEntitySchema = entitySchema.extract([...auditableEntities]);
 export type AuditEntityType = z.infer<typeof auditEntitySchema>;
 
+const auditableEntityIdSchema = anyShortcodeSchema(
+  auditableEntities as unknown as [ShortcodeEntity, ...ShortcodeEntity[]],
+);
+
 export const auditLogListInput = z.object({
   entityType: auditEntitySchema.optional(),
-  entityId: z.uuid().optional(),
+  entityId: auditableEntityIdSchema.optional(),
   /**
    * `oneOrMany`: deliberately reuses `auditSourceSchema` rather than a
    * narrower enum — see that schema's doc comment for why `source` is
@@ -55,9 +60,8 @@ export const auditLogUserOut = z
   .nullable();
 
 export const auditLogEntryOut = z.object({
-  id: z.uuid(),
   entityType: auditEntitySchema,
-  entityId: z.uuid(),
+  entityId: auditableEntityIdSchema.nullable(),
   action: auditLogActionSchema,
   changes: z.record(z.string(), auditLogChangeSchema).nullable(),
   userId: z.string(),

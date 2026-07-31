@@ -5,11 +5,7 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
-import type {
-  BulkMovePayload,
-  InventoryBulkOperationItem,
-  ReconcileSessionPayload,
-} from "@cubby/schemas/inventory";
+import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { and, eq, inArray, max } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
@@ -38,8 +34,41 @@ import type { InventoryEntryDeepDB } from "./types";
 
 type ResolvedInventoryBulkOperationItem = Omit<
   InventoryBulkOperationItem,
-  "productId"
-> & { productId: ProductId };
+  "id" | "productId" | "locationId"
+> & {
+  id?: InventoryId;
+  productId: ProductId;
+  locationId: LocationId;
+};
+
+export type ResolvedBulkMovePayload = {
+  sourceLocationId: LocationId;
+  targetLocationId: LocationId;
+  items: Array<{
+    inventoryEntryId: InventoryId;
+    quantity: InventoryBulkOperationItem["amount"];
+  }>;
+};
+
+export type ResolvedReconcileSessionPayload = {
+  locationId: LocationId;
+  expectedInventoryEntryIds: InventoryId[];
+  snapshotUpdatedAt: Date | null;
+  resolutions: Array<
+    | { kind: "verify"; inventoryEntryId: InventoryId }
+    | {
+        kind: "adjust";
+        inventoryEntryId: InventoryId;
+        amount: InventoryBulkOperationItem["amount"];
+      }
+    | { kind: "remove"; inventoryEntryId: InventoryId }
+    | {
+        kind: "relocate";
+        inventoryEntryId: InventoryId;
+        targetLocationId: LocationId;
+      }
+  >;
+};
 
 /** Batch fetch inventory entries with full relations, preserving order. */
 async function batchFetchResults(
@@ -329,7 +358,7 @@ export const bulkProcessInventoryEntries = async (
  */
 export const bulkMoveInventoryEntries = async (
   db: Database,
-  payload: BulkMovePayload,
+  payload: ResolvedBulkMovePayload,
   actor: ActorContext,
 ) => {
   // Validate source and target are different
@@ -635,7 +664,7 @@ export const reconcileLocationSession = async (
     expectedInventoryEntryIds,
     snapshotUpdatedAt,
     resolutions,
-  }: ReconcileSessionPayload,
+  }: ResolvedReconcileSessionPayload,
   actor: ActorContext,
 ) => {
   const { processed, removedIds, recomputeNeeded } = await withTransaction(

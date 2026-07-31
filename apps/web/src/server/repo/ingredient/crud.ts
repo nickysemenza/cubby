@@ -5,7 +5,11 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type IngredientShortcode,
+  unsafeIngredientShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   IngredientWithRecipesAndProductOut,
   ingredientCreateInput,
@@ -157,7 +161,8 @@ export const findOrCreateIngredient = async (
 
 type ResolvedIngredient = {
   name: string;
-  id: IngredientId;
+  id: IngredientShortcode;
+  entityId: IngredientId;
   matched: boolean;
   created: boolean;
 };
@@ -173,7 +178,10 @@ export const resolveOrCreateIngredients = async (
   db: Database | DrizzleTransaction,
   names: string[],
 ): Promise<ResolvedIngredient[]> => {
-  const resolved = new Map<string, { id: IngredientId; created: boolean }>();
+  const resolved = new Map<
+    string,
+    { id: IngredientId; shortcode: IngredientShortcode; created: boolean }
+  >();
 
   for (const rawName of names) {
     const name = rawName.trim();
@@ -186,7 +194,11 @@ export const resolveOrCreateIngredients = async (
         aliases: [],
       }),
     });
-    resolved.set(key, { id: row.id, created });
+    resolved.set(key, {
+      id: row.id,
+      shortcode: unsafeIngredientShortcode(row.shortcode),
+      created,
+    });
   }
 
   const out: ResolvedIngredient[] = [];
@@ -195,7 +207,8 @@ export const resolveOrCreateIngredients = async (
     if (!entry) continue; // blank/whitespace-only name
     out.push({
       name: rawName,
-      id: entry.id,
+      id: entry.shortcode,
+      entityId: entry.id,
       matched: !entry.created,
       created: entry.created,
     });

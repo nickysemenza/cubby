@@ -1,7 +1,4 @@
-import {
-  unsafeLocationId,
-  unsafeLocationShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { z } from "zod";
@@ -24,10 +21,7 @@ const makeLocation = (
 ): z.infer<typeof infLocation> => {
   locationSeq += 1;
   return {
-    id: unsafeLocationId(`doc-location-${locationSeq}`),
-    shortcode: unsafeLocationShortcode(
-      `L-${String(locationSeq).padStart(4, "0")}`,
-    ),
+    id: unsafeLocationShortcode(`LOC-${String(locationSeq).padStart(4, "0")}`),
     name,
     aliases: [],
     type,

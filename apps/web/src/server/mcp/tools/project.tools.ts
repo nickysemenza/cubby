@@ -18,7 +18,6 @@ import {
   expenseMatchInput,
   expenseMatchOut,
   expenseMcpListOut,
-  expenseMcpOut,
   expenseOut,
   expenseUpdateData,
   LIVE_PROJECT_STATUSES,
@@ -38,7 +37,6 @@ import {
   taskCreateInput,
   taskFilterFields,
   taskMcpListOut,
-  taskMcpOut,
   taskOut,
   taskSummaryOut,
   taskUpdateData,
@@ -47,7 +45,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 import {
-  idParam,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
@@ -85,16 +82,15 @@ const houseStatusProject = projectOut.omit({
 /** Upcoming-task row for `get_house_status` — enough to name and schedule the
  * task; `get_task` / `list_actionable_tasks` own the blocking graph. `taskOut`'s
  * own `id` and `projectId` ARE shortcodes now, so they're picked directly.
- * `subjectProductShortcode` is still separate because product keeps a uuid `id`
- * alongside its code — this tool bypasses the `slim*` projections that would
- * otherwise do that swap (see `registerRouterTool`'s doc comment). */
+ * Product relationships use their canonical public shortcode in
+ * `subjectProductId`, matching the task contract. */
 const houseStatusTask = taskOut.pick({
   id: true,
   name: true,
   status: true,
   projectId: true,
   projectName: true,
-  subjectProductShortcode: true,
+  subjectProductId: true,
   subjectProductName: true,
   dueDate: true,
   dueEndDate: true,
@@ -195,13 +191,6 @@ async function bulkEntityWrite<T>(run: Promise<{ items: T[] }>) {
   return { updated: items.length, items };
 }
 
-/**
- * Product is not cut over yet, so its FK on a task/expense is still a uuid in
- * the shared schema. MCP takes the public code and resolves it — an override
- * here rather than a change to packages/schemas, which tRPC and the UI share.
- */
-const mcpProductRef = idParam("product").nullable().optional();
-
 export function registerProjectTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "project",
@@ -299,17 +288,11 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "task",
-    createInput: {
-      ...taskCreateInput.shape,
-      subjectProductId: mcpProductRef,
-    },
-    updateShape: {
-      ...taskUpdateData.shape,
-      subjectProductId: mcpProductRef,
-    },
+    createInput: taskCreateInput.shape,
+    updateShape: taskUpdateData.shape,
     filterFields: taskFilterFields,
     mcpListOut: taskMcpListOut,
-    out: taskMcpOut,
+    out: taskOut,
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
@@ -322,18 +305,7 @@ export function registerProjectTools(server: McpServer) {
       delete:
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
-    create: async (caller, params) =>
-      caller.task.create({
-        ...params,
-        subjectProductId: params.subjectProductId,
-      }),
-    resolveUpdateData: async (_caller, data) =>
-      data.subjectProductId === undefined
-        ? data
-        : {
-            ...data,
-            subjectProductId: data.subjectProductId,
-          },
+    create: (caller, params) => caller.task.create(params),
   });
 
   registerRouterTool(server, {
@@ -388,17 +360,11 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "expense",
-    createInput: {
-      ...expenseCreateInput.shape,
-      productId: mcpProductRef,
-    },
-    updateShape: {
-      ...expenseUpdateData.shape,
-      productId: mcpProductRef,
-    },
+    createInput: expenseCreateInput.shape,
+    updateShape: expenseUpdateData.shape,
     filterFields: expenseFilterFields,
     mcpListOut: expenseMcpListOut,
-    out: expenseMcpOut,
+    out: expenseOut,
     slim: slimExpense,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
@@ -409,11 +375,7 @@ export function registerProjectTools(server: McpServer) {
       update: "Update an expense's fields.",
       delete: "Soft-delete expenses by IDs.",
     },
-    create: async (caller, params) =>
-      caller.expense.create({
-        ...params,
-        productId: params.productId,
-      }),
+    create: (caller, params) => caller.expense.create(params),
     resolveUpdateData: async (_caller, data) =>
       data.productId === undefined
         ? data
@@ -443,7 +405,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "match_expenses",
     description:
-      "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label` (the export's description), `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseShortcode/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`. Also returns `unmatched` keys and a summary. " +
+      "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label` (the export's description), `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseId/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`. Also returns `unmatched` keys and a summary. " +
       "WARNING — this RANKS candidates, it does not VERIFY them, and it never writes anything. Run it BEFORE proposing any new expense, and again over each row you did create (same amount, ±30 days) to catch what slipped through. Then confirm every match with the user before a single update_expense or create_expense call. " +
       "Read `tokenOverlap` as a hint and NOTHING more. Zero overlap is routine on TRUE matches, because this ledger names the THING, not the product: a Festool vacuum is booked as `dust extractor`, a Bosch miter saw as `chop saw`. That is the exact trap this tool exists for — a keyword search for 'festool' found nothing and a duplicate row was added while the real one had sat there since 2024. Never discard a zero-overlap candidate on that basis, and note that tokenizers also miss compound words (`labelmaker` vs 'label maker', `stepstool` vs 'step stool'). Conversely, high overlap on a coincidental amount is not evidence either. " +
       "**Below about $20, READ the line descriptions before accepting anything.** A $0.93 order matched a $1.00 `5 yd nursery mix` row on amount+date and had to be reverted. Small amounts are inside any usable band by construction; the tool will surface them, and only you can tell them apart. " +

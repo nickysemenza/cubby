@@ -1,5 +1,5 @@
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ArrowDownToLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -19,7 +19,7 @@ interface ArrangeLocationRowProps {
   roots: InfLocation[];
   /** Visual indentation depth, forwarded to `LocationTreeRow`. */
   depth: number;
-  onDrill: (id: LocationId) => void;
+  onDrill: (id: LocationShortcode) => void;
 }
 
 /**

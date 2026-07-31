@@ -1,4 +1,4 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -123,7 +123,7 @@ interface RecipeListProps {
    * page; the table then shows only that cookbook's recipes. Undefined on the
    * main recipes page (shows everything).
    */
-  cookbookIdFilter?: CookbookId;
+  cookbookIdFilter?: CookbookShortcode;
   /**
    * Column ids to hide the header filter control for — the cookbook detail
    * page pins `cookbookId` via `cookbookIdFilter` above, which wins over

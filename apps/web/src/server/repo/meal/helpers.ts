@@ -1,4 +1,6 @@
 import {
+  type MealId,
+  type RecipeId,
   unsafeMealShortcode,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
@@ -68,7 +70,7 @@ const rollupMealTotals = (recipes: MealRecipeOut[]): MealTotals => {
 
 /** Shape of a meal row loaded with `relations.meal.full`. */
 type MealRow = {
-  id: MealOut["id"];
+  id: MealId;
   shortcode: string;
   date: string; // "YYYY-MM-DD" (date column, mode:"string")
   name: string | null;
@@ -77,15 +79,15 @@ type MealRow = {
   updatedAt: Date;
   recipes: Array<{
     id: MealRecipeOut["id"];
-    mealId: MealOut["id"];
-    recipeId: MealRecipeOut["recipeId"];
+    mealId: MealId;
+    recipeId: RecipeId;
     scale: number;
     sortOrder: number | null;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date | null;
     recipe: {
-      id: MealRecipeOut["recipeId"];
+      id: RecipeId;
       shortcode: string;
       name: string;
       servings: number | null;
@@ -110,11 +112,10 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     .filter((mr) => mr.deletedAt === null && mr.recipe.deletedAt === null)
     .map((mr) => ({
       id: mr.id,
-      mealId: mr.mealId,
-      recipeId: mr.recipeId,
+      mealId: unsafeMealShortcode(row.shortcode),
+      recipeId: unsafeRecipeShortcode(mr.recipe.shortcode),
       recipe: {
-        id: mr.recipe.id,
-        shortcode: unsafeRecipeShortcode(mr.recipe.shortcode),
+        id: unsafeRecipeShortcode(mr.recipe.shortcode),
         name: mr.recipe.name,
         servings: mr.recipe.servings,
         yield: mr.recipe.yield,
@@ -128,8 +129,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     }));
 
   return {
-    id: row.id,
-    shortcode: unsafeMealShortcode(row.shortcode),
+    id: unsafeMealShortcode(row.shortcode),
     date: row.date,
     name: row.name,
     sortOrder: row.sortOrder,

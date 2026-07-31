@@ -52,8 +52,8 @@ export function ImageDetail({ image }: ImageDetailProps) {
   const renderEntityLink = () => {
     // Destructure to locals so the guard's narrowing survives into the match
     // closures below (property narrowing on `image` would be lost in callbacks).
-    const { entityType, entityId, entityName, entityShortcode } = image;
-    if (!entityType || !entityId || !entityName || !entityShortcode) {
+    const { entityType, entityId, entityName } = image;
+    if (!entityType || !entityId || !entityName) {
       return (
         <Description as="span" className="italic">
           Not associated with any entity
@@ -67,7 +67,6 @@ export function ImageDetail({ image }: ImageDetailProps) {
           entity="product"
           data={{
             id: entityId,
-            shortcode: entityShortcode,
             name: entityName,
             manufacturer: "",
           }}
@@ -78,7 +77,6 @@ export function ImageDetail({ image }: ImageDetailProps) {
           entity="location"
           data={{
             id: entityId,
-            shortcode: entityShortcode,
             name: entityName,
             type: "room",
           }}
@@ -87,13 +85,13 @@ export function ImageDetail({ image }: ImageDetailProps) {
       .with("RECIPE", () => (
         <EntityInlineLink
           entity="recipe"
-          data={{ id: entityId, shortcode: entityShortcode, name: entityName }}
+          data={{ id: entityId, name: entityName }}
         />
       ))
       .with("PROJECT", () => (
         <Link
           to={entities.project.routes.detail}
-          params={entityDetailParams(entityShortcode)}
+          params={entityDetailParams(entityId)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
@@ -105,7 +103,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
         // returns first — this case exists only for exhaustiveness.
         <Link
           to={entities.cookbook.routes.detail}
-          params={entityDetailParams(entityShortcode)}
+          params={entityDetailParams(entityId)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
@@ -114,7 +112,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
       .with("PURCHASE", () => (
         <Link
           to={entities.purchase.routes.detail}
-          params={entityDetailParams(entityShortcode)}
+          params={entityDetailParams(entityId)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}

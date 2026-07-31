@@ -124,7 +124,6 @@ export default function ImageList() {
           entityType: row.entityType,
           entityId: row.entityId,
           entityName: row.entityName,
-          entityShortcode: row.entityShortcode,
         }),
         {
           id: "entity",
@@ -134,10 +133,9 @@ export default function ImageList() {
             mobile: { slot: "meta", priority: 30 },
           },
           cell: ({ getValue }) => {
-            const { entityType, entityId, entityName, entityShortcode } =
-              getValue();
+            const { entityType, entityId, entityName } = getValue();
 
-            if (!entityType || !entityId || !entityName || !entityShortcode) {
+            if (!entityType || !entityId || !entityName) {
               return <NoneValue />;
             }
 
@@ -158,7 +156,6 @@ export default function ImageList() {
                   entity="purchase"
                   data={{
                     id: entityId,
-                    shortcode: entityShortcode,
                     orderId: entityName,
                   }}
                   compact
@@ -171,7 +168,6 @@ export default function ImageList() {
                 entity={entity}
                 data={{
                   id: entityId,
-                  shortcode: entityShortcode,
                   name: entityName,
                 }}
                 compact

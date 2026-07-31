@@ -89,7 +89,7 @@ export const findEmptyLocations = async (
 
   return emptyLocations.map((row) => ({
     ...row,
-    shortcode: unsafeLocationShortcode(row.shortcode),
+    id: unsafeLocationShortcode(row.shortcode),
   }));
 };
 
@@ -151,7 +151,7 @@ export const findStaleLocations = async (
 
   return rows.map((r) => ({
     ...r,
-    shortcode: unsafeLocationShortcode(r.shortcode),
+    id: unsafeLocationShortcode(r.shortcode),
     itemCount: Number(r.itemCount),
   }));
 };
@@ -176,8 +176,7 @@ export const findLocationsWithoutAiDescription = async (
     .groupBy(location.id, location.shortcode, location.name, location.type);
 
   return results.map((r) => ({
-    id: r.id,
-    shortcode: unsafeLocationShortcode(r.shortcode),
+    id: unsafeLocationShortcode(r.shortcode),
     name: r.name,
     type: r.type,
     imageCount: Number(r.imageCount),

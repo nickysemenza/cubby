@@ -26,7 +26,7 @@
  * Run standalone: node scripts/check-soft-delete-filters.mjs
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,7 +57,12 @@ function serverSources() {
   );
   return out
     .split("\n")
-    .filter((p) => p.endsWith(".ts") && !p.endsWith(".test.ts"));
+    .filter(
+      (p) =>
+        p.endsWith(".ts") &&
+        !p.endsWith(".test.ts") &&
+        existsSync(join(repoRoot, p)),
+    );
 }
 
 /**

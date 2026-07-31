@@ -1,4 +1,4 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type {
   RecipeDepEdge,
   RecipeDepNode,
@@ -43,7 +43,7 @@ export function RecipeDependencyGraph({
   cookbookId,
   hideUnconnected,
 }: {
-  cookbookId?: CookbookId;
+  cookbookId?: CookbookShortcode;
   hideUnconnected: boolean;
 }) {
   const api = useTRPC();
@@ -278,7 +278,7 @@ function Graph({
                 onClick={() =>
                   navigate({
                     to: "/recipes/$shortcode",
-                    params: { shortcode: node.shortcode },
+                    params: { shortcode: node.id },
                   })
                 }
               >

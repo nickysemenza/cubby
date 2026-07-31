@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
@@ -33,7 +33,7 @@ function toPricingStatus(
  */
 export interface LocationHierarchyNode {
   name: string;
-  id: LocationId;
+  id: LocationShortcode;
   /** Public id — the sunburst/treemap link by it. `null` on the synthetic root. */
   shortcode: string | null;
   type: LocationType;
@@ -109,7 +109,7 @@ export function useLocationHierarchy(
       return {
         name: location.name,
         id: location.id,
-        shortcode: location.shortcode,
+        shortcode: location.id,
         type: location.type,
         value,
         directCount,

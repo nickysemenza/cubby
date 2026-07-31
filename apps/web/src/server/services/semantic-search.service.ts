@@ -10,6 +10,7 @@ import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,
@@ -17,7 +18,12 @@ import {
   getStaleEmbeddingTextsForEntityTypes,
   upsertEntityEmbedding,
 } from "~/server/repo/entity-embedding";
-import { globalSearch, hydrateSearchResultsByRefs } from "~/server/repo/search";
+import {
+  globalSearch,
+  hydrateSearchResultsByRefs,
+  type InternalSearchResult,
+} from "~/server/repo/search";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
   SEMANTIC_BACKFILL_BATCH_SIZE,
@@ -36,13 +42,19 @@ import {
 import { TraceNames, withTrace } from "~/server/tracing";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
+const SIMILAR_SOURCE_NOT_FOUND = {
+  expense: "EXPENSE_NOT_FOUND",
+  product: "PRODUCT_NOT_FOUND",
+  ingredient: "INGREDIENT_NOT_FOUND",
+  recipe: "RECIPE_NOT_FOUND",
+} as const;
 
 async function semanticSearchCandidates(
   db: Database,
   query: string,
   limit: number,
   entityTypes?: SearchableEntity[],
-): Promise<SemanticCandidate[]> {
+): Promise<SemanticCandidate<InternalSearchResult>[]> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH) return [];
   if (!semanticEmbeddingsConfigured()) return [];
 
@@ -65,7 +77,9 @@ async function semanticSearchCandidates(
       })),
     );
     const itemByKey = new Map(
-      items.map((item) => [`${item.entityType}:${item.id}`, item] as const),
+      items.map(
+        (item) => [`${item.entityType}:${item.entityId}`, item] as const,
+      ),
     );
 
     return refs.flatMap((ref) => {
@@ -274,8 +288,16 @@ export async function findSimilarEntitiesForPair(
   input: SimilarEntitiesInput,
 ): Promise<SimilarEntitiesOut> {
   const { source, target } = similarEntityPairs[input.pair];
-  const sourceRef = { entityType: source, entityId: input.sourceId };
-  const empty: SimilarEntitiesOut = { source: sourceRef, results: [] };
+  const sourceEntityId = await resolveLiveShortcode(db, input.sourceId, source);
+  if (!sourceEntityId) {
+    throw createAppError(
+      SIMILAR_SOURCE_NOT_FOUND[source],
+      `${source} ${input.sourceId} not found`,
+    );
+  }
+  const sourceRef = { entityType: source, entityId: sourceEntityId };
+  const publicSource = { entityType: source, entityId: input.sourceId };
+  const empty: SimilarEntitiesOut = { source: publicSource, results: [] };
 
   if (!semanticEmbeddingsConfigured()) return empty;
 
@@ -294,11 +316,11 @@ export async function findSimilarEntitiesForPair(
     })),
   );
   const itemByKey = new Map(
-    items.map((item) => [`${item.entityType}:${item.id}`, item] as const),
+    items.map((item) => [`${item.entityType}:${item.entityId}`, item] as const),
   );
 
   return {
-    source: sourceRef,
+    source: publicSource,
     results: candidates.flatMap((candidate) => {
       const item = itemByKey.get(
         `${candidate.entityType}:${candidate.entityId}`,
@@ -312,6 +334,6 @@ export async function semanticProductCandidates(
   db: Database,
   query: string,
   limit: number,
-): Promise<SemanticCandidate[]> {
+): Promise<SemanticCandidate<InternalSearchResult>[]> {
   return semanticSearchCandidates(db, query, limit, ["product"]);
 }

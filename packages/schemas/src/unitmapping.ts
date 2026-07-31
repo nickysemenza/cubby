@@ -1,12 +1,12 @@
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount, positiveAmount } from "./codec";
-import { productId } from "./identifiers";
+import { productShortcode } from "./identifiers";
 
 const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("product"),
-    productId: productId,
+    productId: productShortcode,
   }),
   z.object({
     type: z.literal("food"),

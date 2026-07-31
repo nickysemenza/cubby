@@ -214,15 +214,14 @@ export const findEntitiesMissingEmbeddings = async (
   for (const [entityType, source] of sourceEntries) {
     if (found.length >= limit) break;
     const rows = await client
-      .select({ id: source.idColumn, shortcode: source.shortcodeColumn })
+      .select({ shortcode: source.shortcodeColumn })
       .from(source.table)
       .where(missingEmbeddingWhere(client, entityType, source, config))
       .limit(limit - found.length);
     for (const row of rows) {
       found.push({
         entityType,
-        entityId: String(row.id),
-        shortcode: String(row.shortcode),
+        entityId: String(row.shortcode),
       });
     }
   }

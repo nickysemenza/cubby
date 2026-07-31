@@ -1,26 +1,18 @@
 import { z } from "zod";
-import {
-  ingredientId,
-  ingredientShortcode,
-  recipeId,
-  recipeShortcode,
-} from "./identifiers";
+import { ingredientShortcode, recipeShortcode } from "./identifiers";
 
 // Schema for co-occurrence output - used by both router and repo
 const ingredientNodeSchema = z.object({
-  id: ingredientId,
-  shortcode: ingredientShortcode,
+  id: ingredientShortcode,
   name: z.string(),
   recipeCount: z.number(),
 });
 
 const ingredientEdgeSchema = z.object({
-  source: ingredientId,
-  target: ingredientId,
+  source: ingredientShortcode,
+  target: ingredientShortcode,
   weight: z.number(),
-  recipes: z.array(
-    z.object({ id: recipeId, shortcode: recipeShortcode, name: z.string() }),
-  ),
+  recipes: z.array(z.object({ id: recipeShortcode, name: z.string() })),
 });
 
 export const ingredientCooccurrenceSchema = z.object({

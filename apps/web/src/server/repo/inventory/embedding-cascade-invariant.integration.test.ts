@@ -1,4 +1,9 @@
 import {
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
+import {
   expenseCreateInput,
   projectCreateInput,
   taskCreateInput,
@@ -21,13 +26,14 @@ import {
   reconcileLocationSession,
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
-import { createMeal, deleteMeals } from "~/server/repo/meal";
+import { createMealWithEntityId, deleteMeals } from "~/server/repo/meal";
 import { createProduct } from "~/server/repo/product";
 import { createProject, deleteProjects } from "~/server/repo/project";
 import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask, deleteTasks, updateTask } from "~/server/repo/task";
 
 // F1 regression guard: the inventory manifest has onDelete: [], so a repo/bulk
@@ -68,6 +74,15 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
       })
     )?.deletedAt;
 
+  const requireResolvedId = async (
+    shortcode: string,
+    entity: "inventory" | "location" | "product",
+  ) => {
+    const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
+    if (!entityId) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
+    return entityId;
+  };
+
   const seedEntry = async (locationName: string, productName: string) => {
     const location = await createLocation(
       ctx.db,
@@ -79,52 +94,74 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
       makeProductInput({ name: productName }),
       TEST_ACTOR,
     );
+    const locationEntityId = unsafeLocationId(
+      await requireResolvedId(location.id, "location"),
+    );
+    const productEntityId = unsafeProductId(
+      await requireResolvedId(product.id, "product"),
+    );
     const entry = await createInventoryEntry(
       ctx.db,
-      { productId: product.id, locationId: location.id, amount },
+      { productId: productEntityId, locationId: locationEntityId, amount },
       TEST_ACTOR,
     );
-    return { location, product, entry };
+    const entryEntityId = unsafeInventoryId(
+      await requireResolvedId(entry.id, "inventory"),
+    );
+    return {
+      location,
+      locationEntityId,
+      product,
+      productEntityId,
+      entry,
+      entryEntityId,
+    };
   };
 
   it("deleteInventoryEntries (single soft delete) leaves no orphan", async () => {
-    const { entry } = await seedEntry("Shelf A", "Bolt A");
-    await seedEmbedding("inventory", entry.id);
+    const { entryEntityId } = await seedEntry("Shelf A", "Bolt A");
+    await seedEmbedding("inventory", entryEntityId);
 
-    await deleteInventoryEntries(ctx.db, [entry.id], TEST_ACTOR);
+    await deleteInventoryEntries(ctx.db, [entryEntityId], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt(entry.id)).not.toBeNull();
+    expect(await embeddingDeletedAt(entryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   it("bulkProcessInventoryEntries (delete-on-omit) leaves no orphan", async () => {
-    const { location, entry } = await seedEntry("Shelf B", "Bolt B");
-    await seedEmbedding("inventory", entry.id);
+    const { locationEntityId, entryEntityId } = await seedEntry(
+      "Shelf B",
+      "Bolt B",
+    );
+    await seedEmbedding("inventory", entryEntityId);
 
     // Empty batch omits the existing entry → it is soft-deleted.
-    await bulkProcessInventoryEntries(ctx.db, location.id, [], TEST_ACTOR);
+    await bulkProcessInventoryEntries(ctx.db, locationEntityId, [], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt(entry.id)).not.toBeNull();
+    expect(await embeddingDeletedAt(entryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   it("reconcileLocationSession remove leaves no orphan", async () => {
-    const { location, entry } = await seedEntry("Shelf C", "Bolt C");
-    await seedEmbedding("inventory", entry.id);
+    const { locationEntityId, entry, entryEntityId } = await seedEntry(
+      "Shelf C",
+      "Bolt C",
+    );
+    await seedEmbedding("inventory", entryEntityId);
 
     const { removedIds } = await reconcileLocationSession(
       ctx.db,
       {
-        locationId: location.id,
-        expectedInventoryEntryIds: [entry.id],
+        locationId: locationEntityId,
+        expectedInventoryEntryIds: [entryEntityId],
         snapshotUpdatedAt: entry.updatedAt,
-        resolutions: [{ kind: "remove", inventoryEntryId: entry.id }],
+        resolutions: [{ kind: "remove", inventoryEntryId: entryEntityId }],
       },
       TEST_ACTOR,
     );
-    expect(removedIds).toEqual([entry.id]);
+    expect(removedIds).toEqual([entryEntityId]);
 
-    expect(await embeddingDeletedAt(entry.id)).not.toBeNull();
+    expect(await embeddingDeletedAt(entryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
@@ -146,31 +183,43 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
       makeProductInput({ name: "Shared Bolt" }),
       TEST_ACTOR,
     );
+    const sourceEntityId = unsafeLocationId(
+      await requireResolvedId(source.id, "location"),
+    );
+    const targetEntityId = unsafeLocationId(
+      await requireResolvedId(target.id, "location"),
+    );
+    const productEntityId = unsafeProductId(
+      await requireResolvedId(product.id, "product"),
+    );
     const sourceEntry = await createInventoryEntry(
       ctx.db,
-      { productId: product.id, locationId: source.id, amount },
+      { productId: productEntityId, locationId: sourceEntityId, amount },
       TEST_ACTOR,
     );
     await createInventoryEntry(
       ctx.db,
-      { productId: product.id, locationId: target.id, amount },
+      { productId: productEntityId, locationId: targetEntityId, amount },
       TEST_ACTOR,
     );
-    await seedEmbedding("inventory", sourceEntry.id);
+    const sourceEntryEntityId = unsafeInventoryId(
+      await requireResolvedId(sourceEntry.id, "inventory"),
+    );
+    await seedEmbedding("inventory", sourceEntryEntityId);
 
     await bulkMoveInventoryEntries(
       ctx.db,
       {
-        sourceLocationId: source.id,
-        targetLocationId: target.id,
-        items: [{ inventoryEntryId: sourceEntry.id, quantity: amount }],
+        sourceLocationId: sourceEntityId,
+        targetLocationId: targetEntityId,
+        items: [{ inventoryEntryId: sourceEntryEntityId, quantity: amount }],
       },
       TEST_ACTOR,
     );
 
     // The source inventory row is hard-deleted; its embedding is deliberately
     // soft-deleted (excluded from search + orphan detection), never left live.
-    expect(await embeddingDeletedAt(sourceEntry.id)).not.toBeNull();
+    expect(await embeddingDeletedAt(sourceEntryEntityId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });
@@ -300,7 +349,7 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
   // Cookbook and meal joined the searchable set later; their delete paths carry
   // the same in-transaction embedding cleanup obligation.
   it("deleteCookbook leaves no orphan", async () => {
-    const cookbook = await upsertCookbook(
+    const { entityId: cookbookId } = await upsertCookbook(
       ctx.db,
       {
         name: "Embedding Cascade Cookbook",
@@ -309,25 +358,25 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
       },
       TEST_ACTOR,
     );
-    await seedEmbedding("cookbook", cookbook.id);
+    await seedEmbedding("cookbook", cookbookId);
 
-    await deleteCookbook(ctx.db, cookbook.id, TEST_ACTOR);
+    await deleteCookbook(ctx.db, cookbookId, TEST_ACTOR);
 
-    expect(await embeddingDeletedAt("cookbook", cookbook.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("cookbook", cookbookId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   it("deleteMeals leaves no orphan", async () => {
-    const meal = await createMeal(
+    const { entityId: mealId } = await createMealWithEntityId(
       ctx.db,
       { date: "2026-06-01", name: "Embedding Cascade Meal" },
       TEST_ACTOR,
     );
-    await seedEmbedding("meal", meal.id);
+    await seedEmbedding("meal", mealId);
 
-    await deleteMeals(ctx.db, [meal.id], TEST_ACTOR);
+    await deleteMeals(ctx.db, [mealId], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt("meal", meal.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("meal", mealId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 

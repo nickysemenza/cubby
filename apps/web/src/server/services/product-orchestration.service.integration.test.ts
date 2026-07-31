@@ -1,3 +1,4 @@
+import { unsafeProductId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
@@ -6,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { quickCreateProduct } from "~/server/repo/product";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { LocationValuationService } from "./location-valuation.service";
 import { createProductWriteActions } from "./product.service";
 import {
@@ -230,7 +232,12 @@ describe("applyUpcDataWithSideEffects", () => {
 
     const result = await applyUpcDataWithSideEffects(
       services,
-      { id: product.id, upc },
+      {
+        id: unsafeProductId(
+          (await resolveLiveShortcode(ctx.db, product.id, "product"))!,
+        ),
+        upc,
+      },
       ctx.actor,
     );
 
@@ -260,7 +267,12 @@ describe("applyUpcDataWithSideEffects", () => {
 
     const result = await applyUpcDataWithSideEffects(
       services,
-      { id: product.id, upc },
+      {
+        id: unsafeProductId(
+          (await resolveLiveShortcode(ctx.db, product.id, "product"))!,
+        ),
+        upc,
+      },
       ctx.actor,
     );
 

@@ -90,7 +90,7 @@ export function CookbookImport({
   // recipe's index in `book.recipes` so each card maps to its result. `start` is
   // referentially stable, so destructure it for the importBook callback's deps.
   const { start: startCookbookImport } = useBulkStream<
-    | { index: number; ok: true; id: string; shortcode: string }
+    | { index: number; ok: true; id: string }
     | { index: number; ok: false; error: string },
     { succeeded: number; failed: number }
   >();
@@ -637,7 +637,7 @@ export function CookbookImport({
             setResult(
               item.index,
               item.ok
-                ? { status: "done", shortcode: item.shortcode }
+                ? { status: "done", id: item.id }
                 : { status: "error", message: item.error },
             ),
           onProgress: (done, total) =>

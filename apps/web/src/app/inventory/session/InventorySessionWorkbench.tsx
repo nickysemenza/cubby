@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { LocationId, LocationShortcode } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -235,8 +235,8 @@ export function InventorySessionWorkbench({
     success,
   }: {
     item: InventoryItem;
-    sourceLocationId: LocationId;
-    targetLocationId: LocationId;
+    sourceLocationId: LocationShortcode;
+    targetLocationId: LocationShortcode;
     success: string;
   }) => {
     const result = await bulkMove.mutateAsync({
@@ -320,17 +320,17 @@ export function InventorySessionWorkbench({
   // rows). The move itself reuses moveItem, so verify-staging + undo are shared.
   const [moveTarget, setMoveTarget] = useState<{
     item: InventoryItem;
-    sourceLocationId: LocationId;
+    sourceLocationId: LocationShortcode;
     commit: "done" | "now";
   } | null>(null);
 
   const openMoveTo = (
     item: InventoryItem,
-    sourceLocationId: LocationId,
+    sourceLocationId: LocationShortcode,
     commit: "done" | "now",
   ) => setMoveTarget({ item, sourceLocationId, commit });
 
-  const confirmMoveTo = async (targetLocationId: LocationId) => {
+  const confirmMoveTo = async (targetLocationId: LocationShortcode) => {
     if (!moveTarget) return;
     const target = findLocationInTree(tree, targetLocationId);
     if (moveTarget.commit === "done") {

@@ -72,7 +72,6 @@ const expense: ExpenseOut = {
   vendorId: unsafeVendorShortcode("VEN-2345"),
   projectName: null,
   productName: null,
-  productShortcode: null,
   createdAt: new Date("2026-07-31T12:00:00Z"),
   updatedAt: new Date("2026-07-31T12:00:00Z"),
 };

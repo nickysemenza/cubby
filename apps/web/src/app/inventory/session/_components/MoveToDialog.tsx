@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { useState } from "react";
 import { FormProvider } from "react-hook-form";
 import {
@@ -37,9 +37,9 @@ export function MoveToDialog({
   /** What is being moved, e.g. a product or location name — shown in the title. */
   title: string;
   /** The item's current location; the destination must differ from it. */
-  sourceLocationId: LocationId;
+  sourceLocationId: LocationShortcode;
   commit: "done" | "now";
-  onConfirm: (targetLocationId: LocationId) => Promise<void>;
+  onConfirm: (targetLocationId: LocationShortcode) => Promise<void>;
 }) {
   const { form, error, setError, reset } = useDestinationLocationForm();
   const [pending, setPending] = useState(false);

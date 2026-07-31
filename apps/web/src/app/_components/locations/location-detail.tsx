@@ -74,7 +74,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title={location.name}
       rawData={location}
       heroImages={location.images}
-      heroNo={location.shortcode ?? undefined}
+      heroNo={location.id ?? undefined}
     >
       {/* Breadcrumb lives inside Page so it sits within the max-width
           container (was full-width when the route PageWrapper was dropped). */}

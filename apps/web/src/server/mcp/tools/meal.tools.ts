@@ -6,7 +6,6 @@ import {
   mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
-  mealRecipeInput,
   mealScale,
   mealUpdateData,
   shoppingListOut,
@@ -16,74 +15,20 @@ import { z } from "zod";
 import { SHOPPING_LIST_UI } from "../apps";
 import {
   getCaller,
-  idParam,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
-  resolvePublicId,
-  resolvePublicIdMap,
   respond,
   respondList,
   slimMeal,
   WRITE_CLOSED,
 } from "./_shared";
 
-/**
- * `shoppingListOut.meals[]` is `{id, name, date}` — a summary list distinct
- * from `items[].perMeal[]`'s `shoppingListContribution` rows, which already
- * carry `mealShortcode`/`recipeShortcode`/`ingredientShortcode` siblings from
- * the previous cutover pass. This inline summary shape never got one, so
- * `get_shopping_list`'s handler resolves it via `shortcode.lookupMany` below
- * rather than editing packages/schemas.
- */
-const shoppingListMealMcpOut = shoppingListOut.shape.meals.element
-  .omit({ id: true })
-  .extend({ mealShortcode: z.string().nullable() });
-
-const shoppingListContributionMcpOut =
-  shoppingListOut.shape.items.element.shape.perMeal.element.omit({
-    mealId: true,
-    recipeId: true,
-  });
-
-const shoppingListItemMcpOut = shoppingListOut.shape.items.element
-  .omit({ ingredientId: true, perMeal: true })
-  .extend({ perMeal: z.array(shoppingListContributionMcpOut) });
-
-const shoppingListMcpOut = shoppingListOut
-  .omit({ meals: true, items: true })
-  .extend({
-    meals: z.array(shoppingListMealMcpOut),
-    items: z.array(shoppingListItemMcpOut),
-  });
-
-/**
- * `mealCreateInput`/`mealAddRecipeInput` are shared with the tRPC router (and
- * meal-table.tsx), so the branded-uuid `recipeId`/`mealId` fields stay as-is
- * there — these MCP-only overrides carry the shortcode swap instead.
- */
-const mealRecipeMcpInput = mealRecipeInput.extend({
-  recipeId: idParam("recipe").describe(
-    "Recipe shortcode to plan into the meal",
-  ),
-});
-
-const mealCreateMcpInput = mealCreateInput.extend({
-  recipes: z.array(mealRecipeMcpInput).optional(),
-});
-
-const mealAddRecipeMcpInput = mealAddRecipeInput.extend({
-  mealId: idParam("meal"),
-  recipeId: idParam("recipe").describe(
-    "Recipe shortcode to plan into the meal",
-  ),
-});
-
 export function registerMealTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "meal",
-    createInput: mealCreateMcpInput.shape,
+    createInput: mealCreateInput.shape,
     updateShape: mealUpdateData.shape,
     filterFields: mealFilterFields,
     mcpListOut: mealMcpListOut,
@@ -100,24 +45,7 @@ export function registerMealTools(server: McpServer) {
       delete:
         "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
     },
-    create: async (caller, params) => {
-      const recipes = params.recipes as
-        | Array<{ recipeId: string; scale: number; sortOrder?: number | null }>
-        | undefined;
-      if (!recipes?.length) return caller.meal.create(params);
-      const idByCode = await resolvePublicIdMap(
-        caller,
-        "recipe",
-        recipes.map((r) => r.recipeId),
-      );
-      return caller.meal.create({
-        ...params,
-        recipes: recipes.map((r) => ({
-          ...r,
-          recipeId: idByCode.get(r.recipeId)!,
-        })),
-      });
-    },
+    create: (caller, params) => caller.meal.create(params),
   });
 
   registerRouterTool(server, {
@@ -147,36 +75,15 @@ export function registerMealTools(server: McpServer) {
       from: mealDate.describe("Start day (inclusive)"),
       to: mealDate.describe("End day (inclusive)"),
     },
-    outputSchema: shoppingListMcpOut,
+    outputSchema: shoppingListOut,
     annotations: READ_ONLY_CLOSED,
     uiResourceUri: SHOPPING_LIST_UI,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.meal.getShoppingList({
+      return await caller.meal.getShoppingList({
         from: params.from,
         to: params.to,
       });
-      const mealIds = result.meals.map((m) => m.id);
-      const resolved = mealIds.length
-        ? await caller.shortcode.lookupMany({
-            refs: mealIds.map((id) => ({ entity: "meal" as const, id })),
-          })
-        : [];
-      const codeByMealId = new Map(resolved.map((r) => [r.id, r.shortcode]));
-      return {
-        ...result,
-        meals: result.meals.map(({ id, ...m }) => ({
-          ...m,
-          mealShortcode: codeByMealId.get(id) ?? null,
-        })),
-        items: result.items.map(({ ingredientId: _ingredientId, ...item }) => ({
-          ...item,
-          perMeal: item.perMeal.map(
-            ({ mealId: _mealId, recipeId: _recipeId, ...contribution }) =>
-              contribution,
-          ),
-        })),
-      };
     },
   });
 
@@ -184,17 +91,13 @@ export function registerMealTools(server: McpServer) {
     name: "add_recipe_to_meal",
     description:
       "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
-    inputSchema: mealAddRecipeMcpInput.shape,
+    inputSchema: mealAddRecipeInput.shape,
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {
-      const [mealId, recipeId] = await Promise.all([
-        resolvePublicId(caller, "meal", params.mealId),
-        resolvePublicId(caller, "recipe", params.recipeId),
-      ]);
       const result = await caller.meal.addRecipe({
-        mealId,
-        recipeId,
+        mealId: params.mealId,
+        recipeId: params.recipeId,
         scale: params.scale,
         sortOrder: params.sortOrder,
       });

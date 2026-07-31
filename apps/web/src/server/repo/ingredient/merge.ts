@@ -13,7 +13,6 @@ import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
   type IngredientShortcode,
-  unsafeIngredientId,
   unsafeIngredientShortcode,
 } from "@cubby/schemas/identifiers";
 import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
@@ -63,11 +62,13 @@ export const INGREDIENT_MERGE_EDGE_POLICY = {
  * marks stale + dispatches for recompute (never serialized — superset of the
  * moved set, see the read in `resolve`).
  */
-export type MergeSummary = MergeSummaryOut & { affectedRecipeIds: RecipeId[] };
+export type MergeSummary = MergeSummaryOut & {
+  affectedRecipeIds: RecipeId[];
+  deletedEntityIds: IngredientId[];
+};
 
 interface FuzzyMergeCandidate {
-  id: IngredientId;
-  shortcode: IngredientShortcode;
+  id: IngredientShortcode;
   name: string;
   similarity: number;
 }
@@ -87,9 +88,10 @@ interface FuzzyMergeCandidate {
 export const findFuzzyMergeCandidates = async (
   db: Database,
   { threshold = 0.5, perRow = 3 }: { threshold?: number; perRow?: number } = {},
-): Promise<Map<IngredientId, FuzzyMergeCandidate[]>> => {
+): Promise<Map<IngredientShortcode, FuzzyMergeCandidate[]>> => {
   type Row = {
     source_id: string;
+    source_shortcode: string;
     cand_id: string;
     cand_shortcode: string;
     cand_name: string;
@@ -97,7 +99,7 @@ export const findFuzzyMergeCandidates = async (
     has_product: boolean;
   };
   const res = await getDb(db).execute<Row>(sql`
-    SELECT s.id AS source_id, c.id AS cand_id,
+    SELECT s.id AS source_id, s.shortcode AS source_shortcode, c.id AS cand_id,
            c.shortcode AS cand_shortcode, c.name AS cand_name,
            similarity(s.name, c.name) AS sim,
            EXISTS (
@@ -113,14 +115,13 @@ export const findFuzzyMergeCandidates = async (
   `);
 
   // Already ordered best-first per source; keep the top `perRow` for each.
-  const out = new Map<IngredientId, FuzzyMergeCandidate[]>();
+  const out = new Map<IngredientShortcode, FuzzyMergeCandidate[]>();
   for (const r of res.rows as unknown as Row[]) {
-    const key = unsafeIngredientId(r.source_id);
+    const key = unsafeIngredientShortcode(r.source_shortcode);
     const arr = out.get(key) ?? [];
     if (arr.length >= perRow) continue;
     arr.push({
-      id: unsafeIngredientId(r.cand_id),
-      shortcode: unsafeIngredientShortcode(r.cand_shortcode),
+      id: unsafeIngredientShortcode(r.cand_shortcode),
       name: r.cand_name,
       similarity: Number(r.sim),
     });
@@ -187,7 +188,8 @@ export const mergeIngredients = async (
   ): Promise<{
     newAliases: string[];
     aliasesAdded: string[];
-    deletedIds: IngredientId[];
+    deletedIds: IngredientShortcode[];
+    deletedEntityIds: IngredientId[];
     /** Recipes whose lines move off an alias onto the target (the summary count). */
     movedRecipeIds: RecipeId[];
     /**
@@ -248,7 +250,8 @@ export const mergeIngredients = async (
     return {
       newAliases,
       aliasesAdded: newAliases.filter((a) => !existing.has(a)),
-      deletedIds: aliasRecs.map((a) => a.id),
+      deletedIds: aliasRecs.map((a) => unsafeIngredientShortcode(a.shortcode)),
+      deletedEntityIds: aliasRecs.map((a) => a.id),
       movedRecipeIds,
       affectedRecipeIds,
       productsMoved: movedProducts.length,
@@ -262,6 +265,7 @@ export const mergeIngredients = async (
       recipesMoved: r.movedRecipeIds.length,
       productsMoved: r.productsMoved,
       deletedIds: r.deletedIds,
+      deletedEntityIds: r.deletedEntityIds,
       affectedRecipeIds: r.affectedRecipeIds,
     };
   }
@@ -310,6 +314,7 @@ export const mergeIngredients = async (
       recipesMoved: r.movedRecipeIds.length,
       productsMoved: r.productsMoved,
       deletedIds: r.deletedIds,
+      deletedEntityIds: r.deletedEntityIds,
       affectedRecipeIds: r.affectedRecipeIds,
     };
   });

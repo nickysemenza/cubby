@@ -83,7 +83,7 @@ export function AuditLogEntryComponent({
         <TimelineContent>
           <Row align="center" justify="between" gap="sm" className="min-h-7">
             <Row align="center" gap="sm" className="min-w-0">
-              {showEntityLink ? (
+              {showEntityLink && entry.entityId ? (
                 <EntityInlineLinkById
                   entityType={entry.entityType}
                   entityId={entry.entityId}
@@ -152,7 +152,7 @@ export function AuditLogEntryComponent({
 
             <div className="min-w-0 flex-1">
               <Row align="center" gap="sm" wrap>
-                {showEntityLink ? (
+                {showEntityLink && entry.entityId ? (
                   <EntityInlineLinkById
                     entityType={entry.entityType}
                     entityId={entry.entityId}

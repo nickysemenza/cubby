@@ -152,8 +152,8 @@ function Treemap({ data }: TreemapProps) {
                     >
                       <Link
                         to="/locations/$shortcode"
-                        params={{ shortcode: node.data.shortcode ?? "" }}
-                        disabled={!node.data.shortcode}
+                        params={{ shortcode: node.data.id ?? "" }}
+                        disabled={!node.data.id}
                         className="flex min-w-0 items-center gap-1 font-medium hover:underline"
                         style={{ pointerEvents: "auto" }}
                       >

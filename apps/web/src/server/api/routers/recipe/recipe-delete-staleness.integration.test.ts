@@ -1,4 +1,8 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import {
+  type RecipeId,
+  unsafeRecipeId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
@@ -21,6 +25,7 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { recipeRouter } from "../recipe";
 
 // F2 regression guard: a parent recipe (A) that includes a sub-recipe (B) bakes
@@ -60,7 +65,9 @@ describe("recipe delete propagates cost staleness to parents", () => {
           {
             instructions: [{ instruction: "Mix" }],
             ingredients: [
-              ingredientRef(ing.id, { amounts: [{ value: 2, unit: "cup" }] }),
+              ingredientRef(ing.shortcode, {
+                amounts: [{ value: 2, unit: "cup" }],
+              }),
             ],
           },
         ],
@@ -87,7 +94,16 @@ describe("recipe delete propagates cost staleness to parents", () => {
       }),
       ctx.actor,
     );
-    return { child: child.id as RecipeId, parent: parent.id as RecipeId };
+    const [childEntityId, parentEntityId] = await Promise.all([
+      resolveLiveShortcode(ctx.db, child.id, "recipe"),
+      resolveLiveShortcode(ctx.db, parent.id, "recipe"),
+    ]);
+    if (!childEntityId || !parentEntityId) throw new Error("seed failed");
+    return {
+      child: unsafeRecipeId(childEntityId),
+      childCode: child.id,
+      parent: unsafeRecipeId(parentEntityId),
+    };
   };
 
   const recompute = (ids: RecipeId[]) =>
@@ -96,7 +112,7 @@ describe("recipe delete propagates cost staleness to parents", () => {
     }).services.recipeCosting.recompute(ids);
 
   it("marks the parent stale when its sub-recipe is deleted", async () => {
-    const { child, parent } = await seedParentWithSubRecipe();
+    const { child, childCode, parent } = await seedParentWithSubRecipe();
 
     // Stamp both fresh (inline, no queue bound yet).
     await recompute([parent, child]);
@@ -109,7 +125,7 @@ describe("recipe delete propagates cost staleness to parents", () => {
     // the parent stale — totalsComputedAt returns to null.
     installFakeQueue();
     const caller = createTestCaller(recipeRouter, ctx.db);
-    await caller.delete({ ids: [child] });
+    await caller.delete({ ids: [childCode] });
 
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
@@ -126,7 +142,7 @@ describe("recipe delete propagates cost staleness to parents", () => {
   // sub-recipe.
   it("marks the parent stale when its sub-recipe is deleted via deleteCookbook", async () => {
     const bookName = "Doomed Book";
-    const { id: cookbookId } = await upsertCookbook(
+    const { output: cookbook, entityId: cookbookId } = await upsertCookbook(
       ctx.db,
       { name: bookName, rawJson: [], sourceLabel: bookName },
       ctx.actor,
@@ -140,7 +156,9 @@ describe("recipe delete propagates cost staleness to parents", () => {
           {
             instructions: [{ instruction: "Mix" }],
             ingredients: [
-              ingredientRef(ing.id, { amounts: [{ value: 1, unit: "cup" }] }),
+              ingredientRef(ing.shortcode, {
+                amounts: [{ value: 1, unit: "cup" }],
+              }),
             ],
           },
         ],
@@ -159,7 +177,7 @@ describe("recipe delete propagates cost staleness to parents", () => {
             ingredients: [
               {
                 type: "recipe",
-                recipeId: child.id,
+                recipeId: unsafeRecipeShortcode(child.shortcode),
                 ingredientId: null,
                 amounts: [{ value: 1, unit: "each" }],
               },
@@ -170,19 +188,19 @@ describe("recipe delete propagates cost staleness to parents", () => {
       ctx.actor,
     );
 
-    await recompute([parent.id as RecipeId, child.id]);
+    const parentEntityId = resolveLiveShortcode(ctx.db, parent.id, "recipe");
+    const resolvedParentId = unsafeRecipeId((await parentEntityId)!);
+    await recompute([resolvedParentId, child.id]);
     expect(
-      (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
-        ?.totalsComputedAt,
+      (await getRecipeTotalsState(ctx.db, resolvedParentId))?.totalsComputedAt,
     ).not.toBeNull();
 
     installFakeQueue();
     const caller = createTestCaller(recipeRouter, ctx.db);
-    await caller.deleteCookbook({ cookbookId });
+    await caller.deleteCookbook({ cookbookId: cookbook.id });
 
     expect(
-      (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
-        ?.totalsComputedAt,
+      (await getRecipeTotalsState(ctx.db, resolvedParentId))?.totalsComputedAt,
     ).toBeNull();
     expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
       0,
@@ -222,7 +240,16 @@ describe("findParentRecipesWithDeletedSubRecipes detector", () => {
       }),
       ctx.actor,
     );
-    return { child: child.id as RecipeId, parent: parent.id as RecipeId };
+    const [childEntityId, parentEntityId] = await Promise.all([
+      resolveLiveShortcode(ctx.db, child.id, "recipe"),
+      resolveLiveShortcode(ctx.db, parent.id, "recipe"),
+    ]);
+    if (!childEntityId || !parentEntityId) throw new Error("seed failed");
+    return {
+      child: unsafeRecipeId(childEntityId),
+      parent: unsafeRecipeId(parentEntityId),
+      parentCode: parent.id,
+    };
   };
 
   const recompute = (ids: RecipeId[]) =>
@@ -231,7 +258,7 @@ describe("findParentRecipesWithDeletedSubRecipes detector", () => {
     }).services.recipeCosting.recompute(ids);
 
   it("flags a fresh parent whose sub-recipe was soft-deleted without propagation", async () => {
-    const { child, parent } = await seed();
+    const { child, parent, parentCode } = await seed();
     // Stamp the parent fresh, then soft-delete the child at the repo layer (no
     // staleness propagation) to reconstruct the escaped state directly.
     await recompute([parent]);
@@ -239,14 +266,14 @@ describe("findParentRecipesWithDeletedSubRecipes detector", () => {
 
     const flagged: StaleParentRecipe[] =
       await findParentRecipesWithDeletedSubRecipes(ctx.db);
-    expect(flagged.map((r) => r.id)).toContain(parent);
+    expect(flagged.map((r) => r.id)).toContain(parentCode);
   });
 
   it("does not flag a parent whose sub-recipe is still live", async () => {
-    const { parent } = await seed();
+    const { parent, parentCode } = await seed();
     await recompute([parent]);
 
     const flagged = await findParentRecipesWithDeletedSubRecipes(ctx.db);
-    expect(flagged.map((r) => r.id)).not.toContain(parent);
+    expect(flagged.map((r) => r.id)).not.toContain(parentCode);
   });
 });

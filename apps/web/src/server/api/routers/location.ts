@@ -6,7 +6,12 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { type LocationId, locationId } from "@cubby/schemas/identifiers";
+import {
+  type LocationId,
+  type LocationShortcode,
+  locationShortcode,
+  unsafeLocationId,
+} from "@cubby/schemas/identifiers";
 import {
   infLocation,
   infLocationListOut,
@@ -48,6 +53,10 @@ import {
   updateLocationAiDescription,
 } from "~/server/repo/location";
 import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
+import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -57,6 +66,34 @@ import {
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+async function resolveLocationId(
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: LocationShortcode,
+): Promise<LocationId> {
+  const id = await resolveLiveShortcode(db, shortcode, "location");
+  if (!id) {
+    throw createAppError(
+      "LOCATION_NOT_FOUND",
+      `Location ${shortcode} not found`,
+    );
+  }
+  return unsafeLocationId(id);
+}
+
+async function resolveLocationIds(
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  shortcodes: LocationShortcode[],
+): Promise<LocationId[]> {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "location");
+  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
+  if (missing) {
+    throw createAppError("LOCATION_NOT_FOUND", `Location ${missing} not found`);
+  }
+  return shortcodes.map((shortcode) =>
+    unsafeLocationId(resolved.get(shortcode)!),
+  );
+}
 
 // Create standardized list procedure using factory
 const { list } = createEntityListProcedure({
@@ -94,10 +131,11 @@ const { getByID, getByShortcode, create, update } =
       output: infLocation,
       createOutput: infLocationWithSideEffects,
       updateOutput: infLocationWithSideEffects,
-      idSchema: locationId,
+      idSchema: locationShortcode,
     },
     repository: {
-      getByID: async (services, id: LocationId) => {
+      getByID: async (services, shortcode: LocationShortcode) => {
+        const id = await resolveLocationId(services.db, shortcode);
         return await getLocationById(services.db, id);
       },
       getByShortcode: (services, shortcode) =>
@@ -108,9 +146,10 @@ const { getByID, getByShortcode, create, update } =
           data,
           services.actorContext,
         );
+        const entityId = await resolveLocationId(services.db, location.id);
         const backgroundBatches = await runMutationSideEffects(services.db, {
           action: "created",
-          entity: { entityType: "location", entityId: location.id },
+          entity: { entityType: "location", entityId },
           source: "location.create",
           // A location created WITH photos must trigger the AI description /
           // inventory refresh too — without this it's born with a NULL description
@@ -119,7 +158,8 @@ const { getByID, getByShortcode, create, update } =
         });
         return { ...location, sideEffects: { backgroundBatches } };
       },
-      update: async (services, id: LocationId, data) => {
+      update: async (services, shortcode: LocationShortcode, data) => {
+        const id = await resolveLocationId(services.db, shortcode);
         const imagesChanged =
           (data.pendingImageIds?.length ?? 0) > 0 ||
           (data.removeImageIds?.length ?? 0) > 0;
@@ -176,9 +216,10 @@ const ensureGlobalUnknown = protectedProcedure
       ctx.db,
       ctx.actorContext,
     );
+    const entityId = await resolveLocationId(ctx.db, location.id);
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "location", entityId: location.id },
+      entity: { entityType: "location", entityId },
       source: "location.ensureGlobalUnknown",
     });
     return location;
@@ -195,20 +236,26 @@ const bulkUpdateParent = protectedProcedure
       );
     }
 
+    const ids = await resolveLocationIds(ctx.db, input.ids);
+    const parentId = input.parentId
+      ? await resolveLocationId(ctx.db, input.parentId)
+      : null;
+
     await withTransaction(ctx.db, async (tx) => {
-      for (const id of input.ids) {
+      for (const id of ids) {
         await updateLocation(
           tx,
           id,
           { parentId: input.parentId },
           ctx.actorContext,
+          { resolvedParentId: parentId },
         );
       }
     });
 
     await runMutationSideEffectsForEntities(
       ctx.db,
-      input.ids.map((id) => ({
+      ids.map((id) => ({
         action: "updated" as const,
         entity: { entityType: "location" as const, entityId: id },
         source: "location.bulkUpdateParent",
@@ -234,17 +281,21 @@ const getRecentlyActive = protectedProcedure
   });
 
 // Delete procedure using standalone factory
-const deleteItem = createDeleteProcedure<LocationId>(async (services, ids) => {
-  await deleteLocations(services.db, ids, services.actorContext);
-  return await runMutationSideEffectsForEntities(
-    services.db,
-    ids.map((id) => ({
-      action: "deleted" as const,
-      entity: { entityType: "location" as const, entityId: id },
-      source: "location.delete",
-    })),
-  );
-}, locationId);
+const deleteItem = createDeleteProcedure<LocationShortcode>(
+  async (services, shortcodes) => {
+    const ids = await resolveLocationIds(services.db, shortcodes);
+    await deleteLocations(services.db, ids, services.actorContext);
+    return await runMutationSideEffectsForEntities(
+      services.db,
+      ids.map((id) => ({
+        action: "deleted" as const,
+        entity: { entityType: "location" as const, entityId: id },
+        source: "location.delete",
+      })),
+    );
+  },
+  locationShortcode,
+);
 
 // Manual whole-tree recompute of persisted location valuations. Used to populate
 // after the column is first added, and as a safety net for writes that bypass the
@@ -261,7 +312,14 @@ const getChildCountsByLocations = protectedProcedure
   .input(locationIdsInput)
   .output(locationChildCountsOut)
   .query(async ({ ctx, input }) => {
-    return await getChildCountsByLocationIds(ctx.db, input.locationIds);
+    const ids = await resolveLocationIds(ctx.db, input.locationIds);
+    const counts = await getChildCountsByLocationIds(ctx.db, ids);
+    return Object.fromEntries(
+      input.locationIds.map((shortcode, index) => [
+        shortcode,
+        counts[ids[index]!] ?? 0,
+      ]),
+    );
   });
 
 export const locationRouter = createTRPCRouter({

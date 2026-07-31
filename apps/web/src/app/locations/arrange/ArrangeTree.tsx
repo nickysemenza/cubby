@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
 import { useRef, useState } from "react";
@@ -27,7 +27,7 @@ interface ArrangeTreeProps {
  * only registers draggables/drop targets and local UI state (zoom, hover).
  */
 export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
-  const [zoom, setZoom] = useState<LocationId[]>([]);
+  const [zoom, setZoom] = useState<LocationShortcode[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
@@ -55,7 +55,7 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
   // spring-load-on-hover both fire at any rendered depth (grandchildren render
   // before the collapse cap), so appending the id would skip intermediate
   // ancestors and break zoom resolution — resolve the whole chain instead.
-  function handleDrill(id: LocationId) {
+  function handleDrill(id: LocationShortcode) {
     setZoom(pathToNode(roots, id));
   }
 
@@ -94,7 +94,7 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
                 <ArrangeItemChip
                   key={item.id}
                   item={item}
-                  sourceLocationId={zoomRoot?.id as LocationId}
+                  sourceLocationId={zoomRoot?.id as LocationShortcode}
                 />
               ))}
             </Stack>
@@ -127,7 +127,7 @@ interface TreeLevelProps {
   /** Depth relative to the zoom root — 0 for its direct children. */
   level: number;
   maxDepth: number;
-  onDrill: (id: LocationId) => void;
+  onDrill: (id: LocationShortcode) => void;
 }
 
 /** Recursively renders one indentation level of the tree, capped at `maxDepth`. */
@@ -191,7 +191,7 @@ interface CollapsedRowProps {
   node: InfLocation;
   roots: InfLocation[];
   depth: number;
-  onDrill: (id: LocationId) => void;
+  onDrill: (id: LocationShortcode) => void;
 }
 
 /**
@@ -229,7 +229,7 @@ function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
 
 interface BreadcrumbSegmentProps {
   label: string;
-  locationId: LocationId | null;
+  locationId: LocationShortcode | null;
   roots: InfLocation[];
   active: boolean;
   onClick: () => void;

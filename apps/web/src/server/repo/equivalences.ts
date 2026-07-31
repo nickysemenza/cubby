@@ -59,8 +59,13 @@ export const getMultiMeasureRecipeIngredients = async (
       ),
     );
   return rows.map((r) => ({
-    ...r,
-    ingredientShortcode: unsafeIngredientShortcode(r.ingredientShortcode),
-    recipeShortcode: unsafeRecipeShortcode(r.recipeShortcode),
+    ingredientEntityId: r.ingredientId,
+    ingredientId: unsafeIngredientShortcode(r.ingredientShortcode),
+    ingredientName: r.ingredientName,
+    recipeEntityId: r.recipeId,
+    recipeId: unsafeRecipeShortcode(r.recipeShortcode),
+    recipeName: r.recipeName,
+    rawLine: r.rawLine,
+    amounts: r.amounts,
   }));
 };

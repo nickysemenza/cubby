@@ -8,10 +8,8 @@ import { externalIdInput } from "./external-id";
 import { externalIdOut } from "./external-id";
 import {
   type IngredientId,
-  ingredientId,
   ingredientShortcode,
-  inventoryId,
-  productId,
+  inventoryShortcode,
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
@@ -26,6 +24,7 @@ import { recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   mcpUnitMappingOut,
+  mcpUnitMappingInput,
   unitMappingInput,
   unitMappingOut,
   unitMappingWithMetadata,
@@ -105,7 +104,7 @@ const productCreateShape = {
     .nullable()
     .describe("null means unlimited, 1 for unique items"),
   category: productCategory.nullable().optional(),
-  ingredientId: ingredientId
+  ingredientId: ingredientShortcode
     .nullable()
     .describe(
       "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
@@ -151,7 +150,7 @@ export const productUpdateData = deriveUpdateData(productCreateShape, {
 
 // Input schema for updating products (matches location/recipe/ingredient pattern)
 export const productUpdateInput = z.object({
-  id: productId,
+  id: productShortcode,
   data: productUpdateData,
 });
 
@@ -161,11 +160,11 @@ export const productUpdateInput = z.object({
 export const PRODUCT_SUMMARY_BATCH_MAX = 50;
 
 export const productSummaryBatchInput = z.object({
-  ids: z.array(productId).max(PRODUCT_SUMMARY_BATCH_MAX),
+  ids: z.array(productShortcode).max(PRODUCT_SUMMARY_BATCH_MAX),
 });
 
 export const productApplyUpcInput = z.object({
-  id: productId,
+  id: productShortcode,
   upc,
 });
 
@@ -188,7 +187,7 @@ export const productCreateManyInput = z
   .max(50);
 
 export const productMarkUsdaUnavailableManyInput = z.object({
-  ids: z.array(productId).min(1).max(100),
+  ids: z.array(productShortcode).min(1).max(100),
 });
 
 // Filters accepted by the product list endpoint. Canonical shape shared by the
@@ -278,8 +277,7 @@ export const productSortableFields = [
 export type ProductSortField = (typeof productSortableFields)[number];
 
 const productTopLevelFields = {
-  id: productId,
-  shortcode: productShortcode,
+  id: productShortcode,
   name: z
     .string()
     .describe("Product name")
@@ -346,8 +344,7 @@ export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
 const productIngredientOut = z.object({
-  id: ingredientId,
-  shortcode: ingredientShortcode,
+  id: ingredientShortcode,
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
   naKinds: z.array(baseKind),
@@ -355,7 +352,7 @@ const productIngredientOut = z.object({
 });
 
 const productInventoryFields = {
-  id: inventoryId,
+  id: inventoryShortcode,
   amount,
   valuation: z.number().nullable(),
   // Last deliberate recount (null = never). `updatedAt` moves on any write —
@@ -386,8 +383,7 @@ export type ProductWithMappingsAndFoodOut = z.infer<
 >;
 
 export const productPickerItemOut = z.object({
-  id: productId,
-  shortcode: productShortcode,
+  id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
 });
@@ -466,7 +462,7 @@ export const productSummaryInclude = z.enum(["food", "images", "unitMappings"]);
 export type ProductSummaryInclude = z.infer<typeof productSummaryInclude>;
 
 export const productSummariesInput = z.object({
-  ids: z.array(productId).max(500),
+  ids: z.array(productShortcode).max(500),
   include: z.array(productSummaryInclude).min(1),
 });
 export type ProductSummariesInput = z.infer<typeof productSummariesInput>;
@@ -502,8 +498,7 @@ export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
  */
 export const productTagSiblingsOut = z.array(
   z.object({
-    id: productId,
-    shortcode: productShortcode,
+    id: productShortcode,
     name: z.string(),
     manufacturer: z.string(),
     category: productCategory.nullable(),
@@ -552,7 +547,7 @@ export const mcpProductCreateInput = z.object({
     .string()
     .describe("Manufacturer or 'generic'")
     .meta({ mock: "company.name" }),
-  ingredientId: ingredientId
+  ingredientId: ingredientShortcode
     .nullable()
     .describe(
       "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
@@ -566,7 +561,7 @@ export const mcpProductCreateInput = z.object({
       "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention expense.cost uses.",
     ),
   unitMappings: z
-    .array(unitMappingInput)
+    .array(mcpUnitMappingInput)
     .default([])
     .describe(
       'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
@@ -599,7 +594,13 @@ export const mcpProductUpdateInput = z.object({
   // Same reason as aliases — hand-written shape, so this has to be listed to be
   // writable. Omitting it leaves existing rows untouched (see productUpdateData).
   externalIds: z
-    .array(externalIdInput)
+    .array(
+      z.object({
+        source: z.string().min(1),
+        externalId: z.string().min(1),
+        url: z.string().url().nullish(),
+      }),
+    )
     .optional()
     .describe(
       'Retailer/vendor identifiers, e.g. an Amazon ASIN → [{ source: "amazon", externalId: "B0..." }]. Pass the COMPLETE desired set: it replaces the existing list. One id per (product, source).',
@@ -615,7 +616,7 @@ export const mcpProductUpdateInput = z.object({
   notes: z.string().nullish(),
   expectedQuantity: z.number().int().positive().nullable().optional(),
   category: productCategory.nullable().optional(),
-  ingredientId: ingredientId.nullable().optional(),
+  ingredientId: ingredientShortcode.nullable().optional(),
   price: z.number().nonnegative().nullable().optional(),
   usdaUnavailable: z.boolean().nullable().optional(),
 });
@@ -633,7 +634,15 @@ export const productMcpOut = z.object({
   // USDA FoodData Central id — declared exception, not a cubby shortcode.
   fdc_id: fdcId.nullable(),
   usdaUnavailable: z.boolean().nullable(),
-  externalIds: z.array(externalIdOut),
+  externalIds: z.array(
+    z.object({
+      source: z.string().min(1),
+      externalId: z.string().min(1),
+      url: z.string().url().nullish(),
+      createdAt: z.date(),
+      updatedAt: z.date(),
+    }),
+  ),
   // USDA FoodData Central id — declared exception, not a cubby shortcode.
   usdaFdcId: z.number().nullable(),
   ingredientId: ingredientShortcode.nullable(),

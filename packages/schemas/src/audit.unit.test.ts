@@ -97,6 +97,21 @@ describe("oneOrMany(auditSourceSchema)", () => {
 });
 
 describe("auditLogListInput window filters", () => {
+  it("accepts public entity shortcodes and rejects UUID filters", () => {
+    expect(
+      auditLogListInput.safeParse({
+        entityType: "product",
+        entityId: "PRD-2CRC",
+      }).success,
+    ).toBe(true);
+    expect(
+      auditLogListInput.safeParse({
+        entityType: "product",
+        entityId: "3f2504e0-4f89-41d3-9a0c-0305e82c3302",
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts createdAtFrom/createdAtTo as plain ISO strings", () => {
     const parsed = auditLogListInput.parse({
       limit: 50,
@@ -116,9 +131,8 @@ describe("auditLogListInput window filters", () => {
 });
 
 const entry = (source: string) => ({
-  id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   entityType: "product" as const,
-  entityId: "3f2504e0-4f89-41d3-9a0c-0305e82c3302",
+  entityId: "PRD-2CRC",
   action: "update" as const,
   changes: { tags: { from: [], to: ["fs-rail"] } },
   userId: "user-1",

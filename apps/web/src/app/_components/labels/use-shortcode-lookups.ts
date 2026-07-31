@@ -40,14 +40,14 @@ export function useShortcodeLookups(shortcodes: string[]) {
 
   const items: LabelItem[] = useMemo(() => {
     const locs = locationData.map((d) => ({
-      shortcode: d.shortcode,
+      shortcode: d.id,
       name: d.name,
       entityType: "location" as const,
       locationType: d.type,
       parentName: d.parentName,
     }));
     const prods = productData.map((d) => ({
-      shortcode: d.shortcode,
+      shortcode: d.id,
       name: d.name,
       entityType: "product" as const,
       productCategory: d.category,

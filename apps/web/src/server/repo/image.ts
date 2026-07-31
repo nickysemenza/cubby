@@ -39,7 +39,10 @@ import type {
   ImageUpdateInput,
   ImageWithEntity,
 } from "@cubby/schemas/image";
-import { imageSortableFields } from "@cubby/schemas/image";
+import {
+  attachableImageEntityId,
+  imageSortableFields,
+} from "@cubby/schemas/image";
 import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -179,9 +182,8 @@ const imageWithRelationsToAPI = (
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "PRODUCT",
-      entityId: productAssoc.productId,
+      entityId: attachableImageEntityId.parse(productAssoc.product.shortcode),
       entityName: productAssoc.product.name,
-      entityShortcode: productAssoc.product.shortcode,
     };
   }
 
@@ -201,9 +203,8 @@ const imageWithRelationsToAPI = (
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "LOCATION",
-      entityId: locationAssoc.locationId,
+      entityId: attachableImageEntityId.parse(locationAssoc.location.shortcode),
       entityName: locationAssoc.location.name,
-      entityShortcode: locationAssoc.location.shortcode,
     };
   }
 
@@ -223,9 +224,8 @@ const imageWithRelationsToAPI = (
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "RECIPE",
-      entityId: recipeAssoc.recipeId,
+      entityId: attachableImageEntityId.parse(recipeAssoc.recipe.shortcode),
       entityName: recipeAssoc.recipe.name,
-      entityShortcode: recipeAssoc.recipe.shortcode,
     };
   }
 
@@ -245,9 +245,8 @@ const imageWithRelationsToAPI = (
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "PROJECT",
-      entityId: projectAssoc.projectId,
+      entityId: attachableImageEntityId.parse(projectAssoc.project.shortcode),
       entityName: projectAssoc.project.name,
-      entityShortcode: projectAssoc.project.shortcode,
     };
   }
 
@@ -270,9 +269,8 @@ const imageWithRelationsToAPI = (
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "PURCHASE",
-      entityId: purchaseAssoc.purchaseId,
+      entityId: attachableImageEntityId.parse(purchaseAssoc.purchase.shortcode),
       entityName: purchaseAssoc.purchase.orderId,
-      entityShortcode: purchaseAssoc.purchase.shortcode,
     };
   }
 
@@ -290,7 +288,6 @@ const imageWithRelationsToAPI = (
     entityType: null,
     entityId: null,
     entityName: null,
-    entityShortcode: null,
   };
 };
 

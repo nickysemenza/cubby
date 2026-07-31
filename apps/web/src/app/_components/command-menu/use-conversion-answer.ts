@@ -81,7 +81,7 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
       return {
         input: wasm.format_amount(amount),
         ingredientName: ingredient.name,
-        ingredientShortcode: ingredient.shortcode,
+        ingredientShortcode: ingredient.id,
         result: wasm.format_amount(converted),
         cost,
       };

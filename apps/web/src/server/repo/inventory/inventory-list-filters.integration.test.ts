@@ -1,3 +1,4 @@
+import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,6 +14,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 // Repo-level coverage for the product-attribute filters added to
 // `inventoryentryList` (manufacturerFilter / categoryFilter). The router-level
@@ -23,6 +25,32 @@ import {
 describe("inventoryentryList product-attribute filters", () => {
   const ctx = withTestDb();
 
+  const requireResolvedId = async (
+    shortcode: string,
+    entity: "location" | "product",
+  ) => {
+    const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
+    if (!entityId) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
+    return entityId;
+  };
+
+  const createTestLocation = async (
+    input: Parameters<typeof createLocation>[1],
+  ) => {
+    const output = await createLocation(ctx.db, input, TEST_ACTOR);
+    return unsafeLocationId(await requireResolvedId(output.id, "location"));
+  };
+
+  const createTestProduct = async (
+    input: Parameters<typeof createProduct>[1],
+  ) => {
+    const output = await createProduct(ctx.db, input, TEST_ACTOR);
+    return {
+      output,
+      entityId: unsafeProductId(await requireResolvedId(output.id, "product")),
+    };
+  };
+
   const list = (filters: Parameters<typeof inventoryentryList>[1]) =>
     inventoryentryList(
       ctx.db,
@@ -32,26 +60,20 @@ describe("inventoryentryList product-attribute filters", () => {
     );
 
   it("manufacturerFilter matches case-insensitively on a substring", async () => {
-    const location = await createLocation(
-      ctx.db,
+    const locationId = await createTestLocation(
       makeLocationInput({ name: "Garage" }),
-      TEST_ACTOR,
     );
-    const milwaukee = await createProduct(
-      ctx.db,
+    const { entityId: milwaukeeId } = await createTestProduct(
       makeProductInput({ name: "Drill", manufacturer: "Milwaukee" }),
-      TEST_ACTOR,
     );
-    const dewalt = await createProduct(
-      ctx.db,
+    const { entityId: dewaltId } = await createTestProduct(
       makeProductInput({ name: "Saw", manufacturer: "DeWalt" }),
-      TEST_ACTOR,
     );
     await createInventoryEntry(
       ctx.db,
       {
-        productId: milwaukee.id,
-        locationId: location.id,
+        productId: milwaukeeId,
+        locationId,
         amount: { value: 1, unit: "each" },
       },
       TEST_ACTOR,
@@ -59,8 +81,8 @@ describe("inventoryentryList product-attribute filters", () => {
     await createInventoryEntry(
       ctx.db,
       {
-        productId: dewalt.id,
-        locationId: location.id,
+        productId: dewaltId,
+        locationId,
         amount: { value: 1, unit: "each" },
       },
       TEST_ACTOR,
@@ -74,26 +96,20 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("categoryFilter scopes to the matching category", async () => {
-    const location = await createLocation(
-      ctx.db,
+    const locationId = await createTestLocation(
       makeLocationInput({ name: "Shop" }),
-      TEST_ACTOR,
     );
-    const tool = await createProduct(
-      ctx.db,
+    const { entityId: toolId } = await createTestProduct(
       makeProductInput({ name: "Grinder", category: "tools" }),
-      TEST_ACTOR,
     );
-    const hardware = await createProduct(
-      ctx.db,
+    const { entityId: hardwareId } = await createTestProduct(
       makeProductInput({ name: "Screws", category: "hardware" }),
-      TEST_ACTOR,
     );
     await createInventoryEntry(
       ctx.db,
       {
-        productId: tool.id,
-        locationId: location.id,
+        productId: toolId,
+        locationId,
         amount: { value: 1, unit: "each" },
       },
       TEST_ACTOR,
@@ -101,8 +117,8 @@ describe("inventoryentryList product-attribute filters", () => {
     await createInventoryEntry(
       ctx.db,
       {
-        productId: hardware.id,
-        locationId: location.id,
+        productId: hardwareId,
+        locationId,
         amount: { value: 1, unit: "each" },
       },
       TEST_ACTOR,
@@ -115,47 +131,39 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("ANDs manufacturerFilter and categoryFilter rather than ORing them", async () => {
-    const location = await createLocation(
-      ctx.db,
+    const locationId = await createTestLocation(
       makeLocationInput({ name: "Basement" }),
-      TEST_ACTOR,
     );
     // Matches manufacturer only.
-    const milwaukeeHardware = await createProduct(
-      ctx.db,
+    const milwaukeeHardware = await createTestProduct(
       makeProductInput({
         name: "Bolt Pack",
         manufacturer: "Milwaukee",
         category: "hardware",
       }),
-      TEST_ACTOR,
     );
     // Matches category only.
-    const otherTool = await createProduct(
-      ctx.db,
+    const otherTool = await createTestProduct(
       makeProductInput({
         name: "Wrench",
         manufacturer: "Craftsman",
         category: "tools",
       }),
-      TEST_ACTOR,
     );
     // Matches both.
-    const milwaukeeTool = await createProduct(
-      ctx.db,
+    const milwaukeeTool = await createTestProduct(
       makeProductInput({
         name: "Drill",
         manufacturer: "Milwaukee",
         category: "tools",
       }),
-      TEST_ACTOR,
     );
     for (const p of [milwaukeeHardware, otherTool, milwaukeeTool]) {
       await createInventoryEntry(
         ctx.db,
         {
-          productId: p.id,
-          locationId: location.id,
+          productId: p.entityId,
+          locationId,
           amount: { value: 1, unit: "each" },
         },
         TEST_ACTOR,
@@ -168,50 +176,42 @@ describe("inventoryentryList product-attribute filters", () => {
     });
 
     expect(result.data.length).toEqual(1);
-    expect(result.data[0]?.product.id).toEqual(milwaukeeTool.id);
+    expect(result.data[0]?.product.id).toEqual(milwaukeeTool.output.id);
   });
 
   it("the count/valuation aggregate agrees with the filtered row set", async () => {
-    const location = await createLocation(
-      ctx.db,
+    const locationId = await createTestLocation(
       makeLocationInput({ name: "Kitchen" }),
-      TEST_ACTOR,
     );
-    const flour = await createProduct(
-      ctx.db,
+    const { entityId: flourId } = await createTestProduct(
       makeProductInput({
         name: "Flour",
         manufacturer: "Bob's",
         category: "food",
         price: 5,
       }),
-      TEST_ACTOR,
     );
-    const sugar = await createProduct(
-      ctx.db,
+    const { entityId: sugarId } = await createTestProduct(
       makeProductInput({
         name: "Sugar",
         manufacturer: "Bob's",
         category: "food",
         price: 3,
       }),
-      TEST_ACTOR,
     );
-    const drill = await createProduct(
-      ctx.db,
+    const { entityId: drillId } = await createTestProduct(
       makeProductInput({
         name: "Drill",
         manufacturer: "Milwaukee",
         category: "tools",
         price: 100,
       }),
-      TEST_ACTOR,
     );
     await createInventoryEntry(
       ctx.db,
       {
-        productId: flour.id,
-        locationId: location.id,
+        productId: flourId,
+        locationId,
         amount: { value: 2, unit: "each" },
       },
       TEST_ACTOR,
@@ -219,8 +219,8 @@ describe("inventoryentryList product-attribute filters", () => {
     await createInventoryEntry(
       ctx.db,
       {
-        productId: sugar.id,
-        locationId: location.id,
+        productId: sugarId,
+        locationId,
         amount: { value: 4, unit: "each" },
       },
       TEST_ACTOR,
@@ -228,8 +228,8 @@ describe("inventoryentryList product-attribute filters", () => {
     await createInventoryEntry(
       ctx.db,
       {
-        productId: drill.id,
-        locationId: location.id,
+        productId: drillId,
+        locationId,
         amount: { value: 1, unit: "each" },
       },
       TEST_ACTOR,
@@ -251,25 +251,21 @@ describe("inventoryentryList product-attribute filters", () => {
   });
 
   it("a soft-deleted product does not leak an entry through the join", async () => {
-    const location = await createLocation(
-      ctx.db,
+    const locationId = await createTestLocation(
       makeLocationInput({ name: "Attic" }),
-      TEST_ACTOR,
     );
-    const doomed = await createProduct(
-      ctx.db,
+    const { entityId: doomedId } = await createTestProduct(
       makeProductInput({
         name: "Old Sander",
         manufacturer: "Milwaukee",
         category: "tools",
       }),
-      TEST_ACTOR,
     );
     const entry = await createInventoryEntry(
       ctx.db,
       {
-        productId: doomed.id,
-        locationId: location.id,
+        productId: doomedId,
+        locationId,
         amount: { value: 1, unit: "each" },
       },
       TEST_ACTOR,
@@ -285,7 +281,7 @@ describe("inventoryentryList product-attribute filters", () => {
     await getDb(ctx.db)
       .update(product)
       .set({ deletedAt: new Date() })
-      .where(eq(product.id, doomed.id));
+      .where(eq(product.id, doomedId));
 
     const result = await list({ manufacturerFilter: "milwaukee" });
     expect(result.data.length).toEqual(0);

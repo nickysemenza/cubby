@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { recipeAvailabilityListOut } from "./availability";
-import { recipeId } from "./identifiers";
+import { recipeShortcode } from "./identifiers";
 
 export const recipeAvailabilityInput = z.object({
-  recipeId,
+  recipeId: recipeShortcode,
 });
 
 export const makeableRecipesInput = z.object({

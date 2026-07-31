@@ -67,14 +67,14 @@ export function getSearchResultRoute(item: SearchResultItem) {
   const entity = getSearchResultEntity(item);
   return {
     to: entities[entity].routes.detail,
-    params: entityDetailParams(item.shortcode),
+    params: entityDetailParams(item.id),
   };
 }
 
 export function rememberSearchResult(item: SearchResultItem): void {
   pushRecent({
     entityType: item.entityType,
-    shortcode: item.shortcode,
+    id: item.id,
     name: item.name,
   });
 }

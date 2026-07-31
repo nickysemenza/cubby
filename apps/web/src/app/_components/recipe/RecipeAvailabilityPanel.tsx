@@ -1,5 +1,5 @@
 import type { IngredientAvailability } from "@cubby/schemas/availability";
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChefHat } from "lucide-react";
@@ -19,10 +19,10 @@ const SHELL = "rounded-lg border border-[var(--border)] px-4 py-2 print:hidden";
  * to one (sub-recipe rows carry no ingredient id). */
 function IngredientStatusLink({ row }: { row: IngredientAvailability }) {
   const className = cn("truncate", statusClass(row.status));
-  return row.shortcode ? (
+  return row.ingredientId ? (
     <Link
       to="/ingredients/$shortcode"
-      params={{ shortcode: row.shortcode }}
+      params={{ shortcode: row.ingredientId }}
       className={cn(className, "hover:underline")}
       title={row.name}
     >
@@ -50,7 +50,11 @@ function IngredientStatusLink({ row }: { row: IngredientAvailability }) {
  * Baseline (1×) only — scaling the recipe doesn't rescale these needs; the panel
  * answers "do I have the ingredients", not "how much for 3×".
  */
-export function RecipeAvailabilityPanel({ recipeId }: { recipeId: RecipeId }) {
+export function RecipeAvailabilityPanel({
+  recipeId,
+}: {
+  recipeId: RecipeShortcode;
+}) {
   const api = useTRPC();
   const { data, isLoading, isError } = useQuery(
     api.suggestions.getRecipeAvailability.queryOptions({ recipeId }),

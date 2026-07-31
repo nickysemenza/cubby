@@ -48,14 +48,14 @@ function ChainNodeLink({
     .with("task", () => (
       <EntityInlineLink
         entity="task"
-        data={{ id: node.id, shortcode: node.id, name: node.name }}
+        data={{ id: node.id, name: node.name }}
         compact
       />
     ))
     .with("project", () => (
       <EntityInlineLink
         entity="project"
-        data={{ id: node.id, shortcode: node.id, name: node.name }}
+        data={{ id: node.id, name: node.name }}
         compact
       />
     ))
@@ -108,7 +108,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
               <Row align="center" gap="xs">
                 <EntityInlineLink
                   entity="task"
-                  data={{ id: t.id, shortcode: t.id, name: t.name }}
+                  data={{ id: t.id, name: t.name }}
                   truncate
                 />
                 {t.subtaskCount > 0 && (
@@ -129,7 +129,6 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
                   entity="project"
                   data={{
                     id: t.projectId,
-                    shortcode: t.projectId,
                     name: t.projectName,
                   }}
                   truncate
@@ -216,7 +215,6 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                     entity="task"
                     data={{
                       id: bt.task.id,
-                      shortcode: bt.task.id,
                       name: bt.task.name,
                     }}
                   />

@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationListItemOut } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -43,7 +43,7 @@ export function BulkReparentLocationsDialog({
   const api = useTRPC();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const selectedIds = new Set<LocationId>(
+  const selectedIds = new Set<LocationShortcode>(
     locations.map((location) => location.id),
   );
 

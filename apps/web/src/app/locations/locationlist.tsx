@@ -203,7 +203,7 @@ export function LocationList() {
               );
             }
 
-            const codes = eligible.map((r) => r.original.shortcode).join(",");
+            const codes = eligible.map((r) => r.original.id).join(",");
             navigate({ to: "/labels", search: { codes } });
             return { success: true };
           },
@@ -230,16 +230,14 @@ export function LocationList() {
     (row: LocationListItemOut) => (
       <>
         <DropdownMenuItem
-          render={
-            <Link to="/inventory/session" search={{ parent: row.shortcode }} />
-          }
+          render={<Link to="/inventory/session" search={{ parent: row.id }} />}
         >
           <ScanBarcode className="mr-2 size-4" />
           Recount
         </DropdownMenuItem>
-        {row.shortcode && typeSupportsQrCode(row.type) && (
+        {row.id && typeSupportsQrCode(row.type) && (
           <DropdownMenuItem
-            render={<Link to="/labels" search={{ codes: row.shortcode }} />}
+            render={<Link to="/labels" search={{ codes: row.id }} />}
           >
             <Printer className="mr-2 size-4" />
             Print Label

@@ -78,9 +78,8 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     future: row.future,
     projectId: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
     projectName: resolveLiveJoinName(row.project),
-    productId: row.productId,
+    productId: toProductShortcode(resolveLiveJoinShortcode(row.product)),
     productName: resolveLiveJoinName(row.product),
-    productShortcode: toProductShortcode(resolveLiveJoinShortcode(row.product)),
     // `vendor` and `orderId` are no longer columns on `Expense` — the charge
     // owns them, and they resolve through this join. Keeping the SAME output
     // keys is deliberate: it's what let the ledger's Vendor / Order # columns,

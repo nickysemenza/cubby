@@ -17,10 +17,9 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type LocationId,
-  type ProductId,
   type ProductShortcode,
+  unsafeInventoryId,
   unsafeProductId,
-  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
@@ -53,6 +52,7 @@ import {
   getProductByID,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 
@@ -83,6 +83,15 @@ interface DetectedProductMatch {
   manufacturer: string;
   category: ProductCategory | null;
 }
+
+// Router inputs use a public location shortcode. This service receives the
+// resolved UUID because its repository writes and AI records remain internal.
+type ApproveDetectedInventoryItemRequest = Omit<
+  ApproveDetectedInventoryItemInput,
+  "locationId"
+> & {
+  locationId: LocationId;
+};
 
 function itemProductName(item: DetectedInventoryItem): string {
   if (item.isMisc && !isMiscProduct(item.name)) {
@@ -304,29 +313,38 @@ async function matchDetectedItems(
       productName,
       item.manufacturer,
     );
-    let matched: DetectedProductMatch | null = exactMatched
-      ? {
-          id: exactMatched.id,
-          shortcode: exactMatched.shortcode,
-          name: exactMatched.name,
-          manufacturer: exactMatched.manufacturer,
-          category: exactMatched.category,
-        }
+    const exactMatchedId = exactMatched
+      ? await resolveLiveShortcode(db, exactMatched.id, "product")
       : null;
+    let matched: DetectedProductMatch | null =
+      exactMatched && exactMatchedId
+        ? {
+            id: unsafeProductId(exactMatchedId),
+            shortcode: exactMatched.id,
+            name: exactMatched.name,
+            manufacturer: exactMatched.manufacturer,
+            category: exactMatched.category,
+          }
+        : null;
     if (!matched) {
       const [semanticMatch] = await semanticProductCandidatesBestEffort(
         db,
         productName,
       );
+      const semanticEntityId =
+        semanticMatch?.item.entityType === "product"
+          ? await resolveLiveShortcode(db, semanticMatch.item.id, "product")
+          : null;
       if (
         semanticMatch &&
+        semanticEntityId &&
         semanticMatch.similarity >= SEMANTIC_PRODUCT_MATCH_THRESHOLD &&
         semanticMatch.item.entityType === "product" &&
-        !existingProductIds.has(unsafeProductId(semanticMatch.item.id))
+        !existingProductIds.has(semanticMatch.item.id)
       ) {
         matched = {
-          id: unsafeProductId(semanticMatch.item.id),
-          shortcode: unsafeProductShortcode(semanticMatch.item.shortcode),
+          id: unsafeProductId(semanticEntityId),
+          shortcode: semanticMatch.item.id,
           name: semanticMatch.item.name,
           manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
           category:
@@ -341,8 +359,7 @@ async function matchDetectedItems(
       name: productName,
       matchedProduct: matched
         ? {
-            id: matched.id,
-            shortcode: matched.shortcode,
+            id: matched.shortcode,
             name: matched.name,
             manufacturer: matched.manufacturer,
             category: matched.category,
@@ -443,9 +460,7 @@ export async function detectInventoryItems(
 
 export async function approveDetectedInventoryItem(
   db: Database,
-  input: Omit<ApproveDetectedInventoryItemInput, "productId"> & {
-    productId?: ProductId | null;
-  },
+  input: ApproveDetectedInventoryItemRequest,
   actor: ActorContext,
 ): Promise<ApproveDetectedInventoryItemOut> {
   const productName = itemProductName(input.item);
@@ -453,13 +468,22 @@ export async function approveDetectedInventoryItem(
     input.locationId,
   ]);
 
-  let productId = input.productId ?? null;
+  let productId = input.productId
+    ? await resolveLiveShortcode(db, input.productId, "product")
+    : null;
+  if (input.productId && !productId) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product ${input.productId} not found`,
+    );
+  }
+  let productShortcode = input.productId ?? null;
   let productNameForToast = productName;
   let createdProduct = false;
   const backgroundBatches: BackgroundBatchRef[] = [];
 
   if (productId) {
-    const product = await getProductByID(db, productId);
+    const product = await getProductByID(db, unsafeProductId(productId));
     productNameForToast = product.name;
   } else {
     const matched = await findProductByNameFuzzyManufacturer(
@@ -468,7 +492,15 @@ export async function approveDetectedInventoryItem(
       input.item.manufacturer,
     );
     if (matched) {
-      productId = matched.id;
+      const resolved = await resolveLiveShortcode(db, matched.id, "product");
+      if (!resolved) {
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          `Product ${matched.id} not found`,
+        );
+      }
+      productId = resolved;
+      productShortcode = matched.id;
       productNameForToast = matched.name;
     } else {
       const created = await quickCreateProduct(
@@ -480,20 +512,30 @@ export async function approveDetectedInventoryItem(
         },
         actor,
       );
-      productId = created.id;
+      const resolved = await resolveLiveShortcode(db, created.id, "product");
+      if (!resolved) {
+        throw new Error(`Created product ${created.id} could not be resolved`);
+      }
+      productId = resolved;
+      productShortcode = created.id;
       productNameForToast = created.name;
       createdProduct = true;
       backgroundBatches.push(
         ...(await runMutationSideEffects(db, {
           action: "created",
-          entity: { entityType: "product", entityId: created.id },
+          entity: {
+            entityType: "product",
+            entityId: unsafeProductId(resolved),
+          },
           source: "location-ai.inventory.approve",
         })),
       );
     }
   }
 
-  if (existingInventory.some((entry) => entry.product.id === productId)) {
+  if (
+    existingInventory.some((entry) => entry.product.id === productShortcode)
+  ) {
     throw createAppError(
       "DUPLICATE_RECORD",
       `${productNameForToast} is already inventoried at this location.`,
@@ -503,7 +545,7 @@ export async function approveDetectedInventoryItem(
   const createdInventory = await createInventoryEntry(
     db,
     {
-      productId,
+      productId: unsafeProductId(productId),
       locationId: input.locationId,
       amount: {
         value: Math.max(input.item.estimatedQuantity, 1),
@@ -512,17 +554,30 @@ export async function approveDetectedInventoryItem(
     },
     actor,
   );
+  const inventoryEntityId = await resolveLiveShortcode(
+    db,
+    createdInventory.id,
+    "inventory",
+  );
+  if (!inventoryEntityId) {
+    throw new Error(
+      `Created inventory ${createdInventory.id} could not be resolved`,
+    );
+  }
   backgroundBatches.push(
     ...(await runMutationSideEffects(db, {
       action: "created",
-      entity: { entityType: "inventory", entityId: createdInventory.id },
+      entity: {
+        entityType: "inventory",
+        entityId: unsafeInventoryId(inventoryEntityId),
+      },
       source: "location-ai.inventory.approve",
     })),
   );
 
   return {
     inventoryId: createdInventory.id,
-    productId,
+    productId: productShortcode!,
     productName: productNameForToast,
     createdProduct,
     sideEffects: { backgroundBatches },

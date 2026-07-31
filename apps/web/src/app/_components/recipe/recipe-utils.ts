@@ -307,14 +307,14 @@ export const entityRefForRow = (
     .with({ kind: "subrecipe" }, (r) => ({
       entity: "recipe" as const,
       id: r.child.recipe.id,
-      shortcode: r.child.recipe.shortcode,
+      shortcode: r.child.recipe.id,
     }))
     .with({ kind: "ingredient" }, (r) =>
       r.row.type === "ingredient"
         ? {
             entity: "ingredient" as const,
             id: r.row.ingredient.id,
-            shortcode: r.row.ingredient.shortcode,
+            shortcode: r.row.ingredient.id,
           }
         : null,
     )

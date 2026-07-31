@@ -11,7 +11,10 @@
 
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { amount } from "@cubby/schemas/codec";
-import type { LocationId, ProductShortcode } from "@cubby/schemas/identifiers";
+import type {
+  LocationShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -54,7 +57,7 @@ import {
 } from "./hooks";
 
 interface QuickInventoryAddProps {
-  locationId: LocationId;
+  locationId: LocationShortcode;
   onSuccess: () => void;
   /**
    * Prefills the select-mode product picker (and restores it after each add) —
@@ -182,7 +185,7 @@ export function QuickInventoryAdd({
       // Step 2: Create the inventory entry
       try {
         const inventory = await inventoryCreateMutation.mutateAsync({
-          productId: newProduct.shortcode,
+          productId: newProduct.id,
           locationId,
           amount: values.amount,
         });

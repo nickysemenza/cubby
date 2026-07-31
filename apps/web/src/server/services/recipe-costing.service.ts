@@ -11,7 +11,13 @@
 
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { EntityRef } from "@cubby/schemas/entity";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type RecipeId,
+  type RecipeShortcode,
+  unsafeIngredientId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import type {
@@ -54,6 +60,7 @@ import {
   selectStaleRecipeIds,
   updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
 import type { USDAClient } from "../clients/usda";
 import { getIngredientsByIDs } from "./ingredient.service";
@@ -180,7 +187,18 @@ export class RecipeCostingService {
           const toFetch = frontier.filter((id) => !seen.has(id));
           for (const id of toFetch) seen.add(id);
           if (toFetch.length === 0) break;
-          const fetched = await getRecipesByIDs(this.db, toFetch);
+          const resolved = await resolveLiveShortcodes(
+            this.db,
+            toFetch,
+            "recipe",
+          );
+          const fetched = await getRecipesByIDs(
+            this.db,
+            toFetch.flatMap((shortcode) => {
+              const id = resolved.get(shortcode);
+              return id ? [unsafeRecipeId(id)] : [];
+            }),
+          );
           frontier = [];
           for (const r of fetched) {
             recipeMap[r.id] = r;
@@ -197,10 +215,18 @@ export class RecipeCostingService {
           Object.keys(recipeMap).length,
         );
         span.setAttribute("ingredient.count", ingredientIds.length);
+        const resolvedIngredients = await resolveLiveShortcodes(
+          this.db,
+          ingredientIds,
+          "ingredient",
+        );
         const ingredients = await getIngredientsByIDs(
           this.db,
           this.usdaClient,
-          ingredientIds,
+          ingredientIds.flatMap((shortcode) => {
+            const id = resolvedIngredients.get(shortcode);
+            return id ? [unsafeIngredientId(id)] : [];
+          }),
         );
         const ingMap = keyBy(ingredients, (i) => i.id);
         return { ingMap, recipeMap };
@@ -216,7 +242,9 @@ export class RecipeCostingService {
    */
   async computeTotals(
     recipes: RecipeCostingInput[],
-  ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
+  ): Promise<
+    Map<RecipeShortcode, { totals: RecipeTotals; complete: boolean }>
+  > {
     return withTrace(
       TraceNames.service("recipeCosting", "computeTotals"),
       async (span) => {
@@ -228,7 +256,9 @@ export class RecipeCostingService {
 
   private async computeTotalsInner(
     recipes: RecipeCostingInput[],
-  ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
+  ): Promise<
+    Map<RecipeShortcode, { totals: RecipeTotals; complete: boolean }>
+  > {
     const { ingMap, recipeMap } = await this.loadContext(recipes);
 
     // One engine call for the whole batch (ingredients serialized once). Traced
@@ -249,7 +279,7 @@ export class RecipeCostingService {
     );
 
     const result = new Map<
-      RecipeId,
+      RecipeShortcode,
       { totals: RecipeTotals; complete: boolean }
     >();
     for (const r of recipes) {
@@ -438,6 +468,11 @@ export class RecipeCostingService {
     const tLoad = performance.now();
     const recipes = await getRecipesByIDs(this.db, todo);
     const totalsMap = await this.computeTotals(recipes);
+    const resolvedRecipeIds = await resolveLiveShortcodes(
+      this.db,
+      recipes.map((r) => r.id),
+      "recipe",
+    );
     const loadMs = Math.round(performance.now() - tLoad);
     const updates: Array<{ id: RecipeId; totals: RecipeTotals }> = [];
     const freshOnlyIds: RecipeId[] = [];
@@ -446,7 +481,9 @@ export class RecipeCostingService {
       const computed = totalsMap.get(r.id);
       if (!computed) continue;
       const { totals: next } = computed;
-      const id = r.id;
+      const idValue = resolvedRecipeIds.get(r.id);
+      if (!idValue) continue;
+      const id = unsafeRecipeId(idValue);
       if (totalsDiffer(r.totals, next)) {
         updates.push({ id, totals: next });
         changedIds.push(id);

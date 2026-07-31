@@ -1,4 +1,4 @@
-import { cookbookId } from "@cubby/schemas/identifiers";
+import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
 import { z } from "zod";
@@ -19,7 +19,7 @@ const searchSchema = z.object({
   tab: z.enum(["recipes", "schema", "integrity"]).optional().catch(undefined),
   // Recipe-graph filters (migrated from the old /recipes/graph route). Branded
   // at the route boundary so garbage ?cookbookId= values are rejected here.
-  cookbookId: cookbookId.optional().catch(undefined),
+  cookbookId: cookbookShortcode.optional().catch(undefined),
   hide: z.boolean().optional().catch(true),
 });
 

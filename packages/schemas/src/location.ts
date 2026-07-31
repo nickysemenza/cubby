@@ -6,11 +6,8 @@ import { amount } from "./codec";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
 import {
-  inventoryId,
   inventoryShortcode,
-  locationId,
   locationShortcode,
-  productId,
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
@@ -35,7 +32,7 @@ export const locationFilterFields = {
     .optional()
     .describe("Filter by location name (substring)"),
   itemTypeFilter: oneOrMany(locationType).optional(),
-  parentId: oneOrMany(locationId).optional(),
+  parentId: oneOrMany(locationShortcode).optional(),
   parentPresenceFilter: presenceFilter,
   /**
    * `"none"` is the empty-shelf worklist. Counts only entries whose product is
@@ -87,8 +84,7 @@ export const locationValuation = z.object({
 export type LocationValuation = z.infer<typeof locationValuation>;
 
 export const locationOutFields = {
-  id: locationId,
-  shortcode: locationShortcode,
+  id: locationShortcode,
   name: z.string().describe("name of location"),
   aliases: z
     .array(z.string())
@@ -108,8 +104,7 @@ export const locationOut = z.object(locationOutFields);
 export type LocationOut = z.infer<typeof locationOut>;
 
 export const locationListRefOut = z.object({
-  id: locationId,
-  shortcode: locationShortcode,
+  id: locationShortcode,
   name: z.string(),
   type: locationType,
 });
@@ -122,7 +117,7 @@ export type LocationListRefOut = z.infer<typeof locationListRefOut>;
  * full location universe. Mirrors `projectOptionsOut`'s role for projects.
  */
 export const locationParentOptionsOut = z.object({
-  id: locationId,
+  id: locationShortcode,
   name: z.string(),
 });
 export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
@@ -130,8 +125,7 @@ export type LocationParentOptionsOut = z.infer<typeof locationParentOptionsOut>;
 const locationProductCategory = z.enum(productCategoryValues);
 
 const locationInventoryProductOut = z.object({
-  id: productId,
-  shortcode: productShortcode,
+  id: productShortcode,
   name: z.string(),
   upc: upc.nullable(),
   fdc_id: fdcId.nullable(),
@@ -146,7 +140,7 @@ const locationInventoryProductOut = z.object({
 });
 
 const locationInventoryWithProductOut = z.object({
-  id: inventoryId,
+  id: inventoryShortcode,
   amount,
   valuation: z.number().nullable(),
   ...timestampedFields,
@@ -189,11 +183,10 @@ export const locationChildCountsOut = z.record(
 
 /** Minimal inventory item info for tree display */
 const inventoryItemForTree = z.object({
-  id: inventoryId,
-  shortcode: inventoryShortcode,
+  id: inventoryShortcode,
   amount,
   productName: z.string(),
-  productId,
+  productId: productShortcode,
 });
 export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
 
@@ -226,12 +219,7 @@ export const infLocationWithSideEffects = infLocation.and(
   z.object({ sideEffects: mutationSideEffectsSchema }),
 );
 
-// Helper to coerce empty strings to null for optional ID fields
-const optionalLocationId = z
-  .string()
-  .nullable()
-  .transform((val) => (val === "" ? null : val))
-  .pipe(locationId.nullable());
+const optionalLocationShortcode = locationShortcode.nullable();
 
 // Input schema for creating locations
 const locationCreateShape = {
@@ -245,7 +233,7 @@ const locationCreateShape = {
       "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
     ),
   type: locationType,
-  parentId: optionalLocationId.describe(
+  parentId: optionalLocationShortcode.describe(
     "Parent location id — nest this location under another (omit/null for a top-level location).",
   ),
   pendingImageIds: z.array(z.uuid()).optional(),
@@ -267,13 +255,13 @@ export const locationUpdateData = deriveUpdateData(locationCreateShape, {
 
 // Input schema for updating locations
 export const locationUpdateInput = z.object({
-  id: locationId,
+  id: locationShortcode,
   data: locationUpdateData,
 });
 
 export const locationBulkUpdateParentInput = z.object({
-  ids: z.array(locationId).min(1),
-  parentId: optionalLocationId,
+  ids: z.array(locationShortcode).min(1),
+  parentId: optionalLocationShortcode,
 });
 
 export const locationBulkUpdateParentOut = z.object({
@@ -281,7 +269,7 @@ export const locationBulkUpdateParentOut = z.object({
 });
 
 export const locationIdInput = z.object({
-  id: locationId,
+  id: locationShortcode,
 });
 
 export const locationShortcodesInput = z.object({
@@ -299,7 +287,7 @@ export const recentlyActiveLocationsInput = z
   .optional();
 
 export const locationIdsInput = z.object({
-  locationIds: z.array(locationId),
+  locationIds: z.array(locationShortcode),
 });
 
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
@@ -311,7 +299,7 @@ export type LocationBulkUpdateParentInput = z.infer<
 export const mcpLocationCreateInput = z.object({
   name: requiredName("Location name").describe("name of location"),
   type: locationType,
-  parentId: optionalLocationId.describe(
+  parentId: optionalLocationShortcode.describe(
     "Parent location id — nest this location under another (omit/null for a top-level location).",
   ),
 });

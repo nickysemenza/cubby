@@ -1,7 +1,7 @@
 import {
-  type LocationId,
-  unsafeInventoryId,
-  unsafeLocationId,
+  type LocationShortcode,
+  unsafeInventoryShortcode,
+  unsafeLocationShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -49,8 +49,10 @@ export function useArrangeMutations() {
           treeKey,
           applyLocationMove(
             prev,
-            unsafeLocationId(dragId),
-            vars.parentId == null ? null : unsafeLocationId(vars.parentId),
+            unsafeLocationShortcode(dragId),
+            vars.parentId == null
+              ? null
+              : unsafeLocationShortcode(vars.parentId),
           ),
         );
       }
@@ -77,9 +79,9 @@ export function useArrangeMutations() {
           treeKey,
           applyItemMove(
             prev,
-            unsafeInventoryId(first.inventoryEntryId),
-            unsafeLocationId(vars.sourceLocationId),
-            unsafeLocationId(vars.targetLocationId),
+            unsafeInventoryShortcode(first.inventoryEntryId),
+            unsafeLocationShortcode(vars.sourceLocationId),
+            unsafeLocationShortcode(vars.targetLocationId),
           ),
         );
       }
@@ -94,9 +96,11 @@ export function useArrangeMutations() {
   });
 
   return {
-    moveLocation: (dragId: LocationId, targetId: LocationId | null) =>
-      reparent.mutate({ ids: [dragId], parentId: targetId }),
-    moveItem: (drag: ItemDragData, targetLocationId: LocationId) =>
+    moveLocation: (
+      dragId: LocationShortcode,
+      targetId: LocationShortcode | null,
+    ) => reparent.mutate({ ids: [dragId], parentId: targetId }),
+    moveItem: (drag: ItemDragData, targetLocationId: LocationShortcode) =>
       move.mutate({
         sourceLocationId: drag.sourceLocationId,
         targetLocationId,

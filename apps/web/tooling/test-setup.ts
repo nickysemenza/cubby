@@ -4,14 +4,13 @@ import {
   buildActorContext,
 } from "@cubby/schemas/context";
 import {
-  type InventoryId,
-  inventoryId as inventoryIdSchema,
+  type InventoryShortcode,
   type LocationId,
+  type LocationShortcode,
   type ProductId,
-  productId as productIdSchema,
+  type ProductShortcode,
   unsafeUserId,
 } from "@cubby/schemas/identifiers";
-import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -309,11 +308,11 @@ const remapDBConfig = (
 
 export interface SeedResult {
   /** Lookup product ID by name */
-  productIds: Map<string, ProductId>;
+  productIds: Map<string, ProductShortcode>;
   /** Lookup location ID by name (leaf name, not full path) */
-  locationIds: Map<string, LocationId>;
+  locationIds: Map<string, LocationShortcode>;
   /** Lookup inventory entry ID by "productName@locationName" */
-  inventoryIds: Map<string, InventoryId>;
+  inventoryIds: Map<string, InventoryShortcode>;
 }
 
 /** Minimal row shape for seeding inventory test data. */
@@ -352,21 +351,24 @@ export async function seedFromCSV(
   actor: ActorContext,
 ): Promise<SeedResult> {
   // Dynamic import to avoid loading env.js during globalSetup
-  const { createInventoryEntry, inventoryentryList } = await import(
-    "../src/server/repo/inventory"
-  );
+  const { createInventoryEntry } = await import("../src/server/repo/inventory");
   const { quickCreateProduct } = await import("../src/server/repo/product");
-  const { findOrCreateLocationByName } = await import(
+  const { findOrCreateLocationByName, getLocationById } = await import(
     "../src/server/repo/location"
   );
+  const { resolveLiveShortcode } = await import(
+    "../src/server/repo/shortcode-resolver"
+  );
 
-  const productIds = new Map<string, ProductId>();
-  const locationIds = new Map<string, LocationId>();
-  const inventoryIds = new Map<string, InventoryId>();
+  const productIds = new Map<string, ProductShortcode>();
+  const productEntityIds = new Map<string, ProductId>();
+  const locationIds = new Map<string, LocationShortcode>();
+  const locationEntityIds = new Map<string, LocationId>();
+  const inventoryIds = new Map<string, InventoryShortcode>();
 
   for (const row of rows) {
     // Create each unique product once (keyed by name)
-    let productId = productIds.get(row.product_name);
+    let productId = productEntityIds.get(row.product_name);
     if (!productId) {
       const created = await quickCreateProduct(
         db,
@@ -379,13 +381,16 @@ export async function seedFromCSV(
         },
         actor,
       );
-      productId = productIdSchema.parse(created.id);
-      productIds.set(row.product_name, productId);
+      const resolved = await resolveLiveShortcode(db, created.id, "product");
+      if (!resolved) throw new Error("seedFromCSV: created product not found");
+      productId = resolved as ProductId;
+      productEntityIds.set(row.product_name, productId);
+      productIds.set(row.product_name, created.id);
     }
 
     // Place inventory only when a location is given (else it's a product-only row)
     if (row.location_name) {
-      let locationId = locationIds.get(row.location_name);
+      let locationId = locationEntityIds.get(row.location_name);
       if (!locationId) {
         const loc = await findOrCreateLocationByName(
           db,
@@ -394,10 +399,14 @@ export async function seedFromCSV(
           "room", // type - default to room for test locations
         );
         locationId = loc.locationId;
-        locationIds.set(row.location_name, locationId);
+        locationEntityIds.set(row.location_name, locationId);
+        locationIds.set(
+          row.location_name,
+          (await getLocationById(db, locationId))!.id,
+        );
       }
 
-      await createInventoryEntry(
+      const created = await createInventoryEntry(
         db,
         {
           productId,
@@ -406,21 +415,8 @@ export async function seedFromCSV(
         },
         actor,
       );
+      inventoryIds.set(`${row.product_name}@${row.location_name}`, created.id);
     }
-  }
-
-  // Query created inventory entries to build the "productName@locationName" map
-  // (createInventoryEntry doesn't return a name-keyed lookup)
-  const inventoryEntries = await inventoryentryList(
-    db,
-    {},
-    [{ orderBy: "createdAt", direction: "asc" }],
-    { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
-  );
-
-  for (const entry of inventoryEntries.data) {
-    const key = `${entry.product.name}@${entry.location.name}`;
-    inventoryIds.set(key, inventoryIdSchema.parse(entry.id));
   }
 
   return { productIds, locationIds, inventoryIds };

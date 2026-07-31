@@ -7,14 +7,14 @@ import { VendorCell, VendorMark } from "./vendor-cell";
 vi.mock("~/app/_components/EntityPreviewLink", () => ({
   EntityPreviewLink: ({
     children,
-    shortcode,
+    id,
     className,
   }: {
     children: ReactNode;
-    shortcode: string;
+    id: string;
     className?: string;
   }) => (
-    <a href={`/vendors/${shortcode}`} className={className}>
+    <a href={`/vendors/${id}`} className={className}>
       {children}
     </a>
   ),

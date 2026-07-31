@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { recipeId } from "./identifiers";
+import { recipeShortcode } from "./identifiers";
 
 export const recipeFlowNodeId = z
   .string()
@@ -210,11 +210,11 @@ export const recipeFlowStateSchema = z.discriminatedUnion("status", [
 export type RecipeFlowState = z.infer<typeof recipeFlowStateSchema>;
 
 export const recipeFlowGetInputSchema = z.object({
-  id: recipeId,
+  id: recipeShortcode,
 });
 
 export const recipeFlowGenerateInputSchema = z.object({
-  id: recipeId,
+  id: recipeShortcode,
   guidance: z.string().trim().min(1).max(1000).nullable().optional(),
   force: z.boolean().optional().default(false),
 });

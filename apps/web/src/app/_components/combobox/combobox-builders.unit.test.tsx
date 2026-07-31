@@ -1,9 +1,9 @@
 import {
-  unsafeIngredientId,
-  unsafeLocationId,
+  unsafeIngredientShortcode,
+  unsafeLocationShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
-  unsafeRecipeId,
+  unsafeRecipeShortcode,
   unsafeTaskShortcode,
   unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
@@ -20,40 +20,35 @@ import {
 } from "./combobox-builders";
 
 describe("entity picker value adapters", () => {
-  it("keeps UUID-backed ING, LOC, and RCP assignments while displaying shortcodes", () => {
-    const ingredientId = unsafeIngredientId(
-      "00000000-0000-4000-8000-000000000001",
-    );
-    const locationId = unsafeLocationId("00000000-0000-4000-8000-000000000002");
-    const recipeId = unsafeRecipeId("00000000-0000-4000-8000-000000000003");
+  it("keeps ING, LOC, and RCP assignments shortcode-valued", () => {
+    const ingredientId = unsafeIngredientShortcode("ING-2ABC");
+    const locationId = unsafeLocationShortcode("LOC-3ABC");
+    const recipeId = unsafeRecipeShortcode("RCP-4ABC");
 
     expect(
       buildIngredientComboboxItem({
         id: ingredientId,
-        shortcode: "ING-2ABC",
         name: "Scallion",
         aliases: ["green onion"],
       }),
     ).toMatchObject({
       id: ingredientId,
-      shortcode: "ING-2ABC",
+      shortcode: ingredientId,
       aliases: ["green onion"],
     });
     expect(
       buildLocationComboboxItem({
         id: locationId,
-        shortcode: "LOC-3ABC",
         name: "Pantry",
         type: "room",
       }),
-    ).toMatchObject({ id: locationId, shortcode: "LOC-3ABC" });
+    ).toMatchObject({ id: locationId, shortcode: locationId });
     expect(
       buildRecipeComboboxItem({
         id: recipeId,
-        shortcode: "RCP-4ABC",
         name: "Soup",
       }),
-    ).toMatchObject({ id: recipeId, shortcode: "RCP-4ABC" });
+    ).toMatchObject({ id: recipeId, shortcode: recipeId });
   });
 
   it("keeps PRD, PRJ, TSK, and persisted VEN assignments shortcode-valued", () => {
@@ -64,7 +59,7 @@ describe("entity picker value adapters", () => {
 
     expect(
       buildProductComboboxItem({
-        shortcode: product,
+        id: product,
         name: "Drill",
         manufacturer: "Makita",
       }),

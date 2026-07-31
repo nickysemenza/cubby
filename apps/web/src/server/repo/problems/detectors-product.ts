@@ -113,14 +113,12 @@ export const findDuplicateUniqueProducts = async (
       (prod) => prod.expectedQuantity === 1 && prod.inventoryEntry.length > 1,
     )
     .map((prod) => ({
-      id: prod.id,
-      shortcode: unsafeProductShortcode(prod.shortcode),
+      id: unsafeProductShortcode(prod.shortcode),
       name: prod.name,
       manufacturer: prod.manufacturer,
       expectedQuantity: prod.expectedQuantity,
       locations: prod.inventoryEntry.map((entry) => ({
-        id: entry.location.id,
-        shortcode: unsafeLocationShortcode(entry.location.shortcode),
+        id: unsafeLocationShortcode(entry.location.shortcode),
         name: entry.location.name,
       })),
     }));
@@ -237,7 +235,7 @@ export const findOrphanedProducts = async (
 
   return orphaned.map((row) => ({
     ...row,
-    shortcode: unsafeProductShortcode(row.shortcode),
+    id: unsafeProductShortcode(row.shortcode),
   }));
 };
 
@@ -283,8 +281,7 @@ export const findProductsMissingPrice = async (
     if (prod.inventoryEntry.length === 0) continue;
 
     const item: ProductMissingPrice = {
-      id: prod.id,
-      shortcode: unsafeProductShortcode(prod.shortcode),
+      id: unsafeProductShortcode(prod.shortcode),
       name: prod.name,
       manufacturer: prod.manufacturer,
       inventoryQuantity: prod.inventoryEntry.reduce(
@@ -292,8 +289,7 @@ export const findProductsMissingPrice = async (
         0,
       ),
       locations: prod.inventoryEntry.map((entry) => ({
-        id: entry.location.id,
-        shortcode: unsafeLocationShortcode(entry.location.shortcode),
+        id: unsafeLocationShortcode(entry.location.shortcode),
         name: entry.location.name,
       })),
     };
@@ -374,11 +370,10 @@ export const findProductsWithoutMappings = async (
         ...rest
       }) => ({
         ...rest,
-        shortcode: unsafeProductShortcode(shortcode),
+        id: unsafeProductShortcode(shortcode),
         isIngredient: ingredientId != null,
         usdaUnavailable: usdaUnavailable ?? false,
-        ingredientId,
-        ingredientShortcode:
+        ingredientId:
           ingredientShortcode != null
             ? unsafeIngredientShortcode(ingredientShortcode)
             : null,

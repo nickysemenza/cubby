@@ -7,12 +7,15 @@
 
 import { positiveAmount } from "@cubby/schemas/codec";
 import type {
-  IngredientId,
-  LocationId,
+  IngredientShortcode,
+  LocationShortcode,
   ProductShortcode,
-  RecipeId,
+  RecipeShortcode,
 } from "@cubby/schemas/identifiers";
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeLocationShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 
@@ -62,13 +65,13 @@ export function getProductShortcode(
 }
 
 /**
- * Extracts the LocationId from a required location combobox field.
+ * Extracts the LocationShortcode from a required location combobox field.
  * Use after form validation when location is guaranteed to be non-null.
  */
 export function getLocationId(
   item: z.input<typeof requiredLocationField>,
-): LocationId {
-  return item!.id as LocationId;
+): LocationShortcode {
+  return unsafeLocationShortcode(item!.id);
 }
 
 /** Extracts an optional public ProductShortcode from a product combobox. */
@@ -80,15 +83,15 @@ export function getOptionalProductShortcode(
 }
 
 /**
- * Extracts an optional LocationId from a nullable location combobox field.
+ * Extracts an optional LocationShortcode from a nullable location combobox field.
  * Returns undefined if the combobox is empty or has an empty id.
  */
 export function getOptionalLocationId(
   item: ComboboxItem | null | undefined,
-): LocationId | undefined {
+): LocationShortcode | undefined {
   // Handle null/undefined item, or item with empty id
   if (!item?.id) return undefined;
-  return item.id as LocationId;
+  return unsafeLocationShortcode(item.id);
 }
 
 /**
@@ -97,9 +100,9 @@ export function getOptionalLocationId(
  */
 export function getOptionalIngredientId(
   item: ComboboxItem | null | undefined,
-): IngredientId | undefined {
+): IngredientShortcode | undefined {
   if (!item?.id) return undefined;
-  return item.id as IngredientId;
+  return item.id as IngredientShortcode;
 }
 
 /**
@@ -108,8 +111,8 @@ export function getOptionalIngredientId(
  */
 export function getOptionalRecipeId(
   item: ComboboxItem | null | undefined,
-): RecipeId | undefined {
-  return item?.id as RecipeId | undefined;
+): RecipeShortcode | undefined {
+  return item?.id as RecipeShortcode | undefined;
 }
 
 /**

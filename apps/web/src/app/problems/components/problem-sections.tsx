@@ -402,7 +402,7 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
         : []),
     ],
     // `href` is already a shortcode-bearing path built server-side
-    // (`/tasks/${row.shortcode}` etc. in server/repo/project/attention.ts) —
+    // (`/tasks/${row.id}` etc. in server/repo/project/attention.ts) —
     // no uuid-to-shortcode resolution is needed here.
     route: { href: item.href },
     editLabel: `Open ${item.entityType}`,
@@ -459,7 +459,10 @@ function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
  * reads properly: with no majority the counts are 1 and 1, and "1 uses" is
  * correct English that still scans as a typo.
  */
-const variantSubtitle = (v: LabelVariant, noun: string) =>
+const variantSubtitle = (
+  v: Pick<LabelVariant, "count" | "canonical" | "canonicalCount">,
+  noun: string,
+) =>
   `${v.count} ${noun}${v.count === 1 ? "" : "s"} — "${v.canonical}" has ${
     v.canonicalCount
   }`;
@@ -493,7 +496,7 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   const base = {
     title: item.name,
     subtitle: byManufacturer(item.manufacturer),
-    route: entityDetailLink("product", item.shortcode),
+    route: entityDetailLink("product", item.id),
     editLabel: "Open product",
   };
   const inlineFix = (label: string) => ({
@@ -584,7 +587,7 @@ function locationBadges(
     <Link
       key={location.id}
       to="/locations/$shortcode"
-      params={{ shortcode: location.shortcode }}
+      params={{ shortcode: location.id }}
     >
       <Badge
         variant="outline"
@@ -643,7 +646,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         <Link
           key={location.id}
           to="/locations/$shortcode"
-          params={{ shortcode: location.shortcode }}
+          params={{ shortcode: location.id }}
         >
           <Badge
             variant="outline"
@@ -655,7 +658,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           </Badge>
         </Link>
       )),
-      route: entityDetailLink("product", product.shortcode),
+      route: entityDetailLink("product", product.id),
     }),
   }),
   section({
@@ -672,7 +675,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
       details: [createdAgoDetail(product.createdAt)],
-      route: entityDetailLink("product", product.shortcode),
+      route: entityDetailLink("product", product.id),
       inlineFix: {
         label: "Delete",
         render: (close) => (
@@ -698,7 +701,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: unpricedSubtitle(product),
       badges: locationBadges(product.locations),
-      route: entityDetailLink("product", product.shortcode),
+      route: entityDetailLink("product", product.id),
     }),
   }),
   section({
@@ -717,7 +720,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: getMiscDisplayName(product.name),
       subtitle: unpricedSubtitle(product),
       badges: locationBadges(product.locations),
-      route: entityDetailLink("product", product.shortcode),
+      route: entityDetailLink("product", product.id),
     }),
   }),
   section({
@@ -760,7 +763,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       details: [
         `Used in ${ing.recipeCount} recipe${ing.recipeCount === 1 ? "" : "s"}`,
       ],
-      route: entityDetailLink("ingredient", ing.shortcode),
+      route: entityDetailLink("ingredient", ing.id),
       // The workbench can actually create the product; the detail page can't.
       customActions: <WorkbenchFixLink ingredientId={ing.id} />,
     }),
@@ -784,7 +787,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         <Link
           key={prod.id}
           to="/products/$shortcode"
-          params={{ shortcode: prod.shortcode }}
+          params={{ shortcode: prod.id }}
         >
           <Badge
             variant="outline"
@@ -796,7 +799,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           </Badge>
         </Link>
       )),
-      route: entityDetailLink("ingredient", ing.shortcode),
+      route: entityDetailLink("ingredient", ing.id),
       inlineFix: {
         label: "Delete + product(s)",
         render: (close) => (
@@ -828,7 +831,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     renderItem: (ing) => ({
       title: ing.name,
       details: [createdAgoDetail(ing.createdAt)],
-      route: entityDetailLink("ingredient", ing.shortcode),
+      route: entityDetailLink("ingredient", ing.id),
       inlineFix: {
         label: "Delete",
         render: (close) => (
@@ -883,9 +886,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           className="text-sm"
         />,
       ],
-      route: entityDetailLink("location", loc.shortcode),
+      route: entityDetailLink("location", loc.id),
       editLabel: "Open location",
-      customActions: <RecountLink shortcode={loc.shortcode} />,
+      customActions: <RecountLink shortcode={loc.id} />,
     }),
   }),
   section({
@@ -907,7 +910,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         <Link
           key="loc"
           to="/locations/$shortcode"
-          params={{ shortcode: item.location.shortcode }}
+          params={{ shortcode: item.location.id }}
         >
           <Badge
             variant="outline"
@@ -920,9 +923,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         </Link>,
       ],
       details: [createdAgoDetail(item.createdAt)],
-      route: entityDetailLink("inventory", item.shortcode),
+      route: entityDetailLink("inventory", item.id),
       editLabel: "Open inventory entry",
-      customActions: <RecountLink shortcode={item.location.shortcode} />,
+      customActions: <RecountLink shortcode={item.location.id} />,
     }),
   }),
   section({
@@ -938,7 +941,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       key: v.value,
       title: v.value,
       subtitle: variantSubtitle(v, "product"),
-      route: entityDetailLink("product", v.sampleShortcode),
+      route: entityDetailLink("product", v.sampleId),
       editLabel: "Open product",
       customActions: <ManufacturerVariantLink manufacturer={v.value} />,
     }),
@@ -960,7 +963,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       // Weighed by charges, not by roster rows — a duplicate is 1 row either way,
       // so the charge count is what says which spelling is the real one.
       subtitle: variantSubtitle(v, "charge"),
-      route: entityDetailLink("vendor", v.sampleShortcode),
+      route: entityDetailLink("vendor", v.sampleId),
       editLabel: "Open vendor",
       inlineFix: {
         label: "Merge",
@@ -983,11 +986,11 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: item.product.name,
       subtitle: `${item.amount.value} ${item.amount.unit}`,
       details: [createdAgoDetail(item.createdAt)],
-      route: entityDetailLink("inventory", item.shortcode),
+      route: entityDetailLink("inventory", item.id),
       editLabel: "Open inventory entry",
       // Draining Unknown is a recount rooted there — same deep link the other
       // recount detectors offer.
-      customActions: <RecountLink shortcode={item.location.shortcode} />,
+      customActions: <RecountLink shortcode={item.location.id} />,
     }),
   }),
   section({
@@ -1009,7 +1012,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
       badges: product.upc ? [<CodeChip key="upc">{product.upc}</CodeChip>] : [],
-      route: entityDetailLink("product", product.shortcode),
+      route: entityDetailLink("product", product.id),
     }),
   }),
   section({
@@ -1032,7 +1035,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           {location.imageCount} {location.imageCount === 1 ? "photo" : "photos"}
         </Badge>,
       ],
-      route: entityDetailLink("location", location.shortcode),
+      route: entityDetailLink("location", location.id),
     }),
   }),
   section({
@@ -1077,7 +1080,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: `${entity.entityType} · ${entity.entityId.slice(0, 8)}`,
       // Live entity ⇒ always resolvable to a real page, unlike the orphaned
       // side of this pair — see the note on `entityMissingEmbeddingSchema`.
-      route: entityDetailLink(entity.entityType, entity.shortcode),
+      route: entityDetailLink(entity.entityType, entity.entityId),
     }),
   }),
   section({
@@ -1091,7 +1094,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     emptyMessage: "No recipes reference a deleted sub-recipe.",
     renderItem: (recipe) => ({
       title: recipe.name,
-      route: entityDetailLink("recipe", recipe.shortcode),
+      route: entityDetailLink("recipe", recipe.id),
       editLabel: "Open recipe",
     }),
   }),
@@ -1202,7 +1205,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
             : []),
           <CodeChip key="upc">{product.upc}</CodeChip>,
         ],
-        route: entityDetailLink("product", product.shortcode),
+        route: entityDetailLink("product", product.id),
         editLabel: "Open product",
         customActions: <UpcApplyAction product={product} />,
       };
@@ -1253,7 +1256,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
               ]
             : []),
         ],
-        route: entityDetailLink("purchase", charge.shortcode),
+        route: entityDetailLink("purchase", charge.id),
         editLabel: "Open charge",
       };
     },

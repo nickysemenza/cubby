@@ -42,7 +42,6 @@ export function CookbookList() {
           {cookbooks.map(
             ({
               id,
-              shortcode,
               book,
               author,
               recipeCount,
@@ -68,7 +67,7 @@ export function CookbookList() {
                       we have one, plum "cloth binding" with the serif title when not */}
                   <Link
                     to={entities.cookbook.routes.detail}
-                    params={entityDetailParams(shortcode)}
+                    params={entityDetailParams(id)}
                     className="block rounded-sm border border-[var(--border)] bg-card p-2 transition-colors hover:bg-muted/50"
                   >
                     {coverUrl ? (

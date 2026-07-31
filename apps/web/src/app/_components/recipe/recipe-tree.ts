@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type {
   RecipeGraphOut,
   RecipeOut,
@@ -51,7 +51,7 @@ export type RecipeTreeRow =
   | {
       kind: "stub";
       id: string;
-      recipeId: RecipeId;
+      recipeId: RecipeShortcode;
       name: string;
       /** Why the sub-recipe wasn't expanded. */
       reason: "cycle" | "missing";
@@ -152,7 +152,7 @@ export const buildRecipeTree = (
     recipe: RecipeTreeRecipe,
     depth: number,
     cumulativeFactor: number,
-    visited: ReadonlySet<RecipeId>,
+    visited: ReadonlySet<RecipeShortcode>,
   ): RecipeTreeNode => {
     const costing = costingById.get(recipe.id) ?? null;
     const baseRowId = costing ? pickDefaultBaseRowId(costing) : null;
@@ -236,7 +236,7 @@ export const buildRecipeTree = (
     };
   };
 
-  return buildNode(root, 0, 1, new Set<RecipeId>([root.id]));
+  return buildNode(root, 0, 1, new Set<RecipeShortcode>([root.id]));
 };
 
 /**
@@ -364,7 +364,7 @@ export const buildIngredientMatrix = (root: RecipeTreeNode): MatrixRow[] => {
         if (!r) {
           r = {
             ingredientId,
-            ingredientShortcode: row.row.ingredient.shortcode,
+            ingredientShortcode: row.row.ingredient.id,
             name: row.row.ingredient.name,
             byComponent: new Map(),
             total: 0,

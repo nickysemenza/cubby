@@ -8,12 +8,9 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
 import { requiredName } from "./common";
 import {
-  cookbookId,
   cookbookShortcode,
   id,
-  ingredientId,
   ingredientShortcode,
-  recipeId,
   recipeShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
@@ -52,34 +49,20 @@ export type RecipeSortField = (typeof recipeSortableFields)[number];
 // The section-ingredient's ingredient carries its aliases so the editor can tell
 // real parser drift from a re-parse that just hit one of this ingredient's
 // aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
-/**
- * The ingredient a recipe line points at. Carries BOTH ids on purpose: the UI
- * fetches the hover preview by uuid, while MCP publishes `shortcode` as the
- * line's public ref (see `recipeDetailMcpOut`).
- */
+/** The ingredient a recipe line points at, keyed by its public id. */
 const sectionIngredientRefFields = {
   name: z.string(),
   ...timestampedFields,
   aliases: z.array(z.string()).optional(),
 };
 
-/** The ingredient a recipe line points at, keyed by PUBLIC id — MCP's view. */
-export const mcpSectionIngredientRefFields = {
-  id: ingredientShortcode,
-  ...sectionIngredientRefFields,
-};
-
 const sectionIngredientIngredientOut = z.object({
-  id: ingredientId,
-  shortcode: ingredientShortcode,
+  id: ingredientShortcode,
   ...sectionIngredientRefFields,
 });
 
 export const recipeTopLevelFields = {
-  id: recipeId,
-  // The public id. Recipes minted shortcodes long before this was exposed, which
-  // is why /labels couldn't print recipe QRs — the code never left the DB.
-  shortcode: recipeShortcode,
+  id: recipeShortcode,
   name: z.string(),
   ...timestampedFields,
   meta: recipeMeta,
@@ -98,7 +81,7 @@ export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;
 // Minimal recipe reference — just enough to link + label a recipe pill. Lets
 // list surfaces carry "appears in recipes" without the full recipe body per row
 // (the over-fetch the ingredient list paid via `appearsInRecipes: recipeTopLevel[]`).
-export const recipeRefOut = z.object({ id: recipeId, name: z.string() });
+export const recipeRefOut = z.object({ id: recipeShortcode, name: z.string() });
 export type RecipeRef = z.infer<typeof recipeRefOut>;
 
 // One row per RecipeSectionIngredient — the same recipe repeats when it uses the
@@ -225,8 +208,7 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
 // non-deleted recipes link to it. `book` is the cookbook name (kept for the
 // existing browse-by-name route + UI); `hasRawJson` gates the reprocess action.
 export const cookbookSummary = z.object({
-  id: cookbookId,
-  shortcode: cookbookShortcode,
+  id: cookbookShortcode,
   book: z.string(),
   author: z.array(z.string()),
   subjects: z.array(z.string()),
@@ -255,7 +237,7 @@ const ingredientProvenance = {
 export const recipeIngredientInput = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("ingredient"),
-    ingredientId: ingredientId,
+    ingredientId: ingredientShortcode,
     recipeId: z.null(),
     amounts: z.array(positiveAmount),
     id: id.optional(),
@@ -263,7 +245,7 @@ export const recipeIngredientInput = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("recipe"),
-    recipeId: recipeId,
+    recipeId: recipeShortcode,
     ingredientId: z.null(),
     amounts: z.array(positiveAmount),
     id: id.optional(),
@@ -290,7 +272,7 @@ export const recipeSectionInput = z.object({
 export const recipeFilterFields = {
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
-  cookbookId: oneOrMany(cookbookId).optional(),
+  cookbookId: oneOrMany(cookbookShortcode).optional(),
   /**
    * `"none"` matches recipes with no cookbook; `"has"` matches those with
    * any cookbook. Combined with `cookbookId` it **widens** rather than
@@ -365,7 +347,7 @@ export const recipeUpdateData = deriveUpdateData(recipeCreateShape, {
 });
 
 export const recipeUpdateInput = z.object({
-  id: recipeId,
+  id: recipeShortcode,
   data: recipeUpdateData,
 });
 
@@ -374,7 +356,7 @@ export const recipeShortcodeInput = z.object({
 });
 
 export const recipeIdsInput = z.object({
-  ids: z.array(recipeId),
+  ids: z.array(recipeShortcode),
 });
 
 export const recipeCooccurrenceInput = z
@@ -385,12 +367,12 @@ export const recipeCooccurrenceInput = z
 
 export const recipeCookbookScopeInput = z
   .object({
-    cookbookId: cookbookId.optional(),
+    cookbookId: cookbookShortcode.optional(),
   })
   .optional();
 
 export const recipeIdInput = z.object({
-  id: recipeId,
+  id: recipeShortcode,
 });
 
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
@@ -398,7 +380,7 @@ export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
 export const mcpRecipeCreateInput = z.object(recipeWritableShape);
 const mcpRecipeUpdateFields = {
-  id: recipeId.describe("Recipe ID"),
+  id: recipeShortcode.describe("Recipe ID"),
   ...deriveUpdateFields(recipeWritableShape),
 };
 export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
@@ -442,7 +424,7 @@ export const recipesUsingIngredientOut = z.object({
   recipes: z.array(z.object(recipeWithUsagesMcpFields)),
 });
 
-export const recipeIdOut = z.object({ id: recipeId });
+export const recipeIdOut = z.object({ id: recipeShortcode });
 
 export const recipeTagsListOut = createItemsResponseSchema(z.string());
 

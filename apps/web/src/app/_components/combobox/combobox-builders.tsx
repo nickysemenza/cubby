@@ -1,9 +1,9 @@
 import type {
-  IngredientId,
-  LocationId,
+  IngredientShortcode,
+  LocationShortcode,
   ProductShortcode,
   ProjectShortcode,
-  RecipeId,
+  RecipeShortcode,
   TaskShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
@@ -16,13 +16,13 @@ import { EntityIcon } from "~/entities/entities";
 // Builders take minimal structural shapes (not the full *Out types) so both
 // picker results and list-row relation summaries pass without casts.
 export const buildProductComboboxItem = (product: {
-  shortcode: ProductShortcode;
+  id: ProductShortcode;
   name: string;
   manufacturer: string;
   aliases?: string[] | null;
 }): ComboboxItem<ProductShortcode> => ({
-  id: product.shortcode,
-  shortcode: product.shortcode,
+  id: product.id,
+  shortcode: product.id,
   name: product.name,
   aliases: product.aliases ?? [],
   secondary: product.manufacturer,
@@ -30,14 +30,13 @@ export const buildProductComboboxItem = (product: {
 });
 
 export const buildLocationComboboxItem = (location: {
-  id: LocationId;
-  shortcode?: string;
+  id: LocationShortcode;
   name: string;
   type: LocationType;
   aliases?: string[] | null;
-}): ComboboxItem<LocationId> => ({
+}): ComboboxItem<LocationShortcode> => ({
   id: location.id,
-  shortcode: location.shortcode,
+  shortcode: location.id,
   name: location.name,
   aliases: location.aliases ?? [],
   secondary: location.type,
@@ -51,25 +50,23 @@ export const buildLocationComboboxItem = (location: {
 });
 
 export const buildIngredientComboboxItem = (ingredient: {
-  id: IngredientId;
-  shortcode: string;
+  id: IngredientShortcode;
   name: string;
   aliases?: string[] | null;
-}): ComboboxItem<IngredientId> => ({
+}): ComboboxItem<IngredientShortcode> => ({
   id: ingredient.id,
-  shortcode: ingredient.shortcode,
+  shortcode: ingredient.id,
   name: ingredient.name,
   aliases: ingredient.aliases ?? [],
   icon: <EntityIcon entity="ingredient" size={14} colored />,
 });
 
 export const buildRecipeComboboxItem = (recipe: {
-  id: RecipeId;
-  shortcode: string;
+  id: RecipeShortcode;
   name: string;
-}): ComboboxItem<RecipeId> => ({
+}): ComboboxItem<RecipeShortcode> => ({
   id: recipe.id,
-  shortcode: recipe.shortcode,
+  shortcode: recipe.id,
   name: recipe.name,
   icon: <EntityIcon entity="recipe" size={14} colored />,
 });

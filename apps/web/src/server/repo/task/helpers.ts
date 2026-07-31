@@ -80,7 +80,9 @@ export const dbTaskToAPI = (
   // `purchaseOut.vendorId`. `projectName` stays separately gated on the
   // parent's own liveness via `resolveLiveJoinName`.
   projectId: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
-  subjectProductId: row.subjectProductId,
+  subjectProductId: toProductShortcode(
+    resolveLiveJoinShortcode(row.subjectProduct),
+  ),
   parentTaskId: row.parentTask
     ? toTaskShortcode(row.parentTask.shortcode)
     : null,
@@ -93,9 +95,6 @@ export const dbTaskToAPI = (
   // resolveLiveJoinName still backstops a soft-deleted parent's name leaking.
   projectName: resolveLiveJoinName(row.project),
   subjectProductName: resolveLiveJoinName(row.subjectProduct),
-  subjectProductShortcode: toProductShortcode(
-    resolveLiveJoinShortcode(row.subjectProduct),
-  ),
   parentTaskName: row.parentTask ? resolveLiveJoinName(row.parentTask) : null,
   blockedByIds,
   blockingIds,

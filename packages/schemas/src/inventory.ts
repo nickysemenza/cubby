@@ -6,11 +6,8 @@ import { amount, positiveAmount } from "./codec";
 import { externalIdOut } from "./external-id";
 import { imageOut } from "./image";
 import {
-  inventoryId,
   inventoryShortcode,
-  locationId,
   locationShortcode,
-  productId,
   productShortcode,
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
@@ -35,7 +32,7 @@ export const inventoryFilterFields = {
     .string()
     .optional()
     .describe("Filter by location name (substring)"),
-  locationIdFilter: locationId
+  locationIdFilter: locationShortcode
     .optional()
     .describe("Filter by exact location ID"),
   manufacturerFilter: z
@@ -64,8 +61,7 @@ export const inventorySortableFields = [
 export type InventorySortField = (typeof inventorySortableFields)[number];
 
 export const inventoryEntryFields = {
-  id: inventoryId,
-  shortcode: inventoryShortcode,
+  id: inventoryShortcode,
   // inventory entries do not have a name, just ID
   amount: amount.describe("Quantity on hand"),
   valuation: z
@@ -82,8 +78,7 @@ export const inventoryEntryFields = {
 export const inventoryEntryOut = z.object(inventoryEntryFields);
 
 const productInventoryEmbedFields = {
-  id: productId,
-  shortcode: productShortcode,
+  id: productShortcode,
   name: z.string(),
   upc: upc.nullable(),
   fdc_id: fdcId.nullable(),
@@ -111,8 +106,7 @@ export const inventoryWithLocationOut = z.object({
 });
 
 export const inventoryListProductOut = z.object({
-  id: productId,
-  shortcode: productShortcode,
+  id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
   upc: upc.nullable(),
@@ -126,8 +120,7 @@ export const inventoryListProductOut = z.object({
 export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
 
 export const inventoryListLocationOut = z.object({
-  id: locationId,
-  shortcode: locationShortcode,
+  id: locationShortcode,
   name: z.string(),
   type: locationType,
 });
@@ -186,12 +179,12 @@ export const inventoryCountsByLocationOut = z.record(
 export const inventoryUpdatePayloadData = z.object({
   amount: positiveAmount.optional(),
   productId: productShortcode.optional(),
-  locationId: locationId.optional(),
+  locationId: locationShortcode.optional(),
 });
 
 // Input schema for updating inventory entries
 export const inventoryUpdateInput = z.object({
-  id: inventoryId,
+  id: inventoryShortcode,
   data: inventoryUpdatePayloadData,
 });
 
@@ -199,15 +192,15 @@ export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 
 export const inventoryCreatePayloadData = z.object({
   productId: productShortcode,
-  locationId: locationId,
+  locationId: locationShortcode,
   amount: positiveAmount,
 });
 
 // Schema for bulk inventory operations
 const inventoryBulkOperationItem = z.object({
-  id: inventoryId.optional(),
+  id: inventoryShortcode.optional(),
   productId: productShortcode,
-  locationId: locationId,
+  locationId: locationShortcode,
   amount: positiveAmount,
 });
 
@@ -217,7 +210,7 @@ export type InventoryBulkOperationItem = z.infer<
 
 export const inventoryBulkOperationPayload = z.object({
   // All operations for a given location
-  locationId: locationId,
+  locationId: locationShortcode,
   items: z.array(inventoryBulkOperationItem),
   // When the snapshot was loaded — lets the server reject a stale commit that
   // would delete-on-omit entries another surface added since. Optional so other
@@ -227,15 +220,15 @@ export const inventoryBulkOperationPayload = z.object({
 
 // Schema for bulk move operations (moving items between locations)
 const bulkMoveItem = z.object({
-  inventoryEntryId: inventoryId,
+  inventoryEntryId: inventoryShortcode,
   quantity: positiveAmount, // How much to move (can be less than total for partial moves)
 });
 
 export type BulkMoveItem = z.infer<typeof bulkMoveItem>;
 
 export const bulkMovePayload = z.object({
-  sourceLocationId: locationId,
-  targetLocationId: locationId,
+  sourceLocationId: locationShortcode,
+  targetLocationId: locationShortcode,
   items: z.array(bulkMoveItem).min(1),
 });
 
@@ -246,19 +239,19 @@ export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 // `remove` = not here, soft-delete it; `relocate` = move the full row to the
 // selected location (merging with an existing same-product row when needed).
 export const inventorySessionResolution = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("verify"), inventoryEntryId: inventoryId }),
+  z.object({ kind: z.literal("verify"), inventoryEntryId: inventoryShortcode }),
   z.object({
     kind: z.literal("adjust"),
-    inventoryEntryId: inventoryId,
+    inventoryEntryId: inventoryShortcode,
     // positiveAmount (not amount): a recount to zero is a Remove, not an
     // adjust — this keeps the value > 0 invariant every other write enforces.
     amount: positiveAmount,
   }),
-  z.object({ kind: z.literal("remove"), inventoryEntryId: inventoryId }),
+  z.object({ kind: z.literal("remove"), inventoryEntryId: inventoryShortcode }),
   z.object({
     kind: z.literal("relocate"),
-    inventoryEntryId: inventoryId,
-    targetLocationId: locationId,
+    inventoryEntryId: inventoryShortcode,
+    targetLocationId: locationShortcode,
   }),
 ]);
 
@@ -271,8 +264,8 @@ export type InventorySessionResolution = z.infer<
 // that changed after the client loaded must be refreshed, never silently marked
 // complete from a stale partial snapshot.
 export const reconcileSessionPayload = z.object({
-  locationId: locationId,
-  expectedInventoryEntryIds: z.array(inventoryId),
+  locationId: locationShortcode,
+  expectedInventoryEntryIds: z.array(inventoryShortcode),
   snapshotUpdatedAt: z.date().nullable(),
   resolutions: z.array(inventorySessionResolution),
 });
@@ -280,11 +273,11 @@ export const reconcileSessionPayload = z.object({
 export type ReconcileSessionPayload = z.infer<typeof reconcileSessionPayload>;
 
 export const inventoryFindDuplicatesInput = z.object({
-  excludeLocationId: locationId.optional(),
+  excludeLocationId: locationShortcode.optional(),
 });
 
 export const inventoryLocationIdsInput = z.object({
-  locationIds: z.array(locationId),
+  locationIds: z.array(locationShortcode),
 });
 
 const inventoryMcpProductFields = {

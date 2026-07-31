@@ -43,7 +43,8 @@ describe("cookbook repository", () => {
       ctx.actor,
     );
 
-    expect(second.id).toBe(first.id);
+    expect(second.entityId).toBe(first.entityId);
+    expect(second.output.id).toBe(first.output.id);
     const cb = await getCookbookByName(ctx.db, "Book A");
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
@@ -55,7 +56,7 @@ describe("cookbook repository", () => {
       cookbookRecipe("Pancakes", ["2 cups flour"]),
       cookbookRecipe("Waffles", ["1 cup flour"]),
     ];
-    const { id } = await upsertCookbook(
+    const { output, entityId: id } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
       ctx.actor,
@@ -64,7 +65,7 @@ describe("cookbook repository", () => {
     await upsertCookbookRecipeFromCookbook(raw[0]!, ref, ctx.db, ctx.actor);
 
     const list = await listCookbooks(ctx.db);
-    const entry = list.find((c) => c.id === id);
+    const entry = list.find((c) => c.id === output.id);
     expect(entry).toBeDefined();
     // Only one of the two raw recipes was actually imported.
     expect(entry?.recipeCount).toBe(1);
@@ -79,7 +80,7 @@ describe("cookbook repository", () => {
       cookbookRecipe("Pancakes", ["2 cups flour"]),
       cookbookRecipe("Waffles", ["1 cup flour"]),
     ];
-    const { id } = await upsertCookbook(
+    const { entityId: id } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
       ctx.actor,
@@ -99,7 +100,7 @@ describe("cookbook repository", () => {
       cookbookRecipe("Pancakes", ["2 cups flour"]),
       cookbookRecipe("Waffles", ["1 cup flour"]),
     ];
-    const { id } = await upsertCookbook(
+    const { entityId: id } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
       ctx.actor,
@@ -157,7 +158,7 @@ describe("cookbook repository", () => {
   // recipe cascade underneath it too).
   it("deleteCookbook soft-deletes the book, its recipes, sections, ingredients, and leaves no embedding orphans", async () => {
     const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
-    const { id: cookbookId } = await upsertCookbook(
+    const { entityId: cookbookId } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
       ctx.actor,

@@ -649,37 +649,18 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
   explicitly rather than silently restarting from page one.
 
-### Finish the shortcode cutover: retire the id translation layer
+### Shortcode cutover and MCP translation-layer retirement (completed)
 
-The public-id cutover landed in three passes — registry + columns (#509), UI and
-routes (#514), MCP. MCP is now correct end to end: every tool takes and returns
-shortcodes.
+All public entity outputs and relationship fields now expose their canonical
+shortcodes through `id`/`*Id`, and public CRUD, filter, batch, and relationship
+inputs accept the corresponding shortcode brands. Redundant `shortcode` and
+`*Shortcode` siblings have been removed, and MCP consumes the same canonical
+contracts as tRPC and the UI rather than translating UUIDs at its boundary.
 
-What's left is **deletion**, not new behaviour. Seven entities (product,
-location, recipe, ingredient, inventory, meal, cookbook) still carry a uuid `id`
-plus a separate `shortcode` on their `*Out` schemas, and MCP bridges the gap in
-its `slim*` projections (`id: row.shortcode`) plus `resolvePublicIds` on the way
-in. That bridge only exists because tRPC and the UI still address rows by uuid.
-
-The five ledger entities (project, task, expense, vendor, purchase) already went
-the other way: their `*Out.id` IS the shortcode, so their MCP tools need no
-translation at all. Doing the same for the other seven lets us delete:
-
-- the `slim*` `id = shortcode` remapping, and the `*McpOut` schemas that then
-  differ from their `*Out` twins in nothing
-- `resolvePublicId`/`resolvePublicIds` at the MCP boundary, and probably
-  `shortcode.resolveMany` with them (`resolveLiveShortcode` still backs the
-  `/<shortcode>` scan landing)
-
-Shape, per entity: `*Out.id` becomes the shortcode brand and the separate
-`shortcode` field goes away, so every stale reference is a compile error; repos
-query `WHERE shortcode = $1` (the full-lifetime unique index makes that the same
-cost as by-id, not an extra lookup) and resolve to a uuid only when writing an
-FK column. `getByID(uuid)` stays as a repo-internal function — a service
-legitimately holds a uuid mid-transaction after an insert.
-
-Budget it by the blast radius: `projectOut.id` alone was ~166 compile errors,
-almost all of them mechanical UI call sites.
+Database primary keys, foreign-key columns, repo-internal reads, and mutation
+side-effect entity IDs intentionally remain UUIDs. Server-side FK writes and
+route/scan lookups resolve shortcodes at the domain boundary; the MCP-only
+`resolvePublicId*` helpers and `shortcode.resolveMany` bridge are retired.
 
 Permanent exceptions, asserted by the schema-walk test in
 `mcp-shortcode-boundary.integration.test.ts` rather than left to vigilance:

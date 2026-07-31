@@ -583,7 +583,7 @@ function MobileGalleryDrillDown({
       } else {
         navigate({
           to: "/locations/$shortcode",
-          params: { shortcode: location.shortcode },
+          params: { shortcode: location.id },
         });
       }
     },

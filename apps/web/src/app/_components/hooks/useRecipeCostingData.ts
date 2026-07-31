@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -52,7 +52,7 @@ async function loadRecipeCostingData(
       ),
     );
 
-    const next: RecipeId[] = [];
+    const next: RecipeShortcode[] = [];
     for (const r of chunks.flat()) {
       fetched[r.id] = r;
       next.push(...collectSubRecipeIds([r]));

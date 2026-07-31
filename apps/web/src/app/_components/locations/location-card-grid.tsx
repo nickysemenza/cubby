@@ -8,6 +8,7 @@ import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import type { InventoryItem } from "./calculate-inventory-valuation";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
@@ -203,13 +204,16 @@ function LocationCard({
             images={location.images}
             alt={location.name}
             to="/locations/$shortcode"
-            params={{ shortcode: location.shortcode }}
+            params={{ shortcode: location.id }}
           />
         ) : null
       }
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
       className="h-full"
-      detailsHref={`/locations/${location.shortcode}`}
+      detailsHref={entities.location.routes.detail.replace(
+        "$shortcode",
+        entityDetailParams(location.id).shortcode,
+      )}
     >
       {/* Valuation row */}
       {hasInventory && (

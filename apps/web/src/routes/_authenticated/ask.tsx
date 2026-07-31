@@ -54,13 +54,10 @@ function AskPage() {
     agent.isStreaming || agent.answer.length > 0 || sources.length > 0;
 
   // Mirror the palette's onSelectSource path so /ask sources also seed recents.
-  // A source scraped from a tool payload that carried no shortcode isn't
-  // navigable — better a dead click than a link to a uuid URL that 404s.
   const goToSource = (source: (typeof sources)[number]) => {
-    if (!source.shortcode) return;
     pushRecent({
       entityType: source.entityType,
-      shortcode: source.shortcode,
+      id: source.id,
       name: source.name,
     });
     // Every searchable entity is also a shortcode entity, so the map's widened
@@ -68,7 +65,7 @@ function AskPage() {
     navigate(
       entityDetailLink(
         entityTypeMap[source.entityType] as ShortcodeEntity,
-        source.shortcode,
+        source.id,
       ),
     );
   };

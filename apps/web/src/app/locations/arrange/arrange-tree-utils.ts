@@ -1,4 +1,7 @@
-import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  LocationShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   InventoryItemForTree,
@@ -41,7 +44,7 @@ export function findUnknownRoot(roots: InfLocation[]): InfLocation | null {
 /** Depth-first search for a location node by id across the whole forest. */
 export function findNode(
   roots: InfLocation[],
-  id: LocationId,
+  id: LocationShortcode,
 ): InfLocation | null {
   for (const node of roots) {
     if (node.id === id) return node;
@@ -57,8 +60,8 @@ export function findNode(
  */
 export function parentIdOf(
   roots: InfLocation[],
-  id: LocationId,
-): LocationId | null {
+  id: LocationShortcode,
+): LocationShortcode | null {
   for (const node of roots) {
     for (const child of node.children ?? []) {
       if (child.id === id) return node.id;
@@ -75,11 +78,14 @@ export function parentIdOf(
  * works for a node at ANY depth — so drilling into a grandchild resolves the
  * complete ancestor chain instead of skipping intermediate levels.
  */
-export function pathToNode(roots: InfLocation[], id: LocationId): LocationId[] {
+export function pathToNode(
+  roots: InfLocation[],
+  id: LocationShortcode,
+): LocationShortcode[] {
   const walk = (
     nodes: InfLocation[],
-    trail: LocationId[],
-  ): LocationId[] | null => {
+    trail: LocationShortcode[],
+  ): LocationShortcode[] | null => {
     for (const node of nodes) {
       const next = [...trail, node.id];
       if (node.id === id) return next;
@@ -98,8 +104,8 @@ export function pathToNode(roots: InfLocation[], id: LocationId): LocationId[] {
  */
 export function isSelfOrDescendant(
   roots: InfLocation[],
-  rootId: LocationId,
-  candidateId: LocationId,
+  rootId: LocationShortcode,
+  candidateId: LocationShortcode,
 ): boolean {
   const root = findNode(roots, rootId);
   if (!root) return false;
@@ -118,8 +124,8 @@ export function isSelfOrDescendant(
  */
 export function isValidLocationDrop(
   roots: InfLocation[],
-  dragId: LocationId,
-  targetId: LocationId | null,
+  dragId: LocationShortcode,
+  targetId: LocationShortcode | null,
 ): boolean {
   const unknown = findUnknownRoot(roots);
   if (unknown && dragId === unknown.id) return false;
@@ -132,8 +138,8 @@ export function isValidLocationDrop(
 
 /** May the dragged item move to `targetLocationId`? Invalid only if it's a no-op. */
 export function isValidItemDrop(
-  sourceLocationId: LocationId,
-  targetLocationId: LocationId,
+  sourceLocationId: LocationShortcode,
+  targetLocationId: LocationShortcode,
 ): boolean {
   return sourceLocationId !== targetLocationId;
 }
@@ -151,8 +157,8 @@ function withChildren(node: InfLocation, children: InfLocation[]): InfLocation {
  */
 export function applyLocationMove(
   roots: InfLocation[],
-  dragId: LocationId,
-  newParentId: LocationId | null,
+  dragId: LocationShortcode,
+  newParentId: LocationShortcode | null,
 ): InfLocation[] {
   const moved = findNode(roots, dragId);
   if (!moved) return roots;
@@ -195,9 +201,9 @@ function withItems(
  */
 export function applyItemMove(
   roots: InfLocation[],
-  itemId: InventoryId,
-  sourceLocationId: LocationId,
-  targetLocationId: LocationId,
+  itemId: InventoryShortcode,
+  sourceLocationId: LocationShortcode,
+  targetLocationId: LocationShortcode,
 ): InfLocation[] {
   const source = findNode(roots, sourceLocationId);
   const item = source?.inventoryItems?.find((i) => i.id === itemId);
@@ -227,7 +233,7 @@ export function applyItemMove(
  */
 export function childrenOf(
   roots: InfLocation[],
-  path: LocationId[],
+  path: LocationShortcode[],
 ): InfLocation[] {
   let level = roots;
   for (const id of path) {

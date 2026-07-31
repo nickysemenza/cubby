@@ -1,10 +1,10 @@
 import type { Amount } from "@cubby/schemas/codec";
 import {
-  type InventoryId,
-  type LocationId,
+  type InventoryShortcode,
+  type LocationShortcode,
   type ProductId,
-  unsafeInventoryId,
-  unsafeLocationId,
+  unsafeInventoryShortcode,
+  unsafeLocationShortcode,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
@@ -58,19 +58,21 @@ import type { ComboboxItem } from "../combobox/combobox-types";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
 
-const PANTRY: ComboboxItem<LocationId> = {
-  id: unsafeLocationId("loc-1"),
+const PANTRY: ComboboxItem<LocationShortcode> = {
+  id: unsafeLocationShortcode("loc-1"),
   name: "Pantry (shelf)",
 };
-const FRIDGE: ComboboxItem<LocationId> = {
-  id: unsafeLocationId("loc-2"),
+const FRIDGE: ComboboxItem<LocationShortcode> = {
+  id: unsafeLocationShortcode("loc-2"),
   name: "Fridge (shelf)",
 };
-const STATIC_ITEMS: ComboboxItem<LocationId>[] = [PANTRY, FRIDGE];
+const STATIC_ITEMS: ComboboxItem<LocationShortcode>[] = [PANTRY, FRIDGE];
 
 /** Stub SearchProvider — bypasses the real query hooks and hands back a
  * static item list synchronously, matching editable-entity-cell.unit.test.tsx. */
-function StubSearchProvider({ children }: WithEntitySearchProps<LocationId>) {
+function StubSearchProvider({
+  children,
+}: WithEntitySearchProps<LocationShortcode>) {
   return children({
     items: STATIC_ITEMS,
     onSearchChange: vi.fn(),
@@ -80,9 +82,9 @@ function StubSearchProvider({ children }: WithEntitySearchProps<LocationId>) {
 }
 
 interface TestEntry {
-  id: InventoryId;
+  id: InventoryShortcode;
   amount: Amount;
-  location?: { id: LocationId; name: string; type: LocationType };
+  location?: { id: LocationShortcode; name: string; type: LocationType };
 }
 
 interface TestRow {
@@ -154,10 +156,10 @@ describe("InventoryEntriesCell", () => {
     const onMoveEntry = vi.fn().mockResolvedValue(undefined);
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
     const entry: TestEntry = {
-      id: unsafeInventoryId("inv-1"),
+      id: unsafeInventoryShortcode("inv-1"),
       amount: { value: 2, unit: "lb" },
       location: {
-        id: unsafeLocationId("loc-1"),
+        id: unsafeLocationShortcode("loc-1"),
         name: "Pantry",
         type: "shelf",
       },
@@ -199,19 +201,19 @@ describe("InventoryEntriesCell", () => {
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
     const entries: TestEntry[] = [
       {
-        id: unsafeInventoryId("inv-1"),
+        id: unsafeInventoryShortcode("inv-1"),
         amount: { value: 2, unit: "lb" },
         location: {
-          id: unsafeLocationId("loc-1"),
+          id: unsafeLocationShortcode("loc-1"),
           name: "Pantry",
           type: "shelf",
         },
       },
       {
-        id: unsafeInventoryId("inv-2"),
+        id: unsafeInventoryShortcode("inv-2"),
         amount: { value: 1, unit: "lb" },
         location: {
-          id: unsafeLocationId("loc-2"),
+          id: unsafeLocationShortcode("loc-2"),
           name: "Fridge",
           type: "shelf",
         },

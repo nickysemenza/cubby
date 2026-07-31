@@ -1,7 +1,6 @@
 import type { DetectedItem } from "@cubby/schemas/ai";
 import type {
-  LocationId,
-  ProductId,
+  LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { AllowedImageType } from "@cubby/schemas/image";
@@ -91,7 +90,7 @@ const PLACEHOLDER_PRODUCT_NAME = /^Product \d+$/;
  * or an ingredient link. Never blocks the scan loop — the item is already added.
  */
 interface ScanFollowUp {
-  id: ProductId;
+  id: ProductShortcode;
   name: string;
   /** Placeholder name or unspecified manufacturer. */
   needsName: boolean;
@@ -172,7 +171,7 @@ export function SessionCaptureActions({
               index,
               item.matchedProduct
                 ? {
-                    id: item.matchedProduct.shortcode,
+                    id: item.matchedProduct.id,
                     name: item.matchedProduct.name,
                   }
                 : null,
@@ -256,7 +255,7 @@ export function SessionCaptureActions({
   const addSuggestion = async (item: DetectedItem, index: number) => {
     const { matchedProduct: _matchedProduct, ...detectedItem } = item;
     const override = suggestionProductOverrides[index];
-    const productId = override?.id ?? item.matchedProduct?.shortcode;
+    const productId = override?.id ?? item.matchedProduct?.id;
     try {
       await approveDetectedItem.mutateAsync({
         locationId: location.id,
@@ -295,7 +294,7 @@ export function SessionCaptureActions({
 
     try {
       const inventory = await createInventory.mutateAsync({
-        productId: product.shortcode,
+        productId: product.id,
         locationId: location.id,
         amount: { value: 1, unit: "each" },
       });
@@ -397,7 +396,7 @@ export function SessionCaptureActions({
         data: { pendingImageIds: [init.imageId] },
       });
       const created = await createInventory.mutateAsync({
-        productId: product.shortcode,
+        productId: product.id,
         locationId: location.id,
         amount: { value: 1, unit: "each" },
       });
@@ -784,7 +783,7 @@ function SuggestionProductCombobox({
   );
 }
 
-function ManualAdd({ locationId }: { locationId: LocationId }) {
+function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
   const form = useForm<ManualAddValues>({
@@ -818,7 +817,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
       const created = await quickCreateMutateRef.current({ name });
       invalidateTRPCQueries(queryClient, productMutationInvalidateKeys);
       return {
-        id: created.shortcode,
+        id: created.id,
         name: `${created.name} (${created.manufacturer})`,
       };
     },

@@ -238,7 +238,6 @@ export function LinkExpensesDialog({
                       data={{
                         id: row.id,
                         name: row.name,
-                        shortcode: row.id,
                       }}
                       truncate
                     />
@@ -263,7 +262,6 @@ export function LinkExpensesDialog({
                         data={{
                           id: row.projectId,
                           name: row.projectName,
-                          shortcode: row.projectId,
                         }}
                         truncate
                       />

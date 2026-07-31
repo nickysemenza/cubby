@@ -1,8 +1,10 @@
+import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createRecipe, getRecipeByID, updateRecipe } from "./recipe";
 import { createIngredients, ingredientRef } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 
 /**
  * Regression test: sections (and ingredients within a section) must round-trip
@@ -38,10 +40,14 @@ describe("recipe section ordering", () => {
     })),
   });
 
+  const entityIdOf = async (
+    id: Awaited<ReturnType<typeof createRecipe>>["id"],
+  ) => unsafeRecipeId((await resolveLiveShortcode(ctx.db, id, "recipe"))!);
+
   it("returns sections and ingredients in the order they were created", async () => {
     const created = await createRecipe(ctx.db, buildInput(), ctx.actor);
 
-    const found = await getRecipeByID(ctx.db, created.id);
+    const found = await getRecipeByID(ctx.db, await entityIdOf(created.id));
 
     expect(found!.sections.map((s) => s.name)).toEqual([
       "Section A",
@@ -59,7 +65,7 @@ describe("recipe section ordering", () => {
 
   it("persists a section reorder on update", async () => {
     const created = await createRecipe(ctx.db, buildInput(), ctx.actor);
-    const id = created.id;
+    const id = await entityIdOf(created.id);
 
     // Reorder existing sections (by id) to C, A, B
     const byName = new Map(created.sections.map((s) => [s.name, s]));
@@ -85,7 +91,7 @@ describe("recipe section ordering", () => {
 
   it("persists an ingredient reorder within a section on update", async () => {
     const created = await createRecipe(ctx.db, buildInput(), ctx.actor);
-    const id = created.id;
+    const id = await entityIdOf(created.id);
 
     const firstSection = created.sections[0]!;
     const reversed = [...firstSection.ingredients].reverse();

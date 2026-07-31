@@ -338,9 +338,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
               <EntityInlineLink
                 entity="project"
                 data={{
-                  id: v.id,
+                  id: expense.projectId,
                   name: v.name,
-                  shortcode: expense.projectId,
                 }}
               />
             ) : (
@@ -355,8 +354,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       value: (
         <EditableEntityCell
           value={
-            expense.productShortcode && expense.productName
-              ? { id: expense.productShortcode, name: expense.productName }
+            expense.productId && expense.productName
+              ? { id: expense.productId, name: expense.productName }
               : null
           }
           label="product"
@@ -370,8 +369,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }}
           clipboard={entityCellClipboard(
             "product",
-            expense.productShortcode && expense.productName
-              ? { id: expense.productShortcode, name: expense.productName }
+            expense.productId && expense.productName
+              ? { id: expense.productId, name: expense.productName }
               : null,
             async (newProductId) => {
               await updateMutation.mutateAsync({
@@ -382,13 +381,12 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           )}
           SearchProvider={WithProductSearch}
           renderValue={(v) =>
-            v && expense.productId && v.id === expense.productShortcode ? (
+            v && expense.productId && v.id === expense.productId ? (
               <EntityInlineLink
                 entity="product"
                 data={{
                   id: expense.productId,
                   name: v.name,
-                  shortcode: v.id,
                 }}
               />
             ) : v ? (

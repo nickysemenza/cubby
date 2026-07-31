@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import { asDragData } from "./arrange-types";
@@ -6,7 +6,7 @@ import { asDragData } from "./arrange-types";
 /** Shared policy for every breadcrumb, row, and column drop surface. */
 export function canDropOnArrangeTarget(
   roots: InfLocation[],
-  targetLocationId: LocationId | null,
+  targetLocationId: LocationShortcode | null,
   sourceData: Record<string | symbol, unknown>,
 ): boolean {
   const drag = asDragData(sourceData);

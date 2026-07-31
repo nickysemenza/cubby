@@ -8,8 +8,10 @@ type RankedSearchResult = SearchResultItem & {
   matchTerms: string[];
 };
 
-export interface SemanticCandidate {
-  item: SearchResultItem;
+export interface SemanticCandidate<
+  TItem extends SearchResultItem = SearchResultItem,
+> {
+  item: TItem;
   similarity: number;
   reason?: string;
 }

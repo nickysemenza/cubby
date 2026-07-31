@@ -91,7 +91,6 @@ export function EntityPreviewContent({
 
 export type RecipePreview = {
   id: string;
-  shortcode: string;
   name: string;
   yieldText?: string;
   cost?: number;
@@ -145,7 +144,7 @@ export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
 
   return {
     entity: "recipe",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="recipe" size={14} colored />,
     name: vm.name,
     tag: "recipe",
@@ -153,7 +152,7 @@ export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
     crossLinks: [
       {
         to: "/recipes/$shortcode",
-        params: { shortcode: vm.shortcode },
+        params: { shortcode: vm.id },
         search: { view: "prep" },
         icon: <ListChecks className="size-3" />,
         label: "Prep sheet",
@@ -183,8 +182,7 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
         return (
           <ManifestCard
             {...toRecipeCard({
-              id: recipeId,
-              shortcode: data.shortcode,
+              id: data.id,
               name: data.name,
               yieldText: data.yield?.value
                 ? `makes ${formatYield(data.yield)}`
@@ -214,7 +212,6 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
 
 export type IngredientPreview = {
   id: string;
-  shortcode: string;
   name: string;
   aliases: string[];
   nutrients?: Record<string, number>;
@@ -224,7 +221,6 @@ export type IngredientPreview = {
   usdaFdcId?: number;
   products: {
     id: string;
-    shortcode: string;
     name: string;
     manufacturer: string;
   }[];
@@ -247,7 +243,7 @@ export function toIngredientCard(vm: IngredientPreview): ManifestCardProps {
 
   return {
     entity: "ingredient",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="ingredient" size={14} colored />,
     name: vm.name,
     tag: "ingredient",
@@ -278,8 +274,7 @@ export function IngredientPreviewContent({
         return (
           <ManifestCard
             {...toIngredientCard({
-              id: ingredientId,
-              shortcode: data.shortcode,
+              id: data.id,
               name: data.name,
               aliases: data.aliases ?? [],
               nutrients: data.product.find((prod) => prod.food?.nutritionInfo)
@@ -291,7 +286,6 @@ export function IngredientPreviewContent({
               usdaFdcId: data.product.find((prod) => prod.food)?.food?.fdc_id,
               products: data.product.map((prod) => ({
                 id: prod.id,
-                shortcode: prod.shortcode,
                 name: prod.name,
                 manufacturer: prod.manufacturer,
               })),
@@ -307,7 +301,6 @@ export function IngredientPreviewContent({
 
 export type ProductPreview = {
   id: string;
-  shortcode: string;
   name: string;
   identity?: string;
   nutrients?: Record<string, number>;
@@ -333,7 +326,7 @@ export function toProductCard(vm: ProductPreview): ManifestCardProps {
 
   return {
     entity: "product",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="product" size={14} colored />,
     name: vm.name,
     tag: "product",
@@ -361,8 +354,7 @@ export function ProductPreviewContent({ productId }: { productId: string }) {
         return (
           <ManifestCard
             {...toProductCard({
-              id: productId,
-              shortcode: data.shortcode,
+              id: data.id,
               name: isMisc ? getMiscDisplayName(data.name) : data.name,
               identity:
                 [isMisc ? "misc" : manufacturer, data.category]
@@ -446,7 +438,7 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
               data.brandedFoodInfo?.brand_owner ??
               undefined,
             nutrients: data.nutritionInfo.nutrientsPer100,
-            linkedProductShortcode: data.linkedProducts[0]?.shortcode,
+            linkedProductShortcode: data.linkedProducts[0]?.id,
             linkedProductName: data.linkedProducts[0]?.name,
           })}
         />
@@ -459,10 +451,9 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
 
 export type LocationPreview = {
   id: string;
-  shortcode: string;
   name: string;
   type: LocationType;
-  parent?: { shortcode: string; name: string };
+  parent?: { id: string; name: string };
   itemCount?: number;
   subCount?: number;
 };
@@ -476,7 +467,7 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
 
   return {
     entity: "location",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <LocationIcon type={vm.type} size={14} colored />,
     name: vm.name,
     tag: "location",
@@ -486,7 +477,7 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
       ? [
           {
             to: "/locations/$shortcode",
-            params: { shortcode: vm.parent.shortcode },
+            params: { shortcode: vm.parent.id },
             icon: <EntityIcon entity="location" size={12} colored />,
             label: vm.parent.name,
           },
@@ -507,12 +498,11 @@ export function LocationPreviewContent({ locationId }: { locationId: string }) {
       {(data) => (
         <ManifestCard
           {...toLocationCard({
-            id: locationId,
-            shortcode: data.shortcode,
+            id: data.id,
             name: data.name,
             type: data.type,
             parent: data.parent
-              ? { shortcode: data.parent.shortcode, name: data.parent.name }
+              ? { id: data.parent.id, name: data.parent.name }
               : undefined,
             itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
             subCount: data.childCount ?? data.children?.length ?? undefined,
@@ -527,12 +517,11 @@ export function LocationPreviewContent({ locationId }: { locationId: string }) {
 
 export type InventoryPreview = {
   id: string;
-  shortcode: string;
   /** An entry has no name of its own — the product it holds identifies it. */
   productName: string;
-  productShortcode: string;
+  productId: string;
   locationName: string;
-  locationShortcode: string;
+  locationId: string;
   locationType: LocationType;
   amountText: string;
   valuation?: number | null;
@@ -554,7 +543,7 @@ export function toInventoryCard(vm: InventoryPreview): ManifestCardProps {
 
   return {
     entity: "inventory",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="inventory" size={14} colored />,
     name: vm.productName,
     tag: "inventory",
@@ -562,13 +551,13 @@ export function toInventoryCard(vm: InventoryPreview): ManifestCardProps {
     crossLinks: [
       {
         to: "/products/$shortcode",
-        params: { shortcode: vm.productShortcode },
+        params: { shortcode: vm.productId },
         icon: <EntityIcon entity="product" size={12} colored />,
         label: vm.productName,
       },
       {
         to: "/locations/$shortcode",
-        params: { shortcode: vm.locationShortcode },
+        params: { shortcode: vm.locationId },
         icon: <LocationIcon type={vm.locationType} size={12} colored />,
         label: vm.locationName,
       },
@@ -592,14 +581,13 @@ export function InventoryPreviewContent({
       {(data) => (
         <ManifestCard
           {...toInventoryCard({
-            id: inventoryId,
-            shortcode: data.shortcode,
+            id: data.id,
             productName: isMiscProduct(data.product.name)
               ? getMiscDisplayName(data.product.name)
               : data.product.name,
-            productShortcode: data.product.shortcode,
+            productId: data.product.id,
             locationName: data.location.name,
-            locationShortcode: data.location.shortcode,
+            locationId: data.location.id,
             locationType: data.location.type,
             amountText: tryFormatAmount(data.amount),
             valuation: data.valuation,
@@ -616,7 +604,6 @@ export function InventoryPreviewContent({
 
 export type CookbookPreview = {
   id: string;
-  shortcode: string;
   name: string;
   authors: string[];
   subjects: string[];
@@ -650,7 +637,7 @@ export function toCookbookCard(vm: CookbookPreview): ManifestCardProps {
 
   return {
     entity: "cookbook",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="cookbook" size={14} colored />,
     name: vm.name,
     tag: "cookbook",
@@ -675,8 +662,7 @@ export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
       {(data) => (
         <ManifestCard
           {...toCookbookCard({
-            id: cookbookId,
-            shortcode: data.shortcode,
+            id: data.id,
             name: data.book,
             authors: data.author,
             subjects: data.subjects,
@@ -694,7 +680,6 @@ export function CookbookPreviewContent({ cookbookId }: { cookbookId: string }) {
 
 export type MealPreview = {
   id: string;
-  shortcode: string;
   name: string | null;
   date: string;
   recipeNames: string[];
@@ -707,7 +692,7 @@ export type MealPreview = {
 export function toMealCard(vm: MealPreview): ManifestCardProps {
   return {
     entity: "meal",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="meal" size={14} colored />,
     // An unnamed meal is identified by its date — the same fallback the
     // calendar uses.
@@ -747,8 +732,7 @@ export function MealPreviewContent({ mealId }: { mealId: string }) {
       {(data) => (
         <ManifestCard
           {...toMealCard({
-            id: mealId,
-            shortcode: data.shortcode,
+            id: data.id,
             name: data.name,
             date: data.date,
             recipeNames: data.recipes.map((r) => r.recipe.name),

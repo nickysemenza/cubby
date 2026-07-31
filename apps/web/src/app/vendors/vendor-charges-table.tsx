@@ -92,10 +92,7 @@ export const VendorChargesTable: FC<{ vendor: VendorOut }> = ({ vendor }) => {
                 )}
               </TableCell>
               <TableCell>
-                <EntityInlineLink
-                  entity="purchase"
-                  data={{ ...charge, shortcode: charge.id }}
-                />
+                <EntityInlineLink entity="purchase" data={charge} />
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">
                 {charge.expenseCount}

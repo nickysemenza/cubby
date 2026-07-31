@@ -27,6 +27,7 @@ import {
   deleteImages,
   getImageByKey,
 } from "~/server/repo/image";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   contentTypeToExtension,
   deleteS3Object,
@@ -189,7 +190,18 @@ export const attachFileToEntity = async (
   input: McpAttachFileInput,
 ): Promise<AttachFileResponse> => {
   // Fail a bad target id before we touch R2, so we never orphan an object.
-  await assertAttachableEntityExists(db, input.entityType, input.entityId);
+  const entityId = await resolveLiveShortcode(
+    db,
+    input.entityId,
+    input.entityType,
+  );
+  if (!entityId) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `${input.entityType} ${input.entityId} not found`,
+    );
+  }
+  await assertAttachableEntityExists(db, input.entityType, entityId);
 
   // 1. Resolve bytes + content type + filename from whichever input mode.
   let bytes: Buffer;
@@ -281,7 +293,7 @@ export const attachFileToEntity = async (
       db,
       { key, url, filename, contentType, size: bytes.length },
       input.entityType,
-      input.entityId,
+      entityId,
     );
   } catch (error) {
     await deleteS3Object(key).catch((cleanupError) => {

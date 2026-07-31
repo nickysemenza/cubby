@@ -4,10 +4,9 @@ import { amount } from "./codec";
 import { requiredName } from "./common";
 import {
   id,
-  ingredientId,
   ingredientShortcode,
   productShortcode,
-  recipeId,
+  recipeShortcode,
 } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
@@ -64,8 +63,7 @@ export const ingredientSortableFields = [
 export type IngredientSortField = (typeof ingredientSortableFields)[number];
 
 export const ingredientOutFields = {
-  id: ingredientId,
-  shortcode: ingredientShortcode,
+  id: ingredientShortcode,
   ...ingredientBaseFields,
   // Base measurement kinds the user has marked "not applicable" for this
   // ingredient (e.g. volume on a count-only item). The DB column is non-null
@@ -90,17 +88,17 @@ export const mergeSummary = z.object({
   /** Product rows re-pointed onto the target (incl. soft-deleted). */
   productsMoved: z.number().int().nonnegative(),
   /** Ingredient ids absorbed and hard-deleted. */
-  deletedIds: z.array(ingredientId),
+  deletedIds: z.array(ingredientShortcode),
 });
 export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
 export const ingredientRawLineOut = z.object({
-  ingredientId,
+  ingredientId: ingredientShortcode,
   lineId: id,
   rawLine: z.string().nullable(),
   modifier: z.string().nullable(),
   amounts: z.array(amount),
-  recipeId,
+  recipeId: recipeShortcode,
   recipeName: z.string(),
   sectionName: z.string().nullable(),
 });
@@ -112,8 +110,7 @@ export const ingredientRawLinesOut = z.array(ingredientRawLineOut);
 
 export const ingredientMatchOut = z
   .object({
-    id: z.string(),
-    shortcode: ingredientShortcode,
+    id: ingredientShortcode,
     name: z.string(),
     aliases: z.array(z.string()),
   })
@@ -123,7 +120,7 @@ export const ingredientMatchesOut = z.record(z.string(), ingredientMatchOut);
 
 export const ingredientResolveOrCreateResultOut = z.object({
   name: z.string(),
-  id: ingredientId,
+  id: ingredientShortcode,
   matched: z.boolean(),
   created: z.boolean(),
 });
@@ -221,8 +218,7 @@ export const enrichmentRowOut = z.object({
   priceMode: z.enum(["per-each", "package"]),
   mergeCandidates: z.array(
     z.object({
-      id: ingredientId,
-      shortcode: ingredientShortcode,
+      id: ingredientShortcode,
       name: z.string(),
       // pg_trgm similarity (0-1) to this row.
       similarity: z.number(),
@@ -267,15 +263,15 @@ export const ingredientUpdateData = deriveUpdateData(ingredientCreateShape, {
  *
  */
 export const ingredientUpdateInput = z.object({
-  id: ingredientId,
+  id: ingredientShortcode,
   data: ingredientUpdateData,
 });
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
 
 export const ingredientMergeInput = z.object({
-  target: ingredientId,
-  aliases: z.array(ingredientId).min(1),
+  target: ingredientShortcode,
+  aliases: z.array(ingredientShortcode).min(1),
   // Validate + count what would change without writing.
   dryRun: z.boolean().optional(),
 });
@@ -288,7 +284,7 @@ export const ingredientMergeInput = z.object({
  * USDA-resolvable reference (explicit `fdc_id` or a UPC).
  */
 export const ingredientMergeCandidateImpact = z.object({
-  id: ingredientId,
+  id: ingredientShortcode,
   name: z.string(),
   recipeUsageCount: z.number().int().nonnegative(),
   productCount: z.number().int().nonnegative(),
@@ -300,15 +296,15 @@ export type IngredientMergeCandidateImpact = z.infer<
 >;
 
 export const ingredientIdInput = z.object({
-  id: ingredientId,
+  id: ingredientShortcode,
 });
 
 export const ingredientIdsInput = z.object({
-  ids: z.array(ingredientId),
+  ids: z.array(ingredientShortcode),
 });
 
 export const ingredientRawLinesInput = z.object({
-  ids: z.array(ingredientId).min(1),
+  ids: z.array(ingredientShortcode).min(1),
 });
 
 export const ingredientNameFilterInput = z.object({
@@ -355,9 +351,9 @@ export const ingredientMergeBatchInput = z.object({
   merges: z
     .array(
       z.object({
-        target: ingredientId.describe("ID of the ingredient to keep"),
+        target: ingredientShortcode.describe("ID of the ingredient to keep"),
         aliases: z
-          .array(ingredientId)
+          .array(ingredientShortcode)
           .min(1)
           .describe("IDs of duplicate ingredients to fold into the target"),
       }),
@@ -377,7 +373,7 @@ export const ingredientMergeBatchOut = z.object({
   total: z.number().int().nonnegative(),
   results: z.array(
     z.object({
-      target: ingredientId,
+      target: ingredientShortcode,
       ok: z.boolean(),
       summary: mergeSummary.optional(),
       error: z.string().optional(),
@@ -390,7 +386,7 @@ export const ingredientRawLineMcpOut = z.object({
   rawLine: z.string().nullable(),
   modifier: z.string().nullable(),
   amounts: z.array(amount),
-  recipeId,
+  recipeId: recipeShortcode,
   recipeName: z.string(),
   sectionName: z.string().nullable(),
 });
@@ -399,7 +395,7 @@ export const ingredientRawLinesBatchOut = z.object({
   count: z.number().int().nonnegative(),
   ingredients: z.array(
     z.object({
-      ingredientId: ingredientId,
+      ingredientId: ingredientShortcode,
       lineCount: z.number().int().nonnegative(),
       lines: z.array(ingredientRawLineMcpOut),
     }),

@@ -182,7 +182,6 @@ export const RecipeIngredientList: React.FC<{
                 .with({ type: "ingredient" }, (r) => (
                   <EntityPreviewLink
                     entity="ingredient"
-                    shortcode={r.ingredient.shortcode}
                     id={r.ingredient.id}
                     className={dottedEntityLink}
                   >
@@ -192,7 +191,6 @@ export const RecipeIngredientList: React.FC<{
                 .with({ type: "recipe" }, (r) => (
                   <EntityPreviewLink
                     entity="recipe"
-                    shortcode={r.recipe.shortcode}
                     id={r.recipe.id}
                     className={dottedEntityLink}
                   >
@@ -447,11 +445,11 @@ export const RecipeIngredientList: React.FC<{
       match(row)
         .with({ type: "ingredient" }, (row) => ({
           to: "/ingredients/$shortcode" as const,
-          params: { shortcode: row.ingredient.shortcode },
+          params: { shortcode: row.ingredient.id },
         }))
         .with({ type: "recipe" }, (row) => ({
           to: "/recipes/$shortcode" as const,
-          params: { shortcode: row.recipe.shortcode },
+          params: { shortcode: row.recipe.id },
         }))
         .exhaustive(),
     ),

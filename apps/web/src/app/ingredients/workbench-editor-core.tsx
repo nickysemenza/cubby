@@ -1,4 +1,4 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
@@ -305,7 +305,7 @@ type ProductWrite =
   | { kind: "create"; input: ProductCreateInput }
   | {
       kind: "update";
-      id: ProductId;
+      id: ProductShortcode;
       data: {
         fdc_id?: number;
         price?: number;

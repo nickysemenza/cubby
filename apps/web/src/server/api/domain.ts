@@ -19,7 +19,6 @@ import { projectRouter } from "./routers/project";
 import { purchaseRouter } from "./routers/purchase";
 import { recipeRouter } from "./routers/recipe";
 import { searchRouter } from "./routers/search";
-import { shortcodeRouter } from "./routers/shortcode";
 import { suggestionsRouter } from "./routers/suggestions";
 import { taskRouter } from "./routers/task";
 import { upcRouter } from "./routers/upc";
@@ -52,7 +51,6 @@ export const domainRouterRecord = {
   entityIntegrity: entityIntegrityRouter,
   auditLog: auditLogRouter,
   search: searchRouter,
-  shortcode: shortcodeRouter,
   suggestions: suggestionsRouter,
 };
 

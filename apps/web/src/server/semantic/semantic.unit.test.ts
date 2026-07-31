@@ -1,3 +1,4 @@
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import { shouldUseSemanticComboboxFallback } from "./combobox-fallback";
 import { embeddingTextHash } from "./hash";
@@ -88,8 +89,7 @@ describe("semantic hash", () => {
 describe("hybrid ranking", () => {
   const createdAt = new Date("2026-06-28T00:00:00Z");
   const product = (id: string, name: string) => ({
-    id,
-    shortcode: `PRD-${id.toUpperCase()}`,
+    id: unsafeProductShortcode(`PRD-${id.toUpperCase()}`),
     entityType: "product" as const,
     name,
     subtitle: "generic",
@@ -111,7 +111,7 @@ describe("hybrid ranking", () => {
       5,
     );
 
-    expect(first?.id).toBe("p1");
+    expect(first?.id).toBe("PRD-P1");
     expect(first?.matchKind).toBe("exact");
   });
 

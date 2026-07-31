@@ -105,7 +105,6 @@ export function PurchaseList() {
               data={{
                 id: row.vendorId,
                 name: row.vendorName,
-                shortcode: row.vendorId,
               }}
               truncate
             />

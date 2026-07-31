@@ -1,5 +1,8 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  LocationShortcode,
+} from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
@@ -18,9 +21,9 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 
 interface QuickEditInventoryEntry {
-  id: InventoryId;
+  id: InventoryShortcode;
   amount: Amount;
-  location: { id: LocationId; name: string; type: LocationType };
+  location: { id: LocationShortcode; name: string; type: LocationType };
 }
 
 interface InventoryEntriesQuickEditDialogProps {

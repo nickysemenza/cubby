@@ -6,7 +6,6 @@ import { useTRPC } from "~/integrations/trpc/react";
 /** A matched ingredient (DB row), or `null` when looked up but not found. */
 export type IngredientMatch = {
   id: string;
-  shortcode: string;
   name: string;
   aliases: string[];
 };

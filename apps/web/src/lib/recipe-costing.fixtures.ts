@@ -1,10 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import {
-  unsafeIngredientId,
   unsafeIngredientShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
-  unsafeRecipeId,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
@@ -51,8 +48,7 @@ export const makeProduct = (
     mappings?: { a: Amount; b: Amount }[];
   } = {},
 ): Product => ({
-  id: unsafeProductId(`prod-${idStr}`),
-  shortcode: unsafeProductShortcode("PRD-TEST"),
+  id: unsafeProductShortcode("PRD-TEST"),
   name: idStr,
   aliases: [],
   tags: [],
@@ -99,8 +95,7 @@ export const ingredientWith = (
   name: string,
   product: IngredientWithFoodOut["product"],
 ): IngredientWithFoodOut => ({
-  id: unsafeIngredientId(idStr),
-  shortcode: unsafeIngredientShortcode("ING-2222"),
+  id: unsafeIngredientShortcode(idStr),
   name,
   recipe: null,
   recipeUsages: [],
@@ -143,8 +138,7 @@ export const makeEntry = (
   type: "ingredient",
   ...dates,
   ingredient: {
-    id: unsafeIngredientId(idStr),
-    shortcode: unsafeIngredientShortcode(`ING-${idStr}`),
+    id: unsafeIngredientShortcode(idStr),
     name,
     ...dates,
   },
@@ -174,8 +168,7 @@ export const makeSubRecipe = (
   yieldValue: RecipeOut["yield"],
   ingredients: SectionIngredientOut[],
 ): RecipeOut => ({
-  id: unsafeRecipeId(idStr),
-  shortcode: unsafeRecipeShortcode("RCP-2222"),
+  id: unsafeRecipeShortcode(idStr),
   name,
   ...dates,
   meta: null,
@@ -190,8 +183,7 @@ export const makeSubRecipe = (
 // Wrap loose costing rows in a root recipe (one section per row, preserving
 // each row's sectionName) and run the unified engine.
 export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
-  id: unsafeRecipeId("root"),
-  shortcode: unsafeRecipeShortcode("RCP-3333"),
+  id: unsafeRecipeShortcode("root"),
   name: "root",
   ...dates,
   meta: null,

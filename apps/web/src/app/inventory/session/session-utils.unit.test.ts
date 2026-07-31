@@ -1,7 +1,4 @@
-import {
-  unsafeLocationId,
-  unsafeLocationShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
 import {
@@ -24,10 +21,9 @@ function loc(
   children: InfLocation[] = [],
 ): InfLocation {
   return {
-    id: unsafeLocationId(id),
+    id: unsafeLocationShortcode(`LOC-${id.slice(-4).toUpperCase()}`),
     // Fixtures share a "00000000-0000-4000-8000-..." prefix, so the shortcode
     // must key off the varying tail, not the head, to stay unique per id.
-    shortcode: unsafeLocationShortcode(`L-${id.slice(-4).toUpperCase()}`),
     name,
     aliases: [],
     type,
@@ -140,7 +136,7 @@ describe("inventory session utils", () => {
     );
 
     expect(
-      findLocationInTreeByShortcode([garage, pantry], drawer.shortcode)?.name,
+      findLocationInTreeByShortcode([garage, pantry], drawer.id)?.name,
     ).toBe("Drawer");
     expect(
       findLocationInTreeByShortcode([garage, pantry], undefined),

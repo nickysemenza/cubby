@@ -13,11 +13,8 @@ import {
 import { PRODUCT_EDGE_ROLES } from "~/server/repo/product/edge-roles";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
-import { createIngredient } from "./ingredient";
-import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
-import { createLocation } from "./location";
+import { deleteInventoryEntries } from "./inventory";
 import {
-  createProduct,
   deleteProducts,
   findProductByNameFuzzyManufacturer,
   getProductByID,
@@ -25,6 +22,10 @@ import {
   updateProduct,
 } from "./product";
 import {
+  createIngredientFixture as createIngredient,
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -48,7 +49,10 @@ describe("product repository", () => {
     expect(createdProduct.upc).toEqual(productData.upc);
 
     // Retrieve the product by ID
-    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
+    const retrievedProduct = await getProductByID(
+      ctx.db,
+      createdProduct.entityId,
+    );
 
     // Verify the retrieved product matches the created product
     expect(retrievedProduct.id).toEqual(createdProduct.id);
@@ -157,7 +161,7 @@ describe("product repository", () => {
     // Update the product
     const updatedProduct = await updateProduct(
       ctx.db,
-      createdProduct.id,
+      createdProduct.entityId,
       {
         name: "Updated Product",
         manufacturer: "Updated Manufacturer",
@@ -180,7 +184,10 @@ describe("product repository", () => {
     expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
 
     // Retrieve the product to verify unit mappings
-    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
+    const retrievedProduct = await getProductByID(
+      ctx.db,
+      createdProduct.entityId,
+    );
 
     // Verify unit mappings were created
     expect(retrievedProduct.unitMappings.length).toEqual(1);
@@ -215,7 +222,10 @@ describe("product repository", () => {
     const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
     // Retrieve the product to verify ingredient association
-    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
+    const retrievedProduct = await getProductByID(
+      ctx.db,
+      createdProduct.entityId,
+    );
 
     // Verify the ingredient association
     expect(retrievedProduct.ingredient).not.toBeNull();
@@ -251,13 +261,16 @@ describe("product repository", () => {
     // Update the product to link to the second ingredient
     await updateProduct(
       ctx.db,
-      createdProduct.id,
-      { ingredientId: ingredient2.id },
+      createdProduct.entityId,
+      { ingredientId: ingredient2.entityId },
       ctx.actor,
     );
 
     // Retrieve the product to verify ingredient association
-    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
+    const retrievedProduct = await getProductByID(
+      ctx.db,
+      createdProduct.entityId,
+    );
 
     // Verify the ingredient association was updated
     expect(retrievedProduct.ingredient).not.toBeNull();
@@ -267,13 +280,16 @@ describe("product repository", () => {
     // Update the product to remove ingredient association
     await updateProduct(
       ctx.db,
-      createdProduct.id,
+      createdProduct.entityId,
       { ingredientId: null },
       ctx.actor,
     );
 
     // Retrieve the product again
-    const updatedProduct = await getProductByID(ctx.db, createdProduct.id);
+    const updatedProduct = await getProductByID(
+      ctx.db,
+      createdProduct.entityId,
+    );
 
     // Verify the ingredient association was removed
     expect(updatedProduct.ingredient).toBeNull();
@@ -356,7 +372,7 @@ describe("product repository", () => {
         },
         ctx.actor,
       );
-      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
 
       const noneFiltered = await productList(
         ctx.db,
@@ -541,7 +557,7 @@ describe("product repository", () => {
       await getDb(ctx.db)
         .update(location)
         .set({ deletedAt: new Date() })
-        .where(eq(location.id, shelf.id));
+        .where(eq(location.id, shelf.entityId));
 
       const none = await listWith({ inventoryPresenceFilter: "none" });
       const row = none.data.find((p) => p.id === stranded.id);
@@ -581,7 +597,7 @@ describe("product repository", () => {
           {
             ...makeExpenseInput(),
             name: "Linked",
-            productId: bought.shortcode,
+            productId: bought.id,
           },
           ctx.actor,
         );
@@ -613,7 +629,7 @@ describe("product repository", () => {
           {
             ...makeExpenseInput(),
             name: "Deleted",
-            productId: product.shortcode,
+            productId: product.id,
           },
           ctx.actor,
         );
@@ -798,7 +814,7 @@ describe("product repository", () => {
           }),
           ctx.actor,
         );
-        await deleteProducts(ctx.db, [product.id], ctx.actor);
+        await deleteProducts(ctx.db, [product.entityId], ctx.actor);
 
         const has = await listWith({ pricePresenceFilter: "has" });
         expect(has.data.map((p) => p.id)).not.toContain(product.id);
@@ -900,7 +916,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Acquisition",
             cost: 100,
-            productId: product.shortcode,
+            productId: product.id,
           },
           ctx.actor,
         );
@@ -910,7 +926,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Refund",
             cost: -30,
-            productId: product.shortcode,
+            productId: product.id,
           },
           ctx.actor,
         );
@@ -952,7 +968,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Live",
             cost: 50,
-            productId: product.shortcode,
+            productId: product.id,
           },
           ctx.actor,
         );
@@ -962,7 +978,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Deleted",
             cost: 999,
-            productId: product.shortcode,
+            productId: product.id,
           },
           ctx.actor,
         );
@@ -997,7 +1013,7 @@ describe("product repository", () => {
                 ...makeExpenseInput(),
                 name: `${name} line`,
                 cost,
-                productId: created.shortcode,
+                productId: created.id,
               },
               ctx.actor,
             );
@@ -1042,7 +1058,7 @@ describe("product repository", () => {
               ...makeExpenseInput(),
               name: "doomed",
               cost: 500,
-              productId: created.shortcode,
+              productId: created.id,
             },
             ctx.actor,
           );
@@ -1276,13 +1292,13 @@ describe("product repository", () => {
         {
           ...makeExpenseInput(),
           name: "blocking expense",
-          productId: bought.shortcode,
+          productId: bought.id,
         },
         ctx.actor,
       );
 
       await expect(
-        deleteProducts(ctx.db, [bought.id], ctx.actor),
+        deleteProducts(ctx.db, [bought.entityId], ctx.actor),
       ).rejects.toMatchObject({
         code: "PRECONDITION_FAILED",
         cause: { reason: "PRODUCT_HAS_EXPENSES" },
@@ -1292,10 +1308,12 @@ describe("product repository", () => {
       await deleteExpenses(ctx.db, [expense.id], ctx.actor);
 
       await expect(
-        deleteProducts(ctx.db, [bought.id], ctx.actor),
+        deleteProducts(ctx.db, [bought.entityId], ctx.actor),
       ).resolves.toBeUndefined();
 
-      await expect(getProductByID(ctx.db, bought.id)).rejects.toMatchObject({
+      await expect(
+        getProductByID(ctx.db, bought.entityId),
+      ).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
     });
@@ -1311,13 +1329,13 @@ describe("product repository", () => {
         taskCreateInput.parse({
           name: "Replace furnace filter",
           trade: "mechanical",
-          subjectProductId: furnace.shortcode,
+          subjectProductId: furnace.id,
         }),
         ctx.actor,
       );
 
       await expect(
-        deleteProducts(ctx.db, [furnace.id], ctx.actor),
+        deleteProducts(ctx.db, [furnace.entityId], ctx.actor),
       ).rejects.toMatchObject({
         code: "PRECONDITION_FAILED",
         cause: { reason: "PRODUCT_HAS_TASKS" },
@@ -1326,7 +1344,7 @@ describe("product repository", () => {
 
       await deleteTasks(ctx.db, [maintenance.id], ctx.actor);
       await expect(
-        deleteProducts(ctx.db, [furnace.id], ctx.actor),
+        deleteProducts(ctx.db, [furnace.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
   });
@@ -1383,13 +1401,13 @@ describe("product repository", () => {
       );
 
       await expect(
-        deleteProducts(ctx.db, [prod.id], ctx.actor),
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
       ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_INVENTORY" } });
 
-      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
 
       await expect(
-        deleteProducts(ctx.db, [prod.id], ctx.actor),
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
 
@@ -1404,19 +1422,19 @@ describe("product repository", () => {
         {
           ...makeExpenseInput(),
           name: "backstop expense",
-          productId: prod.shortcode,
+          productId: prod.id,
         },
         ctx.actor,
       );
 
       await expect(
-        deleteProducts(ctx.db, [prod.id], ctx.actor),
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
       ).rejects.toMatchObject({ cause: { reason: "PRODUCT_HAS_EXPENSES" } });
 
       await deleteExpenses(ctx.db, [exp.id], ctx.actor);
 
       await expect(
-        deleteProducts(ctx.db, [prod.id], ctx.actor),
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
       ).resolves.toBeUndefined();
     });
 
@@ -1452,23 +1470,23 @@ describe("product repository", () => {
       // below vacuously pass.
       const extIdBefore = await getDb(ctx.db).query.productExternalId.findFirst(
         {
-          where: eq(productExternalId.productId, prod.id),
+          where: eq(productExternalId.productId, prod.entityId),
         },
       );
       const mappingBefore = await getDb(
         ctx.db,
       ).query.productUnitMappings.findFirst({
-        where: eq(productUnitMappings.productId, prod.id),
+        where: eq(productUnitMappings.productId, prod.entityId),
       });
       const imageJoinBefore = await getDb(ctx.db).query.productImage.findFirst({
-        where: eq(productImage.productId, prod.id),
+        where: eq(productImage.productId, prod.entityId),
       });
       expect(extIdBefore).toBeDefined();
       expect(mappingBefore).toBeDefined();
       expect(imageJoinBefore).toBeDefined();
 
       await expect(
-        deleteProducts(ctx.db, [prod.id], ctx.actor),
+        deleteProducts(ctx.db, [prod.entityId], ctx.actor),
       ).resolves.toBeUndefined();
 
       // Cascade: the metadata rows are soft-deleted along with the product,

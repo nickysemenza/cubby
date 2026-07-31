@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientShortcode,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { normalizeImportRecipe } from "~/lib/import-recipe-normalizer";
@@ -15,7 +19,7 @@ import {
   upsertNotionRecipe,
   upsertRecipe,
 } from "./recipe/crud";
-import { findOrCreateRecipeLinkIngredient } from "./recipe/update-helpers";
+import { lookupShortcodes, refKey } from "./shortcode-resolver";
 
 /**
  * Per-import shared state, threaded through the converter when importing a whole
@@ -33,7 +37,7 @@ export type CookbookImportContext = {
   // name.trim().toLowerCase() → committed ingredient id. Fills lazily: the first
   // recipe to use an ingredient pays the find-or-create round trip; the rest of
   // the book reuses it for free.
-  ingredientIdByName: Map<string, IngredientId>;
+  ingredientIdByName: Map<string, IngredientShortcode>;
 };
 
 /**
@@ -53,30 +57,22 @@ export type CookbookImportContext = {
  */
 const makeIngredientResolvers = (
   exec: Database | DrizzleTransaction,
-  sharedIds?: Map<string, IngredientId>,
+  sharedIds?: Map<string, IngredientShortcode>,
 ) => {
-  const plain = new Map<string, Promise<IngredientId>>();
-  const link = new Map<RecipeId, Promise<IngredientId>>();
+  const plain = new Map<string, Promise<IngredientShortcode>>();
   return {
-    resolvePlain: (name: string): Promise<IngredientId> => {
+    resolvePlain: (name: string): Promise<IngredientShortcode> => {
       const key = name.trim().toLowerCase();
       const cached = sharedIds?.get(key);
       if (cached) return Promise.resolve(cached);
       let p = plain.get(key);
       if (!p) {
         p = findOrCreateIngredient(exec, name).then((i) => {
-          sharedIds?.set(key, i.id);
-          return i.id;
+          const shortcode = unsafeIngredientShortcode(i.shortcode);
+          sharedIds?.set(key, shortcode);
+          return shortcode;
         });
         plain.set(key, p);
-      }
-      return p;
-    },
-    resolveLink: (recipeId: RecipeId): Promise<IngredientId> => {
-      let p = link.get(recipeId);
-      if (!p) {
-        p = findOrCreateRecipeLinkIngredient(exec, recipeId);
-        link.set(recipeId, p);
       }
       return p;
     },
@@ -116,7 +112,7 @@ const importRecipeToRecipeInput = async (
   const build = async (
     exec: Database | DrizzleTransaction,
   ): Promise<RecipeCreateInput> => {
-    const { resolvePlain, resolveLink } = makeIngredientResolvers(
+    const { resolvePlain } = makeIngredientResolvers(
       exec,
       importCtx?.ingredientIdByName,
     );
@@ -143,9 +139,32 @@ const importRecipeToRecipeInput = async (
                   ? titleToId.get(refTitle)
                   : undefined;
                 // A reference whose target recipe exists in the book → link it.
-                const ingredientId = targetRecipeId
-                  ? await resolveLink(targetRecipeId)
-                  : await resolvePlain(parsed.name);
+                if (targetRecipeId) {
+                  const codes = await lookupShortcodes(exec, [
+                    { entity: "recipe", id: targetRecipeId },
+                  ]);
+                  const recipeId = codes.get(refKey("recipe", targetRecipeId));
+                  if (!recipeId) {
+                    throw new Error(
+                      `Recipe ${targetRecipeId} could not be resolved`,
+                    );
+                  }
+                  return {
+                    type: "recipe" as const,
+                    ingredientId: null,
+                    recipeId: unsafeRecipeShortcode(recipeId),
+                    amounts: parsed.amounts.map((a) => ({
+                      value: a.value,
+                      unit: a.unit,
+                      ...(a.upper_value != null && a.upper_value > a.value
+                        ? { upperValue: a.upper_value }
+                        : {}),
+                    })),
+                    rawLine: line,
+                    modifier: parsed.modifier ?? null,
+                  };
+                }
+                const ingredientId = await resolvePlain(parsed.name);
                 return {
                   type: "ingredient" as const,
                   ingredientId,

@@ -7,16 +7,14 @@ import {
   getBackgroundBatchDetail,
   listBackgroundBatches,
 } from "~/server/repo/background-jobs";
-import { createProduct, updateProduct } from "~/server/repo/product";
-import {
-  createRecipe,
-  getRecipesByIDs,
-  updateRecipe,
-} from "~/server/repo/recipe";
+import { updateProduct } from "~/server/repo/product";
+import { getRecipesByIDs, updateRecipe } from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
 import { createTestTRPCContext } from "../api/trpc";
 import { findOrCreateIngredient } from "../repo/ingredient";
 import {
+  createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
   ingredientRef,
   makeProductInput,
   makeRecipeInput,
@@ -61,7 +59,9 @@ describe("RecipeCostingService", () => {
           {
             instructions: [{ instruction: "Mix" }],
             ingredients: [
-              ingredientRef(ing.id, { amounts: [{ value: 2, unit: "cup" }] }),
+              ingredientRef(ing.shortcode, {
+                amounts: [{ value: 2, unit: "cup" }],
+              }),
             ],
           },
         ],
@@ -75,7 +75,7 @@ describe("RecipeCostingService", () => {
       const recipe = await seedPricedRecipe("Complete Recipe");
       const result = await service().computeTotals([recipe]);
 
-      const entry = result.get(recipe.id as RecipeId);
+      const entry = result.get(recipe.id);
       expect(entry).toBeDefined();
       expect(entry?.complete).toBe(true);
       expect(entry?.totals.ingredientCount).toBe(1);
@@ -102,7 +102,9 @@ describe("RecipeCostingService", () => {
             {
               instructions: [{ instruction: "Mix" }],
               ingredients: [
-                ingredientRef(ing.id, { amounts: [{ value: 1, unit: "cup" }] }),
+                ingredientRef(ing.shortcode, {
+                  amounts: [{ value: 1, unit: "cup" }],
+                }),
               ],
             },
           ],
@@ -110,9 +112,7 @@ describe("RecipeCostingService", () => {
         ctx.actor,
       );
 
-      const entry = (await service().computeTotals([recipe])).get(
-        recipe.id as RecipeId,
-      );
+      const entry = (await service().computeTotals([recipe])).get(recipe.id);
       expect(entry?.complete).toBe(false);
     });
   });
@@ -165,7 +165,7 @@ describe("RecipeCostingService", () => {
       );
 
       const result = await service().computeTotals([a]);
-      expect(result.get(a.id as RecipeId)).toBeDefined();
+      expect(result.get(a.id)).toBeDefined();
     });
 
     it("terminates on a cyclic sub-recipe reference", async () => {
@@ -193,7 +193,7 @@ describe("RecipeCostingService", () => {
       );
       await updateRecipe(
         ctx.db,
-        a.id as RecipeId,
+        a.entityId,
         {
           sections: [
             {
@@ -212,19 +212,19 @@ describe("RecipeCostingService", () => {
         ctx.actor,
       );
 
-      const [reloadedA] = await getRecipesByIDs(ctx.db, [a.id as RecipeId]);
+      const [reloadedA] = await getRecipesByIDs(ctx.db, [a.entityId]);
       // Should resolve (not hang); the result map contains A.
       const result = await service().computeTotals([reloadedA!]);
-      expect(result.get(a.id as RecipeId)).toBeDefined();
+      expect(result.get(a.id)).toBeDefined();
     });
   });
 
   describe("recompute", () => {
     it("persists totals and stamps a complete recipe fresh", async () => {
       const recipe = await seedPricedRecipe("Persist Recipe");
-      await service().recompute([recipe.id as RecipeId]);
+      await service().recompute([recipe.entityId]);
 
-      const state = await getRecipeTotalsState(ctx.db, recipe.id as RecipeId);
+      const state = await getRecipeTotalsState(ctx.db, recipe.entityId);
       expect(state?.totals).not.toBeNull();
       expect(state?.totalsComputedAt).not.toBeNull();
     });
@@ -248,7 +248,9 @@ describe("RecipeCostingService", () => {
             {
               instructions: [{ instruction: "Mix" }],
               ingredients: [
-                ingredientRef(ing.id, { amounts: [{ value: 1, unit: "cup" }] }),
+                ingredientRef(ing.shortcode, {
+                  amounts: [{ value: 1, unit: "cup" }],
+                }),
               ],
             },
           ],
@@ -256,8 +258,8 @@ describe("RecipeCostingService", () => {
         ctx.actor,
       );
 
-      await service().recompute([recipe.id as RecipeId]);
-      const state = await getRecipeTotalsState(ctx.db, recipe.id as RecipeId);
+      await service().recompute([recipe.entityId]);
+      const state = await getRecipeTotalsState(ctx.db, recipe.entityId);
       expect(state?.totals).not.toBeNull();
       // USDA is reliable now, so an unresolved fdc_id is a permanent costing gap
       // (surfaced by the coverage UI), not a stale-for-retry row — stamp fresh.
@@ -290,7 +292,7 @@ describe("RecipeCostingService", () => {
             {
               instructions: [{ instruction: "Mix" }],
               ingredients: [
-                ingredientRef(ing.id, {
+                ingredientRef(ing.shortcode, {
                   amounts: [{ value: 1, unit: "lb" }],
                 }),
               ],
@@ -321,15 +323,9 @@ describe("RecipeCostingService", () => {
       );
 
       // Compute both; the child costs $4 and the parent is stamped fresh.
-      await service().recompute([parent.id as RecipeId, child.id as RecipeId]);
-      const childBefore = await getRecipeTotalsState(
-        ctx.db,
-        child.id as RecipeId,
-      );
-      const parentBefore = await getRecipeTotalsState(
-        ctx.db,
-        parent.id as RecipeId,
-      );
+      await service().recompute([parent.entityId, child.entityId]);
+      const childBefore = await getRecipeTotalsState(ctx.db, child.entityId);
+      const parentBefore = await getRecipeTotalsState(ctx.db, parent.entityId);
       expect(childBefore?.totals?.costTotal).toBe(4);
       expect(parentBefore?.totalsComputedAt).not.toBeNull();
 
@@ -338,20 +334,14 @@ describe("RecipeCostingService", () => {
       // drain — re-stamping the parent's totals with a fresh (later) timestamp.
       await updateProduct(
         ctx.db,
-        prod.id,
+        prod.entityId,
         { unitMappings: [priceMapping(10)] },
         ctx.actor,
       );
-      await service().recompute([child.id as RecipeId]);
+      await service().recompute([child.entityId]);
 
-      const childAfter = await getRecipeTotalsState(
-        ctx.db,
-        child.id as RecipeId,
-      );
-      const parentAfter = await getRecipeTotalsState(
-        ctx.db,
-        parent.id as RecipeId,
-      );
+      const childAfter = await getRecipeTotalsState(ctx.db, child.entityId);
+      const parentAfter = await getRecipeTotalsState(ctx.db, parent.entityId);
       expect(childAfter?.totals?.costTotal).toBe(10);
       expect(parentAfter?.totalsComputedAt?.getTime() ?? 0).toBeGreaterThan(
         parentBefore?.totalsComputedAt?.getTime() ?? 0,
@@ -387,7 +377,7 @@ describe("RecipeCostingService", () => {
     it("persists and processes jobs inline when no queue is bound", async () => {
       const ids: RecipeId[] = [];
       for (let i = 0; i < 3; i++) {
-        ids.push((await seedPricedRecipe(`Inline ${i}`)).id as RecipeId);
+        ids.push((await seedPricedRecipe(`Inline ${i}`)).entityId);
       }
       const returnedBatches = await service().dispatchRecompute(ids);
       expect(returnedBatches).toHaveLength(1);
@@ -408,7 +398,7 @@ describe("RecipeCostingService", () => {
       try {
         const ids: RecipeId[] = [];
         for (let i = 0; i < 3; i++) {
-          ids.push((await seedPricedRecipe(`Queued ${i}`)).id as RecipeId);
+          ids.push((await seedPricedRecipe(`Queued ${i}`)).entityId);
         }
         const returnedBatches = await service().dispatchRecompute(ids);
         expect(returnedBatches).toHaveLength(1);
@@ -434,9 +424,7 @@ describe("RecipeCostingService", () => {
       try {
         const ids: RecipeId[] = [];
         for (let i = 0; i <= RECOMPUTE_CHUNK_SIZE; i++) {
-          ids.push(
-            (await seedPricedRecipe(`Queued chunk ${i}`)).id as RecipeId,
-          );
+          ids.push((await seedPricedRecipe(`Queued chunk ${i}`)).entityId);
         }
         const returnedBatches = await service().dispatchRecompute(ids);
         expect(returnedBatches).toHaveLength(1);

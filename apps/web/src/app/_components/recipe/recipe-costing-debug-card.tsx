@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type {
   RecipeCostingExplain,
   RowDiagnosticOut,
@@ -75,9 +75,9 @@ const MeasureCell: React.FC<{
   );
 };
 
-export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
-  recipeId,
-}) => {
+export const RecipeCostingDebugCard: React.FC<{
+  recipeId: RecipeShortcode;
+}> = ({ recipeId }) => {
   const api = useTRPC();
   const { data, error } = useQuery(
     api.recipe.explainCosting.queryOptions({ id: recipeId }),

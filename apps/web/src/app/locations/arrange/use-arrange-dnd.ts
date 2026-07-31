@@ -1,5 +1,5 @@
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useEffect, useRef } from "react";
 import { match } from "ts-pattern";
@@ -9,8 +9,11 @@ import { asDragData, asDropData, type ItemDragData } from "./arrange-types";
 interface UseArrangeDndArgs {
   /** Current tree roots — read live so the monitor never needs re-registering. */
   roots: InfLocation[];
-  moveLocation: (dragId: LocationId, targetId: LocationId | null) => void;
-  moveItem: (drag: ItemDragData, targetLocationId: LocationId) => void;
+  moveLocation: (
+    dragId: LocationShortcode,
+    targetId: LocationShortcode | null,
+  ) => void;
+  moveItem: (drag: ItemDragData, targetLocationId: LocationShortcode) => void;
 }
 
 /**

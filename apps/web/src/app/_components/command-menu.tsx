@@ -163,7 +163,7 @@ export function GlobalCommandMenu({
     if (shortcodeResult && isSearchableEntity(parsedShortcode.type)) {
       pushRecent({
         entityType: parsedShortcode.type,
-        shortcode: parsedShortcode.shortcode,
+        id: parsedShortcode.shortcode,
         name: shortcodeResult.name,
       });
     }
@@ -203,7 +203,7 @@ export function GlobalCommandMenu({
   ) => {
     const entity = entities[entityTypeMap[entityType]];
     if (entity) {
-      if (name) pushRecent({ entityType, shortcode, name });
+      if (name) pushRecent({ entityType, id: shortcode, name });
       navigate({
         to: entity.routes.detail,
         params: entityDetailParams(shortcode),
@@ -505,14 +505,10 @@ export function GlobalCommandMenu({
                   <CommandGroup heading="Jump back">
                     {recents.map((recent) => (
                       <CommandItem
-                        key={`recent-${recent.entityType}-${recent.shortcode}`}
-                        value={`recent-${recent.shortcode}`}
+                        key={`recent-${recent.entityType}-${recent.id}`}
+                        value={`recent-${recent.id}`}
                         onSelect={() =>
-                          goToEntity(
-                            recent.entityType,
-                            recent.shortcode,
-                            recent.name,
-                          )
+                          goToEntity(recent.entityType, recent.id, recent.name)
                         }
                         className="flex items-center gap-2"
                       >
@@ -668,7 +664,7 @@ function AnswerView({
             key={`${source.entityType}-${source.id}`}
             value={`source-${source.entityType}-${source.id}`}
             onSelect={() =>
-              onSelectSource(source.entityType, source.shortcode, source.name)
+              onSelectSource(source.entityType, source.id, source.name)
             }
             className="flex items-center gap-2"
           >

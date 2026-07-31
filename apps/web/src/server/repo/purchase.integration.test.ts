@@ -613,7 +613,7 @@ describe("purchase repository — splitExpense", () => {
             costType: "tools",
             trade: "cabinetry",
             projectId: project.id,
-            productId: product.shortcode,
+            productId: product.id,
           },
           {
             name: "blade portion",
@@ -1681,13 +1681,11 @@ describe("purchase repository — documents", () => {
       purchaseCreateInput.parse({ vendorId, orderId: "MS-INVOICE-1" }),
       ctx.actor,
     );
-    // `attachFileToEntity`'s `entityId` is the generic (unbranded) uuid every
-    // attachable entity shares — not a shortcode.
     const chargeUuid = await purchaseUuid(ctx.db, charge.id);
 
     const result = await attachFileToEntity(ctx.db, {
       entityType: "purchase",
-      entityId: chargeUuid,
+      entityId: charge.id,
       data: Buffer.from("%PDF-1.4 metal invoice").toString("base64"),
       contentType: "application/pdf",
       filename: "metal-invoice.pdf",
@@ -1695,7 +1693,7 @@ describe("purchase repository — documents", () => {
 
     expect(result.kind).toBe("document");
     expect(result.entityType).toBe("purchase");
-    expect(result.entityId).toBe(chargeUuid);
+    expect(result.entityId).toBe(charge.id);
     expect(isDocumentFile({ contentType: result.contentType })).toBe(true);
 
     // The R2 object lands under the documents/ prefix (not images/). NB:

@@ -9,7 +9,6 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import {
   unsafeIngredientShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -59,7 +58,6 @@ export const findIngredientsWithoutProduct = async (
 
   const rows = await dbClient
     .select({
-      id: ingredient.id,
       shortcode: ingredient.shortcode,
       name: ingredient.name,
       recipeCount: sql<number>`count(distinct ${recipe.id})`,
@@ -105,8 +103,8 @@ export const findIngredientsWithoutProduct = async (
     .groupBy(ingredient.id, ingredient.name, ingredient.shortcode);
 
   return rows.map((r) => ({
-    ...r,
-    shortcode: unsafeIngredientShortcode(r.shortcode),
+    id: unsafeIngredientShortcode(r.shortcode),
+    name: r.name,
     recipeCount: Number(r.recipeCount),
   }));
 };
@@ -223,8 +221,7 @@ export const findIngredientsWithUnusedAliases = async (
     });
     if (unusedAliases.length > 0) {
       problems.push({
-        id: ing.id,
-        shortcode: unsafeIngredientShortcode(ing.shortcode),
+        id: unsafeIngredientShortcode(ing.shortcode),
         name: ing.name,
         aliases: ing.aliases,
         unusedAliases,
@@ -252,10 +249,9 @@ export const findUnusedIngredients = async (
       shortcode: ingredient.shortcode,
       name: ingredient.name,
       createdAt: ingredient.createdAt,
-      products: sql<{ id: string; shortcode: string; name: string }[]>`
+      products: sql<{ shortcode: string; name: string }[]>`
         coalesce(
           json_agg(json_build_object(
-            'id', ${product.id},
             'shortcode', ${product.shortcode},
             'name', ${product.name}
           )) filter (where ${product.id} is not null),
@@ -306,12 +302,12 @@ export const findUnusedIngredients = async (
   const withoutProduct: UnusedIngredient[] = [];
   for (const row of rows) {
     const item: UnusedIngredient = {
-      ...row,
-      shortcode: unsafeIngredientShortcode(row.shortcode),
+      id: unsafeIngredientShortcode(row.shortcode),
+      name: row.name,
+      createdAt: row.createdAt,
       products: row.products.map((p) => ({
-        ...p,
-        id: unsafeProductId(p.id),
-        shortcode: unsafeProductShortcode(p.shortcode),
+        id: unsafeProductShortcode(p.shortcode),
+        name: p.name,
       })),
     };
     (item.products.length > 0 ? withProduct : withoutProduct).push(item);

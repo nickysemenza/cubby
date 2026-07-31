@@ -61,7 +61,7 @@ describe("every entity router stamps a usable, correctly-prefixed shortcode on c
     const created = await caller.create(
       makeProductInput({ name: "Shortcode Ground Truth Product" }),
     );
-    expect(parseShortcode(created.shortcode)).toMatchObject({
+    expect(parseShortcode(created.id)).toMatchObject({
       type: "product",
       legacy: false,
     });
@@ -72,7 +72,7 @@ describe("every entity router stamps a usable, correctly-prefixed shortcode on c
     const created = await caller.create(
       makeLocationInput({ name: "Shortcode Ground Truth Location" }),
     );
-    expect(parseShortcode(created.shortcode)).toMatchObject({
+    expect(parseShortcode(created.id)).toMatchObject({
       type: "location",
       legacy: false,
     });
@@ -85,7 +85,7 @@ describe("every entity router stamps a usable, correctly-prefixed shortcode on c
         overrides: { name: "Shortcode Ground Truth Ingredient" },
       }),
     );
-    expect(parseShortcode(created.shortcode)).toMatchObject({
+    expect(parseShortcode(created.id)).toMatchObject({
       type: "ingredient",
       legacy: false,
     });

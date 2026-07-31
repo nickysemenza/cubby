@@ -1,7 +1,8 @@
-import type {
-  AgentResult,
-  AgentSource,
-  AgentStreamEvent,
+import {
+  type AgentResult,
+  type AgentSource,
+  type AgentStreamEvent,
+  agentSourceSchema,
 } from "@cubby/schemas/agent";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
@@ -72,12 +73,6 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
       const location = isRecord(obj.location) ? obj.location : null;
 
       const id = typeof obj.id === "string" ? obj.id : null;
-      const shortcode =
-        typeof obj.shortcode === "string"
-          ? obj.shortcode
-          : typeof product?.shortcode === "string"
-            ? product.shortcode
-            : null;
       const name =
         typeof obj.name === "string"
           ? obj.name
@@ -99,7 +94,14 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
               ? obj.parentName
               : null;
 
-      sources.push({ entityType, id, shortcode, name, detail });
+      const parsed = agentSourceSchema.safeParse({
+        entityType,
+        id,
+        name,
+        detail,
+      });
+      if (!parsed.success) continue;
+      sources.push(parsed.data);
       if (sources.length >= MAX_SOURCES) return sources;
     }
   }

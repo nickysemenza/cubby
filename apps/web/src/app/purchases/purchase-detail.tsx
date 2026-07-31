@@ -123,7 +123,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
                 data={{
                   id: value.id,
                   name: value.name,
-                  shortcode: value.id,
                 }}
                 compact
               />
@@ -305,7 +304,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             data={{
               id: purchase.vendorId,
               name: purchase.vendorName,
-              shortcode: purchase.vendorId,
             }}
             truncate
           />

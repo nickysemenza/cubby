@@ -8,7 +8,7 @@
  */
 
 import type { Amount } from "@cubby/schemas/codec";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import {
   unsafeIngredientShortcode,
   unsafeRecipeShortcode,
@@ -39,7 +39,12 @@ import { TraceNames, withTrace } from "~/server/tracing";
 // booleans drive only how the panel sorts/styles.
 export const findStaleIngredientParses = async (
   db: Database,
-): Promise<StaleIngredientParse[]> => {
+): Promise<
+  (StaleIngredientParse & {
+    ingredientEntityId: IngredientId;
+    recipeEntityId: RecipeId;
+  })[]
+> => {
   // No vocab here — the parser is the single source of truth. Re-parse every
   // captured raw line with the current parser and flag the rows whose result
   // drifted from what's stored. Excludes recipe-link ingredients (system-named
@@ -85,7 +90,10 @@ export const findStaleIngredientParses = async (
   // recipe line is the CPU sweep (suspected 30–60s). Trace it with line/stale
   // counts so the cost is attributable.
   return withTrace(TraceNames.wasm("reparseStaleLines"), async (span) => {
-    const stale: StaleIngredientParse[] = [];
+    const stale: (StaleIngredientParse & {
+      ingredientEntityId: IngredientId;
+      recipeEntityId: RecipeId;
+    })[] = [];
     for (const row of rows) {
       if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
       const fresh = wasm.parse_ingredient(row.rawLine);
@@ -100,11 +108,11 @@ export const findStaleIngredientParses = async (
       if (!hasDrift(drift)) continue;
       stale.push({
         recipeSectionIngredientId: row.recipeSectionIngredientId,
-        recipeId: row.recipeId,
-        recipeShortcode: unsafeRecipeShortcode(row.recipeShortcode),
+        recipeEntityId: row.recipeId,
+        recipeId: unsafeRecipeShortcode(row.recipeShortcode),
         recipeName: row.recipeName,
-        ingredientId: row.ingredientId,
-        ingredientShortcode: unsafeIngredientShortcode(row.ingredientShortcode),
+        ingredientEntityId: row.ingredientId,
+        ingredientId: unsafeIngredientShortcode(row.ingredientShortcode),
         storedName: row.storedName,
         rawLine: row.rawLine,
         parsedName: fresh.name,

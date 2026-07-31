@@ -92,10 +92,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
                 )}
               </TableCell>
               <TableCell>
-                <EntityInlineLink
-                  entity="expense"
-                  data={{ ...expense, shortcode: expense.id }}
-                />
+                <EntityInlineLink entity="expense" data={expense} />
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {expense.vendor ? (

@@ -228,11 +228,16 @@ export const getProductImagesByProductIds = async (
 export const getProductUnitMappingsByProductIds = async (
   db: Database,
   ids: ProductId[],
-): Promise<Record<string, UnitMapping[]>> => {
+) => {
   const uniqueIds = uniq(ids);
-  const result: Record<string, UnitMapping[]> = Object.fromEntries(
-    uniqueIds.map((id) => [id, []]),
-  );
+  const result: Record<
+    string,
+    Array<
+      Omit<UnitMapping, "sourceMetadata"> & {
+        sourceMetadata: { type: "product"; productId: ProductId };
+      }
+    >
+  > = Object.fromEntries(uniqueIds.map((id) => [id, []]));
   if (uniqueIds.length === 0) return result;
 
   const rows = await getDb(db).query.productUnitMappings.findMany({
@@ -651,7 +656,7 @@ async function throwIfDuplicateProduct(
 // Create a new product
 export const createProduct = async (
   db: Database,
-  data: ProductCreateInput,
+  data: ProductRepoCreateInput,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   const {
@@ -757,7 +762,7 @@ export const createProduct = async (
 export const updateProduct = async (
   db: Database,
   id: ProductId,
-  data: ProductUpdateInput["data"],
+  data: ProductRepoUpdateData,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   const {
@@ -1203,4 +1208,17 @@ export const previewDeleteProducts = async (
   }
 
   return { blockers: present(blockers), changes: present(changes) };
+};
+export type ProductRepoCreateInput = Omit<
+  ProductCreateInput,
+  "ingredientId"
+> & {
+  ingredientId: IngredientId | null;
+};
+
+export type ProductRepoUpdateData = Omit<
+  ProductUpdateInput["data"],
+  "ingredientId"
+> & {
+  ingredientId?: IngredientId | null;
 };

@@ -119,7 +119,7 @@ export function LocationReviewPane({
           <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
             <Link
               to={entities.location.routes.detail}
-              params={entityDetailParams(location.shortcode)}
+              params={entityDetailParams(location.id)}
               className="underline decoration-border/70 decoration-dotted underline-offset-4 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
             >
               {location.name}

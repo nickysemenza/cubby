@@ -14,17 +14,19 @@
  * scaled rollups; consumed by the meal-planning routers. The shaping/rollup
  * helpers in `helpers.ts` are internal — see the note below.
  */
+
 export {
   addRecipeToMeal,
   createMeal,
+  createMealWithEntityId,
   deleteMeals,
   getMealByID,
   getMealByShortcode,
   getMealsByDateRange,
   mealList,
-  removeMealRecipe,
+  removeMealRecipeWithEntityId,
   updateMeal,
-  updateMealRecipe,
+  updateMealRecipeWithEntityId,
 } from "./crud";
 // Helpers (dbMealToAPI, rollupMealTotals, scaleTotals) are intentionally not
 // re-exported here — they're used internally within ./helpers and ./crud.

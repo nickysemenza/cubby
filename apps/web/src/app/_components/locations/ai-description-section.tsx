@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { Eye, Sparkles } from "lucide-react";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -9,7 +9,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/integrations/trpc/react";
 
 interface AiDescriptionSectionProps {
-  locationId: LocationId;
+  locationId: LocationShortcode;
   currentDescription: string | null;
   hasImages: boolean;
 }

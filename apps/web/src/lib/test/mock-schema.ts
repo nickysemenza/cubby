@@ -187,6 +187,20 @@ function expandCharClass(body: string): string[] {
  */
 function genFromRegex(pattern: RegExp): string {
   const src = pattern.source.replace(/^\^/, "").replace(/\$$/, "");
+
+  // `anyShortcodeSchema` starts with a non-capturing alternation of allowed
+  // prefixes, e.g. `(?:PRD-|RCP-|ING-)`. Pick one branch before walking the
+  // remaining atoms; treating the group syntax as literals produces a value
+  // that can never pass the schema it came from.
+  const leadingAlternation = src.match(/^\(\?:([^()]+)\)(.*)$/);
+  if (leadingAlternation) {
+    const [, alternatives, rest] = leadingAlternation;
+    if (alternatives !== undefined && rest !== undefined) {
+      const prefix = faker.helpers.arrayElement(alternatives.split("|"));
+      return genFromRegex(new RegExp(`^${prefix}${rest}$`));
+    }
+  }
+
   let out = "";
   let i = 0;
   while (i < src.length) {

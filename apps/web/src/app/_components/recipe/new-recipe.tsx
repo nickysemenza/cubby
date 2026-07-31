@@ -22,7 +22,7 @@ export default function NewRecipeForm({
 
   const { error, isPending, handleCreate } = useEntityCreateMode<
     RecipeCreateInput,
-    { id: string; shortcode: string }
+    { id: string }
   >("recipe", api.recipe.create.mutationOptions(), {
     onSuccess: () => {
       toast.success("Recipe added to your book.");

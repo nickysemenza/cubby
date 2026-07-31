@@ -1,5 +1,3 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   attachableImageEntity,
   attachFileFields,
@@ -7,35 +5,10 @@ import {
 } from "@cubby/schemas/image";
 import { parseShortcode } from "@cubby/shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import {
-  getCaller,
-  registerMcpTool,
-  resolvePublicId,
-  WRITE_CLOSED,
-} from "./_shared";
-
-/**
- * `attachFileResponse.entityId` is the attached-to entity's raw uuid, with no
- * shortcode of its own — `attach_file` predates the shortcode cutover, and
- * this tool republishes the router's result verbatim (see
- * `registerRouterTool`'s doc comment on why that bypasses the `slim*`
- * projections other tools get), so the swap has to happen here rather than in
- * packages/schemas. `imageId` is a declared exception: images have no
- * shortcode of their own.
- */
-/** The attachable set as a non-empty tuple, for the prefix union pattern. */
-const ATTACHABLE_ENTITIES = attachableImageEntity.options as unknown as [
-  ShortcodeEntity,
-  ...ShortcodeEntity[],
-];
+import { getCaller, registerMcpTool, WRITE_CLOSED } from "./_shared";
 
 // `entityType` is derived from the shortcode's prefix, so it is not asked for.
 const { entityType: _entityType, ...attachFileEntityless } = attachFileFields;
-
-const attachFileMcpOut = attachFileResponse
-  .omit({ entityId: true })
-  .extend({ entityShortcode: z.string().nullable() });
 
 /**
  * Image/document attachment tools.
@@ -65,11 +38,11 @@ export function registerImageTools(server: McpServer) {
     // derives the type from the code and rejects a non-attachable one.
     inputSchema: {
       ...attachFileEntityless,
-      entityId: anyShortcodeSchema(ATTACHABLE_ENTITIES).describe(
+      entityId: attachFileEntityless.entityId.describe(
         `Shortcode of the target — its prefix picks the entity (${attachableImageEntity.options.join(", ")}).`,
       ),
     },
-    outputSchema: attachFileMcpOut,
+    outputSchema: attachFileResponse,
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
@@ -81,20 +54,10 @@ export function registerImageTools(server: McpServer) {
         );
       }
       const entityType = attachable.data;
-      const result = await caller.image.attachFile({
+      return await caller.image.attachFile({
         ...params,
         entityType,
-        entityId: await resolvePublicId(
-          caller,
-          entityType,
-          params.entityId as string,
-        ),
       });
-      const [ref] = await caller.shortcode.lookupMany({
-        refs: [{ entity: result.entityType, id: result.entityId }],
-      });
-      const { entityId: _entityId, ...rest } = result;
-      return { ...rest, entityShortcode: ref?.shortcode ?? null };
     },
   });
 }

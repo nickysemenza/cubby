@@ -154,7 +154,7 @@ export function InventoryItemList() {
         renderDisplay: (content, row) => (
           <Link
             to={entities.inventory.routes.detail}
-            params={entityDetailParams(row.shortcode)}
+            params={entityDetailParams(row.id)}
           >
             {content}
           </Link>

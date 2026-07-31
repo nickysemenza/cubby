@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { listBackgroundBatches } from "~/server/repo/background-jobs";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestCaller } from "../trpc";
 import { locationRouter } from "./location";
 
@@ -42,8 +43,9 @@ describe("location.create AI-description side-effect", () => {
         pendingImageIds: [image.id],
       }),
     );
+    const entityId = await resolveLiveShortcode(ctx.db, created.id, "location");
 
-    const kinds = await kindsForLocation(ctx.db, created.id);
+    const kinds = await kindsForLocation(ctx.db, entityId!);
     expect(kinds).toContain("location-ai.description.refresh");
     expect(kinds).toContain("location-ai.inventory.refresh");
   });
@@ -53,9 +55,32 @@ describe("location.create AI-description side-effect", () => {
     const created = await caller.create(
       makeLocationInput({ name: "Created no photo", pendingImageIds: [] }),
     );
+    const entityId = await resolveLiveShortcode(ctx.db, created.id, "location");
 
-    const kinds = await kindsForLocation(ctx.db, created.id);
+    const kinds = await kindsForLocation(ctx.db, entityId!);
     expect(kinds).not.toContain("location-ai.description.refresh");
     expect(kinds).not.toContain("location-ai.inventory.refresh");
+  });
+});
+
+describe("location.bulkUpdateParent", () => {
+  const ctx = withTestDb();
+
+  it("rejects moving a location under its own descendant", async () => {
+    const caller = createTestCaller(locationRouter, ctx.db);
+    const root = await caller.create(makeLocationInput({ name: "Cycle root" }));
+    const child = await caller.create(
+      makeLocationInput({ name: "Cycle child", parentId: root.id }),
+    );
+    const grandchild = await caller.create(
+      makeLocationInput({ name: "Cycle grandchild", parentId: child.id }),
+    );
+
+    await expect(
+      caller.bulkUpdateParent({ ids: [root.id], parentId: grandchild.id }),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message: "Cannot set parent: would create a circular reference",
+    });
   });
 });

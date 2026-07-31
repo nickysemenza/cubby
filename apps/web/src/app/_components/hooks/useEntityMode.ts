@@ -1,8 +1,8 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { entities } from "~/entities/entities";
+import { entities, entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 
@@ -29,14 +29,10 @@ type TRPCMutationOptions = object;
  */
 export function useEntityCreateMode<
   TData,
-  // `shortcode` is required, not optional: this navigates to the new row's
-  // detail page, and detail routes are keyed on the public id. Typing it here
-  // is what stops a create mutation whose result lacks one from compiling —
-  // the uuid-in-a-shortcode-slot bug the href guard can't see, because the
-  // entity (and therefore the path) is a variable.
-  TResult extends { id: string; shortcode: string },
+  // Canonical public ids are the route keys for every entity created here.
+  TResult extends { id: string },
 >(
-  entityKey: Entity,
+  entityKey: ShortcodeEntity,
   mutationOptions: TRPCMutationOptions,
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {
@@ -59,7 +55,7 @@ export function useEntityCreateMode<
       }
 
       callbacks?.onSuccess?.(result);
-      navigate({ to: `/${entities[entityKey].basePath}/${result.shortcode}` });
+      navigate(entityDetailLink(entityKey, result.id));
     },
     onError: (error: unknown) => {
       setError(getErrorMessage(error));

@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import pluralize from "pluralize";
 import { useState } from "react";
@@ -23,13 +23,13 @@ import type { InventoryItem, ItemResolution } from "./types";
 type SessionLocationListProps = {
   parent: InfLocation;
   locations: SessionLocation[];
-  currentId: LocationId | null;
+  currentId: LocationShortcode | null;
   inventoryByLocation: Map<string, InventoryItem[]>;
   itemResolutions: Map<string, ItemResolution>;
   completedLocationIds: Set<string>;
   /** Deferred this pass — settled for progress, but nothing was written. */
   skippedLocationIds: Set<string>;
-  onSelect: (locationId: LocationId) => void;
+  onSelect: (locationId: LocationShortcode) => void;
   onScanJump: (locationId: string) => void;
   parentLocation: InfLocation;
 };

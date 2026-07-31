@@ -240,10 +240,10 @@ function HoverTooltip({
     <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
-        {node.data.shortcode ? (
+        {node.data.id ? (
           <Link
             to="/locations/$shortcode"
-            params={{ shortcode: node.data.shortcode }}
+            params={{ shortcode: node.data.id }}
             className="hover:underline"
             style={{ pointerEvents: "auto" }}
           >

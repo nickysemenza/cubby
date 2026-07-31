@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import { type RecipeId, unsafeIngredientId } from "@cubby/schemas/identifiers";
 import {
   cleanupOrphanedEntityEmbeddingsInput,
   cleanupOrphanedEntityEmbeddingsOut,
@@ -17,7 +17,9 @@ import {
   reparseStaleSyncOut,
 } from "@cubby/schemas/problems";
 import { streamProgress } from "~/lib/bulk-progress";
+import { createAppError } from "~/server/errors/app-error";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import {
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
@@ -166,12 +168,40 @@ const deleteUnused = protectedProcedure
   .input(deleteUnusedIngredientsInput)
   .output(deleteUnusedIngredientsOut)
   .mutation(async ({ ctx, input }) => {
-    return await deleteUnusedIngredients(
+    const resolved = await resolveLiveShortcodes(
       ctx.db,
       input.ingredientIds,
+      "ingredient",
+    );
+    const missing = input.ingredientIds.find((id) => !resolved.has(id));
+    if (missing) {
+      throw createAppError(
+        "INGREDIENT_NOT_FOUND",
+        `Ingredient ${missing} not found`,
+      );
+    }
+    const entityIds = input.ingredientIds.map((id) =>
+      unsafeIngredientId(resolved.get(id)!),
+    );
+    const result = await deleteUnusedIngredients(
+      ctx.db,
+      entityIds,
       input.alsoDeleteProducts,
       ctx.actorContext,
     );
+    const shortcodeByEntityId = new Map(
+      input.ingredientIds.map((shortcode, index) => [
+        entityIds[index],
+        shortcode,
+      ]),
+    );
+    return {
+      deleted: result.deleted,
+      failed: result.failed.map(({ id, reason }) => ({
+        id: shortcodeByEntityId.get(id)!,
+        reason,
+      })),
+    };
   });
 
 const cleanupOrphanedEmbeddings = protectedProcedure

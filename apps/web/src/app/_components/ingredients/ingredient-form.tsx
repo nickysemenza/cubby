@@ -84,7 +84,7 @@ function DuplicateNameHint({
           <EntityInlineLink
             key={m.id}
             entity="ingredient"
-            data={{ name: m.name, id: m.id, shortcode: m.shortcode }}
+            data={{ name: m.name, id: m.id }}
           />
         ))}
       </Row>

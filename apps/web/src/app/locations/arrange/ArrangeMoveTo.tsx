@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { FolderInput } from "lucide-react";
 import { useState } from "react";
@@ -22,7 +22,7 @@ import { useArrangeMutations } from "./use-arrange-mutations";
 export type ArrangeMoveTarget =
   | {
       kind: "location";
-      locationId: LocationId;
+      locationId: LocationShortcode;
       name: string;
       roots: InfLocation[];
     }
@@ -71,12 +71,12 @@ function MoveToDialog({
 }) {
   const { moveLocation, moveItem } = useArrangeMutations();
   const [destination, setDestination] =
-    useState<ComboboxItem<LocationId> | null>(null);
+    useState<ComboboxItem<LocationShortcode> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // `null` destination = top level ("Home"), the drop target the breadcrumbs
   // expose. Same validity guards the drop monitor re-checks before firing.
-  const commit = (destinationId: LocationId | null) => {
+  const commit = (destinationId: LocationShortcode | null) => {
     const moved = match(target)
       .with({ kind: "location" }, (t) => {
         if (!isValidLocationDrop(t.roots, t.locationId, destinationId))

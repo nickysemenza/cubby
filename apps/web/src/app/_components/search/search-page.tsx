@@ -193,7 +193,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           onClick={() => {
             pushRecent({
               entityType: "ingredient",
-              shortcode: conversion.ingredientShortcode,
+              id: conversion.ingredientShortcode,
               name: conversion.ingredientName,
             });
             navigate({
@@ -252,13 +252,13 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                     as="button"
                     align="center"
                     gap="sm"
-                    key={`jump-${jump.entityType}-${jump.shortcode}`}
+                    key={`jump-${jump.entityType}-${jump.id}`}
                     type="button"
                     onClick={() => {
                       pushRecent(jump);
                       navigate({
                         to: entities[entity].routes.detail,
-                        params: entityDetailParams(jump.shortcode),
+                        params: entityDetailParams(jump.id),
                       });
                     }}
                     className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"

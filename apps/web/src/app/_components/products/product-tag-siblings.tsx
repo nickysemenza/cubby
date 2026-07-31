@@ -1,4 +1,4 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { formatCategoryLabel } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -22,7 +22,7 @@ import { EntityInlineLink } from "../EntityInlineLink";
 export function ProductTagSiblings({
   product,
 }: {
-  product: { id: ProductId; tags: string[] };
+  product: { id: ProductShortcode; tags: string[] };
 }) {
   const api = useTRPC();
   const { data, isLoading } = useQuery(
@@ -75,7 +75,6 @@ export function ProductTagSiblings({
                   entity="product"
                   data={{
                     id: sibling.id,
-                    shortcode: sibling.shortcode,
                     name: sibling.name,
                     manufacturer: sibling.manufacturer,
                   }}

@@ -6,7 +6,12 @@
  * costing path, and the enrichment-workbench worklist. None of these mutate.
  */
 
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type IngredientShortcode,
+  unsafeIngredientShortcode,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   IngredientFilters,
   IngredientMergeCandidateImpact,
@@ -47,6 +52,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import { lookupShortcodes, refKey } from "~/server/repo/shortcode-resolver";
 import {
   appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
@@ -131,7 +137,11 @@ export const mergeImpactForIngredients = async (
   // Base rows: name + alias count. Filters deleted so a stale id contributes
   // nothing (and drops out of the result entirely).
   const bases = await dbClient
-    .select({ id: ingredient.id, name: ingredient.name })
+    .select({
+      id: ingredient.id,
+      shortcode: ingredient.shortcode,
+      name: ingredient.name,
+    })
     .from(ingredient)
     .where(and(inArray(ingredient.id, ids), notDeleted(ingredient)));
   if (bases.length === 0) return [];
@@ -188,7 +198,7 @@ export const mergeImpactForIngredients = async (
   return bases.map((b) => {
     const productStats = productStatsById.get(b.id);
     return {
-      id: b.id,
+      id: unsafeIngredientShortcode(b.shortcode),
       name: b.name,
       recipeUsageCount: recipeCountById.get(b.id) ?? 0,
       productCount: productStats?.count ?? 0,
@@ -242,6 +252,13 @@ export const getRawLinesForIngredients = async (
     ),
     with: { recipeSection: { with: { recipe: true } } },
   });
+  const codes = await lookupShortcodes(
+    db,
+    rows.flatMap((r) => [
+      { entity: "ingredient" as const, id: r.ingredientId },
+      { entity: "recipe" as const, id: r.recipeSection.recipe.id },
+    ]),
+  );
   return rows
     .filter(
       (r) =>
@@ -249,12 +266,16 @@ export const getRawLinesForIngredients = async (
         r.recipeSection.recipe.deletedAt === null,
     )
     .map((r) => ({
-      ingredientId: r.ingredientId,
+      ingredientId: unsafeIngredientShortcode(
+        codes.get(refKey("ingredient", r.ingredientId)) ?? "",
+      ),
       lineId: r.id,
       rawLine: r.rawLine,
       modifier: r.modifier,
       amounts: r.amounts,
-      recipeId: r.recipeSection.recipe.id,
+      recipeId: unsafeRecipeShortcode(
+        codes.get(refKey("recipe", r.recipeSection.recipe.id)) ?? "",
+      ),
       recipeName: r.recipeSection.recipe.name,
       sectionName: r.recipeSection.name,
     }));
@@ -372,8 +393,7 @@ export const getIngredientByName = async (db: Database, name: string) => {
  * request per ingredient per recipe card.
  */
 type IngredientNameMatch = {
-  id: string;
-  shortcode: string;
+  id: IngredientShortcode;
   name: string;
   aliases: string[];
 };
@@ -397,8 +417,7 @@ export const getIngredientMatches = async (
   const byKey = new Map<string, IngredientNameMatch>();
   for (const row of rows) {
     const match = {
-      id: row.id,
-      shortcode: row.shortcode,
+      id: unsafeIngredientShortcode(row.shortcode),
       name: row.name,
       aliases: row.aliases,
     };

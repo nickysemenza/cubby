@@ -35,7 +35,7 @@ interface ProductAddToInventoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: {
-    shortcode: ProductShortcode;
+    id: ProductShortcode;
     name: string;
     manufacturer: string;
   };
@@ -52,7 +52,7 @@ export const ProductAddToInventoryDialog: FC<
 
   const initialProduct = useMemo(
     () => ({
-      id: product.shortcode,
+      id: product.id,
       name: `${product.name} (${product.manufacturer})`,
     }),
     [product],

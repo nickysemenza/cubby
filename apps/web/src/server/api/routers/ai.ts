@@ -25,7 +25,10 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
-import { unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeLocationId,
+} from "@cubby/schemas/identifiers";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -35,7 +38,10 @@ import { createAppError } from "~/server/errors/app-error";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
 import {
   approveDetectedInventoryItem,
@@ -82,6 +88,20 @@ const suggestLocationType = protectedProcedure
     });
   });
 
+const resolveLocationEntityId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: string,
+) => {
+  const id = await resolveLiveShortcode(db, shortcode, "location");
+  if (!id) {
+    throw createAppError(
+      "LOCATION_NOT_FOUND",
+      `Location ${shortcode} not found`,
+    );
+  }
+  return unsafeLocationId(id);
+};
+
 export const aiRouter = createTRPCRouter({
   suggestCategory,
   suggestLocationType,
@@ -89,34 +109,29 @@ export const aiRouter = createTRPCRouter({
     .input(aiLocationIdInput)
     .output(locationDescriptionSchema)
     .mutation(async ({ ctx, input }) => {
-      return describeLocation(ctx.db, input.locationId);
+      return describeLocation(
+        ctx.db,
+        await resolveLocationEntityId(ctx.db, input.locationId),
+      );
     }),
   detectInventoryItems: protectedProcedure
     .input(aiLocationIdInput)
     .output(detectedInventorySchema)
     .mutation(async ({ ctx, input }) => {
-      return detectInventoryItems(ctx.db, input.locationId);
+      return detectInventoryItems(
+        ctx.db,
+        await resolveLocationEntityId(ctx.db, input.locationId),
+      );
     }),
   approveDetectedInventoryItem: protectedProcedure
     .input(approveDetectedInventoryItemInput)
     .output(approveDetectedInventoryItemOut)
     .mutation(async ({ ctx, input }) => {
-      const resolvedProductId = input.productId
-        ? await resolveLiveShortcode(ctx.db, input.productId, "product")
-        : null;
-      if (input.productId && !resolvedProductId) {
-        throw createAppError(
-          "PRODUCT_NOT_FOUND",
-          `Product not found: ${input.productId}`,
-        );
-      }
       return await approveDetectedInventoryItem(
         ctx.db,
         {
           ...input,
-          productId: resolvedProductId
-            ? unsafeProductId(resolvedProductId)
-            : null,
+          locationId: await resolveLocationEntityId(ctx.db, input.locationId),
         },
         ctx.actorContext,
       );
@@ -164,7 +179,33 @@ export const aiRouter = createTRPCRouter({
     .input(ingredientMergeSuggestionBatchInput)
     .output(ingredientMergeSuggestionBatchOut)
     .mutation(async ({ ctx, input }) => {
-      return suggestIngredientMergeBatch(ctx.db, input.ingredients);
+      const resolved = await resolveLiveShortcodes(
+        ctx.db,
+        input.ingredients.map((ingredient) => ingredient.id),
+        "ingredient",
+      );
+      const result = await suggestIngredientMergeBatch(
+        ctx.db,
+        input.ingredients.map((ingredient) => {
+          const entityId = resolved.get(ingredient.id);
+          if (!entityId) {
+            throw createAppError(
+              "INGREDIENT_NOT_FOUND",
+              `Ingredient ${ingredient.id} not found`,
+            );
+          }
+          return {
+            id: unsafeIngredientId(entityId),
+            shortcode: ingredient.id,
+            name: ingredient.name,
+          };
+        }),
+      );
+      return result.map(({ source, target, ...suggestion }) => ({
+        ...suggestion,
+        source: { id: source.shortcode, name: source.name },
+        target: target ? { id: target.shortcode, name: target.name } : null,
+      }));
     }),
   // Streamed, read-only pre-compute for the enrichment review queue: one event
   // per ingredient carrying its USDA (and optional merge) proposal, so the

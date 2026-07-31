@@ -1,6 +1,6 @@
 "use client";
 
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
@@ -26,7 +26,7 @@ import {
  * intentionally loose (plain `string` id) so it also fits `product` rows;
  * the branded-id cast happens once here at the inline-edit boundary. */
 type LocationLike = {
-  id: LocationId;
+  id: LocationShortcode;
   shortcode: string;
   name: string;
   type: LocationType;
@@ -34,9 +34,11 @@ type LocationLike = {
 
 interface InventoryEntriesInlineEditConfig<T, TEntry> {
   /** WithLocationSearch — injected so unit tests can stub it. */
-  SearchProvider: (props: WithEntitySearchProps<LocationId>) => ReactNode;
-  onMoveEntry: (entry: TEntry, locationId: LocationId) => Promise<void>;
-  onCreateEntry: (row: T, locationId: LocationId) => Promise<void>;
+  SearchProvider: (
+    props: WithEntitySearchProps<LocationShortcode>,
+  ) => ReactNode;
+  onMoveEntry: (entry: TEntry, locationId: LocationShortcode) => Promise<void>;
+  onCreateEntry: (row: T, locationId: LocationShortcode) => Promise<void>;
 }
 
 export interface InventoryEntriesCellProps<
@@ -105,7 +107,7 @@ export function InventoryEntriesCell<
           ) {
             throw new Error("Paste a location cell here");
           }
-          await inlineEdit.onCreateEntry(row, pasted.id as LocationId);
+          await inlineEdit.onCreateEntry(row, pasted.id as LocationShortcode);
           return { id: pasted.id, name: pasted.name };
         },
       };

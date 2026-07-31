@@ -8,8 +8,10 @@
 
 import {
   type IngredientId,
-  ingredientId,
-  recipeId,
+  type IngredientShortcode,
+  ingredientShortcode,
+  type RecipeId,
+  recipeShortcode,
   unsafeIngredientId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -37,6 +39,7 @@ import {
   ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   deleteIngredients,
   getIngredientMatches,
@@ -45,7 +48,10 @@ import {
   ingredientList,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import {
   createIngredient as createIngredientService,
   enrichmentWorkbench as enrichmentWorkbenchService,
@@ -65,6 +71,37 @@ import {
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+const resolveIngredientEntityId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: IngredientShortcode,
+): Promise<IngredientId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "ingredient");
+  if (!id) {
+    throw createAppError(
+      "INGREDIENT_NOT_FOUND",
+      `Ingredient ${shortcode} not found`,
+    );
+  }
+  return unsafeIngredientId(id);
+};
+
+const resolveIngredientEntityIds = async (
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  shortcodes: IngredientShortcode[],
+): Promise<IngredientId[]> => {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "ingredient");
+  return shortcodes.map((shortcode) => {
+    const id = resolved.get(shortcode);
+    if (!id) {
+      throw createAppError(
+        "INGREDIENT_NOT_FOUND",
+        `Ingredient ${shortcode} not found`,
+      );
+    }
+    return unsafeIngredientId(id);
+  });
+};
 
 // Create standardized CRUD procedures using factory (update is customized below
 // so it can eagerly recompute dependent recipes and report the side-effects).
@@ -99,11 +136,15 @@ const { getByID, getByShortcode, create } =
       updateInput: ingredientUpdateData,
       output: ingredientWithFoodOut,
       createOutput: ingredientWithFoodAndSideEffectsOut,
-      idSchema: ingredientId,
+      idSchema: ingredientShortcode,
     },
     repository: {
-      getByID: async (services, id: IngredientId) => {
-        return await getIngredientByID(services.db, services.usdaClient, id);
+      getByID: async (services, id: IngredientShortcode) => {
+        return await getIngredientByID(
+          services.db,
+          services.usdaClient,
+          await resolveIngredientEntityId(services.db, id),
+        );
       },
       // Resolves the shortcode itself: `getByID` above returns the
       // USDA-enriched shape (`ingredientWithFoodOut`), which the plain repo
@@ -130,18 +171,22 @@ const { getByID, getByShortcode, create } =
           data,
           services.actorContext,
         );
+        const entityId = await resolveIngredientEntityId(
+          services.db,
+          ingredient.id,
+        );
         const backgroundBatches = await runMutationSideEffects(services.db, {
           action: "created",
-          entity: { entityType: "ingredient", entityId: ingredient.id },
+          entity: { entityType: "ingredient", entityId },
           source: "ingredient.create",
         });
         return { ...ingredient, sideEffects: { backgroundBatches } };
       },
-      update: async (services, id: IngredientId, data) => {
+      update: async (services, id: IngredientShortcode, data) => {
         return await updateIngredientService(
           services.db,
           services.usdaClient,
-          id,
+          await resolveIngredientEntityId(services.db, id),
           data,
           services.actorContext,
         );
@@ -156,22 +201,23 @@ const update = protectedProcedure
   .input(ingredientUpdateInput)
   .output(ingredientWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
+    const entityId = await resolveIngredientEntityId(ctx.db, input.id);
     const result = await updateIngredientService(
       ctx.db,
       ctx.usdaClient,
-      input.id,
+      entityId,
       input.data,
       ctx.actorContext,
     );
     const backgroundBatches = await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "ingredient", entityId: input.id },
+      entity: { entityType: "ingredient", entityId },
       source: "ingredient.update",
     });
     const recipeBatches =
-      await ctx.services.recipeCosting.recomputeForIngredient(input.id, {
+      await ctx.services.recipeCosting.recomputeForIngredient(entityId, {
         source: "ingredient.update",
-        entity: { entityType: "ingredient", entityId: input.id },
+        entity: { entityType: "ingredient", entityId },
       });
     return {
       ...result,
@@ -185,11 +231,15 @@ const merge = protectedProcedure
   .input(ingredientMergeInput)
   .output(ingredientMergeOut)
   .mutation(async ({ ctx, input }) => {
+    const [target, ...aliases] = await resolveIngredientEntityIds(ctx.db, [
+      input.target,
+      ...input.aliases,
+    ]);
     const { ingredient: merged, summary } = await mergeIngredients(
       ctx.db,
       ctx.usdaClient,
-      input.target,
-      input.aliases,
+      target!,
+      aliases,
       {
         dryRun: input.dryRun,
       },
@@ -202,17 +252,17 @@ const merge = protectedProcedure
         summary.affectedRecipeIds,
         {
           source: "ingredient.merge",
-          entity: { entityType: "ingredient", entityId: merged.id },
+          entity: { entityType: "ingredient", entityId: target! },
         },
       );
       const backgroundBatches = await runMutationSideEffects(ctx.db, {
         action: "updated",
-        entity: { entityType: "ingredient", entityId: merged.id },
+        entity: { entityType: "ingredient", entityId: target! },
         source: "ingredient.merge",
       });
       const deletedBatches = await runMutationSideEffectsForEntities(
         ctx.db,
-        summary.deletedIds.map((id) => ({
+        summary.deletedEntityIds.map((id) => ({
           action: "deleted" as const,
           entity: { entityType: "ingredient" as const, entityId: id },
           source: "ingredient.merge",
@@ -250,11 +300,20 @@ const merge = protectedProcedure
 // The enrichment workbench worklist: recipe-used ingredients that aren't fully
 // costable, with coverage + recommended fix computed server-side.
 const enrichmentWorkbench = protectedProcedure
-  .input(z.object({ recipeId: recipeId.optional() }).optional())
+  .input(z.object({ recipeId: recipeShortcode.optional() }).optional())
   .output(enrichmentRowsOut)
   .query(async ({ ctx, input }) => {
+    const recipeId = input?.recipeId
+      ? await resolveLiveShortcode(ctx.db, input.recipeId, "recipe")
+      : undefined;
+    if (input?.recipeId && !recipeId) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        `Recipe ${input.recipeId} not found`,
+      );
+    }
     return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
-      recipeId: input?.recipeId,
+      recipeId: recipeId ? (recipeId as RecipeId) : undefined,
     });
   });
 
@@ -265,7 +324,10 @@ const recipeUsages = protectedProcedure
   .input(ingredientIdInput)
   .output(ingredientRecipeUsagesOut)
   .query(async ({ ctx, input }) => {
-    const usages = await getRecipeUsagesForIngredient(ctx.db, input.id);
+    const usages = await getRecipeUsagesForIngredient(
+      ctx.db,
+      await resolveIngredientEntityId(ctx.db, input.id),
+    );
     return usages.recipeUsages;
   });
 
@@ -277,7 +339,10 @@ const rawLines = protectedProcedure
   .input(ingredientRawLinesInput)
   .output(ingredientRawLinesOut)
   .query(async ({ ctx, input }) => {
-    return await getRawLinesForIngredients(ctx.db, input.ids);
+    return await getRawLinesForIngredients(
+      ctx.db,
+      await resolveIngredientEntityIds(ctx.db, input.ids),
+    );
   });
 
 const getByName = protectedProcedure
@@ -306,18 +371,17 @@ const resolveOrCreate = protectedProcedure
   .output(ingredientResolveOrCreateOut)
   .mutation(async ({ ctx, input }) => {
     const result = await resolveOrCreateIngredients(ctx.db, input.names);
+    const created = result.filter((ingredient) => ingredient.created);
     await runMutationSideEffectsForEntities(
       ctx.db,
-      result
-        .filter((ingredient) => ingredient.created)
-        .map((ingredient) => ({
-          action: "created" as const,
-          entity: {
-            entityType: "ingredient" as const,
-            entityId: ingredient.id,
-          },
-          source: "ingredient.resolveOrCreate",
-        })),
+      created.map((ingredient) => ({
+        action: "created" as const,
+        entity: {
+          entityType: "ingredient" as const,
+          entityId: ingredient.entityId,
+        },
+        source: "ingredient.resolveOrCreate",
+      })),
     );
     return result;
   });
@@ -332,12 +396,17 @@ const getManyByIDs = protectedProcedure
   // a ~1s over-fetch on a recipe's ingredient set.
   .output(ingredientWithFoodLeanListOut)
   .query(async ({ ctx, input }) => {
-    return await getIngredientsByIDs(ctx.db, ctx.usdaClient, input.ids);
+    return await getIngredientsByIDs(
+      ctx.db,
+      ctx.usdaClient,
+      await resolveIngredientEntityIds(ctx.db, input.ids),
+    );
   });
 
 // Delete procedure using standalone factory
-const deleteItem = createDeleteProcedure<IngredientId>(
-  async (services, ids) => {
+const deleteItem = createDeleteProcedure<IngredientShortcode>(
+  async (services, shortcodes) => {
+    const ids = await resolveIngredientEntityIds(services.db, shortcodes);
     await deleteIngredients(services.db, ids, services.actorContext);
     return await runMutationSideEffectsForEntities(
       services.db,
@@ -348,7 +417,7 @@ const deleteItem = createDeleteProcedure<IngredientId>(
       })),
     );
   },
-  ingredientId,
+  ingredientShortcode,
 );
 
 export const ingredientRouter = createTRPCRouter({

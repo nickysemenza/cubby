@@ -8,10 +8,17 @@
 
 import {
   type InventoryId,
-  inventoryId,
+  type InventoryShortcode,
+  inventoryShortcode,
+  type LocationId,
+  type LocationShortcode,
   type ProductId,
   type ProductShortcode,
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
@@ -77,6 +84,60 @@ async function resolveProductId(
   return unsafeProductId(resolved);
 }
 
+async function resolveLocationId(
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: LocationShortcode,
+): Promise<LocationId> {
+  const resolved = await resolveLiveShortcode(db, shortcode, "location");
+  if (!resolved) {
+    throw createAppError(
+      "LOCATION_NOT_FOUND",
+      `Location not found: ${shortcode}`,
+    );
+  }
+  return unsafeLocationId(resolved);
+}
+
+async function resolveInventoryId(
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: InventoryShortcode,
+): Promise<InventoryId> {
+  const resolved = await resolveLiveShortcode(db, shortcode, "inventory");
+  if (!resolved) {
+    throw createAppError(
+      "INVENTORY_NOT_FOUND",
+      `Inventory entry not found: ${shortcode}`,
+    );
+  }
+  return unsafeInventoryId(resolved);
+}
+
+async function resolveEntityIds<T extends string>(
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  shortcodes: T[],
+  entity: "inventory" | "location",
+): Promise<Map<T, string>> {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, entity);
+  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
+  if (missing) {
+    throw createAppError(
+      entity === "inventory" ? "INVENTORY_NOT_FOUND" : "LOCATION_NOT_FOUND",
+      `${entity === "inventory" ? "Inventory entry" : "Location"} not found: ${missing}`,
+    );
+  }
+  return resolved as Map<T, string>;
+}
+
+async function inventoryEntityIds(
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  shortcodes: InventoryShortcode[],
+): Promise<InventoryId[]> {
+  const resolved = await resolveEntityIds(db, shortcodes, "inventory");
+  return shortcodes.map((shortcode) =>
+    unsafeInventoryId(resolved.get(shortcode)!),
+  );
+}
+
 // Create standardized CRUD procedures using factory
 const { list } = createEntityListProcedure({
   schemas: {
@@ -89,7 +150,15 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await inventoryentryList(services.db, filters, sort, pagination);
+      const locationIdFilter = filters.locationIdFilter
+        ? await resolveLocationId(services.db, filters.locationIdFilter)
+        : undefined;
+      return await inventoryentryList(
+        services.db,
+        { ...filters, locationIdFilter },
+        sort,
+        pagination,
+      );
     },
   },
   entityName: "inventory",
@@ -104,10 +173,11 @@ const { getByID, getByShortcode, create, update } =
       output: inventoryWithLocationAndProductOut,
       createOutput: inventoryWithLocationAndProductAndSideEffectsOut,
       updateOutput: inventoryWithLocationAndProductAndSideEffectsOut,
-      idSchema: inventoryId,
+      idSchema: inventoryShortcode,
     },
     repository: {
-      getByID: async (services, id: InventoryId) => {
+      getByID: async (services, shortcode: InventoryShortcode) => {
+        const id = await resolveInventoryId(services.db, shortcode);
         const res = await getInventoryEntryByID(services.db, id);
         if (res === null) {
           throw createAppError(
@@ -120,12 +190,15 @@ const { getByID, getByShortcode, create, update } =
       getByShortcode: (services, shortcode) =>
         getInventoryEntryByShortcode(services.db, shortcode),
       create: async (services, data) => {
-        const productId = await resolveProductId(services.db, data.productId);
+        const [productId, locationId] = await Promise.all([
+          resolveProductId(services.db, data.productId),
+          resolveLocationId(services.db, data.locationId),
+        ]);
         // Check if this is a unique product that already exists elsewhere
         const duplicate = await checkUniqueProductDuplicate(
           services.db,
           productId,
-          data.locationId,
+          locationId,
         );
 
         if (duplicate) {
@@ -137,24 +210,29 @@ const { getByID, getByShortcode, create, update } =
 
         const created = await createInventoryEntry(
           services.db,
-          { ...data, productId },
+          { ...data, productId, locationId },
           services.actorContext,
         );
+        const entityId = await resolveInventoryId(services.db, created.id);
         const backgroundBatches = await runMutationSideEffects(services.db, {
           action: "created",
-          entity: { entityType: "inventory", entityId: created.id },
+          entity: { entityType: "inventory", entityId },
           source: "inventory.create",
         });
         return { ...created, sideEffects: { backgroundBatches } };
       },
-      update: async (services, id: InventoryId, data) => {
+      update: async (services, shortcode: InventoryShortcode, data) => {
+        const id = await resolveInventoryId(services.db, shortcode);
         const productId = data.productId
           ? await resolveProductId(services.db, data.productId)
+          : undefined;
+        const locationId = data.locationId
+          ? await resolveLocationId(services.db, data.locationId)
           : undefined;
         const updated = await updateInventoryEntry(
           services.db,
           id,
-          { ...data, productId },
+          { ...data, productId, locationId },
           services.actorContext,
         );
         const backgroundBatches = await runMutationSideEffects(services.db, {
@@ -168,17 +246,21 @@ const { getByID, getByShortcode, create, update } =
   });
 
 // Delete procedure using standalone factory
-const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
-  await deleteInventoryEntries(services.db, ids, services.actorContext);
-  return await runMutationSideEffectsForEntities(
-    services.db,
-    ids.map((id) => ({
-      action: "deleted" as const,
-      entity: { entityType: "inventory" as const, entityId: id },
-      source: "inventory.delete",
-    })),
-  );
-}, inventoryId);
+const deleteItem = createDeleteProcedure<InventoryShortcode>(
+  async (services, shortcodes) => {
+    const ids = await inventoryEntityIds(services.db, shortcodes);
+    await deleteInventoryEntries(services.db, ids, services.actorContext);
+    return await runMutationSideEffectsForEntities(
+      services.db,
+      ids.map((id) => ({
+        action: "deleted" as const,
+        entity: { entityType: "inventory" as const, entityId: id },
+        source: "inventory.delete",
+      })),
+    );
+  },
+  inventoryShortcode,
+);
 
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = protectedProcedure
@@ -200,23 +282,43 @@ const bulkProcess = protectedProcedure
         `Product(s) not found: ${missing.join(", ")}`,
       );
     }
+    const locationShortcodes = [
+      input.locationId,
+      ...input.items.map((item) => item.locationId),
+    ];
+    const inventoryShortcodes = input.items.flatMap((item) =>
+      item.id ? [item.id] : [],
+    );
+    const [resolvedLocations, resolvedInventories] = await Promise.all([
+      resolveEntityIds(ctx.db, locationShortcodes, "location"),
+      resolveEntityIds(ctx.db, inventoryShortcodes, "inventory"),
+    ]);
+    const locationId = unsafeLocationId(
+      resolvedLocations.get(input.locationId)!,
+    );
     const result = await bulkProcessInventoryEntries(
       ctx.db,
-      input.locationId,
+      locationId,
       input.items.map((item) => ({
-        id: item.id,
+        id: item.id
+          ? unsafeInventoryId(resolvedInventories.get(item.id)!)
+          : undefined,
         productId: unsafeProductId(resolvedProducts.get(item.productId) ?? ""),
-        locationId: item.locationId ?? input.locationId,
+        locationId: unsafeLocationId(resolvedLocations.get(item.locationId)!),
         amount: item.amount,
       })),
       ctx.actorContext,
       input.loadedAt,
     );
+    const entityIds = await inventoryEntityIds(
+      ctx.db,
+      result.map((entry) => entry.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      result.map((entry) => ({
+      entityIds.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "inventory" as const, entityId: entry.id },
+        entity: { entityType: "inventory" as const, entityId },
         source: "inventory.bulkProcess",
       })),
     );
@@ -228,16 +330,42 @@ const bulkMove = protectedProcedure
   .input(bulkMovePayload)
   .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
+    const locationCodes = [input.sourceLocationId, input.targetLocationId];
+    const [resolvedLocations, resolvedInventories] = await Promise.all([
+      resolveEntityIds(ctx.db, locationCodes, "location"),
+      resolveEntityIds(
+        ctx.db,
+        input.items.map((item) => item.inventoryEntryId),
+        "inventory",
+      ),
+    ]);
     const result = await bulkMoveInventoryEntries(
       ctx.db,
-      input,
+      {
+        sourceLocationId: unsafeLocationId(
+          resolvedLocations.get(input.sourceLocationId)!,
+        ),
+        targetLocationId: unsafeLocationId(
+          resolvedLocations.get(input.targetLocationId)!,
+        ),
+        items: input.items.map((item) => ({
+          ...item,
+          inventoryEntryId: unsafeInventoryId(
+            resolvedInventories.get(item.inventoryEntryId)!,
+          ),
+        })),
+      },
       ctx.actorContext,
+    );
+    const entityIds = await inventoryEntityIds(
+      ctx.db,
+      result.map((entry) => entry.id),
     );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      result.map((entry) => ({
+      entityIds.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "inventory" as const, entityId: entry.id },
+        entity: { entityType: "inventory" as const, entityId },
         source: "inventory.bulkMove",
       })),
     );
@@ -251,15 +379,69 @@ const reconcileSession = protectedProcedure
   .input(reconcileSessionPayload)
   .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
+    const inventoryCodes = [
+      ...input.expectedInventoryEntryIds,
+      ...input.resolutions.map((resolution) => resolution.inventoryEntryId),
+    ];
+    const locationCodes = [
+      input.locationId,
+      ...input.resolutions.flatMap((resolution) =>
+        resolution.kind === "relocate" ? [resolution.targetLocationId] : [],
+      ),
+    ];
+    const [resolvedInventories, resolvedLocations] = await Promise.all([
+      resolveEntityIds(ctx.db, inventoryCodes, "inventory"),
+      resolveEntityIds(ctx.db, locationCodes, "location"),
+    ]);
+    const resolvedInput = {
+      ...input,
+      locationId: unsafeLocationId(resolvedLocations.get(input.locationId)!),
+      expectedInventoryEntryIds: input.expectedInventoryEntryIds.map((id) =>
+        unsafeInventoryId(resolvedInventories.get(id)!),
+      ),
+      resolutions: input.resolutions.map((resolution) => {
+        const inventoryEntryId = unsafeInventoryId(
+          resolvedInventories.get(resolution.inventoryEntryId)!,
+        );
+        switch (resolution.kind) {
+          case "verify":
+            return { kind: "verify" as const, inventoryEntryId };
+          case "adjust":
+            return {
+              kind: "adjust" as const,
+              inventoryEntryId,
+              amount: resolution.amount,
+            };
+          case "remove":
+            return { kind: "remove" as const, inventoryEntryId };
+          case "relocate":
+            return {
+              kind: "relocate" as const,
+              inventoryEntryId,
+              targetLocationId: unsafeLocationId(
+                resolvedLocations.get(resolution.targetLocationId)!,
+              ),
+            };
+          default: {
+            const exhaustive: never = resolution;
+            throw new Error(`Unsupported resolution: ${String(exhaustive)}`);
+          }
+        }
+      }),
+    };
     const { items, removedIds, recomputeNeeded } =
-      await reconcileLocationSession(ctx.db, input, ctx.actorContext);
+      await reconcileLocationSession(ctx.db, resolvedInput, ctx.actorContext);
     // Surviving entries get "updated" side-effects; removed (soft-deleted) ones
     // get "deleted" so their embedding is cleaned up too (they're not in items).
+    const survivingEntityIds = await inventoryEntityIds(
+      ctx.db,
+      items.map((entry) => entry.id),
+    );
     const backgroundBatches = recomputeNeeded
       ? await runMutationSideEffectsForEntities(ctx.db, [
-          ...items.map((entry) => ({
+          ...survivingEntityIds.map((entityId) => ({
             action: "updated" as const,
-            entity: { entityType: "inventory" as const, entityId: entry.id },
+            entity: { entityType: "inventory" as const, entityId },
             source: "inventory.reconcileSession",
           })),
           ...removedIds.map((id) => ({
@@ -277,19 +459,20 @@ const findDuplicates = protectedProcedure
   .input(inventoryFindDuplicatesInput)
   .output(inventoryDuplicateUniqueProductsOut)
   .query(async ({ ctx, input }) => {
+    const excludeLocationId = input.excludeLocationId
+      ? await resolveLocationId(ctx.db, input.excludeLocationId)
+      : undefined;
     const duplicates = await findDuplicateUniqueProducts(ctx.db, {
-      excludeLocationId: input.excludeLocationId,
+      excludeLocationId,
     });
 
     return duplicates.map((product) => ({
-      id: product.id,
-      shortcode: product.shortcode,
+      id: unsafeProductShortcode(product.shortcode),
       name: product.name,
       manufacturer: product.manufacturer,
       expectedQuantity: product.expectedQuantity,
       locations: product.inventoryEntry.map((entry) => ({
-        id: entry.location.id,
-        shortcode: entry.location.shortcode,
+        id: unsafeLocationShortcode(entry.location.shortcode),
         name: entry.location.name,
       })),
     }));
@@ -300,7 +483,21 @@ const getCountsByLocations = protectedProcedure
   .input(inventoryLocationIdsInput)
   .output(inventoryCountsByLocationOut)
   .query(async ({ ctx, input }) => {
-    return await getInventoryCountsByLocations(ctx.db, input.locationIds);
+    const resolved = await resolveEntityIds(
+      ctx.db,
+      input.locationIds,
+      "location",
+    );
+    const ids = input.locationIds.map((shortcode) =>
+      unsafeLocationId(resolved.get(shortcode)!),
+    );
+    const counts = await getInventoryCountsByLocations(ctx.db, ids);
+    return Object.fromEntries(
+      input.locationIds.map((shortcode, index) => [
+        shortcode,
+        counts[ids[index]!] ?? 0,
+      ]),
+    );
   });
 
 // Get inventory entries for multiple locations (batched query to avoid N+1)
@@ -308,7 +505,17 @@ const getByLocationIds = protectedProcedure
   .input(inventoryLocationIdsInput)
   .output(inventoryWithLocationAndProductListOut)
   .query(async ({ ctx, input }) => {
-    return await getInventoryByLocationIds(ctx.db, input.locationIds);
+    const resolved = await resolveEntityIds(
+      ctx.db,
+      input.locationIds,
+      "location",
+    );
+    return await getInventoryByLocationIds(
+      ctx.db,
+      input.locationIds.map((shortcode) =>
+        unsafeLocationId(resolved.get(shortcode)!),
+      ),
+    );
   });
 
 export const inventoryRouter = createTRPCRouter({

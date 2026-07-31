@@ -1,4 +1,10 @@
-import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import {
+  type InventoryId,
+  type LocationId,
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -14,6 +20,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 // bulkProcess deletes-on-omit, so a stale snapshot could silently delete entries
 // another surface added since load. The optional `loadedAt` guard rejects the
@@ -24,6 +31,15 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
   const ctx = withTestDb();
   const amount = { value: 1, unit: "each" };
 
+  const requireResolvedId = async (
+    shortcode: string,
+    entity: "inventory" | "location" | "product",
+  ) => {
+    const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
+    if (!entityId) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
+    return entityId;
+  };
+
   // Add an entry (with a new product) to a location, returning the bulk-op item
   // that re-submits it unchanged.
   const addEntry = async (locationId: LocationId, productName: string) => {
@@ -32,18 +48,24 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       makeProductInput({ name: `Bolt ${productName}` }),
       TEST_ACTOR,
     );
+    const productEntityId = unsafeProductId(
+      await requireResolvedId(product.id, "product"),
+    );
     const entry = await createInventoryEntry(
       ctx.db,
-      { productId: product.id, locationId, amount },
+      { productId: productEntityId, locationId, amount },
       TEST_ACTOR,
     );
+    const entryEntityId = unsafeInventoryId(
+      await requireResolvedId(entry.id, "inventory"),
+    );
     const item = {
-      id: entry.id,
-      productId: product.id,
+      id: entryEntityId,
+      productId: productEntityId,
       locationId,
       amount,
     };
-    return { id: entry.id, item };
+    return { id: entryEntityId, item };
   };
 
   const seedLocation = async (name: string) => {
@@ -52,8 +74,11 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       makeLocationInput({ name }),
       TEST_ACTOR,
     );
-    const first = await addEntry(loc.id, `${name}-A`);
-    return { loc, first };
+    const locationEntityId = unsafeLocationId(
+      await requireResolvedId(loc.id, "location"),
+    );
+    const first = await addEntry(locationEntityId, `${name}-A`);
+    return { loc, locationEntityId, first };
   };
 
   const readEntry = (id: InventoryId) =>
@@ -67,7 +92,7 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       .then((rows) => rows[0]);
 
   it("rejects a commit when an entry was added after loadedAt", async () => {
-    const { loc, first } = await seedLocation("Stale");
+    const { locationEntityId, first } = await seedLocation("Stale");
     // loadedAt = the first entry's DB updatedAt; any later write is strictly newer.
     // Throw (don't fall back to `new Date()`) so a missing seed fails loudly
     // instead of silently making the `>` comparison ambiguous.
@@ -78,14 +103,14 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
     const loadedAt = new Date(loaded.at.getTime() - 1);
 
     // Another surface adds an entry after the snapshot was loaded.
-    const sneakedIn = await addEntry(loc.id, "sneaked");
+    const sneakedIn = await addEntry(locationEntityId, "sneaked");
 
     // Submitting the stale snapshot (only the original entry) would delete-on-omit
     // the new one — the guard must reject instead.
     await expect(
       bulkProcessInventoryEntries(
         ctx.db,
-        loc.id,
+        locationEntityId,
         [first.item],
         TEST_ACTOR,
         loadedAt,
@@ -97,14 +122,14 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
   });
 
   it("commits when loadedAt is current (delete-on-omit still applies)", async () => {
-    const { loc, first } = await seedLocation("Fresh");
-    const other = await addEntry(loc.id, "other");
+    const { locationEntityId, first } = await seedLocation("Fresh");
+    const other = await addEntry(locationEntityId, "other");
     // A loadedAt in the future is never stale → the commit proceeds.
     const future = new Date(Date.now() + 60_000);
 
     await bulkProcessInventoryEntries(
       ctx.db,
-      loc.id,
+      locationEntityId,
       [first.item],
       TEST_ACTOR,
       future,
@@ -115,11 +140,16 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
   });
 
   it("skips the guard entirely when loadedAt is omitted (back-compat)", async () => {
-    const { loc, first } = await seedLocation("NoGuard");
-    const other = await addEntry(loc.id, "other");
+    const { locationEntityId, first } = await seedLocation("NoGuard");
+    const other = await addEntry(locationEntityId, "other");
 
     // No loadedAt → no staleness check; the omitted entry is deleted as before.
-    await bulkProcessInventoryEntries(ctx.db, loc.id, [first.item], TEST_ACTOR);
+    await bulkProcessInventoryEntries(
+      ctx.db,
+      locationEntityId,
+      [first.item],
+      TEST_ACTOR,
+    );
     expect((await readEntry(other.id))?.deletedAt).not.toBeNull();
   });
 });

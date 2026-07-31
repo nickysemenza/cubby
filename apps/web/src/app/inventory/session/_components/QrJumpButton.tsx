@@ -89,14 +89,14 @@ export function LocationScanButton({
     try {
       const location = await queryClient.fetchQuery(
         api.location.getByShortcode.queryOptions({
-          shortcode: parsed.shortcode,
+          shortcode: parsed.id,
         }),
       );
       if (!location) {
         toast.error("No location found for that shortcode.");
         return;
       }
-      finish(location.id, location.shortcode, location.name);
+      finish(location.id, location.id, location.name);
     } catch (error) {
       toast.error(`Location lookup failed: ${getErrorMessage(error)}`);
     } finally {

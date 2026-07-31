@@ -67,13 +67,11 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   const fields: BasicInfoField[] = [
     { label: "Name", value: product.name },
     // Shortcode (if assigned)
-    ...(product.shortcode
+    ...(product.id
       ? [
           {
             label: "Shortcode",
-            value: (
-              <span className="font-mono text-xs">{product.shortcode}</span>
-            ),
+            value: <span className="font-mono text-xs">{product.id}</span>,
           },
         ]
       : []),
@@ -147,7 +145,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           data={{
             name: product.ingredient.name,
             id: product.ingredient.id,
-            shortcode: product.ingredient.shortcode,
           }}
         />
       ) : undefined,
@@ -241,7 +238,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           // this cluster is product-record actions only.
           <Row gap="sm">
             <Button onClick={onEdit}>Edit</Button>
-            <PrintLabelButton shortcode={product.shortcode} />
+            <PrintLabelButton shortcode={product.id} />
             {deleteButton}
           </Row>
         }
