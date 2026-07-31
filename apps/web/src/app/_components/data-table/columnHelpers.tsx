@@ -1646,7 +1646,11 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
       : undefined,
   );
   return columnHelper.accessor(
-    (row) => ({ id: row.projectId, name: row.projectName }),
+    (row) => ({
+      id: row.projectId,
+      name: row.projectName,
+      shortcode: row.projectShortcode,
+    }),
     {
       id: "project",
       header: options?.header ?? "Project",
@@ -1665,7 +1669,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         cellData,
       },
       cell: (info) => {
-        const { id, name } = info.getValue();
+        const { id, name, shortcode } = info.getValue();
 
         if (options?.editable) {
           const current: ComboboxItem<ProjectId> | null =
@@ -1698,9 +1702,13 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
           );
         }
 
-        if (!id || !name) return <NoneValue />;
+        if (!id || !name || !shortcode) return <NoneValue />;
         return (
-          <EntityInlineLink entity="project" data={{ id, name }} truncate />
+          <EntityInlineLink
+            entity="project"
+            data={{ id, name, shortcode }}
+            truncate
+          />
         );
       },
     },
@@ -1756,7 +1764,11 @@ export function createProductLinkColumn<T extends ProductRefRow>(
       : undefined,
   );
   return columnHelper.accessor(
-    (row) => ({ id: row.productId, name: row.productName }),
+    (row) => ({
+      id: row.productId,
+      name: row.productName,
+      shortcode: row.productShortcode,
+    }),
     {
       id: "product",
       header: options?.header ?? "Product",
@@ -1768,7 +1780,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
         cellData,
       },
       cell: (info) => {
-        const { id, name } = info.getValue();
+        const { id, name, shortcode } = info.getValue();
 
         if (options?.editable) {
           const current: ComboboxItem<ProductId> | null =
@@ -1801,9 +1813,13 @@ export function createProductLinkColumn<T extends ProductRefRow>(
           );
         }
 
-        if (!id || !name) return <NoneValue />;
+        if (!id || !name || !shortcode) return <NoneValue />;
         return (
-          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+          <EntityInlineLink
+            entity="product"
+            data={{ id, name, shortcode }}
+            truncate
+          />
         );
       },
     },
@@ -1841,6 +1857,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     (row) => ({
       id: row.subjectProductId,
       name: row.subjectProductName,
+      shortcode: row.subjectProductShortcode,
     }),
     {
       id: "subjectProduct",
@@ -1853,7 +1870,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
         cellData,
       },
       cell: (info) => {
-        const { id, name } = info.getValue();
+        const { id, name, shortcode } = info.getValue();
 
         if (options?.editable) {
           const current: ComboboxItem<ProductId> | null =
@@ -1886,9 +1903,13 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
           );
         }
 
-        if (!id || !name) return <NoneValue />;
+        if (!id || !name || !shortcode) return <NoneValue />;
         return (
-          <EntityInlineLink entity="product" data={{ id, name }} truncate />
+          <EntityInlineLink
+            entity="product"
+            data={{ id, name, shortcode }}
+            truncate
+          />
         );
       },
     },

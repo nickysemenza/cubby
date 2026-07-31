@@ -74,9 +74,10 @@ export function ProblemsOverview() {
   // page revalidates whatever the badge's 5-min cache may have left stale.
   const { problems, isLoading, error } = useProblemsData();
 
-  // Every product id across the product-bearing sections, so we fetch recipe
-  // usage once for the whole page rather than per card.
-  const productIds = useMemo(
+  // Every product shortcode across the product-bearing sections, so we fetch
+  // recipe usage once for the whole page rather than per card. Keyed by
+  // shortcode because that is the only id the cards themselves carry.
+  const productShortcodes = useMemo(
     () =>
       problems
         ? uniq(
@@ -90,13 +91,13 @@ export function ProblemsOverview() {
               ...problems.productsWithIslandedMappings,
               ...problems.productsWithNoImages,
               ...problems.productsWithBetterUpcData,
-            ].map((p) => p.id),
+            ].map((p) => p.shortcode),
           )
         : [],
     [problems],
   );
   const { data: recipeUsage } = useQuery(
-    api.problems.recipeUsageByProduct.queryOptions({ productIds }),
+    api.problems.recipeUsageByProduct.queryOptions({ productShortcodes }),
   );
 
   // Denominators for the coverage meters. Its own cheap batched query — the

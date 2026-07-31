@@ -806,9 +806,14 @@ export const cleanupOrphanedEntityEmbeddingsOut = z.object({
 });
 
 export const recipeUsageByProductInput = z.object({
-  productIds: z.array(z.string()),
+  productShortcodes: z.array(productShortcode),
 });
 
+/**
+ * Keyed by product SHORTCODE, matching the input — the caller (a problem card)
+ * only ever holds the public id, so a uuid-keyed map here would never match and
+ * the "used in N recipes" signal would silently vanish from every card.
+ */
 export const recipeUsageByProductOut = z.record(z.string(), z.number());
 
 export const deleteUnusedIngredientsInput = z.object({

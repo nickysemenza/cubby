@@ -3,7 +3,12 @@ import type {
   CandidateEquivalence,
   EquivalenceExample,
 } from "@cubby/schemas/equivalences";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  IngredientShortcode,
+  RecipeId,
+  RecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import { groupBy, median } from "es-toolkit";
 
 // One recipe-ingredient occurrence with its parsed measures. Matches the repo's
@@ -11,8 +16,10 @@ import { groupBy, median } from "es-toolkit";
 // aggregation has no `~/server` runtime import (testable in the node project).
 export interface HarvestRow {
   ingredientId: IngredientId;
+  ingredientShortcode: IngredientShortcode;
   ingredientName: string;
   recipeId: RecipeId;
+  recipeShortcode: RecipeShortcode;
   recipeName: string;
   rawLine: string | null;
   amounts: Amount[];
@@ -66,8 +73,10 @@ const dimInfo = (tools: UnitTools, m: Amount): DimInfo => {
 
 interface FlatPair {
   ingredientId: IngredientId;
+  ingredientShortcode: IngredientShortcode;
   ingredientName: string;
   recipeId: RecipeId;
+  recipeShortcode: RecipeShortcode;
   recipeName: string;
   rawLine: string | null;
   tokenA: string;
@@ -142,8 +151,10 @@ export const harvestEquivalences = (
 
         pairs.push({
           ingredientId: row.ingredientId,
+          ingredientShortcode: row.ingredientShortcode,
           ingredientName: row.ingredientName,
           recipeId: row.recipeId,
+          recipeShortcode: row.recipeShortcode,
           recipeName: row.recipeName,
           rawLine: row.rawLine,
           tokenA: a.info.token,
@@ -172,6 +183,7 @@ export const harvestEquivalences = (
         .slice(0, MAX_EXAMPLES)
         .map((p) => ({
           recipeId: p.recipeId,
+          recipeShortcode: p.recipeShortcode,
           recipeName: p.recipeName,
           rawLine: p.rawLine,
           a: p.a,
@@ -179,6 +191,7 @@ export const harvestEquivalences = (
         }));
       return {
         ingredientId: first.ingredientId,
+        ingredientShortcode: first.ingredientShortcode,
         ingredientName: first.ingredientName,
         unitA: first.unitA,
         unitB: first.unitB,

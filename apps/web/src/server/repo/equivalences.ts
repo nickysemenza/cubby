@@ -1,3 +1,7 @@
+import {
+  unsafeIngredientShortcode,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { HarvestRow } from "~/lib/harvest-equivalences";
 import type { Database } from "~/server/db";
@@ -19,16 +23,19 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
  * excluded — their amounts are recipe yields, not measurements of a food. Pure
  * DB: dimension classification + pairing happen in `harvestEquivalences`. Branded
  * ids (`ingredient.id`, `recipe.id`) and `amounts` (`$type<Amount[]>`) come back
- * natively typed, so the rows are `HarvestRow[]` with no cast.
+ * natively typed; shortcode columns are deliberately unbranded in the schema, so
+ * they get their brand here at the repo boundary.
  */
 export const getMultiMeasureRecipeIngredients = async (
   db: Database,
 ): Promise<HarvestRow[]> => {
-  return await getDb(db)
+  const rows = await getDb(db)
     .select({
       ingredientId: ingredient.id,
+      ingredientShortcode: ingredient.shortcode,
       ingredientName: ingredient.name,
       recipeId: recipe.id,
+      recipeShortcode: recipe.shortcode,
       recipeName: recipe.name,
       rawLine: recipeSectionIngredient.rawLine,
       amounts: recipeSectionIngredient.amounts,
@@ -51,4 +58,9 @@ export const getMultiMeasureRecipeIngredients = async (
         sql`jsonb_array_length(${recipeSectionIngredient.amounts}) >= 2`,
       ),
     );
+  return rows.map((r) => ({
+    ...r,
+    ingredientShortcode: unsafeIngredientShortcode(r.ingredientShortcode),
+    recipeShortcode: unsafeRecipeShortcode(r.recipeShortcode),
+  }));
 };

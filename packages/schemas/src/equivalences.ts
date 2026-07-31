@@ -1,12 +1,18 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import { ingredientId, recipeId } from "./identifiers";
+import {
+  ingredientId,
+  ingredientShortcode,
+  recipeId,
+  recipeShortcode,
+} from "./identifiers";
 
 // One recipe line that expressed a candidate equivalence — the raw line plus the
 // two parsed measures it pairs (e.g. "1 bunch kale (about 5 cups)" → a={1 bunch},
 // b={5 cup}). Carried so the report can "show its work" per candidate.
 export const equivalenceExampleSchema = z.object({
   recipeId,
+  recipeShortcode: recipeShortcode,
   recipeName: z.string(),
   rawLine: z.string().nullable(),
   a: amount,
@@ -21,6 +27,7 @@ export type EquivalenceExample = z.infer<typeof equivalenceExampleSchema>;
 // Read-only for now — a future pass promotes accepted candidates into a live edge.
 export const candidateEquivalenceSchema = z.object({
   ingredientId,
+  ingredientShortcode: ingredientShortcode,
   ingredientName: z.string(),
   unitA: z.string(),
   unitB: z.string(),

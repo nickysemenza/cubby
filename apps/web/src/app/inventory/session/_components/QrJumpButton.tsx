@@ -1,3 +1,4 @@
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,6 +36,7 @@ export function LocationScanButton({
 }: {
   onResolved: (
     locationId: InfLocation["id"],
+    shortcode: LocationShortcode | undefined,
     label?: string,
   ) => boolean | undefined;
   buttonLabel?: string;
@@ -48,8 +50,12 @@ export function LocationScanButton({
   const [manualValue, setManualValue] = useState("");
   const [isResolving, setIsResolving] = useState(false);
 
-  const finish = (locationId: InfLocation["id"], label?: string) => {
-    const shouldClose = onResolved(locationId, label) !== false;
+  const finish = (
+    locationId: InfLocation["id"],
+    shortcode: LocationShortcode | undefined,
+    label?: string,
+  ) => {
+    const shouldClose = onResolved(locationId, shortcode, label) !== false;
     if (shouldClose) {
       setOpen(false);
       setManualValue("");
@@ -67,7 +73,10 @@ export function LocationScanButton({
         toast.error("Enter a location shortcode or UUID.");
         return;
       }
-      finish(id);
+      // A raw pasted UUID carries no shortcode — the caller degrades
+      // gracefully (e.g. skips a direct URL jump) rather than us doing a
+      // second network lookup just to backfill one.
+      finish(id, undefined);
       return;
     }
 
@@ -87,7 +96,7 @@ export function LocationScanButton({
         toast.error("No location found for that shortcode.");
         return;
       }
-      finish(location.id, location.name);
+      finish(location.id, location.shortcode, location.name);
     } catch (error) {
       toast.error(`Location lookup failed: ${getErrorMessage(error)}`);
     } finally {
@@ -190,7 +199,7 @@ export function QrJumpButton({
       variant="outline"
       manualEntry={manualEntry}
       sheetDescription="Jump within this recount, or switch to the scanned location."
-      onResolved={(targetId, label) => {
+      onResolved={(targetId, shortcode, label) => {
         if (!isDescendantLocation(parent, targetId)) {
           toast(`${label ?? "That location"} is outside this recount.`, {
             action: {
@@ -198,7 +207,7 @@ export function QrJumpButton({
               onClick: () => {
                 void navigate({
                   to: "/inventory/session",
-                  search: { parentId: targetId },
+                  search: { parent: shortcode },
                 });
               },
             },

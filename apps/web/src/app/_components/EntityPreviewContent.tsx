@@ -222,7 +222,12 @@ export type IngredientPreview = {
   multiplePrices: boolean;
   recipeCount: number;
   usdaFdcId?: number;
-  products: { id: string; name: string; manufacturer: string }[];
+  products: {
+    id: string;
+    shortcode: string;
+    name: string;
+    manufacturer: string;
+  }[];
 };
 
 export function toIngredientCard(vm: IngredientPreview): ManifestCardProps {
@@ -286,6 +291,7 @@ export function IngredientPreviewContent({
               usdaFdcId: data.product.find((prod) => prod.food)?.food?.fdc_id,
               products: data.product.map((prod) => ({
                 id: prod.id,
+                shortcode: prod.shortcode,
                 name: prod.name,
                 manufacturer: prod.manufacturer,
               })),

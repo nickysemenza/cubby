@@ -107,6 +107,7 @@ export const ingredientRawLinesOut = z.array(ingredientRawLineOut);
 export const ingredientMatchOut = z
   .object({
     id: z.string(),
+    shortcode: ingredientShortcode,
     name: z.string(),
     aliases: z.array(z.string()),
   })
@@ -215,6 +216,7 @@ export const enrichmentRowOut = z.object({
   mergeCandidates: z.array(
     z.object({
       id: ingredientId,
+      shortcode: ingredientShortcode,
       name: z.string(),
       // pg_trgm similarity (0-1) to this row.
       similarity: z.number(),

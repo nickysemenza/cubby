@@ -1,3 +1,4 @@
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -49,6 +50,7 @@ export const projectNameOptions = async (
     getDb(db)
       .select({
         id: project.id,
+        shortcode: project.shortcode,
         name: project.name,
         parentProjectId: project.parentProjectId,
         startDate: project.startDate,
@@ -65,6 +67,7 @@ export const projectNameOptions = async (
     const window = windows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW;
     return {
       id: row.id,
+      shortcode: unsafeProjectShortcode(row.shortcode),
       name: row.name,
       effectiveStart: window.effectiveStart,
       effectiveEnd: window.effectiveEnd,

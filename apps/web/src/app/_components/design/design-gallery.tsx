@@ -842,23 +842,29 @@ export function DesignGallery() {
           <Row label="Entity links">
             <EntityInlineLink
               entity="ingredient"
-              data={{ id: "1", name: "almond butter" }}
+              data={{ id: "1", shortcode: "ING-0001", name: "almond butter" }}
             />
             <EntityInlineLink
               entity="product"
               data={{
                 id: "1",
+                shortcode: "PRD-0001",
                 name: "Cyclone 200ES",
                 manufacturer: "Everlast",
               }}
             />
             <EntityInlineLink
               entity="recipe"
-              data={{ id: "1", name: "Za'atar" }}
+              data={{ id: "1", shortcode: "RCP-0001", name: "Za'atar" }}
             />
             <EntityInlineLink
               entity="location"
-              data={{ id: "1", name: "Chrome Wire Shelf", type: "shelf" }}
+              data={{
+                id: "1",
+                shortcode: "LOC-0001",
+                name: "Chrome Wire Shelf",
+                type: "shelf",
+              }}
             />
             <EntityInlineLink
               entity="usda-food"
@@ -1443,7 +1449,12 @@ const INGREDIENT_SAMPLE: IngredientPreview = {
   recipeCount: 2,
   usdaFdcId: 1103349,
   products: [
-    { id: "sample-product", name: "cilantro", manufacturer: "generic" },
+    {
+      id: "sample-product",
+      shortcode: "PRD-0001",
+      name: "cilantro",
+      manufacturer: "generic",
+    },
   ],
 };
 const PRODUCT_SAMPLE: ProductPreview = {

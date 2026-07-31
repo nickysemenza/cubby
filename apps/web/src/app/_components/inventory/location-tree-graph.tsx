@@ -8,6 +8,7 @@ import { ROOT_LOCATION_ID, useLocationTree } from "~/hooks/useLocationTree";
 interface TreeNode {
   name: string;
   id: LocationId;
+  shortcode: string;
   type: LocationType;
   children?: TreeNode[];
 }
@@ -16,6 +17,7 @@ function transformToTreeNode(location: InfLocation): TreeNode {
   return {
     name: location.name,
     id: location.id,
+    shortcode: location.shortcode,
     type: location.type,
     children: location.children?.map(transformToTreeNode),
   };
@@ -30,6 +32,9 @@ export default function LocationTreeGraph() {
     return {
       name: "_root",
       id: ROOT_LOCATION_ID,
+      // Synthetic root node — never rendered as a link (guarded by `isRoot`
+      // below), so this placeholder shortcode is never dereferenced.
+      shortcode: "_root",
       type: "room" as LocationType,
       children: data.map(transformToTreeNode),
     };
@@ -173,6 +178,7 @@ function TidyTree({ data }: TidyTreeProps) {
                         data={{
                           name: node.data.name,
                           id: node.data.id,
+                          shortcode: node.data.shortcode,
                           type: node.data.type,
                         }}
                       />

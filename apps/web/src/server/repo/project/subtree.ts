@@ -297,6 +297,7 @@ export type ProjectTree = {
   allRows: ProjectParentRow[];
   childrenByParent: Map<ProjectId, ProjectId[]>;
   nameById: Map<ProjectId, string>;
+  shortcodeById: Map<ProjectId, string>;
 };
 
 /**
@@ -323,6 +324,7 @@ export async function loadProjectTree(db: Database): Promise<ProjectTree> {
     allRows,
     childrenByParent: buildChildrenMap(allRows),
     nameById: new Map(allRows.map((r) => [r.id, r.name])),
+    shortcodeById: new Map(allRows.map((r) => [r.id, r.shortcode])),
   };
 }
 

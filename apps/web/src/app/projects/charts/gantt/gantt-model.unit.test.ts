@@ -44,6 +44,7 @@ function project(params: {
   return {
     id: unsafeProjectId(params.id),
     shortcode: nextProjectShortcode(),
+    parentProjectShortcode: null,
     name: params.id,
     status: params.status ?? "planning",
     kind: params.kind ?? null,
@@ -112,6 +113,7 @@ function task(params: {
   return {
     id: unsafeTaskId(params.id),
     shortcode: nextTaskShortcode(),
+    parentTaskShortcode: null,
     name: params.id,
     status: params.status ?? "not_started",
     projectId:

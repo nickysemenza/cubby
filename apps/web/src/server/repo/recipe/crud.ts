@@ -201,10 +201,12 @@ export const getCookbookRecipeTitles = async (
 export const getCookbookRecipesForDiff = async (
   db: Database,
   cookbookId: CookbookId,
-): Promise<Array<{ title: string; id: string; sig: string }>> => {
+): Promise<
+  Array<{ title: string; id: string; shortcode: string; sig: string }>
+> => {
   const rows = await getDb(db).query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
-    columns: { id: true, name: true },
+    columns: { id: true, name: true, shortcode: true },
   });
   const recipes = await getRecipesByIDs(
     db,
@@ -214,7 +216,14 @@ export const getCookbookRecipesForDiff = async (
   return rows.flatMap((r) => {
     const full = byId.get(r.id);
     return full
-      ? [{ title: r.name, id: r.id, sig: recipeOutSignature(full) }]
+      ? [
+          {
+            title: r.name,
+            id: r.id,
+            shortcode: r.shortcode,
+            sig: recipeOutSignature(full),
+          },
+        ]
       : [];
   });
 };

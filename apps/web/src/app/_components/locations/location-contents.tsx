@@ -263,7 +263,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
         </Button>
         <Link
           to="/inventory/session"
-          search={{ parentId: location.id }}
+          search={{ parent: location.shortcode }}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <ScanBarcode className="mr-2 size-4" />

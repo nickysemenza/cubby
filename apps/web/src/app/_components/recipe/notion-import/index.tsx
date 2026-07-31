@@ -218,6 +218,7 @@ export function NotionImport() {
                 recipe={item.recipe}
                 status={item.status}
                 existingId={item.existingId ?? undefined}
+                existingShortcode={item.existingShortcode ?? undefined}
                 reasons={item.reasons}
                 selected={selected.has(item.pageId)}
                 disabled={item.status === "needs-formatting"}

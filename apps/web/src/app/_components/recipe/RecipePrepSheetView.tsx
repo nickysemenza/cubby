@@ -70,6 +70,7 @@ function ShoppingList({
             <span className="truncate" title={need.name}>
               <EntityPreviewLink
                 entity="ingredient"
+                shortcode={need.ingredientShortcode}
                 id={need.ingredientId}
                 className={dottedEntityLink}
               >
@@ -139,6 +140,7 @@ function PrepRow({
         {ref ? (
           <EntityPreviewLink
             entity={ref.entity}
+            shortcode={ref.shortcode}
             id={ref.id}
             className={dottedEntityLink}
           >
@@ -199,6 +201,7 @@ function Component({
         <h3 className="my-0 font-heading font-medium text-base leading-tight tracking-tight">
           <EntityPreviewLink
             entity="recipe"
+            shortcode={node.recipe.shortcode}
             id={node.recipe.id}
             className={dottedEntityLink}
           >

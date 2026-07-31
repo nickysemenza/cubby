@@ -149,8 +149,18 @@ interface ProjectDetailPageProps {
  * to resolve these) is the lightweight `{id,name}` projection, so this can't
  * carry `ProjectPill`'s status icon/tooltip (those need a full `ProjectOut`).
  */
-function DependencyBadge({ id, name }: { id: string; name: string }) {
-  return <EntityInlineLink entity="project" data={{ id, name }} compact />;
+function DependencyBadge({
+  id,
+  name,
+  shortcode,
+}: {
+  id: string;
+  name: string;
+  shortcode: string;
+}) {
+  return (
+    <EntityInlineLink entity="project" data={{ id, name, shortcode }} compact />
+  );
 }
 
 /**
@@ -388,7 +398,11 @@ function SubProjectsList({
                   <StatusIcon status={child.status} />
                   <EntityInlineLink
                     entity="project"
-                    data={{ id: child.id, name: child.name }}
+                    data={{
+                      id: child.id,
+                      shortcode: child.shortcode,
+                      name: child.name,
+                    }}
                     compact
                   />
                   <Badge variant="outline">
@@ -634,15 +648,18 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // same as the old full-ProjectOut lookup did.
   const { data: projectOptions } = useQuery(api.project.options.queryOptions());
   const projectNamesById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const p of projectOptions ?? []) map.set(p.id, p.name);
+    const map = new Map<string, { name: string; shortcode: string }>();
+    for (const p of projectOptions ?? [])
+      map.set(p.id, { name: p.name, shortcode: p.shortcode });
     return map;
   }, [projectOptions]);
   const resolveDependencyNames = (ids: ProjectOut["blockedByIds"]) =>
     ids
       .map((id) => {
-        const name = projectNamesById.get(id);
-        return name ? { id, name } : null;
+        const found = projectNamesById.get(id);
+        return found
+          ? { id, name: found.name, shortcode: found.shortcode }
+          : null;
       })
       .filter((p): p is NonNullable<typeof p> => p != null);
   const blockedBy = resolveDependencyNames(project.blockedByIds);
@@ -865,10 +882,14 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             });
           }}
           renderValue={(v) =>
-            v && project.parentProjectName ? (
+            v && project.parentProjectName && project.parentProjectShortcode ? (
               <EntityInlineLink
                 entity="project"
-                data={{ id: v, name: project.parentProjectName }}
+                data={{
+                  id: v,
+                  name: project.parentProjectName,
+                  shortcode: project.parentProjectShortcode,
+                }}
                 compact
               />
             ) : (
@@ -1109,7 +1130,19 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             SearchProvider={WithProjectSearch}
             label="project"
             excludeId={project.id}
-            renderReadChip={(item) => <DependencyBadge {...item} />}
+            renderReadChip={(item) => {
+              // DependencyPicker's chip type is the generic {id,name} —
+              // resolve the public id from the same options map `blockedBy`
+              // was built from rather than widening that shared component.
+              const shortcode = projectNamesById.get(item.id)?.shortcode;
+              return shortcode ? (
+                <DependencyBadge
+                  id={item.id}
+                  name={item.name}
+                  shortcode={shortcode}
+                />
+              ) : null;
+            }}
           />
         </Stack>
         {blocking.length > 0 && (
@@ -1243,7 +1276,9 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const heroStats: DetailHeroStat[] = [
     // A sub-project surfaces its parent right in the spec-plate header, same
     // treatment as the task subtask breadcrumb.
-    ...(project.parentProjectId && project.parentProjectName
+    ...(project.parentProjectId &&
+    project.parentProjectName &&
+    project.parentProjectShortcode
       ? [
           {
             label: "Sub-project of",
@@ -1253,6 +1288,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 data={{
                   id: project.parentProjectId,
                   name: project.parentProjectName,
+                  shortcode: project.parentProjectShortcode,
                 }}
                 truncate
               />

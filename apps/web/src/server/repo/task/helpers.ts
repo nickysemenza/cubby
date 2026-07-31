@@ -21,6 +21,9 @@ const toProductShortcode = (code: string | null) =>
 const toProjectShortcode = (code: string | null) =>
   code === null ? null : unsafeProjectShortcode(code);
 
+const toTaskShortcode = (code: string | null) =>
+  code === null ? null : unsafeTaskShortcode(code);
+
 export const effectiveTaskDueDateSql = () =>
   sql`coalesce(${task.dueEndDate}, ${task.dueDate})`;
 
@@ -50,7 +53,11 @@ type TaskRow = {
     shortcode: string;
     deletedAt: Date | null;
   } | null;
-  parentTask?: { name: string; deletedAt: Date | null } | null;
+  parentTask?: {
+    name: string;
+    shortcode: string;
+    deletedAt: Date | null;
+  } | null;
 };
 
 export const dbTaskToAPI = (
@@ -81,6 +88,9 @@ export const dbTaskToAPI = (
     resolveLiveJoinShortcode(row.subjectProduct),
   ),
   parentTaskName: row.parentTask ? resolveLiveJoinName(row.parentTask) : null,
+  parentTaskShortcode: row.parentTask
+    ? toTaskShortcode(resolveLiveJoinShortcode(row.parentTask))
+    : null,
   blockedByIds,
   blockingIds,
   subtaskCount,

@@ -34,7 +34,17 @@ export const dottedEntityLink =
 
 type EntityPreviewLinkProps = {
   entity: HoverPreviewEntity;
-  /** Route param id. For usda-food this is String(fdc_id). */
+  /**
+   * The entity's PUBLIC id — what the href is built from. Split out from `id`
+   * on purpose: while one prop served both, callers passed a uuid and produced
+   * `/projects/<uuid>` links that 404, caught only by an E2E href assertion.
+   * For `usda-food` this is `String(fdc_id)`, that entity's public id.
+   */
+  shortcode: string;
+  /**
+   * The entity's private uuid, used ONLY for the hover preview's own query —
+   * never for the href. (For `usda-food`, same value as `shortcode`.)
+   */
   id: string;
   /** The trigger content — a plain name, or a full pill body. */
   children: ReactNode;
@@ -44,6 +54,7 @@ type EntityPreviewLinkProps = {
 
 export function EntityPreviewLink({
   entity,
+  shortcode,
   id,
   children,
   openInNewTab,
@@ -62,7 +73,7 @@ export function EntityPreviewLink({
           entity === "usda-food" ? (
             <Link
               to="/usda/$id"
-              params={{ id }}
+              params={{ id: shortcode }}
               target={openInNewTab ? "_blank" : undefined}
               rel={openInNewTab ? "noopener noreferrer" : undefined}
               className={className}
@@ -70,7 +81,7 @@ export function EntityPreviewLink({
           ) : (
             <Link
               to={entities[entity].routes.detail}
-              params={entityDetailParams(id)}
+              params={entityDetailParams(shortcode)}
               target={openInNewTab ? "_blank" : undefined}
               rel={openInNewTab ? "noopener noreferrer" : undefined}
               className={className}

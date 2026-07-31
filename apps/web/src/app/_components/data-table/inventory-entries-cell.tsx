@@ -25,7 +25,12 @@ import {
  * related-entity accessor — {@link InventoryEntryBase}'s `location` field is
  * intentionally loose (plain `string` id) so it also fits `product` rows;
  * the branded-id cast happens once here at the inline-edit boundary. */
-type LocationLike = { id: LocationId; name: string; type: LocationType };
+type LocationLike = {
+  id: LocationId;
+  shortcode: string;
+  name: string;
+  type: LocationType;
+};
 
 interface InventoryEntriesInlineEditConfig<T, TEntry> {
   /** WithLocationSearch — injected so unit tests can stub it. */

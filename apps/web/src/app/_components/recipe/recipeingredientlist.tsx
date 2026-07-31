@@ -182,6 +182,7 @@ export const RecipeIngredientList: React.FC<{
                 .with({ type: "ingredient" }, (r) => (
                   <EntityPreviewLink
                     entity="ingredient"
+                    shortcode={r.ingredient.shortcode}
                     id={r.ingredient.id}
                     className={dottedEntityLink}
                   >
@@ -191,6 +192,7 @@ export const RecipeIngredientList: React.FC<{
                 .with({ type: "recipe" }, (r) => (
                   <EntityPreviewLink
                     entity="recipe"
+                    shortcode={r.recipe.shortcode}
                     id={r.recipe.id}
                     className={dottedEntityLink}
                   >

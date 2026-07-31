@@ -195,6 +195,7 @@ function SpecRow({
         {ref ? (
           <EntityPreviewLink
             entity={ref.entity}
+            shortcode={ref.shortcode}
             id={ref.id}
             className={dottedEntityLink}
           >
@@ -285,6 +286,7 @@ function SpecNode({
         <div className="eyebrow mb-1 flex flex-wrap items-center gap-x-2">
           <EntityPreviewLink
             entity="recipe"
+            shortcode={node.recipe.shortcode}
             id={node.recipe.id}
             className={cn(dottedEntityLink, "font-semibold")}
           >

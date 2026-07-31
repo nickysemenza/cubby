@@ -253,7 +253,7 @@ export function TaskCard({
             </Badge>
           )}
           {showTrade && <TradeBadge trade={task.trade} />}
-          {showProject && task.projectId && (
+          {showProject && task.projectId && task.projectShortcode && (
             // biome-ignore lint/a11y/noStaticElementInteractions: bare stopPropagation guard so a card click doesn't fire when the inner link is used
             <span
               onClick={(e) => e.stopPropagation()}
@@ -263,7 +263,11 @@ export function TaskCard({
               <EntityInlineLink
                 entity="project"
                 truncate
-                data={{ id: task.projectId, name: task.projectName ?? "" }}
+                data={{
+                  id: task.projectId,
+                  shortcode: task.projectShortcode,
+                  name: task.projectName ?? "",
+                }}
               />
             </span>
           )}

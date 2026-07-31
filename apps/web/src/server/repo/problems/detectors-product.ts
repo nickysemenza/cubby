@@ -15,7 +15,6 @@ import type {
 import {
   unsafeIngredientShortcode,
   unsafeLocationShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
@@ -479,13 +478,13 @@ export const findProductsWithUpcGaps = async (
 // omitted, so the card can tell "0 recipes" apart from "no ingredient link".
 export const recipeUsageCountsByProduct = async (
   db: Database,
-  productIds: string[],
+  productShortcodes: string[],
 ): Promise<Record<string, number>> => {
-  if (productIds.length === 0) return {};
+  if (productShortcodes.length === 0) return {};
 
   const rows = await getDb(db)
     .select({
-      productId: product.id,
+      shortcode: product.shortcode,
       count: sql<number>`count(distinct ${recipe.id})`,
     })
     .from(product)
@@ -511,12 +510,12 @@ export const recipeUsageCountsByProduct = async (
       and(
         notDeleted(product),
         isNotNull(product.ingredientId),
-        inArray(product.id, productIds.map(unsafeProductId)),
+        inArray(product.shortcode, productShortcodes),
       ),
     )
-    .groupBy(product.id);
+    .groupBy(product.shortcode);
 
-  return Object.fromEntries(rows.map((r) => [r.productId, Number(r.count)]));
+  return Object.fromEntries(rows.map((r) => [r.shortcode, Number(r.count)]));
 };
 
 // DB pull shared by BOTH coverage detectors (partial-coverage + islanding):

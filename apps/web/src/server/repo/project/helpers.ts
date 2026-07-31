@@ -112,6 +112,7 @@ const dbProjectToAPI = ({
   blockedByIds,
   blockingIds,
   parentProjectName,
+  parentProjectShortcode,
   childProjectIds,
 }: {
   row: ProjectRow;
@@ -121,6 +122,7 @@ const dbProjectToAPI = ({
   blockedByIds: ProjectId[];
   blockingIds: ProjectId[];
   parentProjectName: string | null;
+  parentProjectShortcode: string | null;
   childProjectIds: ProjectId[];
 }): ProjectOut => ({
   id: row.id,
@@ -132,6 +134,9 @@ const dbProjectToAPI = ({
   costEstimate: row.costEstimate,
   parentProjectId: row.parentProjectId,
   parentProjectName,
+  parentProjectShortcode: parentProjectShortcode
+    ? unsafeProjectShortcode(parentProjectShortcode)
+    : null,
   childProjectIds,
   startDate: row.startDate,
   endDate: row.endDate,
@@ -158,6 +163,7 @@ export const hydrateProjectRow = (
     subtreeRollups: Map<ProjectId, ProjectSubtreeRollup>;
     dateWindows: Map<ProjectId, ProjectDateWindow>;
     nameById: Map<ProjectId, string>;
+    shortcodeById: Map<ProjectId, string>;
     childrenByParent: Map<ProjectId, ProjectId[]>;
   },
   dependencies: {
@@ -175,6 +181,9 @@ export const hydrateProjectRow = (
     blockingIds: dependencies.blocking.get(row.id) ?? [],
     parentProjectName: row.parentProjectId
       ? (context.nameById.get(row.parentProjectId) ?? null)
+      : null,
+    parentProjectShortcode: row.parentProjectId
+      ? (context.shortcodeById.get(row.parentProjectId) ?? null)
       : null,
     childProjectIds: context.childrenByParent.get(row.id) ?? [],
   });

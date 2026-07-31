@@ -40,6 +40,7 @@ import type { IngItem } from "./types";
 
 interface IngredientMatch {
   id: string;
+  shortcode: string;
   name: string;
   aliases: string[];
 }
@@ -87,6 +88,7 @@ interface ParsedIngredientWithMatch {
   parsed: ParsedIngredientLine["parsed"];
   match: {
     id: string;
+    shortcode: string;
     name: string;
   } | null;
   isLoading: boolean;
@@ -113,7 +115,9 @@ export function IngredientPreviewTable({
       const match = ingredientMatchMap.get(p.parsed.name) ?? null;
       return {
         ...p,
-        match: match ? { id: match.id, name: match.name } : null,
+        match: match
+          ? { id: match.id, shortcode: match.shortcode, name: match.name }
+          : null,
         isLoading: !ingredientMatchMap.has(p.parsed.name),
       };
     });
@@ -239,7 +243,11 @@ function IngredientRow({
           ) : isMatched && item.match ? (
             <EntityInlineLink
               entity="ingredient"
-              data={{ id: item.match.id, name: item.match.name }}
+              data={{
+                id: item.match.id,
+                shortcode: item.match.shortcode,
+                name: item.match.name,
+              }}
             />
           ) : (
             <>

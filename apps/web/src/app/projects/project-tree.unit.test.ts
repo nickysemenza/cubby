@@ -25,6 +25,7 @@ function proj(id: string, parentProjectId?: string): ProjectOut {
   return {
     id: unsafeProjectId(id),
     shortcode: nextProjectShortcode(),
+    parentProjectShortcode: null,
     name: id,
     status: "planning",
     kind: null,

@@ -22,7 +22,7 @@ import { LocationIcon } from "./locations/location-icons";
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 
 // Minimal data shape - just id and name
-type MinimalEntityData = { id: string; name: string };
+type MinimalEntityData = { id: string; shortcode: string; name: string };
 
 // Discriminated union for entity-specific data shapes
 type EntityInlineLinkProps = {
@@ -82,6 +82,7 @@ type EntityInlineLinkProps = {
       entity: "purchase";
       data: {
         id: string;
+        shortcode: string;
         orderId: string | null;
         vendorName?: string | null;
         date?: string | null;
@@ -140,18 +141,21 @@ function EntityLinkBody({
 function PreviewEntityLink({
   entity,
   id,
+  shortcode,
   openInNewTab,
   className,
   ...body
 }: EntityLinkBodyProps & {
   entity: HoverPreviewEntity;
   id: string;
+  shortcode: string;
   openInNewTab?: boolean;
   className: string;
 }) {
   return (
     <EntityPreviewLink
       entity={entity}
+      shortcode={shortcode}
       id={id}
       openInNewTab={openInNewTab}
       className={className}
@@ -169,6 +173,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "ingredient" }, ({ data }) => (
       <PreviewEntityLink
         entity="ingredient"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -181,6 +186,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "recipe" }, ({ data }) => (
       <PreviewEntityLink
         entity="recipe"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -193,6 +199,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "cookbook" }, ({ data }) => (
       <PreviewEntityLink
         entity="cookbook"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -206,6 +213,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "meal" }, ({ data }) => (
       <PreviewEntityLink
         entity="meal"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -219,6 +227,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "location" }, ({ data }) => (
       <PreviewEntityLink
         entity="location"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -243,6 +252,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
       return (
         <PreviewEntityLink
           entity="product"
+          shortcode={data.shortcode}
           id={data.id}
           openInNewTab={openInNewTab}
           className={wrapperClass}
@@ -257,6 +267,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "inventory" }, ({ data }) => (
       <PreviewEntityLink
         entity="inventory"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -285,6 +296,8 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
       return (
         <PreviewEntityLink
           entity="usda-food"
+          // usda-food has no shortcode — fdc_id IS its public id.
+          shortcode={usdaRouteId(data.fdc_id)}
           id={usdaRouteId(data.fdc_id)}
           openInNewTab={openInNewTab}
           className={wrapperClass}
@@ -301,6 +314,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "project" }, ({ data }) => (
       <PreviewEntityLink
         entity="project"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -326,6 +340,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "task" }, ({ data }) => (
       <PreviewEntityLink
         entity="task"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -339,6 +354,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "expense" }, ({ data }) => (
       <PreviewEntityLink
         entity="expense"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -356,6 +372,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "purchase" }, ({ data }) => (
       <PreviewEntityLink
         entity="purchase"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}
@@ -375,6 +392,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
     .with({ entity: "vendor" }, ({ data }) => (
       <PreviewEntityLink
         entity="vendor"
+        shortcode={data.shortcode}
         id={data.id}
         openInNewTab={openInNewTab}
         className={wrapperClass}

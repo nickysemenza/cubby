@@ -142,6 +142,7 @@ export const getProductsSharingTags = async (
 ): Promise<
   Array<{
     id: ProductId;
+    shortcode: string;
     name: string;
     manufacturer: string;
     category: ProductCategory | null;
@@ -160,6 +161,7 @@ export const getProductsSharingTags = async (
   return await getDb(db)
     .select({
       id: product.id,
+      shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
       category: product.category,

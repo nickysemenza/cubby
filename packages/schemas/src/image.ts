@@ -248,6 +248,7 @@ export const imageWithEntitySchema = z.object({
   entityType: entityImage.nullable(),
   entityId: id.nullable(),
   entityName: z.string().nullable(),
+  entityShortcode: z.string().nullable(),
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;

@@ -235,7 +235,11 @@ export function LinkExpensesDialog({
                   <TableCell>
                     <EntityInlineLink
                       entity="expense"
-                      data={{ id: row.id, name: row.name }}
+                      data={{
+                        id: row.id,
+                        name: row.name,
+                        shortcode: row.shortcode,
+                      }}
                       truncate
                     />
                   </TableCell>
@@ -253,10 +257,16 @@ export function LinkExpensesDialog({
                     <TradeBadge trade={row.trade} />
                   </TableCell>
                   <TableCell className="truncate">
-                    {row.projectId && row.projectName ? (
+                    {row.projectId &&
+                    row.projectName &&
+                    row.projectShortcode ? (
                       <EntityInlineLink
                         entity="project"
-                        data={{ id: row.projectId, name: row.projectName }}
+                        data={{
+                          id: row.projectId,
+                          name: row.projectName,
+                          shortcode: row.projectShortcode,
+                        }}
                         truncate
                       />
                     ) : (

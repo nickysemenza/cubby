@@ -60,6 +60,10 @@ function FlowSourceContent({
     usage.type === "ingredient" ? usage.ingredient.name : usage.recipe.name;
   const id =
     usage.type === "ingredient" ? usage.ingredient.id : usage.recipe.id;
+  const shortcode =
+    usage.type === "ingredient"
+      ? usage.ingredient.shortcode
+      : usage.recipe.shortcode;
   const quantities = buildDisplayQuantities(usage, NO_GRAMS);
 
   return (
@@ -78,6 +82,7 @@ function FlowSourceContent({
         ) : (
           <EntityPreviewLink
             entity="ingredient"
+            shortcode={shortcode}
             id={id}
             className={dottedEntityLink}
           >

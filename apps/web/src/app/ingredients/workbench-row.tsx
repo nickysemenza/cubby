@@ -75,10 +75,14 @@ export function WorkbenchRow({
   selected: boolean;
   onToggle: () => void;
   suggestion: Suggestion | null;
-  mergeSuggestion: { targetId: string; targetName: string } | null;
+  mergeSuggestion: {
+    targetId: string;
+    targetShortcode: string;
+    targetName: string;
+  } | null;
   onRequestMerge: (pair: {
-    source: { id: string; name: string };
-    target: { id: string; name: string };
+    source: { id: string; shortcode: string; name: string };
+    target: { id: string; shortcode: string; name: string };
   }) => void;
   /** Start expanded (deep-link focus from the Problems page). */
   defaultOpen?: boolean;
@@ -141,9 +145,14 @@ export function WorkbenchRow({
               targetName={mergeSuggestion.targetName}
               onMerge={() =>
                 onRequestMerge({
-                  source: { id: row.id, name: row.name },
+                  source: {
+                    id: row.id,
+                    shortcode: row.shortcode,
+                    name: row.name,
+                  },
                   target: {
                     id: mergeSuggestion.targetId,
+                    shortcode: mergeSuggestion.targetShortcode,
                     name: mergeSuggestion.targetName,
                   },
                 })
@@ -160,8 +169,16 @@ export function WorkbenchRow({
                   const cand = row.mergeCandidates[0];
                   if (cand)
                     onRequestMerge({
-                      source: { id: row.id, name: row.name },
-                      target: { id: cand.id, name: cand.name },
+                      source: {
+                        id: row.id,
+                        shortcode: row.shortcode,
+                        name: row.name,
+                      },
+                      target: {
+                        id: cand.id,
+                        shortcode: cand.shortcode,
+                        name: cand.name,
+                      },
                     });
                 }}
               />

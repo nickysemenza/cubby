@@ -58,7 +58,7 @@ export function BookGroupCard({
       new Map(
         (existingRecipes ?? []).map((r) => [
           normalize(r.title),
-          { id: r.id, sig: r.sig },
+          { id: r.id, shortcode: r.shortcode, sig: r.sig },
         ]),
       ),
     [existingRecipes],
@@ -191,7 +191,7 @@ function RecipeList({
 }: {
   book: Book;
   toggleRecipe: BookHandlers["toggleRecipe"];
-  existingByTitle: Map<string, { id: string; sig: string }>;
+  existingByTitle: Map<string, { id: string; shortcode: string; sig: string }>;
   linkableTitles: ReadonlySet<string>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -267,6 +267,7 @@ function RecipeList({
                 recipe={recipe}
                 status={status}
                 existingId={existing?.id}
+                existingShortcode={existing?.shortcode}
                 selected={book.selected.has(vi.index)}
                 onToggle={() => toggleRecipe(book.source, vi.index)}
                 result={book.results.get(vi.index)}

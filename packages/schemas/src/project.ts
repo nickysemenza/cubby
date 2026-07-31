@@ -292,6 +292,7 @@ export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
  */
 export const projectOptionsOut = z.object({
   id: projectId,
+  shortcode: projectShortcode,
   name: z.string(),
   // Carried so a picker can rank by "was this project running on that date?"
   // without a second round trip — see rankProjectSuggestions. These are the
@@ -416,6 +417,8 @@ export const projectOut = z.object({
   ...projectFields,
   /** Null when the project has no parent, or the parent is gone/soft-deleted. */
   parentProjectName: z.string().nullable(),
+  /** Public id for the parent link — same liveness rule as `parentProjectName`. */
+  parentProjectShortcode: projectShortcode.nullable(),
   /** Live sub-project ids (direct children only). */
   childProjectIds: z.array(projectId),
   blockedByIds: z.array(projectId),
@@ -609,6 +612,7 @@ export const taskOut = z.object({
   subjectProductShortcode: productShortcode.nullable(),
   /** Null when the task has no parent, or the parent is gone/soft-deleted. */
   parentTaskName: z.string().nullable(),
+  parentTaskShortcode: taskShortcode.nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
   /** Live subtask count (incl. done ones) — 0 for a subtask itself (one level). */
@@ -668,6 +672,10 @@ export const blockedReasonSchema = z.object({
   chain: z.array(
     z.object({
       id: z.string(),
+      // Public id for the link. Deliberately a plain string (not the
+      // task/project-branded shortcode schema) — a single node type spans
+      // both entity kinds, discriminated by `type`.
+      shortcode: z.string(),
       name: z.string(),
       status: z.string(),
       type: z.enum(["task", "project"]),

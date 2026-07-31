@@ -76,6 +76,7 @@ import { dbTaskToAPI } from "./helpers";
 /** The subset of a live, non-done task's fields the chain walk needs. */
 type OpenTaskNode = {
   id: TaskId;
+  shortcode: string;
   name: string;
   status: TaskStatus;
   projectId: ProjectId | null;
@@ -84,6 +85,7 @@ type OpenTaskNode = {
 /** The subset of a live, non-done project's fields the chain walk needs. */
 type OpenProjectNode = {
   id: ProjectId;
+  shortcode: string;
   name: string;
   status: ProjectStatus;
 };
@@ -153,7 +155,13 @@ function buildChain(
     if (currentType === "task") {
       const t = tasksById.get(currentId as TaskId);
       if (!t) break;
-      chain.push({ id: t.id, name: t.name, status: t.status, type: "task" });
+      chain.push({
+        id: t.id,
+        shortcode: t.shortcode,
+        name: t.name,
+        status: t.status,
+        type: "task",
+      });
 
       const nextTask = taskEdgesByOwner
         .get(t.id)
@@ -182,7 +190,13 @@ function buildChain(
 
     const p = projectsById.get(currentId as ProjectId);
     if (!p) break;
-    chain.push({ id: p.id, name: p.name, status: p.status, type: "project" });
+    chain.push({
+      id: p.id,
+      shortcode: p.shortcode,
+      name: p.name,
+      status: p.status,
+      type: "project",
+    });
 
     const nextProject = projectEdgesByOwner
       .get(p.id)
@@ -279,7 +293,12 @@ export async function listActionableTasks(
       .from(taskDependency)
       .orderBy(asc(taskDependency.createdAt), asc(taskDependency.id)),
     getDb(db)
-      .select({ id: project.id, name: project.name, status: project.status })
+      .select({
+        id: project.id,
+        shortcode: project.shortcode,
+        name: project.name,
+        status: project.status,
+      })
       .from(project)
       .where(and(notDeleted(project), ne(project.status, "done"))),
     getDb(db)
@@ -303,6 +322,7 @@ export async function listActionableTasks(
       row.id,
       {
         id: row.id,
+        shortcode: row.shortcode,
         name: row.name,
         status: row.status,
         projectId: row.projectId,

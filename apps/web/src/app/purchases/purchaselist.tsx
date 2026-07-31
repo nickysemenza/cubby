@@ -97,10 +97,14 @@ export function PurchaseList() {
         meta: { className: "w-48", mobile: { slot: "subtitle", priority: 10 } },
         cell: (info) => {
           const row = info.row.original;
-          return row.vendorName ? (
+          return row.vendorName && row.vendorShortcode ? (
             <EntityInlineLink
               entity="vendor"
-              data={{ id: row.vendorId, name: row.vendorName }}
+              data={{
+                id: row.vendorId,
+                name: row.vendorName,
+                shortcode: row.vendorShortcode,
+              }}
               truncate
             />
           ) : (

@@ -41,7 +41,11 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
         }),
       );
       if (!location) throw notFound();
-      return;
+      // Hand the CANONICAL code to the component. It must not re-read the raw
+      // URL param: a legacy `/L-A3F2` scan would then query `getByShortcode`
+      // with a non-canonical code, which fails the `LOC-` pattern at zod and
+      // renders an empty page instead of the scan landing.
+      return { shortcode: parsed.shortcode };
     }
 
     throw redirect({
@@ -66,7 +70,7 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
 });
 
 function ShortcodeLandingPage() {
-  const { shortcode } = Route.useParams();
+  const { shortcode } = Route.useLoaderData();
   const api = useTRPC();
   // The loader only reaches this component for a location shortcode (everything
   // else throws redirect) and has already primed this query.

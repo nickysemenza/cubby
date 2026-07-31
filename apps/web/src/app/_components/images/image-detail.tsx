@@ -52,8 +52,8 @@ export function ImageDetail({ image }: ImageDetailProps) {
   const renderEntityLink = () => {
     // Destructure to locals so the guard's narrowing survives into the match
     // closures below (property narrowing on `image` would be lost in callbacks).
-    const { entityType, entityId, entityName } = image;
-    if (!entityType || !entityId || !entityName) {
+    const { entityType, entityId, entityName, entityShortcode } = image;
+    if (!entityType || !entityId || !entityName || !entityShortcode) {
       return (
         <Description as="span" className="italic">
           Not associated with any entity
@@ -67,6 +67,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
           entity="product"
           data={{
             id: entityId,
+            shortcode: entityShortcode,
             name: entityName,
             manufacturer: "",
           }}
@@ -75,25 +76,24 @@ export function ImageDetail({ image }: ImageDetailProps) {
       .with("LOCATION", () => (
         <EntityInlineLink
           entity="location"
-          data={{ id: entityId, name: entityName, type: "room" }}
+          data={{
+            id: entityId,
+            shortcode: entityShortcode,
+            name: entityName,
+            type: "room",
+          }}
         />
       ))
       .with("RECIPE", () => (
         <EntityInlineLink
           entity="recipe"
-          data={{ id: entityId, name: entityName }}
+          data={{ id: entityId, shortcode: entityShortcode, name: entityName }}
         />
       ))
       .with("PROJECT", () => (
-        // KNOWN GAP: `ImageWithEntity.entityId` is a generic polymorphic
-        // reference (packages/schemas/src/image.ts) — a uuid regardless of
-        // owning entity, with no denormalized shortcode. Routed through the
-        // manifest (rather than a hand-rolled `/projects/$id`, which is no
-        // longer a real route) so this at least resolves once `project`
-        // gains a shortcode here; until then it's a dead link either way.
         <Link
           to={entities.project.routes.detail}
-          params={entityDetailParams(entityId)}
+          params={entityDetailParams(entityShortcode)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
@@ -105,17 +105,16 @@ export function ImageDetail({ image }: ImageDetailProps) {
         // returns first — this case exists only for exhaustiveness.
         <Link
           to={entities.cookbook.routes.detail}
-          params={entityDetailParams(entityId)}
+          params={entityDetailParams(entityShortcode)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
         </Link>
       ))
       .with("PURCHASE", () => (
-        // KNOWN GAP: same as PROJECT above.
         <Link
           to={entities.purchase.routes.detail}
-          params={entityDetailParams(entityId)}
+          params={entityDetailParams(entityShortcode)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}

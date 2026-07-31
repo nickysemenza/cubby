@@ -191,6 +191,16 @@ export function findLocationInTree(
   return flattenAllLocations(tree).find((loc) => loc.id === locationId) ?? null;
 }
 
+export function findLocationInTreeByShortcode(
+  tree: InfLocation[] | undefined,
+  shortcode: string | undefined,
+): InfLocation | null {
+  if (!tree || !shortcode) return null;
+  return (
+    flattenAllLocations(tree).find((loc) => loc.shortcode === shortcode) ?? null
+  );
+}
+
 export function isDescendantLocation(
   parent: InfLocation,
   candidateId: string,

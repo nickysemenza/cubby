@@ -264,7 +264,11 @@ const previewNotionSync = protectedProcedure
     const existing = new Map(
       (await getNotionRecipesForDiff(ctx.db)).map((e) => [
         normalizeNotionId(e.pageId),
-        { id: e.id, sig: recipeOutSignature(e.recipe) },
+        {
+          id: e.id,
+          shortcode: e.recipe.shortcode,
+          sig: recipeOutSignature(e.recipe),
+        },
       ]),
     );
     return await Promise.all(
@@ -287,6 +291,7 @@ const previewNotionSync = protectedProcedure
           notionUrl: row.notionUrl,
           status,
           existingId: prior?.id ?? null,
+          existingShortcode: prior?.shortcode ?? null,
           reasons,
           recipe,
         };

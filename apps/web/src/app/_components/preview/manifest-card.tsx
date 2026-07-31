@@ -50,7 +50,12 @@ export type BodyBlock =
     }
   | {
       kind: "products";
-      products: { id: string; name: string; manufacturer: string }[];
+      products: {
+        id: string;
+        shortcode: string;
+        name: string;
+        manufacturer: string;
+      }[];
     };
 
 export type ManifestCardProps = {

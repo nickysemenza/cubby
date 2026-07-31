@@ -147,6 +147,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           data={{
             name: product.ingredient.name,
             id: product.ingredient.id,
+            shortcode: product.ingredient.shortcode,
           }}
         />
       ) : undefined,

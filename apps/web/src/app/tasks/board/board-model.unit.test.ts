@@ -54,6 +54,7 @@ function task(params: {
     subjectProductName: null,
     subjectProductShortcode: null,
     parentTaskId: null,
+    parentTaskShortcode: null,
     parentTaskName: null,
     dueDate: params.dueDate ?? null,
     dueEndDate: null,

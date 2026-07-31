@@ -414,13 +414,11 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
  * actually restores inventory truth (tenet 1), so link straight into the audit
  * session scoped to the offending location rather than to a form.
  */
-function RecountLink({ locationId }: { locationId: string }) {
+function RecountLink({ shortcode }: { shortcode: string }) {
   return (
     <Button
       size="sm"
-      render={
-        <Link to="/inventory/session" search={{ parentId: locationId }} />
-      }
+      render={<Link to="/inventory/session" search={{ parent: shortcode }} />}
       nativeButton={false}
     >
       <ScanBarcode className="mr-1 size-3" />
@@ -887,7 +885,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       ],
       route: entityDetailLink("location", loc.shortcode),
       editLabel: "Open location",
-      customActions: <RecountLink locationId={loc.id} />,
+      customActions: <RecountLink shortcode={loc.shortcode} />,
     }),
   }),
   section({
@@ -924,7 +922,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       details: [createdAgoDetail(item.createdAt)],
       route: entityDetailLink("inventory", item.shortcode),
       editLabel: "Open inventory entry",
-      customActions: <RecountLink locationId={item.location.id} />,
+      customActions: <RecountLink shortcode={item.location.shortcode} />,
     }),
   }),
   section({
@@ -989,7 +987,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       editLabel: "Open inventory entry",
       // Draining Unknown is a recount rooted there — same deep link the other
       // recount detectors offer.
-      customActions: <RecountLink locationId={item.location.id} />,
+      customActions: <RecountLink shortcode={item.location.shortcode} />,
     }),
   }),
   section({

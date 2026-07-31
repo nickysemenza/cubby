@@ -24,6 +24,7 @@ import { EntityInlineLink } from "../EntityInlineLink";
 
 export interface IngredientMergePair {
   id: string;
+  shortcode: string;
   name: string;
 }
 
@@ -223,7 +224,7 @@ export function IngredientMergeDialog({
                   <EntityInlineLink
                     key={a.id}
                     entity="ingredient"
-                    data={{ name: a.name, id: a.id }}
+                    data={{ name: a.name, id: a.id, shortcode: a.shortcode }}
                   />
                 ))
               ) : (
