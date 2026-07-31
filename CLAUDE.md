@@ -11,19 +11,20 @@ The **[Tenets](README.md#tenets)** there are binding on design proposals: invent
 
 ## Production database migrations
 
-The configured PostgreSQL development database is production. Agents are authorized to run `pnpm --filter @cubby/web run db:push` when a schema change is necessary to complete the requested work and the migration has been verified as safe.
+Follow the shared-production-database guidance in [README's worktree section](README.md#worktrees-parallel-sessions) and its [D1 migration workflow](README.md#common-commands). Agents are authorized to run `pnpm --filter @cubby/web run db:push` when a schema change is necessary to complete the requested work and the migration has been verified as safe.
 
 Before pushing:
 
+- Serialize production schema changes: one agent owns the migration through verification, and no push may overlap another worktree or session's schema work. If exclusive ownership cannot be established, wait or ask.
 - Inspect the proposed schema change and current data constraints.
 - Run relevant checks and tests.
 - Confirm the migration will not lose or reinterpret existing data.
 - Reject ambiguous renames, destructive drops, unsafe type changes, and new required columns without a valid default or backfill.
 - Ensure the schema remains compatible with both the currently deployed code and the code being prepared for deployment.
-- Account for concurrent worktrees sharing the production database; re-check the live schema immediately before applying the change.
+- Run `db:push` interactively. If Drizzle asks whether a change is a rename, create, or drop, cancel the push; never choose an option or accept a default until the intent is made unambiguous and its data impact is verified.
 - Use expand → backfill/migrate → deploy → cleanup for incompatible changes.
 
-For D1 changes, generate and apply the migration locally, run the package checks, then apply the remote migration before deploying code that requires it. If migration safety cannot be established from available evidence, stop and ask rather than guessing. After applying a production migration, verify the expected schema and data state and report what changed.
+If migration safety cannot be established from available evidence, stop and ask rather than guessing. After applying a production migration, verify the expected schema and data state and report what changed.
 
 ## Where logic lives (layering)
 
