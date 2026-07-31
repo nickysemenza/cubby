@@ -11,7 +11,7 @@ import {
   ReceiptText,
   Scale,
 } from "lucide-react";
-import { type FC, useMemo, useState } from "react";
+import { type FC, useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ExpenseList } from "~/app/projects/shared";
@@ -26,11 +26,13 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
+import { WithVendorShortcodeSearch } from "../_components/combobox/with-vendor-search";
 import {
   type DetailSection,
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
@@ -43,7 +45,6 @@ import {
 } from "./purchase-reconciliation";
 
 const NO_EXPENSES: ExpenseOut[] = [];
-const NO_VENDOR_OPTIONS: Array<{ value: string; label: string }> = [];
 
 /**
  * One vendor transaction: what the paperwork said (`statedTotal`, documents) and
@@ -58,17 +59,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
 
   const { data: expenses = NO_EXPENSES } = useQuery(
     api.purchase.expenses.queryOptions(purchase.id),
-  );
-
-  // Bounded roster — the vendor is a required FK, so this is a swap, never a clear.
-  const vendorOptionsQuery = useQuery(api.vendor.options.queryOptions());
-  const vendorOptions = useMemo(
-    () =>
-      vendorOptionsQuery.data?.map(({ id, name }) => ({
-        value: id,
-        label: name,
-      })) ?? NO_VENDOR_OPTIONS,
-    [vendorOptionsQuery.data],
   );
 
   const updateMutation = useUpdateMutation({
@@ -106,27 +96,34 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     {
       label: "Vendor",
       value: (
-        <EditableCell
-          value={purchase.vendorId}
-          config={{ type: "select", options: vendorOptions }}
+        <EditableEntityCell
+          value={
+            purchase.vendorId && purchase.vendorName
+              ? {
+                  id: purchase.vendorId,
+                  shortcode: purchase.vendorId,
+                  name: purchase.vendorName,
+                }
+              : null
+          }
+          label="vendor"
+          trigger="pencil"
           onSave={async (vendorId) => {
-            // Required field — a cleared select is a no-op, not a null write.
             if (!vendorId) return;
-            // Already a `VendorId`: the cell's value came off
-            // `purchase.vendorId`, so the branded type rides through onSave.
             await updateMutation.mutateAsync({
               id: purchase.id,
               data: { vendorId },
             });
           }}
+          SearchProvider={WithVendorShortcodeSearch}
           renderValue={(value) =>
-            value && purchase.vendorName && purchase.vendorId ? (
+            value ? (
               <EntityInlineLink
                 entity="vendor"
                 data={{
-                  id: value,
-                  name: purchase.vendorName,
-                  shortcode: purchase.vendorId,
+                  id: value.id,
+                  name: value.name,
+                  shortcode: value.id,
                 }}
                 compact
               />

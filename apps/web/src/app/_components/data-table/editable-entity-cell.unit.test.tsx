@@ -78,7 +78,7 @@ const openCombobox = () => {
 const clickDropdownItem = (name: string) => {
   const popup = document.querySelector("[data-combobox-popup]");
   if (!(popup instanceof HTMLElement)) throw new Error("dropdown not open");
-  fireEvent.click(within(popup).getByRole("button", { name }));
+  fireEvent.click(within(popup).getByRole("option", { name }));
 };
 
 describe("EditableEntityCell", () => {
@@ -178,6 +178,10 @@ describe("EditableEntityCell", () => {
 
     enterEditMode();
 
+    // The first Escape closes the modal combobox surface, exposing the cell
+    // editor controls again. The explicit ✗ then cancels the editor.
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+
     const cancelButton = getCancelButton();
     expect(cancelButton).toBeDefined();
     fireEvent.click(cancelButton as HTMLElement);
@@ -189,7 +193,7 @@ describe("EditableEntityCell", () => {
     expect(screen.getByTestId("display")).toHaveTextContent("Pantry");
   });
 
-  it("clearable: toggling the selected item off saves null immediately", async () => {
+  it("clearable: the explicit clear control saves null immediately", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EditableEntityCell
@@ -204,8 +208,7 @@ describe("EditableEntityCell", () => {
 
     enterEditMode();
     openCombobox();
-    // Clicking the already-selected item toggles selection to null → clears.
-    clickDropdownItem("Pantry");
+    fireEvent.click(screen.getByRole("button", { name: "Clear location" }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1);
@@ -217,7 +220,7 @@ describe("EditableEntityCell", () => {
     });
   });
 
-  it("not clearable: toggling the selected item off is a no-op cancel", async () => {
+  it("not clearable: has no clear control and reselecting is a no-op", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EditableEntityCell
@@ -294,7 +297,7 @@ describe("EditableEntityCell", () => {
     openCombobox();
     const popup = document.querySelector("[data-combobox-popup]");
     if (popup instanceof HTMLElement) {
-      fireEvent.click(within(popup).getByRole("button", { name: "Garage" }));
+      fireEvent.click(within(popup).getByRole("option", { name: "Garage" }));
     }
     expect(onSave).toHaveBeenCalledTimes(1);
 

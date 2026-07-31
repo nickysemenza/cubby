@@ -20,8 +20,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { DialogCompatibleCombobox } from "~/app/_components/combobox/combobox-dialog";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import {
   WithIngredientSearch,
   WithProductSearch,
@@ -679,7 +679,8 @@ export function SessionCaptureActions({
                 onCreateNew,
                 onOpenChange,
               }) => (
-                <DialogCompatibleCombobox
+                <EntityPicker
+                  entity="ingredient"
                   label="ingredient"
                   items={items}
                   onSearchChange={onSearchChange}
@@ -770,7 +771,8 @@ function SuggestionProductCombobox({
   }, [itemName, onSearchChange]);
 
   return (
-    <DialogCompatibleCombobox
+    <EntityPicker
+      entity="product"
       label="product"
       items={items}
       onSearchChange={onSearchChange}
@@ -856,6 +858,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
               isLoading={isLoading}
               onCreateNew={onCreateNew}
               onOpenChange={onOpenChange}
+              entity="product"
             />
           )}
         </WithProductSearch>

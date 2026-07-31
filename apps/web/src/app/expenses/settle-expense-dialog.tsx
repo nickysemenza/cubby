@@ -1,3 +1,4 @@
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   costTypeSchema,
@@ -10,7 +11,8 @@ import { format } from "date-fns";
 import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { tradeOptions } from "~/app/projects/shared";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -69,7 +71,6 @@ export function SettleExpenseDialog({
   expense,
 }: SettleExpenseDialogProps) {
   const api = useTRPC();
-  const { options: projectOptions } = useProjectOptions();
 
   const defaultValues = useMemo<SettleExpenseValues>(
     () => ({
@@ -164,12 +165,13 @@ export function SettleExpenseDialog({
           label="Trade"
           options={tradeOptions}
         />
-        <SelectField
+        <EntityValueField<SettleExpenseValues, ProjectShortcode>
           form={form}
           name="projectId"
+          entity="project"
           label="Project"
-          options={projectOptions}
-          nullable
+          SearchProvider={WithProjectSearch}
+          clearable
         />
         {/* Roster picker, not free text — see `VendorField`. */}
         <VendorField form={form} name="vendor" label="Vendor" />

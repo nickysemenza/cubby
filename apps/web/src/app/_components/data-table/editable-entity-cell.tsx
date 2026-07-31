@@ -6,8 +6,8 @@ import { useCallback, useState } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
-import type { ComboboxItem } from "../combobox/combobox-types";
+import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
+import { EntityPicker } from "../combobox/entity-picker";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
@@ -31,7 +31,7 @@ export interface EditableEntityCellProps<TId extends string> {
   /** WithLocationSearch / WithIngredientSearch / ... — injected so unit tests can stub it. */
   SearchProvider: (props: WithEntitySearchProps<TId>) => React.ReactNode;
   /** Combobox placeholder noun, e.g. "location", "ingredient". */
-  label: string;
+  label: PickerEntity;
   /** Allow saving null (clear the relation). Without it, an empty selection is a no-op cancel. */
   clearable?: boolean;
   /** Hide rows from the dropdown (e.g. a location can't be its own parent). */
@@ -53,7 +53,7 @@ export interface EditableEntityCellProps<TId extends string> {
  * Editable cell for a single related entity, backed by an async entity search.
  * Sibling of `EditableCell` (which only supports static option lists) — same
  * trigger / overlay / commit-on-pick / optimistic-display semantics, but the
- * editor is a `DialogCompatibleCombobox` fed by a `With*Search` render-prop
+ * editor is the shared Base UI `EntityPicker`, fed by a `With*Search` render-prop
  * provider.
  */
 export function EditableEntityCell<TId extends string>({
@@ -136,7 +136,7 @@ export function EditableEntityCell<TId extends string>({
  * Picking the SAME item, or clearing a non-clearable relation, closes without a
  * write; a save rejection toasts and keeps the editor open with the attempted
  * selection intact. The ✗ button stays as the explicit mouse cancel affordance
- * (Escape via the overlay also works). `DialogCompatibleCombobox` closes its
+ * (Escape via the overlay also works). `EntityPicker` closes its
  * own dropdown on select, so the whole editor folds away in one gesture.
  */
 function EditableEntityEditor<TId extends string>({
@@ -152,14 +152,14 @@ function EditableEntityEditor<TId extends string>({
   value: ComboboxItem<TId> | null;
   onSave: (id: TId | null) => Promise<void>;
   SearchProvider: (props: WithEntitySearchProps<TId>) => React.ReactNode;
-  label: string;
+  label: PickerEntity;
   clearable?: boolean;
   filterItems?: (item: ComboboxItem<TId>) => boolean;
   onCancel: () => void;
   onCommit: (value: ComboboxItem<TId> | null) => void;
 }) {
   const [selected, setSelected] = useState<ComboboxItem<TId> | null>(value);
-  // DialogCompatibleCombobox closes its dropdown synchronously on click (before
+  // EntityPicker closes its dropdown synchronously on click (before
   // the awaited save resolves), so a fast second pick would otherwise fire a
   // concurrent onSave whose last-to-resolve wins regardless of click order. The
   // pointer-events gate on the wrapper below is the visual affordance;
@@ -190,8 +190,7 @@ function EditableEntityEditor<TId extends string>({
 
   return (
     <div className="inline-flex w-full items-center gap-1">
-      {/* Mid-save pick gate — mirrors EditableDateEditor's isPending wrapper
-          (DialogCompatibleCombobox has no disabled prop to thread instead). */}
+      {/* Mid-save pick gate — mirrors EditableDateEditor's isPending wrapper. */}
       <div
         className={cn(
           "min-w-0 flex-1",
@@ -206,7 +205,8 @@ function EditableEntityEditor<TId extends string>({
             onCreateNew,
             onOpenChange,
           }) => (
-            <DialogCompatibleCombobox
+            <EntityPicker
+              entity={label}
               label={label}
               items={filterItems ? items.filter(filterItems) : items}
               onSearchChange={onSearchChange}
@@ -219,6 +219,8 @@ function EditableEntityEditor<TId extends string>({
               // search input is internal state, so a type-to-edit seed char isn't
               // threaded here.
               autoFocus
+              compact
+              clearable={clearable}
             />
           )}
         </SearchProvider>

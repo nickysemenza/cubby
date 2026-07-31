@@ -16,9 +16,10 @@ import {
 import { useMemo } from "react";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
+import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { tradeOptions } from "~/app/projects/shared";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
@@ -75,7 +76,6 @@ export function CreateTaskDialog({
   presetSubjectProductName,
 }: CreateTaskDialogProps) {
   const api = useTRPC();
-  const { options: projectOptions } = useProjectOptions();
 
   const defaultValues = useMemo<QuickAddTaskValues>(
     () => ({
@@ -151,12 +151,13 @@ export function CreateTaskDialog({
             options={tradeOptions}
             nullable
           />
-          <SelectField
+          <EntityValueField<QuickAddTaskValues, ProjectShortcode>
             form={form}
             name="projectId"
+            entity="project"
             label="Project"
-            options={projectOptions}
-            nullable
+            SearchProvider={WithProjectSearch}
+            clearable
           />
           <ComboboxFieldWithSearch
             form={form}

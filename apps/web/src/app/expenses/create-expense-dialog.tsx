@@ -8,8 +8,9 @@ import { format } from "date-fns";
 import { useMemo } from "react";
 import { Controller } from "react-hook-form";
 import { z } from "zod";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { tradeOptions } from "~/app/projects/shared";
 import { Row } from "~/components/layout";
 import { Switch } from "~/components/ui/switch";
@@ -82,7 +83,6 @@ export function CreateExpenseDialog({
   intent = "expense",
 }: CreateExpenseDialogProps) {
   const api = useTRPC();
-  const { options: projectOptions } = useProjectOptions();
   const isDisposition = intent === "disposition";
 
   const defaultValues = useMemo<QuickAddExpenseValues>(
@@ -230,12 +230,13 @@ export function CreateExpenseDialog({
             label="Order #"
             placeholder="Vendor order #"
           />
-          <SelectField
+          <EntityValueField<QuickAddExpenseValues, ProjectShortcode>
             form={form}
             name="projectId"
+            entity="project"
             label="Project"
-            options={projectOptions}
-            nullable
+            SearchProvider={WithProjectSearch}
+            clearable
           />
         </>
       )}
