@@ -1,6 +1,30 @@
-[README.md](README.md) is the canonical source of truth for the project — architecture, monorepo layout, deploy targets, commands, entities, environment, and the roadmap. Read it first. This file contains only rules and anti-patterns for the Claude agent. When you need context that isn't a rule, go to README rather than embedding the answer here.
+[README.md](README.md) is the canonical source of truth for the project — architecture, monorepo layout, deploy targets, commands, entities, environment, and the roadmap. Read it first. This file contains only rules and anti-patterns for coding agents. When you need context that isn't a rule, go to README rather than embedding the answer here.
 
 The **[Tenets](README.md#tenets)** there are binding on design proposals: inventory never auto-decrements (no cook-and-consume), `fdc_id` is product-only (nutrition goes `ingredient → product → fdc_id`), rare interactive work stays off the background queue, and all money lives on `Expense` (`purchase.statedTotal` is never summed into spend). Don't propose a feature that contradicts one — say it's out of scope and why.
+
+## Agent workflow
+
+- Use subagents proactively when a task has two or more independent, bounded workstreams and delegation would materially improve speed or quality.
+- Prefer subagents for codebase exploration, test execution, log analysis, documentation research, and independent review. Keep architecture decisions, implementation coordination, and final verification with the main agent.
+- Do not delegate small or inherently sequential tasks. Do not let multiple agents edit overlapping files concurrently; use isolated worktrees and disjoint ownership for parallel write-heavy work.
+- For change, build, and fix requests, make the requested in-scope changes and validate them proportionally. Run targeted checks first; run `pnpm run check` plus relevant tests for broad or cross-layer changes.
+
+## Production database migrations
+
+Follow the shared-production-database guidance in [README's worktree section](README.md#worktrees-parallel-sessions) and its [D1 migration workflow](README.md#common-commands). Agents are authorized to run `pnpm --filter @cubby/web run db:push` when a schema change is necessary to complete the requested work and the migration has been verified as safe.
+
+Before pushing:
+
+- Serialize production schema changes: one agent owns the migration through verification, and no push may overlap another worktree or session's schema work. If exclusive ownership cannot be established, wait or ask.
+- Inspect the proposed schema change and current data constraints.
+- Run relevant checks and tests.
+- Confirm the migration will not lose or reinterpret existing data.
+- Reject ambiguous renames, destructive drops, unsafe type changes, and new required columns without a valid default or backfill.
+- Ensure the schema remains compatible with both the currently deployed code and the code being prepared for deployment.
+- Run `db:push` interactively. If Drizzle asks whether a change is a rename, create, or drop, cancel the push; never choose an option or accept a default until the intent is made unambiguous and its data impact is verified.
+- Use expand → backfill/migrate → deploy → cleanup for incompatible changes.
+
+If migration safety cannot be established from available evidence, stop and ask rather than guessing. After applying a production migration, verify the expected schema and data state and report what changed.
 
 ## Where logic lives (layering)
 
