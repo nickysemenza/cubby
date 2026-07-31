@@ -638,6 +638,16 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 ## Architecture / engineering
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
+- [ ] **Budget-aware cursor pagination for wide MCP tool results.** MCP's native
+  opaque-cursor pagination covers discovery operations such as `tools/list`, not
+  arbitrary `tools/call` results, and `CallToolResult` carries no host context-window
+  budget. Add tool-level `cursor` / `nextCursor` fields to the shared list plumbing,
+  starting with `list_expenses`: use a stable keyset cursor so variable page sizes
+  cannot skip or duplicate rows; treat `pageSize` as an upper bound while a
+  configurable compact-JSON byte budget chooses the actual page; consume a future
+  client budget hint if MCP standardizes one, otherwise keep the conservative
+  server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
+  explicitly rather than silently restarting from page one.
 
 ### Finish the shortcode cutover: retire the id translation layer
 

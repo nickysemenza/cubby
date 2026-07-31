@@ -196,7 +196,7 @@ function structuredSuccess(
   const parsed = outputSchema.parse(data);
   return {
     structuredContent: parsed as Record<string, unknown>,
-    content: [{ type: "text", text: JSON.stringify(parsed, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify(parsed) }],
   };
 }
 
