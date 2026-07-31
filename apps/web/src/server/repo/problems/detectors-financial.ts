@@ -17,6 +17,7 @@ import type {
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
  * must produce a defect, never make the complete Problems scan unavailable. */
@@ -143,14 +144,20 @@ export async function findPurchaseFinancialSettlementMismatches(
     ) ft ON TRUE
     WHERE p."deletedAt" IS NULL
   `);
-  const cents = (n: number) => Math.round(Number(n) * 100);
   return result.rows.flatMap((row) => {
-    const outstanding = Number(row.outstandingTransactionCount);
-    const comparable =
-      Number(row.unpriced) === 0 && Number(row.transactionCount) > 0;
-    const total =
-      outstanding > 0 ? Number(row.projectedTotal) : Number(row.postedTotal);
-    if (!comparable || cents(total) === cents(Number(row.expenseTotal)))
+    const financialReconciliation = calculateFinancialReconciliation({
+      expenseTotal: row.expenseTotal,
+      unpricedExpenseCount: row.unpriced,
+      transactionCount: row.transactionCount,
+      postedTransactionCount: row.postedTransactionCount,
+      outstandingTransactionCount: row.outstandingTransactionCount,
+      postedTotal: row.postedTotal,
+      projectedTotal: row.projectedTotal,
+    });
+    if (
+      financialReconciliation.status !== "mismatch" ||
+      financialReconciliation.delta === null
+    )
       return [];
     return [
       {
@@ -158,13 +165,9 @@ export async function findPurchaseFinancialSettlementMismatches(
         vendorName: row.vendorName,
         expenseTotal: Number(row.expenseTotal),
         financialReconciliation: {
+          ...financialReconciliation,
           status: "mismatch" as const,
-          transactionCount: Number(row.transactionCount),
-          postedTransactionCount: Number(row.postedTransactionCount),
-          outstandingTransactionCount: outstanding,
-          postedTotal: Number(row.postedTotal),
-          projectedTotal: Number(row.projectedTotal),
-          delta: total - Number(row.expenseTotal),
+          delta: financialReconciliation.delta,
         },
       },
     ];
