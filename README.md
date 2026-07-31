@@ -262,13 +262,20 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 
 ### Worktrees (parallel sessions)
 
-Claude Code can run parallel sessions, each in its own git worktree under
-`.claude/worktrees/<name>`. A few things to know:
+Claude Code and Codex can run parallel sessions in isolated git worktrees.
+Claude keeps managed worktrees under `.claude/worktrees/<name>`; Codex keeps
+them under `$CODEX_HOME/worktrees`. A few things to know:
 
-- **Fresh worktree setup:** `pnpm install && pnpm run wasm`. Gitignored env
-  (`apps/web/.env`, `.env.local`) is copied in automatically via
+- **Fresh worktree setup:** Codex and Claude both run
+  [scripts/setup-agent-environment.mjs](scripts/setup-agent-environment.mjs)
+  automatically. Codex calls it from
+  [.codex/environments/environment.toml](.codex/environments/environment.toml);
+  Claude calls it for new linked-worktree sessions from
+  [.claude/settings.json](.claude/settings.json). It installs only when the
+  workspace lockfile is not current, then builds WASM only when missing or stale.
+  Gitignored env (`apps/web/.env`, `.env.local`) is copied automatically via
   [.worktreeinclude](.worktreeinclude); `node_modules` and the gitignored WASM
-  package (`packages/wasm/*`) are not, so build them once.
+  package (`packages/wasm/*`) are not copied.
 - **Builds are shared, not cold.** The `wasm` script points `CARGO_TARGET_DIR` at a
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
   compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the
@@ -288,10 +295,12 @@ Claude Code can run parallel sessions, each in its own git worktree under
   so it fails loudly rather than drifting). Worktree dev servers auto-pick a free
   port — the preview harness via `autoPort` (injects `PORT`), or a terminal
   `pnpm dev` via vite's auto-increment.
-- **Previewing a worktree:** start a session with the **worktree folder itself**
-  selected as the project (`<repo>/.claude/worktrees/<name>`), not by entering a
-  worktree from inside the main-rooted session — preview resolves `launch.json` from
-  the folder you opened, so opening the worktree serves its branch.
+- **Previewing a worktree:** in Claude, start with the **worktree folder itself**
+  selected as the project (`<repo>/.claude/worktrees/<name>`) so preview resolves
+  that checkout's `launch.json`. In Codex, start the task in Worktree mode and use
+  the `Web` or `Dev stack` action from the local environment. Any linked worktree
+  without an injected `PORT` auto-picks a free port; the main checkout remains
+  strict on `:3000`.
 - **Shared services:** docker-compose (Postgres/IntegresQL/Jaeger) binds fixed host
   ports — `docker-compose up -d` once from any checkout and all worktrees reuse them
   for `test`/`test:e2e`.
@@ -408,11 +417,15 @@ themselves through dynamic client registration. There is no API key and no
   `https://cubby.nickysemenza.com/api/mcp`. No query string, no headers. It
   registers itself, sends you through sign-in and the `/oauth/consent` screen,
   and stores the resulting token.
-- **Claude Code** — the `cubby` entry in `.mcp.json` is just `{"type": "http",
-  "url": "..."}`. Authorize once with `claude mcp login cubby` (or `/mcp` →
+- **Claude Code** — the `cubby-localhost` entry in `.mcp.json` is just `{"type": "http",
+  "url": "..."}`. Authorize once with `claude mcp login cubby-localhost` (or `/mcp` →
   authenticate); the refresh token keeps non-interactive runs (`claude -p`, the
   Agent SDK) working afterwards. **Do not add an `Authorization` header** — a
   static header suppresses the OAuth flow, and the connection just fails.
+- **Codex** — `.codex/config.toml` registers `cubby-localhost` as an OAuth HTTP
+  MCP server. With the web app running, authorize once with
+  `codex mcp login cubby-localhost`; the desktop app, CLI, and IDE extension
+  share the stored login.
 
 Preview deploys are not supported: each gets a unique
 `<prefix>-cubby.nicky.workers.dev` host, and the accepted token audience is

@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm",
+            "args": [
+              "--dir",
+              "${CLAUDE_PROJECT_DIR}",
+              "run",
+              "agent:setup",
+              "--",
+              "--worktree-only"
+            ],
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

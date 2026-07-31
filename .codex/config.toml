@@ -1,0 +1,6 @@
+# Codex natively discovers AGENTS.md. Treat CLAUDE.md as the per-directory
+# fallback so work below apps/web also picks up apps/web/CLAUDE.md.
+project_doc_fallback_filenames = ["CLAUDE.md"]
+
+[mcp_servers.cubby-localhost]
+url = "http://localhost:3000/api/mcp"

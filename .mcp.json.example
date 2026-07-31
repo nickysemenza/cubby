@@ -1,24 +1,8 @@
 {
   "mcpServers": {
-    "_comment_cubby": "OAuth 2.1: no key, no headers. Sign in once with `claude mcp login cubby` (or /mcp -> authenticate); the token refreshes itself after that. An Authorization header here would suppress the OAuth flow entirely.",
-    "cubby": {
+    "cubby-localhost": {
       "type": "http",
       "url": "http://localhost:3000/api/mcp"
-    },
-    "postgres": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-postgres",
-        "postgresql://recipehub:example@localhost:5555/recipes"
-      ]
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
     }
   }
 }

@@ -7,6 +7,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
+import { isGitWorktree } from "./tooling/git-worktree";
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -105,7 +106,7 @@ export default defineConfig(async () => {
 
   // Multi-worktree dev-server port resolution (see `server.port` below).
   const serverPort = Number(process.env.PORT) || 0;
-  const inWorktree = process.cwd().includes("/.claude/worktrees/");
+  const inWorktree = isGitWorktree();
 
   return {
     envDir: ".", // Explicitly load .env from this directory
@@ -154,10 +155,10 @@ export default defineConfig(async () => {
     server: {
       host: "0.0.0.0",
       // Port resolution for multi-worktree dev (see README "Worktrees"):
-      // - The Claude Code preview harness (autoPort) injects PORT when it picks a
-      //   free port — bind exactly that (strictPort) so the preview attaches.
+      // - A preview harness can inject PORT when it picks a free port — bind
+      //   exactly that (strictPort) so the preview attaches.
       // - No PORT: the main checkout is 3000-or-fail-loudly (never silent-drift);
-      //   a worktree's terminal `pnpm dev` auto-finds a free port instead.
+      //   any linked Git worktree auto-finds a free port instead.
       port: serverPort || 3000,
       strictPort: serverPort ? true : !inWorktree,
       allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
