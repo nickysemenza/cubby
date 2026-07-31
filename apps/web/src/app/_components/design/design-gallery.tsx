@@ -13,6 +13,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   type CookbookPreview,
@@ -95,7 +96,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
-import { FilterableCombobox } from "~/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -901,10 +901,11 @@ export function DesignGallery() {
           </div>
           <div className="space-y-1.5">
             <Label>Combobox</Label>
-            <FilterableCombobox
+            <StaticPicker
               items={productCategoryValues.map((c) => ({ value: c, label: c }))}
               value={comboValue}
               onValueChange={setComboValue}
+              label="product category"
               placeholder="Pick a category"
             />
           </div>

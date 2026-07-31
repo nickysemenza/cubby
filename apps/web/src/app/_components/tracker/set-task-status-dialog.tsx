@@ -1,9 +1,9 @@
 import type { TaskStatus } from "@cubby/schemas/project";
 import { useState } from "react";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { taskStatusOptions } from "~/app/tasks/task-options";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { FilterableCombobox } from "~/components/ui/combobox";
 
 interface SetTaskStatusItem {
   id: string;
@@ -61,10 +61,11 @@ export function SetTaskStatusDialog({
       isPending={isPending}
     >
       <FormFieldGroup label="Status">
-        <FilterableCombobox
+        <StaticPicker
           items={taskStatusOptions}
           value={status}
           onValueChange={setStatus}
+          label="status"
           placeholder="Select a status…"
         />
       </FormFieldGroup>

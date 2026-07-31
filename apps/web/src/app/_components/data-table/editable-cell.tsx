@@ -7,14 +7,12 @@ import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import {
-  FilterableCombobox,
-  type FilterableComboboxItem,
-} from "~/components/ui/combobox";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
+import { StaticPicker } from "../combobox/static-picker";
 import { DatePickerInput } from "../date-picker-input";
 import {
   showAmountAndPrice,
@@ -625,16 +623,16 @@ function EditableSelectEditor({
       className="inline-flex items-center gap-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <FilterableCombobox
+      <StaticPicker
         items={options}
         value={value}
         onValueChange={(next) => void handlePick(next)}
+        label={placeholder}
         placeholder={placeholder}
         disabled={isPending}
         className="w-48"
-        // Focus-only seeding: the combobox filters its own internal input, so a
-        // type-to-edit seed char isn't threaded here (documented focus-only).
         autoFocus
+        compact
       />
       <Button
         size="icon"

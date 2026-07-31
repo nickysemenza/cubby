@@ -224,11 +224,10 @@ describe("EditableCell select editor (commit-on-pick)", () => {
       />,
     );
 
-  /** Enter edit mode, then open the combobox dropdown via its chevron trigger
-   * (autoFocus only focuses the filter input; it doesn't auto-open). */
+  /** Enter edit mode; the shared picker auto-opens ready for selection. */
   const openDropdown = async () => {
     fireEvent.click(screen.getByRole("button"));
-    fireEvent.click(await screen.findByRole("button", { name: /open/i }));
+    await screen.findByRole("option", { name: "Apple" });
   };
 
   it("saves on pick and closes — no ✓ confirm step", async () => {
@@ -266,7 +265,7 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     fireEvent.click(screen.getByRole("button"));
     await screen.findByRole("combobox");
 
-    const buttons = screen.getAllByRole("button");
+    const buttons = screen.getAllByRole("button", { hidden: true });
     expect(buttons.some((b) => b.querySelector("svg.lucide-check"))).toBe(
       false,
     );

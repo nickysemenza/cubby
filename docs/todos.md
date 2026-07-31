@@ -638,6 +638,15 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 ## Architecture / engineering
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
+- [ ] **Selection-control consolidation — non-form phase.** Form and inline-edit
+  pickers share the Base UI assignment-picker shell; remaining selectors are
+  intentionally specialized. If visual or keyboard inconsistencies remain painful,
+  migrate table/header filters, pagination, gallery and workflow-scope filters, plus
+  the remaining native selects in activity, cookbook, and background-jobs surfaces.
+  Treat the ReUI advanced-filter builder as a separate high-risk phase: its static/
+  async, single/multi, selected-first, nested-menu, and max-selection paths should
+  converge on Base UI behavior before deleting its manual keyboard handling.
+  Command palette and action menus are different interaction types and remain separate.
 - [ ] **Budget-aware cursor pagination for wide MCP tool results.** MCP's native
   opaque-cursor pagination covers discovery operations such as `tools/list`, not
   arbitrary `tools/call` results, and `CallToolResult` carries no host context-window
