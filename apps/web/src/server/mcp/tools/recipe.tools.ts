@@ -11,7 +11,6 @@ import {
   recipeAvailabilityMcpOut,
   recipeCostingExplainMcpOut,
   recipeDetailMcpOut,
-  recipeIdOut,
   recipeMcpListOut,
   recipeRecomputeMcpOut,
   recipesUsingIngredientOut,
@@ -98,6 +97,31 @@ const recipeUpdateMcpInput = mcpRecipeUpdateInput.extend({
 });
 
 type McpRecipeSection = z.infer<typeof mcpRecipeSectionInput>;
+
+/**
+ * `recipeIdOut` (`{id: recipeId}`) is a bare uuid wrapper — `import_recipe`/
+ * `create_recipe_from_text` predate the cutover, and `caller.recipe.
+ * insertImport`'s own output (`recipeImportIdOut`) carries no shortcode
+ * either, so one is resolved via `shortcode.lookupMany` in each handler
+ * below rather than edited in packages/schemas.
+ */
+const recipeShortcodeOut = z.object({ shortcode: idParam("recipe") });
+
+/**
+ * `recipesUsingIngredientOut` echoes the seed `ingredientId` (a raw uuid, no
+ * shortcode sibling) and each `recipes[]` row's own `id` (which DOES already
+ * have a `shortcode` sibling from the previous cutover pass, on
+ * `recipeWithUsagesMcpFields`). The seed needs no lookup — the handler
+ * already has the shortcode it was called with, before resolving it to a
+ * uuid.
+ */
+const recipesUsingIngredientMcpOut = z.object({
+  ingredientShortcode: idParam("ingredient"),
+  count: recipesUsingIngredientOut.shape.count,
+  recipes: z.array(
+    recipesUsingIngredientOut.shape.recipes.element.omit({ id: true }),
+  ),
+});
 
 /**
  * Resolve every ingredient/recipe shortcode inside a recipe's `sections[]` to
@@ -204,7 +228,7 @@ export function registerRecipeTools(server: McpServer) {
     description:
       "Reverse lookup: given an ingredient ID, return every recipe that uses it.",
     inputSchema: { id: idParam("ingredient") },
-    outputSchema: recipesUsingIngredientOut,
+    outputSchema: recipesUsingIngredientMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
@@ -212,18 +236,23 @@ export function registerRecipeTools(server: McpServer) {
         id: await resolvePublicId(caller, "ingredient", params.id),
       })) as RecipeUsage[];
       const recipes = Object.values(groupBy(usages, (u) => u.recipe.id)).map(
-        (rows) => ({
-          ...slimRecipe(rows[0]!.recipe),
-          usages: rows.map((u) => ({
-            lineId: u.id,
-            sectionName: u.sectionName ?? null,
-            amounts: u.amounts,
-            rawLine: u.rawLine ?? null,
-            modifier: u.modifier ?? null,
-          })),
-        }),
+        (rows) => {
+          const { id: _id, ...recipe } = slimRecipe(rows[0]!.recipe);
+          return {
+            ...recipe,
+            usages: rows.map((u) => ({
+              lineId: u.id,
+              sectionName: u.sectionName ?? null,
+              amounts: u.amounts,
+              rawLine: u.rawLine ?? null,
+              modifier: u.modifier ?? null,
+            })),
+          };
+        },
       );
-      return { ingredientId: params.id, count: recipes.length, recipes };
+      // `params.id` is the shortcode the tool was called with — the seed's
+      // own uuid never enters this handler, so no reverse lookup is needed.
+      return { ingredientShortcode: params.id, count: recipes.length, recipes };
     },
   });
 
@@ -240,14 +269,19 @@ export function registerRecipeTools(server: McpServer) {
   registerRouterTool(server, {
     name: "import_recipe",
     description:
-      "Scrape a recipe from a URL and save it in one step. Returns the new recipe's id.",
+      "Scrape a recipe from a URL and save it in one step. Returns the new recipe's shortcode.",
     inputSchema: { url: scrapeRecipeInput },
-    outputSchema: recipeIdOut,
+    outputSchema: recipeShortcodeOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {
       const imported = await caller.recipe.scrape(params.url);
       const result = await caller.recipe.insertImport(imported);
-      return { id: result.id };
+      const [ref] = await caller.shortcode.lookupMany({
+        refs: [{ entity: "recipe", id: result.id }],
+      });
+      // Non-null: the row was just inserted in this same request, so the
+      // lookup can't miss.
+      return { shortcode: ref!.shortcode! };
     },
   });
 
@@ -256,7 +290,7 @@ export function registerRecipeTools(server: McpServer) {
     description:
       "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs.",
     inputSchema: mcpRecipeCreateFromTextInput.shape,
-    outputSchema: recipeIdOut,
+    outputSchema: recipeShortcodeOut,
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
@@ -276,7 +310,12 @@ export function registerRecipeTools(server: McpServer) {
         ...(input.servings != null ? { servings: input.servings } : {}),
       };
       const result = await caller.recipe.insertImport(importRecipe);
-      return { id: result.id };
+      const [ref] = await caller.shortcode.lookupMany({
+        refs: [{ entity: "recipe", id: result.id }],
+      });
+      // Non-null: the row was just inserted in this same request, so the
+      // lookup can't miss.
+      return { shortcode: ref!.shortcode! };
     },
   });
 

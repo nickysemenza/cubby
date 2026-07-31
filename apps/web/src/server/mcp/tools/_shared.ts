@@ -2,7 +2,6 @@ import { deletedCountOut } from "@cubby/schemas/common";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
-  type IngredientMcpOut,
   type IngredientOut,
   ingredientMcpOut,
 } from "@cubby/schemas/ingredient";
@@ -11,11 +10,7 @@ import {
   inventoryMcpOut,
 } from "@cubby/schemas/inventory";
 import { type LocationOut, locationMcpOut } from "@cubby/schemas/location";
-import {
-  type McpUsdaFoodOut,
-  mcpUsdaFoodListItemOut,
-  mcpUsdaFoodOut,
-} from "@cubby/schemas/mcp";
+import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
 import { type MealOut, mealMcpOut } from "@cubby/schemas/meal";
 import { mcpListInputShape } from "@cubby/schemas/pagination";
 import {
@@ -32,11 +27,7 @@ import {
   taskOut,
 } from "@cubby/schemas/project";
 import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
-import {
-  type RecipeMcpOut,
-  type RecipeTopLevel,
-  recipeMcpOut,
-} from "@cubby/schemas/recipe";
+import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
 import type { foodSummary } from "@cubby/usda-schemas";
@@ -419,59 +410,68 @@ function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
 }
 
 type LocationRow = LocationOut & {
-  parent?: Pick<LocationOut, "id" | "name"> | null;
-  children?: Array<Pick<LocationOut, "id" | "name">>;
+  parent?: Pick<LocationOut, "shortcode" | "name"> | null;
+  children?: Array<Pick<LocationOut, "shortcode" | "name">>;
 };
 export const slimLocation = defineSlim(locationMcpOut, (locRow: Row) => {
   const loc = locRow as LocationRow;
   return {
-    id: loc.id,
+    id: loc.shortcode,
     name: loc.name,
-    shortcode: loc.shortcode,
     type: loc.type,
     parentName: loc.parent?.name ?? null,
-    parentId: loc.parent?.id ?? null,
-    children: (loc.children ?? []).map((c) => ({ id: c.id, name: c.name })),
+    parentId: loc.parent?.shortcode ?? null,
+    children: (loc.children ?? []).map((c) => ({
+      id: c.shortcode,
+      name: c.name,
+    })),
   };
 });
 
-type InventoryRow = Pick<InventoryMcpOut, "id" | "amount" | "valuation"> & {
+type InventoryRow = Pick<InventoryMcpOut, "amount" | "valuation"> & {
+  // The row's own public id — not on InventoryMcpOut (whose `id` IS the
+  // shortcode), so it has to be typed off the row shape directly.
+  shortcode: string;
   product?: {
-    id: string;
     name: string;
     manufacturer: string;
-    shortcode: string | null;
+    shortcode: string;
     category: string | null;
     model: string | null;
   } | null;
-  location?: { id: string; name: string } | null;
+  // Widened (was `{ id: string; name: string }`) so the location ref can carry
+  // its own shortcode — every list/detail row already selects it (see
+  // dbInventoryEntryToListAPI/dbInventoryEntryToAPI), this type just hadn't
+  // caught up.
+  location?: { shortcode: string; name: string } | null;
 };
 export const slimInventory = defineSlim(inventoryMcpOut, (entryRow: Row) => {
   const entry = entryRow as InventoryRow;
   return {
-    id: entry.id,
+    id: entry.shortcode,
     amount: entry.amount,
     valuation: entry.valuation,
     product: entry.product
       ? {
-          id: entry.product.id,
+          id: entry.product.shortcode,
           name: entry.product.name,
           manufacturer: entry.product.manufacturer,
-          shortcode: entry.product.shortcode,
           category: entry.product.category,
           model: entry.product.model,
         }
       : null,
     location: entry.location
-      ? { id: entry.location.id, name: entry.location.name }
+      ? { id: entry.location.shortcode, name: entry.location.name }
       : null,
   };
 });
 
 type ProductRow = ProductTopLevelOut & {
   food?: { fdc_id?: number | null } | null;
-  ingredient?: { id?: ProductMcpOut["ingredientId"] } | null;
-  ingredientId?: ProductMcpOut["ingredientId"];
+  // Every read path nests the linked ingredient's own row (with its
+  // shortcode) under `ingredient` — there is no bare `ingredientId` field on
+  // a real product row to fall back to.
+  ingredient?: { shortcode: ProductMcpOut["ingredientId"] } | null;
   unitMappings?: Array<{
     a: ProductMcpOut["unitMappings"][number]["a"];
     b: ProductMcpOut["unitMappings"][number]["b"];
@@ -481,9 +481,8 @@ type ProductRow = ProductTopLevelOut & {
 export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   const p = pRow as ProductRow;
   return {
-    id: p.id,
+    id: p.shortcode,
     name: p.name,
-    shortcode: p.shortcode,
     manufacturer: p.manufacturer,
     upc: p.upc,
     category: p.category,
@@ -494,7 +493,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     usdaUnavailable: p.usdaUnavailable ?? null,
     externalIds: p.externalIds,
     usdaFdcId: p.food?.fdc_id ?? null,
-    ingredientId: p.ingredient?.id ?? p.ingredientId ?? null,
+    ingredientId: p.ingredient?.shortcode ?? null,
     unitMappings: (p.unitMappings ?? []).map((m) => ({
       a: m.a,
       b: m.b,
@@ -503,15 +502,11 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   };
 });
 
-type RecipeRow = RecipeTopLevel & {
-  shortcode?: RecipeMcpOut["shortcode"];
-};
 export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
-  const r = rRow as RecipeRow;
+  const r = rRow as RecipeTopLevel;
   return {
-    id: r.id,
+    id: r.shortcode,
     name: r.name,
-    shortcode: r.shortcode ?? null,
     yield: r.yield,
     servings: r.servings,
     tags: r.tags,
@@ -519,18 +514,18 @@ export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
 });
 
 type IngredientRow = IngredientOut & {
-  product?: IngredientMcpOut["products"];
+  product?: Array<{ shortcode: string; name: string }>;
   appearsInRecipes?: unknown[];
   food?: { fdc_id?: number | null } | null;
 };
 export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   const i = iRow as IngredientRow;
   return {
-    id: i.id,
+    id: i.shortcode,
     name: i.name,
     aliases: i.aliases,
-    products: (i.product ?? []).map((p: { id: string; name: string }) => ({
-      id: p.id,
+    products: (i.product ?? []).map((p) => ({
+      id: p.shortcode,
       name: p.name,
     })),
     recipeCount: (i.appearsInRecipes ?? []).length,
@@ -542,6 +537,18 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
 // (no relation reshaping needed) — a typed passthrough is enough.
 // structuredSuccess re-validates via outputSchema.parse, so new schema fields
 // flow through automatically without an MCP-side edit.
+//
+// NOT yet shortcode-cut-over: `id` here is still the private uuid (these
+// entities' *.tools.ts register `out: projectOut`/`taskOut`/`vendorOut`/
+// `purchaseOut`/`expenseOut` directly — the plain, uuid-based schema — rather
+// than a dedicated `*McpOut`). Reshaping to `id: row.shortcode` needs a new
+// McpOut schema per entity PLUS the matching `*.tools.ts` registration swapped
+// to it in the same change (parsing a shortcode against `projectId`'s uuid
+// schema throws), and several FK fields here are uuid ARRAYS with no
+// shortcode counterpart yet (`blockedByIds`/`blockingIds`/`childProjectIds`),
+// which would need `lookupShortcodes` (repo/shortcode-resolver.ts) to convert.
+// Left for a dedicated pass — tracked as a known gap, not a decision that this
+// is fine to leave uuid-based.
 export const slimProject = defineSlim(
   projectOut,
   (row: Row) => row as ProjectOut,
@@ -564,14 +571,15 @@ export const slimExpense = defineSlim(
 export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
   const m = mRow as MealOut;
   return {
-    id: m.id,
+    id: m.shortcode,
     date: m.date,
     name: m.name,
     sortOrder: m.sortOrder,
     totals: m.totals,
     recipes: (m.recipes ?? []).map((mr) => ({
+      // mealRecipe row id — declared exception, no shortcode; stays uuid.
       id: mr.id,
-      recipeId: mr.recipeId,
+      recipeId: mr.recipe.shortcode,
       name: mr.recipe?.name ?? null,
       scale: mr.scale,
       scaledTotals: mr.scaledTotals,
@@ -580,7 +588,9 @@ export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
 });
 
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
-  linkedProducts?: McpUsdaFoodOut["linkedProducts"];
+  // The real row (usda.service.ts's `getLinkedProducts`) is full
+  // `ProductTopLevelOut[]` — only the fields the slim projection reads.
+  linkedProducts?: Array<Pick<ProductTopLevelOut, "shortcode" | "name">>;
 };
 /**
  * The nutrients worth reading first, in display order, as USDA names them.
@@ -642,7 +652,7 @@ export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
     ),
     portionInfoRaw: f.portionInfoRaw ?? [],
     linkedProducts: (f.linkedProducts ?? []).map((p) => ({
-      id: p.id,
+      id: p.shortcode,
       name: p.name,
     })),
   };

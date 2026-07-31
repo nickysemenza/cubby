@@ -151,8 +151,9 @@ export const mealOut = z.object({
 export type MealOut = z.infer<typeof mealOut>;
 
 const mealMcpRecipeFields = {
+  // mealRecipe row id — declared exception, no shortcode; stays uuid.
   id: mealRecipeId,
-  recipeId,
+  recipeId: recipeShortcode,
   name: z.string().nullable(),
   scale: mealScale,
   scaledTotals: scaledTotals.nullable(),
@@ -160,7 +161,7 @@ const mealMcpRecipeFields = {
 
 /** Slim MCP projection of a meal row. */
 export const mealMcpOut = z.object({
-  id: mealId,
+  id: mealShortcode,
   date: mealDate,
   name: z.string().nullable(),
   sortOrder: z.number().int().nullable(),

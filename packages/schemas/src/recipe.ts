@@ -384,18 +384,19 @@ export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
 
 /** Slim MCP projection of a recipe list row. */
 export const recipeMcpOut = z.object({
-  id: recipeId,
+  id: recipeShortcode,
   name: z.string(),
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
-  shortcode: recipeShortcode.nullish(),
 });
 export type RecipeMcpOut = z.infer<typeof recipeMcpOut>;
 
 export const recipeMcpListOut = createPaginatedResponseSchema(recipeMcpOut);
 
 export const recipeUsageMcpOut = z.object({
+  // RecipeSectionIngredient row id — declared exception. Recipe section/line
+  // ids have no shortcode and stay uuid across the MCP boundary.
   lineId: z.uuid(),
   sectionName: z.string().nullable(),
   amounts: z.array(amount),
@@ -404,17 +405,14 @@ export const recipeUsageMcpOut = z.object({
 });
 
 const recipeWithUsagesMcpFields = {
-  id: recipeId,
-  name: z.string(),
-  yield: recipeYieldSchema.nullish(),
-  servings: recipeServings.nullish(),
-  tags: recipeTags.nullish(),
-  shortcode: recipeShortcode.nullish(),
+  ...recipeMcpOut.shape,
   usages: z.array(recipeUsageMcpOut),
 };
 
 export const recipesUsingIngredientOut = z.object({
-  ingredientId: ingredientId,
+  // The ingredient shortcode the caller passed in — echoed back, not resolved
+  // to a uuid (find_recipes_using_ingredient never needs the private id).
+  ingredientId: ingredientShortcode,
   count: z.number().int().nonnegative(),
   recipes: z.array(z.object(recipeWithUsagesMcpFields)),
 });

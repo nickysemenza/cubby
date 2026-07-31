@@ -30,6 +30,35 @@ import {
 } from "./_shared";
 
 /**
+ * `shoppingListOut.meals[]` is `{id, name, date}` — a summary list distinct
+ * from `items[].perMeal[]`'s `shoppingListContribution` rows, which already
+ * carry `mealShortcode`/`recipeShortcode`/`ingredientShortcode` siblings from
+ * the previous cutover pass. This inline summary shape never got one, so
+ * `get_shopping_list`'s handler resolves it via `shortcode.lookupMany` below
+ * rather than editing packages/schemas.
+ */
+const shoppingListMealMcpOut = shoppingListOut.shape.meals.element
+  .omit({ id: true })
+  .extend({ mealShortcode: z.string().nullable() });
+
+const shoppingListContributionMcpOut =
+  shoppingListOut.shape.items.element.shape.perMeal.element.omit({
+    mealId: true,
+    recipeId: true,
+  });
+
+const shoppingListItemMcpOut = shoppingListOut.shape.items.element
+  .omit({ ingredientId: true, perMeal: true })
+  .extend({ perMeal: z.array(shoppingListContributionMcpOut) });
+
+const shoppingListMcpOut = shoppingListOut
+  .omit({ meals: true, items: true })
+  .extend({
+    meals: z.array(shoppingListMealMcpOut),
+    items: z.array(shoppingListItemMcpOut),
+  });
+
+/**
  * `mealCreateInput`/`mealAddRecipeInput` are shared with the tRPC router (and
  * meal-table.tsx), so the branded-uuid `recipeId`/`mealId` fields stay as-is
  * there — these MCP-only overrides carry the shortcode swap instead.
@@ -110,7 +139,7 @@ export function registerMealTools(server: McpServer) {
     },
   });
 
-  registerRouterTool(server, {
+  registerMcpTool(server, {
     name: "get_shopping_list",
     description:
       "Build a shopping list across all meals in a date range: aggregated need vs. on-hand inventory.",
@@ -118,11 +147,37 @@ export function registerMealTools(server: McpServer) {
       from: mealDate.describe("Start day (inclusive)"),
       to: mealDate.describe("End day (inclusive)"),
     },
-    outputSchema: shoppingListOut,
+    outputSchema: shoppingListMcpOut,
     annotations: READ_ONLY_CLOSED,
     uiResourceUri: SHOPPING_LIST_UI,
-    call: (caller, params) =>
-      caller.meal.getShoppingList({ from: params.from, to: params.to }),
+    handler: async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.getShoppingList({
+        from: params.from,
+        to: params.to,
+      });
+      const mealIds = result.meals.map((m) => m.id);
+      const resolved = mealIds.length
+        ? await caller.shortcode.lookupMany({
+            refs: mealIds.map((id) => ({ entity: "meal" as const, id })),
+          })
+        : [];
+      const codeByMealId = new Map(resolved.map((r) => [r.id, r.shortcode]));
+      return {
+        ...result,
+        meals: result.meals.map(({ id, ...m }) => ({
+          ...m,
+          mealShortcode: codeByMealId.get(id) ?? null,
+        })),
+        items: result.items.map(({ ingredientId: _ingredientId, ...item }) => ({
+          ...item,
+          perMeal: item.perMeal.map(
+            ({ mealId: _mealId, recipeId: _recipeId, ...contribution }) =>
+              contribution,
+          ),
+        })),
+      };
+    },
   });
 
   registerRouterTool(server, {

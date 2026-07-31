@@ -622,20 +622,21 @@ export const mcpProductUpdateInput = z.object({
 
 /** Slim MCP projection of a product list/detail row. */
 export const productMcpOut = z.object({
-  id: productId,
+  id: productShortcode,
   name: z.string(),
-  shortcode: productShortcode,
   manufacturer: z.string(),
   upc: upc.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
   price: z.number().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
+  // USDA FoodData Central id — declared exception, not a cubby shortcode.
   fdc_id: fdcId.nullable(),
   usdaUnavailable: z.boolean().nullable(),
   externalIds: z.array(externalIdOut),
+  // USDA FoodData Central id — declared exception, not a cubby shortcode.
   usdaFdcId: z.number().nullable(),
-  ingredientId: z.string().nullable(),
+  ingredientId: ingredientShortcode.nullable(),
   unitMappings: z.array(mcpUnitMappingOut),
 });
 export type ProductMcpOut = z.infer<typeof productMcpOut>;

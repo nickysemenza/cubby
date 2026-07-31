@@ -10,7 +10,7 @@ import {
 } from "@cubby/usda-schemas";
 import { recipeAvailabilityListOut } from "./availability";
 import { deletedCountOut } from "./common";
-import { productId } from "./identifiers";
+import { productShortcode } from "./identifiers";
 import {
   ingredientMcpListOut,
   ingredientMcpOut,
@@ -123,6 +123,8 @@ const mcpBrandedServingOut = z.object({
 
 /** Everything a USDA food carries in both the search and detail shapes. */
 const usdaFoodSharedFields = {
+  // USDA FoodData Central id — declared exception, USDA's own public id and
+  // not a cubby shortcode; this IS the entity's id at the MCP boundary.
   fdc_id: fdcId,
   description: z.string().nullable(),
   data_type: dataTypeEnum.nullable(),
@@ -134,7 +136,7 @@ const usdaFoodSharedFields = {
   serving: mcpBrandedServingOut.nullable(),
   nutrientsPer100: nutrientsPer100.nullable(),
   portionInfoRaw: z.array(foodPortion),
-  linkedProducts: z.array(z.object({ id: productId, name: z.string() })),
+  linkedProducts: z.array(z.object({ id: productShortcode, name: z.string() })),
 };
 
 export const mcpUsdaFoodOut = z.object({

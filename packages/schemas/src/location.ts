@@ -318,13 +318,12 @@ export const mcpLocationCreateInput = z.object({
 
 /** Slim MCP projection of a location row (list or detail). */
 export const locationMcpOut = z.object({
-  id: locationId,
+  id: locationShortcode,
   name: z.string(),
-  shortcode: locationShortcode,
   type: locationType,
   parentName: z.string().nullable(),
-  parentId: locationId.nullable(),
-  children: z.array(z.object({ id: locationId, name: z.string() })),
+  parentId: locationShortcode.nullable(),
+  children: z.array(z.object({ id: locationShortcode, name: z.string() })),
 });
 export type LocationMcpOut = z.infer<typeof locationMcpOut>;
 
