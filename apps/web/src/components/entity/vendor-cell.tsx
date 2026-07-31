@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { Row } from "~/components/layout";
 import {
   publicBucketUrl,
@@ -117,6 +118,12 @@ export function VendorMark({
  * the text in the a11y tree means the name has exactly one source at every
  * breakpoint, rather than moving into an `alt` that would double-announce on
  * desktop where the name is already visible.
+ *
+ * Supplying `vendorId` also makes the whole branded cell the canonical vendor
+ * detail link, with the same at-rest dotted underline and hover preview as
+ * `EntityInlineLink`. Without an id it intentionally stays plain: during an
+ * optimistic vendor edit, the displayed name can change before the refetched
+ * ExpenseOut carries the new vendor's shortcode.
  */
 export function VendorCell({
   vendor,
@@ -131,16 +138,44 @@ export function VendorCell({
   compactOnMobile?: boolean;
 }) {
   const logo = hasVendorLogo(vendor, vendorId);
-  return (
+  const body = (
     <Row gap="sm" align="center" className="min-w-0">
       {(!compactOnMobile || logo) && (
-        <VendorMark vendor={vendor} vendorId={vendorId} />
+        <VendorMark
+          vendor={vendor}
+          vendorId={vendorId}
+          className={
+            vendorId ? "group-hover/vendor-link:grayscale-0" : undefined
+          }
+        />
       )}
       <span
-        className={cn("truncate", compactOnMobile && logo && "max-sm:sr-only")}
+        className={cn(
+          "truncate",
+          compactOnMobile && logo && "max-sm:sr-only",
+          vendorId &&
+            "font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover/vendor-link:decoration-primary group-hover/vendor-link:decoration-solid",
+        )}
       >
         {vendor}
       </span>
     </Row>
+  );
+
+  // An id-less value is either genuinely unresolved or the optimistic window
+  // after choosing a new vendor, before the refetched ExpenseOut carries that
+  // vendor's persisted shortcode. A guessed href would point at the old vendor,
+  // so only a canonical id turns the branded cell into an entity link.
+  if (!vendorId) return body;
+
+  return (
+    <EntityPreviewLink
+      entity="vendor"
+      id={vendorId}
+      shortcode={vendorId}
+      className="group/vendor-link inline-flex min-w-0 max-w-full text-foreground transition-colors hover:text-primary"
+    >
+      {body}
+    </EntityPreviewLink>
   );
 }

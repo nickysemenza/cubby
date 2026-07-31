@@ -851,8 +851,8 @@ describe("expense router", () => {
     });
   });
 
-  describe("chargeSiblings", () => {
-    it("returns the charge's other lines, excluding the expense itself", async () => {
+  describe("chargeContext", () => {
+    it("returns canonical charge identity and the other lines, excluding the expense itself", async () => {
       const caller = createTestCaller(expenseRouter, ctx.db);
       const orderId = "111-siblings-0000001";
       const [{ output: self }, { output: sibling }] = await Promise.all([
@@ -883,14 +883,33 @@ describe("expense router", () => {
         ctx.actor,
       );
 
-      const siblings = await caller.chargeSiblings(self.id);
+      // Charge date and ledger date are separate domain fields. The link label
+      // must use this canonical Purchase date, never `self.date`.
+      const chargeDate = "2026-07-30";
+      await updatePurchase(
+        ctx.db,
+        {
+          id: purchaseIdOf(self),
+          data: { date: chargeDate },
+        },
+        ctx.actor,
+      );
+
+      const context = await caller.chargeContext(self.id);
+      expect(context?.purchase).toEqual({
+        id: purchaseIdOf(self),
+        orderId,
+        date: chargeDate,
+        vendorId: vendorIdOf(self),
+        vendorName: "Amazon",
+      });
       // `getPurchaseExpenses` includes the source row (the charge total needs
       // it); the detail section filters itself out here, so a single-line charge
       // renders nothing rather than a list of one.
-      expect(siblings.map((p) => p.id)).toEqual([sibling.id]);
+      expect(context?.siblings.map((p) => p.id)).toEqual([sibling.id]);
     });
 
-    it("returns [] for an expense with no charge — without early-returning on a missing order id", async () => {
+    it("returns null for an expense with no charge — without early-returning on a missing order id", async () => {
       const caller = createTestCaller(expenseRouter, ctx.db);
       const { output: chargeless } = await createExpense(
         ctx.db,
@@ -898,7 +917,7 @@ describe("expense router", () => {
         ctx.actor,
       );
       expect(chargeless.purchaseId).toBeNull();
-      expect(await caller.chargeSiblings(chargeless.id)).toEqual([]);
+      expect(await caller.chargeContext(chargeless.id)).toBeNull();
 
       // The distinction the old `orderSiblings` got wrong: it bailed on a missing
       // ORDER ID, which would have hidden this section for the 33% of
@@ -919,9 +938,10 @@ describe("expense router", () => {
         ctx.actor,
       );
       expect(orderless.orderId).toBeNull();
-      expect(
-        (await caller.chargeSiblings(orderless.id)).map((p) => p.id),
-      ).toEqual([alsoOnThatCharge.id]);
+      const context = await caller.chargeContext(orderless.id);
+      expect(context?.purchase.orderId).toBeNull();
+      expect(context?.purchase.vendorName).toBe("Tool Nirvana");
+      expect(context?.siblings.map((p) => p.id)).toEqual([alsoOnThatCharge.id]);
     });
   });
 
@@ -2201,7 +2221,7 @@ describe("expense repository — charge grouping", () => {
     expect(purchaseIdOf(otherOrder)).not.toBe(purchaseIdOf(first));
 
     // Every line of the charge, source row included — the total needs it, and
-    // the detail section filters itself out (see `expense.chargeSiblings`).
+    // the detail section filters itself out (see `expense.chargeContext`).
     const lines = await getPurchaseExpenses(
       ctx.db,
       await purchaseUuid(ctx.db, purchaseIdOf(first)),

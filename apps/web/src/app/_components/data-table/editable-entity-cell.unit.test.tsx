@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { MouseEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 // Mock WASM module - can't load binary in jsdom. editable-entity-cell.tsx
@@ -81,6 +82,35 @@ const clickDropdownItem = (name: string) => {
 };
 
 describe("EditableEntityCell", () => {
+  it("keeps a linked value outside the separate pencil edit trigger", () => {
+    const displayClick = vi.fn((event: MouseEvent) => {
+      event.preventDefault();
+    });
+    render(
+      <EditableEntityCell
+        value={PANTRY}
+        onSave={vi.fn()}
+        SearchProvider={StubSearchProvider}
+        label="location"
+        trigger="pencil"
+        renderValue={(value) => (
+          <a href="/locations/LOC-TEST" onClick={displayClick}>
+            {value?.name}
+          </a>
+        )}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "Pantry" });
+    expect(link.closest("button")).toBeNull();
+    fireEvent.click(link);
+    expect(displayClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit location" }));
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
+  });
+
   it("renders display mode by default and enters edit mode on click without propagating", () => {
     const parentClick = vi.fn();
     render(

@@ -1,7 +1,24 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { VENDOR_LOGO_BY_ID } from "~/lib/vendor-logos.generated";
 import { VendorCell, VendorMark } from "./vendor-cell";
+
+vi.mock("~/app/_components/EntityPreviewLink", () => ({
+  EntityPreviewLink: ({
+    children,
+    shortcode,
+    className,
+  }: {
+    children: ReactNode;
+    shortcode: string;
+    className?: string;
+  }) => (
+    <a href={`/vendors/${shortcode}`} className={className}>
+      {children}
+    </a>
+  ),
+}));
 
 // Driven off a live manifest entry, not a hardcoded id, so these survive a
 // re-seed that drops or renumbers vendors — any entry works, this just needs
@@ -24,6 +41,25 @@ const RENAMED_VENDOR = "Totally Unrelated Renamed Co";
  * `vendor` prop.
  */
 describe("VendorCell", () => {
+  it("links a persisted vendor with an at-rest affordance", () => {
+    render(<VendorCell vendor={RENAMED_VENDOR} vendorId={SEEDED_ID} />);
+
+    const link = screen.getByRole("link", { name: RENAMED_VENDOR });
+    expect(link).toHaveAttribute("href", `/vendors/${SEEDED_ID}`);
+    expect(screen.getByText(RENAMED_VENDOR)).toHaveClass("decoration-dotted");
+    // Linking the cell must not trade away its rename-safe branded mark.
+    expect(document.querySelector("img")).toBeTruthy();
+  });
+
+  it("stays unlinked until a persisted vendor id is available", () => {
+    render(<VendorCell vendor="Optimistic New Vendor" />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("Optimistic New Vendor")).not.toHaveClass(
+      "decoration-dotted",
+    );
+  });
+
   it("re-attempts the logo after a failure when the vendor changes", () => {
     const { rerender } = render(<VendorCell vendor="eBay" />);
     expect(screen.getByRole("presentation", { hidden: true })).toBeTruthy();

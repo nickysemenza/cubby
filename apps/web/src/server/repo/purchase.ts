@@ -401,6 +401,45 @@ export const getPurchaseByID = async (
   return dbPurchaseToAPI(row, await loadPurchaseImages(db, id));
 };
 
+export type PurchaseLinkIdentity = Pick<
+  PurchaseOut,
+  "id" | "orderId" | "date" | "vendorId" | "vendorName"
+>;
+
+/**
+ * The canonical identity needed to render a link to a charge.
+ *
+ * Kept smaller than `getPurchaseByID`: an expense detail already has a separate
+ * hover-preview query for the full charge, so loading documents, reconciliation
+ * aggregates, and notes just to label its parent link would duplicate work.
+ */
+export const getPurchaseLinkIdentityByID = async (
+  db: Database,
+  id: PurchaseId,
+): Promise<PurchaseLinkIdentity | null> => {
+  const [row] = await getDb(db)
+    .select({
+      shortcode: purchase.shortcode,
+      orderId: purchase.orderId,
+      date: purchase.date,
+      vendorName: purchaseVendorName,
+      vendorShortcode: purchaseVendorShortcode,
+    })
+    .from(purchase)
+    .where(and(eq(purchase.id, id), notDeleted(purchase)))
+    .limit(1);
+
+  return row
+    ? {
+        id: unsafePurchaseShortcode(row.shortcode),
+        orderId: row.orderId,
+        date: row.date,
+        vendorId: unsafeVendorShortcode(row.vendorShortcode),
+        vendorName: row.vendorName,
+      }
+    : null;
+};
+
 /**
  * Get full purchase details by shortcode. Returns null if the code doesn't
  * resolve to a live purchase.

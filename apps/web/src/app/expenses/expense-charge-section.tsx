@@ -5,12 +5,9 @@ import { format } from "date-fns";
 import { ListFilter } from "lucide-react";
 import type { FC } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { VendorCell } from "~/components/entity/vendor-cell";
 import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
-import { entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
@@ -43,9 +40,9 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
   // change under the same component instance (clearing a vendor detaches the
   // line), and a conditional hook would break the hook order when it does.
   const { data, isPending } = useQuery(
-    api.expense.chargeSiblings.queryOptions(expense.id),
+    api.expense.chargeContext.queryOptions(expense.id),
   );
-  const others = data ?? NO_OTHER_LINES;
+  const others = data?.siblings ?? NO_OTHER_LINES;
 
   // The caller only mounts this section for a line that has a charge; this keeps
   // the parent link's `params` honest rather than asserting a non-null id.
@@ -58,6 +55,10 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
     return <Description>Loading charge…</Description>;
   }
 
+  // The expense can be detached (or its charge deleted) after this detail
+  // payload was fetched. Do not render a stale purchase link in that window.
+  if (!data) return null;
+
   // The whole charge, not just the other lines — this expense is one of them,
   // and a total that excluded it would never reconcile against a receipt.
   const lines = [expense, ...others];
@@ -67,52 +68,27 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
 
   return (
     <Stack gap="sm">
-      <Row align="center" justify="between" gap="sm">
-        <Row align="center" gap="sm" className="min-w-0">
-          {/* The charge's own page is the primary hop — it owns the invoice,
-              the stated total, and every line at once. */}
-          <Link
-            {...entityDetailLink("purchase", expense.purchaseId)}
-            className="min-w-0 hover:underline"
-          >
-            {expense.vendor ? (
-              <VendorCell vendor={expense.vendor} vendorId={expense.vendorId} />
-            ) : (
-              <span className="truncate">View charge</span>
-            )}
-          </Link>
-          {/* Secondary: the rest of this vendor's spend in the ledger. `vendor`
-              is the URL key and now carries the vendor ID (same shape as
-              `?project=`), which is what the id-based filter matches on. */}
-          {expense.vendorId && (
-            <Link
-              to="/expenses"
-              search={{ vendor: expense.vendorId }}
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label={`Show every ledger line from ${expense.vendor ?? "this vendor"}`}
-            >
-              <ListFilter className="size-3.5" />
-            </Link>
-          )}
-        </Row>
-        {/* Opaque identifier, not a category — opts out of Badge's
-            mono-uppercase stamp so the id reads exactly as stored. Absent on
-            plenty of real charges (cash at the yard, a contractor's invoice). */}
-        {expense.orderId ? (
-          <Badge
-            variant="outline"
-            className="shrink-0 font-mono normal-case tracking-normal"
-          >
-            {expense.orderId}
-          </Badge>
-        ) : (
-          // A predicate about the charge, not an identifier — the eyebrow
-          // register (mono/uppercase/slate) rather than a Badge, so it doesn't
-          // read as an order id that happens to say "none".
-          <span className="shrink-0 font-mono text-slate text-xs uppercase tracking-wider">
-            no order id
-          </span>
-        )}
+      <Row align="center" gap="sm" className="min-w-0">
+        {/* The charge's own page is the primary hop — it owns the invoice,
+            stated total, and every line at once. Its canonical identity comes
+            from Purchase, including the charge date (not this line's ledger
+            date), so the shared purchase-label ladder stays truthful. */}
+        <EntityInlineLink
+          entity="purchase"
+          data={{ ...data.purchase, shortcode: data.purchase.id }}
+          truncate
+        />
+        {/* Secondary: the rest of this vendor's spend in the ledger. `vendor`
+            is the URL key and carries the vendor shortcode (same shape as
+            `?project=`), which is what the id-based filter matches on. */}
+        <Link
+          to="/expenses"
+          search={{ vendor: data.purchase.vendorId }}
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={`Show every ledger line from ${data.purchase.vendorName ?? "this vendor"}`}
+        >
+          <ListFilter className="size-3.5" />
+        </Link>
       </Row>
 
       {others.length === 0 ? (
