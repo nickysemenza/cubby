@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
@@ -25,6 +26,7 @@ import {
   Network,
   ScanBarcode,
   Sparkles,
+  Unlink,
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -36,9 +38,10 @@ import {
   ReconciliationBadge,
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { EntityIcon } from "~/entities/entities";
+import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { productRecipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -331,6 +334,95 @@ function searchableEntityRoute(entityRef: SearchableEntityRef) {
       params: { id: e.entityId },
     }))
     .exhaustive();
+}
+
+/**
+ * Route to any entity's detail page, by the full `Entity` union (unlike
+ * `searchableEntityRoute` above, which only covers the entities global search
+ * can return). Params come from the shared `entityDetailParams` helper (the
+ * cookbook `$cookbookId` special case); the `to` literal still has to be
+ * matched by hand so it stays a real union member of `EntityDetailRoute`
+ * rather than widening to `string` — `.exhaustive()` makes a newly-added
+ * `Entity` variant a compile error here until it's routed.
+ */
+function targetEntityRoute(entity: Entity, id: string) {
+  const to = match(entity)
+    .with("ingredient", () => "/ingredients/$id" as const)
+    .with("product", () => "/products/$id" as const)
+    .with("recipe", () => "/recipes/$id" as const)
+    .with("cookbook", () => "/cookbooks/$cookbookId" as const)
+    .with("location", () => "/locations/$id" as const)
+    .with("inventory", () => "/inventory/$id" as const)
+    .with("meal", () => "/meals/$id" as const)
+    .with("project", () => "/projects/$id" as const)
+    .with("task", () => "/tasks/$id" as const)
+    .with("vendor", () => "/vendors/$id" as const)
+    .with("purchase", () => "/purchases/$id" as const)
+    .with("expense", () => "/expenses/$id" as const)
+    .with("usda-food", () => "/usda/$id" as const)
+    .with("image", () => "/images/$id" as const)
+    .exhaustive();
+  return { to, params: entityDetailParams(entity, id) };
+}
+
+/**
+ * `{pluralLabel} · {edgeKey}` — clusters violations first by the entity left
+ * dangling, then by the specific FK column, so 34 possible edges don't render
+ * as one flat wall of identical-looking rows.
+ */
+function referentialLivenessGroup(v: ReferentialLivenessViolation): string {
+  return `${entities[v.targetEntity].pluralLabel} · ${v.edgeKey}`;
+}
+
+/** `Table.column` — mono, the exact FK the audit failed on. */
+function edgeKeyDetail(edgeKey: string): ReactNode {
+  return (
+    <div key="edge" className="font-mono text-muted-foreground text-xs">
+      {edgeKey}
+    </div>
+  );
+}
+
+/** `Source SourceTable #id` — the live row carrying the dangling pointer. */
+function sourceDetail(sourceTable: string, sourceId: string): ReactNode {
+  return (
+    <Row
+      key="source"
+      align="center"
+      gap="xs"
+      className="text-muted-foreground text-sm"
+    >
+      Source{" "}
+      <CodeChip>
+        {sourceTable} #{sourceId.slice(0, 8)}
+      </CodeChip>
+    </Row>
+  );
+}
+
+/**
+ * The soft-deleted target the dangling edge still points at. No name to show
+ * (the row is gone from every normal query), so this links the entity +
+ * truncated id rather than truncating a name — the acceptable shape for a
+ * surface `EntityInlineLink` doesn't fit, per the entities.tsx rule that a
+ * rendered entity is never plain unlinked text.
+ */
+function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
+  const { to, params } = targetEntityRoute(v.targetEntity, v.targetId);
+  return (
+    <Link key="target" to={to} params={params}>
+      <Badge
+        variant="outline"
+        title={v.targetId}
+        // Free-form identifier, not a categorical tag — opt out of the
+        // mono-uppercase stamp (matches the location/vendor badge idiom).
+        className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
+      >
+        <EntityIcon entity={v.targetEntity} colored className="size-3" />
+        {entities[v.targetEntity].label} {v.targetId.slice(0, 8)}
+      </Badge>
+    </Link>
+  );
 }
 
 /**
@@ -1073,6 +1165,41 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: recipe.name,
       route: { to: "/recipes/$id", params: { id: recipe.id } },
       editLabel: "Open recipe",
+    }),
+  }),
+  section({
+    id: "referential-liveness",
+    label: "Dangling refs",
+    select: (p) => p.referentialLivenessViolations,
+    icon: Unlink,
+    title: "Live rows pointing at deleted records",
+    description:
+      "A removal path forgot to detach, re-point, or cascade: a live row still carries a foreign key to a soft-deleted target. Production sits at zero for this check — any row here is a regression, not a backlog. Clearing the reference and deleting the dangling row are both plausible and not interchangeable, so there's no auto-fix; each needs a judgment call.",
+    emptyMessage: "No live row points at a soft-deleted target.",
+    groupBy: (items) =>
+      groupBy(
+        [...items].sort((a, b) =>
+          referentialLivenessGroup(a).localeCompare(
+            referentialLivenessGroup(b),
+          ),
+        ),
+        referentialLivenessGroup,
+      ),
+    renderItem: (v) => ({
+      // (edgeKey, sourceId) is the natural key — one FK column can only point
+      // at one target per source row.
+      key: `${v.edgeKey}-${v.sourceId}`,
+      title: v.description,
+      details: [
+        edgeKeyDetail(v.edgeKey),
+        sourceDetail(v.sourceTable, v.sourceId),
+      ],
+      badges: [referentialTargetBadge(v)],
+      // The target, not the source: it's the soft-deleted row the edge
+      // shouldn't still be pointing at, and (unlike `sourceTable`, an
+      // arbitrary pgTable name) it's always a real entity with a detail route.
+      route: targetEntityRoute(v.targetEntity, v.targetId),
+      editLabel: `Open ${entities[v.targetEntity].label.toLowerCase()}`,
     }),
   }),
   section({

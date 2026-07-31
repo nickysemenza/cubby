@@ -7,7 +7,11 @@ import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion
 import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
 import { LOCATION_DELETE_EDGE_POLICY } from "~/server/repo/location/crud";
 import { MEAL_DELETE_EDGE_POLICY } from "~/server/repo/meal/crud";
-import { PRODUCT_EDGE_ROLES } from "~/server/repo/product/edge-roles";
+import {
+  isRetainingEdgeKey,
+  PRODUCT_DELETE_EDGE_POLICY,
+  PRODUCT_EDGE_ROLES,
+} from "~/server/repo/product/edge-roles";
 import { PROJECT_DELETE_EDGE_POLICY } from "~/server/repo/project/crud";
 import {
   PURCHASE_DELETE_EDGE_POLICY,
@@ -45,6 +49,10 @@ const POLICY_CASES = {
     entity: "product",
     policy: PRODUCT_EDGE_ROLES,
   },
+  "product delete": {
+    entity: "product",
+    policy: PRODUCT_DELETE_EDGE_POLICY,
+  },
   "location delete": {
     entity: "location",
     policy: LOCATION_DELETE_EDGE_POLICY,
@@ -74,4 +82,41 @@ describe("incoming-edge operation policies", () => {
       );
     });
   }
+});
+
+/**
+ * The retaining set decides whether a product can be deleted and whether
+ * `findOrphanedProducts` will offer it for one-click deletion, so it is pinned
+ * by value — not just by "whatever the roles happen to say". Moving
+ * `ProductImage.productId` from the product-local `metadata` role to the shared
+ * `media` role would have silently changed this set under the old
+ * `!== "metadata"` filter; this test is what makes that a failure instead.
+ */
+describe("product retaining edges", () => {
+  const RETAINING: readonly string[] = [
+    "Expense.productId",
+    "InventoryEntry.productId",
+    "Task.subjectProductId",
+  ];
+
+  it("retains exactly the acquisition and history edges", () => {
+    expect(
+      (
+        Object.keys(PRODUCT_EDGE_ROLES) as Array<
+          keyof typeof PRODUCT_EDGE_ROLES
+        >
+      )
+        .filter(isRetainingEdgeKey)
+        .sort(),
+    ).toEqual(RETAINING);
+  });
+
+  it("blocks deletion on exactly those edges, and no others", () => {
+    expect(
+      Object.entries(PRODUCT_DELETE_EDGE_POLICY)
+        .filter(([, d]) => d.effect === "block")
+        .map(([key]) => key)
+        .sort(),
+    ).toEqual(RETAINING);
+  });
 });
