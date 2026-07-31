@@ -232,7 +232,12 @@ export const getExpenseByShortcode = expenseCrud.getByShortcode;
 const resolveCharge = async (
   tx: DrizzleTransaction,
   actor: ActorContext,
-  data: { vendor?: string | null; orderId?: string | null },
+  data: {
+    vendor?: string | null;
+    orderId?: string | null;
+    /** Effective ledger date used only when this resolution mints a charge. */
+    date?: string | null;
+  },
   current?: {
     purchaseId: PurchaseId | null;
     vendorName: string | null;
@@ -297,6 +302,9 @@ const resolveCharge = async (
       data.orderId === undefined
         ? (current?.orderId ?? null)
         : requestedOrderId,
+    // `findOrCreatePurchase` only applies this on INSERT. An existing charge's
+    // own date is charge-level truth and must never be overwritten from a line.
+    date: data.date,
   });
 
   // Leaving its last line behind makes the old charge dead weight. Fold it into
@@ -407,7 +415,7 @@ export const updateExpense = async (
     // duplicate — see `resolveCharge`.
     const existing = await tx.query.expense.findFirst({
       where: and(eq(expense.id, id), notDeleted(expense)),
-      columns: { purchaseId: true },
+      columns: { purchaseId: true, date: true },
       with: {
         purchase: {
           columns: { id: true, orderId: true, deletedAt: true },
@@ -438,15 +446,25 @@ export const updateExpense = async (
         )[0]?.n ?? 0)
       : 0;
 
-    const resolved = await resolveCharge(tx, actor, data, {
-      purchaseId: live ? (existing?.purchaseId ?? null) : null,
-      vendorName:
-        live?.vendor && live.vendor.deletedAt === null
-          ? live.vendor.name
-          : null,
-      orderId: live?.orderId ?? null,
-      lineCount,
-    });
+    const resolved = await resolveCharge(
+      tx,
+      actor,
+      {
+        ...data,
+        // Adding/changing a vendor without editing the line date still needs
+        // the date already carried by the expense when a new charge is minted.
+        date: data.date === undefined ? existing?.date : data.date,
+      },
+      {
+        purchaseId: live ? (existing?.purchaseId ?? null) : null,
+        vendorName:
+          live?.vendor && live.vendor.deletedAt === null
+            ? live.vendor.name
+            : null,
+        orderId: live?.orderId ?? null,
+        lineCount,
+      },
+    );
 
     return {
       output: await expenseCrud.update(

@@ -93,6 +93,17 @@ export const purchaseUpdateInput = z.object({
 });
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
+/** Mutually-exclusive health buckets for the expense lines under one charge. */
+export const purchaseLineStatus = z.enum(["empty", "unpriced", "priced"]);
+export type PurchaseLineStatus = z.infer<typeof purchaseLineStatus>;
+
+/**
+ * The soft reconciliation verdict for a charge's stated total versus its lines.
+ * `unknown` means there is no stated total to compare against.
+ */
+export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
+export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
+
 export const purchaseFilterFields = {
   search: z.string().optional().describe("Substring match on order id"),
   vendorId: oneOrMany(vendorShortcode).optional(),
@@ -101,6 +112,19 @@ export const purchaseFilterFields = {
   orderIdPresenceFilter: presenceFilter,
   /** `"none"` matches charges with no `statedTotal` recorded yet. */
   statedTotalPresenceFilter: presenceFilter,
+  /** Empty, partly-unpriced, or fully-priced line sets; several values OR. */
+  lineStatus: oneOrMany(purchaseLineStatus).optional(),
+  /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
+  reconciliation: oneOrMany(purchaseReconciliation).optional(),
+  /** `"none"` matches charges with no live invoice/receipt document. */
+  documentPresenceFilter: presenceFilter,
+  /**
+   * Inclusive bounds on SUM(expense.cost), in dollars. Bounds only apply to
+   * charges with at least one priced line, so empty/unpriced-only charges do
+   * not masquerade as zero-dollar credits.
+   */
+  expenseTotalMin: z.coerce.number().optional(),
+  expenseTotalMax: z.coerce.number().optional(),
   dateFrom: plainDate
     .optional()
     .describe("Inclusive lower bound on charge date"),
@@ -117,6 +141,7 @@ export const purchaseSortableFields = [
   "vendor",
   "expenseCount",
   "expenseTotal",
+  "documentCount",
   "createdAt",
 ] as const;
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];
@@ -127,12 +152,16 @@ export const purchaseOut = z.object({
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
   expenseCount: z.number().int(),
+  /** Live lines whose cost has not been recorded yet. */
+  unpricedExpenseCount: z.number().int(),
   /**
    * `SUM(cost)` over this charge's live expenses. THIS is the charge's spend;
    * `statedTotal` is only what the paperwork claimed. They may legitimately
    * disagree — see the reconciliation note on `statedTotal`.
    */
   expenseTotal: z.number(),
+  /** Live invoice/receipt documents filed against this charge. */
+  documentCount: z.number().int(),
   /**
    * The charge's filed documents — the emailed PDF invoice, a photo of the paper
    * slip, or both, in display order.
@@ -169,9 +198,6 @@ export type PurchaseListResponse = z.infer<typeof purchaseListResponse>;
  * and nothing back-computes a cost from it — mismatch is often correct.
  * `"unknown"` when no `statedTotal` has been recorded.
  */
-export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
-export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
-
 /**
  * Dollars of slack tolerated before `statedTotal` reads as a mismatch.
  *

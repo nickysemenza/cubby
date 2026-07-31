@@ -80,6 +80,12 @@ describe("expense views produce the filters their old tabs pinned", () => {
     const view = viewsForEntity("expense").find((v) => v.id === "unassigned");
     expect(view?.filters).toEqual([{ id: "project", value: [FILTER_NONE] }]);
   });
+
+  it("unattached pins the existing no-purchase vendor predicate", () => {
+    expect(build("unattached")).toEqual({ vendorPresenceFilter: "none" });
+    const view = viewsForEntity("expense").find((v) => v.id === "unattached");
+    expect(view?.filters).toEqual([{ id: "vendor", value: [FILTER_NONE] }]);
+  });
 });
 
 describe("isViewActive", () => {

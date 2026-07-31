@@ -68,6 +68,7 @@ const expense: ExpenseOut = {
   vendor: "Tool Nirvana",
   orderId: "#11325",
   purchaseId: unsafePurchaseShortcode("PUR-2345"),
+  purchaseDate: "2026-07-29",
   vendorId: unsafeVendorShortcode("VEN-2345"),
   projectName: null,
   productName: null,

@@ -1,11 +1,13 @@
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
+import { FileText } from "lucide-react";
 import { useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { VendorMark } from "~/components/entity/vendor-cell";
-import { Grid } from "~/components/layout";
+import { Grid, Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
@@ -144,8 +146,21 @@ export function PurchaseList() {
         header: "Lines",
         meta: {
           numeric: true,
-          className: "w-16",
+          className: "w-32",
           mobile: { slot: "meta", priority: 50 },
+        },
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <Row align="center" justify="end" gap="xs">
+              <span className="font-mono tabular-nums">{info.getValue()}</span>
+              {row.unpricedExpenseCount > 0 && (
+                <Badge variant="warning">
+                  {row.unpricedExpenseCount} unpriced
+                </Badge>
+              )}
+            </Row>
+          );
         },
       }),
       // THIS is the charge's spend, so it does carry a footer total.
@@ -161,6 +176,24 @@ export function PurchaseList() {
         header: "Reconciles",
         meta: { className: "w-32", mobile: { slot: "meta", priority: 60 } },
         cell: (info) => <ReconciliationBadge purchase={info.row.original} />,
+      }),
+      columnHelper.accessor((row) => row.documentCount, {
+        id: "documentCount",
+        header: "Documents",
+        meta: {
+          numeric: true,
+          className: "w-20",
+          mobile: { slot: "meta", priority: 70 },
+        },
+        cell: (info) =>
+          info.getValue() > 0 ? (
+            <Row align="center" justify="end" gap="xs">
+              <FileText className="size-3.5 text-muted-foreground" />
+              <span className="font-mono tabular-nums">{info.getValue()}</span>
+            </Row>
+          ) : (
+            <NoneValue />
+          ),
       }),
     ],
     [columnHelper],

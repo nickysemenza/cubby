@@ -56,6 +56,7 @@ import {
   expenseAnalytics,
   expenseList,
   getExpenseByShortcode,
+  updateExpense,
 } from "./expense";
 import { createProduct } from "./product";
 import {
@@ -279,6 +280,7 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
         makeExpenseInput({
           name: "reuse line one",
           cost: 40,
+          date: "2026-07-15",
           vendor: "Direct Tools Outlet",
           orderId: "DTO-9001",
         }),
@@ -291,6 +293,7 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
         makeExpenseInput({
           name: "reuse line two",
           cost: 60,
+          date: "2026-07-16",
           vendor: "Direct Tools Outlet",
           orderId: "DTO-9001",
         }),
@@ -307,8 +310,11 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
     // charge join, under the same output keys they always had.
     expect(first.vendor).toBe("Direct Tools Outlet");
     expect(first.orderId).toBe("DTO-9001");
+    expect(first.purchaseDate).toBe("2026-07-15");
     expect(second.vendor).toBe("Direct Tools Outlet");
     expect(second.orderId).toBe("DTO-9001");
+    // Reusing the charge never overwrites its own date from a later line.
+    expect(second.purchaseDate).toBe("2026-07-15");
 
     // One vendor, one charge, two lines.
     expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
@@ -317,6 +323,45 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
       await purchaseUuid(ctx.db, first.purchaseId!),
     );
     expect(lines.map((l) => l.id).sort()).toEqual([first.id, second.id].sort());
+    expect(
+      (
+        await getPurchaseByID(
+          ctx.db,
+          await purchaseUuid(ctx.db, first.purchaseId!),
+        )
+      ).date,
+    ).toBe("2026-07-15");
+  });
+
+  it("seeds a new charge from an existing expense date when a vendor is added", async () => {
+    const { output: unattached } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "dated before vendor",
+          date: "2026-07-20",
+          vendor: null,
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const { output: attached } = await updateExpense(
+      ctx.db,
+      unattached.id,
+      { vendor: "Date Seed Vendor" },
+      ctx.actor,
+    );
+
+    expect(attached.purchaseDate).toBe("2026-07-20");
+    expect(
+      (
+        await getPurchaseByID(
+          ctx.db,
+          await purchaseUuid(ctx.db, attached.purchaseId!),
+        )
+      ).date,
+    ).toBe("2026-07-20");
   });
 
   it("a vendor with NO orderId gets its own charge each time", async () => {
@@ -1219,8 +1264,8 @@ describe("purchase repository — deletion cascades", () => {
  * every spend number in the app, and `statedTotal` must never reach one.
  */
 /**
- * `resolvePurchaseSort` — the three sort keys that are NOT columns on
- * `Purchase`: the joined vendor name and the two correlated rollups. The generic
+ * `resolvePurchaseSort` — the sort keys that are NOT columns on `Purchase`:
+ * the joined vendor name and correlated rollups. The generic
  * column path can't produce them, so a regression here silently falls back to
  * the default order rather than erroring.
  */
@@ -1284,6 +1329,96 @@ describe("purchase repository — sorting over the joined name and rollups", () 
 
     expect(await idsSortedBy("expenseTotal", "desc")).toEqual([big, small]);
     expect(await idsSortedBy("expenseTotal", "asc")).toEqual([small, big]);
+  });
+});
+
+describe("purchase repository — purchase worklist filters", () => {
+  const ctx = withTestDb();
+
+  const seed = async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Filter Supply");
+    const makeCharge = async (
+      orderId: string,
+      statedTotal: number | null,
+      cost?: number | null,
+    ) => {
+      const { output: charge } = await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({ vendorId, orderId, statedTotal }),
+        ctx.actor,
+      );
+      if (cost !== undefined) {
+        await createExpense(
+          ctx.db,
+          expenseCreateInput.parse(
+            makeExpenseInput({
+              name: `${orderId} line`,
+              cost,
+              purchaseId: charge.id,
+            }),
+          ),
+          ctx.actor,
+        );
+      }
+      return charge.id;
+    };
+
+    return {
+      empty: await makeCharge("FILTER-EMPTY", null),
+      unpriced: await makeCharge("FILTER-UNPRICED", 10, null),
+      match: await makeCharge("FILTER-MATCH", 100, 99.99),
+      mismatch: await makeCharge("FILTER-MISMATCH", 100, 99.98),
+      credit: await makeCharge("FILTER-CREDIT", -5, -5),
+    };
+  };
+
+  const ids = async (filters: Parameters<typeof purchaseList>[1]) =>
+    new Set(
+      (await purchaseList(ctx.db, filters, [], page)).data.map((row) => row.id),
+    );
+
+  it("filters the disjoint empty, unpriced, and fully-priced line states", async () => {
+    const seeded = await seed();
+
+    expect(await ids({ lineStatus: "empty" })).toEqual(new Set([seeded.empty]));
+    expect(await ids({ lineStatus: "unpriced" })).toEqual(
+      new Set([seeded.unpriced]),
+    );
+    expect(await ids({ lineStatus: "priced" })).toEqual(
+      new Set([seeded.match, seeded.mismatch, seeded.credit]),
+    );
+    expect(await ids({ lineStatus: ["unpriced", "priced"] })).toEqual(
+      new Set([seeded.unpriced, seeded.match, seeded.mismatch, seeded.credit]),
+    );
+
+    const unpriced = (
+      await purchaseList(ctx.db, { lineStatus: "unpriced" }, [], page)
+    ).data[0];
+    expect(unpriced?.expenseCount).toBe(1);
+    expect(unpriced?.unpricedExpenseCount).toBe(1);
+  });
+
+  it("uses the same inclusive one-cent reconciliation boundary as the UI", async () => {
+    const seeded = await seed();
+
+    expect(await ids({ reconciliation: "unknown" })).toEqual(
+      new Set([seeded.empty]),
+    );
+    expect(await ids({ reconciliation: "match" })).toEqual(
+      new Set([seeded.match, seeded.credit]),
+    );
+    expect(await ids({ reconciliation: "mismatch" })).toEqual(
+      new Set([seeded.unpriced, seeded.mismatch]),
+    );
+  });
+
+  it("applies signed line-total bounds only when at least one line is priced", async () => {
+    const seeded = await seed();
+
+    expect(await ids({ expenseTotalMax: 0 })).toEqual(new Set([seeded.credit]));
+    expect(await ids({ expenseTotalMin: 99.99 })).toEqual(
+      new Set([seeded.match]),
+    );
   });
 });
 
@@ -1442,6 +1577,7 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
         makeExpenseInput({
           name: "orphaned by a deleted charge",
           cost: 60,
+          date: "2026-07-25",
           vendor: "Ghost Vendor",
           orderId: "GHOST-1",
         }),
@@ -1469,6 +1605,7 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
     expect(reread.vendor).toBeNull();
     expect(reread.orderId).toBeNull();
     expect(reread.purchaseId).toBeNull();
+    expect(reread.purchaseDate).toBeNull();
     expect(reread.vendorId).toBeNull();
     // The money is untouched.
     expect(reread.cost).toBe(60);
@@ -1586,6 +1723,57 @@ describe("purchase repository — documents", () => {
     expect(joins).toHaveLength(1);
     expect(joins[0]?.imageId).toBe(result.imageId);
     expect(joins[0]?.deletedAt).toBeNull();
+
+    const withDocuments = await purchaseList(
+      ctx.db,
+      { documentPresenceFilter: "has" },
+      [],
+      page,
+    );
+    expect(withDocuments.data).toHaveLength(1);
+    expect(withDocuments.data[0]?.documentCount).toBe(1);
+
+    const { output: bareCharge } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({ vendorId, orderId: "MS-INVOICE-2" }),
+      ctx.actor,
+    );
+    expect(
+      (
+        await purchaseList(
+          ctx.db,
+          {},
+          [{ orderBy: "documentCount", direction: "desc" }],
+          page,
+        )
+      ).data.map((row) => row.id),
+    ).toEqual([charge.id, bareCharge.id]);
+
+    // A tombstoned association is absent from both the count and presence
+    // filter, matching the detail query's soft-delete semantics.
+    await getDb(ctx.db)
+      .update(purchaseImage)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(purchaseImage.purchaseId, chargeUuid),
+          eq(purchaseImage.imageId, result.imageId),
+        ),
+      );
+    expect(
+      (await purchaseList(ctx.db, { documentPresenceFilter: "has" }, [], page))
+        .data,
+    ).toEqual([]);
+    const withoutDocuments = await purchaseList(
+      ctx.db,
+      { documentPresenceFilter: "none" },
+      [],
+      page,
+    );
+    expect(withoutDocuments.data).toHaveLength(2);
+    expect(withoutDocuments.data.every((row) => row.documentCount === 0)).toBe(
+      true,
+    );
   });
 
   it("the browser's two-phase document upload files the object under a purchase-scoped folder", async () => {
