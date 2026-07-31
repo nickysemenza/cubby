@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { fillCellEditor } from "./e2e-helpers";
+import { fillCellEditor, openCommandPalette } from "./e2e-helpers";
 
 /**
  * Coverage for the new (DB-backed) project-tracker surfaces: /projects
@@ -244,11 +244,9 @@ test.describe("Project tracker", () => {
 
     // Open the palette via the header's search trigger — same affordance as
     // Cmd/Ctrl+K (owned by __root.tsx), stabler to drive headlessly than a
-    // synthetic key chord.
-    await page.getByRole("button", { name: "Search" }).click();
-
-    const palette = page.getByRole("dialog");
-    await expect(palette).toBeVisible({ timeout: 10000 });
+    // synthetic key chord. openCommandPalette waits out the just-closed create
+    // dialog's fading backdrop before clicking (see helper).
+    const palette = await openCommandPalette(page);
     const searchInput = palette.getByPlaceholder(
       "Search, jump to a page, or ask Cubby…",
     );
@@ -267,10 +265,13 @@ test.describe("Project tracker", () => {
     await searchInput.fill(`tasks:${name}`);
 
     // Target the search-result name node specifically; the Ask Cubby action
-    // below the results also contains the literal query.
-    const resultName = palette.locator("div.truncate.text-sm", {
-      hasText: name,
-    });
+    // below the results also contains the literal query. `.first()` because the
+    // two-stage search (lexical → hybrid) can render the same task in two rows;
+    // both open the same detail page, so either is a valid target and picking
+    // one keeps the visibility check + click from tripping strict mode.
+    const resultName = palette
+      .locator("div.truncate.text-sm", { hasText: name })
+      .first();
     await expect(resultName).toBeVisible({ timeout: 10000 });
     const resultItem = resultName.locator("xpath=ancestor::*[@cmdk-item]");
     await expect(resultItem.getByText("task", { exact: true })).toBeVisible();
@@ -294,8 +295,7 @@ test.describe("Project tracker", () => {
     });
 
     // The exhaustive search page receives the clean query and selected type.
-    await page.getByRole("button", { name: "Search" }).click();
-    const reopenedPalette = page.getByRole("dialog");
+    const reopenedPalette = await openCommandPalette(page);
     await reopenedPalette
       .getByPlaceholder("Search, jump to a page, or ask Cubby…")
       .fill(`task:${name}`);

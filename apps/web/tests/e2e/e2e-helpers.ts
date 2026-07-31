@@ -112,6 +112,32 @@ export async function fillCellEditor(page: Page, value: string) {
   await input.press("Enter");
 }
 
+/**
+ * Open the global command palette via the header "Search" trigger and return
+ * its dialog.
+ *
+ * `exact: true` is load-bearing: a non-exact name is a substring match, and the
+ * ProblemsBadge renders an "N missing a search embedding — Click to view" link
+ * (role=button) whenever a freshly-created entity hasn't been embedded yet —
+ * that "search" substring collides with the trigger and trips strict mode
+ * intermittently. This was the shard-2 command-palette flake.
+ *
+ * The overlay-count wait is secondary hardening: a dialog that just closed
+ * (e.g. a quick-add form) keeps its Base UI backdrop (`data-slot="dialog-overlay"`,
+ * `fixed inset-0 z-50`) mounted for its ~100ms fade-out, and that backdrop can
+ * intercept pointer events over the trigger while `expect(dialog).not.toBeVisible()`
+ * (which only checks the dialog *panel*) has already passed.
+ */
+export async function openCommandPalette(page: Page): Promise<Locator> {
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0);
+  const trigger = page.getByRole("button", { name: "Search", exact: true });
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  const palette = page.getByRole("dialog");
+  await expect(palette).toBeVisible({ timeout: 10000 });
+  return palette;
+}
+
 // Helper to create a location via UI. Asserts the id-bearing detail URL and
 // that the name renders, so callers (and the create-location spec) get the same
 // coverage the inline flow used to.
