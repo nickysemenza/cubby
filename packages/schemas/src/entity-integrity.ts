@@ -188,6 +188,63 @@ export const entityLifecycleSchema = z.object({
 export type EntityLifecycle = z.infer<typeof entityLifecycleSchema>;
 
 /**
+ * One physical incoming edge, flattened for the wire. `INCOMING_EDGES` holds
+ * Drizzle column objects, which cannot be serialized or validated — this is the
+ * projection of them the client actually gets.
+ */
+export const physicalEdgeSchema = z.object({
+  edgeKey: edgeKeySchema,
+  /** The entity whose `id` this edge points at. */
+  targetEntity: entitySchema,
+  sourceTable: z.string().min(1),
+  sourceColumn: z.string().min(1),
+  /** False when the relationship is real but carries no DB-level FK constraint. */
+  constrained: z.boolean(),
+  semantics: edgeSemanticsSchema,
+});
+export type PhysicalEdge = z.infer<typeof physicalEdgeSchema>;
+
+/** Every disposition one operation declares, keyed by edge. */
+export const lifecycleOperationSchema = z.object({
+  entity: entitySchema,
+  operation: z.enum(["delete", "merge"]),
+  dispositions: z.array(
+    z.object({
+      edgeKey: edgeKeySchema,
+      disposition: operationDispositionSchema,
+    }),
+  ),
+});
+export type LifecycleOperation = z.infer<typeof lifecycleOperationSchema>;
+
+/**
+ * The static architecture surface behind `/entities?tab=integrity`. Pure
+ * projection of compile-time constants — the procedure that serves it runs no
+ * queries at all.
+ */
+export const integrityCatalogSchema = z.object({
+  entities: z.array(
+    z.object({
+      entity: entitySchema,
+      dbTable: z.string().nullable(),
+      relationships: z.array(entityRelationshipSchema),
+      lifecycle: entityLifecycleSchema,
+      incomingEdges: z.array(physicalEdgeSchema),
+    }),
+  ),
+  operations: z.array(lifecycleOperationSchema),
+  /** Denominators for the tab's summary metrics. */
+  coverage: z.object({
+    relationships: z.number().int(),
+    incomingEdges: z.number().int(),
+    auditedEdges: z.number().int(),
+    exemptEdges: z.number().int(),
+    operations: z.number().int(),
+  }),
+});
+export type IntegrityCatalog = z.infer<typeof integrityCatalogSchema>;
+
+/**
  * One live source row pointing at a soft-deleted target, on an edge whose
  * liveness rule is `must-target-live`.
  */

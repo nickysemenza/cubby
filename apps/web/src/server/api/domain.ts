@@ -4,6 +4,7 @@ import { auditLogRouter } from "./routers/audit-log";
 import { backgroundJobsRouter } from "./routers/background-jobs";
 import { calendarRouter } from "./routers/calendar";
 import { dashboardRouter } from "./routers/dashboard";
+import { entityIntegrityRouter } from "./routers/entity-integrity";
 import { expenseRouter } from "./routers/expense";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
@@ -47,6 +48,7 @@ export const domainRouterRecord = {
   upc: upcRouter,
   image: imageRouter,
   problems: problemsRouter,
+  entityIntegrity: entityIntegrityRouter,
   auditLog: auditLogRouter,
   search: searchRouter,
   suggestions: suggestionsRouter,

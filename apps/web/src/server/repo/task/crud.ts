@@ -7,6 +7,7 @@
  * rows) inside the same transaction as the column update.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProductId, TaskId } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkDueDateInput,
@@ -49,13 +50,25 @@ import { assertProjectLive } from "~/server/repo/project";
 import { dbTaskToAPI } from "./helpers";
 
 export const TASK_DELETE_EDGE_POLICY = {
-  "Task.parentTaskId": "cascade-live-child",
-  "TaskDependency.taskId": "hard-delete-dependency",
-  "TaskDependency.blockedByTaskId": "hard-delete-dependency",
-} as const satisfies IncomingEdgePolicy<
-  "task",
-  "cascade-live-child" | "hard-delete-dependency"
->;
+  "Task.parentTaskId": {
+    code: "cascade-live-child",
+    effect: "soft-delete",
+    description:
+      "A deleted task's live subtasks are soft-deleted alongside it — they're checklist items with no independent existence.",
+  },
+  "TaskDependency.taskId": {
+    code: "hard-delete-dependency",
+    effect: "hard-delete",
+    description:
+      "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
+  },
+  "TaskDependency.blockedByTaskId": {
+    code: "hard-delete-dependency",
+    effect: "hard-delete",
+    description:
+      "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
+  },
+} as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
 /** `taskUpdateData` has no standalone type export — derive it from the input. */
 type TaskUpdateData = TaskUpdateInput["data"];

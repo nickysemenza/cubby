@@ -4,6 +4,7 @@
  * surviving target before hard-deleting the absorbed rows.
  */
 
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
@@ -29,9 +30,19 @@ import {
 } from "~/server/repo/database-helpers";
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
-  "RecipeSectionIngredient.ingredientId": "repoint-to-survivor",
-  "Product.ingredientId": "repoint-to-survivor",
-} as const satisfies IncomingEdgePolicy<"ingredient", "repoint-to-survivor">;
+  "RecipeSectionIngredient.ingredientId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "A merged ingredient's recipe lines are re-pointed onto the surviving ingredient.",
+  },
+  "Product.ingredientId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "A merged ingredient's linked products are re-pointed onto the surviving ingredient.",
+  },
+} as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
 /**
  * The serialized {@link MergeSummaryOut} (aliasesAdded / recipesMoved /

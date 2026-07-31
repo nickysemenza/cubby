@@ -172,11 +172,32 @@ const GROUPS: Group[] = [
     rows: [
       {
         label: "References →",
-        cell: ({ d }) => <Chips items={d.references} />,
+        cell: ({ entity }) => <Chips items={entityReferences(entity)} />,
       },
       {
         label: "← Referenced by",
         cell: ({ entity }) => <Chips items={referencesInto(entity)} />,
+      },
+    ],
+  },
+  {
+    title: "Lifecycle",
+    rows: [
+      {
+        label: "Delete",
+        cell: ({ d }) =>
+          d.lifecycle.delete ? (
+            <span className={mono}>
+              {d.lifecycle.delete.mode}
+              {d.lifecycle.delete.bulk ? " · bulk" : " · single"}
+            </span>
+          ) : (
+            dash
+          ),
+      },
+      {
+        label: "Mergeable",
+        cell: ({ d }) => <Bool value={d.lifecycle.merge} />,
       },
     ],
   },

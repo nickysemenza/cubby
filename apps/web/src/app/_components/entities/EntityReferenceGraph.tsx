@@ -1,5 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, entityReferences } from "@cubby/schemas/entity-manifest";
+import {
+  allEntities,
+  entityManifest,
+  entityReferences,
+} from "@cubby/schemas/entity-manifest";
 import * as d3Force from "d3-force";
 import {
   useCallback,
@@ -11,6 +15,7 @@ import {
 } from "react";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { cn } from "~/lib/utils";
 import { VizOverlay } from "../visualizations/viz-overlay";
 
 interface GraphNode extends d3Force.SimulationNodeDatum {
@@ -21,13 +26,49 @@ interface GraphLink extends d3Force.SimulationLinkDatum<GraphNode> {
   target: string | GraphNode;
 }
 
+/** Node treatment: default reference-graph coloring, delete/merge lifecycle, or referential-health. */
+export type EntityGraphLens = "logical" | "lifecycle" | "health";
+
+/** Stable empty default — a fresh `new Set()` per render would destabilize `fillFor`. */
+const EMPTY_UNHEALTHY: ReadonlySet<Entity> = new Set();
+
+const LENS_CAPTION: Record<EntityGraphLens, string> = {
+  logical:
+    "Arrow → the entity it references · size = times referenced · dashed ring = self-reference",
+  lifecycle:
+    "Fill = delete mode (ultramarine soft · red hard · slate none) · dashed plum ring = mergeable",
+  health: "Red = has a live referential-integrity finding",
+};
+
+interface EntityReferenceGraphProps {
+  /** Entity shown in a detail panel elsewhere on the page; drawn with a selection ring. */
+  selected?: Entity | null;
+  /** Called when a node is clicked. Omit to keep the graph purely decorative (EntityManifestGrid). */
+  onSelect?: (entity: Entity) => void;
+  /** Node treatment. Defaults to the original reference-graph coloring. */
+  lens?: EntityGraphLens;
+  /** Entities with at least one live referential-integrity finding — read by the "health" lens. */
+  unhealthyEntities?: ReadonlySet<Entity>;
+}
+
 /**
  * Directed reference graph of every entity, laid out by d3-force straight from
  * the manifest's `references` — add an entity or edge and it appears here with
  * no layout to maintain. Arrows point from an entity to what it references; a
  * node's size grows with how many entities reference it (image is the hub).
+ *
+ * `lens` swaps node coloring without touching the edges or layout: `logical`
+ * (default) is the original per-entity accent; `lifecycle` colors by delete
+ * mode and rings mergeable entities; `health` highlights only entities present
+ * in `unhealthyEntities`, everything else falls back to a neutral slate so a
+ * clean audit reads as calm rather than a wall of green.
  */
-export function EntityReferenceGraph() {
+export function EntityReferenceGraph({
+  selected = null,
+  onSelect,
+  lens = "logical",
+  unhealthyEntities = EMPTY_UNHEALTHY,
+}: EntityReferenceGraphProps = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const arrowId = useId().replace(/:/g, "");
   const arrowActiveId = `${arrowId}a`;
@@ -70,6 +111,26 @@ export function EntityReferenceGraph() {
   const getRadius = useCallback(
     (id: Entity) => 12 + Math.min(inDegree.get(id) ?? 0, 5) * 3,
     [inDegree],
+  );
+
+  // Node fill per lens — edges and layout stay identical across lenses, only
+  // this changes. `logical` preserves the exact prior behavior.
+  const fillFor = useCallback(
+    (id: Entity): string => {
+      if (lens === "health") {
+        return unhealthyEntities.has(id)
+          ? "var(--destructive)"
+          : "var(--slate)";
+      }
+      if (lens === "lifecycle") {
+        const mode = entityManifest[id].lifecycle.delete?.mode;
+        if (mode === "hard") return "var(--destructive)";
+        if (mode === "soft") return "var(--primary)";
+        return "var(--slate)";
+      }
+      return ENTITY_ACCENTS[id];
+    },
+    [lens, unhealthyEntities],
   );
 
   useEffect(() => {
@@ -189,15 +250,21 @@ export function EntityReferenceGraph() {
               !entityReferences(hovered).includes(node.id) &&
               !entityReferences(node.id).includes(hovered);
             const hasSelf = selfLoops.includes(node.id);
+            const mergeable =
+              lens === "lifecycle" && entityManifest[node.id].lifecycle.merge;
             return (
-              // biome-ignore lint/a11y/noStaticElementInteractions: graph node hover
+              // biome-ignore lint/a11y/noStaticElementInteractions: graph node hover/select
               <g
                 key={node.id}
                 transform={`translate(${node.x ?? 0}, ${node.y ?? 0})`}
                 opacity={dim ? 0.25 : 1}
-                className="cursor-default transition-opacity"
+                className={cn(
+                  "transition-opacity",
+                  onSelect ? "cursor-pointer" : "cursor-default",
+                )}
                 onMouseEnter={() => setHovered(node.id)}
                 onMouseLeave={() => setHovered(null)}
+                onClick={() => onSelect?.(node.id)}
               >
                 {hasSelf && (
                   <circle
@@ -208,9 +275,26 @@ export function EntityReferenceGraph() {
                     strokeDasharray="2 2"
                   />
                 )}
+                {mergeable && (
+                  <circle
+                    r={r + 7}
+                    fill="none"
+                    stroke="var(--plum)"
+                    strokeWidth={1.25}
+                    strokeDasharray="2 2"
+                  />
+                )}
+                {selected === node.id && (
+                  <circle
+                    r={r + 10}
+                    fill="none"
+                    stroke="var(--primary)"
+                    strokeWidth={2}
+                  />
+                )}
                 <circle
                   r={r}
-                  fill={ENTITY_ACCENTS[node.id]}
+                  fill={fillFor(node.id)}
                   stroke="var(--card)"
                   strokeWidth={2}
                 />
@@ -228,8 +312,7 @@ export function EntityReferenceGraph() {
       </svg>
 
       <VizOverlay className="text-muted-foreground">
-        Arrow → the entity it references · size = times referenced · dashed ring
-        = self-reference
+        {LENS_CAPTION[lens]}
       </VizOverlay>
     </div>
   );

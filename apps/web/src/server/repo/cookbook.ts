@@ -9,6 +9,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
@@ -38,8 +39,13 @@ import {
 } from "~/server/repo/recipe";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
-  "Recipe.cookbookId": "cascade-delete-entity",
-} as const satisfies IncomingEdgePolicy<"cookbook", "cascade-delete-entity">;
+  "Recipe.cookbookId": {
+    code: "cascade-delete-entity",
+    effect: "soft-delete",
+    description:
+      "Deleting a cookbook soft-deletes every recipe it produced, along with their sections, images, and meal associations.",
+  },
+} as const satisfies IncomingEdgePolicy<"cookbook", OperationDisposition>;
 
 // Everything an import knows about a cookbook before its recipes are written: the
 // book name plus the full extraction and OPF metadata. `author`/`subjects` default
