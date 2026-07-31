@@ -15,7 +15,7 @@ export async function waitForFormHydration(page: Page) {
 }
 
 /**
- * Click a DialogCompatibleCombobox and select an item from the dropdown.
+ * Open an EntityPicker, type in its single combobox input, and select a result.
  *
  * Uses Playwright's `toPass` retry to handle the SSR-hydration race:
  * keeps clicking the combobox until `aria-expanded` becomes "true",
@@ -24,7 +24,6 @@ export async function waitForFormHydration(page: Page) {
 export async function selectComboboxItem(
   page: Page,
   combobox: Locator,
-  searchPlaceholder: string,
   itemName: string,
 ) {
   await expect(combobox).toBeVisible({ timeout: 10000 });
@@ -35,9 +34,7 @@ export async function selectComboboxItem(
     await expect(combobox).toHaveAttribute("aria-expanded", "true");
   }).toPass({ timeout: 5000 });
 
-  const searchInput = page.getByPlaceholder(searchPlaceholder);
-  await expect(searchInput).toBeVisible({ timeout: 5000 });
-  await searchInput.fill(itemName);
+  await combobox.fill(itemName);
 
   // Wait for and click the matching option. The name regex is anchored to the
   // start: while the debounced search is still loading, the popup shows a
@@ -45,7 +42,7 @@ export async function selectComboboxItem(
   // contains itemName — an unanchored (substring) match clicks it and opens
   // the quick-create dialog, wedging the whole form behind aria-hidden.
   const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const option = page.getByRole("button", {
+  const option = page.getByRole("option", {
     name: new RegExp(`^${escapedName}`),
   });
   await expect(option).toBeVisible({ timeout: 10000 });
@@ -210,12 +207,10 @@ export async function createProductWithIngredientMappings(
   await fillInput(page, "Enter product name", opts.name);
   await fillInput(page, "Enter manufacturer", opts.manufacturer);
 
-  // Link to the ingredient. The field label is "Linked ingredient" — the
-  // combobox derives its search placeholder from the lowercased label.
+  // Link to the ingredient through the picker’s single labeled search input.
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: /ingredient/i }),
-    "Search linked ingredient...",
     opts.ingredientName,
   );
 
@@ -265,7 +260,6 @@ export async function addInventory(
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: /product/i }),
-    "Search product...",
     productName,
   );
 
@@ -273,7 +267,6 @@ export async function addInventory(
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: /location/i }),
-    "Search location...",
     locationName,
   );
 

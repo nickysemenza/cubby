@@ -28,7 +28,6 @@ test.describe("Bulk Move Inventory - Transfer", () => {
     await selectComboboxItem(
       page,
       page.getByRole("combobox", { name: /from location/i }),
-      "Search from location...",
       sourceName,
     );
 
@@ -44,7 +43,6 @@ test.describe("Bulk Move Inventory - Transfer", () => {
     await selectComboboxItem(
       page,
       page.getByRole("combobox", { name: /to location/i }),
-      "Search to location...",
       targetName,
     );
 
