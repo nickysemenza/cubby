@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Audit"
+  short_description: "Run Cubby’s verified multi-agent repo audit"
+  default_prompt: "Use $repo-audit to run Cubby’s full verified repository audit and write the report."
