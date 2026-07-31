@@ -994,6 +994,50 @@ describe("unknown filter keys are rejected", () => {
   });
 });
 
+describe("MCP response serialization", () => {
+  it("keeps a 100-row expense page while compacting its JSON text mirror", async () => {
+    const representativeExpense = mock(expenseOut, {
+      seed: 100,
+      overrides: {
+        id: unsafeExpenseShortcode("EXP-6662"),
+        name: "Festool CT 36 E HEPA dust extractor with accessories",
+        notes:
+          "Imported from a vendor receipt; retain this provenance for later reconciliation and duplicate review.",
+        url: "https://example.com/orders/representative-wide-expense-row",
+      },
+    });
+    const items = Array.from({ length: 100 }, () => representativeExpense);
+    const list = vi.fn().mockResolvedValue({
+      meta: { pageIndex: 0, pageSize: 100, totalCount: 100 },
+      items,
+    });
+
+    const result = await callTool(
+      createMcpServer(),
+      "list_expenses",
+      { pageSize: 100 },
+      { expense: { list } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pagination: { pageIndex: 0, pageSize: 100 },
+      }),
+    );
+    expect(
+      (result.structuredContent as { items: unknown[] }).items,
+    ).toHaveLength(100);
+
+    const content = result.content as CallToolResult["content"];
+    const text = (content[0] as { type: "text"; text: string }).text;
+    const compact = JSON.stringify(result.structuredContent);
+    const pretty = JSON.stringify(result.structuredContent, null, 2);
+    expect(text).toBe(compact);
+    expect(text.length).toBeLessThan(pretty.length * 0.8);
+  });
+});
+
 describe("household tracker synthesis + bulk tools", () => {
   // project/task/expense are addressed by their public code end to end now —
   // the tool input, the router call, and the row's own `id` are all the same

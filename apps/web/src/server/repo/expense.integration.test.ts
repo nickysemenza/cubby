@@ -2931,6 +2931,24 @@ describe("expense repository — matchExpenses", () => {
     });
   });
 
+  it("classifies a nominal one-cent float delta as exact", async () => {
+    const fourCentLine = await line("four-cent line", {
+      cost: 0.04,
+      date: "2026-04-03",
+    });
+
+    const result = await run([
+      { key: "one-cent-gap", date: "2026-04-03", amount: 0.03 },
+    ]);
+    const hit = result.matches[0]?.candidates.find(
+      (candidate) => candidate.expenseId === fourCentLine.id,
+    );
+
+    // `0.04 - 0.03` is 0.010000000000000002 as a raw float. The documented
+    // boundary is one cent, so classification must happen after cent rounding.
+    expect(hit?.ratioLabel).toBe("exact");
+  });
+
   it("computes the amount window on the SIGNED amount, so credits match credits", async () => {
     const refund = await line("festool accessory refund", {
       cost: -96.67,
