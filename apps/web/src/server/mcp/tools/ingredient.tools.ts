@@ -2,7 +2,6 @@ import {
   ingredientFilterFields,
   ingredientMcpListOut,
   ingredientMcpOut,
-  ingredientMergeBatchInput,
   ingredientMergeBatchOut,
   ingredientRawLinesBatchOut,
   ingredientResolvableNamesInput,
@@ -17,15 +16,50 @@ import { z } from "zod";
 import {
   formatToolError,
   getCaller,
+  idParam,
+  mustResolvedId,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
+  resolvePublicIdMap,
+  resolvePublicIds,
   slimIngredient,
   structuredSuccessWithError,
   WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
+
+/**
+ * `ingredientMergeBatchInput` (target/aliases as branded ingredient uuids) is
+ * MCP-only but lives in packages/schemas — this local shape is what the
+ * shortcode conversion actually needs, kept beside the tool per the "prefer
+ * defining it next to the tool" rule rather than edited in place.
+ */
+const mergeIngredientsMcpInput = z.object({
+  merges: z
+    .array(
+      z.object({
+        target: idParam("ingredient").describe(
+          "Shortcode of the ingredient to keep",
+        ),
+        aliases: z
+          .array(idParam("ingredient"))
+          .min(1)
+          .describe(
+            "Shortcodes of duplicate ingredients to fold into the target",
+          ),
+      }),
+    )
+    .min(1)
+    .describe("One entry per duplicate cluster to merge"),
+  dryRun: z
+    .boolean()
+    .optional()
+    .describe(
+      "Validate shortcodes and report what each cluster WOULD change, without writing.",
+    ),
+});
 
 export function registerIngredientTools(server: McpServer) {
   registerEntityCrudToolset(server, {
@@ -73,7 +107,7 @@ export function registerIngredientTools(server: McpServer) {
     name: "merge_ingredients",
     description:
       "Merge one or more clusters of duplicate ingredients in a single call.",
-    inputSchema: ingredientMergeBatchInput.shape,
+    inputSchema: mergeIngredientsMcpInput.shape,
     outputSchema: ingredientMergeBatchOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     handler: async (params, extra) => {
@@ -83,6 +117,13 @@ export function registerIngredientTools(server: McpServer) {
         aliases: string[];
       }>;
       const dryRun = params.dryRun as boolean | undefined;
+      // Every code across every cluster resolves in ONE batched call, since
+      // they're all the same entity (ingredient) and a code may recur.
+      const idByCode = await resolvePublicIdMap(
+        caller,
+        "ingredient",
+        merges.flatMap((m) => [m.target, ...m.aliases]),
+      );
       const results: Array<{
         target: string;
         ok: boolean;
@@ -90,15 +131,29 @@ export function registerIngredientTools(server: McpServer) {
         error?: string;
       }> = [];
       for (const { target, aliases } of merges) {
+        // outputSchema's `target` is a branded ingredientId (uuid), so the
+        // resolved id — not the shortcode the caller passed — is what's echoed.
+        const targetId = mustResolvedId(idByCode, "ingredient", target);
+        const aliasIds = aliases.map((a) =>
+          mustResolvedId(idByCode, "ingredient", a),
+        );
         try {
           const result = await caller.ingredient.merge({
-            target,
-            aliases,
+            target: targetId,
+            aliases: aliasIds,
             dryRun,
           });
-          results.push({ target, ok: true, summary: result.mergeSummary });
+          results.push({
+            target: targetId,
+            ok: true,
+            summary: result.mergeSummary,
+          });
         } catch (error) {
-          results.push({ target, ok: false, error: formatToolError(error) });
+          results.push({
+            target: targetId,
+            ok: false,
+            error: formatToolError(error),
+          });
         }
       }
       const payload = {
@@ -118,16 +173,17 @@ export function registerIngredientTools(server: McpServer) {
       "Bulk parser-triage dump: for each ingredient id, the original rawLine of every recipe line currently linked to it.",
     inputSchema: {
       ids: z
-        .array(z.string())
+        .array(idParam("ingredient"))
         .min(1)
-        .describe("Ingredient IDs to dump raw lines for"),
+        .describe("Ingredient shortcodes to dump raw lines for"),
     },
     outputSchema: ingredientRawLinesBatchOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
+      const ids = await resolvePublicIds(caller, "ingredient", params.ids);
       const rows = (await caller.ingredient.rawLines({
-        ids: params.ids,
+        ids,
       })) as Array<{
         ingredientId: string;
         lineId: string;

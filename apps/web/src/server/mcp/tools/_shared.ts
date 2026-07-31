@@ -51,7 +51,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { TRPCError } from "@trpc/server";
-import { omitBy } from "es-toolkit";
+import { omitBy, uniq } from "es-toolkit";
 import { z } from "zod";
 import type { DomainCaller } from "~/server/api/domain";
 
@@ -63,7 +63,7 @@ import type { DomainCaller } from "~/server/api/domain";
  * helpers, the slim output projections, and the CRUD handler factories.
  */
 
-type Caller = DomainCaller;
+export type Caller = DomainCaller;
 
 type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
@@ -775,6 +775,73 @@ export async function resolvePublicId(
   return id;
 }
 
+/**
+ * Resolve an optional/nullable FK shortcode field: `undefined` (field
+ * omitted) and `null` (explicit clear) both pass through unchanged; only a
+ * real code makes the round trip. The common shape for an optional single-id
+ * FK field on a create/update input.
+ */
+export async function resolveOptionalId(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  code: string | null | undefined,
+): Promise<string | null | undefined> {
+  if (code == null) return code;
+  return resolvePublicId(caller, entity, code);
+}
+
+/**
+ * Batch-resolve a set of same-entity codes to a `code -> uuid` map, for a
+ * payload that needs to look the same code up more than once while walking a
+ * nested shape (e.g. an ingredient merge's `target` plus every `aliases[]`
+ * entry, which may repeat across clusters). One round trip regardless of how
+ * many times a code recurs — `resolvePublicIds` is called once on the
+ * deduplicated set.
+ */
+export async function resolvePublicIdMap(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<Map<string, string>> {
+  const unique = uniq(codes);
+  const ids = await resolvePublicIds(caller, entity, unique);
+  // resolvePublicIds returns exactly one id per input code, same order.
+  return new Map(unique.map((code, i) => [code, ids[i]!]));
+}
+
+/**
+ * Resolve a `oneOrMany(idParam(entity))` filter value — a bare code or an
+ * array of codes — to the uuid(s) the repo's filter expects, preserving
+ * whichever shape the caller used (a bare-code filter must stay bare; the
+ * repo dispatches on `Array.isArray` to decide `eq` vs `inArray`).
+ */
+export async function resolveOneOrManyFilter(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  value: string | readonly string[],
+): Promise<string | string[]> {
+  const isArray = Array.isArray(value);
+  const codes = isArray ? value : [value];
+  const idByCode = await resolvePublicIdMap(caller, entity, codes);
+  const ids = codes.map((code) => mustResolvedId(idByCode, entity, code));
+  return isArray ? ids : ids[0]!;
+}
+
+/** Look up a code in a `resolvePublicIdMap` result, throwing the same shape
+ * of error as a direct miss would (the map is always built from the exact
+ * codes being looked up here, so a miss would indicate a caller bug, not a
+ * bad shortcode — but we still fail loudly rather than pass `undefined`
+ * through to a branded-id field). */
+export function mustResolvedId(
+  map: ReadonlyMap<string, string>,
+  entity: ShortcodeEntity,
+  code: string,
+): string {
+  const id = map.get(code);
+  if (!id) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+  return id;
+}
+
 interface DynamicEntityRouter {
   create(input: Record<string, unknown>): Promise<unknown>;
   getByID(input: { id: unknown }): Promise<unknown>;
@@ -831,15 +898,28 @@ function deleteHandler(routerName: string, entity: ShortcodeEntity) {
   };
 }
 
+/**
+ * Transform an update tool's `data` object after the self-id has been pulled
+ * off and before it reaches the router — the hook a FK field inside `data`
+ * (e.g. product's `ingredientId`) resolves through, since the generic
+ * `updateHandler` below knows nothing about any field but `id`.
+ */
+type ResolveUpdateData = (
+  caller: Caller,
+  data: Record<string, unknown>,
+) => Promise<Record<string, unknown>> | Record<string, unknown>;
+
 function updateHandler(
   routerName: string,
   entity: ShortcodeEntity,
   slim: Slim = identity,
+  resolveData?: ResolveUpdateData,
 ) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const caller = getCaller(extra);
     const { id, ...rest } = params;
-    const data = omitBy(rest, (v) => v === undefined);
+    let data = omitBy(rest, (v) => v === undefined);
+    if (resolveData) data = await resolveData(caller, data);
     const result = await getEntityRouter(caller, routerName).update({
       id: await resolvePublicId(caller, entity, id as string),
       data,
@@ -848,26 +928,40 @@ function updateHandler(
   };
 }
 
+/**
+ * A list tool's filter builder. Most entities have no FK filter fields and
+ * stay synchronous (`pickSchemaFilters`); one with a filter like
+ * `locationIdFilter`/`projectId` needs `caller` to resolve the shortcode to a
+ * uuid before it reaches the router, hence the `Caller` param and the
+ * `Promise` return — awaited unconditionally below, which is a no-op for a
+ * plain synchronous builder.
+ */
+type BuildListFilters = (
+  caller: Caller,
+  params: Row,
+) => Record<string, unknown> | Promise<Record<string, unknown>>;
+
 function listHandler(
   routerName: string,
   slim: Slim,
   config: {
     orderBy: string;
     direction?: "asc" | "desc";
-    buildFilters?: (params: Row) => Record<string, unknown>;
+    buildFilters?: BuildListFilters;
     filterFields?: Record<string, z.ZodType>;
     defaultPageSize?: number;
   },
 ) {
-  const resolveFilters =
+  const resolveFilters: BuildListFilters =
     config.buildFilters ??
     (config.filterFields
-      ? (params: Row) => pickSchemaFilters(params, config.filterFields!)
+      ? (_caller, params) => pickSchemaFilters(params, config.filterFields!)
       : () => ({}));
 
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const result = await getEntityRouter(getCaller(extra), routerName).list({
-      filters: resolveFilters(params),
+    const caller = getCaller(extra);
+    const result = await getEntityRouter(caller, routerName).list({
+      filters: await resolveFilters(caller, params),
       sort: { orderBy: config.orderBy, direction: config.direction ?? "asc" },
       pagination: {
         pageIndex: (params.pageIndex as number) ?? 0,
@@ -962,7 +1056,7 @@ type EntityListToolConfig = {
   annotations: ToolAnnotations;
   defaultPageSize?: number;
   maxPageSize?: number;
-  buildFilters?: (params: Row) => Record<string, unknown>;
+  buildFilters?: BuildListFilters;
 };
 
 export function registerEntityListTool(
@@ -1053,6 +1147,8 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     outputSchema: z.ZodType;
     slim: Slim;
     annotations: ToolAnnotations;
+    /** Resolve any FK shortcode fields inside `data` before it reaches the router. */
+    resolveUpdateData?: ResolveUpdateData;
   },
 ) {
   registerMcpTool(server, {
@@ -1066,6 +1162,7 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
         config.router,
         config.entity,
         config.slim,
+        config.resolveUpdateData,
       )(params as Record<string, unknown>, extra),
   });
 }
@@ -1141,6 +1238,10 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
   ) => Promise<unknown>;
   /** Override the get fetch — see `GetByIdFetch`. */
   get?: GetByIdFetch;
+  /** Resolve any FK shortcode fields inside update's `data` before the router sees it. */
+  resolveUpdateData?: ResolveUpdateData;
+  /** Override list's default filter passthrough — needed when a filter field is itself an FK shortcode. */
+  buildFilters?: BuildListFilters;
 };
 
 /**
@@ -1176,6 +1277,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       sort: config.sort,
       defaultPageSize: config.paging?.defaultPageSize,
       maxPageSize: config.paging?.maxPageSize,
+      buildFilters: config.buildFilters,
       annotations: READ_ONLY_CLOSED,
     });
 
@@ -1221,6 +1323,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       router: config.entity,
       entity: config.entity,
       annotations: WRITE_CLOSED,
+      resolveUpdateData: config.resolveUpdateData,
     });
 
   if (enabled("delete")) {

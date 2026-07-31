@@ -6,6 +6,7 @@ import {
   mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
+  mealRecipeInput,
   mealScale,
   mealUpdateData,
   shoppingListOut,
@@ -15,20 +16,45 @@ import { z } from "zod";
 import { SHOPPING_LIST_UI } from "../apps";
 import {
   getCaller,
+  idParam,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
+  resolvePublicId,
+  resolvePublicIdMap,
   respond,
   respondList,
   slimMeal,
   WRITE_CLOSED,
 } from "./_shared";
 
+/**
+ * `mealCreateInput`/`mealAddRecipeInput` are shared with the tRPC router (and
+ * meal-table.tsx), so the branded-uuid `recipeId`/`mealId` fields stay as-is
+ * there — these MCP-only overrides carry the shortcode swap instead.
+ */
+const mealRecipeMcpInput = mealRecipeInput.extend({
+  recipeId: idParam("recipe").describe(
+    "Recipe shortcode to plan into the meal",
+  ),
+});
+
+const mealCreateMcpInput = mealCreateInput.extend({
+  recipes: z.array(mealRecipeMcpInput).optional(),
+});
+
+const mealAddRecipeMcpInput = mealAddRecipeInput.extend({
+  mealId: idParam("meal"),
+  recipeId: idParam("recipe").describe(
+    "Recipe shortcode to plan into the meal",
+  ),
+});
+
 export function registerMealTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "meal",
-    createInput: mealCreateInput.shape,
+    createInput: mealCreateMcpInput.shape,
     updateShape: mealUpdateData.shape,
     filterFields: mealFilterFields,
     mcpListOut: mealMcpListOut,
@@ -39,11 +65,29 @@ export function registerMealTools(server: McpServer) {
       list: "List meals (planned eating occasions), most recent first, optionally bounded by a date range.",
       get: "Get a single meal by ID, including its planned recipes and cost/calorie totals.",
       create:
-        "Create a meal on a calendar day. Optionally include recipes (by recipe ID) to plan in one call; use list_recipes/get_recipe to resolve IDs.",
+        "Create a meal on a calendar day. Optionally include recipes (by recipe shortcode) to plan in one call; use list_recipes/get_recipe to resolve shortcodes.",
       update:
         "Update a meal's date, name, or sort order. Recipes are managed via add/update/remove_meal_recipe.",
       delete:
         "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
+    },
+    create: async (caller, params) => {
+      const recipes = params.recipes as
+        | Array<{ recipeId: string; scale: number; sortOrder?: number | null }>
+        | undefined;
+      if (!recipes?.length) return caller.meal.create(params);
+      const idByCode = await resolvePublicIdMap(
+        caller,
+        "recipe",
+        recipes.map((r) => r.recipeId),
+      );
+      return caller.meal.create({
+        ...params,
+        recipes: recipes.map((r) => ({
+          ...r,
+          recipeId: idByCode.get(r.recipeId)!,
+        })),
+      });
     },
   });
 
@@ -85,13 +129,17 @@ export function registerMealTools(server: McpServer) {
     name: "add_recipe_to_meal",
     description:
       "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
-    inputSchema: mealAddRecipeInput.shape,
+    inputSchema: mealAddRecipeMcpInput.shape,
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {
+      const [mealId, recipeId] = await Promise.all([
+        resolvePublicId(caller, "meal", params.mealId),
+        resolvePublicId(caller, "recipe", params.recipeId),
+      ]);
       const result = await caller.meal.addRecipe({
-        mealId: params.mealId,
-        recipeId: params.recipeId,
+        mealId,
+        recipeId,
         scale: params.scale,
         sortOrder: params.sortOrder,
       });
@@ -104,6 +152,8 @@ export function registerMealTools(server: McpServer) {
     description:
       "Adjust a planned recipe's scale or sort order within its meal.",
     inputSchema: {
+      // mealRecipe.id is a declared exception — no shortcode exists for the
+      // meal-recipe join row, so this stays the raw uuid.
       id: z
         .string()
         .describe(
@@ -134,6 +184,7 @@ export function registerMealTools(server: McpServer) {
     name: "remove_meal_recipe",
     description: "Remove a planned recipe from its meal.",
     inputSchema: {
+      // mealRecipe.id is a declared exception — see update_meal_recipe above.
       id: z
         .string()
         .describe(

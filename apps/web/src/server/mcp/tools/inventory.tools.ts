@@ -1,10 +1,10 @@
 import {
-  bulkMovePayload,
   inventoryDuplicateFindOut,
   inventoryFilterFields,
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,
   inventoryMcpOut,
+  positiveAmount,
 } from "@cubby/schemas/inventory";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -16,7 +16,9 @@ import {
   registerEntityGetTool,
   registerEntityListTool,
   registerMcpTool,
+  resolveOptionalId,
   resolvePublicId,
+  resolvePublicIds,
   respond,
   respondList,
   slimInventory,
@@ -24,16 +26,66 @@ import {
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
+/**
+ * `inventoryFilterFields.locationIdFilter` is a branded uuid shared with the
+ * tRPC router (apps/web/src/app/inventory/inventoryitemlist.tsx also filters
+ * by it) — packages/schemas stays uuid-only, so the shortcode swap is local.
+ */
+const inventoryFilterMcpFields = {
+  ...inventoryFilterFields,
+  locationIdFilter: idParam("location")
+    .optional()
+    .describe("Filter by exact location shortcode"),
+};
+
+/**
+ * `bulkMovePayload` (sourceLocationId/targetLocationId/items[].inventoryEntryId)
+ * is shared with the tRPC router and the inventory-session workbench UI, so
+ * this MCP-only shape is defined fresh rather than derived via `.extend()`
+ * (the nested `items[]` object isn't separately exported to extend).
+ */
+const bulkMoveMcpInput = z.object({
+  sourceLocationId: idParam("location"),
+  targetLocationId: idParam("location"),
+  items: z
+    .array(
+      z.object({
+        inventoryEntryId: idParam("inventory"),
+        quantity: positiveAmount,
+      }),
+    )
+    .min(1),
+});
+
 export function registerInventoryTools(server: McpServer) {
   registerEntityListTool(server, {
     name: "list_inventory",
     description: "List inventory entries with optional filters.",
     router: "inventory",
-    filterFields: inventoryFilterFields,
+    filterFields: inventoryFilterMcpFields,
     outputSchema: inventoryMcpListOut,
     slim: slimInventory,
     sort: { orderBy: "createdAt", direction: "desc" },
     annotations: READ_ONLY_CLOSED,
+    buildFilters: async (caller, params) => {
+      const filters: Record<string, unknown> = {};
+      for (const key of [
+        "productNameFilter",
+        "locationNameFilter",
+        "manufacturerFilter",
+        "categoryFilter",
+      ] as const) {
+        if (params[key] !== undefined) filters[key] = params[key];
+      }
+      if (params.locationIdFilter !== undefined) {
+        filters.locationIdFilter = await resolveOptionalId(
+          caller,
+          "location",
+          params.locationIdFilter as string,
+        );
+      }
+      return filters;
+    },
   });
 
   registerEntityGetTool(server, {
@@ -138,21 +190,32 @@ export function registerInventoryTools(server: McpServer) {
     name: "bulk_move_inventory",
     description:
       "Move inventory entries between locations. Supports partial moves.",
-    inputSchema: bulkMovePayload.shape,
+    inputSchema: bulkMoveMcpInput.shape,
     outputSchema: inventoryMcpBulkMoveOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
+      const items = params.items as Array<{
+        inventoryEntryId: string;
+        quantity: { value: number; unit: string };
+      }>;
+      // resolvePublicIds returns exactly one id per input code, in order —
+      // both `!`s below index a result whose length matches its own input.
+      const [sourceLocationId, targetLocationId] = await resolvePublicIds(
+        caller,
+        "location",
+        [params.sourceLocationId, params.targetLocationId],
+      );
+      const entryIds = await resolvePublicIds(
+        caller,
+        "inventory",
+        items.map((item) => item.inventoryEntryId),
+      );
       const result = await caller.inventory.bulkMove({
-        sourceLocationId: params.sourceLocationId,
-        targetLocationId: params.targetLocationId,
-        items: (
-          params.items as Array<{
-            inventoryEntryId: string;
-            quantity: { value: number; unit: string };
-          }>
-        ).map((item) => ({
-          inventoryEntryId: item.inventoryEntryId,
+        sourceLocationId: sourceLocationId!,
+        targetLocationId: targetLocationId!,
+        items: items.map((item, i) => ({
+          inventoryEntryId: entryIds[i]!,
           quantity: item.quantity,
         })),
       });
@@ -165,8 +228,7 @@ export function registerInventoryTools(server: McpServer) {
     description:
       "Find unique products (expectedQuantity = 1) that appear in more than one location — likely duplicates to consolidate.",
     inputSchema: {
-      excludeLocationId: z
-        .string()
+      excludeLocationId: idParam("location")
         .optional()
         .describe("Ignore duplicates that involve this location"),
     },
@@ -174,8 +236,14 @@ export function registerInventoryTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
+      const excludeLocationId = await resolveOptionalId(
+        caller,
+        "location",
+        params.excludeLocationId,
+      );
       const result = await caller.inventory.findDuplicates({
-        excludeLocationId: params.excludeLocationId,
+        // The filter is "omit this location", so a null code is just absence.
+        excludeLocationId: excludeLocationId ?? undefined,
       });
       return { items: result };
     },

@@ -22,16 +22,31 @@ import {
   WRITE_CLOSED,
 } from "./_shared";
 
+/**
+ * `mcpProductCreateInput`/`mcpProductUpdateInput` are MCP-only but live in
+ * packages/schemas — `ingredientId` is a branded uuid there, so the shortcode
+ * swap happens in these local `.extend()`s instead of in place.
+ */
 const productCreateMcpInput = mcpProductCreateInput.extend({
   unitMappings: z.array(mcpUnitMappingInput).optional(),
+  ingredientId: idParam("ingredient")
+    .nullable()
+    .describe(
+      "Link this product to an ingredient (its shortcode) so recipes using that ingredient can cost from this product.",
+    ),
 }).shape;
+
+const productUpdateMcpShape = {
+  ...mcpProductUpdateInput.shape,
+  ingredientId: idParam("ingredient").nullable().optional(),
+};
 
 export function registerProductTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "product",
     names: { list: "search_products" },
     createInput: productCreateMcpInput,
-    updateShape: mcpProductUpdateInput.shape,
+    updateShape: productUpdateMcpShape,
     filterFields: productFilterFields,
     mcpListOut: productMcpListOut,
     out: productMcpOut,
@@ -61,17 +76,38 @@ export function registerProductTools(server: McpServer) {
         });
         return respond(result, slimProduct);
       }
+      const ingredientId =
+        params.ingredientId == null
+          ? null
+          : await resolvePublicId(
+              caller,
+              "ingredient",
+              params.ingredientId as string,
+            );
       const result = await caller.product.create({
         name: params.name,
         manufacturer: params.manufacturer ?? UNSPECIFIED_MANUFACTURER,
         upc: (params.upc as string | undefined) ?? null,
         fdc_id: null,
         expectedQuantity: null,
-        ingredientId: (params.ingredientId as string | undefined) ?? null,
+        ingredientId,
         price: (params.price as number | undefined) ?? null,
         unitMappings,
       });
       return result;
+    },
+    resolveUpdateData: async (caller, data) => {
+      if (data.ingredientId === undefined || data.ingredientId === null) {
+        return data;
+      }
+      return {
+        ...data,
+        ingredientId: await resolvePublicId(
+          caller,
+          "ingredient",
+          data.ingredientId as string,
+        ),
+      };
     },
   });
 
