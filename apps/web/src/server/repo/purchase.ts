@@ -46,7 +46,10 @@ import type {
   PurchaseUpdateInput,
   SplitExpenseInput,
 } from "@cubby/schemas/purchase";
-import { purchaseSortableFields } from "@cubby/schemas/purchase";
+import {
+  purchaseSortableFields,
+  RECONCILIATION_TOLERANCE,
+} from "@cubby/schemas/purchase";
 import {
   and,
   asc,
@@ -55,6 +58,7 @@ import {
   inArray,
   isNull,
   ne,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -167,6 +171,18 @@ const purchaseExpenseTotal = correlated<number>(
      WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL)`,
 );
 
+const purchaseUnpricedExpenseCount = correlated<number>(
+  `(SELECT count(*)::int FROM "Expense" e
+     WHERE e."purchaseId" = "Purchase"."id"
+       AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
+);
+
+const purchaseDocumentCount = correlated<number>(
+  `(SELECT count(*)::int FROM "PurchaseImage" pi
+     JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
+     WHERE pi."purchaseId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
+);
+
 const purchaseVendorName = correlated<string | null>(
   `(SELECT v."name" FROM "Vendor" v
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
@@ -195,7 +211,9 @@ const purchaseColumns = {
   vendorName: purchaseVendorName,
   vendorShortcode: purchaseVendorShortcode,
   expenseCount: purchaseExpenseCount,
+  unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
+  documentCount: purchaseDocumentCount,
 } as const;
 
 type PurchaseRow = {
@@ -210,7 +228,9 @@ type PurchaseRow = {
   vendorName: string | null;
   vendorShortcode: string;
   expenseCount: number;
+  unpricedExpenseCount: number;
   expenseTotal: number;
+  documentCount: number;
 };
 
 const dbPurchaseToAPI = (
@@ -225,7 +245,9 @@ const dbPurchaseToAPI = (
   notes: row.notes,
   vendorName: row.vendorName,
   expenseCount: Number(row.expenseCount),
+  unpricedExpenseCount: Number(row.unpricedExpenseCount),
   expenseTotal: Number(row.expenseTotal),
+  documentCount: Number(row.documentCount),
   images,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -321,6 +343,54 @@ const syncPurchaseImages = async (
  * which Postgres rejects outright with `invalid input syntax for type uuid`.
  * Mirrors `toUuids` on the expense side.
  */
+const lineStatusCondition = (
+  values: PurchaseFilters["lineStatus"],
+): SQL | undefined => {
+  const selected = values ? [values].flat() : [];
+  if (selected.length === 0) return undefined;
+  return or(
+    selected.includes("empty") ? sql`${purchaseExpenseCount} = 0` : undefined,
+    selected.includes("unpriced")
+      ? sql`${purchaseUnpricedExpenseCount} > 0`
+      : undefined,
+    selected.includes("priced")
+      ? sql`${purchaseExpenseCount} > 0 AND ${purchaseUnpricedExpenseCount} = 0`
+      : undefined,
+  );
+};
+
+const reconciliationCondition = (
+  values: PurchaseFilters["reconciliation"],
+): SQL | undefined => {
+  const selected = values ? [values].flat() : [];
+  if (selected.length === 0) return undefined;
+  const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
+  // `floor(x + .5)` is PostgreSQL's exact twin of JS `Math.round`, including
+  // negative half-cent values (numeric `round()` rounds those away from zero).
+  const gapInCents = sql`abs(
+    floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
+    floor((${purchaseExpenseTotal} * 100)::numeric + 0.5)
+  )`;
+  return or(
+    selected.includes("unknown") ? isNull(purchase.statedTotal) : undefined,
+    selected.includes("match")
+      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} <= ${toleranceInCents}`
+      : undefined,
+    selected.includes("mismatch")
+      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents}`
+      : undefined,
+  );
+};
+
+const documentPresenceCondition = (
+  value: PurchaseFilters["documentPresenceFilter"],
+): SQL | undefined =>
+  value === "has"
+    ? sql`${purchaseDocumentCount} > 0`
+    : value === "none"
+      ? sql`${purchaseDocumentCount} = 0`
+      : undefined;
+
 const buildPurchaseWhereClause = (
   filters: PurchaseFilters,
   vendorUuids: string[] | undefined,
@@ -336,6 +406,15 @@ const buildPurchaseWhereClause = (
         purchase.statedTotal,
         filters.statedTotalPresenceFilter,
       ),
+      lineStatusCondition(filters.lineStatus),
+      reconciliationCondition(filters.reconciliation),
+      documentPresenceCondition(filters.documentPresenceFilter),
+      filters.expenseTotalMin !== undefined
+        ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`
+        : undefined,
+      filters.expenseTotalMax !== undefined
+        ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} <= ${filters.expenseTotalMax}`
+        : undefined,
       filters.dateFrom
         ? sql`${purchase.date} >= ${filters.dateFrom}`
         : undefined,
@@ -343,12 +422,13 @@ const buildPurchaseWhereClause = (
     ],
   );
 
-/** Sorts over the joined vendor name and the two rollups — none are columns. */
+/** Sorts over the joined vendor name and rollups — none are table columns. */
 const resolvePurchaseSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
   if (sort.orderBy === "vendor") return [dir(purchaseVendorName)];
   if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
   if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
+  if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
   return null;
 };
 

@@ -53,6 +53,7 @@ export type ExpenseRow = {
     id: PurchaseId;
     shortcode: string;
     orderId: string | null;
+    date: string | null;
     vendorId: VendorId;
     deletedAt: Date | null;
     vendor: { name: string; shortcode: string; deletedAt: Date | null } | null;
@@ -92,6 +93,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     // `purchaseOut.vendorId`); `vendor` (the display name) is separately
     // gated on the vendor's own liveness via `resolveLiveJoinName`.
     purchaseId: charge ? unsafePurchaseShortcode(charge.shortcode) : null,
+    purchaseDate: charge?.date ?? null,
     vendorId:
       charge?.vendor != null
         ? unsafeVendorShortcode(charge.vendor.shortcode)

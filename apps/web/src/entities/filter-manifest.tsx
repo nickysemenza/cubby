@@ -20,6 +20,12 @@ import {
 } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import {
+  purchaseLineStatusOptions,
+  purchaseLineTotalOptions,
+  purchaseReconciliationOptions,
+  resolvePurchaseLineTotalFilter,
+} from "~/app/purchases/purchase-options";
+import {
   dueRangeOptions,
   resolveDueRange,
   taskStatusOptions,
@@ -208,7 +214,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       brand: unsafeVendorId,
       placeholder: "Filter by vendor...",
       optionsKey: "vendor",
-      nullable: { field: "vendorPresenceFilter", label: "vendor" },
+      nullable: { field: "vendorPresenceFilter", label: "purchase" },
     },
     {
       // "none" is the unreconciled worklist — no order id recorded. The id lives
@@ -269,10 +275,10 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
   ],
 
-  // One row per vendor charge. Five specs, covering `purchaseFiltersSchema`
-  // (packages/schemas/src/purchase.ts) apart from its exact `orderId` match —
-  // nothing deep-links a charge by order id (a charge has its own detail route),
-  // so there's no `orderIdExact`-style URL-only scope here the way expense has.
+  // One row per vendor charge. These specs cover `purchaseFiltersSchema`,
+  // including the exact line-total bounds kept URL-only for callers that need
+  // values outside the UI presets. A charge has its own detail route, so there
+  // is no expense-style exact-order-id scope here.
   purchase: [
     {
       // `?q=`, the money family's search key — and it hangs on `charge`, not
@@ -335,6 +341,50 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "presence",
       placeholder: "Filter by stated total...",
       options: presenceFilterOptions("stated total"),
+    },
+    {
+      columnId: "expenseCount",
+      field: "lineStatus",
+      urlKey: "lines",
+      kind: "multiselect",
+      placeholder: "Filter by line status...",
+      options: purchaseLineStatusOptions,
+    },
+    {
+      columnId: "expenseTotal",
+      urlKey: "lineTotal",
+      kind: "range",
+      placeholder: "Filter by line total...",
+      options: purchaseLineTotalOptions,
+      expand: resolvePurchaseLineTotalFilter,
+    },
+    {
+      columnId: "reconciliation",
+      kind: "multiselect",
+      placeholder: "Filter reconciliation...",
+      options: purchaseReconciliationOptions,
+    },
+    {
+      columnId: "documentCount",
+      field: "documentPresenceFilter",
+      urlKey: "documents",
+      kind: "presence",
+      placeholder: "Filter by documents...",
+      options: presenceFilterOptions("documents"),
+    },
+    {
+      columnId: "expenseTotalMin",
+      urlKey: "lineTotalMin",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Minimum line total...",
+    },
+    {
+      columnId: "expenseTotalMax",
+      urlKey: "lineTotalMax",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Maximum line total...",
     },
   ],
 

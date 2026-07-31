@@ -68,6 +68,7 @@ import { ListBulkActionBar } from "~/app/_components/hooks/useListBulkActions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { TableLink } from "~/app/_components/table/TableLink";
 import {
   ExpenseBulkActionDialogs,
   useExpenseBulkActions,
@@ -97,9 +98,11 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
+import { purchaseLabel } from "~/lib/purchase-label";
 import {
   expenseMutationInvalidateKeys,
   projectMutationInvalidateKeys,
@@ -743,6 +746,8 @@ export function expenseVendorColumn(
   opts?: {
     mobile?: MobileColumnMeta;
     vendorOptions?: FilterableComboboxItem[];
+    /** Render the charge identity/link while retaining vendor editing/filtering. */
+    asPurchase?: boolean;
   },
 ) {
   const cellData = textCellData<ExpenseOut>(
@@ -753,13 +758,13 @@ export function expenseVendorColumn(
 
   return helper.accessor((row) => row.vendor, {
     id: "vendor",
-    header: "Vendor",
+    header: opts?.asPurchase ? "Purchase" : "Vendor",
     // Overrides the name-based `multiSelectFilterFn` a multiselect text column
     // would otherwise get — see `vendorIdFilterFn` for why the two can't be the
     // same function here.
     filterFn: vendorIdFilterFn,
     meta: {
-      className: "w-40",
+      className: opts?.asPurchase ? "w-56" : "w-40",
       mobile: opts?.mobile,
       filterConfig: manifestFilterConfig(
         "expense",
@@ -787,8 +792,31 @@ export function expenseVendorColumn(
           onSave={(newVendor) => save(newVendor, expense)}
           clipboard={specFromCellData(cellData, expense)}
           SearchProvider={WithVendorSearch}
-          renderValue={(v) =>
-            v ? (
+          renderValue={(v) => {
+            if (opts?.asPurchase) {
+              if (expense.purchaseId) {
+                const label = purchaseLabel({
+                  orderId: expense.orderId,
+                  vendorName: v?.name ?? expense.vendor,
+                  date: expense.purchaseDate,
+                });
+                return (
+                  <TableLink
+                    to={entities.purchase.routes.detail}
+                    params={entityDetailParams(expense.purchaseId)}
+                    className="block truncate"
+                  >
+                    <span title={label}>{label}</span>
+                  </TableLink>
+                );
+              }
+              return v ? (
+                <span className="truncate">{v.name}</span>
+              ) : (
+                <span className="text-muted-foreground">(none)</span>
+              );
+            }
+            return v ? (
               <VendorCell
                 vendor={v.name}
                 vendorId={persistedVendorId(v.name, expense)}
@@ -796,8 +824,8 @@ export function expenseVendorColumn(
               />
             ) : (
               <NoneValue />
-            )
-          }
+            );
+          }}
         />
       );
     },

@@ -323,7 +323,7 @@ describe("expense vendor filter", () => {
     });
     expect(config?.filterType).toBe("multiselect");
     expect(config?.options).toEqual([
-      { value: FILTER_ANY, label: "Has vendor", meta: true },
+      { value: FILTER_ANY, label: "Has purchase", meta: true },
       { value: FILTER_NONE, label: "(none)", meta: true },
       ...injected,
     ]);
@@ -388,8 +388,7 @@ describe("vendor filters", () => {
 });
 
 /**
- * The charges table's five filters — the whole of `purchaseFiltersSchema` apart
- * from its exact `orderId` match, which nothing links to. These used to be a
+ * The charges table's worklist filters. These used to be a
  * LOCAL manifest in `app/purchases/purchase-filters.ts` (specs + header controls
  * + a hand-written `buildFilters` + a hand-rolled search-fields Record), because
  * this file was off-limits to the agent that built the page. They pin the wiring
@@ -450,6 +449,29 @@ describe("purchase filters", () => {
     ]);
   });
 
+  it("routes line health, reconciliation, documents, and total presets", () => {
+    expect(
+      build({
+        lines: "unpriced,priced",
+        reconciliation: "mismatch,unknown",
+        documents: "none",
+        lineTotal: "gte200",
+      }),
+    ).toEqual({
+      lineStatus: ["unpriced", "priced"],
+      reconciliation: ["mismatch", "unknown"],
+      documentPresenceFilter: "none",
+      expenseTotalMin: 200,
+    });
+  });
+
+  it("passes exact line-total bounds through for server coercion", () => {
+    expect(build({ lineTotalMin: "-25", lineTotalMax: "500" })).toEqual({
+      expenseTotalMin: "-25",
+      expenseTotalMax: "500",
+    });
+  });
+
   it("expands ?date= into inclusive dateFrom/dateTo bounds", () => {
     // Same presets and expander as the ledger's date filter, so one `?date=30d`
     // means the same window on both money tables.
@@ -468,7 +490,7 @@ describe("purchase filters", () => {
     expect(build({})).toEqual({});
   });
 
-  it("declares five column-backed specs and no URL-only scope", () => {
+  it("declares every visible worklist filter plus exact URL-only bounds", () => {
     const [columnBacked, urlOnly] = partitionFilterSpecs(
       getEntityFilters("purchase"),
     );
@@ -478,11 +500,18 @@ describe("purchase filters", () => {
       "orderId",
       "date",
       "statedTotal",
+      "expenseCount",
+      "expenseTotal",
+      "reconciliation",
+      "documentCount",
     ]);
-    expect(urlOnly).toEqual([]);
+    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "expenseTotalMin",
+      "expenseTotalMax",
+    ]);
   });
 
-  it("declares all five URL keys so the route schema can't strip them", () => {
+  it("declares every URL key so the route schema can't strip them", () => {
     // The route spreads this into its `validateSearch` and re-declares the same
     // five by name; a missing key means the table writes the filter and the
     // router removes it before anything reads it back.
@@ -492,6 +521,12 @@ describe("purchase filters", () => {
       "orderId",
       "date",
       "statedTotal",
+      "lines",
+      "lineTotal",
+      "reconciliation",
+      "documents",
+      "lineTotalMin",
+      "lineTotalMax",
     ]);
     // And the fragment survives what `parseSearch` hands it — an all-digits
     // order-id search arrives pre-parsed as a number.
@@ -521,6 +556,12 @@ describe("purchase filters", () => {
       orderId: undefined,
       date: undefined,
       statedTotal: undefined,
+      lines: undefined,
+      lineTotal: undefined,
+      reconciliation: undefined,
+      documents: undefined,
+      lineTotalMin: undefined,
+      lineTotalMax: undefined,
     });
   });
 });

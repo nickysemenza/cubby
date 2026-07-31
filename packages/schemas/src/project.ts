@@ -1024,6 +1024,8 @@ export const expenseOut = z.object({
    * a charge that never happened.
    */
   purchaseId: purchaseShortcode.nullable(),
+  /** The linked charge's own date, distinct from this ledger line's date. */
+  purchaseDate: plainDate.nullable(),
   /** The charge's vendor, denormalized onto the line so tables can link it. */
   vendorId: vendorShortcode.nullable(),
   projectName: z.string().nullable(),

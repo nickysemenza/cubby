@@ -620,7 +620,7 @@ unit-mapping ids, background job/batch ids, and the dev-only diagnostics in
 `problems.tools.ts` (an orphaned embedding may name a row that no longer
 resolves, and a liveness violation's `sourceTable` can be a join table).
 
-### BUG: a charge minted from an expense gets no date
+### BUG: a charge minted from an expense gets no date (propagation fixed)
 
 **Found 2026-07-31** during the 22-receipt tool/3D-printer ingest, which created
 the first 15 charges ever minted through the live code path.
@@ -660,14 +660,15 @@ and today's 15 were hand-corrected. Latent, not active. Low urgency, cheap fix.
 
 **Fix — everything should have a date.** Two layers:
 
-- [ ] **Propagate it.** Widen `resolveCharge`'s `data` type to carry `date` and
-  pass it into `findOrCreatePurchase`. Seeding the charge date from the ledger date
-  is safe in a way seeding `statedTotal` is not: nothing reconciles against
+- [x] **Propagate it.** Shipped 2026-07-31. `resolveCharge` now carries the
+  expense's effective date into `findOrCreatePurchase`, covering both expense
+  creation and attaching a vendor later without overwriting an existing charge.
+  Seeding the charge date from the ledger date is safe in a way seeding
+  `statedTotal` is not: nothing reconciles against
   `purchase.date`, so a day's imprecision costs nothing, whereas a guessed stated
   total would manufacture false `chargesNotReconciling` flags. `update_purchase`
-  still overrides when the receipt disagrees. Add the integration test that's
-  missing — no test currently asserts `purchase.date` after a
-  `createExpense`-driven resolve.
+  still overrides when the receipt disagrees. Integration coverage now asserts
+  both implicit creation paths and live-charge-only `purchaseDate` resolution.
 - [ ] **Then consider making `Purchase.date` NOT NULL** (`db/schema.ts:1028`),
   which is the real intent. Nothing to backfill (0 nulls). Consequences to handle,
   not surprises to discover:

@@ -20,6 +20,12 @@ const searchSchema = z.object({
   orderId: urlStringParam,
   date: urlStringParam,
   statedTotal: urlStringParam,
+  lines: urlStringParam,
+  lineTotal: urlStringParam,
+  reconciliation: urlStringParam,
+  documents: urlStringParam,
+  lineTotalMin: urlStringParam,
+  lineTotalMax: urlStringParam,
   ...tableSearchFields,
 });
 
@@ -29,6 +35,12 @@ const searchDefaults = {
   orderId: undefined,
   date: undefined,
   statedTotal: undefined,
+  lines: undefined,
+  lineTotal: undefined,
+  reconciliation: undefined,
+  documents: undefined,
+  lineTotalMin: undefined,
+  lineTotalMax: undefined,
 } as const;
 
 export const Route = createFileRoute("/_authenticated/purchases/")({

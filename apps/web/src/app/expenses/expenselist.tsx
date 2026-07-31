@@ -234,9 +234,8 @@ export function ExpenseList() {
           mobile: { slot: "meta", priority: 50 },
         },
       ),
-      // Hidden by default (see `initialColumnVisibility` below) — revealed via
-      // the column-visibility toggle when a vendor-heavy view (e.g. an Amazon
-      // reconciliation pass) actually wants them.
+      // The column keeps the historical `vendor` id and editor/filter wiring,
+      // but presents the linked charge as the primary accounting relationship.
       expenseVendorColumn(
         columnHelper,
         async (vendor, expense) => {
@@ -245,7 +244,10 @@ export function ExpenseList() {
             data: { vendor },
           });
         },
-        { mobile: { slot: "meta", priority: 70 } },
+        {
+          asPurchase: true,
+          mobile: { slot: "meta", priority: 70, interactive: true },
+        },
       ),
       expenseOrderIdColumn(
         columnHelper,
@@ -393,11 +395,8 @@ export function ExpenseList() {
     nameEditable,
     bulkActions: expenseBulkActions.config,
     extraActions,
-    // Newly added columns default VISIBLE unless declared here (see
-    // useTableColumnVisibility's `{ ...initial, ...stored }` merge) — vendor
-    // and order id are niche enough (mostly an Amazon-reconciliation need) to
-    // stay opt-in via the column toggle rather than clutter the default view.
-    initialColumnVisibility: { vendor: false, orderId: false },
+    // Purchase is visible by default; its Order # detail remains opt-in.
+    initialColumnVisibility: { orderId: false },
   });
   usePageCount(totalCount);
 
