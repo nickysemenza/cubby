@@ -1,4 +1,4 @@
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   costTypeSchema,
   type ExpenseOut,
@@ -27,9 +27,9 @@ import { VendorField } from "../_components/form-utils/vendor-field";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { costTypeOptions } from "./expense-options";
 
-// projectId stays a plain string here (not the branded `projectId` schema) —
-// it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
-// applied at the tRPC-call boundary in buildPayload via `unsafeProjectId`,
+// projectId stays a plain string here (not the branded schema) — it's the raw
+// value out of the `SelectField` dropdown; the ProjectShortcode brand is
+// applied at the tRPC-call boundary in onSubmit via `unsafeProjectShortcode`,
 // same convention as `create-expense-dialog.tsx`. `cost` is nullable +
 // refined (not a plain `z.number()`) so a cleared input reads as `null` (not
 // `undefined`) for `NullableNumericField` while still being rejected as
@@ -106,7 +106,7 @@ export function SettleExpenseDialog({
           cost: values.cost!,
           date: values.date,
           projectId: values.projectId
-            ? unsafeProjectId(values.projectId)
+            ? unsafeProjectShortcode(values.projectId)
             : null,
           costType: values.costType,
           trade: values.trade,

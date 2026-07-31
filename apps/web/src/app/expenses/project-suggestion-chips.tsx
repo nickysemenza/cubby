@@ -1,4 +1,7 @@
-import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectShortcode,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Lightbulb } from "lucide-react";
@@ -20,7 +23,7 @@ const NO_AFFINITY: TradeAffinityCell[] = [];
 
 interface ProjectSuggestionChipsProps {
   expense: ExpenseOut;
-  onAssign: (projectId: ProjectId) => Promise<void>;
+  onAssign: (projectId: ProjectShortcode) => Promise<void>;
   isPending: boolean;
 }
 
@@ -77,7 +80,7 @@ export function ProjectSuggestionChips({
           disabled={isPending}
           // The ranking module is deliberately dependency-free, so its ids are
           // plain strings — re-brand at this boundary.
-          onClick={() => void onAssign(unsafeProjectId(suggestion.id))}
+          onClick={() => void onAssign(unsafeProjectShortcode(suggestion.id))}
           // The affinity count is the whole basis for the ordering, so show it
           // rather than presenting the ranking as an oracle.
           title={`${suggestion.affinity} ${expense.trade} expense${suggestion.affinity === 1 ? "" : "s"} already on this project`}

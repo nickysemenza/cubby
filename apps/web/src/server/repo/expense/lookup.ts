@@ -1,3 +1,4 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -44,17 +45,20 @@ import { dbExpenseToAPI } from "./helpers";
 /**
  * Resolve a batch of shortcodes to their (unbranded) uuids for use in a WHERE
  * clause. Unknown/malformed codes simply drop out — a filter naming a code
- * that doesn't exist should match nothing, not throw.
+ * that doesn't exist should match nothing, not throw. The `entity` parameter
+ * pins the expected type so a wrong-prefix code is silently dropped rather than
+ * matching an unrelated row.
  */
 const toUuids = async (
   db: Database,
   codes: readonly string[],
+  entity: ShortcodeEntity,
 ): Promise<string[]> => {
   if (codes.length === 0) return [];
   const resolved = await resolveShortcodes(db, codes);
   return codes.flatMap((code) => {
     const ref = resolved.get(code);
-    return ref ? [ref.id] : [];
+    return ref?.entity === entity ? [ref.id] : [];
   });
 };
 
@@ -137,7 +141,7 @@ export const buildExpenseWhereClause = async (
   const selectedProjectCodes = filters.projectId
     ? [filters.projectId].flat()
     : [];
-  const selectedProjectIds = await toUuids(db, selectedProjectCodes);
+  const selectedProjectIds = await toUuids(db, selectedProjectCodes, "project");
   let projectValues =
     selectedProjectIds.length > 0
       ? eqAny(expense.projectId, selectedProjectIds)
@@ -188,10 +192,12 @@ export const buildExpenseWhereClause = async (
   const vendorUuids = await toUuids(
     db,
     filters.vendorId ? [filters.vendorId].flat() : [],
+    "vendor",
   );
   const purchaseUuids = await toUuids(
     db,
     filters.purchaseId ? [filters.purchaseId] : [],
+    "purchase",
   );
 
   // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
