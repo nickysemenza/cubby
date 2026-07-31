@@ -9,10 +9,23 @@ export const ComboboxItem = z.object({
 // Generic ComboboxItem type that preserves ID branding
 // TId defaults to string for backward compatibility
 export type ComboboxItem<TId extends string = string> = {
+  /** Canonical value written by the assignment adapter. */
   name: string;
   id: TId;
+  /** Public entity identifier displayed in picker result rows. */
+  shortcode?: string;
   icon?: React.ReactNode;
-  // Optional aliases, carried for ingredient items so a row's drift check can
-  // recognize an alias match on manual selection. Unused by other entity types.
+  /** Alternate searchable names. */
   aliases?: string[];
+  /** Compact secondary row metadata (manufacturer, location type, etc.). */
+  secondary?: string;
 };
+
+export type PickerEntity =
+  | "ingredient"
+  | "location"
+  | "product"
+  | "recipe"
+  | "project"
+  | "task"
+  | "vendor";

@@ -13,7 +13,7 @@ import type {
   ProjectOut,
 } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
-import { asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import {
@@ -21,6 +21,7 @@ import {
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
@@ -117,10 +118,18 @@ export const projectList = async (
     parentCondition = inArray(project.id, descendantIds);
   }
 
+  const pickerSearch = filters.search
+    ? or(
+        formatSearchTerm(project.name, filters.search),
+        formatSearchTerm(project.notes, filters.search),
+        sql`EXISTS (SELECT 1 FROM unnest(${project.locations}) AS location_name WHERE location_name ILIKE ${`%${filters.search}%`})`,
+      )
+    : undefined;
   const whereClause = buildSearchConditions(
     project,
-    [{ column: project.name, term: filters.search }],
+    [],
     [
+      pickerSearch,
       filters.status ? eq(project.status, filters.status) : undefined,
       filters.kind ? eq(project.kind, filters.kind) : undefined,
       // `locations` is a free-form text[] column — exact-match membership.
