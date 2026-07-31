@@ -1,6 +1,6 @@
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import type { TaskId } from "@cubby/schemas/identifiers";
+import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskBulkReorderInput, TaskOut } from "@cubby/schemas/project";
 import { useEffect, useRef } from "react";
 import { cellTasks, computeMove, computeRank } from "./board-model";
@@ -14,7 +14,7 @@ import {
 interface UseBoardDndArgs {
   /** The board's full task list — the target cell's ordering is derived from it. */
   tasks: TaskOut[];
-  moveTask: (taskId: TaskId, patch: TaskBoardPatch) => void;
+  moveTask: (taskId: TaskShortcode, patch: TaskBoardPatch) => void;
   reorderTasks: (input: TaskBulkReorderInput) => void;
 }
 

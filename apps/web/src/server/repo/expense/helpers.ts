@@ -1,8 +1,16 @@
+import type {
+  ExpenseId,
+  ProductId,
+  ProjectId,
+  PurchaseId,
+  VendorId,
+} from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
   unsafePurchaseShortcode,
+  unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import {
@@ -24,7 +32,7 @@ const toProjectShortcode = (code: string | null) =>
   code === null ? null : unsafeProjectShortcode(code);
 
 export type ExpenseRow = {
-  id: ExpenseOut["id"];
+  id: ExpenseId;
   shortcode: string;
   name: string;
   cost: number | null;
@@ -34,20 +42,20 @@ export type ExpenseRow = {
   url: string | null;
   notes: string | null;
   future: boolean;
-  projectId: ExpenseOut["projectId"];
-  productId: ExpenseOut["productId"];
-  purchaseId: ExpenseOut["purchaseId"];
+  projectId: ProjectId | null;
+  productId: ProductId | null;
+  purchaseId: PurchaseId | null;
   createdAt: Date;
   updatedAt: Date;
   project: { name: string; shortcode: string; deletedAt: Date | null } | null;
   product: { name: string; shortcode: string; deletedAt: Date | null } | null;
   purchase: {
-    id: NonNullable<ExpenseOut["purchaseId"]>;
+    id: PurchaseId;
     shortcode: string;
     orderId: string | null;
-    vendorId: NonNullable<ExpenseOut["vendorId"]>;
+    vendorId: VendorId;
     deletedAt: Date | null;
-    vendor: { name: string; deletedAt: Date | null } | null;
+    vendor: { name: string; shortcode: string; deletedAt: Date | null } | null;
   } | null;
 };
 
@@ -58,8 +66,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
   const charge = row.purchase?.deletedAt === null ? row.purchase : null;
 
   return {
-    id: row.id,
-    shortcode: unsafeExpenseShortcode(row.shortcode),
+    id: unsafeExpenseShortcode(row.shortcode),
     name: row.name,
     cost: row.cost,
     date: row.date,
@@ -68,9 +75,8 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     url: row.url,
     notes: row.notes,
     future: row.future,
-    projectId: row.projectId,
+    projectId: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
     projectName: resolveLiveJoinName(row.project),
-    projectShortcode: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
     productId: row.productId,
     productName: resolveLiveJoinName(row.product),
     productShortcode: toProductShortcode(resolveLiveJoinShortcode(row.product)),
@@ -78,12 +84,18 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     // owns them, and they resolve through this join. Keeping the SAME output
     // keys is deliberate: it's what let the ledger's Vendor / Order # columns,
     // the MCP surface, and the purchase-import skill survive the split
-    // untouched. `purchaseId`/`vendorId` are additive, for linking.
-    purchaseId: charge?.id ?? null,
-    purchaseShortcode: charge
-      ? unsafePurchaseShortcode(charge.shortcode)
-      : null,
-    vendorId: charge?.vendorId ?? null,
+    // untouched.
+    //
+    // `vendorId` is the charge's vendor FK, denormalized — always present on a
+    // live charge regardless of whether the VENDOR itself was soft-deleted
+    // (same "shortcode is a permanent tombstone" reasoning as
+    // `purchaseOut.vendorId`); `vendor` (the display name) is separately
+    // gated on the vendor's own liveness via `resolveLiveJoinName`.
+    purchaseId: charge ? unsafePurchaseShortcode(charge.shortcode) : null,
+    vendorId:
+      charge?.vendor != null
+        ? unsafeVendorShortcode(charge.vendor.shortcode)
+        : null,
     vendor: charge ? resolveLiveJoinName(charge.vendor) : null,
     orderId: charge?.orderId ?? null,
     createdAt: row.createdAt,

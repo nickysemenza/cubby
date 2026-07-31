@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { unsafeExpenseId } from "@cubby/schemas/identifiers";
+import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
 import {
   expenseOut,
@@ -75,6 +75,38 @@ async function callTool(
   }
 }
 
+/**
+ * Stub the `shortcode.resolveMany` router that every MCP tool now resolves
+ * public codes through (see `resolvePublicIds` in `tools/_shared.ts`). Mirrors
+ * the real router's contract: only codes present in `entries` come back, so a
+ * code the test didn't declare surfaces as an "Unknown ... shortcode" error
+ * exactly like a real miss would.
+ */
+/**
+ * Stands in for the `shortcode` router both ways: `resolveMany` (code -> uuid,
+ * on the way in) and `lookupMany` (uuid -> code, on the way out). Entries not
+ * listed simply don't come back, so an unstubbed code surfaces as a real
+ * "unknown shortcode" miss rather than silently resolving.
+ */
+function shortcodeResolverStub(
+  entries: Array<{ code: string; entity: string; id: string }>,
+) {
+  return {
+    resolveMany: vi.fn(async ({ codes }: { codes: string[] }) =>
+      entries.filter((e) => codes.includes(e.code)),
+    ),
+    lookupMany: vi.fn(
+      async ({ refs }: { refs: Array<{ entity: string; id: string }> }) =>
+        refs.flatMap((ref) => {
+          const hit = entries.find(
+            (e) => e.id === ref.id && e.entity === ref.entity,
+          );
+          return hit ? [{ ...ref, shortcode: hit.code }] : [];
+        }),
+    ),
+  };
+}
+
 function schemaHasMockKey(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.some(schemaHasMockKey);
@@ -116,7 +148,9 @@ describe("registerEntityCrudToolset", () => {
     const detailOut = z.object({ id: z.string(), detail: z.string() });
     const mutationOut = z.object({ id: z.string(), changed: z.boolean() });
     registerEntityCrudToolset(server, {
-      entity: "widget",
+      // A real registry entity: `entity` now names the shortcode prefix, so a
+      // made-up slug can no longer stand in for one.
+      entity: "vendor",
       names: { list: "search_widgets" },
       operations: { delete: false },
       paging: { defaultPageSize: 7, maxPageSize: 9 },
@@ -145,22 +179,25 @@ describe("registerEntityCrudToolset", () => {
       openWorldHint: false,
     });
     const list = vi.fn().mockResolvedValue({ meta: {}, items: [] });
-    await callTool(server, "search_widgets", {}, { widget: { list } });
+    // The CRUD toolset's router key is the entity itself ("vendor"), not the
+    // overridden tool name ("search_widgets") — only the tool's public name
+    // changed via `names.list`.
+    await callTool(server, "search_widgets", {}, { vendor: { list } });
     expect(list).toHaveBeenCalledWith(
       expect.objectContaining({
         pagination: { pageIndex: 0, pageSize: 7 },
       }),
     );
-    expect(getRegisteredTool(server, "get_widget")?.outputSchema).toBe(
+    expect(getRegisteredTool(server, "get_vendor")?.outputSchema).toBe(
       detailOut,
     );
-    expect(getRegisteredTool(server, "create_widget")?.outputSchema).toBe(
+    expect(getRegisteredTool(server, "create_vendor")?.outputSchema).toBe(
       mutationOut,
     );
-    expect(getRegisteredTool(server, "update_widget")?.outputSchema).toBe(
+    expect(getRegisteredTool(server, "update_vendor")?.outputSchema).toBe(
       mutationOut,
     );
-    expect(getRegisteredTool(server, "delete_widgets")).toBeUndefined();
+    expect(getRegisteredTool(server, "delete_vendors")).toBeUndefined();
   });
 });
 
@@ -224,9 +261,15 @@ describe("slimMeal", () => {
       totals: { costTotal: 12, caloriesTotal: 800, pending: false },
       recipes: [
         {
+          // mealRecipe row id — declared exception, no shortcode; stays uuid.
           id: "mr-1",
           recipeId: "r-1",
-          recipe: { id: "r-1", name: "Chili", sections: [{ huge: true }] },
+          recipe: {
+            id: "r-1",
+            shortcode: "RCP-2222",
+            name: "Chili",
+            sections: [{ huge: true }],
+          },
           scale: 2,
           sortOrder: 0,
           scaledTotals: { costTotal: 12, caloriesTotal: 800 },
@@ -236,7 +279,7 @@ describe("slimMeal", () => {
     expect(slim.recipes).toEqual([
       {
         id: "mr-1",
-        recipeId: "r-1",
+        recipeId: "RCP-2222",
         name: "Chili",
         scale: 2,
         scaledTotals: { costTotal: 12, caloriesTotal: 800 },
@@ -277,7 +320,9 @@ describe("slimUsdaFood", () => {
         nutrientSummary: [{ amount: 39000, name: "Sodium", unit: "mg" }],
       },
       portionInfoRaw: [{ amount: 1, modifier: "tsp", gram_weight: 6 }],
-      linkedProducts: [{ id: "p-1", name: "salt", notes: "drop me" }],
+      linkedProducts: [
+        { id: "p-1", shortcode: "PRD-2222", name: "salt", notes: "drop me" },
+      ],
     });
     expect(slim).toEqual({
       fdc_id: 2571981,
@@ -296,7 +341,7 @@ describe("slimUsdaFood", () => {
       nutrientsPer100: { Sodium: 39000 },
       nutrientSummary: [{ amount: 39000, name: "Sodium", unit: "mg" }],
       portionInfoRaw: [{ amount: 1, modifier: "tsp", gram_weight: 6 }],
-      linkedProducts: [{ id: "p-1", name: "salt" }],
+      linkedProducts: [{ id: "PRD-2222", name: "salt" }],
     });
   });
 
@@ -489,6 +534,87 @@ describe("listMcpToolCatalog", () => {
     expect(degraded.map((tool) => tool.name)).toEqual([]);
   });
 
+  it("keeps a JSON Schema pattern on every shortcode-shaped input field", async () => {
+    // Regression: `shortcodeSchema` is deliberately kept a `ZodString` — see the
+    // comment on `idParam` in tools/_shared.ts and shortcode.unit.test.ts —
+    // specifically because wrapping it in `.transform().pipe()` still parses
+    // but silently drops `pattern` from the advertised JSON Schema, which is
+    // most of what makes a shortcode self-explanatory to an agent over the
+    // wire. That guard lives at the schema level; this walks the LIVE input
+    // catalog (SDK registration + safeToJsonSchema + stripMock) so it also
+    // catches a future field that swaps `idParam` for a bare `z.string()`, or
+    // a catalog-build change that strips `pattern` some other way.
+    //
+    // Two field names are excluded because they are free text, not cubby
+    // entity references, despite the "Id" suffix: `orderId` (a vendor's own
+    // order/receipt number — every retailer formats these differently) and
+    // `externalId` (an ASIN/part-number on `Product.externalIds`). The
+    // mealRecipe `id` on update_meal_recipe/remove_meal_recipe is the one
+    // declared uuid exception (see MCP_SERVER_INSTRUCTIONS) — it's a bare
+    // `z.string()` with no pattern at all, by design.
+    const FREE_TEXT_ID_FIELDS = new Set(["orderId", "externalId"]);
+    const DECLARED_UUID_EXCEPTIONS = new Set([
+      "update_meal_recipe.id",
+      "remove_meal_recipe.id",
+    ]);
+
+    function stringSchemas(node: unknown): Array<Record<string, unknown>> {
+      if (!node || typeof node !== "object") return [];
+      const obj = node as Record<string, unknown>;
+      if (obj.type === "string") return [obj];
+      if (obj.type === "array" && obj.items) return stringSchemas(obj.items);
+      if (Array.isArray(obj.anyOf)) return obj.anyOf.flatMap(stringSchemas);
+      if (Array.isArray(obj.oneOf)) return obj.oneOf.flatMap(stringSchemas);
+      return [];
+    }
+
+    function collectIdFields(
+      schema: unknown,
+      path: string,
+      out: Array<{ path: string; node: unknown }>,
+    ) {
+      if (!schema || typeof schema !== "object") return;
+      const obj = schema as Record<string, unknown>;
+      if (obj.properties && typeof obj.properties === "object") {
+        for (const [key, val] of Object.entries(
+          obj.properties as Record<string, unknown>,
+        )) {
+          const p = path ? `${path}.${key}` : key;
+          if (
+            (key === "id" || key === "ids" || /Id$/.test(key)) &&
+            !FREE_TEXT_ID_FIELDS.has(key)
+          ) {
+            out.push({ path: p, node: val });
+          }
+          collectIdFields(val, p, out);
+        }
+      }
+      if (obj.items) collectIdFields(obj.items, `${path}[]`, out);
+      if (Array.isArray(obj.anyOf)) {
+        for (const v of obj.anyOf) collectIdFields(v, path, out);
+      }
+      if (Array.isArray(obj.oneOf)) {
+        for (const v of obj.oneOf) collectIdFields(v, path, out);
+      }
+    }
+
+    const { tools } = await listMcpToolCatalog();
+    const violations: string[] = [];
+    for (const tool of tools) {
+      const fields: Array<{ path: string; node: unknown }> = [];
+      collectIdFields(tool.inputSchema, "", fields);
+      for (const { path, node } of fields) {
+        if (DECLARED_UUID_EXCEPTIONS.has(`${tool.name}.${path}`)) continue;
+        const strings = stringSchemas(node);
+        if (strings.length === 0) continue; // not string-shaped (nested object, number, …)
+        if (strings.some((s) => !s.pattern)) {
+          violations.push(`${tool.name}.${path}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
   it("advertises dates as date-time strings and emits them on the wire", async () => {
     const catalog = await listMcpToolCatalog();
     const getProject = catalog.tools.find(
@@ -524,11 +650,17 @@ describe("listMcpToolCatalog", () => {
     // structuredContent carries a real Date, which JSON-RPC serializes to ISO.
     const createdAt = new Date("2026-07-27T12:34:56.000Z");
     const project = mock(projectOut, { seed: 1, overrides: { createdAt } });
+    const projectCode = "PRJ-2222";
     const result = await callTool(
       createMcpServer(),
       "get_project",
-      { id: project.id },
-      { project: { getByID: async () => project } },
+      { id: projectCode },
+      {
+        project: { getByID: async () => project },
+        shortcode: shortcodeResolverStub([
+          { code: projectCode, entity: "project", id: project.id },
+        ]),
+      },
     );
 
     expect(result.isError).not.toBe(true);
@@ -595,6 +727,11 @@ describe("listMcpToolCatalog", () => {
 
 describe("find_similar_entities pair allowlist", () => {
   const EXPENSE_A = "77777777-7777-4777-8777-777777777771";
+  const EXPENSE_A_CODE = "EXP-2222";
+  const similarShortcodeStub = () =>
+    shortcodeResolverStub([
+      { code: EXPENSE_A_CODE, entity: "expense", id: EXPENSE_A },
+    ]);
 
   it("passes an allowlisted pair through to search.similar", async () => {
     const similar = vi.fn().mockResolvedValue({
@@ -605,11 +742,12 @@ describe("find_similar_entities pair allowlist", () => {
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "expense_to_product", sourceId: EXPENSE_A, limit: 3 },
-      { search: { similar } },
+      { pair: "expense_to_product", sourceId: EXPENSE_A_CODE, limit: 3 },
+      { search: { similar }, shortcode: similarShortcodeStub() },
     );
 
     expect(result.isError).not.toBe(true);
+    // The seed crosses the boundary as a code and reaches the router as a uuid.
     expect(similar).toHaveBeenCalledWith({
       pair: "expense_to_product",
       sourceId: EXPENSE_A,
@@ -623,8 +761,9 @@ describe("find_similar_entities pair allowlist", () => {
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "expense_to_recipe", sourceId: EXPENSE_A },
-      { search: { similar } },
+      // A valid seed code, so the rejection can only be about the PAIR.
+      { pair: "expense_to_recipe", sourceId: EXPENSE_A_CODE },
+      { search: { similar }, shortcode: similarShortcodeStub() },
     );
 
     expect(result.isError).toBe(true);
@@ -633,17 +772,35 @@ describe("find_similar_entities pair allowlist", () => {
 });
 
 describe("merge_ingredients partial-success aggregation", () => {
-  const TARGET_A = "11111111-1111-4111-8111-111111111111";
-  const ALIAS_A = "11111111-1111-4111-8111-111111111112";
-  const TARGET_B = "22222222-2222-4222-8222-222222222222";
-  const ALIAS_B = "22222222-2222-4222-8222-222222222223";
+  // The tool takes ingredient SHORTCODES and echoes the RESOLVED uuid back on
+  // each result (see the comment in ingredient.tools.ts: "outputSchema's
+  // `target` is a branded ingredientId (uuid), so the resolved id — not the
+  // shortcode the caller passed — is what's echoed"). So every merge needs
+  // both a valid ING- code (what the tool receives) and the uuid it resolves
+  // to (what the assertions check for).
+  const TARGET_A_CODE = "ING-2222";
+  const TARGET_A_ID = "11111111-1111-4111-8111-111111111111";
+  const ALIAS_A_CODE = "ING-2223";
+  const ALIAS_A_ID = "11111111-1111-4111-8111-111111111112";
+  const TARGET_B_CODE = "ING-2224";
+  const TARGET_B_ID = "22222222-2222-4222-8222-222222222222";
+  const ALIAS_B_CODE = "ING-2225";
+  const ALIAS_B_ID = "22222222-2222-4222-8222-222222222223";
+
+  const shortcodeStub = () =>
+    shortcodeResolverStub([
+      { code: TARGET_A_CODE, entity: "ingredient", id: TARGET_A_ID },
+      { code: ALIAS_A_CODE, entity: "ingredient", id: ALIAS_A_ID },
+      { code: TARGET_B_CODE, entity: "ingredient", id: TARGET_B_ID },
+      { code: ALIAS_B_CODE, entity: "ingredient", id: ALIAS_B_ID },
+    ]);
 
   it("reports merged/total/results and leaves isError unset when at least one merge succeeds", async () => {
     const mergeSummary = {
       aliasesAdded: ["Cherry"],
       recipesMoved: 2,
       productsMoved: 1,
-      deletedIds: [ALIAS_A],
+      deletedIds: [ALIAS_A_ID],
     };
     const caller = {
       ingredient: {
@@ -652,6 +809,7 @@ describe("merge_ingredients partial-success aggregation", () => {
           .mockResolvedValueOnce({ mergeSummary })
           .mockRejectedValueOnce(new Error("target not found")),
       },
+      shortcode: shortcodeStub(),
     };
 
     const result = await callTool(
@@ -659,8 +817,8 @@ describe("merge_ingredients partial-success aggregation", () => {
       "merge_ingredients",
       {
         merges: [
-          { target: TARGET_A, aliases: [ALIAS_A] },
-          { target: TARGET_B, aliases: [ALIAS_B] },
+          { target: TARGET_A_CODE, aliases: [ALIAS_A_CODE] },
+          { target: TARGET_B_CODE, aliases: [ALIAS_B_CODE] },
         ],
       },
       caller,
@@ -671,8 +829,8 @@ describe("merge_ingredients partial-success aggregation", () => {
       merged: 1,
       total: 2,
       results: [
-        { target: TARGET_A, ok: true, summary: mergeSummary },
-        { target: TARGET_B, ok: false, error: "target not found" },
+        { target: TARGET_A_ID, ok: true, summary: mergeSummary },
+        { target: TARGET_B_ID, ok: false, error: "target not found" },
       ],
     });
   });
@@ -682,6 +840,7 @@ describe("merge_ingredients partial-success aggregation", () => {
       ingredient: {
         merge: vi.fn().mockRejectedValue(new Error("boom")),
       },
+      shortcode: shortcodeStub(),
     };
 
     const result = await callTool(
@@ -689,8 +848,8 @@ describe("merge_ingredients partial-success aggregation", () => {
       "merge_ingredients",
       {
         merges: [
-          { target: TARGET_A, aliases: [ALIAS_A] },
-          { target: TARGET_B, aliases: [ALIAS_B] },
+          { target: TARGET_A_CODE, aliases: [ALIAS_A_CODE] },
+          { target: TARGET_B_CODE, aliases: [ALIAS_B_CODE] },
         ],
       },
       caller,
@@ -701,8 +860,8 @@ describe("merge_ingredients partial-success aggregation", () => {
       merged: 0,
       total: 2,
       results: [
-        { target: TARGET_A, ok: false, error: "boom" },
-        { target: TARGET_B, ok: false, error: "boom" },
+        { target: TARGET_A_ID, ok: false, error: "boom" },
+        { target: TARGET_B_ID, ok: false, error: "boom" },
       ],
     });
   });
@@ -712,18 +871,19 @@ describe("merge_ingredients partial-success aggregation", () => {
       aliasesAdded: [],
       recipesMoved: 0,
       productsMoved: 0,
-      deletedIds: [ALIAS_A],
+      deletedIds: [ALIAS_A_ID],
     };
     const caller = {
       ingredient: {
         merge: vi.fn().mockResolvedValue({ mergeSummary }),
       },
+      shortcode: shortcodeStub(),
     };
 
     const result = await callTool(
       createMcpServer(),
       "merge_ingredients",
-      { merges: [{ target: TARGET_A, aliases: [ALIAS_A] }] },
+      { merges: [{ target: TARGET_A_CODE, aliases: [ALIAS_A_CODE] }] },
       caller,
     );
 
@@ -731,7 +891,7 @@ describe("merge_ingredients partial-success aggregation", () => {
     expect(result.structuredContent).toEqual({
       merged: 1,
       total: 1,
-      results: [{ target: TARGET_A, ok: true, summary: mergeSummary }],
+      results: [{ target: TARGET_A_ID, ok: true, summary: mergeSummary }],
     });
   });
 });
@@ -835,11 +995,14 @@ describe("unknown filter keys are rejected", () => {
 });
 
 describe("household tracker synthesis + bulk tools", () => {
-  const PROJECT_A = "44444444-4444-4444-8444-444444444441";
-  const PROJECT_B = "44444444-4444-4444-8444-444444444442";
-  const PROJECT_C = "44444444-4444-4444-8444-444444444443";
-  const TASK_A = "55555555-5555-4555-8555-555555555551";
-  const EXPENSE_A = "66666666-6666-4666-8666-666666666661";
+  // project/task/expense are addressed by their public code end to end now —
+  // the tool input, the router call, and the row's own `id` are all the same
+  // value, so there is nothing left to translate in these tools.
+  const PROJECT_A = "PRJ-4442";
+  const PROJECT_B = "PRJ-4443";
+  const PROJECT_C = "PRJ-4444";
+  const TASK_A = "TSK-5552";
+  const EXPENSE_A = "EXP-6662";
 
   it("get_house_status passes filters through and trims UI-only + heavy fields", async () => {
     const project = mock(projectOut, {
@@ -923,8 +1086,9 @@ describe("household tracker synthesis + bulk tools", () => {
       "projectId",
       "projectName",
       "status",
-      "subjectProductId",
       "subjectProductName",
+      // product keeps a uuid `id` of its own, so its ref stays an explicit code
+      "subjectProductShortcode",
       "trade",
     ]);
   });
@@ -933,7 +1097,7 @@ describe("household tracker synthesis + bulk tools", () => {
     const candidate = (
       overrides: Partial<ExpenseMatchCandidate>,
     ): ExpenseMatchCandidate => ({
-      expenseId: unsafeExpenseId(EXPENSE_A),
+      expenseId: unsafeExpenseShortcode("EXP-3333"),
       name: "dust extractor",
       cost: 599,
       date: "2024-06-10",
@@ -956,7 +1120,7 @@ describe("household tracker synthesis + bulk tools", () => {
     const ordered = [
       candidate({ matchedOn: "order_id", orderId: "1121197219" }),
       candidate({
-        expenseId: unsafeExpenseId(PROJECT_B),
+        expenseId: unsafeExpenseShortcode("EXP-3334"),
         name: "coincidence",
         matchedOn: "amount_date",
       }),
@@ -984,7 +1148,7 @@ describe("household tracker synthesis + bulk tools", () => {
       { expense: { match } },
     );
 
-    expect(result.isError).not.toBe(true);
+    if (result.isError) throw new Error(JSON.stringify(result.content));
     // Every tuning knob has a schema default, so a caller passing only `rows`
     // still reaches the repo with a fully-resolved option set.
     expect(match).toHaveBeenCalledWith(
@@ -1072,7 +1236,7 @@ describe("household tracker synthesis + bulk tools", () => {
       { project: { portfolioAnalytics } },
     );
 
-    expect(result.isError).not.toBe(true);
+    if (result.isError) throw new Error(JSON.stringify(result.content));
     const structured = result.structuredContent as {
       projects: Array<Record<string, unknown>>;
       totals: Record<string, number>;
@@ -1177,10 +1341,10 @@ describe("household tracker synthesis + bulk tools", () => {
 });
 
 describe("purchase restructuring tools (split/link/merge)", () => {
-  const EXPENSE_A = "77777777-7777-4777-8777-777777777771";
-  const EXPENSE_B = "77777777-7777-4777-8777-777777777772";
-  const PURCHASE_A = "88888888-8888-4888-8888-888888888881";
-  const PURCHASE_B = "88888888-8888-4888-8888-888888888882";
+  const EXPENSE_A = "EXP-7772";
+  const EXPENSE_B = "EXP-7773";
+  const PURCHASE_A = "PUR-8882";
+  const PURCHASE_B = "PUR-8883";
 
   it("split_expense is WRITE_CLOSED, wraps the array result in items, and passes params through", async () => {
     const server = createMcpServer();
@@ -1279,6 +1443,12 @@ describe("purchase restructuring tools (split/link/merge)", () => {
 });
 
 describe("update_inventory_entry value/unit pairing guard", () => {
+  // A valid INV- code that resolves is required even though the pairing guard
+  // fires before the id is ever resolved: zod validates `id` against the
+  // shortcode pattern BEFORE the handler runs at all, so a raw uuid here would
+  // fail at parse time and the test would prove nothing about the pairing
+  // guard specifically (see the id-format failure this test used to produce).
+  const ENTRY_CODE = "INV-2222";
   const ENTRY_ID = "33333333-3333-4333-8333-333333333333";
 
   it("throws before reaching the router when only value is supplied", async () => {
@@ -1287,7 +1457,7 @@ describe("update_inventory_entry value/unit pairing guard", () => {
     const result = await callTool(
       createMcpServer(),
       "update_inventory_entry",
-      { id: ENTRY_ID, value: 3 },
+      { id: ENTRY_CODE, value: 3 },
       caller,
     );
 
@@ -1305,7 +1475,7 @@ describe("update_inventory_entry value/unit pairing guard", () => {
     const result = await callTool(
       createMcpServer(),
       "update_inventory_entry",
-      { id: ENTRY_ID, unit: "each" },
+      { id: ENTRY_CODE, unit: "each" },
       caller,
     );
 
@@ -1315,7 +1485,10 @@ describe("update_inventory_entry value/unit pairing guard", () => {
 
   it("passes both through when value and unit are supplied together", async () => {
     const updated = {
-      id: ENTRY_ID,
+      // slimInventory reads the raw row's `shortcode` field for the
+      // projection's `id` (inventoryMcpOut.id IS the shortcode) — not `id`
+      // itself, which on the raw row is the private uuid.
+      shortcode: ENTRY_CODE,
       amount: { value: 3, unit: "each" },
       valuation: null,
       product: null,
@@ -1323,12 +1496,15 @@ describe("update_inventory_entry value/unit pairing guard", () => {
     };
     const caller = {
       inventory: { update: vi.fn().mockResolvedValue(updated) },
+      shortcode: shortcodeResolverStub([
+        { code: ENTRY_CODE, entity: "inventory", id: ENTRY_ID },
+      ]),
     };
 
     const result = await callTool(
       createMcpServer(),
       "update_inventory_entry",
-      { id: ENTRY_ID, value: 3, unit: "each" },
+      { id: ENTRY_CODE, value: 3, unit: "each" },
       caller,
     );
 

@@ -16,7 +16,7 @@ import {
   updateImage,
 } from "./image";
 import { createPurchase } from "./purchase";
-import { findOrCreateVendor } from "./vendor";
+import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 describe("image repository", () => {
   const ctx = withTestDb();
@@ -193,11 +193,15 @@ describe("image repository — purchase (charge) documents", () => {
 
   const makePurchase = async (orderId: string | null = null) => {
     const vendorId = await findOrCreateVendor(ctx.db, "PurchaseImage Test Co");
-    return createPurchase(
+    const vendor = await getVendorByID(ctx.db, vendorId);
+    // The FK plumbing below is keyed by the private uuid, which the repo hands
+    // back alongside the public row — no second lookup needed.
+    const { output: charge, entityId } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId }),
+      purchaseCreateInput.parse({ vendorId: vendor.id, orderId }),
       ctx.actor,
     );
+    return { ...charge, uuid: entityId };
   };
 
   // The live bug: on `main`, `deleteImages` never deletes `PurchaseImage`
@@ -215,7 +219,7 @@ describe("image repository — purchase (charge) documents", () => {
         size: 4096,
       },
       "purchase",
-      charge.id,
+      charge.uuid,
     );
 
     const result = await deleteImages(ctx.db, [uploaded.id]);
@@ -242,7 +246,7 @@ describe("image repository — purchase (charge) documents", () => {
     const charge = await makePurchase();
     const pending = await makePendingImage();
     await insertAndReturn(ctx.db, purchaseImage, {
-      purchaseId: charge.id,
+      purchaseId: charge.uuid,
       imageId: pending.id,
     });
 
@@ -265,12 +269,12 @@ describe("image repository — purchase (charge) documents", () => {
         size: 2048,
       },
       "purchase",
-      charge.id,
+      charge.uuid,
     );
 
     const found = await getImageById(ctx.db, uploaded.id);
     expect(found.entityType).toEqual("PURCHASE");
-    expect(found.entityId).toEqual(charge.id);
+    expect(found.entityId).toEqual(charge.uuid);
     expect(found.entityName).toEqual("PO-2002");
   });
 });

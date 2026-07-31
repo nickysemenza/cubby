@@ -3,7 +3,12 @@
  * Pure crud-factory shape; no children, no rollups of its own.
  */
 
-import { type ExpenseId, expenseId } from "@cubby/schemas/identifiers";
+import {
+  type ExpenseShortcode,
+  expenseShortcode,
+  unsafeExpenseId,
+  unsafePurchaseId,
+} from "@cubby/schemas/identifiers";
 import {
   expenseAnalyticsOut,
   expenseBulkCostTypeInput,
@@ -21,6 +26,7 @@ import {
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   createExpense,
   deleteExpenses,
@@ -36,6 +42,10 @@ import {
   updateExpense,
 } from "~/server/repo/expense";
 import { getPurchaseExpenses } from "~/server/repo/purchase";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
@@ -61,25 +71,52 @@ const {
       // sort keys from being accepted as group keys that do nothing.
       groupableFields: ["costType"] as const,
     },
-    idSchema: expenseId,
+    idSchema: expenseShortcode,
   },
   repository: {
-    getByID: async (services, id: ExpenseId) => getExpenseByID(services.db, id),
+    getByID: async (services, shortcode: ExpenseShortcode) => {
+      const id = await resolveLiveShortcode(services.db, shortcode, "expense");
+      if (!id) {
+        throw createAppError(
+          "EXPENSE_NOT_FOUND",
+          `Expense not found: ${shortcode}`,
+        );
+      }
+      return getExpenseByID(services.db, unsafeExpenseId(id));
+    },
     getByShortcode: (services, shortcode) =>
       getExpenseByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       expenseList(services.db, filters, sort, pagination),
+    // The repo hands back the uuid alongside the output, so neither of these
+    // re-resolves a code it just had.
     create: async (services, data) =>
-      createExpense(services.db, data, services.actorContext),
-    update: async (services, id: ExpenseId, data) =>
-      updateExpense(services.db, id, data, services.actorContext),
-    delete: async (services, ids) => {
+      await createExpense(services.db, data, services.actorContext),
+    update: async (services, shortcode: ExpenseShortcode, data) =>
+      await updateExpense(services.db, shortcode, data, services.actorContext),
+    delete: async (services, ids: ExpenseShortcode[]) => {
       await deleteExpenses(services.db, ids, services.actorContext);
       return undefined;
     },
   },
   entityName: "expense",
 });
+
+/**
+ * Batch-resolve the shortcodes a bulk-write result carries into the internal
+ * uuids `runMutationSideEffectsForEntities` keys on — one query for the
+ * whole batch, not one per row.
+ */
+async function expenseEntityIds(
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  ids: ExpenseShortcode[],
+) {
+  const resolved = await resolveLiveShortcodes(db, ids, "expense");
+  return ids.flatMap((code) => {
+    const uuid = resolved.get(code);
+    return uuid ? [unsafeExpenseId(uuid)] : [];
+  });
+}
 
 /**
  * Every expense matching the filters, in one round trip — chart aggregates
@@ -131,12 +168,25 @@ const vendorOptions = protectedProcedure
  * grow a lookup only one section reads.
  */
 const chargeSiblings = protectedProcedure
-  .input(expenseId)
+  .input(expenseShortcode)
   .output(z.array(expenseOut))
   .query(async ({ ctx, input }) => {
-    const self = await getExpenseByID(ctx.db, input);
+    const id = await resolveLiveShortcode(ctx.db, input, "expense");
+    if (!id) {
+      throw createAppError("EXPENSE_NOT_FOUND", `Expense not found: ${input}`);
+    }
+    const self = await getExpenseByID(ctx.db, unsafeExpenseId(id));
     if (!self.purchaseId) return [];
-    const lines = await getPurchaseExpenses(ctx.db, self.purchaseId);
+    const purchaseId = await resolveLiveShortcode(
+      ctx.db,
+      self.purchaseId,
+      "purchase",
+    );
+    if (!purchaseId) return [];
+    const lines = await getPurchaseExpenses(
+      ctx.db,
+      unsafePurchaseId(purchaseId),
+    );
     return lines.filter((row) => row.id !== input);
   });
 
@@ -171,11 +221,15 @@ const bulkMove = protectedProcedure
   .output(expenseListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await moveExpenses(ctx.db, input, ctx.actorContext);
+    const ids = await expenseEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId: item.id },
+        entity: { entityType: "expense" as const, entityId },
         source: "expense.bulkMove",
       })),
     );
@@ -188,11 +242,15 @@ const bulkSetTrade = protectedProcedure
   .output(expenseListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setExpensesTrade(ctx.db, input, ctx.actorContext);
+    const ids = await expenseEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId: item.id },
+        entity: { entityType: "expense" as const, entityId },
         source: "expense.bulkSetTrade",
       })),
     );
@@ -205,11 +263,15 @@ const bulkSetCostType = protectedProcedure
   .output(expenseListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setExpensesCostType(ctx.db, input, ctx.actorContext);
+    const ids = await expenseEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId: item.id },
+        entity: { entityType: "expense" as const, entityId },
         source: "expense.bulkSetCostType",
       })),
     );

@@ -1,3 +1,5 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -37,7 +39,28 @@ import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
+import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { dbExpenseToAPI } from "./helpers";
+
+/**
+ * Resolve a batch of shortcodes to their (unbranded) uuids for use in a WHERE
+ * clause. Unknown/malformed codes simply drop out — a filter naming a code
+ * that doesn't exist should match nothing, not throw. The `entity` parameter
+ * pins the expected type so a wrong-prefix code is silently dropped rather than
+ * matching an unrelated row.
+ */
+const toUuids = async (
+  db: Database,
+  codes: readonly string[],
+  entity: ShortcodeEntity,
+): Promise<string[]> => {
+  if (codes.length === 0) return [];
+  const resolved = await resolveShortcodes(db, codes);
+  return codes.flatMap((code) => {
+    const ref = resolved.get(code);
+    return ref?.entity === entity ? [ref.id] : [];
+  });
+};
 
 /**
  * Lift a predicate on the CHARGE into a predicate on the expense.
@@ -113,20 +136,28 @@ export const buildExpenseWhereClause = async (
 ): Promise<SQL | undefined> => {
   // When scoped to a project subtree, resolve each selected project + every
   // live descendant and match on the whole set; otherwise a plain match on the
-  // selection (one project or several — see `eqAny`).
-  const selectedProjectIds = filters.projectId
+  // selection (one project or several — see `eqAny`). Filters arrive as
+  // shortcodes, resolved to the uuid FK the column actually stores.
+  const selectedProjectCodes = filters.projectId
     ? [filters.projectId].flat()
     : [];
-  let projectValues = eqAny(expense.projectId, filters.projectId);
+  const selectedProjectIds = await toUuids(db, selectedProjectCodes, "project");
+  let projectValues =
+    selectedProjectIds.length > 0
+      ? eqAny(expense.projectId, selectedProjectIds)
+      : undefined;
   if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
     const { childrenByParent } = await loadProjectTree(db);
     projectValues = inArray(
       expense.projectId,
       uniq(
-        selectedProjectIds.flatMap((id) => [
-          id,
-          ...collectDescendantIds(childrenByParent, id),
-        ]),
+        selectedProjectIds.flatMap((id) => {
+          const projectId = unsafeProjectId(id);
+          return [
+            projectId,
+            ...collectDescendantIds(childrenByParent, projectId),
+          ];
+        }),
       ),
     );
   }
@@ -157,6 +188,18 @@ export const buildExpenseWhereClause = async (
       .map((term) => formatSearchTerm(expense.name, term)),
   );
 
+  // Resolved once up front, same as `selectedProjectIds` above.
+  const vendorUuids = await toUuids(
+    db,
+    filters.vendorId ? [filters.vendorId].flat() : [],
+    "vendor",
+  );
+  const purchaseUuids = await toUuids(
+    db,
+    filters.purchaseId ? [filters.purchaseId] : [],
+    "purchase",
+  );
+
   // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
   // filters and ANDing them with each other and with the name search is the
   // intended semantics. What must never happen is a second entry reusing
@@ -185,7 +228,9 @@ export const buildExpenseWhereClause = async (
       // rule as project above — and because `purchase.vendorId` is NOT NULL, "no
       // vendor" and "no charge" are one predicate: `purchaseId IS NULL`.
       or(
-        chargeCondition(db, eqAny(purchase.vendorId, filters.vendorId)),
+        vendorUuids.length > 0
+          ? chargeCondition(db, eqAny(purchase.vendorId, vendorUuids))
+          : undefined,
         presenceCondition(expense.purchaseId, filters.vendorPresenceFilter),
       ),
       filters.future !== undefined
@@ -223,7 +268,9 @@ export const buildExpenseWhereClause = async (
       chargeCondition(db, eqAny(purchase.orderId, filters.orderId)),
       // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
       // `expense` — no `chargeCondition` sub-select hop needed.
-      eqAny(expense.purchaseId, filters.purchaseId),
+      purchaseUuids.length > 0
+        ? eqAny(expense.purchaseId, purchaseUuids)
+        : undefined,
     ],
   );
 };

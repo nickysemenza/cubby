@@ -79,6 +79,41 @@ export async function resolveLiveShortcode<E extends ShortcodeEntity>(
 }
 
 /**
+ * Resolve many shortcodes of a SINGLE known entity to their LIVE uuids, in one
+ * query — the batched counterpart to {@link resolveLiveShortcode}. Codes that
+ * are malformed, belong to another entity, or name a soft-deleted row are
+ * simply absent from the returned map (never thrown); callers that need every
+ * input to resolve check the map's size against the input.
+ */
+export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
+  db: Database | DrizzleTransaction,
+  codes: readonly string[],
+  entity: E,
+): Promise<Map<string, string>> {
+  const canonical = new Map<string, string>(); // canonical code -> original code
+  for (const code of codes) {
+    const parsed = parseShortcode(code);
+    if (parsed && parsed.type === entity) canonical.set(parsed.shortcode, code);
+  }
+  if (canonical.size === 0) return new Map();
+
+  const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+  const rows = (await unwrapDb(db)
+    .select({ id: table.id, shortcode: table.shortcode })
+    .from(table)
+    .where(
+      and(inArray(table.shortcode, [...canonical.keys()]), notDeleted(table)),
+    )) as IdAndCode[];
+
+  const resolved = new Map<string, string>();
+  for (const row of rows) {
+    const originalCode = canonical.get(row.shortcode);
+    if (originalCode !== undefined) resolved.set(originalCode, row.id);
+  }
+  return resolved;
+}
+
+/**
  * Resolve many shortcodes at once — one query per entity type present, not one
  * per code. Unknown or malformed codes are simply absent from the result.
  *

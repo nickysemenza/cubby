@@ -6,7 +6,7 @@
  * get_project.
  */
 
-import { projectId } from "@cubby/schemas/identifiers";
+import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   expenseAnalyticsOut,
@@ -18,9 +18,11 @@ import {
   expenseMatchInput,
   expenseMatchOut,
   expenseMcpListOut,
+  expenseMcpOut,
   expenseOut,
   expenseUpdateData,
   LIVE_PROJECT_STATUSES,
+  projectAttentionItemSchema,
   projectCreateInput,
   projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
@@ -28,6 +30,7 @@ import {
   projectMcpListOut,
   projectOut,
   projectPortfolioAnalyticsOut,
+  projectTaskStatusBreakdown,
   projectUpdateData,
   taskBulkDueDateInput,
   taskBulkMoveInput,
@@ -35,6 +38,7 @@ import {
   taskCreateInput,
   taskFilterFields,
   taskMcpListOut,
+  taskMcpOut,
   taskOut,
   taskSummaryOut,
   taskUpdateData,
@@ -43,9 +47,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 import {
+  idParam,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
+  resolveOptionalId,
   slimExpense,
   slimProject,
   slimTask,
@@ -78,32 +84,52 @@ const houseStatusProject = projectOut.omit({
 });
 
 /** Upcoming-task row for `get_house_status` — enough to name and schedule the
- * task; `get_task` / `list_actionable_tasks` own the blocking graph. */
+ * task; `get_task` / `list_actionable_tasks` own the blocking graph. `taskOut`'s
+ * own `id` and `projectId` ARE shortcodes now, so they're picked directly.
+ * `subjectProductShortcode` is still separate because product keeps a uuid `id`
+ * alongside its code — this tool bypasses the `slim*` projections that would
+ * otherwise do that swap (see `registerRouterTool`'s doc comment). */
 const houseStatusTask = taskOut.pick({
   id: true,
   name: true,
   status: true,
   projectId: true,
   projectName: true,
-  subjectProductId: true,
+  subjectProductShortcode: true,
   subjectProductName: true,
   dueDate: true,
   dueEndDate: true,
   trade: true,
 });
 
+/** `attention[].entityId` already carries the public code (see
+ * `repo/project/attention.ts`, which selects `row.shortcode` into it), and
+ * `projectTaskStatusBreakdown.projectId` is a `projectShortcode` — so both
+ * pass straight through. */
+const houseStatusAttentionItem = projectAttentionItemSchema;
+const houseStatusTaskStatus = projectTaskStatusBreakdown;
+
 /** `project.dashboardSummary` minus `filterOptions` (UI select options only). */
 const houseStatusOut = projectDashboardSummaryOut
-  .omit({ filterOptions: true, projects: true, nextTasks: true })
+  .omit({
+    filterOptions: true,
+    projects: true,
+    taskStatusByProject: true,
+    nextTasks: true,
+    attention: true,
+  })
   .extend({
     projects: z.array(houseStatusProject),
+    taskStatusByProject: z.array(houseStatusTaskStatus),
     nextTasks: z.array(houseStatusTask),
+    attention: z.array(houseStatusAttentionItem),
   });
 
 /** One project's planned-vs-actual envelope, derived from
- * `portfolioAnalytics.costVsEstimate` (subtree lifetime totals). */
+ * `portfolioAnalytics.costVsEstimate` (subtree lifetime totals). Its
+ * `projectId` IS the public shortcode, so no reverse lookup is needed. */
 const projectBudgetRow = z.object({
-  projectId,
+  projectId: projectShortcode,
   projectName: z.string(),
   estimate: z
     .number()
@@ -138,6 +164,18 @@ const projectBudgetOut = z.object({
   plannedVsActualByMonth: projectPortfolioAnalyticsOut.shape.plannedVsActual,
 });
 
+/** `expenseMatchCandidate.expenseId` is already the public code. */
+const expenseMatchCandidateMcpOut =
+  expenseMatchOut.shape.matches.element.shape.candidates.element;
+
+const expenseMatchMcpOut = expenseMatchOut.omit({ matches: true }).extend({
+  matches: z.array(
+    expenseMatchOut.shape.matches.element.omit({ candidates: true }).extend({
+      candidates: z.array(expenseMatchCandidateMcpOut),
+    }),
+  ),
+});
+
 /** Bulk task writes return the updated rows plus the background batches they
  * enqueued (embedding refresh); MCP clients only need the rows and a count. */
 const taskBulkMcpOut = z.object({
@@ -157,6 +195,13 @@ async function bulkEntityWrite<T>(run: Promise<{ items: T[] }>) {
   const { items } = await run;
   return { updated: items.length, items };
 }
+
+/**
+ * Product is not cut over yet, so its FK on a task/expense is still a uuid in
+ * the shared schema. MCP takes the public code and resolves it — an override
+ * here rather than a change to packages/schemas, which tRPC and the UI share.
+ */
+const mcpProductRef = idParam("product").nullable().optional();
 
 export function registerProjectTools(server: McpServer) {
   registerEntityCrudToolset(server, {
@@ -194,11 +239,13 @@ export function registerProjectTools(server: McpServer) {
     // history when the caller doesn't specify a scope. Behavior-preserving
     // today: `ne(status,'done')` (the old default) is equivalent to
     // `inArray(LIVE_PROJECT_STATUSES)` given exactly 4 statuses.
-    call: (caller, params) =>
-      caller.project.dashboardSummary({
+    call: async (caller, params) => {
+      const result = await caller.project.dashboardSummary({
         statusScope: [...LIVE_PROJECT_STATUSES],
         ...params,
-      }),
+      });
+      return result;
+    },
   });
 
   registerRouterTool(server, {
@@ -253,11 +300,17 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "task",
-    createInput: taskCreateInput.shape,
-    updateShape: taskUpdateData.shape,
+    createInput: {
+      ...taskCreateInput.shape,
+      subjectProductId: mcpProductRef,
+    },
+    updateShape: {
+      ...taskUpdateData.shape,
+      subjectProductId: mcpProductRef,
+    },
     filterFields: taskFilterFields,
     mcpListOut: taskMcpListOut,
-    out: taskOut,
+    out: taskMcpOut,
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
@@ -270,7 +323,26 @@ export function registerProjectTools(server: McpServer) {
       delete:
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
-    create: (caller, params) => caller.task.create(params),
+    create: async (caller, params) =>
+      caller.task.create({
+        ...params,
+        subjectProductId: await resolveOptionalId(
+          caller,
+          "product",
+          params.subjectProductId,
+        ),
+      }),
+    resolveUpdateData: async (caller, data) =>
+      data.subjectProductId === undefined
+        ? data
+        : {
+            ...data,
+            subjectProductId: await resolveOptionalId(
+              caller,
+              "product",
+              data.subjectProductId as string | null,
+            ),
+          },
   });
 
   registerRouterTool(server, {
@@ -325,11 +397,17 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "expense",
-    createInput: expenseCreateInput.shape,
-    updateShape: expenseUpdateData.shape,
+    createInput: {
+      ...expenseCreateInput.shape,
+      productId: mcpProductRef,
+    },
+    updateShape: {
+      ...expenseUpdateData.shape,
+      productId: mcpProductRef,
+    },
     filterFields: expenseFilterFields,
     mcpListOut: expenseMcpListOut,
-    out: expenseOut,
+    out: expenseMcpOut,
     slim: slimExpense,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
@@ -340,7 +418,22 @@ export function registerProjectTools(server: McpServer) {
       update: "Update an expense's fields.",
       delete: "Soft-delete expenses by IDs.",
     },
-    create: (caller, params) => caller.expense.create(params),
+    create: async (caller, params) =>
+      caller.expense.create({
+        ...params,
+        productId: await resolveOptionalId(caller, "product", params.productId),
+      }),
+    resolveUpdateData: async (caller, data) =>
+      data.productId === undefined
+        ? data
+        : {
+            ...data,
+            productId: await resolveOptionalId(
+              caller,
+              "product",
+              data.productId as string | null,
+            ),
+          },
   });
 
   registerRouterTool(server, {
@@ -363,7 +456,7 @@ export function registerProjectTools(server: McpServer) {
   registerRouterTool(server, {
     name: "match_expenses",
     description:
-      "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label` (the export's description), `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseId/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`. Also returns `unmatched` keys and a summary. " +
+      "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label` (the export's description), `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseShortcode/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`. Also returns `unmatched` keys and a summary. " +
       "WARNING — this RANKS candidates, it does not VERIFY them, and it never writes anything. Run it BEFORE proposing any new expense, and again over each row you did create (same amount, ±30 days) to catch what slipped through. Then confirm every match with the user before a single update_expense or create_expense call. " +
       "Read `tokenOverlap` as a hint and NOTHING more. Zero overlap is routine on TRUE matches, because this ledger names the THING, not the product: a Festool vacuum is booked as `dust extractor`, a Bosch miter saw as `chop saw`. That is the exact trap this tool exists for — a keyword search for 'festool' found nothing and a duplicate row was added while the real one had sat there since 2024. Never discard a zero-overlap candidate on that basis, and note that tokenizers also miss compound words (`labelmaker` vs 'label maker', `stepstool` vs 'step stool'). Conversely, high overlap on a coincidental amount is not evidence either. " +
       "**Below about $20, READ the line descriptions before accepting anything.** A $0.93 order matched a $1.00 `5 yd nursery mix` row on amount+date and had to be reverted. Small amounts are inside any usable band by construction; the tool will surface them, and only you can tell them apart. " +
@@ -372,9 +465,11 @@ export function registerProjectTools(server: McpServer) {
       '**Always pass `orderId` when the export line has one — and pass `vendor` with it.** An order id is only unique WITHIN a vendor, so a short one (Tool Nirvana\'s "#11325") genuinely collides across retailers. Without `vendor` the matcher cannot tell a collision from a real hit, and an order-id candidate otherwise takes the top slot. Each candidate reports `vendorMatch`: true (agrees), false (CONFLICTS — treat as almost certainly the wrong row; it is demoted below every amount+date candidate but still returned, because the two spellings may just differ), or null (nothing to compare, which is unknown rather than clean). It is the only key that catches BOTH directions of the aggregate problem: a ledger row may AGGREGATE several export lines at an amount that reconciles to nothing, and it may equally hold the SPLIT while you search for the total (B&H order 1121197219 was already two sibling rows, so an amount+date search for its $306.27 total found nothing and a duplicate aggregate was created). The order-id arm ignores the day window on purpose. ' +
       "An empty `candidates` list means 'nothing within the window', NOT 'this expense is missing' — an aggregate row covering your line can sit at an amount no formula relates to yours. Rows with no cost or no date recorded are outside every amount window by construction. Planned (`future: true`) rows are included and flagged, never filtered: an export line often turns out to be one. When one ledger row is the best candidate for two export lines it is returned for both — resolve that yourself rather than assuming a one-to-one assignment.",
     inputSchema: expenseMatchInput.shape,
-    outputSchema: expenseMatchOut,
+    outputSchema: expenseMatchMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.expense.match(params),
+    call: async (caller, params) => {
+      return await caller.expense.match(params);
+    },
   });
 
   registerRouterTool(server, {

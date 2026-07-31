@@ -1,4 +1,7 @@
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeProjectId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -21,6 +24,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { resolveShortcode } from "~/server/repo/shortcode-resolver";
 import { projectContentDates, projectDependencyIds } from "./analytics";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
@@ -66,8 +70,7 @@ export const projectNameOptions = async (
   return rows.map((row) => {
     const window = windows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW;
     return {
-      id: row.id,
-      shortcode: unsafeProjectShortcode(row.shortcode),
+      id: unsafeProjectShortcode(row.shortcode),
       name: row.name,
       effectiveStart: window.effectiveStart,
       effectiveEnd: window.effectiveEnd,
@@ -89,16 +92,27 @@ export const projectList = async (
   const tree = await loadProjectTree(db);
   const { childrenByParent } = tree;
 
+  // The filter arrives as a shortcode; resolve to the uuid the column
+  // actually stores. Not live-only: a filter naming a since-deleted project
+  // should still scope the query rather than silently match everything.
+  const resolvedParent = filters.parentProjectId
+    ? await resolveShortcode(db, filters.parentProjectId)
+    : null;
+  const parentProjectUuid =
+    resolvedParent && resolvedParent.entity === "project"
+      ? unsafeProjectId(resolvedParent.id)
+      : null;
+
   // When scoped to a parent's subtree, resolve every live descendant id and
   // match on that set (excluding the parent itself — same shape as the plain
   // `parentProjectId` filter, just recursive); otherwise a direct-children match.
-  let parentCondition = filters.parentProjectId
-    ? eq(project.parentProjectId, filters.parentProjectId)
+  let parentCondition = parentProjectUuid
+    ? eq(project.parentProjectId, parentProjectUuid)
     : undefined;
-  if (filters.parentProjectId && filters.includeSubProjects) {
+  if (parentProjectUuid && filters.includeSubProjects) {
     const descendantIds = collectDescendantIds(
       childrenByParent,
-      filters.parentProjectId,
+      parentProjectUuid,
     );
     parentCondition = inArray(project.id, descendantIds);
   }

@@ -766,9 +766,9 @@ export function MealPreviewContent({ mealId }: { mealId: string }) {
 
 // Cross-link to a task/expense's parent project (built identically for both).
 //
-// KNOWN GAP: `taskOut`/`expenseOut` denormalize `projectId` (the FK, a uuid)
-// Task/expense carry a denormalized `projectShortcode` alongside `projectName`,
-// so the cross-link needs no lookup of its own.
+// `taskOut`/`expenseOut` carry `projectId` (the project's shortcode, per the
+// project/task/expense shortcode cutover) alongside `projectName`, so the
+// cross-link needs no lookup of its own.
 const projectCrossLink = (shortcode: string, name: string): CrossLink => ({
   to: "/projects/$shortcode",
   params: { shortcode },
@@ -778,7 +778,6 @@ const projectCrossLink = (shortcode: string, name: string): CrossLink => ({
 
 export type ProjectPreview = {
   id: string;
-  shortcode: string;
   name: string;
   icon?: string | null;
   status: ProjectStatus;
@@ -809,7 +808,7 @@ export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
 
   return {
     entity: "project",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: vm.icon ? (
       <span className="text-sm leading-none">{vm.icon}</span>
     ) : (
@@ -855,7 +854,6 @@ export function ProjectPreviewContent({ projectId }: { projectId: string }) {
         <ManifestCard
           {...toProjectCard({
             id: projectId,
-            shortcode: data.shortcode,
             name: data.name,
             icon: data.icon,
             status: data.status,
@@ -879,7 +877,6 @@ export function ProjectPreviewContent({ projectId }: { projectId: string }) {
 
 export type TaskPreview = {
   id: string;
-  shortcode: string;
   name: string;
   status: TaskStatus;
   trade: Trade | null;
@@ -887,7 +884,6 @@ export type TaskPreview = {
   dueEndDate: string | null;
   projectId?: string | null;
   projectName?: string | null;
-  projectShortcode?: string | null;
 };
 
 export function toTaskCard(vm: TaskPreview): ManifestCardProps {
@@ -900,14 +896,14 @@ export function toTaskCard(vm: TaskPreview): ManifestCardProps {
 
   return {
     entity: "task",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="task" size={14} colored />,
     name: vm.name,
     tag: "task",
     identity,
     crossLinks:
-      vm.projectShortcode && vm.projectName
-        ? [projectCrossLink(vm.projectShortcode, vm.projectName)]
+      vm.projectId && vm.projectName
+        ? [projectCrossLink(vm.projectId, vm.projectName)]
         : undefined,
     body: [
       {
@@ -934,7 +930,6 @@ export function TaskPreviewContent({ taskId }: { taskId: string }) {
         <ManifestCard
           {...toTaskCard({
             id: taskId,
-            shortcode: data.shortcode,
             name: data.name,
             status: data.status,
             trade: data.trade,
@@ -953,7 +948,6 @@ export function TaskPreviewContent({ taskId }: { taskId: string }) {
 
 export type ExpensePreview = {
   id: string;
-  shortcode: string;
   name: string;
   cost: number | null;
   date: string | null;
@@ -964,7 +958,6 @@ export type ExpensePreview = {
   orderId?: string | null;
   projectId?: string | null;
   projectName?: string | null;
-  projectShortcode?: string | null;
 };
 
 export function toExpenseCard(vm: ExpensePreview): ManifestCardProps {
@@ -989,14 +982,14 @@ export function toExpenseCard(vm: ExpensePreview): ManifestCardProps {
 
   return {
     entity: "expense",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="expense" size={14} colored />,
     name: vm.name,
     tag: "expense",
     identity: identity || undefined,
     crossLinks:
-      vm.projectShortcode && vm.projectName
-        ? [projectCrossLink(vm.projectShortcode, vm.projectName)]
+      vm.projectId && vm.projectName
+        ? [projectCrossLink(vm.projectId, vm.projectName)]
         : undefined,
     body: [{ kind: "stats", stats }],
   };
@@ -1012,7 +1005,6 @@ export function ExpensePreviewContent({ expenseId }: { expenseId: string }) {
         <ManifestCard
           {...toExpenseCard({
             id: expenseId,
-            shortcode: data.shortcode,
             name: data.name,
             cost: data.cost,
             date: data.date,
@@ -1033,10 +1025,10 @@ export function ExpensePreviewContent({ expenseId }: { expenseId: string }) {
 // ── Purchase ────────────────────────────────────────────────────────────────
 
 /**
- * Cross-link to the vendor that issued a charge — the charge's primary context.
- *
- * KNOWN GAP: `purchaseOut` denormalizes `vendorId` (the FK, a uuid) and
- * `vendorShortcode`, denormalized alongside `vendorName` by the charge query.
+ * Cross-link to the vendor that issued a charge — the charge's primary
+ * context. `purchaseOut.vendorId` is the vendor's shortcode (per the
+ * vendor/purchase shortcode cutover), denormalized alongside `vendorName` by
+ * the charge query, so the cross-link needs no lookup of its own.
  */
 const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
   to: "/vendors/$shortcode",
@@ -1047,7 +1039,6 @@ const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
 
 export type PurchasePreview = {
   id: string;
-  shortcode: string;
   orderId: string | null;
   date: string | null;
   statedTotal: number | null;
@@ -1055,13 +1046,12 @@ export type PurchasePreview = {
   expenseTotal: number;
   vendorId?: string | null;
   vendorName?: string | null;
-  vendorShortcode?: string | null;
 };
 
 export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
   return {
     entity: "purchase",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="purchase" size={14} colored />,
     // No `name` column on a charge — the shared label ladder owns this so the
     // hovercard and every inline link read the same charge the same way.
@@ -1069,8 +1059,8 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
     tag: "purchase",
     identity: vm.date ? formatDate(vm.date) : undefined,
     crossLinks:
-      vm.vendorShortcode && vm.vendorName
-        ? [vendorCrossLink(vm.vendorShortcode, vm.vendorName)]
+      vm.vendorId && vm.vendorName
+        ? [vendorCrossLink(vm.vendorId, vm.vendorName)]
         : undefined,
     body: [
       {
@@ -1115,7 +1105,6 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
         <ManifestCard
           {...toPurchaseCard({
             id: purchaseId,
-            shortcode: data.shortcode,
             orderId: data.orderId,
             date: data.date,
             statedTotal: data.statedTotal,
@@ -1134,7 +1123,6 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
 
 export type VendorPreview = {
   id: string;
-  shortcode: string;
   name: string;
   purchaseCount: number;
   spend: number;
@@ -1143,7 +1131,7 @@ export type VendorPreview = {
 export function toVendorCard(vm: VendorPreview): ManifestCardProps {
   return {
     entity: "vendor",
-    routeParam: vm.shortcode,
+    routeParam: vm.id,
     icon: <EntityIcon entity="vendor" size={14} colored />,
     name: vm.name,
     tag: "vendor",
@@ -1172,7 +1160,6 @@ export function VendorPreviewContent({ vendorId }: { vendorId: string }) {
         <ManifestCard
           {...toVendorCard({
             id: vendorId,
-            shortcode: data.shortcode,
             name: data.name,
             purchaseCount: data.purchaseCount,
             spend: data.spend,

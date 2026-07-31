@@ -4,10 +4,10 @@ import {
   type IngredientId,
   type LocationId,
   type ProductId,
-  type ProjectId,
+  type ProjectShortcode,
   type RecipeId,
   unsafeProductId,
-  unsafeProjectId,
+  unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
@@ -1602,12 +1602,12 @@ export function createPlainDateColumn<
 }
 
 /** A row that carries a project reference as a flat id+name pair (not a
- * nested `{id,name}` object) — the task/expense list shape. */
+ * nested `{id,name}` object) — the task/expense list shape. `projectId` is
+ * the project's shortcode (per the project shortcode cutover), so it is
+ * also the link target — no separate denormalized shortcode field. */
 interface ProjectRefRow {
   projectId: string | null;
   projectName: string | null;
-  /** Public id, denormalized next to the name — the link target. */
-  projectShortcode: string | null;
 }
 
 /**
@@ -1631,7 +1631,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     /** Enable inline editing via an async project picker. `clearable` always
      * on — a task/expense's project is optional. */
     editable?: {
-      onSave: (newProjectId: ProjectId | null, row: T) => Promise<void>;
+      onSave: (newProjectId: ProjectShortcode | null, row: T) => Promise<void>;
     };
   },
 ) {
@@ -1642,14 +1642,13 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         ? { id: row.projectId, name: row.projectName }
         : null,
     options?.editable
-      ? (row, id) => options.editable!.onSave(unsafeProjectId(id), row)
+      ? (row, id) => options.editable!.onSave(unsafeProjectShortcode(id), row)
       : undefined,
   );
   return columnHelper.accessor(
     (row) => ({
       id: row.projectId,
       name: row.projectName,
-      shortcode: row.projectShortcode,
     }),
     {
       id: "project",
@@ -1669,11 +1668,11 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
         cellData,
       },
       cell: (info) => {
-        const { id, name, shortcode } = info.getValue();
+        const { id, name } = info.getValue();
 
         if (options?.editable) {
-          const current: ComboboxItem<ProjectId> | null =
-            id && name ? { id: unsafeProjectId(id), name } : null;
+          const current: ComboboxItem<ProjectShortcode> | null =
+            id && name ? { id: unsafeProjectShortcode(id), name } : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -1687,11 +1686,12 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
-                  // The combobox value carries the project's uuid; the row
-                  // carries its public id, denormalized alongside `projectName`.
+                  // `row.projectId` is the project's shortcode (per the
+                  // project shortcode cutover) — the same value the combobox
+                  // carries, so it doubles as the link target.
                   <TableLink
                     to="/projects/$shortcode"
-                    params={{ shortcode: row.projectShortcode ?? "" }}
+                    params={{ shortcode: row.projectId ?? "" }}
                     variant="muted"
                   >
                     {v.name}
@@ -1702,11 +1702,11 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
           );
         }
 
-        if (!id || !name || !shortcode) return <NoneValue />;
+        if (!id || !name) return <NoneValue />;
         return (
           <EntityInlineLink
             entity="project"
-            data={{ id, name, shortcode }}
+            data={{ id, name, shortcode: id }}
             truncate
           />
         );

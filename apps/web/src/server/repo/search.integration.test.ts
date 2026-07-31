@@ -24,7 +24,7 @@ describe("globalSearch: tracker entities", () => {
   const ctx = withTestDb();
 
   it("finds a project by name and reports status + spent enrichment", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: {
@@ -65,7 +65,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Garage Rewire Manifest");
     const hit = results.find(
-      (r) => r.entityType === "project" && r.id === project.id,
+      (r) => r.entityType === "project" && r.shortcode === project.id,
     );
     expect(hit).toBeDefined();
     expect(hit?.entityType).toBe("project");
@@ -78,7 +78,7 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds a project by notes text", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: {
@@ -91,19 +91,21 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "manifest-notes-fence");
     expect(
-      results.some((r) => r.entityType === "project" && r.id === project.id),
+      results.some(
+        (r) => r.entityType === "project" && r.shortcode === project.id,
+      ),
     ).toBe(true);
   });
 
   it("finds a task by name and reports status + projectName enrichment", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Manifest Task Project" },
       }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: {
@@ -118,7 +120,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Manifest Sand The Deck");
     const hit = results.find(
-      (r) => r.entityType === "task" && r.id === task.id,
+      (r) => r.entityType === "task" && r.shortcode === task.id,
     );
     expect(hit).toBeDefined();
     if (hit?.entityType === "task") {
@@ -130,7 +132,7 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds a task by trade text", async () => {
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: {
@@ -143,19 +145,19 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "plumbing");
     expect(
-      results.some((r) => r.entityType === "task" && r.id === task.id),
+      results.some((r) => r.entityType === "task" && r.shortcode === task.id),
     ).toBe(true);
   });
 
   it("finds an expense by name and reports cost + projectName enrichment", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Manifest Expense Project" },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { output: expense } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -169,7 +171,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Manifest Cordless Drill");
     const hit = results.find(
-      (r) => r.entityType === "expense" && r.id === expense.id,
+      (r) => r.entityType === "expense" && r.shortcode === expense.id,
     );
     expect(hit).toBeDefined();
     if (hit?.entityType === "expense") {
@@ -180,7 +182,7 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds an expense by trade or notes text", async () => {
-    const byTrade = await createExpense(
+    const { output: byTrade } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -190,7 +192,7 @@ describe("globalSearch: tracker entities", () => {
       }),
       ctx.actor,
     );
-    const byNotes = await createExpense(
+    const { output: byNotes } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -204,7 +206,7 @@ describe("globalSearch: tracker entities", () => {
     const tradeResults = await globalSearch(ctx.db, "electrical");
     expect(
       tradeResults.some(
-        (r) => r.entityType === "expense" && r.id === byTrade.id,
+        (r) => r.entityType === "expense" && r.shortcode === byTrade.id,
       ),
     ).toBe(true);
 
@@ -214,7 +216,7 @@ describe("globalSearch: tracker entities", () => {
     );
     expect(
       notesResults.some(
-        (r) => r.entityType === "expense" && r.id === byNotes.id,
+        (r) => r.entityType === "expense" && r.shortcode === byNotes.id,
       ),
     ).toBe(true);
   });
@@ -386,21 +388,23 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
   const ctx = withTestDb();
 
   it("round-trips project/task/expense refs, preserving ref order", async () => {
-    const project = await createProject(
+    // `hydrateSearchResultsByRefs` takes the private uuid on purpose — its refs
+    // come straight off the search index rows, which are uuid-keyed.
+    const { output: project, entityId: projectUuid } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Hydrate Ref Project" },
       }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { entityId: taskUuid } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Hydrate Ref Task", projectId: project.id },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { entityId: expenseUuid } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: { name: "Hydrate Ref Expense", projectId: project.id },
@@ -409,9 +413,9 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
     );
 
     const results = await hydrateSearchResultsByRefs(ctx.db, [
-      { entityType: "expense", entityId: expense.id },
-      { entityType: "project", entityId: project.id },
-      { entityType: "task", entityId: task.id },
+      { entityType: "expense", entityId: expenseUuid },
+      { entityType: "project", entityId: projectUuid },
+      { entityType: "task", entityId: taskUuid },
     ]);
 
     expect(results.map((r) => r.entityType)).toEqual([
@@ -419,7 +423,11 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
       "project",
       "task",
     ]);
-    expect(results.map((r) => r.id)).toEqual([expense.id, project.id, task.id]);
+    expect(results.map((r) => r.id)).toEqual([
+      expenseUuid,
+      projectUuid,
+      taskUuid,
+    ]);
     const taskHit = results.find((r) => r.entityType === "task");
     if (taskHit?.entityType === "task") {
       expect(taskHit.projectName).toBe("Hydrate Ref Project");
@@ -431,7 +439,7 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
   });
 
   it("drops refs that don't resolve to a live row", async () => {
-    const project = await createProject(
+    const { entityId: projectUuid } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Hydrate Missing Ref Project" },
@@ -440,7 +448,7 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
     );
 
     const results = await hydrateSearchResultsByRefs(ctx.db, [
-      { entityType: "project", entityId: project.id },
+      { entityType: "project", entityId: projectUuid },
       {
         entityType: "task",
         entityId: "00000000-0000-4000-8000-000000000000",

@@ -1,4 +1,4 @@
-import type { TaskId } from "@cubby/schemas/identifiers";
+import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import { plainDate, projectKindSchema } from "@cubby/schemas/project";
 import { z } from "zod";
 import {
@@ -34,7 +34,7 @@ interface CreateProjectFromTasksDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The selected Inbox tasks to move onto the new project once it's created. */
-  taskIds: TaskId[];
+  taskIds: TaskShortcode[];
 }
 
 /**

@@ -58,7 +58,7 @@ export function TaskStatusBoard({
         }
         return {
           projectId: row.projectId,
-          projectShortcode: proj?.shortcode ?? null,
+          projectShortcode: proj?.id ?? null,
           name: proj?.name ?? "Unknown project",
           date: proj?.startDate ?? "",
           breakdown: row,

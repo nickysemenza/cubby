@@ -1,6 +1,5 @@
 import {
-  unsafeProjectId,
-  unsafeTaskId,
+  unsafeProjectShortcode,
   unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
@@ -17,19 +16,6 @@ import {
 } from "./board-model";
 import type { TaskCardDragData } from "./board-types";
 
-// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
-const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-let taskShortcodeCounter = 0;
-const nextTaskShortcode = () => {
-  const n = taskShortcodeCounter++;
-  const hi =
-    SHORTCODE_ALPHABET[
-      Math.floor(n / SHORTCODE_ALPHABET.length) % SHORTCODE_ALPHABET.length
-    ];
-  const lo = SHORTCODE_ALPHABET[n % SHORTCODE_ALPHABET.length];
-  return unsafeTaskShortcode(`TSK-23${hi}${lo}`);
-};
-
 function task(params: {
   id: string;
   name?: string;
@@ -42,19 +28,18 @@ function task(params: {
   updatedAt?: Date;
 }): TaskOut {
   return {
-    id: unsafeTaskId(params.id),
-    shortcode: nextTaskShortcode(),
+    id: unsafeTaskShortcode(params.id),
     name: params.name ?? params.id,
     status: params.status ?? "not_started",
     projectId:
-      params.projectId != null ? unsafeProjectId(params.projectId) : null,
-    projectShortcode: null,
+      params.projectId != null
+        ? unsafeProjectShortcode(params.projectId)
+        : null,
     projectName: params.projectName ?? null,
     subjectProductId: null,
     subjectProductName: null,
     subjectProductShortcode: null,
     parentTaskId: null,
-    parentTaskShortcode: null,
     parentTaskName: null,
     dueDate: params.dueDate ?? null,
     dueEndDate: null,
@@ -295,7 +280,7 @@ describe("cellTasks", () => {
       tasks,
       {
         kind: "project",
-        projectId: unsafeProjectId("p1"),
+        projectId: unsafeProjectShortcode("p1"),
         projectName: "Attic",
       },
       null,
@@ -395,11 +380,14 @@ describe("computeMove", () => {
         column: { kind: "status", status: "in_progress" },
         lane: {
           kind: "project",
-          projectId: unsafeProjectId("p2"),
+          projectId: unsafeProjectShortcode("p2"),
           projectName: "B",
         },
       }),
-    ).toEqual({ status: "in_progress", projectId: unsafeProjectId("p2") });
+    ).toEqual({
+      status: "in_progress",
+      projectId: unsafeProjectShortcode("p2"),
+    });
   });
 
   it("un-assigns the project when dropping into the Inbox lane", () => {
@@ -416,12 +404,12 @@ describe("computeMove", () => {
       computeMove(drag(t), {
         column: {
           kind: "project",
-          projectId: unsafeProjectId("p2"),
+          projectId: unsafeProjectShortcode("p2"),
           projectName: "B",
         },
         lane: null,
       }),
-    ).toEqual({ projectId: unsafeProjectId("p2") });
+    ).toEqual({ projectId: unsafeProjectShortcode("p2") });
   });
 
   it("writes only trade on a trade-column drop", () => {
@@ -438,7 +426,7 @@ describe("computeMove", () => {
       computeMove(drag(t), {
         column: {
           kind: "project",
-          projectId: unsafeProjectId("p1"),
+          projectId: unsafeProjectShortcode("p1"),
           projectName: "A",
         },
         lane: null,

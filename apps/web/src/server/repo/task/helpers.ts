@@ -1,5 +1,10 @@
+import type {
+  ProductId,
+  ProjectId,
+  TaskId,
+  TaskShortcode,
+} from "@cubby/schemas/identifiers";
 import {
-  type TaskId,
   unsafeProductShortcode,
   unsafeProjectShortcode,
   unsafeTaskShortcode,
@@ -34,13 +39,13 @@ export const effectiveTaskDueDateSql = () =>
  * `parentTaskName`, which is correct there since subtask rows never surface.
  */
 type TaskRow = {
-  id: TaskOut["id"];
+  id: TaskId;
   shortcode: string;
   name: string;
   status: TaskOut["status"];
-  projectId: TaskOut["projectId"];
-  subjectProductId: TaskOut["subjectProductId"];
-  parentTaskId: TaskOut["parentTaskId"];
+  projectId: ProjectId | null;
+  subjectProductId: ProductId | null;
+  parentTaskId: TaskId | null;
   dueDate: string | null;
   dueEndDate: string | null;
   trade: TaskOut["trade"];
@@ -62,18 +67,23 @@ type TaskRow = {
 
 export const dbTaskToAPI = (
   row: TaskRow,
-  blockedByIds: TaskId[],
-  blockingIds: TaskId[],
+  blockedByIds: TaskShortcode[],
+  blockingIds: TaskShortcode[],
   subtaskCount = 0,
   doneSubtaskCount = 0,
 ): TaskOut => ({
-  id: row.id,
-  shortcode: unsafeTaskShortcode(row.shortcode),
+  id: unsafeTaskShortcode(row.shortcode),
   name: row.name,
   status: row.status,
-  projectId: row.projectId,
+  // Resolved through the join rather than the raw FK column — the permanent
+  // public identity, same "shortcode never dies" reasoning as
+  // `purchaseOut.vendorId`. `projectName` stays separately gated on the
+  // parent's own liveness via `resolveLiveJoinName`.
+  projectId: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
   subjectProductId: row.subjectProductId,
-  parentTaskId: row.parentTaskId,
+  parentTaskId: row.parentTask
+    ? toTaskShortcode(row.parentTask.shortcode)
+    : null,
   dueDate: row.dueDate,
   dueEndDate: row.dueEndDate,
   trade: row.trade,
@@ -82,15 +92,11 @@ export const dbTaskToAPI = (
   // deletion (see project/crud.ts's PROJECT_HAS_TASKS guard) — but
   // resolveLiveJoinName still backstops a soft-deleted parent's name leaking.
   projectName: resolveLiveJoinName(row.project),
-  projectShortcode: toProjectShortcode(resolveLiveJoinShortcode(row.project)),
   subjectProductName: resolveLiveJoinName(row.subjectProduct),
   subjectProductShortcode: toProductShortcode(
     resolveLiveJoinShortcode(row.subjectProduct),
   ),
   parentTaskName: row.parentTask ? resolveLiveJoinName(row.parentTask) : null,
-  parentTaskShortcode: row.parentTask
-    ? toTaskShortcode(resolveLiveJoinShortcode(row.parentTask))
-    : null,
   blockedByIds,
   blockingIds,
   subtaskCount,

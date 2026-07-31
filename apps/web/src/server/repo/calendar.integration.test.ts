@@ -16,7 +16,7 @@ describe("calendar repository", () => {
   const ctx = withTestDb();
 
   it("combines date-only entities, project spans, and day summaries", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "Kitchen refresh",

@@ -1,7 +1,5 @@
 import {
-  unsafeProjectId,
   unsafeProjectShortcode,
-  unsafeTaskId,
   unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
@@ -14,19 +12,9 @@ import {
   type GanttRow,
 } from "./gantt-model";
 
-// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
-const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-let projectShortcodeCounter = 0;
-const nextProjectShortcode = () =>
-  unsafeProjectShortcode(
-    `PRJ-234${SHORTCODE_ALPHABET[projectShortcodeCounter++ % SHORTCODE_ALPHABET.length]}`,
-  );
-let taskShortcodeCounter = 0;
-const nextTaskShortcode = () =>
-  unsafeTaskShortcode(
-    `TSK-234${SHORTCODE_ALPHABET[taskShortcodeCounter++ % SHORTCODE_ALPHABET.length]}`,
-  );
-
+/** `id`/`parentProjectId`/`projectId`/`parentTaskId` are now the shortcode
+ * itself (post-cutover). These are unsafe casts, not zod-validated, so the
+ * readable test names double as the fixture's "shortcode" directly. */
 function project(params: {
   id: string;
   parentProjectId?: string | null;
@@ -42,9 +30,7 @@ function project(params: {
   const taskCount = params.taskCount ?? 0;
   const doneTaskCount = params.doneTaskCount ?? 0;
   return {
-    id: unsafeProjectId(params.id),
-    shortcode: nextProjectShortcode(),
-    parentProjectShortcode: null,
+    id: unsafeProjectShortcode(params.id),
     name: params.id,
     status: params.status ?? "planning",
     kind: params.kind ?? null,
@@ -52,7 +38,7 @@ function project(params: {
     costEstimate: null,
     parentProjectId:
       params.parentProjectId != null
-        ? unsafeProjectId(params.parentProjectId)
+        ? unsafeProjectShortcode(params.parentProjectId)
         : null,
     startDate: params.startDate ?? null,
     endDate: params.endDate ?? null,
@@ -111,16 +97,17 @@ function task(params: {
   status?: TaskOut["status"];
 }): TaskOut {
   return {
-    id: unsafeTaskId(params.id),
-    shortcode: nextTaskShortcode(),
-    parentTaskShortcode: null,
+    id: unsafeTaskShortcode(params.id),
     name: params.id,
     status: params.status ?? "not_started",
     projectId:
-      params.projectId != null ? unsafeProjectId(params.projectId) : null,
-    projectShortcode: null,
+      params.projectId != null
+        ? unsafeProjectShortcode(params.projectId)
+        : null,
     parentTaskId:
-      params.parentTaskId != null ? unsafeTaskId(params.parentTaskId) : null,
+      params.parentTaskId != null
+        ? unsafeTaskShortcode(params.parentTaskId)
+        : null,
     dueDate: params.dueDate ?? null,
     dueEndDate: params.dueEndDate ?? null,
     trade: "other",

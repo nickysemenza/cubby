@@ -1,7 +1,7 @@
 import {
   unsafeProductId,
-  unsafeProjectId,
-  unsafeTaskId,
+  unsafeProjectShortcode,
+  unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
@@ -24,7 +24,7 @@ import {
   createTask,
   deleteTasks,
   getTaskBoard,
-  getTaskByID,
+  getTaskByShortcode,
   getTaskSummary,
   moveTasks,
   setTasksStatus,
@@ -38,7 +38,7 @@ describe("task repository — listActionableTasks", () => {
   const ctx = withTestDb();
 
   it("an unblocked task is actionable", async () => {
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "solo task" }),
       ctx.actor,
@@ -51,12 +51,12 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a task blocked by an open task edge is blocked, and frees once the blocker is marked done", async () => {
-    const blocker = await createTask(
+    const { output: blocker } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "blocker task" }),
       ctx.actor,
     );
-    const blocked = await createTask(
+    const { output: blocked } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "blocked task" }),
       ctx.actor,
@@ -77,7 +77,6 @@ describe("task repository — listActionableTasks", () => {
         chain: [
           {
             id: blocker.id,
-            shortcode: blocker.shortcode,
             name: blocker.name,
             status: blocker.status,
             type: "task",
@@ -95,12 +94,12 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a project-edge blockage is inherited by the project's tasks", async () => {
-    const blockerProject = await createProject(
+    const { output: blockerProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "blocker project" }),
       ctx.actor,
     );
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "blocked project" }),
       ctx.actor,
@@ -111,7 +110,7 @@ describe("task repository — listActionableTasks", () => {
       { blockedByIds: [blockerProject.id] },
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -131,7 +130,6 @@ describe("task repository — listActionableTasks", () => {
         chain: [
           {
             id: blockerProject.id,
-            shortcode: blockerProject.shortcode,
             name: blockerProject.name,
             status: blockerProject.status,
             type: "project",
@@ -142,7 +140,7 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("excludes a manually-blocked task from actionable, with a manual reason", async () => {
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -161,7 +159,7 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a later task with no blockers appears in `later`, not `next`", async () => {
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -179,17 +177,17 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("builds the transitive chain (A blocked by B, B blocked by C -> A's chain = [B, C])", async () => {
-    const c = await createTask(
+    const { output: c } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "task c" }),
       ctx.actor,
     );
-    const b = await createTask(
+    const { output: b } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "task b" }),
       ctx.actor,
     );
-    const a = await createTask(
+    const { output: a } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "task a" }),
       ctx.actor,
@@ -205,12 +203,12 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a soft-deleted blocker task does not block", async () => {
-    const blocker = await createTask(
+    const { output: blocker } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "soon-deleted blocker" }),
       ctx.actor,
     );
-    const blocked = await createTask(
+    const { output: blocked } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -233,12 +231,12 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a done blocker does not block", async () => {
-    const blocker = await createTask(
+    const { output: blocker } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "done blocker" }),
       ctx.actor,
     );
-    const blocked = await createTask(
+    const { output: blocked } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -261,12 +259,12 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a task in a grandchild project is blocked when the ROOT ancestor has an open blocked-by edge", async () => {
-    const blockerProject = await createProject(
+    const { output: blockerProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "root blocker project" }),
       ctx.actor,
     );
-    const root = await createProject(
+    const { output: root } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "root project" }),
       ctx.actor,
@@ -277,7 +275,7 @@ describe("task repository — listActionableTasks", () => {
       { blockedByIds: [blockerProject.id] },
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "child project",
@@ -285,7 +283,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const grandchild = await createProject(
+    const { output: grandchild } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "grandchild project",
@@ -293,7 +291,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -313,7 +311,6 @@ describe("task repository — listActionableTasks", () => {
         chain: [
           {
             id: blockerProject.id,
-            shortcode: blockerProject.shortcode,
             name: blockerProject.name,
             status: blockerProject.status,
             type: "project",
@@ -336,17 +333,17 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("a done intermediate ancestor's own blocked-by edges don't block", async () => {
-    const blockerProject = await createProject(
+    const { output: blockerProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "intermediate blocker project" }),
       ctx.actor,
     );
-    const root = await createProject(
+    const { output: root } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "root project two" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "done intermediate child",
@@ -362,7 +359,7 @@ describe("task repository — listActionableTasks", () => {
       { status: "done", blockedByIds: [blockerProject.id] },
       ctx.actor,
     );
-    const grandchild = await createProject(
+    const { output: grandchild } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "grandchild under done intermediate",
@@ -370,7 +367,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -390,17 +387,17 @@ describe("task repository — listActionableTasks", () => {
     const yesterday = householdDaysAgo(1);
     const tomorrow = householdDaysFromNow(1);
 
-    const noDueZ = await createTask(
+    const { output: noDueZ } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "Z no due date" }),
       ctx.actor,
     );
-    const noDueA = await createTask(
+    const { output: noDueA } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "A no due date" }),
       ctx.actor,
     );
-    const dueTomorrowInProgress = await createTask(
+    const { output: dueTomorrowInProgress } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -410,7 +407,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const dueTomorrowNotStarted = await createTask(
+    const { output: dueTomorrowNotStarted } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -419,7 +416,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const overdue = await createTask(
+    const { output: overdue } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -454,7 +451,7 @@ describe("task repository — listActionableTasks", () => {
     const soon = householdDaysFromNow(1);
     const later = householdDaysFromNow(2);
 
-    const dueLater = await createTask(
+    const { output: dueLater } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -464,7 +461,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const dueSoon = await createTask(
+    const { output: dueSoon } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -474,7 +471,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const noDueOlderUpdate = await createTask(
+    const { output: noDueOlderUpdate } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -483,7 +480,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const noDueNewerCreate = await createTask(
+    const { output: noDueNewerCreate } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -524,7 +521,7 @@ describe("task repository — listActionableTasks", () => {
     const soon = householdDaysFromNow(1);
     const later = householdDaysFromNow(2);
 
-    const blockedNoDueZ = await createTask(
+    const { output: blockedNoDueZ } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -533,7 +530,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const blockedNoDueA = await createTask(
+    const { output: blockedNoDueA } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -542,7 +539,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const blockedDueLater = await createTask(
+    const { output: blockedDueLater } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -552,7 +549,7 @@ describe("task repository — listActionableTasks", () => {
       }),
       ctx.actor,
     );
-    const blockedDueSoon = await createTask(
+    const { output: blockedDueSoon } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -615,12 +612,12 @@ describe("task repository — subtasks (parentTaskId)", () => {
   const ctx = withTestDb();
 
   it("create with parentTaskId inherits the parent's projectId when omitted", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "subtask project" }),
       ctx.actor,
     );
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -630,7 +627,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ctx.actor,
     );
 
-    const subtask = await createTask(
+    const { output: subtask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -645,17 +642,17 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("create with parentTaskId and an explicit projectId keeps the explicit projectId", async () => {
-    const parentProject = await createProject(
+    const { output: parentProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "parent project" }),
       ctx.actor,
     );
-    const otherProject = await createProject(
+    const { output: otherProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "other project" }),
       ctx.actor,
     );
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -665,7 +662,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ctx.actor,
     );
 
-    const subtask = await createTask(
+    const { output: subtask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -680,12 +677,12 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects a parent that is itself a subtask — only one level of nesting", async () => {
-    const grandparent = await createTask(
+    const { output: grandparent } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "grandparent" }),
       ctx.actor,
     );
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -709,7 +706,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects giving a parent to a task that already has live subtasks", async () => {
-    const futureSubtask = await createTask(
+    const { output: futureSubtask } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "future subtask target" }),
       ctx.actor,
@@ -723,7 +720,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       }),
       ctx.actor,
     );
-    const otherTask = await createTask(
+    const { output: otherTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "other task" }),
       ctx.actor,
@@ -740,7 +737,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects a task being its own parent", async () => {
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "self parent" }),
       ctx.actor,
@@ -752,7 +749,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects a nonexistent parent (create and update)", async () => {
-    const bogus = unsafeTaskId("00000000-0000-0000-0000-000000000000");
+    const bogus = unsafeTaskShortcode("TSK-ZZZZ");
 
     await expect(
       createTask(
@@ -766,7 +763,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ),
     ).rejects.toThrow(/not found/i);
 
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -780,7 +777,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects a soft-deleted parent", async () => {
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "soon-deleted parent" }),
       ctx.actor,
@@ -801,12 +798,12 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("update can clear parentTaskId", async () => {
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "parent" }),
       ctx.actor,
     );
-    const subtask = await createTask(
+    const { output: subtask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -816,7 +813,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ctx.actor,
     );
 
-    const updated = await updateTask(
+    const { output: updated } = await updateTask(
       ctx.db,
       subtask.id,
       { parentTaskId: null },
@@ -824,17 +821,17 @@ describe("task repository — subtasks (parentTaskId)", () => {
     );
 
     expect(updated.parentTaskId).toBeNull();
-    const reread = await getTaskByID(ctx.db, subtask.id);
-    expect(reread.parentTaskId).toBeNull();
+    const reread = await getTaskByShortcode(ctx.db, subtask.id);
+    expect(reread?.parentTaskId).toBeNull();
   });
 
   it("taskList topLevelOnly excludes subtasks, and reports correct subtask counts", async () => {
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "checklist parent" }),
       ctx.actor,
     );
-    const doneSub = await createTask(
+    const { output: doneSub } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -844,7 +841,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ctx.actor,
     );
     await updateTask(ctx.db, doneSub.id, { status: "done" }, ctx.actor);
-    const openSub = await createTask(
+    const { output: openSub } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -881,12 +878,12 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("listActionableTasks excludes subtask rows, and parent rows carry subtask counts", async () => {
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "actionable parent" }),
       ctx.actor,
     );
-    const doneSub = await createTask(
+    const { output: doneSub } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -896,7 +893,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ctx.actor,
     );
     await updateTask(ctx.db, doneSub.id, { status: "done" }, ctx.actor);
-    const openSub = await createTask(
+    const { output: openSub } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -930,7 +927,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       makeProductInput({ name: "Air Handler" }),
       ctx.actor,
     );
-    const parent = await createTask(
+    const { output: parent } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "mechanical",
@@ -940,7 +937,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       ctx.actor,
     );
 
-    const inherited = await createTask(
+    const { output: inherited } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "mechanical",
@@ -949,7 +946,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       }),
       ctx.actor,
     );
-    const independent = await createTask(
+    const { output: independent } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "mechanical",
@@ -969,7 +966,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       subjectProductName: airHandler.name,
     });
 
-    const cleared = await updateTask(
+    const { output: cleared } = await updateTask(
       ctx.db,
       inherited.id,
       { subjectProductId: null },
@@ -1000,7 +997,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
     );
     await deleteProducts(ctx.db, [deleted.id], ctx.actor);
 
-    const taskWithoutProduct = await createTask(
+    const { output: taskWithoutProduct } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1028,7 +1025,7 @@ describe("task repository — subject product filters and search", () => {
       makeProductInput({ name: "Basement Furnace" }),
       ctx.actor,
     );
-    const linked = await createTask(
+    const { output: linked } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "mechanical",
@@ -1037,7 +1034,7 @@ describe("task repository — subject product filters and search", () => {
       }),
       ctx.actor,
     );
-    const unlinked = await createTask(
+    const { output: unlinked } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "Unrelated chore" }),
       ctx.actor,
@@ -1066,7 +1063,7 @@ describe("task repository — projectPresenceFilter", () => {
   const ctx = withTestDb();
 
   const seedProjectMix = async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "presence project" }),
       ctx.actor,
@@ -1132,17 +1129,17 @@ describe("task repository — moveTasks (bulk move to project)", () => {
   const ctx = withTestDb();
 
   it("moves tasks to another live project", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB, entityId: projectBId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks b" }),
       ctx.actor,
     );
-    const t1 = await createTask(
+    const { output: t1, entityId: t1Id } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1151,7 +1148,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       }),
       ctx.actor,
     );
-    const t2 = await createTask(
+    const { output: t2 } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1170,26 +1167,27 @@ describe("task repository — moveTasks (bulk move to project)", () => {
 
     const auditT1 = await getAuditLog(ctx.db, {
       entityType: "task",
-      entityId: t1.id,
+      entityId: t1Id,
       limit: 20,
     });
     expect(
       auditT1.entries.some(
         (e) =>
           e.action === "update" &&
+          // the audit trail records the column write, i.e. the uuid
           (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectB.id,
+            ?.projectId?.to === projectBId,
       ),
     ).toBe(true);
   });
 
   it("moves tasks to null (the inbox)", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move to inbox project" }),
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1208,17 +1206,17 @@ describe("task repository — moveTasks (bulk move to project)", () => {
 
     // No project-scoped filter distinguishes "projectless" tasks beyond a
     // plain read of projectId — assert directly against the re-read row.
-    const reread = await getTaskByID(ctx.db, t.id);
-    expect(reread.projectId).toBeNull();
+    const reread = await getTaskByShortcode(ctx.db, t.id);
+    expect(reread?.projectId).toBeNull();
   });
 
   it("rejects a nonexistent or soft-deleted target project with PROJECT_NOT_FOUND", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks reject source" }),
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1227,9 +1225,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       }),
       ctx.actor,
     );
-    const bogusProjectId = unsafeProjectId(
-      "00000000-0000-0000-0000-000000000000",
-    );
+    const bogusProjectId = unsafeProjectShortcode("PRJ-ZZZZ");
 
     await expect(
       moveTasks(ctx.db, { ids: [t.id], projectId: bogusProjectId }, ctx.actor),
@@ -1238,7 +1234,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       cause: { reason: "PROJECT_NOT_FOUND" },
     });
 
-    const deletedProject = await createProject(
+    const { output: deletedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "soon-deleted task target" }),
       ctx.actor,
@@ -1258,17 +1254,17 @@ describe("task repository — moveTasks (bulk move to project)", () => {
   });
 
   it("leaves soft-deleted task ids in the input untouched", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks untouched a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks untouched b" }),
       ctx.actor,
     );
-    const live = await createTask(
+    const { output: live } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1277,7 +1273,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       }),
       ctx.actor,
     );
-    const deleted = await createTask(
+    const { output: deleted } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1297,12 +1293,12 @@ describe("task repository — moveTasks (bulk move to project)", () => {
   });
 
   it("writes no audit entry for a row already in the target project (no-op)", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks noop project" }),
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t, entityId: tId } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1314,7 +1310,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
 
     const before = await getAuditLog(ctx.db, {
       entityType: "task",
-      entityId: t.id,
+      entityId: tId,
       limit: 20,
     });
     const beforeCount = before.entries.length;
@@ -1328,7 +1324,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
 
     const after = await getAuditLog(ctx.db, {
       entityType: "task",
-      entityId: t.id,
+      entityId: tId,
       limit: 20,
     });
     // computeChanges sees no field diff (projectId unchanged) — moveTasks
@@ -1341,12 +1337,12 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
   const ctx = withTestDb();
 
   it("bulk-sets status to done and to in_progress", async () => {
-    const t1 = await createTask(
+    const { output: t1 } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "bulk status 1" }),
       ctx.actor,
     );
-    const t2 = await createTask(
+    const { output: t2 } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "bulk status 2" }),
       ctx.actor,
@@ -1371,7 +1367,7 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
   });
 
   it("mixed no-op rows (already that status) don't fail, and skip the audit entry", async () => {
-    const already = await createTask(
+    const { output: already, entityId: alreadyId } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1380,7 +1376,7 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
       }),
       ctx.actor,
     );
-    const changing = await createTask(
+    const { output: changing, entityId: changingId } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "will change" }),
       ctx.actor,
@@ -1395,7 +1391,7 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
 
     const alreadyAudit = await getAuditLog(ctx.db, {
       entityType: "task",
-      entityId: already.id,
+      entityId: alreadyId,
       limit: 20,
     });
     expect(
@@ -1408,7 +1404,7 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
 
     const changingAudit = await getAuditLog(ctx.db, {
       entityType: "task",
-      entityId: changing.id,
+      entityId: changingId,
       limit: 20,
     });
     expect(
@@ -1433,17 +1429,17 @@ describe("task router — bulkMove / bulkSetStatus", () => {
   });
 
   it("bulkMove returns items + sideEffects", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "router bulk move a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "router bulk move b" }),
       ctx.actor,
     );
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1462,7 +1458,7 @@ describe("task router — bulkMove / bulkSetStatus", () => {
   });
 
   it("bulkSetStatus returns items + sideEffects", async () => {
-    const t = await createTask(
+    const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "router status me" }),
       ctx.actor,
@@ -1481,12 +1477,12 @@ describe("task repository — getTaskSummary", () => {
   const ctx = withTestDb();
 
   it("computes each count via its own scope, excluding done tasks and subtasks", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "summary project" }),
       ctx.actor,
     );
-    const openInProject = await createTask(
+    const { output: openInProject } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1495,12 +1491,12 @@ describe("task repository — getTaskSummary", () => {
       }),
       ctx.actor,
     );
-    const inboxOpen = await createTask(
+    const { output: inboxOpen } = await createTask(
       ctx.db,
       taskCreateInput.parse({ trade: "other", name: "inbox open" }),
       ctx.actor,
     );
-    const laterTask = await createTask(
+    const { output: laterTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1509,7 +1505,7 @@ describe("task repository — getTaskSummary", () => {
       }),
       ctx.actor,
     );
-    const blockedTask = await createTask(
+    const { output: blockedTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1527,7 +1523,7 @@ describe("task repository — getTaskSummary", () => {
       }),
       ctx.actor,
     );
-    const overdueTask = await createTask(
+    const { output: overdueTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1536,7 +1532,7 @@ describe("task repository — getTaskSummary", () => {
       }),
       ctx.actor,
     );
-    const dueThisWeekTask = await createTask(
+    const { output: dueThisWeekTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1603,18 +1599,18 @@ describe("task repository — getTaskBoard", () => {
   const ctx = withTestDb();
 
   it("scopes active/recentDone/doneCount to the given project, ordering recentDone by updatedAt desc", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "board project" }),
       ctx.actor,
     );
-    const otherProject = await createProject(
+    const { output: otherProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "board other project" }),
       ctx.actor,
     );
 
-    const active1 = await createTask(
+    const { output: active1 } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1623,7 +1619,7 @@ describe("task repository — getTaskBoard", () => {
       }),
       ctx.actor,
     );
-    const active2 = await createTask(
+    const { output: active2 } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1633,7 +1629,7 @@ describe("task repository — getTaskBoard", () => {
       }),
       ctx.actor,
     );
-    const doneOlder = await createTask(
+    const { output: doneOlder } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1643,7 +1639,7 @@ describe("task repository — getTaskBoard", () => {
       }),
       ctx.actor,
     );
-    const doneNewer = await createTask(
+    const { output: doneNewer } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1694,12 +1690,12 @@ describe("task repository — getTaskBoard", () => {
   });
 
   it("filters `active` by search, and includes descendant-project tasks with includeSubProjects", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "board parent project" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "board child project",
@@ -1707,7 +1703,7 @@ describe("task repository — getTaskBoard", () => {
       }),
       ctx.actor,
     );
-    const inParent = await createTask(
+    const { output: inParent } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1716,7 +1712,7 @@ describe("task repository — getTaskBoard", () => {
       }),
       ctx.actor,
     );
-    const inChild = await createTask(
+    const { output: inChild } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",

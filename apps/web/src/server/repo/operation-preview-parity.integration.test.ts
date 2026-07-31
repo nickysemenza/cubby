@@ -264,12 +264,12 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("project: a live task blocks delete, both in the preview and the mutation", async () => {
-      const project = await createProject(
+      const { output: project } = await createProject(
         ctx.db,
         projectCreateInput.parse({ name: "Blocked Project" }),
         ctx.actor,
       );
-      const taskRow = await createTask(
+      const { output: taskRow } = await createTask(
         ctx.db,
         taskCreateInput.parse({
           name: "Blocking Task",
@@ -310,12 +310,12 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("vendor: a live purchase blocks delete, both in the preview and the mutation", async () => {
-      const vendor = await createVendor(
+      const { output: vendor } = await createVendor(
         ctx.db,
         vendorCreateInput.parse({ name: "Blocked Vendor" }),
         ctx.actor,
       );
-      const purchase = await createPurchase(
+      const { output: purchase } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendor.id }),
         ctx.actor,
@@ -352,22 +352,22 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("purchase merge: cross-vendor charges are refused, both in the preview and the mutation", async () => {
-      const vendorA = await createVendor(
+      const { output: vendorA } = await createVendor(
         ctx.db,
         vendorCreateInput.parse({ name: "Cross Vendor A" }),
         ctx.actor,
       );
-      const vendorB = await createVendor(
+      const { output: vendorB } = await createVendor(
         ctx.db,
         vendorCreateInput.parse({ name: "Cross Vendor B" }),
         ctx.actor,
       );
-      const keeper = await createPurchase(
+      const { output: keeper } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendorA.id }),
         ctx.actor,
       );
-      const otherVendorCharge = await createPurchase(
+      const { output: otherVendorCharge } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendorB.id }),
         ctx.actor,
@@ -399,7 +399,7 @@ describe("operation preview / mutation parity", () => {
       });
 
       // The converse: a same-vendor charge merges cleanly.
-      const sameVendorCharge = await createPurchase(
+      const { output: sameVendorCharge } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendorA.id }),
         ctx.actor,
@@ -426,17 +426,17 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("purchase merge: two order-id-bearing charges are refused, both in the preview and the mutation", async () => {
-      const vendor = await createVendor(
+      const { output: vendor } = await createVendor(
         ctx.db,
         vendorCreateInput.parse({ name: "Order Collision Vendor" }),
         ctx.actor,
       );
-      const keeper = await createPurchase(
+      const { output: keeper } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendor.id, orderId: "ORD-A" }),
         ctx.actor,
       );
-      const otherOrderCharge = await createPurchase(
+      const { output: otherOrderCharge } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendor.id, orderId: "ORD-B" }),
         ctx.actor,
@@ -470,7 +470,7 @@ describe("operation preview / mutation parity", () => {
       // The converse: a charge with no order id of its own merges cleanly
       // (the keeper's own order id survives — only a SECOND real order id
       // is the collision).
-      const noOrderCharge = await createPurchase(
+      const { output: noOrderCharge } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendor.id, orderId: null }),
         ctx.actor,
@@ -674,12 +674,12 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("task delete: predicted subtask cascade matches what actually gets soft-deleted", async () => {
-      const parent = await createTask(
+      const { output: parent, entityId: parentUuid } = await createTask(
         ctx.db,
         taskCreateInput.parse({ name: "Parent Task", trade: "other" }),
         ctx.actor,
       );
-      const child = await createTask(
+      const { entityId: childUuid } = await createTask(
         ctx.db,
         taskCreateInput.parse({
           name: "Subtask",
@@ -689,54 +689,54 @@ describe("operation preview / mutation parity", () => {
         ctx.actor,
       );
 
-      const preview = await previewDeleteTasks(ctx.db, [parent.id]);
+      const preview = await previewDeleteTasks(ctx.db, [parentUuid]);
       const subtaskChange = preview.changes.find(
         (c) => c.edgeKey === "Task.parentTaskId",
       );
       expect(subtaskChange?.total).toBe(1);
-      expect(subtaskChange?.byTargetId[parent.id]).toBe(1);
+      expect(subtaskChange?.byTargetId[parentUuid]).toBe(1);
 
       await deleteTasks(ctx.db, [parent.id], ctx.actor);
 
       const rows = await getDb(ctx.db)
         .select({ id: task.id, deletedAt: task.deletedAt })
         .from(task)
-        .where(inArray(task.id, [parent.id, child.id]));
+        .where(inArray(task.id, [parentUuid, childUuid]));
       for (const row of rows) {
         expect(row.deletedAt).not.toBeNull();
       }
     });
 
     it("purchase delete: predicted expense-detach count matches what actually gets nulled", async () => {
-      const vendor = await createVendor(
+      const { output: vendor } = await createVendor(
         ctx.db,
         vendorCreateInput.parse({ name: "Detach Vendor" }),
         ctx.actor,
       );
-      const purchase = await createPurchase(
+      const { output: purchase, entityId: purchaseUuid } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendor.id }),
         ctx.actor,
       );
-      const line = await createExpense(
+      const { entityId: lineUuid } = await createExpense(
         ctx.db,
         { ...makeExpenseInput(), name: "Detach Line", purchaseId: purchase.id },
         ctx.actor,
       );
 
-      const preview = await previewDeletePurchases(ctx.db, [purchase.id]);
+      const preview = await previewDeletePurchases(ctx.db, [purchaseUuid]);
       const detachChange = preview.changes.find(
         (c) => c.edgeKey === "Expense.purchaseId",
       );
       expect(detachChange?.total).toBe(1);
-      expect(detachChange?.byTargetId[purchase.id]).toBe(1);
+      expect(detachChange?.byTargetId[purchaseUuid]).toBe(1);
 
       await deletePurchases(ctx.db, [purchase.id], ctx.actor);
 
       const [row] = await getDb(ctx.db)
         .select({ purchaseId: expense.purchaseId })
         .from(expense)
-        .where(eq(expense.id, line.id));
+        .where(eq(expense.id, lineUuid));
       expect(row?.purchaseId).toBeNull();
     });
 
@@ -1011,7 +1011,7 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("expense has zero incoming edges: blockers/changes stay empty but a real consequence still surfaces as a sideEffect", async () => {
-      const line = await createExpense(
+      const { output: line, entityId: lineUuid } = await createExpense(
         ctx.db,
         { ...makeExpenseInput(), name: "Zero Edge Expense" },
         ctx.actor,
@@ -1023,7 +1023,8 @@ describe("operation preview / mutation parity", () => {
         .insert(entityEmbedding)
         .values({
           entityType: "expense",
-          entityId: line.id,
+          // EntityEmbedding is keyed by the private uuid, not the public code.
+          entityId: lineUuid,
           embeddingText: `expense ${line.id}`,
           embeddingHash: `hash-${line.id}`,
           provider: "test",
@@ -1032,7 +1033,7 @@ describe("operation preview / mutation parity", () => {
           embedding: [0, 0, 0],
         });
 
-      const preview = await previewDeleteExpenses(ctx.db, [line.id]);
+      const preview = await previewDeleteExpenses(ctx.db, [lineUuid]);
       expect(preview.blockers).toEqual([]);
       expect(preview.changes).toEqual([]);
       expect(preview.sideEffects.length).toBeGreaterThan(0);

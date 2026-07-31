@@ -1,12 +1,10 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import {
-  expenseId,
+  expenseShortcode,
   productId,
-  projectId,
-  purchaseId,
+  projectShortcode,
   purchaseShortcode,
-  vendorId,
   vendorShortcode,
 } from "./identifiers";
 import {
@@ -37,7 +35,7 @@ import { costTypeSchema, plainDate, tradeSchema } from "./project";
  */
 
 const purchaseFields = {
-  vendorId: vendorId,
+  vendorId: vendorShortcode,
   orderId: z
     .string()
     .nullable()
@@ -90,14 +88,14 @@ export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape, {
 });
 export type PurchaseUpdateData = z.infer<typeof purchaseUpdateData>;
 export const purchaseUpdateInput = z.object({
-  id: purchaseId,
+  id: purchaseShortcode,
   data: purchaseUpdateData,
 });
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
 export const purchaseFilterFields = {
   search: z.string().optional().describe("Substring match on order id"),
-  vendorId: oneOrMany(vendorId).optional(),
+  vendorId: oneOrMany(vendorShortcode).optional(),
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches charges with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
@@ -124,12 +122,10 @@ export const purchaseSortableFields = [
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];
 
 export const purchaseOut = z.object({
-  id: purchaseId,
-  shortcode: purchaseShortcode,
+  id: purchaseShortcode,
   ...purchaseFields,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
-  vendorShortcode: vendorShortcode.nullable(),
   expenseCount: z.number().int(),
   /**
    * `SUM(cost)` over this charge's live expenses. THIS is the charge's spend;
@@ -214,8 +210,8 @@ export const reconcilePurchase = (p: {
  * separate charges, so they are separate purchases.
  */
 export const linkExpensesToPurchaseInput = z.object({
-  purchaseId: purchaseId,
-  expenseIds: z.array(expenseId).min(1),
+  purchaseId: purchaseShortcode,
+  expenseIds: z.array(expenseShortcode).min(1),
 });
 export type LinkExpensesToPurchaseInput = z.infer<
   typeof linkExpensesToPurchaseInput
@@ -227,7 +223,7 @@ export type LinkExpensesToPurchaseInput = z.infer<
  * Each part keeps its own trade/costType/project/product.
  */
 export const splitExpenseInput = z.object({
-  expenseId: expenseId,
+  expenseId: expenseShortcode,
   parts: z
     .array(
       z.object({
@@ -235,7 +231,7 @@ export const splitExpenseInput = z.object({
         cost: z.number(),
         costType: costTypeSchema,
         trade: tradeSchema,
-        projectId: projectId.nullable().default(null),
+        projectId: projectShortcode.nullable().default(null),
         productId: productId.nullable().default(null),
       }),
     )
@@ -249,7 +245,7 @@ export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
  * 71 rows across 31 groups). A user action, never a backfill guess.
  */
 export const mergePurchasesInput = z.object({
-  keepId: purchaseId,
-  mergeIds: z.array(purchaseId).min(1),
+  keepId: purchaseShortcode,
+  mergeIds: z.array(purchaseShortcode).min(1),
 });
 export type MergePurchasesInput = z.infer<typeof mergePurchasesInput>;

@@ -2,17 +2,13 @@ import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import {
-  expenseId,
   expenseShortcode,
   productId,
-  projectId,
-  projectShortcode,
-  purchaseId,
-  purchaseShortcode,
-  taskId,
-  taskShortcode,
-  vendorId,
   productShortcode,
+  projectShortcode,
+  purchaseShortcode,
+  taskShortcode,
+  vendorShortcode,
 } from "./identifiers";
 import {
   createPaginatedResponseSchema,
@@ -232,7 +228,7 @@ const projectFields = {
   // is its budget envelope; expenses/tasks attribute to it via their
   // existing `projectId`. Cycle/self-parent guards live in
   // repo/project/crud.ts (depth is otherwise unrestricted).
-  parentProjectId: projectId.nullable(),
+  parentProjectId: projectShortcode.nullable(),
   // Manual OVERRIDES on the derived window, not the window itself. A project's
   // dates are normally rolled up from its own tasks/expenses plus every live
   // sub-project's effective window (see `projectDateWindow`); these two columns
@@ -255,7 +251,7 @@ const projectCreateShape = {
   kind: projectKindSchema.nullable().default(null),
   locations: z.array(z.string()).default([]),
   costEstimate: z.number().nullable().default(null),
-  parentProjectId: projectId.nullable().default(null),
+  parentProjectId: projectShortcode.nullable().default(null),
   startDate: plainDate.nullable().default(null),
   endDate: plainDate.nullable().default(null),
   icon: z.string().nullable().default(null),
@@ -273,14 +269,14 @@ export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
 export const projectUpdateData = deriveUpdateData(projectCreateShape, {
   extend: {
     blockedByIds: z
-      .array(projectId)
+      .array(projectShortcode)
       .optional()
       .describe("Full replacement set of blocking-project ids"),
   },
 });
 export type ProjectUpdateData = z.infer<typeof projectUpdateData>;
 export const projectUpdateInput = z.object({
-  id: projectId,
+  id: projectShortcode,
   data: projectUpdateData,
 });
 export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
@@ -291,8 +287,7 @@ export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
  * repo/project/lookup.ts's `projectNameOptions`).
  */
 export const projectOptionsOut = z.object({
-  id: projectId,
-  shortcode: projectShortcode,
+  id: projectShortcode,
   name: z.string(),
   // Carried so a picker can rank by "was this project running on that date?"
   // without a second round trip — see rankProjectSuggestions. These are the
@@ -312,7 +307,7 @@ export const projectFilterFields = {
   /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
   topLevelOnly: z.boolean().optional(),
   /** Only this parent's live sub-projects. */
-  parentProjectId: projectId.optional(),
+  parentProjectId: projectShortcode.optional(),
   // Only meaningful alongside `parentProjectId`: expands the filter to the
   // whole live subtree under that parent, not just direct children.
   includeSubProjects: z.boolean().optional(),
@@ -412,17 +407,14 @@ export const projectRollup = z.object({
 export type ProjectRollup = z.infer<typeof projectRollup>;
 
 export const projectOut = z.object({
-  id: projectId,
-  shortcode: projectShortcode,
+  id: projectShortcode,
   ...projectFields,
   /** Null when the project has no parent, or the parent is gone/soft-deleted. */
   parentProjectName: z.string().nullable(),
-  /** Public id for the parent link — same liveness rule as `parentProjectName`. */
-  parentProjectShortcode: projectShortcode.nullable(),
   /** Live sub-project ids (direct children only). */
-  childProjectIds: z.array(projectId),
-  blockedByIds: z.array(projectId),
-  blockingIds: z.array(projectId),
+  childProjectIds: z.array(projectShortcode),
+  blockedByIds: z.array(projectShortcode),
+  blockingIds: z.array(projectShortcode),
   ...timestampedFields,
   rollup: projectRollup,
   dates: projectDateWindow,
@@ -436,13 +428,13 @@ export type ProjectOut = z.infer<typeof projectOut>;
 const taskFields = {
   name: z.string().min(1),
   status: taskStatusSchema,
-  projectId: projectId.nullable(),
+  projectId: projectShortcode.nullable(),
   /** The optional product/item this task acts on. */
   subjectProductId: productId.nullable(),
   // One level of checklist subtasks — a subtask's own parentTaskId must be
   // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
   // an all-done checklist never auto-completes it.
-  parentTaskId: taskId.nullable(),
+  parentTaskId: taskShortcode.nullable(),
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable().describe("End of a due-date range"),
   trade: tradeSchema,
@@ -455,12 +447,12 @@ const taskFields = {
 const taskCreateShape = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
-  projectId: projectId.nullable().default(null),
+  projectId: projectShortcode.nullable().default(null),
   subjectProductId: productId.nullable().default(null),
   // If set and either relation is omitted/null, the created task inherits the
   // parent's projectId and subjectProductId (see repo/task/crud.ts's
   // createTask) — one-time at create, no ongoing sync afterwards.
-  parentTaskId: taskId.nullable().default(null),
+  parentTaskId: taskShortcode.nullable().default(null),
   dueDate: plainDate.nullable().default(null),
   dueEndDate: plainDate.nullable().default(null),
   // New tasks are unranked (land per derived sort); a drag assigns a rank.
@@ -475,14 +467,14 @@ export type TaskCreateInput = z.infer<typeof taskCreateInput>;
 export const taskUpdateData = deriveUpdateData(taskCreateShape, {
   extend: {
     blockedByIds: z
-      .array(taskId)
+      .array(taskShortcode)
       .optional()
       .describe("Full replacement set of blocking-task ids"),
   },
 });
 export type TaskUpdateData = z.infer<typeof taskUpdateData>;
 export const taskUpdateInput = z.object({
-  id: taskId,
+  id: taskShortcode,
   data: taskUpdateData,
 });
 export type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
@@ -493,28 +485,28 @@ export type TaskUpdateInput = z.infer<typeof taskUpdateInput>;
  * `taskUpdateData.projectId` write, batched over `ids`.
  */
 export const taskBulkMoveInput = z.object({
-  ids: z.array(taskId).min(1),
-  projectId: projectId.nullable(),
+  ids: z.array(taskShortcode).min(1),
+  projectId: projectShortcode.nullable(),
 });
 export type TaskBulkMoveInput = z.infer<typeof taskBulkMoveInput>;
 
 /** Bulk status write — same enum as a single `taskUpdateData.status` write. */
 export const taskBulkStatusInput = z.object({
-  ids: z.array(taskId).min(1),
+  ids: z.array(taskShortcode).min(1),
   status: taskStatusSchema,
 });
 export type TaskBulkStatusInput = z.infer<typeof taskBulkStatusInput>;
 
 /** Bulk trade write — same enum as a single `taskUpdateData.trade` write. */
 export const taskBulkTradeInput = z.object({
-  ids: z.array(taskId).min(1),
+  ids: z.array(taskShortcode).min(1),
   trade: tradeSchema,
 });
 export type TaskBulkTradeInput = z.infer<typeof taskBulkTradeInput>;
 
 /** Bulk due-date write — same nullable pair as a single task update. */
 export const taskBulkDueDateInput = z.object({
-  ids: z.array(taskId).min(1),
+  ids: z.array(taskShortcode).min(1),
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable(),
 });
@@ -529,7 +521,7 @@ export type TaskBulkDueDateInput = z.infer<typeof taskBulkDueDateInput>;
  */
 export const taskBoardMovePatch = z.object({
   status: taskStatusSchema.optional(),
-  projectId: projectId.nullable().optional(),
+  projectId: projectShortcode.nullable().optional(),
   trade: tradeSchema.optional(),
 });
 export type TaskBoardMovePatch = z.infer<typeof taskBoardMovePatch>;
@@ -544,23 +536,23 @@ export type TaskBoardMovePatch = z.infer<typeof taskBoardMovePatch>;
  */
 export const taskBulkReorderInput = z.object({
   ranks: z
-    .array(z.object({ id: taskId, sortOrder: z.number() }))
+    .array(z.object({ id: taskShortcode, sortOrder: z.number() }))
     .min(1)
     .max(200),
-  move: z.object({ id: taskId, patch: taskBoardMovePatch }).optional(),
+  move: z.object({ id: taskShortcode, patch: taskBoardMovePatch }).optional(),
 });
 export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
   status: oneOrMany(taskStatusSchema).optional(),
-  projectId: oneOrMany(projectId).optional(),
+  projectId: oneOrMany(projectShortcode).optional(),
   subjectProductId: oneOrMany(productId).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
   topLevelOnly: z.boolean().optional(),
   /** Only this parent's live subtasks. */
-  parentTaskId: taskId.optional(),
+  parentTaskId: taskShortcode.optional(),
   /**
    * When combined with `projectId`, also match tasks in that project's live
    * descendant sub-projects.
@@ -602,19 +594,16 @@ export const taskSortableFields = [
 export type TaskSortField = (typeof taskSortableFields)[number];
 
 export const taskOut = z.object({
-  id: taskId,
-  shortcode: taskShortcode,
+  id: taskShortcode,
   ...taskFields,
   projectName: z.string().nullable(),
-  projectShortcode: projectShortcode.nullable(),
   /** Null when there is no subject product, or it is gone/soft-deleted. */
   subjectProductName: z.string().nullable(),
   subjectProductShortcode: productShortcode.nullable(),
   /** Null when the task has no parent, or the parent is gone/soft-deleted. */
   parentTaskName: z.string().nullable(),
-  parentTaskShortcode: taskShortcode.nullable(),
-  blockedByIds: z.array(taskId),
-  blockingIds: z.array(taskId),
+  blockedByIds: z.array(taskShortcode),
+  blockingIds: z.array(taskShortcode),
   /** Live subtask count (incl. done ones) — 0 for a subtask itself (one level). */
   subtaskCount: z.number().int(),
   doneSubtaskCount: z.number().int(),
@@ -641,7 +630,7 @@ export type TaskListAndSideEffectsOut = z.infer<
  * persists if the other fails.
  */
 export const createProjectFromTasksInput = z.object({
-  taskIds: z.array(taskId).min(1),
+  taskIds: z.array(taskShortcode).min(1),
   project: projectCreateInput,
 });
 export type CreateProjectFromTasksInput = z.infer<
@@ -671,11 +660,10 @@ export const blockedReasonSchema = z.object({
   kind: z.enum(["manual", "task", "project"]),
   chain: z.array(
     z.object({
-      id: z.string(),
-      // Public id for the link. Deliberately a plain string (not the
-      // task/project-branded shortcode schema) — a single node type spans
+      // Public id (shortcode) for the link. Deliberately a plain string (not
+      // the task/project-branded shortcode schema) — a single node type spans
       // both entity kinds, discriminated by `type`.
-      shortcode: z.string(),
+      id: z.string(),
       name: z.string(),
       status: z.string(),
       type: z.enum(["task", "project"]),
@@ -685,15 +673,13 @@ export const blockedReasonSchema = z.object({
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 
 export const actionableTaskOut = z.object({
-  id: taskId,
-  shortcode: taskShortcode,
+  id: taskShortcode,
   ...taskFields,
   projectName: z.string().nullable(),
-  projectShortcode: projectShortcode.nullable(),
   subjectProductName: z.string().nullable(),
   subjectProductShortcode: productShortcode.nullable(),
-  blockedByIds: z.array(taskId),
-  blockingIds: z.array(taskId),
+  blockedByIds: z.array(taskShortcode),
+  blockingIds: z.array(taskShortcode),
   // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
   // in sync by hand. Actionable/blocked rows are always top-level (subtask
   // rows are excluded — see repo/task/actionable.ts), so these count the
@@ -748,7 +734,7 @@ export type TaskSummaryOut = z.infer<typeof taskSummaryOut>;
 
 /** `task.board`'s input — the axes a board view can scope by. */
 export const taskBoardInput = z.object({
-  projectId: projectId.optional(),
+  projectId: projectShortcode.optional(),
   includeSubProjects: z.boolean().optional(),
   search: z.string().optional(),
 });
@@ -780,7 +766,7 @@ const expenseFields = {
   url: z.string().nullable(),
   notes: z.string().nullable(),
   future: z.boolean().describe("Planned/not-yet-made expense"),
-  projectId: projectId.nullable(),
+  projectId: projectShortcode.nullable(),
   productId: productId
     .nullable()
     .describe(
@@ -812,13 +798,13 @@ const expenseCreateShape = {
    * stay the ergonomic form for importers and quick-add. When both are given,
    * this wins — an explicit id is never a guess.
    */
-  purchaseId: purchaseId.nullable().default(null),
+  purchaseId: purchaseShortcode.nullable().default(null),
   cost: z.number().nullable().default(null),
   date: plainDate.nullable().default(null),
   url: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
   future: z.boolean().default(false),
-  projectId: projectId.nullable().default(null),
+  projectId: projectShortcode.nullable().default(null),
   productId: productId.nullable().default(null),
   vendor: z.string().nullable().default(null),
   orderId: z.string().nullable().default(null),
@@ -832,7 +818,7 @@ export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 export const expenseUpdateData = deriveUpdateData(expenseCreateShape);
 export type ExpenseUpdateData = z.infer<typeof expenseUpdateData>;
 export const expenseUpdateInput = z.object({
-  id: expenseId,
+  id: expenseShortcode,
   data: expenseUpdateData,
 });
 export type ExpenseUpdateInput = z.infer<typeof expenseUpdateInput>;
@@ -843,21 +829,21 @@ export type ExpenseUpdateInput = z.infer<typeof expenseUpdateInput>;
  * `expenseUpdateData.projectId` write, batched over `ids`.
  */
 export const expenseBulkMoveInput = z.object({
-  ids: z.array(expenseId).min(1),
-  projectId: projectId.nullable(),
+  ids: z.array(expenseShortcode).min(1),
+  projectId: projectShortcode.nullable(),
 });
 export type ExpenseBulkMoveInput = z.infer<typeof expenseBulkMoveInput>;
 
 /** Bulk trade write — same enum as a single `expenseUpdateData.trade` write. */
 export const expenseBulkTradeInput = z.object({
-  ids: z.array(expenseId).min(1),
+  ids: z.array(expenseShortcode).min(1),
   trade: tradeSchema,
 });
 export type ExpenseBulkTradeInput = z.infer<typeof expenseBulkTradeInput>;
 
 /** Bulk cost-type write — same enum as a single `expenseUpdateData.costType`. */
 export const expenseBulkCostTypeInput = z.object({
-  ids: z.array(expenseId).min(1),
+  ids: z.array(expenseShortcode).min(1),
   costType: costTypeSchema,
 });
 export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
@@ -867,7 +853,7 @@ export const expenseFilterFields = {
   // stay valid. Resolved with `eqAny` in the repo.
   costType: oneOrMany(costTypeSchema).optional(),
   trade: oneOrMany(tradeSchema).optional(),
-  projectId: oneOrMany(projectId).optional(),
+  projectId: oneOrMany(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
   includeSubProjects: z.boolean().optional(),
@@ -892,7 +878,7 @@ export const expenseFilterFields = {
    * `search` term would mean `name ILIKE q AND vendor matches q` — and most rows
    * have no vendor, which would silently zero out expense search.
    */
-  vendorId: oneOrMany(vendorId).optional(),
+  vendorId: oneOrMany(vendorShortcode).optional(),
   /**
    * `"none"` matches expenses with no charge attached — the
    * where-did-this-come-from worklist. Since `purchase.vendorId` is NOT NULL,
@@ -1008,7 +994,7 @@ export const expenseFilterFields = {
    * No dedicated presence field: `vendorPresenceFilter` already means
    * `purchaseId IS NULL`, since `purchase.vendorId` is NOT NULL (see above).
    */
-  purchaseId: purchaseId.optional(),
+  purchaseId: purchaseShortcode.optional(),
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
@@ -1030,21 +1016,17 @@ export const expenseSortableFields = [
 export type ExpenseSortField = (typeof expenseSortableFields)[number];
 
 export const expenseOut = z.object({
-  id: expenseId,
-  shortcode: expenseShortcode,
+  id: expenseShortcode,
   ...expenseFields,
   /**
    * The charge this line belongs to. Null for the rows with no vendor recorded —
    * there's no transaction to attach them to, and inventing one would fabricate
    * a charge that never happened.
    */
-  purchaseId: purchaseId.nullable(),
-  /** The charge's own shortcode — null along with `purchaseId` when unattached. */
-  purchaseShortcode: purchaseShortcode.nullable(),
+  purchaseId: purchaseShortcode.nullable(),
   /** The charge's vendor, denormalized onto the line so tables can link it. */
-  vendorId: vendorId.nullable(),
+  vendorId: vendorShortcode.nullable(),
   projectName: z.string().nullable(),
-  projectShortcode: projectShortcode.nullable(),
   // Null when unlinked *or* when the linked product has been soft-deleted —
   // product deletion deliberately does not block on referencing expenses
   // (unlike project deletion), so this null branch is routinely reachable.
@@ -1129,7 +1111,7 @@ export const expenseCumulativePoint = z.object({
 export type ExpenseCumulativePoint = z.infer<typeof expenseCumulativePoint>;
 
 export const expenseProjectAggregate = z.object({
-  projectId,
+  projectId: projectShortcode,
   projectName: z.string(),
   ...expenseAggregateFields,
 });
@@ -1148,7 +1130,7 @@ export type ExpenseProjectAggregate = z.infer<typeof expenseProjectAggregate>;
  * unattributed tail, not as a bug.
  */
 export const expenseVendorAggregate = z.object({
-  vendorId,
+  vendorId: vendorShortcode,
   vendorName: z.string(),
   ...expenseAggregateFields,
 });
@@ -1267,7 +1249,7 @@ export const expenseMatchRatioLabel = z.enum([
 export type ExpenseMatchRatioLabel = z.infer<typeof expenseMatchRatioLabel>;
 
 export const expenseMatchCandidate = z.object({
-  expenseId,
+  expenseId: expenseShortcode,
   name: z.string(),
   cost: z.number().nullable(),
   date: plainDate.nullable(),
@@ -1331,7 +1313,7 @@ export type ExpenseMatchOut = z.infer<typeof expenseMatchOut>;
  * an unassigned expense; see repo/expense/analytics.ts.
  */
 export const expenseTradeAffinityOut = z.object({
-  projectId,
+  projectId: projectShortcode,
   trade: tradeSchema,
   count: z.number(),
 });
@@ -1342,8 +1324,42 @@ export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 // ---------------------------------------------------------------------------
 
 export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
-export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
-export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
+/**
+ * MCP views of task/expense. Identical to the tRPC shapes except the product
+ * FK, which carries product's public code rather than its uuid — product is not
+ * cut over yet, so the swap happens here instead of on the shared shape the UI
+ * uses. Delete these once product's own `id` is its shortcode.
+ */
+export const taskMcpOut = z.object({
+  id: taskShortcode,
+  ...taskFields,
+  projectName: z.string().nullable(),
+  subjectProductName: z.string().nullable(),
+  // The product FK by PUBLIC id (product isn't cut over, so `taskFields`
+  // still types it as a uuid).
+  subjectProductId: productShortcode.nullable(),
+  parentTaskName: z.string().nullable(),
+  blockedByIds: z.array(taskShortcode),
+  blockingIds: z.array(taskShortcode),
+  subtaskCount: z.number().int(),
+  doneSubtaskCount: z.number().int(),
+  ...timestampedFields,
+});
+
+export const expenseMcpOut = z.object({
+  id: expenseShortcode,
+  ...expenseFields,
+  purchaseId: purchaseShortcode.nullable(),
+  vendorId: vendorShortcode.nullable(),
+  projectName: z.string().nullable(),
+  productName: z.string().nullable(),
+  // Same product-FK swap as `taskMcpOut`.
+  productId: productShortcode.nullable(),
+  ...timestampedFields,
+});
+
+export const taskMcpListOut = createPaginatedResponseSchema(taskMcpOut);
+export const expenseMcpListOut = createPaginatedResponseSchema(expenseMcpOut);
 
 // ---------------------------------------------------------------------------
 // Project dashboard: bounded Overview summary + on-demand portfolio
@@ -1439,7 +1455,7 @@ export const projectAttentionItemSchema = z.object({
 export type ProjectAttentionItem = z.infer<typeof projectAttentionItemSchema>;
 
 export const projectTaskStatusBreakdown = z.object({
-  projectId,
+  projectId: projectShortcode,
   notStarted: z.number().int(),
   later: z.number().int(),
   inProgress: z.number().int(),
@@ -1510,7 +1526,7 @@ export type ProjectDashboardSummaryOut = z.infer<
 export const projectPortfolioAnalyticsOut = z.object({
   costVsEstimate: z.array(
     z.object({
-      projectId,
+      projectId: projectShortcode,
       projectName: z.string(),
       actual: z.number(),
       committed: z.number(),
@@ -1519,8 +1535,7 @@ export const projectPortfolioAnalyticsOut = z.object({
   ),
   spendingByProject: z.array(
     z.object({
-      projectId,
-      projectShortcode,
+      projectId: projectShortcode,
       projectName: z.string(),
       spend: z.number(),
     }),
@@ -1532,8 +1547,7 @@ export const projectPortfolioAnalyticsOut = z.object({
   tradeActivity: z.array(expenseTradeAggregate),
   taskHeatmap: z.array(
     z.object({
-      projectId,
-      projectShortcode,
+      projectId: projectShortcode,
       projectName: z.string(),
       openTaskCount: z.number().int(),
     }),

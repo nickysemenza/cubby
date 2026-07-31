@@ -59,7 +59,6 @@ function buildFlatTaskRows(tasks: TaskOut[]): {
     return {
       kind: "task",
       id: t.id,
-      shortcode: t.shortcode,
       name: t.name,
       depth: 0,
       status: t.status,
@@ -104,7 +103,7 @@ function TasksGanttTimeline({ tasks }: { tasks: TaskOut[] }) {
     return (
       <Link
         to={entities.task.routes.detail}
-        params={entityDetailParams(row.shortcode)}
+        params={entityDetailParams(row.id)}
         className="hover:underline"
       >
         {row.name}

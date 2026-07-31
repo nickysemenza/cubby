@@ -1,4 +1,7 @@
-import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
+import type {
+  ProjectShortcode,
+  TaskShortcode,
+} from "@cubby/schemas/identifiers";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import { match } from "ts-pattern";
 
@@ -12,9 +15,9 @@ import { match } from "ts-pattern";
 /** The moved task's current coordinates — lets the drop handler diff for no-ops. */
 export type TaskCardDragData = {
   taskBoardDrag: true;
-  taskId: TaskId;
+  taskId: TaskShortcode;
   status: TaskStatus;
-  projectId: ProjectId | null;
+  projectId: ProjectShortcode | null;
   trade: Trade;
 };
 
@@ -25,12 +28,12 @@ export type TaskCardDragData = {
  */
 export type BoardColumnKey =
   | { kind: "status"; status: TaskStatus }
-  | { kind: "project"; projectId: ProjectId | null; projectName: string }
+  | { kind: "project"; projectId: ProjectShortcode | null; projectName: string }
   | { kind: "trade"; trade: Trade };
 
 /** A swimlane row key — project or trade only (status is never a lane). */
 export type BoardLaneKey =
-  | { kind: "project"; projectId: ProjectId | null; projectName: string }
+  | { kind: "project"; projectId: ProjectShortcode | null; projectName: string }
   | { kind: "trade"; trade: Trade };
 
 /** A cell drop target: its column, plus the lane row it sits in (null = no lanes). */
@@ -51,13 +54,13 @@ export type BoardCardDropData = {
   taskBoardCardTarget: true;
   column: BoardColumnKey;
   lane: BoardLaneKey | null;
-  targetTaskId: TaskId;
+  targetTaskId: TaskShortcode;
 };
 
 /** The fields a single drop can write — a subset of `taskUpdateData`. */
 export type TaskBoardPatch = {
   status?: TaskStatus;
-  projectId?: ProjectId | null;
+  projectId?: ProjectShortcode | null;
   trade?: Trade;
   /** Manual priority within the target cell (drag-to-prioritize). */
   sortOrder?: number;
@@ -70,7 +73,7 @@ export type TaskBoardPatch = {
  */
 export type TaskCreatePreset = {
   status?: TaskStatus;
-  projectId?: ProjectId | null;
+  projectId?: ProjectShortcode | null;
   trade?: Trade;
 };
 

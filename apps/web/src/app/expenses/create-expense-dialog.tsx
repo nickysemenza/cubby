@@ -1,5 +1,5 @@
-import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import type { ProductId, ProjectShortcode } from "@cubby/schemas/identifiers";
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
 import { useMemo } from "react";
@@ -25,8 +25,9 @@ import { costTypeOptions } from "./expense-options";
 const today = () => format(new Date(), "yyyy-MM-dd");
 
 // projectId stays a plain string here (not the branded `projectId` schema) —
-// it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
-// applied at the tRPC-call boundary in buildPayload via `unsafeProjectId`.
+// it's the raw value out of the `SelectField` dropdown; the ProjectShortcode
+// brand is applied at the tRPC-call boundary in buildPayload via
+// `unsafeProjectShortcode` — a project is named by its public code now.
 // `name` is the only truly required field — `trade`/`costType` now default
 // (see `defaultValues` below) rather than forcing a choice via `.refine()`.
 const quickAddExpenseSchema = z.object({
@@ -50,7 +51,7 @@ interface CreateExpenseDialogProps {
    * Read once, on mount — the caller conditionally mounts a fresh dialog
    * instance per click (see `CreateTaskDialog`'s `presetProjectId`).
    */
-  presetProjectId?: ProjectId | null;
+  presetProjectId?: ProjectShortcode | null;
   /**
    * Link the new expense to a product. Not a form field — there's no product
    * picker in quick-add; linking an existing expense happens via the Product
@@ -121,7 +122,9 @@ export function CreateExpenseDialog({
         name: values.name,
         cost: values.cost,
         date: values.date,
-        projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
+        projectId: values.projectId
+          ? unsafeProjectShortcode(values.projectId)
+          : null,
         productId: presetProductId ?? null,
         vendor: values.vendor.trim() || null,
         orderId: values.orderId.trim() || null,

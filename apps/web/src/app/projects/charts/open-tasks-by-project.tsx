@@ -35,7 +35,6 @@ export function OpenTasksByProject({
         .map((r) => ({
           project: r.projectName,
           id: r.projectId,
-          shortcode: r.projectShortcode,
           count: r.openTaskCount,
         }))
         .sort((a, b) => a.count - b.count)
@@ -72,8 +71,8 @@ export function OpenTasksByProject({
         enableGridX
         enableGridY={false}
         onClick={(bar) => {
-          const shortcode = bar.data.shortcode;
-          if (shortcode) navigate(entityDetailLink("project", shortcode));
+          const id = bar.data.id;
+          if (id) navigate(entityDetailLink("project", id));
         }}
         tooltip={({ indexValue, value }) => (
           <ChartTooltip>

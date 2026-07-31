@@ -1,4 +1,4 @@
-import type { TaskId } from "@cubby/schemas/identifiers";
+import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -54,7 +54,7 @@ export function TaskInbox() {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<TaskOut>(), []);
   const [createProjectTaskIds, setCreateProjectTaskIds] = useState<
-    TaskId[] | null
+    TaskShortcode[] | null
   >(null);
   const taskBulkActions = useTaskBulkActions({
     includeDueDate: true,

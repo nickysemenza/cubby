@@ -1516,8 +1516,7 @@ const MEAL_SAMPLE: MealPreview = {
   pending: false,
 };
 const PROJECT_SAMPLE: ProjectPreview = {
-  id: "sample-project",
-  shortcode: "PRJ-9ABC",
+  id: "PRJ-9ABC",
   name: "Backyard Deck Rebuild",
   icon: "🔨",
   status: "in_progress",
@@ -1530,44 +1529,40 @@ const PROJECT_SAMPLE: ProjectPreview = {
   expenseCount: 6,
 };
 const TASK_SAMPLE: TaskPreview = {
-  id: "sample-task",
-  shortcode: "TSK-ABCD",
+  id: "TSK-ABCD",
   name: "Sand and stain the railing",
   status: "in_progress",
   trade: "finishes",
   dueDate: "2026-08-01",
   dueEndDate: null,
-  projectId: "sample-project",
+  projectId: "PRJ-9ABC",
   projectName: "Backyard Deck Rebuild",
 };
 const EXPENSE_SAMPLE: ExpensePreview = {
-  id: "sample-expense",
-  shortcode: "EXP-BCDE",
+  id: "EXP-BCDE",
   name: "Cedar decking boards",
   cost: 340,
   date: "2026-07-10",
   costType: "materials",
   trade: "building",
   future: false,
-  projectId: "sample-project",
+  projectId: "PRJ-9ABC",
   projectName: "Backyard Deck Rebuild",
 };
 // A charge whose lines don't quite add up to what the receipt stated — the
 // reconciliation caption is the whole point of the card, so the sample shows it.
 const PURCHASE_SAMPLE: PurchasePreview = {
-  id: "sample-purchase",
-  shortcode: "PUR-CDEF",
+  id: "PUR-CDEF",
   orderId: "WN63446464",
   date: "2026-07-10",
   statedTotal: 412.18,
   expenseCount: 3,
   expenseTotal: 396.4,
-  vendorId: "sample-vendor",
+  vendorId: "VEN-DEFG",
   vendorName: "Home Depot",
 };
 const VENDOR_SAMPLE: VendorPreview = {
-  id: "sample-vendor",
-  shortcode: "VEN-DEFG",
+  id: "VEN-DEFG",
   name: "Home Depot",
   purchaseCount: 27,
   spend: 8412.55,

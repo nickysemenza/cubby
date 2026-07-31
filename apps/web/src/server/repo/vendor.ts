@@ -21,6 +21,7 @@ import {
   unsafeVendorId,
   unsafeVendorShortcode,
   type VendorId,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -58,7 +59,10 @@ import {
 } from "~/server/repo/database-helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { foldChargeInto } from "~/server/repo/purchase";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -152,8 +156,7 @@ type VendorRow = {
 };
 
 const dbVendorToAPI = (row: VendorRow): VendorOut => ({
-  id: row.id,
-  shortcode: unsafeVendorShortcode(row.shortcode),
+  id: unsafeVendorShortcode(row.shortcode),
   name: row.name,
   website: row.website,
   notes: row.notes,
@@ -182,34 +185,6 @@ const resolveVendorSort = (sort: SortParams) => {
   if (sort.orderBy === "purchaseCount") return [dir(vendorPurchaseCount)];
   if (sort.orderBy === "spend") return [dir(vendorSpend)];
   return null;
-};
-
-/**
- * The named vendor must exist and be live.
- *
- * Mirrors `assertProjectLive` (repo/project/crud.ts), and exists for the same
- * reason: an FK checks existence, not `deletedAt`, so nothing stopped a charge
- * from being pointed at a tombstoned vendor. That state was reachable in three
- * public calls — create a vendor, delete it (allowed: 0 charges, so
- * `VENDOR_HAS_PURCHASES` doesn't fire), then `purchase.update({vendorId})` — and
- * it leaves the charge resolving `vendorName` to null, which `deleteVendors`' own
- * doc calls "a lie". The codebase treated this as an invariant without enforcing
- * it.
- */
-export const assertVendorLive = async (
-  tx: DrizzleTransaction,
-  id: VendorId,
-): Promise<void> => {
-  const live = await tx.query.vendor.findFirst({
-    where: and(eq(vendor.id, id), notDeleted(vendor)),
-    columns: { id: true },
-  });
-  if (!live) {
-    throw createAppError(
-      "VENDOR_NOT_FOUND",
-      `Vendor ${id} does not exist or has been deleted`,
-    );
-  }
 };
 
 export const vendorList = async (
@@ -302,7 +277,7 @@ export const vendorOptions = async (
 ): Promise<VendorOptionsOut> => {
   const rows = await getDb(db)
     .select({
-      id: vendor.id,
+      shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
     })
@@ -311,7 +286,7 @@ export const vendorOptions = async (
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
   return rows.map((row) => ({
-    id: row.id,
+    id: unsafeVendorShortcode(row.shortcode),
     name: row.name,
     count: Number(row.count),
   }));
@@ -349,7 +324,7 @@ export const createVendor = async (
   db: Database,
   data: VendorCreateInput,
   actor: ActorContext,
-): Promise<VendorOut> => {
+): Promise<{ output: VendorOut; entityId: VendorId }> => {
   const id = await withTransaction(db, async (tx) => {
     const created = await insertWithShortcode(tx, "vendor", {
       name: data.name.trim(),
@@ -363,7 +338,7 @@ export const createVendor = async (
     });
     return created.id;
   });
-  return getVendorByID(db, id);
+  return { output: await getVendorByID(db, id), entityId: id };
 };
 
 const VENDOR_AUDIT_FIELDS = ["name", "website", "notes"] as const;
@@ -372,8 +347,13 @@ export const updateVendor = async (
   db: Database,
   input: VendorUpdateInput,
   actor: ActorContext,
-): Promise<VendorOut> => {
-  const { id, data } = input;
+): Promise<{ output: VendorOut; entityId: VendorId }> => {
+  const { data } = input;
+  const resolvedId = await resolveLiveShortcode(db, input.id, "vendor");
+  if (!resolvedId) {
+    throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${input.id}`);
+  }
+  const id = unsafeVendorId(resolvedId);
 
   await withTransaction(db, async (tx) => {
     const before = await tx.query.vendor.findFirst({
@@ -405,7 +385,7 @@ export const updateVendor = async (
     }
   });
 
-  return getVendorByID(db, id);
+  return { output: await getVendorByID(db, id), entityId: id };
 };
 
 /** What `mergeVendors` (and `previewMergeVendors`) does with one live charge. */
@@ -542,11 +522,22 @@ const planVendorMerge = async (
  */
 export const mergeVendors = async (
   db: Database,
-  input: { keepId: VendorId; mergeIds: VendorId[] },
+  input: { keepId: VendorShortcode; mergeIds: VendorShortcode[] },
   actor: ActorContext,
 ): Promise<VendorOut> => {
-  const { keepId } = input;
-  const losers = input.mergeIds.filter((id) => id !== keepId);
+  const codes = [input.keepId, ...input.mergeIds];
+  const resolved = await resolveLiveShortcodes(db, codes, "vendor");
+  const missing = codes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "VENDOR_NOT_FOUND",
+      `Vendor(s) not found: ${missing.join(", ")}`,
+    );
+  }
+  const keepId = unsafeVendorId(resolved.get(input.keepId) ?? "");
+  const losers = input.mergeIds
+    .map((code) => unsafeVendorId(resolved.get(code) ?? ""))
+    .filter((id) => id !== keepId);
   if (losers.length === 0) return getVendorByID(db, keepId);
 
   await withTransaction(db, async (tx) => {
@@ -622,10 +613,22 @@ export const mergeVendors = async (
  */
 export const deleteVendors = async (
   db: Database,
-  ids: VendorId[],
+  shortcodes: VendorShortcode[],
   actor: ActorContext,
 ): Promise<void> => {
-  if (ids.length === 0) return;
+  if (shortcodes.length === 0) return;
+
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "vendor");
+  const missing = shortcodes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "VENDOR_NOT_FOUND",
+      `Vendors not found or already deleted: ${missing.join(", ")}`,
+    );
+  }
+  const ids = shortcodes.map((code) =>
+    unsafeVendorId(resolved.get(code) ?? ""),
+  );
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, ids, "Vendor");

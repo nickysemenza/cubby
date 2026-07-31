@@ -1,5 +1,5 @@
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
@@ -347,10 +347,10 @@ export function SplitExpenseDialog({
                   cost: parseCost(part.cost),
                   costType: part.costType,
                   trade: part.trade,
-                  // Plain string out of the picker — branded at this boundary,
-                  // same convention as the create/settle dialogs.
+                  // Plain string out of the picker — branded as a shortcode at
+                  // this boundary, same convention as the create/settle dialogs.
                   projectId: part.projectId
-                    ? unsafeProjectId(part.projectId)
+                    ? unsafeProjectShortcode(part.projectId)
                     : null,
                   productId: part.keepProduct ? expense.productId : null,
                 })),

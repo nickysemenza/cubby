@@ -52,15 +52,30 @@ export type RecipeSortField = (typeof recipeSortableFields)[number];
 // The section-ingredient's ingredient carries its aliases so the editor can tell
 // real parser drift from a re-parse that just hit one of this ingredient's
 // aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
-const sectionIngredientIngredientOut = z.object({
-  id: ingredientId,
-  shortcode: ingredientShortcode,
+/**
+ * The ingredient a recipe line points at. Carries BOTH ids on purpose: the UI
+ * fetches the hover preview by uuid, while MCP publishes `shortcode` as the
+ * line's public ref (see `recipeDetailMcpOut`).
+ */
+const sectionIngredientRefFields = {
   name: z.string(),
   ...timestampedFields,
   aliases: z.array(z.string()).optional(),
+};
+
+/** The ingredient a recipe line points at, keyed by PUBLIC id — MCP's view. */
+export const mcpSectionIngredientRefFields = {
+  id: ingredientShortcode,
+  ...sectionIngredientRefFields,
+};
+
+const sectionIngredientIngredientOut = z.object({
+  id: ingredientId,
+  shortcode: ingredientShortcode,
+  ...sectionIngredientRefFields,
 });
 
-const recipeTopLevelFields = {
+export const recipeTopLevelFields = {
   id: recipeId,
   // The public id. Recipes minted shortcodes long before this was exposed, which
   // is why /labels couldn't print recipe QRs — the code never left the DB.
@@ -102,27 +117,27 @@ export const recipeUsageOut = z.object({
 export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 
 // Create a discriminated union to ensure either recipe or ingredient is set
+/** Fields every section line shares, whichever arm it is. */
+export const sectionLineFields = {
+  // Declared exception: a recipe section/line id has no shortcode.
+  id: z.uuid(),
+  amounts: z.array(amount),
+  // Provenance from import: the original unparsed line and the parser-derived
+  // modifier. Null for rows created before capture, or manual/UI edits.
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+  ...timestampedFields,
+};
+
 export const sectionIngredientOut = z.discriminatedUnion("type", [
   z.object({
-    id: z.uuid(),
-    amounts: z.array(amount),
-    // Provenance from import: the original unparsed line and the parser-derived
-    // modifier. Null for rows created before capture, or manual/UI edits.
-    rawLine: z.string().nullish(),
-    modifier: z.string().nullish(),
-    ...timestampedFields,
+    ...sectionLineFields,
     type: z.literal("ingredient"),
     recipe: z.null(),
     ingredient: sectionIngredientIngredientOut,
   }),
   z.object({
-    id: z.uuid(),
-    amounts: z.array(amount),
-    // Provenance from import: the original unparsed line and the parser-derived
-    // modifier. Null for rows created before capture, or manual/UI edits.
-    rawLine: z.string().nullish(),
-    modifier: z.string().nullish(),
-    ...timestampedFields,
+    ...sectionLineFields,
     type: z.literal("recipe"),
     recipe: recipeTopLevel,
     ingredient: z.null(),
@@ -131,12 +146,18 @@ export const sectionIngredientOut = z.discriminatedUnion("type", [
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 
-export const recipeSectionOut = z.object({
+/** Section fields minus `ingredients`, which differs between UI and MCP. */
+export const recipeSectionFields = {
+  // Declared exception: section ids have no shortcode.
   id: z.uuid(),
   name: z.string().nullable(),
-  ingredients: z.array(sectionIngredientOut),
   instructions: z.array(z.object({ instruction: z.string() })),
   ...timestampedFields,
+};
+
+export const recipeSectionOut = z.object({
+  ...recipeSectionFields,
+  ingredients: z.array(sectionIngredientOut),
 });
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
@@ -151,7 +172,7 @@ export const recipeGraphOut = z.object({
 });
 export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
-const recipeOutFields = {
+export const recipeOutFields = {
   ...recipeTopLevelFields,
   sections: z.array(recipeSectionOut),
   // Precomputed cost/calorie rollup (null until first computed). Populated by
@@ -383,19 +404,24 @@ const mcpRecipeUpdateFields = {
 export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
 
 /** Slim MCP projection of a recipe list row. */
-export const recipeMcpOut = z.object({
-  id: recipeId,
+/** The lean recipe MCP surface, as a field map so derived shapes can compose it
+ * without reaching into `.shape`. */
+export const recipeMcpFields = {
+  id: recipeShortcode,
   name: z.string(),
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
-  shortcode: recipeShortcode.nullish(),
-});
+};
+
+export const recipeMcpOut = z.object(recipeMcpFields);
 export type RecipeMcpOut = z.infer<typeof recipeMcpOut>;
 
 export const recipeMcpListOut = createPaginatedResponseSchema(recipeMcpOut);
 
 export const recipeUsageMcpOut = z.object({
+  // RecipeSectionIngredient row id — declared exception. Recipe section/line
+  // ids have no shortcode and stay uuid across the MCP boundary.
   lineId: z.uuid(),
   sectionName: z.string().nullable(),
   amounts: z.array(amount),
@@ -404,17 +430,14 @@ export const recipeUsageMcpOut = z.object({
 });
 
 const recipeWithUsagesMcpFields = {
-  id: recipeId,
-  name: z.string(),
-  yield: recipeYieldSchema.nullish(),
-  servings: recipeServings.nullish(),
-  tags: recipeTags.nullish(),
-  shortcode: recipeShortcode.nullish(),
+  ...recipeMcpFields,
   usages: z.array(recipeUsageMcpOut),
 };
 
 export const recipesUsingIngredientOut = z.object({
-  ingredientId: ingredientId,
+  // The ingredient shortcode the caller passed in — echoed back, not resolved
+  // to a uuid (find_recipes_using_ingredient never needs the private id).
+  ingredientId: ingredientShortcode,
   count: z.number().int().nonnegative(),
   recipes: z.array(z.object(recipeWithUsagesMcpFields)),
 });

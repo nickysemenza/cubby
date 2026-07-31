@@ -69,19 +69,19 @@ describe("searchable entity loader maps", () => {
       makeRecipeInput({ name: "Loader recipe" }),
       ctx.actor,
     );
-    const project = await createProject(
+    const { output: project, entityId: projectUuid } = await createProject(
       ctx.db,
       mock(projectCreateInput, { overrides: { name: "Loader project" } }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { entityId: taskUuid } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Loader task", projectId: project.id },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { entityId: expenseUuid } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: { name: "Loader expense", projectId: project.id },
@@ -116,9 +116,9 @@ describe("searchable entity loader maps", () => {
       location: location.id,
       inventory: inventory.id,
       meal: meal.id,
-      project: project.id,
-      task: task.id,
-      expense: expense.id,
+      project: projectUuid,
+      task: taskUuid,
+      expense: expenseUuid,
     } satisfies Record<SearchableEntity, string>;
 
     const batch = await getEmbeddingTextsForEntityTypes(ctx.db, [

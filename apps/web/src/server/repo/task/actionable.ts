@@ -50,7 +50,12 @@
  * independently. They still participate in `tasksById`/`taskEdgesByOwner`, so
  * a why-chain can walk through one if an edge points at it.
  */
-import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectId,
+  type TaskId,
+  type TaskShortcode,
+  unsafeTaskShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ActionableTaskOut,
   ActionableTasksOut,
@@ -70,6 +75,11 @@ import {
   taskDependency,
 } from "~/server/db/schema";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
+import {
+  type EntityRef,
+  lookupShortcodes,
+  refKey,
+} from "~/server/repo/shortcode-resolver";
 import { taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
 
@@ -156,8 +166,7 @@ function buildChain(
       const t = tasksById.get(currentId as TaskId);
       if (!t) break;
       chain.push({
-        id: t.id,
-        shortcode: t.shortcode,
+        id: t.shortcode,
         name: t.name,
         status: t.status,
         type: "task",
@@ -191,8 +200,7 @@ function buildChain(
     const p = projectsById.get(currentId as ProjectId);
     if (!p) break;
     chain.push({
-      id: p.id,
-      shortcode: p.shortcode,
+      id: p.shortcode,
       name: p.name,
       status: p.status,
       type: "project",
@@ -364,6 +372,23 @@ export async function listActionableTasks(
     openTaskRows.map((row) => row.id),
   );
 
+  // `dbTaskToAPI` takes public ids for blockedByIds/blockingIds; the edge
+  // values above are the OTHER side's uuid regardless of its open/done
+  // state, so they aren't all covered by `tasksById` — one batched reverse
+  // lookup for whichever ones are actually referenced.
+  const referencedTaskIds = [
+    ...new Set([...blockedByIds.values(), ...blockingIds.values()].flat()),
+  ];
+  const taskRefs: EntityRef[] = referencedTaskIds.map((id) => ({
+    entity: "task",
+    id,
+  }));
+  const taskShortcodesById = await lookupShortcodes(db, taskRefs);
+  const toTaskShortcodes = (ids: TaskId[]): TaskShortcode[] =>
+    ids.map((id) =>
+      unsafeTaskShortcode(taskShortcodesById.get(refKey("task", id)) ?? ""),
+    );
+
   const next: ActionableTaskOut[] = [];
   const later: ActionableTaskOut[] = [];
   const blocked: BlockedTaskOut[] = [];
@@ -379,8 +404,8 @@ export async function listActionableTasks(
     const counts = subtaskCounts.get(row.id);
     const taskOutRow = dbTaskToAPI(
       row,
-      blockedByIds.get(row.id) ?? [],
-      blockingIds.get(row.id) ?? [],
+      toTaskShortcodes(blockedByIds.get(row.id) ?? []),
+      toTaskShortcodes(blockingIds.get(row.id) ?? []),
       counts?.count ?? 0,
       counts?.doneCount ?? 0,
     );

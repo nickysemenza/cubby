@@ -50,7 +50,7 @@
  * query makes it structurally impossible for a grading signal to drift into a
  * filter — which it must never become.
  */
-import type { ExpenseId } from "@cubby/schemas/identifiers";
+import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import type {
   ExpenseMatchCandidate,
   ExpenseMatchOptions,
@@ -70,7 +70,7 @@ import { getDb } from "~/server/repo/database-helpers";
  */
 type MatchRow = {
   key: string;
-  expenseId: ExpenseId;
+  expenseShortcode: string;
   name: string;
   cost: number | null;
   date: string | null;
@@ -203,7 +203,7 @@ export const matchExpenses = async (
     -- of magnitude.
     live AS (
       SELECT
-        e."id"          AS "expenseId",
+        e."shortcode"   AS "expenseShortcode",
         e."name"        AS "name",
         e."cost"        AS "cost",
         e."date"        AS "date",
@@ -281,9 +281,9 @@ export const matchExpenses = async (
     ),
     -- One export row can hit the same expense on both arms; keep the stronger.
     deduped AS (
-      SELECT DISTINCT ON ("key", "expenseId") *
+      SELECT DISTINCT ON ("key", "expenseShortcode") *
       FROM arms
-      ORDER BY "key", "expenseId", "arm"
+      ORDER BY "key", "expenseShortcode", "arm"
     ),
     -- Does the ledger row's vendor contradict the one on the export line?
     --
@@ -328,7 +328,7 @@ export const matchExpenses = async (
     )
     SELECT
       "key",
-      "expenseId",
+      "expenseShortcode",
       "name",
       "cost"::double precision AS "cost",
       "date"::text            AS "date",
@@ -364,7 +364,7 @@ export const matchExpenses = async (
       cost === null || inputRow.amount === 0 ? null : cost / inputRow.amount;
 
     const candidate: ExpenseMatchCandidate = {
-      expenseId: raw.expenseId,
+      expenseId: unsafeExpenseShortcode(raw.expenseShortcode),
       name: raw.name,
       cost,
       date: raw.date,

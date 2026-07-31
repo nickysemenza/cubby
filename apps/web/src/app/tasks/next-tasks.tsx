@@ -36,9 +36,10 @@ import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
 function ChainNodeLink({
   node,
 }: {
+  // A blocked-reason chain node names its entity by public id only — `id` IS
+  // the shortcode, so it serves both the link target and the preview fetch.
   node: {
     id: string;
-    shortcode: string;
     name: string;
     type: "task" | "project";
   };
@@ -47,14 +48,14 @@ function ChainNodeLink({
     .with("task", () => (
       <EntityInlineLink
         entity="task"
-        data={{ id: node.id, shortcode: node.shortcode, name: node.name }}
+        data={{ id: node.id, shortcode: node.id, name: node.name }}
         compact
       />
     ))
     .with("project", () => (
       <EntityInlineLink
         entity="project"
-        data={{ id: node.id, shortcode: node.shortcode, name: node.name }}
+        data={{ id: node.id, shortcode: node.id, name: node.name }}
         compact
       />
     ))
@@ -107,7 +108,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
               <Row align="center" gap="xs">
                 <EntityInlineLink
                   entity="task"
-                  data={{ id: t.id, shortcode: t.shortcode, name: t.name }}
+                  data={{ id: t.id, shortcode: t.id, name: t.name }}
                   truncate
                 />
                 {t.subtaskCount > 0 && (
@@ -123,12 +124,12 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
               </Badge>
             </TableCell>
             <TableCell>
-              {t.projectId && t.projectName && t.projectShortcode ? (
+              {t.projectId && t.projectName && t.projectId ? (
                 <EntityInlineLink
                   entity="project"
                   data={{
                     id: t.projectId,
-                    shortcode: t.projectShortcode,
+                    shortcode: t.projectId,
                     name: t.projectName,
                   }}
                   truncate
@@ -215,7 +216,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                     entity="task"
                     data={{
                       id: bt.task.id,
-                      shortcode: bt.task.shortcode,
+                      shortcode: bt.task.id,
                       name: bt.task.name,
                     }}
                   />

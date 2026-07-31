@@ -1,4 +1,7 @@
-import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
+import type {
+  ProjectShortcode,
+  TaskShortcode,
+} from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { taskStatusValues, tradeValues } from "@cubby/schemas/project";
 import { match } from "ts-pattern";
@@ -57,8 +60,8 @@ function activeTasks(tasks: TaskOut[]): TaskOut[] {
 /** Projects with active tasks (by name), with Inbox (null) always first. */
 function projectAxis(
   tasks: TaskOut[],
-): { projectId: ProjectId | null; projectName: string }[] {
-  const names = new Map<ProjectId, string>();
+): { projectId: ProjectShortcode | null; projectName: string }[] {
+  const names = new Map<ProjectShortcode, string>();
   for (const t of activeTasks(tasks)) {
     if (t.projectId != null) {
       names.set(t.projectId, t.projectName ?? NAMELESS_PROJECT);
@@ -245,7 +248,7 @@ const RANK_EPSILON = 1e-9;
  */
 export type RankOutcome =
   | { kind: "single"; sortOrder: number }
-  | { kind: "materialize"; ranks: { id: TaskId; sortOrder: number }[] };
+  | { kind: "materialize"; ranks: { id: TaskShortcode; sortOrder: number }[] };
 
 /**
  * Pure rank math for a card-edge drop. `cellCardsSorted` is the target cell's

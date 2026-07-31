@@ -96,6 +96,7 @@ export type PurchaseId = z.infer<typeof purchaseId>;
 // truth). Each one already trims, uppercases, validates its prefix, and brands —
 // there is deliberately no second "normalized" variant to choose between.
 export {
+  anyShortcodeSchema,
   cookbookShortcode,
   expenseShortcode,
   ingredientShortcode,

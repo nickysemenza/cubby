@@ -57,7 +57,7 @@ describe("mutation side effects integration", () => {
       },
       ctx.actor,
     );
-    const task = await createTask(
+    const { entityId: taskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: {
@@ -97,28 +97,28 @@ describe("mutation side effects integration", () => {
           payload: { entityType: "inventory", entityId: inventory.id },
         }),
         expect.objectContaining({
-          payload: { entityType: "task", entityId: task.id },
+          payload: { entityType: "task", entityId: taskId },
         }),
       ]),
     );
   });
 
   it("project rename enqueues project and related task/expense embedding refreshes", async () => {
-    const project = await createProject(
+    const { output: project, entityId: projectId } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Manifest Tracker Project" },
       }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { entityId: taskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Manifest Tracker Task", projectId: project.id },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { entityId: expenseId } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -139,7 +139,7 @@ describe("mutation side effects integration", () => {
     );
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "project", entityId: project.id },
+      entity: { entityType: "project", entityId: projectId },
       source: "test.project.rename",
     });
 
@@ -160,13 +160,13 @@ describe("mutation side effects integration", () => {
     expect(jobs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          payload: { entityType: "project", entityId: project.id },
+          payload: { entityType: "project", entityId: projectId },
         }),
         expect.objectContaining({
-          payload: { entityType: "task", entityId: task.id },
+          payload: { entityType: "task", entityId: taskId },
         }),
         expect.objectContaining({
-          payload: { entityType: "expense", entityId: expense.id },
+          payload: { entityType: "expense", entityId: expenseId },
         }),
       ]),
     );

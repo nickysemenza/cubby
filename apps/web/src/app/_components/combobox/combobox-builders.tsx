@@ -2,9 +2,9 @@ import type {
   IngredientId,
   LocationId,
   ProductId,
-  ProjectId,
+  ProjectShortcode,
   RecipeId,
-  TaskId,
+  TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -56,17 +56,17 @@ export const buildRecipeComboboxItem = (recipe: {
 });
 
 export const buildProjectComboboxItem = (project: {
-  id: ProjectId;
+  id: ProjectShortcode;
   name: string;
-}): ComboboxItem<ProjectId> => ({
+}): ComboboxItem<ProjectShortcode> => ({
   id: project.id,
   name: project.name,
 });
 
 export const buildTaskComboboxItem = (task: {
-  id: TaskId;
+  id: TaskShortcode;
   name: string;
-}): ComboboxItem<TaskId> => ({
+}): ComboboxItem<TaskShortcode> => ({
   id: task.id,
   name: task.name,
 });

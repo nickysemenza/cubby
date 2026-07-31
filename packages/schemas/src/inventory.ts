@@ -288,22 +288,21 @@ export const inventoryLocationIdsInput = z.object({
 });
 
 const inventoryMcpProductFields = {
-  id: productId,
+  id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
-  shortcode: productShortcode,
   category: productCategory.nullable(),
   model: z.string().nullable(),
 };
 
 const inventoryMcpLocationFields = {
-  id: locationId,
+  id: locationShortcode,
   name: z.string(),
 };
 
 /** Slim MCP projection of an inventory list/detail row. */
 export const inventoryMcpOut = z.object({
-  id: inventoryId,
+  id: inventoryShortcode,
   amount,
   valuation: z.number().nullable(),
   product: z.object(inventoryMcpProductFields).nullable(),

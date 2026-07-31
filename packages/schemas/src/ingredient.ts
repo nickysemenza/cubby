@@ -2,7 +2,13 @@ import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { id, ingredientId, ingredientShortcode, recipeId } from "./identifiers";
+import {
+  id,
+  ingredientId,
+  ingredientShortcode,
+  productShortcode,
+  recipeId,
+} from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
@@ -322,17 +328,18 @@ export const mcpIngredientCreateInput = z.object({
   aliases: ingredientCreateShape.aliases,
 });
 const ingredientMcpProductRefFields = {
-  id: z.string(),
+  id: productShortcode,
   name: z.string(),
 };
 
 /** Slim MCP projection of an ingredient list/detail row. */
 export const ingredientMcpOut = z.object({
-  id: ingredientId,
+  id: ingredientShortcode,
   name: z.string(),
   aliases: z.array(z.string()),
   products: z.array(z.object(ingredientMcpProductRefFields)),
   recipeCount: z.number().int().nonnegative(),
+  // USDA FoodData Central id — declared exception, not a cubby shortcode.
   usdaFdcId: z.number().nullable(),
 });
 export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;

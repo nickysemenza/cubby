@@ -581,6 +581,45 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 
+### Finish the shortcode cutover: retire the id translation layer
+
+The public-id cutover landed in three passes — registry + columns (#509), UI and
+routes (#514), MCP. MCP is now correct end to end: every tool takes and returns
+shortcodes.
+
+What's left is **deletion**, not new behaviour. Seven entities (product,
+location, recipe, ingredient, inventory, meal, cookbook) still carry a uuid `id`
+plus a separate `shortcode` on their `*Out` schemas, and MCP bridges the gap in
+its `slim*` projections (`id: row.shortcode`) plus `resolvePublicIds` on the way
+in. That bridge only exists because tRPC and the UI still address rows by uuid.
+
+The five ledger entities (project, task, expense, vendor, purchase) already went
+the other way: their `*Out.id` IS the shortcode, so their MCP tools need no
+translation at all. Doing the same for the other seven lets us delete:
+
+- the `slim*` `id = shortcode` remapping, and the `*McpOut` schemas that then
+  differ from their `*Out` twins in nothing
+- `resolvePublicId`/`resolvePublicIds` at the MCP boundary, and probably
+  `shortcode.resolveMany` with them (`resolveLiveShortcode` still backs the
+  `/<shortcode>` scan landing)
+
+Shape, per entity: `*Out.id` becomes the shortcode brand and the separate
+`shortcode` field goes away, so every stale reference is a compile error; repos
+query `WHERE shortcode = $1` (the full-lifetime unique index makes that the same
+cost as by-id, not an extra lookup) and resolve to a uuid only when writing an
+FK column. `getByID(uuid)` stays as a repo-internal function — a service
+legitimately holds a uuid mid-transaction after an insert.
+
+Budget it by the blast radius: `projectOut.id` alone was ~166 compile errors,
+almost all of them mechanical UI call sites.
+
+Permanent exceptions, asserted by the schema-walk test in
+`mcp-shortcode-boundary.integration.test.ts` rather than left to vigilance:
+image ids, USDA `fdc_id`, `mealRecipe.id`, recipe section/line ids,
+unit-mapping ids, background job/batch ids, and the dev-only diagnostics in
+`problems.tools.ts` (an orphaned embedding may name a row that no longer
+resolves, and a liveness violation's `sourceTable` can be a join table).
+
 ### BUG: a charge minted from an expense gets no date
 
 **Found 2026-07-31** during the 22-receipt tool/3D-printer ingest, which created

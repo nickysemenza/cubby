@@ -1,5 +1,13 @@
-import type { PurchaseId, VendorId } from "@cubby/schemas/identifiers";
-import { unsafeVendorId } from "@cubby/schemas/identifiers";
+import type {
+  PurchaseId,
+  VendorId,
+  VendorShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  unsafePurchaseId,
+  unsafeVendorId,
+  unsafeVendorShortcode,
+} from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
@@ -24,6 +32,7 @@ import {
   getPurchaseExpenses,
 } from "./purchase";
 import { makeExpenseInput } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 import {
   createVendor,
   deleteVendors,
@@ -104,7 +113,7 @@ describe("vendor repository — roster CRUD and list filters", () => {
   const ctx = withTestDb();
 
   it("creates, reads back, and updates the roster fields", async () => {
-    const created = await createVendor(
+    const { output: created } = await createVendor(
       ctx.db,
       vendorCreateInput.parse({
         name: "Masseria Calderisi",
@@ -115,7 +124,7 @@ describe("vendor repository — roster CRUD and list filters", () => {
     expect(created.website).toBe("https://example.com/masseria");
     expect(created.notes).toBeNull();
 
-    const updated = await updateVendor(
+    const { output: updated } = await updateVendor(
       ctx.db,
       {
         id: created.id,
@@ -158,7 +167,7 @@ describe("vendor repository — roster CRUD and list filters", () => {
   });
 
   it("refuses to update a vendor that does not exist or has been deleted", async () => {
-    const gone = await createVendor(
+    const { output: gone } = await createVendor(
       ctx.db,
       vendorCreateInput.parse({ name: "Shuttered Supply" }),
       ctx.actor,
@@ -183,7 +192,9 @@ describe("vendor repository — roster CRUD and list filters", () => {
       updateVendor(
         ctx.db,
         {
-          id: unsafeVendorId("00000000-0000-0000-0000-000000000000"),
+          // Well-formed but never minted in this test run — same "-2222"
+          // placeholder convention as shortcode.integration.test.ts.
+          id: unsafeVendorShortcode("VEN-2222"),
           data: { name: "Never Existed" },
         },
         ctx.actor,
@@ -200,10 +211,14 @@ describe("vendor repository — roster CRUD and list filters", () => {
    * order instead of erroring.
    */
   it("sorts by the purchaseCount and spend rollups in both directions", async () => {
-    const quiet = await findOrCreateVendor(ctx.db, "One Charge Vendor");
-    const busy = await findOrCreateVendor(ctx.db, "Two Charge Vendor");
+    const quietId = await findOrCreateVendor(ctx.db, "One Charge Vendor");
+    const busyId = await findOrCreateVendor(ctx.db, "Two Charge Vendor");
+    // `findOrCreateVendor` still returns the internal uuid; the purchase input
+    // and the vendorList id comparisons below speak the public shortcode.
+    const quiet = (await getVendorByID(ctx.db, quietId)).id;
+    const busy = (await getVendorByID(ctx.db, busyId)).id;
 
-    const quietCharge = await createPurchase(
+    const { output: quietCharge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: quiet, orderId: "Q-1" }),
       ctx.actor,
@@ -249,10 +264,11 @@ describe("vendor repository — spend rollup", () => {
 
   it("spend is SUM(expense.cost), never the charge's statedTotal", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Spend Rollup Vendor");
-    const charge = await createPurchase(
+    const vendorShortcode = (await getVendorByID(ctx.db, vendorId)).id;
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
-        vendorId,
+        vendorId: vendorShortcode,
         orderId: "SPEND-1",
         // Wildly wrong on purpose. `statedTotal` is only a reconciliation cue;
         // if it ever reached `spend` this assertion would read 99999.
@@ -303,6 +319,10 @@ describe("vendor repository — spend rollup", () => {
       vendorId,
       orderId: "DOOMED-1",
     });
+    // `findOrCreatePurchase` (the import hot path) still returns the internal
+    // uuid; the expense input and `deletePurchases` speak the public shortcode.
+    const keptChargeCode = (await getPurchaseByID(ctx.db, keptCharge)).id;
+    const doomedChargeCode = (await getPurchaseByID(ctx.db, doomedCharge)).id;
 
     const line = (name: string, cost: number, purchaseId: string) =>
       expenseCreateInput.parse({
@@ -313,15 +333,19 @@ describe("vendor repository — spend rollup", () => {
         purchaseId,
       });
 
-    await createExpense(ctx.db, line("kept line", 40, keptCharge), ctx.actor);
-    const doomedLine = await createExpense(
+    await createExpense(
       ctx.db,
-      line("soon-deleted line", 10, keptCharge),
+      line("kept line", 40, keptChargeCode),
+      ctx.actor,
+    );
+    const { output: doomedLine } = await createExpense(
+      ctx.db,
+      line("soon-deleted line", 10, keptChargeCode),
       ctx.actor,
     );
     await createExpense(
       ctx.db,
-      line("line under doomed charge", 500, doomedCharge),
+      line("line under doomed charge", 500, doomedChargeCode),
       ctx.actor,
     );
 
@@ -335,7 +359,7 @@ describe("vendor repository — spend rollup", () => {
     // drop its lines from the vendor's spend too. (`deletePurchases` also nulls
     // `expense.purchaseId`, which is the same outcome from the other side — an
     // expense with no charge belongs to no vendor.)
-    await deletePurchases(ctx.db, [doomedCharge], ctx.actor);
+    await deletePurchases(ctx.db, [doomedChargeCode], ctx.actor);
     const after = await getVendorByID(ctx.db, vendorId);
     expect(after.spend).toBe(40);
     expect(after.purchaseCount).toBe(1);
@@ -346,23 +370,34 @@ describe("vendor repository — vendorOptions picklist", () => {
   const ctx = withTestDb();
 
   it("returns {id, name, count} over LIVE charges, keeps a zero-charge vendor, and hides deleted vendors", async () => {
-    const busy = await findOrCreateVendor(ctx.db, "Busy Vendor");
-    const quiet = await findOrCreateVendor(ctx.db, "Quiet Vendor");
+    const busyId = await findOrCreateVendor(ctx.db, "Busy Vendor");
+    const quietId = await findOrCreateVendor(ctx.db, "Quiet Vendor");
     // A vendor can exist before any money went there — the whole point of a
     // roster table (its free-text `GROUP BY` predecessor could never list one).
-    const empty = await findOrCreateVendor(ctx.db, "Aspirational Vendor");
-    const doomed = await findOrCreateVendor(ctx.db, "Deleted Vendor");
+    const emptyId = await findOrCreateVendor(ctx.db, "Aspirational Vendor");
+    const doomedId = await findOrCreateVendor(ctx.db, "Deleted Vendor");
 
-    await findOrCreatePurchase(ctx.db, { vendorId: busy, orderId: "B-1" });
-    await findOrCreatePurchase(ctx.db, { vendorId: busy, orderId: "B-2" });
+    await findOrCreatePurchase(ctx.db, { vendorId: busyId, orderId: "B-1" });
+    await findOrCreatePurchase(ctx.db, { vendorId: busyId, orderId: "B-2" });
     const deletedCharge = await findOrCreatePurchase(ctx.db, {
-      vendorId: busy,
+      vendorId: busyId,
       orderId: "B-3",
     });
-    await findOrCreatePurchase(ctx.db, { vendorId: quiet, orderId: "Q-1" });
+    await findOrCreatePurchase(ctx.db, { vendorId: quietId, orderId: "Q-1" });
 
-    await deletePurchases(ctx.db, [deletedCharge], ctx.actor);
+    await deletePurchases(
+      ctx.db,
+      [(await getPurchaseByID(ctx.db, deletedCharge)).id],
+      ctx.actor,
+    );
+    // Resolved to its shortcode BEFORE the delete — `deleteVendors` speaks
+    // shortcodes, and the code stays a valid (tombstoned) reference after.
+    const doomed = (await getVendorByID(ctx.db, doomedId)).id;
     await deleteVendors(ctx.db, [doomed], ctx.actor);
+
+    const busy = (await getVendorByID(ctx.db, busyId)).id;
+    const quiet = (await getVendorByID(ctx.db, quietId)).id;
+    const empty = (await getVendorByID(ctx.db, emptyId)).id;
 
     const options = await vendorOptions(ctx.db);
 
@@ -385,18 +420,23 @@ describe("vendor repository — deletion guard", () => {
       vendorId,
       orderId: "LB-1",
     });
+    const vendorShortcode = (await getVendorByID(ctx.db, vendorId)).id;
 
     // Dropping the vendor would leave that charge resolving `vendorName` to
     // null, which reads as "no vendor recorded" and is a lie. The re-point path
     // is `mergePurchases`, not a cascade.
     await expect(
-      deleteVendors(ctx.db, [vendorId], ctx.actor),
+      deleteVendors(ctx.db, [vendorShortcode], ctx.actor),
     ).rejects.toMatchObject({
       cause: { reason: "VENDOR_HAS_PURCHASES" },
     });
 
-    await deletePurchases(ctx.db, [charge], ctx.actor);
-    await deleteVendors(ctx.db, [vendorId], ctx.actor);
+    await deletePurchases(
+      ctx.db,
+      [(await getPurchaseByID(ctx.db, charge)).id],
+      ctx.actor,
+    );
+    await deleteVendors(ctx.db, [vendorShortcode], ctx.actor);
 
     await expect(getVendorByID(ctx.db, vendorId)).rejects.toMatchObject({
       cause: { reason: "VENDOR_NOT_FOUND" },
@@ -463,10 +503,31 @@ describe("vendor repository — mergeVendors", () => {
         ),
       );
 
-  const addLine = (name: string, cost: number, purchaseId: PurchaseId) =>
+  // The audit log's `entityId` is always the row's internal uuid (every writer
+  // in vendor.ts/purchase.ts logs `entityId: <uuid column>`), but `createVendor`
+  // and `createExpense` only ever hand back the public shortcode. These two
+  // resolve back to the uuid the audit rows above actually key on.
+  const vendorUuid = async (shortcode: VendorShortcode): Promise<VendorId> => {
+    const id = await resolveLiveShortcode(ctx.db, shortcode, "vendor");
+    if (!id) throw new Error(`vendor not found: ${shortcode}`);
+    return unsafeVendorId(id);
+  };
+  // The inverse direction: `findOrCreateVendor` (the import hot path) still
+  // returns the internal uuid, but `mergeVendors`'s input and `VendorOut.id`
+  // are shortcodes post-cutover.
+  const vendorCode = async (id: VendorId): Promise<VendorShortcode> =>
+    (await getVendorByID(ctx.db, id)).id;
+
+  const addLine = async (name: string, cost: number, purchaseId: PurchaseId) =>
     createExpense(
       ctx.db,
-      expenseCreateInput.parse(makeExpenseInput({ name, cost, purchaseId })),
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name,
+          cost,
+          purchaseId: (await getPurchaseByID(ctx.db, purchaseId)).id,
+        }),
+      ),
       ctx.actor,
     );
 
@@ -487,18 +548,28 @@ describe("vendor repository — mergeVendors", () => {
     return { imageId: img.id, joinId: join.id };
   };
 
+  // Returns the charge's internal uuid — every downstream helper here
+  // (`chargeRow`, `getPurchaseExpenses`, `getPurchaseByID`, the audit-row
+  // lookups) is keyed on it, even though `createPurchase` itself now speaks
+  // shortcodes at its public boundary.
   const charge = async (
     vendorId: VendorId,
     orderId: string | null,
     statedTotal: number | null = null,
-  ) =>
-    (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({ vendorId, orderId, statedTotal }),
-        ctx.actor,
-      )
-    ).id;
+  ): Promise<PurchaseId> => {
+    const { output: created } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId: await vendorCode(vendorId),
+        orderId,
+        statedTotal,
+      }),
+      ctx.actor,
+    );
+    const id = await resolveLiveShortcode(ctx.db, created.id, "purchase");
+    if (!id) throw new Error(`purchase not found: ${created.id}`);
+    return unsafePurchaseId(id);
+  };
 
   it("re-points the losers' charges, soft-deletes the losers, and unions the keeper's rollups", async () => {
     const keeper = await findOrCreateVendor(ctx.db, "B&H Photo");
@@ -518,11 +589,11 @@ describe("vendor repository — mergeVendors", () => {
 
     const merged = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
-    expect(merged.id).toBe(keeper);
+    expect(merged.id).toBe(await vendorCode(keeper));
     // Union of both sides: 3 live charges, 150 of live spend.
     expect(merged.purchaseCount).toBe(3);
     expect(merged.spend).toBe(150);
@@ -566,7 +637,7 @@ describe("vendor repository — mergeVendors", () => {
     // Does not throw — the fold happens BEFORE the bulk re-point.
     const merged = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
@@ -618,7 +689,7 @@ describe("vendor repository — mergeVendors", () => {
 
     await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
@@ -638,7 +709,7 @@ describe("vendor repository — mergeVendors", () => {
 
     const merged = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
@@ -672,7 +743,10 @@ describe("vendor repository — mergeVendors", () => {
 
     const merged = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loserA, loserB] },
+      {
+        keepId: await vendorCode(keeper),
+        mergeIds: [await vendorCode(loserA), await vendorCode(loserB)],
+      },
       ctx.actor,
     );
 
@@ -717,7 +791,7 @@ describe("vendor repository — mergeVendors", () => {
 
     const merged = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
@@ -734,12 +808,12 @@ describe("vendor repository — mergeVendors", () => {
     // The real first case: `B&H` held the website with 1 charge, `B&H Photo` had
     // 4 charges and no website. The better-populated duplicate is rarely the one
     // with more history, so the keeper fills its gaps from the losers.
-    const keeper = await createVendor(
+    const { output: keeper } = await createVendor(
       ctx.db,
       vendorCreateInput.parse({ name: "B&H Photo", notes: "keeper notes" }),
       ctx.actor,
     );
-    const loser = await createVendor(
+    const { output: loser } = await createVendor(
       ctx.db,
       vendorCreateInput.parse({
         name: "B&H",
@@ -760,7 +834,11 @@ describe("vendor repository — mergeVendors", () => {
     // clobbering a value a human wrote.
     expect(merged.notes).toBe("keeper notes");
 
-    const [entry] = await auditRows("vendor", keeper.id, "update");
+    const [entry] = await auditRows(
+      "vendor",
+      await vendorUuid(keeper.id),
+      "update",
+    );
     expect(entry?.changes?.carriedOver).toEqual({
       from: null,
       to: { website: "https://bhphotovideo.example" },
@@ -776,7 +854,7 @@ describe("vendor repository — mergeVendors", () => {
 
     await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
@@ -795,7 +873,7 @@ describe("vendor repository — mergeVendors", () => {
 
     await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
@@ -820,13 +898,19 @@ describe("vendor repository — mergeVendors", () => {
 
     await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [loser] },
+      { keepId: await vendorCode(keeper), mergeIds: [await vendorCode(loser)] },
       ctx.actor,
     );
 
     // Every re-pointed expense records which charge it left and which it joined,
     // so the money's movement is reconstructible from the log alone.
-    const [expenseEntry] = await auditRows("expense", movedLine.id, "update");
+    // `createExpense`/`addLine` hand back both the public `output` (shortcode
+    // `id`) and the internal `entityId` uuid the audit log's `entityId` keys on.
+    const [expenseEntry] = await auditRows(
+      "expense",
+      movedLine.entityId,
+      "update",
+    );
     expect(expenseEntry?.changes?.purchaseId).toEqual({
       from: dead,
       to: survivor,
@@ -854,22 +938,23 @@ describe("vendor repository — mergeVendors", () => {
     const keeper = await findOrCreateVendor(ctx.db, "Self Merge Vendor");
     const keeperCharge = await charge(keeper, "SELF-1");
     await addLine("self line", 77, keeperCharge);
+    const keeperCode = await vendorCode(keeper);
 
     const selfOnly = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [keeper] },
+      { keepId: keeperCode, mergeIds: [keeperCode] },
       ctx.actor,
     );
     const emptySet = await mergeVendors(
       ctx.db,
-      { keepId: keeper, mergeIds: [] },
+      { keepId: keeperCode, mergeIds: [] },
       ctx.actor,
     );
 
     // Not self-destruction: the keeper is returned untouched and its charge is
     // neither folded nor deleted.
     for (const result of [selfOnly, emptySet]) {
-      expect(result.id).toBe(keeper);
+      expect(result.id).toBe(keeperCode);
       expect(result.purchaseCount).toBe(1);
       expect(result.spend).toBe(77);
     }
@@ -882,7 +967,10 @@ describe("vendor repository — mergeVendors", () => {
   it("refuses to merge an already-deleted vendor", async () => {
     const keeper = await findOrCreateVendor(ctx.db, "Live Keeper");
     const gone = await findOrCreateVendor(ctx.db, "Already Gone");
-    await deleteVendors(ctx.db, [gone], ctx.actor);
+    // Resolved to its shortcode BEFORE the delete — `deleteVendors` speaks
+    // shortcodes, and the code stays a valid (tombstoned) reference after.
+    const goneCode = await vendorCode(gone);
+    await deleteVendors(ctx.db, [goneCode], ctx.actor);
 
     const keeperCharge = await charge(keeper, "LK-1");
     await addLine("keeper line", 9, keeperCharge);
@@ -892,7 +980,11 @@ describe("vendor repository — mergeVendors", () => {
     // would re-run its side effects (and re-log its delete) against rows that
     // already moved.
     await expect(
-      mergeVendors(ctx.db, { keepId: keeper, mergeIds: [gone] }, ctx.actor),
+      mergeVendors(
+        ctx.db,
+        { keepId: await vendorCode(keeper), mergeIds: [goneCode] },
+        ctx.actor,
+      ),
     ).rejects.toMatchObject({ cause: { reason: "VENDOR_NOT_FOUND" } });
 
     // The transaction rolled back: the keeper is untouched.

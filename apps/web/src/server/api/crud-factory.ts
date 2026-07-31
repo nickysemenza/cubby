@@ -411,17 +411,32 @@ function createEntityCrudProcedures<
   };
 }
 
-/** Standard CRUD for searchable entities whose create/update mutations refresh embeddings. */
+/**
+ * Standard CRUD for searchable entities whose create/update mutations refresh
+ * embeddings.
+ *
+ * `TId` is the PUBLIC id the router accepts (a uuid for entities not yet cut
+ * over to shortcodes, a shortcode for ones that are — see `idSchema`); `TEntityId`
+ * is the INTERNAL uuid `runMutationSideEffects`/`EntityEmbedding` require,
+ * which is a DB implementation detail and never equal to `TId` once an
+ * entity's public id is a shortcode. Because `TOutput` (the shape returned to
+ * the client) therefore can't carry `TEntityId` — that would put a uuid back
+ * on the wire, the exact thing the shortcode cutover exists to prevent —
+ * `repository.create`/`update` return `{ output, entityId }`: `output` is
+ * what the procedure returns, `entityId` is what only the side-effect
+ * dispatch below ever sees.
+ */
 export function createSearchableEntityCrudProcedures<
   SCreate extends ZodSchema,
   SUpdate extends ZodSchema,
   TEntity extends SearchableEntity,
-  TId extends Extract<
+  TEntityId extends Extract<
     Parameters<typeof runMutationSideEffects>[1]["entity"],
     { entityType: TEntity }
   >["entityId"],
-  TOutput extends { id: TId },
+  TOutput,
   TFilters,
+  TId extends string = string,
 >({
   schemas,
   repository,
@@ -456,12 +471,12 @@ export function createSearchableEntityCrudProcedures<
     create: (
       ctx: ProtectedCrudServices,
       data: z.infer<SCreate>,
-    ) => Promise<TOutput>;
+    ) => Promise<{ output: TOutput; entityId: TEntityId }>;
     update: (
       ctx: ProtectedCrudServices,
       id: TId,
       data: z.infer<SUpdate>,
-    ) => Promise<TOutput>;
+    ) => Promise<{ output: TOutput; entityId: TEntityId }>;
     delete: (
       ctx: ProtectedCrudServices,
       ids: TId[],
@@ -469,7 +484,7 @@ export function createSearchableEntityCrudProcedures<
   };
   entityName: TEntity;
 }) {
-  const entityRef = (entityId: TId) =>
+  const entityRef = (entityId: TEntityId) =>
     ({ entityType: entityName, entityId }) as Extract<
       Parameters<typeof runMutationSideEffects>[1]["entity"],
       { entityType: TEntity }
@@ -477,24 +492,26 @@ export function createSearchableEntityCrudProcedures<
   const procedures = createEntityCrudProcedures({
     schemas,
     repository: {
-      ...repository,
+      getByID: repository.getByID,
+      getByShortcode: repository.getByShortcode,
+      list: repository.list,
       create: async (ctx, data) => {
-        const created = await repository.create(ctx, data);
+        const { output, entityId } = await repository.create(ctx, data);
         await runMutationSideEffects(ctx.db, {
           action: "created",
-          entity: entityRef(created.id),
+          entity: entityRef(entityId),
           source: `${entityName}.create`,
         });
-        return created;
+        return output;
       },
       update: async (ctx, id: TId, data) => {
-        const updated = await repository.update(ctx, id, data);
+        const { output, entityId } = await repository.update(ctx, id, data);
         await runMutationSideEffects(ctx.db, {
           action: "updated",
-          entity: entityRef(id),
+          entity: entityRef(entityId),
           source: `${entityName}.update`,
         });
-        return updated;
+        return output;
       },
     },
     entityName,

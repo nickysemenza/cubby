@@ -4,7 +4,7 @@ import {
   type Edge,
   extractClosestEdge,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import type { TaskId } from "@cubby/schemas/identifiers";
+import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import { type RefObject, useEffect, useState } from "react";
 import type { BoardColumnKey, BoardLaneKey } from "./board-types";
 import { asDragData, type BoardCardDropData } from "./board-types";
@@ -13,7 +13,7 @@ interface BoardCardDropTargetOptions<T extends HTMLElement> {
   ref: RefObject<T | null>;
   column: BoardColumnKey;
   lane: BoardLaneKey | null;
-  taskId: TaskId;
+  taskId: TaskShortcode;
   /**
    * The Done status column opts out of manual ranking — its cards aren't
    * reorder targets (they sort by recency), so no edge indicator and the drop

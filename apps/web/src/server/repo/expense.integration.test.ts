@@ -1,12 +1,14 @@
 import type {
   ExpenseId,
   PurchaseId,
-  VendorId,
+  PurchaseShortcode,
+  VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
-  unsafeExpenseId,
-  unsafeProjectId,
+  unsafeExpenseShortcode,
+  unsafeProjectShortcode,
   unsafePurchaseId,
+  unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   type ExpenseCreateInput,
@@ -20,6 +22,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { expenseRouter } from "~/server/api/routers/expense";
 import { createTestCaller } from "~/server/api/trpc";
+import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
@@ -29,7 +32,7 @@ import {
   deleteExpenses,
   expenseAnalytics,
   expenseList,
-  getExpenseByID,
+  getExpenseByShortcode,
   matchExpenses,
   moveExpenses,
   setExpensesCostType,
@@ -49,6 +52,7 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveShortcode } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
 
 /**
@@ -56,19 +60,49 @@ import { vendorOptions } from "~/server/repo/vendor";
  * (see `resolveCharge`), so a row created by NAME comes back carrying the ids
  * every filter and grouping assertion below needs. Throwing rather than
  * asserting inline keeps the id non-nullable at the call site.
+ *
+ * Both `vendorId` and `purchaseId` on `ExpenseOut` are shortcodes now (the
+ * public boundary) — see `purchaseUuid` below for the call sites that still
+ * need the internal uuid `getPurchaseByID`/`getPurchaseExpenses` key on.
  */
-const vendorIdOf = (expense: ExpenseOut): VendorId => {
+/**
+ * `createExpense`/`updateExpense` hand back `{ output, entityId }` — the uuid is
+ * for audit/side-effect bookkeeping. These tests assert on the public shape.
+ */
+const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
+  (await p).output;
+
+const vendorIdOf = (expense: ExpenseOut): VendorShortcode => {
   if (!expense.vendorId) {
     throw new Error(`expected a resolved vendor on "${expense.name}"`);
   }
   return expense.vendorId;
 };
 
-const purchaseIdOf = (expense: ExpenseOut): PurchaseId => {
+const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {
   if (!expense.purchaseId) {
     throw new Error(`expected a resolved charge on "${expense.name}"`);
   }
   return expense.purchaseId;
+};
+
+/**
+ * `getPurchaseByID`/`getPurchaseExpenses` still key on the charge's internal
+ * uuid; `purchaseIdOf` only ever hands back the public shortcode. Resolve the
+ * call sites that need it.
+ *
+ * Through `resolveShortcode`, NOT `resolveLiveShortcode` — a charge that just
+ * got folded away (`foldChargeInto`) is soft-deleted but its uuid is still a
+ * valid, queryable row (e.g. `getPurchaseExpenses` on a vacated charge must
+ * still resolve, to prove it now has zero live lines).
+ */
+const purchaseUuid = async (
+  db: Database,
+  code: PurchaseShortcode,
+): Promise<PurchaseId> => {
+  const resolved = await resolveShortcode(db, code);
+  if (!resolved) throw new Error(`purchase not found: ${code}`);
+  return unsafePurchaseId(resolved.id);
 };
 
 // NB: project rollup contribution (spend/expenseCount/subtree) and
@@ -81,13 +115,13 @@ describe("expense repository — CRUD", () => {
   const ctx = withTestDb();
 
   it("creates, reads (with projectName join), updates (incl. clearing date/projectId), and deletes", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "expense crud project" }),
       ctx.actor,
     );
 
-    const created = await createExpense(
+    const { output: created } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "plumbing",
@@ -103,7 +137,7 @@ describe("expense repository — CRUD", () => {
       ctx.actor,
     );
 
-    const read = await getExpenseByID(ctx.db, created.id);
+    const read = await getExpenseByShortcode(ctx.db, created.id);
     expect(read).toMatchObject({
       name: "test faucet",
       cost: 42.5,
@@ -117,7 +151,7 @@ describe("expense repository — CRUD", () => {
       projectName: project.name,
     });
 
-    const updated = await updateExpense(
+    const { output: updated } = await updateExpense(
       ctx.db,
       created.id,
       { name: "updated faucet", cost: 55, date: null, projectId: null },
@@ -131,10 +165,9 @@ describe("expense repository — CRUD", () => {
 
     await deleteExpenses(ctx.db, [created.id], ctx.actor);
 
-    await expect(getExpenseByID(ctx.db, created.id)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      cause: { reason: "EXPENSE_NOT_FOUND" },
-    });
+    // Unlike `getExpenseByID`, `getExpenseByShortcode` never throws — it
+    // resolves to null for a soft-deleted (or otherwise unresolvable) code.
+    expect(await getExpenseByShortcode(ctx.db, created.id)).toBeNull();
 
     const { data } = await expenseList(ctx.db, {}, [], {
       pageIndex: 0,
@@ -226,12 +259,12 @@ describe("expense repository — expenseList filters", () => {
   });
 
   it("filters by projectId, and projectId + includeSubProjects over a 3-level chain", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "filter parent" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "filter child",
@@ -239,7 +272,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const grandchild = await createProject(
+    const { output: grandchild } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "filter grandchild",
@@ -247,7 +280,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const other = await createProject(
+    const { output: other } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "unrelated project" }),
       ctx.actor,
@@ -292,7 +325,7 @@ describe("expense repository — expenseList filters", () => {
   });
 
   it("filters by dateFrom/dateTo (inclusive boundary, outside window, null-date excluded)", async () => {
-    const inWindow = await createExpense(
+    const { output: inWindow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -302,7 +335,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const lowerBoundary = await createExpense(
+    const { output: lowerBoundary } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -312,7 +345,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const upperBoundary = await createExpense(
+    const { output: upperBoundary } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -322,7 +355,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const beforeWindow = await createExpense(
+    const { output: beforeWindow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -332,7 +365,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const afterWindow = await createExpense(
+    const { output: afterWindow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -342,7 +375,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const nullDate = await createExpense(
+    const { output: nullDate } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -392,15 +425,17 @@ describe("expense repository — expenseList filters", () => {
 
   it("filters by costMin/costMax (inclusive boundary, outside window, null-cost excluded)", async () => {
     const mk = (name: string, cost: number | undefined) =>
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse({
-          trade: "other",
-          costType: "materials",
-          name,
-          ...(cost === undefined ? {} : { cost }),
-        }),
-        ctx.actor,
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse({
+            trade: "other",
+            costType: "materials",
+            name,
+            ...(cost === undefined ? {} : { cost }),
+          }),
+          ctx.actor,
+        ),
       );
 
     const lowerBoundary = await mk("cost on lower boundary", 100);
@@ -462,7 +497,7 @@ describe("expense repository — expenseList filters", () => {
   });
 
   it("ORs several `search` terms over the name, and ANDs notesSearch/urlSearch", async () => {
-    const extractor = await createExpense(
+    const { output: extractor } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -473,7 +508,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const chopSaw = await createExpense(
+    const { output: chopSaw } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -483,7 +518,7 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const unrelated = await createExpense(
+    const { output: unrelated } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -553,12 +588,12 @@ describe("expense repository — expenseList filters", () => {
   });
 
   it("combines filters with AND semantics", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "combined filter project" }),
       ctx.actor,
     );
-    const matches = await createExpense(
+    const { output: matches } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "plumbing",
@@ -720,7 +755,7 @@ describe("expense router", () => {
   describe("projectPresenceFilter", () => {
     /** One assigned expense, one unassigned, plus a decoy in another project. */
     const seedProjectMix = async () => {
-      const [projA, projB] = await Promise.all([
+      const [{ output: projA }, { output: projB }] = await Promise.all([
         createProject(
           ctx.db,
           projectCreateInput.parse({ name: "assigned home" }),
@@ -820,7 +855,7 @@ describe("expense router", () => {
     it("returns the charge's other lines, excluding the expense itself", async () => {
       const caller = createTestCaller(expenseRouter, ctx.db);
       const orderId = "111-siblings-0000001";
-      const [self, sibling] = await Promise.all([
+      const [{ output: self }, { output: sibling }] = await Promise.all([
         createExpense(
           ctx.db,
           makeExpenseInput({
@@ -857,7 +892,7 @@ describe("expense router", () => {
 
     it("returns [] for an expense with no charge — without early-returning on a missing order id", async () => {
       const caller = createTestCaller(expenseRouter, ctx.db);
-      const chargeless = await createExpense(
+      const { output: chargeless } = await createExpense(
         ctx.db,
         makeExpenseInput({ name: "cash, no vendor" }),
         ctx.actor,
@@ -870,12 +905,12 @@ describe("expense router", () => {
       // vendor-bearing rows that have none — even though they sit on a real
       // charge with real siblings. Gating on `purchaseId` instead is what fixed
       // it.
-      const orderless = await createExpense(
+      const { output: orderless } = await createExpense(
         ctx.db,
         makeExpenseInput({ name: "walk-in line a", vendor: "Tool Nirvana" }),
         ctx.actor,
       );
-      const alsoOnThatCharge = await createExpense(
+      const { output: alsoOnThatCharge } = await createExpense(
         ctx.db,
         makeExpenseInput({
           name: "walk-in line b",
@@ -892,7 +927,7 @@ describe("expense router", () => {
 
   it("tradeAffinity counts assigned expenses per project and trade", async () => {
     const caller = createTestCaller(expenseRouter, ctx.db);
-    const proj = await createProject(
+    const { output: proj } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "affinity project" }),
       ctx.actor,
@@ -928,17 +963,17 @@ describe("expense router", () => {
 
   it("bulkMove moves expenses to another project and to the inbox (null), returning items + sideEffects", async () => {
     const caller = createTestCaller(expenseRouter, ctx.db);
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "bulk move a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "bulk move b" }),
       ctx.actor,
     );
-    const p1 = await createExpense(
+    const { output: p1 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -948,7 +983,7 @@ describe("expense router", () => {
       }),
       ctx.actor,
     );
-    const p2 = await createExpense(
+    const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -983,17 +1018,17 @@ describe("expense repository — moveExpenses", () => {
   const ctx = withTestDb();
 
   it("moves rows to the new projectId and writes an audit entry per changed row", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move expenses a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB, entityId: projectBId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move expenses b" }),
       ctx.actor,
     );
-    const p1 = await createExpense(
+    const { output: p1, entityId: p1Id } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1003,7 +1038,7 @@ describe("expense repository — moveExpenses", () => {
       }),
       ctx.actor,
     );
-    const p2 = await createExpense(
+    const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1021,9 +1056,12 @@ describe("expense repository — moveExpenses", () => {
     );
     expect(moved.map((p) => p.projectId)).toEqual([projectB.id, projectB.id]);
 
+    // `getAuditLog`'s `entityId` matches the internal uuid, not the shortcode
+    // — and so does the diff `computeChanges` records for `projectId` itself,
+    // since that's the raw FK column value, not the public shortcode.
     const auditP1 = await getAuditLog(ctx.db, {
       entityType: "expense",
-      entityId: p1.id,
+      entityId: p1Id,
       limit: 20,
     });
     expect(
@@ -1031,23 +1069,23 @@ describe("expense repository — moveExpenses", () => {
         (e) =>
           e.action === "update" &&
           (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectB.id,
+            ?.projectId?.to === projectBId,
       ),
     ).toBe(true);
   });
 
   it("leaves soft-deleted ids in the input untouched", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move expenses untouched a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move expenses untouched b" }),
       ctx.actor,
     );
-    const live = await createExpense(
+    const { output: live } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1057,7 +1095,7 @@ describe("expense repository — moveExpenses", () => {
       }),
       ctx.actor,
     );
-    const deleted = await createExpense(
+    const { output: deleted } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1080,12 +1118,12 @@ describe("expense repository — moveExpenses", () => {
   });
 
   it("rejects a nonexistent or soft-deleted target project with PROJECT_NOT_FOUND", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move expenses reject source" }),
       ctx.actor,
     );
-    const expenseRow = await createExpense(
+    const { output: expenseRow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1095,7 +1133,7 @@ describe("expense repository — moveExpenses", () => {
       }),
       ctx.actor,
     );
-    const bogusProjectId = unsafeProjectId(
+    const bogusProjectId = unsafeProjectShortcode(
       "00000000-0000-0000-0000-000000000000",
     );
 
@@ -1110,7 +1148,7 @@ describe("expense repository — moveExpenses", () => {
       cause: { reason: "PROJECT_NOT_FOUND" },
     });
 
-    const deletedProject = await createProject(
+    const { output: deletedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "soon-deleted target" }),
       ctx.actor,
@@ -1130,12 +1168,12 @@ describe("expense repository — moveExpenses", () => {
   });
 
   it("no-op on an id list with only nonexistent ids (returns empty, no error)", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move expenses noop project" }),
       ctx.actor,
     );
-    const bogusId = unsafeExpenseId("00000000-0000-0000-0000-000000000000");
+    const bogusId = unsafeExpenseShortcode("EXP-ZZZZ");
 
     const moved = await moveExpenses(
       ctx.db,
@@ -1164,7 +1202,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       ctx.actor,
     );
 
-  /** `update` audit entries for one expense. */
+  /** `update` audit entries for one expense — keyed on the internal uuid. */
   const updateEntries = async (id: ExpenseId) =>
     (
       await getAuditLog(ctx.db, {
@@ -1183,14 +1221,19 @@ describe("expense repository — bulk trade / cost-type writes", () => {
     ];
 
   it("setExpensesTrade writes the trade over the listed ids only, and audits just the rows that changed", async () => {
-    const a = await line("bulk trade a", { trade: "other" });
-    const b = await line("bulk trade b", { trade: "other" });
+    const { output: a, entityId: aId } = await line("bulk trade a", {
+      trade: "other",
+    });
+    const { output: b } = await line("bulk trade b", { trade: "other" });
     // Already carries the target value: it must be written (harmlessly) but NOT
     // audited — `computeChanges` returns null, so the `if (changes)` arm skips it.
-    const already = await line("bulk trade already electrical", {
-      trade: "electrical",
+    const { output: already, entityId: alreadyId } = await line(
+      "bulk trade already electrical",
+      { trade: "electrical" },
+    );
+    const { output: untouched } = await line("bulk trade bystander", {
+      trade: "plumbing",
     });
-    const untouched = await line("bulk trade bystander", { trade: "plumbing" });
 
     const updated = await setExpensesTrade(
       ctx.db,
@@ -1204,18 +1247,22 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       "electrical",
     ]);
     // Not in `ids` — a bulk write must never widen past its selection.
-    expect((await getExpenseByID(ctx.db, untouched.id)).trade).toBe("plumbing");
+    expect((await getExpenseByShortcode(ctx.db, untouched.id))?.trade).toBe(
+      "plumbing",
+    );
 
-    expect(changeOf((await updateEntries(a.id))[0], "trade")).toEqual({
+    expect(changeOf((await updateEntries(aId))[0], "trade")).toEqual({
       from: "other",
       to: "electrical",
     });
-    expect(await updateEntries(already.id)).toHaveLength(0);
+    expect(await updateEntries(alreadyId)).toHaveLength(0);
   });
 
   it("setExpensesTrade skips soft-deleted ids and returns [] when nothing live matches", async () => {
-    const live = await line("bulk trade live", { trade: "other" });
-    const deleted = await line("bulk trade deleted", { trade: "other" });
+    const { output: live } = await line("bulk trade live", { trade: "other" });
+    const { output: deleted } = await line("bulk trade deleted", {
+      trade: "other",
+    });
     await deleteExpenses(ctx.db, [deleted.id], ctx.actor);
 
     const updated = await setExpensesTrade(
@@ -1237,10 +1284,13 @@ describe("expense repository — bulk trade / cost-type writes", () => {
   });
 
   it("setExpensesCostType writes the cost type and audits only the changed rows", async () => {
-    const a = await line("bulk costType a", { costType: "materials" });
-    const already = await line("bulk costType already tools", {
-      costType: "tools",
+    const { output: a, entityId: aId } = await line("bulk costType a", {
+      costType: "materials",
     });
+    const { output: already, entityId: alreadyId } = await line(
+      "bulk costType already tools",
+      { costType: "tools" },
+    );
 
     const updated = await setExpensesCostType(
       ctx.db,
@@ -1249,11 +1299,11 @@ describe("expense repository — bulk trade / cost-type writes", () => {
     );
     expect(updated.map((row) => row.costType)).toEqual(["tools", "tools"]);
 
-    expect(changeOf((await updateEntries(a.id))[0], "costType")).toEqual({
+    expect(changeOf((await updateEntries(aId))[0], "costType")).toEqual({
       from: "materials",
       to: "tools",
     });
-    expect(await updateEntries(already.id)).toHaveLength(0);
+    expect(await updateEntries(alreadyId)).toHaveLength(0);
   });
 });
 
@@ -1261,19 +1311,19 @@ describe("expense repository — expenseAnalytics", () => {
   const ctx = withTestDb();
 
   it("aggregates match manual arithmetic, omits empty categories, and stays consistent with expenseList under the same filter", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "analytics project a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "analytics project b" }),
       ctx.actor,
     );
 
     // p1: actual spend, plumbing/materials, projectA, dated Jan.
-    const p1 = await createExpense(
+    const { output: p1 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "plumbing",
@@ -1287,7 +1337,7 @@ describe("expense repository — expenseAnalytics", () => {
       ctx.actor,
     );
     // p2: committed (future) spend, plumbing/materials, projectA, no date yet.
-    const p2 = await createExpense(
+    const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "plumbing",
@@ -1300,7 +1350,7 @@ describe("expense repository — expenseAnalytics", () => {
       ctx.actor,
     );
     // p3: a credit/refund (negative cost), electrical/materials, no project (inbox), dated Jan.
-    const p3 = await createExpense(
+    const { output: p3 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "electrical",
@@ -1313,7 +1363,7 @@ describe("expense repository — expenseAnalytics", () => {
       ctx.actor,
     );
     // p4: actual spend, electrical/services, projectB, dated Feb.
-    const p4 = await createExpense(
+    const { output: p4 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "electrical",
@@ -1488,18 +1538,20 @@ describe("expense repository — expenseAnalytics", () => {
 
   it("groups byVendor through the charge, and does NOT sum to summary.net", async () => {
     const mk = (name: string, cost: number, vendor?: string) =>
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse({
-          trade: "other",
-          costType: "tools",
-          name,
-          cost,
-          future: false,
-          date: "2026-04-01",
-          ...(vendor ? { vendor } : {}),
-        }),
-        ctx.actor,
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse({
+            trade: "other",
+            costType: "tools",
+            name,
+            cost,
+            future: false,
+            date: "2026-04-01",
+            ...(vendor ? { vendor } : {}),
+          }),
+          ctx.actor,
+        ),
       );
 
     const acmeA = await mk("vendor acme a", 100, "Analytics Acme");
@@ -1594,7 +1646,7 @@ describe("expense repository — embedding cascade invariant", () => {
   // "deleteExpenses leaves no orphan" case. This just re-confirms the
   // no-orphan invariant holds from this file's own delete path too.
   it("deleteExpenses leaves no orphaned EntityEmbedding rows", async () => {
-    const expenseRow = await createExpense(
+    const { output: expenseRow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1625,7 +1677,7 @@ describe("expense repository — product bridge", () => {
       ctx.actor,
     );
 
-    const created = await createExpense(
+    const { output: created } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "millwork",
@@ -1638,14 +1690,14 @@ describe("expense repository — product bridge", () => {
       ctx.actor,
     );
 
-    const read = await getExpenseByID(ctx.db, created.id);
+    const read = await getExpenseByShortcode(ctx.db, created.id);
     expect(read).toMatchObject({
       productId: product.id,
       productName: "bridge miter saw",
       vendor: "Home Depot",
     });
 
-    const cleared = await updateExpense(
+    const { output: cleared } = await updateExpense(
       ctx.db,
       created.id,
       { productId: null, vendor: null },
@@ -1663,7 +1715,7 @@ describe("expense repository — product bridge", () => {
       ctx.actor,
     );
 
-    const bought = await createExpense(
+    const { output: bought } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "flooring",
@@ -1674,7 +1726,7 @@ describe("expense repository — product bridge", () => {
       }),
       ctx.actor,
     );
-    const sold = await createExpense(
+    const { output: sold } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "flooring",
@@ -1724,7 +1776,7 @@ describe("expense repository — product bridge", () => {
       makeProductInput({ name: "bridge doomed drill" }),
       ctx.actor,
     );
-    const created = await createExpense(
+    const { output: created } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1742,9 +1794,9 @@ describe("expense repository — product bridge", () => {
       cause: { reason: "PRODUCT_HAS_EXPENSES" },
     });
 
-    const read = await getExpenseByID(ctx.db, created.id);
-    expect(read.productId).toBe(bridgeDoomedDrill.id);
-    expect(read.productName).toBe("bridge doomed drill");
+    const read = await getExpenseByShortcode(ctx.db, created.id);
+    expect(read?.productId).toBe(bridgeDoomedDrill.id);
+    expect(read?.productName).toBe("bridge doomed drill");
   });
 
   it("still matches name search when vendor is null", async () => {
@@ -1771,7 +1823,7 @@ describe("expense repository — product bridge", () => {
   });
 
   it("filters by vendor id independently of search", async () => {
-    const lumber = await createExpense(
+    const { output: lumber } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1806,7 +1858,7 @@ describe("expense repository — product bridge", () => {
     // (254)" also dragging in "Amazon Business") is gone by construction now:
     // two names are two rows in the `Vendor` roster, so the filter compares
     // primary keys and there is no substring to leak through.
-    const prime = await createExpense(
+    const { output: prime } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1816,7 +1868,7 @@ describe("expense repository — product bridge", () => {
       }),
       ctx.actor,
     );
-    const business = await createExpense(
+    const { output: business } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1839,15 +1891,17 @@ describe("expense repository — product bridge", () => {
 
   it("matches any of a set of vendor ids", async () => {
     const line = (name: string, vendor: string) =>
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse({
-          trade: "other",
-          costType: "materials",
-          name,
-          vendor,
-        }),
-        ctx.actor,
+      unwrap(
+        createExpense(
+          ctx.db,
+          expenseCreateInput.parse({
+            trade: "other",
+            costType: "materials",
+            name,
+            vendor,
+          }),
+          ctx.actor,
+        ),
       );
     const socketSet = await line("socket set", "eBay");
     const deckScrews = await line("deck screws", "Home Depot");
@@ -1867,7 +1921,7 @@ describe("expense repository — product bridge", () => {
 
   it("filters by purchase (charge) id directly, no vendor hop needed", async () => {
     const orderId = "111-purchaseid-filter-0000001";
-    const first = await createExpense(
+    const { output: first } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1878,7 +1932,7 @@ describe("expense repository — product bridge", () => {
       }),
       ctx.actor,
     );
-    const second = await createExpense(
+    const { output: second } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1924,7 +1978,7 @@ describe("expense repository — product bridge", () => {
       }),
       ctx.actor,
     );
-    const tileSaw = await createExpense(
+    const { output: tileSaw } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -1970,7 +2024,7 @@ describe("expense repository — productPresenceFilter", () => {
       makeProductInput({ name: "presence linked drill" }),
       ctx.actor,
     );
-    const linked = await createExpense(
+    const { output: linked } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -2016,7 +2070,7 @@ describe("expense repository — productPresenceFilter", () => {
       }),
       ctx.actor,
     );
-    const unlinked = await createExpense(
+    const { output: unlinked } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -2054,7 +2108,7 @@ describe("expense repository — productPresenceFilter", () => {
       makeProductInput({ name: "presence doomed router" }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { output: expense } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -2117,12 +2171,12 @@ describe("expense repository — charge grouping", () => {
 
   it("files two lines of one order onto ONE charge, where they see each other", async () => {
     const orderId = "111-charge-0000001";
-    const first = await createExpense(
+    const { output: first } = await createExpense(
       ctx.db,
       chargeLine("order line one", "Amazon", orderId),
       ctx.actor,
     );
-    const second = await createExpense(
+    const { output: second } = await createExpense(
       ctx.db,
       chargeLine("order line two", "Amazon", orderId),
       ctx.actor,
@@ -2130,13 +2184,13 @@ describe("expense repository — charge grouping", () => {
     // Same order id under a DIFFERENT vendor is a different charge — an order id
     // is only unique within a vendor, which is exactly what the partial-unique
     // `(vendorId, orderId)` index encodes.
-    const collision = await createExpense(
+    const { output: collision } = await createExpense(
       ctx.db,
       chargeLine("same id, other retailer", "Home Depot", orderId),
       ctx.actor,
     );
     // Same vendor, different order — the other axis.
-    const otherOrder = await createExpense(
+    const { output: otherOrder } = await createExpense(
       ctx.db,
       chargeLine("different order", "Amazon", "111-charge-0000002"),
       ctx.actor,
@@ -2148,19 +2202,22 @@ describe("expense repository — charge grouping", () => {
 
     // Every line of the charge, source row included — the total needs it, and
     // the detail section filters itself out (see `expense.chargeSiblings`).
-    const lines = await getPurchaseExpenses(ctx.db, purchaseIdOf(first));
+    const lines = await getPurchaseExpenses(
+      ctx.db,
+      await purchaseUuid(ctx.db, purchaseIdOf(first)),
+    );
     expect(lines.map((p) => p.id).sort()).toEqual([first.id, second.id].sort());
     expect(lines.map((p) => p.id)).not.toContain(collision.id);
     expect(lines.map((p) => p.id)).not.toContain(otherOrder.id);
   });
 
   it("keeps two order-less buys from one vendor on SEPARATE charges", async () => {
-    const walkInA = await createExpense(
+    const { output: walkInA } = await createExpense(
       ctx.db,
       chargeLine("counter sale a", "Tool Nirvana"),
       ctx.actor,
     );
-    const walkInB = await createExpense(
+    const { output: walkInB } = await createExpense(
       ctx.db,
       chargeLine("counter sale b", "Tool Nirvana"),
       ctx.actor,
@@ -2172,14 +2229,20 @@ describe("expense repository — charge grouping", () => {
     // transactions; merging near-duplicates is `mergePurchases`, a user action.
     expect(purchaseIdOf(walkInA)).not.toBe(purchaseIdOf(walkInB));
     expect(
-      (await getPurchaseExpenses(ctx.db, purchaseIdOf(walkInA))).map(
-        (p) => p.id,
-      ),
+      (
+        await getPurchaseExpenses(
+          ctx.db,
+          await purchaseUuid(ctx.db, purchaseIdOf(walkInA)),
+        )
+      ).map((p) => p.id),
     ).toEqual([walkInA.id]);
     expect(
-      (await getPurchaseExpenses(ctx.db, purchaseIdOf(walkInB))).map(
-        (p) => p.id,
-      ),
+      (
+        await getPurchaseExpenses(
+          ctx.db,
+          await purchaseUuid(ctx.db, purchaseIdOf(walkInB)),
+        )
+      ).map((p) => p.id),
     ).toEqual([walkInB.id]);
   });
 
@@ -2187,7 +2250,7 @@ describe("expense repository — charge grouping", () => {
     // An order id alone can't name a transaction (they're only unique per
     // vendor), so a vendorless line gets no charge rather than an unidentifiable
     // one — and the detail page's charge section stays off for it.
-    const loose = await createExpense(
+    const { output: loose } = await createExpense(
       ctx.db,
       chargeLine("cash, no receipt", null, "WN-no-vendor"),
       ctx.actor,
@@ -2199,25 +2262,35 @@ describe("expense repository — charge grouping", () => {
 
   it("excludes a soft-deleted line of the charge", async () => {
     const orderId = "111-charge-deleted";
-    const keep = await createExpense(
+    const { output: keep } = await createExpense(
       ctx.db,
       chargeLine("surviving line", "Amazon", orderId),
       ctx.actor,
     );
-    const doomed = await createExpense(
+    const { output: doomed } = await createExpense(
       ctx.db,
       chargeLine("deleted line", "Amazon", orderId),
       ctx.actor,
     );
 
     expect(
-      (await getPurchaseExpenses(ctx.db, purchaseIdOf(keep))).map((p) => p.id),
+      (
+        await getPurchaseExpenses(
+          ctx.db,
+          await purchaseUuid(ctx.db, purchaseIdOf(keep)),
+        )
+      ).map((p) => p.id),
     ).toContain(doomed.id);
 
     await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
 
     expect(
-      (await getPurchaseExpenses(ctx.db, purchaseIdOf(keep))).map((p) => p.id),
+      (
+        await getPurchaseExpenses(
+          ctx.db,
+          await purchaseUuid(ctx.db, purchaseIdOf(keep)),
+        )
+      ).map((p) => p.id),
     ).toEqual([keep.id]);
   });
 });
@@ -2243,7 +2316,7 @@ describe("expense repository — charge resolution on update", () => {
   ) => makeExpenseInput({ name, cost: 10, vendor, orderId });
 
   /** Live charges belonging to one vendor — the orphan detector below. */
-  const chargeCount = async (id: VendorId) =>
+  const chargeCount = async (id: VendorShortcode) =>
     (await purchaseList(ctx.db, { vendorId: id }, [], page)).count;
 
   it("re-writing the SAME vendor onto an order-less row mints no second charge", async () => {
@@ -2254,7 +2327,7 @@ describe("expense repository — charge resolution on update", () => {
     // re-import of the same row) created a fresh charge, re-pointed the expense
     // at it, and orphaned the previous one — `statedTotal` and attached
     // documents included.
-    const counterSale = await createExpense(
+    const { output: counterSale } = await createExpense(
       ctx.db,
       line("counter sale", "Tool Nirvana"),
       ctx.actor,
@@ -2263,7 +2336,7 @@ describe("expense repository — charge resolution on update", () => {
     const chargeBefore = purchaseIdOf(counterSale);
     expect(await chargeCount(vendorId)).toBe(1);
 
-    const rewritten = await updateExpense(
+    const { output: rewritten } = await updateExpense(
       ctx.db,
       counterSale.id,
       { vendor: "Tool Nirvana" },
@@ -2275,12 +2348,12 @@ describe("expense repository — charge resolution on update", () => {
 
     // Idempotent again when the unchanged order id is restated alongside it —
     // the `current.orderId === requestedOrderId` arm of the same guard.
-    const withOrder = await createExpense(
+    const { output: withOrder } = await createExpense(
       ctx.db,
       line("online order", "Tool Nirvana", "#11325"),
       ctx.actor,
     );
-    const restated = await updateExpense(
+    const { output: restated } = await updateExpense(
       ctx.db,
       withOrder.id,
       { vendor: "Tool Nirvana", orderId: "#11325" },
@@ -2292,12 +2365,12 @@ describe("expense repository — charge resolution on update", () => {
 
   it("vendor: null detaches the line but leaves the charge and its other lines intact", async () => {
     const orderId = "111-detach-0000001";
-    const keep = await createExpense(
+    const { output: keep } = await createExpense(
       ctx.db,
       line("stays on the order", "Amazon", orderId),
       ctx.actor,
     );
-    const leaving = await createExpense(
+    const { output: leaving } = await createExpense(
       ctx.db,
       line("mis-filed line", "Amazon", orderId),
       ctx.actor,
@@ -2305,7 +2378,7 @@ describe("expense repository — charge resolution on update", () => {
     const chargeId = purchaseIdOf(keep);
     expect(purchaseIdOf(leaving)).toBe(chargeId);
 
-    const detached = await updateExpense(
+    const { output: detached } = await updateExpense(
       ctx.db,
       leaving.id,
       { vendor: null },
@@ -2320,23 +2393,24 @@ describe("expense repository — charge resolution on update", () => {
     // where `statedTotal` and the invoice PDF live, and its OTHER lines are real
     // spend. `null` means "this row isn't part of that transaction", not
     // "that transaction didn't happen".
-    const charge = await getPurchaseByID(ctx.db, chargeId);
+    const chargeUuid = await purchaseUuid(ctx.db, chargeId);
+    const charge = await getPurchaseByID(ctx.db, chargeUuid);
     expect(charge.orderId).toBe(orderId);
     expect(
-      (await getPurchaseExpenses(ctx.db, chargeId)).map((p) => p.id),
+      (await getPurchaseExpenses(ctx.db, chargeUuid)).map((p) => p.id),
     ).toEqual([keep.id]);
   });
 
   it("changing the vendor moves the line to the other vendor's charge, carrying its order id", async () => {
     const orderId = "WN-moved-0001";
-    const misattributed = await createExpense(
+    const { output: misattributed } = await createExpense(
       ctx.db,
       line("bought at the wrong store", "Lowe's", orderId),
       ctx.actor,
     );
     const wrongCharge = purchaseIdOf(misattributed);
 
-    const corrected = await updateExpense(
+    const { output: corrected } = await updateExpense(
       ctx.db,
       misattributed.id,
       { vendor: "Home Depot" },
@@ -2351,17 +2425,22 @@ describe("expense repository — charge resolution on update", () => {
     expect(corrected.orderId).toBe(orderId);
 
     // The vacated charge is FOLDED into the new one, not left line-less: `resolveCharge` folds when the old charge loses its last line, so its statedTotal/notes/date and documents carry over rather than stranding. Same rule as detaching above.
-    expect(await getPurchaseExpenses(ctx.db, wrongCharge)).toEqual([]);
+    expect(
+      await getPurchaseExpenses(
+        ctx.db,
+        await purchaseUuid(ctx.db, wrongCharge),
+      ),
+    ).toEqual([]);
   });
 
   it("adding an order id moves an order-less line onto the (vendor, orderId) charge, joining a sibling already there", async () => {
     const orderId = "111-adopt-0000001";
-    const alreadyFiled = await createExpense(
+    const { output: alreadyFiled } = await createExpense(
       ctx.db,
       line("first line of the order", "Amazon", orderId),
       ctx.actor,
     );
-    const loose = await createExpense(
+    const { output: loose } = await createExpense(
       ctx.db,
       line("second line, order id not known yet", "Amazon"),
       ctx.actor,
@@ -2369,7 +2448,7 @@ describe("expense repository — charge resolution on update", () => {
     // Two separate charges to start with — an order-less buy can't dedupe.
     expect(purchaseIdOf(loose)).not.toBe(purchaseIdOf(alreadyFiled));
 
-    const adopted = await updateExpense(
+    const { output: adopted } = await updateExpense(
       ctx.db,
       loose.id,
       { vendor: "Amazon", orderId },
@@ -2382,7 +2461,12 @@ describe("expense repository — charge resolution on update", () => {
     expect(adopted.purchaseId).toBe(purchaseIdOf(alreadyFiled));
     expect(adopted.orderId).toBe(orderId);
     expect(
-      (await getPurchaseExpenses(ctx.db, purchaseIdOf(alreadyFiled)))
+      (
+        await getPurchaseExpenses(
+          ctx.db,
+          await purchaseUuid(ctx.db, purchaseIdOf(alreadyFiled)),
+        )
+      )
         .map((p) => p.id)
         .sort(),
     ).toEqual([alreadyFiled.id, loose.id].sort());
@@ -2403,18 +2487,18 @@ describe("expense repository — charge resolution on update", () => {
   // genuinely vendorless row still drops the order id.
   it("adopts an order id written on its own, using the vendor the row already has", async () => {
     const orderId = "111-alone-0000001";
-    const alreadyFiled = await createExpense(
+    const { output: alreadyFiled } = await createExpense(
       ctx.db,
       line("first line of the order", "Amazon", orderId),
       ctx.actor,
     );
-    const loose = await createExpense(
+    const { output: loose } = await createExpense(
       ctx.db,
       line("order id typed in later", "Amazon"),
       ctx.actor,
     );
 
-    const adopted = await updateExpense(
+    const { output: adopted } = await updateExpense(
       ctx.db,
       loose.id,
       { orderId },
@@ -2430,19 +2514,19 @@ describe("expense repository — charge resolution on update", () => {
     // nothing to resolve. This is the purchase detail page's "add a line to this
     // charge" path — it must not be second-guessed by a stale vendor value the
     // form happened to carry along.
-    const anchor = await createExpense(
+    const { output: anchor } = await createExpense(
       ctx.db,
       line("known charge anchor", "eBay", "eb-shortcircuit-1"),
       ctx.actor,
     );
     const chargeId = purchaseIdOf(anchor);
-    const stray = await createExpense(
+    const { output: stray } = await createExpense(
       ctx.db,
       line("stray line", null),
       ctx.actor,
     );
 
-    const attached = await updateExpense(
+    const { output: attached } = await updateExpense(
       ctx.db,
       stray.id,
       { purchaseId: chargeId, vendor: "Conflicting Vendor" },
@@ -2464,7 +2548,7 @@ describe("expense repository — charge resolution on update", () => {
     // An order id alone can't name a transaction — they're only unique per
     // vendor — so there is no charge it could safely create. Dropped, not
     // stored on an unidentifiable charge.
-    const cash = await createExpense(
+    const { output: cash } = await createExpense(
       ctx.db,
       line("cash, no receipt", null),
       ctx.actor,
@@ -2472,7 +2556,7 @@ describe("expense repository — charge resolution on update", () => {
     expect(cash.purchaseId).toBeNull();
     const chargesBefore = (await purchaseList(ctx.db, {}, [], page)).count;
 
-    const updated = await updateExpense(
+    const { output: updated } = await updateExpense(
       ctx.db,
       cash.id,
       { orderId: "WN-no-vendor" },
@@ -2492,12 +2576,13 @@ describe("expense repository — charge resolution on update", () => {
   // renames, which is the COMMON path — correcting a typo'd order number on a
   // charge whose only line is the row being edited.
   it("corrects a typo'd order id IN PLACE on a single-line charge, keeping its statedTotal", async () => {
-    const typo = await createExpense(
+    const { output: typo } = await createExpense(
       ctx.db,
       line("receipt with a typo", "Home Depot", "WN6344646"),
       ctx.actor,
     );
     const chargeId = purchaseIdOf(typo);
+    const chargeUuid = await purchaseUuid(ctx.db, chargeId);
     const vendorId = vendorIdOf(typo);
     // The two things a re-minted charge would strand. `statedTotal` is the
     // reconciliation cue the whole Purchase table exists to hold.
@@ -2507,7 +2592,7 @@ describe("expense repository — charge resolution on update", () => {
       ctx.actor,
     );
 
-    const fixed = await updateExpense(
+    const { output: fixed } = await updateExpense(
       ctx.db,
       typo.id,
       { orderId: "WN63446464" },
@@ -2518,16 +2603,18 @@ describe("expense repository — charge resolution on update", () => {
     expect(fixed.purchaseId).toBe(chargeId);
     expect(fixed.orderId).toBe("WN63446464");
     expect(await chargeCount(vendorId)).toBe(1);
-    const charge = await getPurchaseByID(ctx.db, chargeId);
+    const charge = await getPurchaseByID(ctx.db, chargeUuid);
     expect(charge.statedTotal).toBe(10);
     expect(charge.notes).toBe("invoice on file");
 
     // Audited on the CHARGE: the rename returns `undefined` to `resolveCharge`,
     // so `expenseCrud.update` sees no column change and emits nothing — without
     // `renameChargeOrderId`'s own entry the edit would leave no trace anywhere.
+    // `getAuditLog`'s `entityId` matches the internal uuid (what `logAuditEntry`
+    // writes), not the shortcode.
     const chargeAudit = await getAuditLog(ctx.db, {
       entityType: "purchase",
-      entityId: chargeId,
+      entityId: chargeUuid,
       limit: 20,
     });
     expect(
@@ -2541,7 +2628,7 @@ describe("expense repository — charge resolution on update", () => {
 
     // Clearing it is the same in-place rename with no collision check to make —
     // `(vendorId, null)` isn't in the partial-unique index at all.
-    const cleared = await updateExpense(
+    const { output: cleared } = await updateExpense(
       ctx.db,
       typo.id,
       { orderId: null },
@@ -2569,7 +2656,7 @@ describe("expense repository — charge resolution on update", () => {
    * and the observable outcome is identical.
    */
   it("rolls back a resolved vendor AND charge when the row was concurrently soft-deleted", async () => {
-    const doomed = await createExpense(
+    const { output: doomed, entityId: doomedId } = await createExpense(
       ctx.db,
       line("about to be deleted", null),
       ctx.actor,
@@ -2598,10 +2685,11 @@ describe("expense repository — charge resolution on update", () => {
       chargesBefore,
     );
 
-    // And no audit entry for a write that never landed.
+    // And no audit entry for a write that never landed. `getAuditLog`'s
+    // `entityId` matches the internal uuid, not the shortcode.
     const audit = await getAuditLog(ctx.db, {
       entityType: "expense",
-      entityId: doomed.id,
+      entityId: doomedId,
       limit: 20,
     });
     expect(audit.entries.filter((e) => e.action === "update")).toEqual([]);
@@ -2612,7 +2700,7 @@ describe("expense repository — charge resolution on update", () => {
     // explicit `purchaseId` skips `resolveCharge` entirely — so
     // `assertPurchaseLive` is the only thing between a direct API call and spend
     // filed against a dead charge.
-    const anchor = await createExpense(
+    const { output: anchor } = await createExpense(
       ctx.db,
       line("line on a doomed charge", "eBay", "eb-tombstone-1"),
       ctx.actor,
@@ -2637,14 +2725,20 @@ describe("expense repository — charge resolution on update", () => {
 
     // Same guard on the update short-circuit: `rest.purchaseId` never passes
     // through `resolveCharge`, so it is checked separately or it goes in unchecked.
-    const stray = await createExpense(ctx.db, line("stray", null), ctx.actor);
+    const { output: stray } = await createExpense(
+      ctx.db,
+      line("stray", null),
+      ctx.actor,
+    );
     await expect(
       updateExpense(ctx.db, stray.id, { purchaseId: deadChargeId }, ctx.actor),
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
       cause: { reason: "PURCHASE_NOT_FOUND" },
     });
-    expect((await getExpenseByID(ctx.db, stray.id)).purchaseId).toBeNull();
+    expect(
+      (await getExpenseByShortcode(ctx.db, stray.id))?.purchaseId,
+    ).toBeNull();
 
     // A charge id that never existed is refused by the same assert.
     await expect(
@@ -2652,7 +2746,7 @@ describe("expense repository — charge resolution on update", () => {
         ctx.db,
         stray.id,
         {
-          purchaseId: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+          purchaseId: unsafePurchaseShortcode("PUR-ZZZZ"),
         },
         ctx.actor,
       ),
@@ -2673,7 +2767,7 @@ describe("expense repository — orderIdPresenceFilter", () => {
 
   /** The three states the filter has to tell apart. */
   const seed = async () => {
-    const hasOrderId = await createExpense(
+    const { output: hasOrderId } = await createExpense(
       ctx.db,
       makeExpenseInput({
         name: "amazon order line",
@@ -2684,13 +2778,13 @@ describe("expense repository — orderIdPresenceFilter", () => {
     );
     // A contractor's progress payment: a real charge, but the vendor never
     // issued an order number for it.
-    const chargeWithoutOrderId = await createExpense(
+    const { output: chargeWithoutOrderId } = await createExpense(
       ctx.db,
       makeExpenseInput({ name: "progress payment", vendor: "Flow Form" }),
       ctx.actor,
     );
     // No charge at all — cash at the yard, no vendor recorded.
-    const noCharge = await createExpense(
+    const { output: noCharge } = await createExpense(
       ctx.db,
       makeExpenseInput({ name: "cash at the yard" }),
       ctx.actor,
@@ -2766,15 +2860,17 @@ describe("expense repository — matchExpenses", () => {
     name: string,
     extra: Record<string, unknown> = {},
   ): Promise<ExpenseOut> =>
-    createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        name,
-        ...extra,
-      }),
-      ctx.actor,
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse({
+          trade: "other",
+          costType: "tools",
+          name,
+          ...extra,
+        }),
+        ctx.actor,
+      ),
     );
 
   it("matches on amount+date with ZERO token overlap — the trap the matcher exists for", async () => {

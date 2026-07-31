@@ -12,7 +12,11 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectId,
+  type ProjectShortcode,
+  unsafeProjectId,
+} from "@cubby/schemas/identifiers";
 import type {
   ProjectCreateInput,
   ProjectOut,
@@ -50,6 +54,10 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
@@ -128,38 +136,6 @@ export const getProjectByShortcode = (db: Database, shortcode: string) =>
   projectReader.getByShortcode(db, shortcode);
 
 /**
- * The referenced project must exist and be live. Guards `parentProjectId`
- * writes (this file) and any other write that points a foreign key straight
- * at a project id without going through a picker that already filters to live
- * projects — task/expense bulk-move (`repo/task/crud.ts`'s `moveTasks`,
- * `repo/expense/crud.ts`'s `moveExpenses`) reuse this rather than
- * re-implementing the same live-row check.
- */
-export async function assertProjectLive(
-  tx: DrizzleTransaction,
-  id: ProjectId,
-): Promise<void> {
-  const live = await tx.query.project.findFirst({
-    where: and(eq(project.id, id), notDeleted(project)),
-    columns: { id: true },
-  });
-  if (!live) {
-    throw createAppError(
-      "PROJECT_NOT_FOUND",
-      `Project ${id} does not exist or has been deleted`,
-    );
-  }
-}
-
-/** The chosen parent must exist and be live. */
-async function assertParentProjectExists(
-  tx: DrizzleTransaction,
-  parentId: ProjectId,
-): Promise<void> {
-  await assertProjectLive(tx, parentId);
-}
-
-/**
  * Walk `newParentId`'s ancestor chain (up to `MAX_PROJECT_TREE_DEPTH` hops,
  * defensively) looking for `projectId` — true if setting the parent would
  * make `projectId` its own ancestor. Mirrors
@@ -191,10 +167,24 @@ export const createProject = async (
   db: Database,
   data: ProjectCreateInput,
   actor: ActorContext,
-): Promise<ProjectOut> => {
+): Promise<{ output: ProjectOut; entityId: ProjectId }> => {
   const id = await withTransaction(db, async (tx) => {
+    // Resolving THROUGH a LIVE-only lookup is the "exists and is live" check
+    // itself — an FK proves the parent row exists, not that it's live.
+    let parentProjectId: ProjectId | null = null;
     if (data.parentProjectId) {
-      await assertParentProjectExists(tx, data.parentProjectId);
+      const resolved = await resolveLiveShortcode(
+        tx,
+        data.parentProjectId,
+        "project",
+      );
+      if (!resolved) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project ${data.parentProjectId} does not exist or has been deleted`,
+        );
+      }
+      parentProjectId = unsafeProjectId(resolved);
     }
 
     const created = await insertWithShortcode(tx, "project", {
@@ -203,7 +193,7 @@ export const createProject = async (
       kind: data.kind,
       locations: data.locations,
       costEstimate: data.costEstimate,
-      parentProjectId: data.parentProjectId,
+      parentProjectId,
       startDate: data.startDate,
       endDate: data.endDate,
       icon: data.icon,
@@ -218,7 +208,7 @@ export const createProject = async (
     });
     return created.id;
   });
-  return getProjectByID(db, id);
+  return { output: await getProjectByID(db, id), entityId: id };
 };
 
 const AUDIT_FIELDS = [
@@ -238,10 +228,16 @@ const AUDIT_FIELDS = [
 
 export const updateProject = async (
   db: Database,
-  id: ProjectId,
+  shortcode: ProjectShortcode,
   data: ProjectUpdateData,
   actor: ActorContext,
-): Promise<ProjectOut> => {
+): Promise<{ output: ProjectOut; entityId: ProjectId }> => {
+  const resolvedId = await resolveLiveShortcode(db, shortcode, "project");
+  if (!resolvedId) {
+    throw createAppError("PROJECT_NOT_FOUND", `Project ${shortcode} not found`);
+  }
+  const id = unsafeProjectId(resolvedId);
+
   const before = await fetchProjectById(db, id);
   if (!before) {
     throw createAppError("PROJECT_NOT_FOUND", `Project ${id} not found`);
@@ -252,20 +248,56 @@ export const updateProject = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
+    let parentProjectId: ProjectId | null | undefined;
     if (data.parentProjectId !== undefined && data.parentProjectId !== null) {
-      if (data.parentProjectId === id) {
+      const resolvedParent = await resolveLiveShortcode(
+        tx,
+        data.parentProjectId,
+        "project",
+      );
+      if (!resolvedParent) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project ${data.parentProjectId} does not exist or has been deleted`,
+        );
+      }
+      parentProjectId = unsafeProjectId(resolvedParent);
+      if (parentProjectId === id) {
         throw createAppError(
           "SELF_DEPENDENCY",
           "A project cannot be its own parent.",
         );
       }
-      await assertParentProjectExists(tx, data.parentProjectId);
-      if (await wouldCreateProjectCycle(tx, id, data.parentProjectId)) {
+      if (await wouldCreateProjectCycle(tx, id, parentProjectId)) {
         throw createAppError(
           "PROJECT_CYCLE",
           "Cannot set parent: would create a circular reference.",
         );
       }
+    } else if (data.parentProjectId === null) {
+      parentProjectId = null;
+    }
+
+    // Full-replacement set: resolve every requested shortcode to a live uuid
+    // up front — `replaceDependencyEdges`'s own not-found check operates on
+    // the FK column, so it can't be handed a shortcode.
+    let resolvedBlockedByIds: ProjectId[] | undefined;
+    if (data.blockedByIds !== undefined) {
+      const resolved = await resolveLiveShortcodes(
+        tx,
+        data.blockedByIds,
+        "project",
+      );
+      const missing = data.blockedByIds.filter((code) => !resolved.has(code));
+      if (missing.length > 0) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project(s) not found: ${missing.join(", ")}`,
+        );
+      }
+      resolvedBlockedByIds = data.blockedByIds.map((code) =>
+        unsafeProjectId(resolved.get(code) ?? ""),
+      );
     }
 
     const updateValues = buildPartialUpdateValues({
@@ -274,7 +306,7 @@ export const updateProject = async (
       kind: data.kind,
       locations: data.locations,
       costEstimate: data.costEstimate,
-      parentProjectId: data.parentProjectId,
+      parentProjectId,
       startDate: data.startDate,
       endDate: data.endDate,
       icon: data.icon,
@@ -286,7 +318,7 @@ export const updateProject = async (
 
     // Full-replacement set: clear this project's blocked-by edges and insert
     // the new ones, all inside the same transaction as the column update.
-    if (data.blockedByIds !== undefined) {
+    if (resolvedBlockedByIds !== undefined) {
       await replaceDependencyEdges(
         tx,
         projectDependency,
@@ -302,17 +334,17 @@ export const updateProject = async (
           notFoundReason: "PROJECT_NOT_FOUND",
         },
         id,
-        data.blockedByIds,
+        resolvedBlockedByIds,
       );
     }
 
     const changes: Record<string, { from: unknown; to: unknown }> = {
       ...(computeChanges(before, updated, [...AUDIT_FIELDS]) ?? {}),
     };
-    if (data.blockedByIds !== undefined) {
+    if (resolvedBlockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(
         beforeBlockedBy ?? [],
-        data.blockedByIds,
+        resolvedBlockedByIds,
       );
       if (blockedByChange) {
         changes.blockedByIds = blockedByChange;
@@ -328,7 +360,7 @@ export const updateProject = async (
     }
   });
 
-  return getProjectByID(db, id);
+  return { output: await getProjectByID(db, id), entityId: id };
 };
 
 /** Either a checked-out transaction or a plain client — reads work the same on both. */
@@ -377,10 +409,22 @@ const fetchLiveProjectExpenses = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
  */
 export const deleteProjects = async (
   db: Database,
-  ids: ProjectId[],
+  shortcodes: ProjectShortcode[],
   actor: ActorContext,
 ): Promise<void> => {
-  if (ids.length === 0) return;
+  if (shortcodes.length === 0) return;
+
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "project");
+  const missing = shortcodes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "PROJECT_NOT_FOUND",
+      `Projects not found or already deleted: ${missing.join(", ")}`,
+    );
+  }
+  const ids = shortcodes.map((code) =>
+    unsafeProjectId(resolved.get(code) ?? ""),
+  );
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, project, ids, "Project");

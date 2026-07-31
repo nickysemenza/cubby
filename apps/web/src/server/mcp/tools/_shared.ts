@@ -1,6 +1,7 @@
 import { deletedCountOut } from "@cubby/schemas/common";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
-  type IngredientMcpOut,
   type IngredientOut,
   ingredientMcpOut,
 } from "@cubby/schemas/ingredient";
@@ -9,11 +10,7 @@ import {
   inventoryMcpOut,
 } from "@cubby/schemas/inventory";
 import { type LocationOut, locationMcpOut } from "@cubby/schemas/location";
-import {
-  type McpUsdaFoodOut,
-  mcpUsdaFoodListItemOut,
-  mcpUsdaFoodOut,
-} from "@cubby/schemas/mcp";
+import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
 import { type MealOut, mealMcpOut } from "@cubby/schemas/meal";
 import { mcpListInputShape } from "@cubby/schemas/pagination";
 import {
@@ -23,18 +20,14 @@ import {
 } from "@cubby/schemas/product";
 import {
   type ExpenseOut,
-  expenseOut,
+  expenseMcpOut,
   type ProjectOut,
   projectOut,
   type TaskOut,
-  taskOut,
+  taskMcpOut,
 } from "@cubby/schemas/project";
 import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
-import {
-  type RecipeMcpOut,
-  type RecipeTopLevel,
-  recipeMcpOut,
-} from "@cubby/schemas/recipe";
+import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { type VendorOut, vendorOut } from "@cubby/schemas/vendor";
 import type { foodSummary } from "@cubby/usda-schemas";
@@ -49,7 +42,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { TRPCError } from "@trpc/server";
-import { omitBy } from "es-toolkit";
+import { omitBy, uniq } from "es-toolkit";
 import { z } from "zod";
 import type { DomainCaller } from "~/server/api/domain";
 
@@ -61,7 +54,7 @@ import type { DomainCaller } from "~/server/api/domain";
  * helpers, the slim output projections, and the CRUD handler factories.
  */
 
-type Caller = DomainCaller;
+export type Caller = DomainCaller;
 
 type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
@@ -406,70 +399,79 @@ export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
 // Slim output projections
 // ---------------------------------------------------------------------------
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 type Slim = (row: Row) => unknown;
 const slimSchemas = new WeakMap<Slim, z.ZodType>();
 const identity: Slim = (row) => row;
 
-function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
+export function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
   slimSchemas.set(slim as Slim, schema);
   return slim;
 }
 
 type LocationRow = LocationOut & {
-  parent?: Pick<LocationOut, "id" | "name"> | null;
-  children?: Array<Pick<LocationOut, "id" | "name">>;
+  parent?: Pick<LocationOut, "shortcode" | "name"> | null;
+  children?: Array<Pick<LocationOut, "shortcode" | "name">>;
 };
 export const slimLocation = defineSlim(locationMcpOut, (locRow: Row) => {
   const loc = locRow as LocationRow;
   return {
-    id: loc.id,
+    id: loc.shortcode,
     name: loc.name,
-    shortcode: loc.shortcode,
     type: loc.type,
     parentName: loc.parent?.name ?? null,
-    parentId: loc.parent?.id ?? null,
-    children: (loc.children ?? []).map((c) => ({ id: c.id, name: c.name })),
+    parentId: loc.parent?.shortcode ?? null,
+    children: (loc.children ?? []).map((c) => ({
+      id: c.shortcode,
+      name: c.name,
+    })),
   };
 });
 
-type InventoryRow = Pick<InventoryMcpOut, "id" | "amount" | "valuation"> & {
+type InventoryRow = Pick<InventoryMcpOut, "amount" | "valuation"> & {
+  // The row's own public id — not on InventoryMcpOut (whose `id` IS the
+  // shortcode), so it has to be typed off the row shape directly.
+  shortcode: string;
   product?: {
-    id: string;
     name: string;
     manufacturer: string;
-    shortcode: string | null;
+    shortcode: string;
     category: string | null;
     model: string | null;
   } | null;
-  location?: { id: string; name: string } | null;
+  // Widened (was `{ id: string; name: string }`) so the location ref can carry
+  // its own shortcode — every list/detail row already selects it (see
+  // dbInventoryEntryToListAPI/dbInventoryEntryToAPI), this type just hadn't
+  // caught up.
+  location?: { shortcode: string; name: string } | null;
 };
 export const slimInventory = defineSlim(inventoryMcpOut, (entryRow: Row) => {
   const entry = entryRow as InventoryRow;
   return {
-    id: entry.id,
+    id: entry.shortcode,
     amount: entry.amount,
     valuation: entry.valuation,
     product: entry.product
       ? {
-          id: entry.product.id,
+          id: entry.product.shortcode,
           name: entry.product.name,
           manufacturer: entry.product.manufacturer,
-          shortcode: entry.product.shortcode,
           category: entry.product.category,
           model: entry.product.model,
         }
       : null,
     location: entry.location
-      ? { id: entry.location.id, name: entry.location.name }
+      ? { id: entry.location.shortcode, name: entry.location.name }
       : null,
   };
 });
 
 type ProductRow = ProductTopLevelOut & {
   food?: { fdc_id?: number | null } | null;
-  ingredient?: { id?: ProductMcpOut["ingredientId"] } | null;
-  ingredientId?: ProductMcpOut["ingredientId"];
+  // Every read path nests the linked ingredient's own row (with its
+  // shortcode) under `ingredient` — there is no bare `ingredientId` field on
+  // a real product row to fall back to.
+  ingredient?: { shortcode: ProductMcpOut["ingredientId"] } | null;
   unitMappings?: Array<{
     a: ProductMcpOut["unitMappings"][number]["a"];
     b: ProductMcpOut["unitMappings"][number]["b"];
@@ -479,9 +481,8 @@ type ProductRow = ProductTopLevelOut & {
 export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   const p = pRow as ProductRow;
   return {
-    id: p.id,
+    id: p.shortcode,
     name: p.name,
-    shortcode: p.shortcode,
     manufacturer: p.manufacturer,
     upc: p.upc,
     category: p.category,
@@ -492,7 +493,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     usdaUnavailable: p.usdaUnavailable ?? null,
     externalIds: p.externalIds,
     usdaFdcId: p.food?.fdc_id ?? null,
-    ingredientId: p.ingredient?.id ?? p.ingredientId ?? null,
+    ingredientId: p.ingredient?.shortcode ?? null,
     unitMappings: (p.unitMappings ?? []).map((m) => ({
       a: m.a,
       b: m.b,
@@ -501,15 +502,11 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   };
 });
 
-type RecipeRow = RecipeTopLevel & {
-  shortcode?: RecipeMcpOut["shortcode"];
-};
 export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
-  const r = rRow as RecipeRow;
+  const r = rRow as RecipeTopLevel;
   return {
-    id: r.id,
+    id: r.shortcode,
     name: r.name,
-    shortcode: r.shortcode ?? null,
     yield: r.yield,
     servings: r.servings,
     tags: r.tags,
@@ -517,18 +514,18 @@ export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
 });
 
 type IngredientRow = IngredientOut & {
-  product?: IngredientMcpOut["products"];
+  product?: Array<{ shortcode: string; name: string }>;
   appearsInRecipes?: unknown[];
   food?: { fdc_id?: number | null } | null;
 };
 export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   const i = iRow as IngredientRow;
   return {
-    id: i.id,
+    id: i.shortcode,
     name: i.name,
     aliases: i.aliases,
-    products: (i.product ?? []).map((p: { id: string; name: string }) => ({
-      id: p.id,
+    products: (i.product ?? []).map((p) => ({
+      id: p.shortcode,
       name: p.name,
     })),
     recipeCount: (i.appearsInRecipes ?? []).length,
@@ -540,12 +537,34 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
 // (no relation reshaping needed) — a typed passthrough is enough.
 // structuredSuccess re-validates via outputSchema.parse, so new schema fields
 // flow through automatically without an MCP-side edit.
+//
+// NOT yet shortcode-cut-over: `id` here is still the private uuid (these
+// entities' *.tools.ts register `out: projectOut`/`taskOut`/`vendorOut`/
+// `purchaseOut`/`expenseOut` directly — the plain, uuid-based schema — rather
+// than a dedicated `*McpOut`). Reshaping to `id: row.shortcode` needs a new
+// McpOut schema per entity PLUS the matching `*.tools.ts` registration swapped
+// to it in the same change (parsing a shortcode against `projectId`'s uuid
+// schema throws), and several FK fields here are uuid ARRAYS with no
+// shortcode counterpart yet (`blockedByIds`/`blockingIds`/`childProjectIds`),
+// which would need `lookupShortcodes` (repo/shortcode-resolver.ts) to convert.
+// Left for a dedicated pass — tracked as a known gap, not a decision that this
+// is fine to leave uuid-based.
 export const slimProject = defineSlim(
   projectOut,
   (row: Row) => row as ProjectOut,
 );
 
-export const slimTask = defineSlim(taskOut, (row: Row) => row as TaskOut);
+/**
+ * Task's own ids are public codes already. The one exception is its product FK:
+ * product isn't cut over yet, so `subjectProductId` is still a uuid on the
+ * shared shape — MCP swaps in the code that rides alongside it, so an agent can
+ * feed the value straight back into a product tool.
+ */
+export const slimTask = defineSlim(taskMcpOut, (row: Row) => {
+  const t = row as TaskOut;
+  const { subjectProductShortcode, ...rest } = t;
+  return { ...rest, subjectProductId: subjectProductShortcode };
+});
 
 export const slimVendor = defineSlim(vendorOut, (row: Row) => row as VendorOut);
 
@@ -554,22 +573,25 @@ export const slimPurchase = defineSlim(
   (row: Row) => row as PurchaseOut,
 );
 
-export const slimExpense = defineSlim(
-  expenseOut,
-  (row: Row) => row as ExpenseOut,
-);
+/** Same product-FK swap as {@link slimTask}. */
+export const slimExpense = defineSlim(expenseMcpOut, (row: Row) => {
+  const e = row as ExpenseOut;
+  const { productShortcode, ...rest } = e;
+  return { ...rest, productId: productShortcode };
+});
 
 export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
   const m = mRow as MealOut;
   return {
-    id: m.id,
+    id: m.shortcode,
     date: m.date,
     name: m.name,
     sortOrder: m.sortOrder,
     totals: m.totals,
     recipes: (m.recipes ?? []).map((mr) => ({
+      // mealRecipe row id — declared exception, no shortcode; stays uuid.
       id: mr.id,
-      recipeId: mr.recipeId,
+      recipeId: mr.recipe.shortcode,
       name: mr.recipe?.name ?? null,
       scale: mr.scale,
       scaledTotals: mr.scaledTotals,
@@ -578,7 +600,9 @@ export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
 });
 
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
-  linkedProducts?: McpUsdaFoodOut["linkedProducts"];
+  // The real row (usda.service.ts's `getLinkedProducts`) is full
+  // `ProductTopLevelOut[]` — only the fields the slim projection reads.
+  linkedProducts?: Array<Pick<ProductTopLevelOut, "shortcode" | "name">>;
 };
 /**
  * The nutrients worth reading first, in display order, as USDA names them.
@@ -640,7 +664,7 @@ export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
     ),
     portionInfoRaw: f.portionInfoRaw ?? [],
     linkedProducts: (f.linkedProducts ?? []).map((p) => ({
-      id: p.id,
+      id: p.shortcode,
       name: p.name,
     })),
   };
@@ -714,9 +738,176 @@ function isSchema(value: unknown): value is z.ZodType {
   );
 }
 
-export const idParam = (label: string) => z.string().describe(`${label} ID`);
-const idsParam = (label: string) =>
-  z.array(z.string()).describe(`Array of ${label} IDs to delete`);
+/**
+ * A tool parameter naming an entity by its PUBLIC id — the shortcode.
+ *
+ * This is the one chokepoint every `get_*`/`update_*`/`delete_*` self-id flows
+ * through, so swapping it here makes ~30 tools prefix-correct at once. It is the
+ * SAME schema the UI and tRPC use — there is no MCP-specific ref type — which is
+ * what makes the advertised JSON Schema carry a real `pattern` (`^PRD-[…]{4}$`)
+ * instead of a bare string. An agent handed a wrong-entity code fails at zod
+ * parse, before the handler runs and therefore before any mutation.
+ */
+export const idParam = (entity: ShortcodeEntity) => shortcodeSchema(entity);
+
+const idsParam = (entity: ShortcodeEntity) =>
+  z
+    .array(shortcodeSchema(entity))
+    .describe(`Array of ${entity} shortcodes to delete`);
+
+/**
+ * Translate public codes to the private uuids every domain router below MCP
+ * takes. One batched call per tool invocation, not one per id.
+ *
+ * Unknown codes are named explicitly in the error: a shortcode is something a
+ * human reads off a label or an agent copies from a previous response, so "which
+ * one was wrong" is the entire useful content of the failure. The `entity` pin
+ * means a `LOC-` code handed to a product tool is reported as a mismatch rather
+ * than silently resolving to some other table's row.
+ */
+/**
+ * Entities whose OWN crud router still addresses rows by uuid.
+ *
+ * Only the crud factory may consult this: it calls `<entity>.getByID/update/
+ * delete`, so "does this entity's router take a code" is exactly the right
+ * question there. Everywhere else it is the WRONG question — a hand-rolled tool
+ * may hand an expense code to the *search* router, which takes uuids
+ * regardless — so those callers use `resolvePublicId`, which always resolves.
+ *
+ * Shrinks to empty as the remaining entities are cut over; when it does, the
+ * whole translation layer goes with it.
+ */
+const CRUD_ROUTER_TAKES_UUID: ReadonlySet<ShortcodeEntity> = new Set([
+  "product",
+  "location",
+  "recipe",
+  "ingredient",
+  "inventory",
+  "meal",
+  "cookbook",
+]);
+
+export async function resolvePublicIds(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<string[]> {
+  if (codes.length === 0) return [];
+  const resolved = await caller.shortcode.resolveMany({ codes: [...codes] });
+  const byCode = new Map(resolved.map((r) => [r.code, r]));
+  return codes.map((code) => {
+    const hit = byCode.get(code);
+    if (!hit) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+    if (hit.entity !== entity) {
+      throw new Error(
+        `${code} is a ${hit.entity} shortcode, not a ${entity} one`,
+      );
+    }
+    return hit.id;
+  });
+}
+
+/**
+ * The crud factory's variant: a no-op for an entity whose own router already
+ * speaks public ids. See {@link CRUD_ROUTER_TAKES_UUID}.
+ */
+async function resolveCrudIds(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<string[]> {
+  if (!CRUD_ROUTER_TAKES_UUID.has(entity)) return [...codes];
+  return resolvePublicIds(caller, entity, codes);
+}
+
+async function resolveCrudId(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  code: string,
+): Promise<string> {
+  const [id] = await resolveCrudIds(caller, entity, [code]);
+  if (!id) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+  return id;
+}
+
+export async function resolvePublicId(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  code: string,
+): Promise<string> {
+  const [id] = await resolvePublicIds(caller, entity, [code]);
+  // resolvePublicIds throws on a miss, so this is unreachable; it satisfies
+  // noUncheckedIndexedAccess without hiding a genuinely-reachable undefined.
+  if (!id) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+  return id;
+}
+
+/**
+ * Resolve an optional/nullable FK shortcode field: `undefined` (field
+ * omitted) and `null` (explicit clear) both pass through unchanged; only a
+ * real code makes the round trip. The common shape for an optional single-id
+ * FK field on a create/update input.
+ */
+export async function resolveOptionalId(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  code: string | null | undefined,
+): Promise<string | null | undefined> {
+  if (code == null) return code;
+  return resolvePublicId(caller, entity, code);
+}
+
+/**
+ * Batch-resolve a set of same-entity codes to a `code -> uuid` map, for a
+ * payload that needs to look the same code up more than once while walking a
+ * nested shape (e.g. an ingredient merge's `target` plus every `aliases[]`
+ * entry, which may repeat across clusters). One round trip regardless of how
+ * many times a code recurs — `resolvePublicIds` is called once on the
+ * deduplicated set.
+ */
+export async function resolvePublicIdMap(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<Map<string, string>> {
+  const unique = uniq(codes);
+  const ids = await resolvePublicIds(caller, entity, unique);
+  // resolvePublicIds returns exactly one id per input code, same order.
+  return new Map(unique.map((code, i) => [code, ids[i]!]));
+}
+
+/**
+ * Resolve a `oneOrMany(idParam(entity))` filter value — a bare code or an
+ * array of codes — to the uuid(s) the repo's filter expects, preserving
+ * whichever shape the caller used (a bare-code filter must stay bare; the
+ * repo dispatches on `Array.isArray` to decide `eq` vs `inArray`).
+ */
+export async function resolveOneOrManyFilter(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  value: string | readonly string[],
+): Promise<string | string[]> {
+  const isArray = Array.isArray(value);
+  const codes = isArray ? value : [value];
+  const idByCode = await resolvePublicIdMap(caller, entity, codes);
+  const ids = codes.map((code) => mustResolvedId(idByCode, entity, code));
+  return isArray ? ids : ids[0]!;
+}
+
+/** Look up a code in a `resolvePublicIdMap` result, throwing the same shape
+ * of error as a direct miss would (the map is always built from the exact
+ * codes being looked up here, so a miss would indicate a caller bug, not a
+ * bad shortcode — but we still fail loudly rather than pass `undefined`
+ * through to a branded-id field). */
+export function mustResolvedId(
+  map: ReadonlyMap<string, string>,
+  entity: ShortcodeEntity,
+  code: string,
+): string {
+  const id = map.get(code);
+  if (!id) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+  return id;
+}
 
 interface DynamicEntityRouter {
   create(input: Record<string, unknown>): Promise<unknown>;
@@ -751,12 +942,13 @@ type GetByIdFetch = (caller: Caller, id: string) => Promise<unknown>;
 
 function getByIdHandler(
   routerName: string,
+  entity: ShortcodeEntity,
   slim: Slim = identity,
   fetch?: GetByIdFetch,
 ) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const caller = getCaller(extra);
-    const id = params.id as string;
+    const id = await resolveCrudId(caller, entity, params.id as string);
     const result = fetch
       ? await fetch(caller, id)
       : await getEntityRouter(caller, routerName).getByID({ id });
@@ -764,25 +956,57 @@ function getByIdHandler(
   };
 }
 
-function deleteHandler(routerName: string) {
+function deleteHandler(routerName: string, entity: ShortcodeEntity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const ids = params.ids as string[];
-    await getEntityRouter(getCaller(extra), routerName).delete({ ids });
+    const caller = getCaller(extra);
+    const ids = await resolveCrudIds(caller, entity, params.ids as string[]);
+    await getEntityRouter(caller, routerName).delete({ ids });
     return { deleted: ids.length };
   };
 }
 
-function updateHandler(routerName: string, slim: Slim = identity) {
+/**
+ * Transform an update tool's `data` object after the self-id has been pulled
+ * off and before it reaches the router — the hook a FK field inside `data`
+ * (e.g. product's `ingredientId`) resolves through, since the generic
+ * `updateHandler` below knows nothing about any field but `id`.
+ */
+type ResolveUpdateData = (
+  caller: Caller,
+  data: Record<string, unknown>,
+) => Promise<Record<string, unknown>> | Record<string, unknown>;
+
+function updateHandler(
+  routerName: string,
+  entity: ShortcodeEntity,
+  slim: Slim = identity,
+  resolveData?: ResolveUpdateData,
+) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
+    const caller = getCaller(extra);
     const { id, ...rest } = params;
-    const data = omitBy(rest, (v) => v === undefined);
-    const result = await getEntityRouter(getCaller(extra), routerName).update({
-      id,
+    let data = omitBy(rest, (v) => v === undefined);
+    if (resolveData) data = await resolveData(caller, data);
+    const result = await getEntityRouter(caller, routerName).update({
+      id: await resolveCrudId(caller, entity, id as string),
       data,
     });
     return respond(result, slim);
   };
 }
+
+/**
+ * A list tool's filter builder. Most entities have no FK filter fields and
+ * stay synchronous (`pickSchemaFilters`); one with a filter like
+ * `locationIdFilter`/`projectId` needs `caller` to resolve the shortcode to a
+ * uuid before it reaches the router, hence the `Caller` param and the
+ * `Promise` return — awaited unconditionally below, which is a no-op for a
+ * plain synchronous builder.
+ */
+type BuildListFilters = (
+  caller: Caller,
+  params: Row,
+) => Record<string, unknown> | Promise<Record<string, unknown>>;
 
 function listHandler(
   routerName: string,
@@ -790,20 +1014,21 @@ function listHandler(
   config: {
     orderBy: string;
     direction?: "asc" | "desc";
-    buildFilters?: (params: Row) => Record<string, unknown>;
+    buildFilters?: BuildListFilters;
     filterFields?: Record<string, z.ZodType>;
     defaultPageSize?: number;
   },
 ) {
-  const resolveFilters =
+  const resolveFilters: BuildListFilters =
     config.buildFilters ??
     (config.filterFields
-      ? (params: Row) => pickSchemaFilters(params, config.filterFields!)
+      ? (_caller, params) => pickSchemaFilters(params, config.filterFields!)
       : () => ({}));
 
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const result = await getEntityRouter(getCaller(extra), routerName).list({
-      filters: resolveFilters(params),
+    const caller = getCaller(extra);
+    const result = await getEntityRouter(caller, routerName).list({
+      filters: await resolveFilters(caller, params),
       sort: { orderBy: config.orderBy, direction: config.direction ?? "asc" },
       pagination: {
         pageIndex: (params.pageIndex as number) ?? 0,
@@ -880,8 +1105,11 @@ function pickSchemaFilters(
   return out;
 }
 
-function withIdInput(idLabel: string, dataShape: Record<string, z.ZodType>) {
-  return { id: idParam(idLabel), ...dataShape };
+function withIdInput(
+  entity: ShortcodeEntity,
+  dataShape: Record<string, z.ZodType>,
+) {
+  return { id: idParam(entity), ...dataShape };
 }
 
 type EntityListToolConfig = {
@@ -895,7 +1123,7 @@ type EntityListToolConfig = {
   annotations: ToolAnnotations;
   defaultPageSize?: number;
   maxPageSize?: number;
-  buildFilters?: (params: Row) => Record<string, unknown>;
+  buildFilters?: BuildListFilters;
 };
 
 export function registerEntityListTool(
@@ -932,7 +1160,7 @@ export function registerEntityGetTool(
     name: string;
     description: string;
     router: string;
-    idLabel: string;
+    entity: ShortcodeEntity;
     outputSchema: z.ZodType;
     slim?: Slim;
     annotations: ToolAnnotations;
@@ -943,10 +1171,15 @@ export function registerEntityGetTool(
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: { id: idParam(config.idLabel) },
+    inputSchema: { id: idParam(config.entity) },
     outputSchema: config.outputSchema,
     annotations: config.annotations,
-    handler: getByIdHandler(config.router, config.slim ?? identity, config.get),
+    handler: getByIdHandler(
+      config.router,
+      config.entity,
+      config.slim ?? identity,
+      config.get,
+    ),
   });
 }
 
@@ -956,17 +1189,17 @@ export function registerEntityDeleteTool(
     name: string;
     description: string;
     router: string;
-    entityLabel: string;
+    entity: ShortcodeEntity;
     annotations: ToolAnnotations;
   },
 ) {
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: { ids: idsParam(config.entityLabel) },
+    inputSchema: { ids: idsParam(config.entity) },
     outputSchema: deletedCountOut,
     annotations: config.annotations,
-    handler: deleteHandler(config.router),
+    handler: deleteHandler(config.router, config.entity),
   });
 }
 
@@ -976,10 +1209,13 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     name: string;
     description: string;
     router: string;
+    entity: ShortcodeEntity;
     inputSchema: TInput;
     outputSchema: z.ZodType;
     slim: Slim;
     annotations: ToolAnnotations;
+    /** Resolve any FK shortcode fields inside `data` before it reaches the router. */
+    resolveUpdateData?: ResolveUpdateData;
   },
 ) {
   registerMcpTool(server, {
@@ -989,10 +1225,12 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     handler: async (params, extra) =>
-      updateHandler(config.router, config.slim)(
-        params as Record<string, unknown>,
-        extra,
-      ),
+      updateHandler(
+        config.router,
+        config.entity,
+        config.slim,
+        config.resolveUpdateData,
+      )(params as Record<string, unknown>, extra),
   });
 }
 
@@ -1025,12 +1263,10 @@ export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
 }
 
 type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
-  /** Singular slug — router key and get/create/update tool names (get_x, create_x, update_x). */
-  entity: string;
+  /** Singular slug — router key, shortcode prefix, and get/create/update tool names (get_x, create_x, update_x). */
+  entity: ShortcodeEntity;
   /** Plural slug — list/delete tool names (list_xs, delete_xs). */
   entityPlural?: string;
-  /** Capitalized singular label for id params (e.g. "Project"); lowercased for delete's entityLabel. */
-  idLabel?: string;
   createInput: TCreateInput;
   updateShape: Record<string, z.ZodType>;
   /** Use when the update schema already includes its id field. */
@@ -1069,13 +1305,17 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
   ) => Promise<unknown>;
   /** Override the get fetch — see `GetByIdFetch`. */
   get?: GetByIdFetch;
+  /** Resolve any FK shortcode fields inside update's `data` before the router sees it. */
+  resolveUpdateData?: ResolveUpdateData;
+  /** Override list's default filter passthrough — needed when a filter field is itself an FK shortcode. */
+  buildFilters?: BuildListFilters;
 };
 
 /**
  * Register the standard 5-tool CRUD surface (list/get/create/update/delete)
  * for one entity in a single call. Bakes in the annotation conventions shared
  * by every entity toolset (READ_ONLY_CLOSED for reads, WRITE_CLOSED for
- * create/update, WRITE_DESTRUCTIVE_CLOSED for delete) and the name/idLabel
+ * create/update, WRITE_DESTRUCTIVE_CLOSED for delete) and the name
  * derivation (`list_${plural}`, `get_${entity}`, `create_${entity}`,
  * `update_${entity}`, `delete_${plural}`).
  */
@@ -1092,9 +1332,6 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
   const detailOut = config.detailOut ?? config.out;
   const mutationOut = config.mutationOut ?? config.out;
   const entityPlural = config.entityPlural ?? `${config.entity}s`;
-  const idLabel =
-    config.idLabel ??
-    `${config.entity[0]?.toUpperCase()}${config.entity.slice(1)}`;
 
   if (enabled("list"))
     registerEntityListTool(server, {
@@ -1107,6 +1344,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       sort: config.sort,
       defaultPageSize: config.paging?.defaultPageSize,
       maxPageSize: config.paging?.maxPageSize,
+      buildFilters: config.buildFilters,
       annotations: READ_ONLY_CLOSED,
     });
 
@@ -1115,7 +1353,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       name: name("get", `get_${config.entity}`),
       description: config.descriptions.get,
       router: config.entity,
-      idLabel,
+      entity: config.entity,
       outputSchema: detailOut,
       slim:
         config.detailSlim === false
@@ -1146,11 +1384,13 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       name: name("update", `update_${config.entity}`),
       description: config.descriptions.update,
       inputSchema:
-        config.updateInput ?? withIdInput(idLabel, config.updateShape),
+        config.updateInput ?? withIdInput(config.entity, config.updateShape),
       outputSchema: mutationOut,
       slim: config.slim,
       router: config.entity,
+      entity: config.entity,
       annotations: WRITE_CLOSED,
+      resolveUpdateData: config.resolveUpdateData,
     });
 
   if (enabled("delete")) {
@@ -1164,7 +1404,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       name: name("delete", `delete_${entityPlural}`),
       description,
       router: config.entity,
-      entityLabel: idLabel.toLowerCase(),
+      entity: config.entity,
       annotations: WRITE_DESTRUCTIVE_CLOSED,
     });
   }

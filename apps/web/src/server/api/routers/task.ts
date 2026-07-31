@@ -4,7 +4,11 @@
  * `blockedByIds` replacement set.
  */
 
-import { type TaskId, taskId } from "@cubby/schemas/identifiers";
+import {
+  type TaskShortcode,
+  taskShortcode,
+  unsafeTaskId,
+} from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   taskBoardInput,
@@ -23,6 +27,11 @@ import {
   taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import {
   createTask,
   deleteTasks,
@@ -61,25 +70,47 @@ const {
       defaultSort: "createdAt",
       groupableFields: ["status"] as const,
     },
-    idSchema: taskId,
+    idSchema: taskShortcode,
   },
   repository: {
-    getByID: async (services, id: TaskId) => getTaskByID(services.db, id),
+    getByID: async (services, shortcode: TaskShortcode) => {
+      const id = await resolveLiveShortcode(services.db, shortcode, "task");
+      if (!id) {
+        throw createAppError("TASK_NOT_FOUND", `Task not found: ${shortcode}`);
+      }
+      return getTaskByID(services.db, unsafeTaskId(id));
+    },
     getByShortcode: (services, shortcode) =>
       getTaskByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       taskList(services.db, filters, sort, pagination),
     create: async (services, data) =>
       createTask(services.db, data, services.actorContext),
-    update: async (services, id: TaskId, data) =>
-      updateTask(services.db, id, data, services.actorContext),
-    delete: async (services, ids) => {
+    update: async (services, shortcode: TaskShortcode, data) =>
+      updateTask(services.db, shortcode, data, services.actorContext),
+    delete: async (services, ids: TaskShortcode[]) => {
       await deleteTasks(services.db, ids, services.actorContext);
       return undefined;
     },
   },
   entityName: "task",
 });
+
+/**
+ * Batch-resolve the shortcodes a bulk-write result carries into the internal
+ * uuids `runMutationSideEffectsForEntities` keys on — one query for the
+ * whole batch, not one per row.
+ */
+async function taskEntityIds(
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  ids: TaskShortcode[],
+) {
+  const resolved = await resolveLiveShortcodes(db, ids, "task");
+  return ids.flatMap((code) => {
+    const uuid = resolved.get(code);
+    return uuid ? [unsafeTaskId(uuid)] : [];
+  });
+}
 
 /**
  * The computed "what can I actually do" read behind the /tasks Next view:
@@ -119,11 +150,15 @@ const bulkMove = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await moveTasks(ctx.db, input, ctx.actorContext);
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "task" as const, entityId: item.id },
+        entity: { entityType: "task" as const, entityId },
         source: "task.bulkMove",
       })),
     );
@@ -136,11 +171,15 @@ const bulkSetStatus = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksStatus(ctx.db, input, ctx.actorContext);
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "task" as const, entityId: item.id },
+        entity: { entityType: "task" as const, entityId },
         source: "task.bulkSetStatus",
       })),
     );
@@ -153,11 +192,15 @@ const bulkSetTrade = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksTrade(ctx.db, input, ctx.actorContext);
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "task" as const, entityId: item.id },
+        entity: { entityType: "task" as const, entityId },
         source: "task.bulkSetTrade",
       })),
     );
@@ -170,11 +213,15 @@ const bulkSetDueDate = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksDueDate(ctx.db, input, ctx.actorContext);
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      items.map((item) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "task" as const, entityId: item.id },
+        entity: { entityType: "task" as const, entityId },
         source: "task.bulkSetDueDate",
       })),
     );
@@ -192,11 +239,12 @@ const bulkReorder = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     const items = await reorderTasks(ctx.db, input, ctx.actorContext);
     const movedIds = input.move ? [input.move.id] : [];
+    const ids = await taskEntityIds(ctx.db, movedIds);
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
-      movedIds.map((id) => ({
+      ids.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "task" as const, entityId: id },
+        entity: { entityType: "task" as const, entityId },
         source: "task.bulkReorder",
       })),
     );

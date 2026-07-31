@@ -1,5 +1,5 @@
-import type { VendorId } from "@cubby/schemas/identifiers";
-import { unsafeVendorId } from "@cubby/schemas/identifiers";
+import type { VendorShortcode } from "@cubby/schemas/identifiers";
+import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
 import { plainDate } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -46,7 +46,7 @@ export function CreatePurchaseDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Pre-fill the vendor (e.g. from a vendor's detail page). */
-  presetVendorId?: VendorId | null;
+  presetVendorId?: VendorShortcode | null;
 }) {
   const api = useTRPC();
   const vendorOptionsQuery = useQuery(api.vendor.options.queryOptions());
@@ -82,7 +82,7 @@ export function CreatePurchaseDialog({
       successMessage={(purchase) => `Logged "${purchaseLabel(purchase)}"`}
       invalidateKeys={purchaseMutationInvalidateKeys}
       buildPayload={(values) => ({
-        vendorId: unsafeVendorId(values.vendorId),
+        vendorId: unsafeVendorShortcode(values.vendorId),
         orderId: values.orderId.trim() || null,
         date: values.date,
         statedTotal: values.statedTotal,

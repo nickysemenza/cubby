@@ -152,7 +152,7 @@ export function ProjectGantt({
     return (
       <Link
         to={entities[entity].routes.detail}
-        params={entityDetailParams(row.shortcode)}
+        params={entityDetailParams(row.id)}
         className="hover:underline"
       >
         {row.name}
@@ -200,7 +200,7 @@ export function ProjectGantt({
               <Link
                 key={task.id}
                 to={entities.task.routes.detail}
-                params={entityDetailParams(task.shortcode)}
+                params={entityDetailParams(task.id)}
                 className="max-w-64 truncate rounded-sm bg-muted px-2 py-1 text-xs hover:underline"
                 title={task.name}
               >
