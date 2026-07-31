@@ -106,6 +106,7 @@ export async function computeAttentionItems(
     getDb(db)
       .select({
         id: task.id,
+        shortcode: task.shortcode,
         name: task.name,
         projectId: task.projectId,
         dueDate: task.dueDate,
@@ -125,6 +126,7 @@ export async function computeAttentionItems(
       : getDb(db)
           .select({
             id: project.id,
+            shortcode: project.shortcode,
             name: project.name,
             updatedAt: project.updatedAt,
           })
@@ -142,6 +144,7 @@ export async function computeAttentionItems(
     getDb(db)
       .select({
         id: expense.id,
+        shortcode: expense.shortcode,
         name: expense.name,
         projectId: expense.projectId,
         date: expense.date,
@@ -159,6 +162,7 @@ export async function computeAttentionItems(
     getDb(db)
       .select({
         id: expense.id,
+        shortcode: expense.shortcode,
         name: expense.name,
         projectId: expense.projectId,
         date: expense.date,
@@ -190,7 +194,7 @@ export async function computeAttentionItems(
       entityId: row.id,
       date: effectiveDue,
       amount: null,
-      href: `/tasks/${row.id}`,
+      href: `/tasks/${row.shortcode}`,
     });
   }
 
@@ -254,7 +258,7 @@ export async function computeAttentionItems(
       entityId: row.id,
       date: lastActivityDate,
       amount: null,
-      href: `/projects/${row.id}`,
+      href: `/projects/${row.shortcode}`,
     });
   }
 
@@ -283,7 +287,7 @@ export async function computeAttentionItems(
         entityId: row.id,
         date: null,
         amount: spend,
-        href: `/projects/${row.id}`,
+        href: `/projects/${row.shortcode}`,
       });
     }
   }
@@ -299,7 +303,7 @@ export async function computeAttentionItems(
       entityId: row.id,
       date: row.date,
       amount: null,
-      href: `/expenses/${row.id}`,
+      href: `/expenses/${row.shortcode}`,
     });
   }
 
@@ -316,7 +320,7 @@ export async function computeAttentionItems(
       entityId: row.id,
       date: row.date,
       amount: null,
-      href: `/expenses/${row.id}`,
+      href: `/expenses/${row.shortcode}`,
     });
   }
 
@@ -343,7 +347,7 @@ export async function computeAttentionItems(
         entityId: row.id,
         date: null,
         amount: null,
-        href: `/projects/${row.id}`,
+        href: `/projects/${row.shortcode}`,
       });
     }
   }
@@ -375,7 +379,7 @@ export async function computeAttentionItems(
         entityId: row.id,
         date: window.derivedStart,
         amount: null,
-        href: `/projects/${row.id}`,
+        href: `/projects/${row.shortcode}`,
       });
     }
     if (
@@ -392,7 +396,7 @@ export async function computeAttentionItems(
         entityId: row.id,
         date: window.derivedEnd,
         amount: null,
-        href: `/projects/${row.id}`,
+        href: `/projects/${row.shortcode}`,
       });
     }
   }

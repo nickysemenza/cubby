@@ -1,4 +1,8 @@
-import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeRecipeId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,6 +14,8 @@ import {
 const recipe = (): RecipeOut =>
   ({
     id: unsafeRecipeId("r-root"),
+    shortcode: unsafeRecipeShortcode("RCP-4444"),
+    source: null,
     name: "Root",
     meta: null,
     images: [],
@@ -26,7 +32,12 @@ const recipe = (): RecipeOut =>
           {
             id: "row-1",
             type: "ingredient",
-            ingredient: { id: unsafeIngredientId("i-1"), name: "Flour" },
+            ingredient: {
+              id: unsafeIngredientId("i-1"),
+              name: "Flour",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
             recipe: null,
             amounts: [],
             createdAt: new Date(),
@@ -38,6 +49,8 @@ const recipe = (): RecipeOut =>
             ingredient: {
               id: unsafeIngredientId("i-1"),
               name: "Flour again",
+              createdAt: new Date(),
+              updatedAt: new Date(),
             },
             recipe: null,
             amounts: [],
@@ -50,6 +63,7 @@ const recipe = (): RecipeOut =>
             ingredient: null,
             recipe: {
               id: unsafeRecipeId("r-child"),
+              shortcode: unsafeRecipeShortcode("RCP-5555"),
               name: "Sauce",
               meta: null,
               createdAt: new Date(),

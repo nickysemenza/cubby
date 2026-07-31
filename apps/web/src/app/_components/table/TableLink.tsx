@@ -26,11 +26,14 @@ type USDALookupRoute =
 
 /**
  * Standard entity detail routes. `params` is the full `EntityDetailParams`
- * union, not `{ id: string }` — cookbook's route takes `cookbookId`, so the
- * narrower shape made `TableLink` unusable for polymorphic rows (the global
- * search table) even though it's the canonical entity link.
+ * union (`{ shortcode }`) for the shortcode-bearing entities, or `{ id }` for
+ * `image` — the one entity `EntityDetailRoute` covers that stays keyed on its
+ * uuid (`/images/$id`; `usda-food` never routes through `TableLink`).
  */
-type EntityRoute = { to: EntityDetailRoute; params: EntityDetailParams };
+type EntityRoute = {
+  to: EntityDetailRoute;
+  params: EntityDetailParams | { id: string };
+};
 
 type TableLinkProps = VariantProps<typeof tableLinkVariants> & {
   children: ReactNode;

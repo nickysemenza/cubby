@@ -1,3 +1,4 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -15,7 +16,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
-import { entities } from "~/entities/entities";
+import { entityDetailLink } from "~/entities/entities";
 
 export const Route = createFileRoute("/_authenticated/ask")({
   component: AskPage,
@@ -53,15 +54,23 @@ function AskPage() {
     agent.isStreaming || agent.answer.length > 0 || sources.length > 0;
 
   // Mirror the palette's onSelectSource path so /ask sources also seed recents.
+  // A source scraped from a tool payload that carried no shortcode isn't
+  // navigable — better a dead click than a link to a uuid URL that 404s.
   const goToSource = (source: (typeof sources)[number]) => {
+    if (!source.shortcode) return;
     pushRecent({
       entityType: source.entityType,
-      id: source.id,
+      shortcode: source.shortcode,
       name: source.name,
     });
-    navigate({
-      to: `/${entities[entityTypeMap[source.entityType]].basePath}/${source.id}`,
-    });
+    // Every searchable entity is also a shortcode entity, so the map's widened
+    // `Entity` return is safe to narrow here.
+    navigate(
+      entityDetailLink(
+        entityTypeMap[source.entityType] as ShortcodeEntity,
+        source.shortcode,
+      ),
+    );
   };
 
   return (

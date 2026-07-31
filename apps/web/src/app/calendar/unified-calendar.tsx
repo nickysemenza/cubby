@@ -57,6 +57,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
+import { entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -676,27 +677,33 @@ function CalendarItemLink({ item }: { item: CalendarItem }) {
 
   if (item.kind === "meal") {
     return (
-      <Link to="/meals/$id" params={{ id: item.id }} className={className}>
+      <Link {...entityDetailLink("meal", item.shortcode)} className={className}>
         {content}
       </Link>
     );
   }
   if (item.kind === "task") {
     return (
-      <Link to="/tasks/$id" params={{ id: item.id }} className={className}>
+      <Link {...entityDetailLink("task", item.shortcode)} className={className}>
         {content}
       </Link>
     );
   }
   if (item.kind === "expense") {
     return (
-      <Link to="/expenses/$id" params={{ id: item.id }} className={className}>
+      <Link
+        {...entityDetailLink("expense", item.shortcode)}
+        className={className}
+      >
         {content}
       </Link>
     );
   }
   return (
-    <Link to="/projects/$id" params={{ id: item.id }} className={className}>
+    <Link
+      {...entityDetailLink("project", item.shortcode)}
+      className={className}
+    >
       {content}
     </Link>
   );

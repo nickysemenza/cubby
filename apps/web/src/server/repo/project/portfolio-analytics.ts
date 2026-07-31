@@ -19,7 +19,10 @@
  *     aggregates (`monthlySpend`/`plannedVsActual`/`tradeActivity`), which need
  *     it to bucket by month in the first place.
  */
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ProjectPortfolioAnalyticsInput,
   ProjectPortfolioAnalyticsOut,
@@ -62,12 +65,15 @@ export async function projectPortfolioAnalytics(
   const projectRows = await getDb(db).query.project.findMany({
     where: buildDashboardProjectWhere(filters),
     orderBy: [asc(project.name)],
-    columns: { id: true, name: true },
+    columns: { id: true, shortcode: true, name: true },
   });
   const ids = projectRows.map((r) => r.id);
   if (ids.length === 0) return EMPTY_OUT;
 
   const nameById = new Map(projectRows.map((r) => [r.id, r.name]));
+  const shortcodeById = new Map(
+    projectRows.map((r) => [r.id, unsafeProjectShortcode(r.shortcode)]),
+  );
   const { subtreeRollups } = await loadProjectSubtreeRollups(db, ids);
 
   const costVsEstimate = ids.map((id) => {
@@ -84,6 +90,7 @@ export async function projectPortfolioAnalytics(
   const spendingByProject = ids
     .map((id) => ({
       projectId: id,
+      projectShortcode: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
       projectName: nameById.get(id) ?? "",
       spend: (subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP).spent,
     }))
@@ -153,6 +160,7 @@ export async function projectPortfolioAnalytics(
   }
   const taskHeatmap = ids.map((id) => ({
     projectId: id,
+    projectShortcode: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
     projectName: nameById.get(id) ?? "",
     openTaskCount: openTaskCountByProject.get(id) ?? 0,
   }));

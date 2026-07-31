@@ -1,4 +1,7 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ProjectDateWindow,
   ProjectOut,
@@ -8,6 +11,7 @@ import type {
 /** Shape of a `project` row as returned by a plain (no relations) select. */
 export type ProjectRow = {
   id: ProjectOut["id"];
+  shortcode: string;
   name: string;
   status: ProjectOut["status"];
   kind: ProjectOut["kind"];
@@ -120,6 +124,7 @@ const dbProjectToAPI = ({
   childProjectIds: ProjectId[];
 }): ProjectOut => ({
   id: row.id,
+  shortcode: unsafeProjectShortcode(row.shortcode),
   name: row.name,
   status: row.status,
   kind: row.kind,

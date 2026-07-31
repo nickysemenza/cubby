@@ -3,6 +3,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+import { entityDetailLink } from "~/entities/entities";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -34,6 +35,7 @@ export function OpenTasksByProject({
         .map((r) => ({
           project: r.projectName,
           id: r.projectId,
+          shortcode: r.projectShortcode,
           count: r.openTaskCount,
         }))
         .sort((a, b) => a.count - b.count)
@@ -70,8 +72,8 @@ export function OpenTasksByProject({
         enableGridX
         enableGridY={false}
         onClick={(bar) => {
-          const id = bar.data.id;
-          if (id) navigate({ to: "/projects/$id", params: { id } });
+          const shortcode = bar.data.shortcode;
+          if (shortcode) navigate(entityDetailLink("project", shortcode));
         }}
         tooltip={({ indexValue, value }) => (
           <ChartTooltip>

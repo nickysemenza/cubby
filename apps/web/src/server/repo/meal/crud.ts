@@ -60,7 +60,7 @@ const fetchMealById = async (db: Database, id: MealId) => {
 // Read path through the shared reader. The write path stays hand-rolled: meal
 // create/update/delete manage mealRecipe children inside a transaction.
 const mealReader = createEntityReader({
-  entityName: "meal",
+  entity: "meal",
   fetchById: fetchMealById,
   fromDB: (_db, row) => dbMealToAPI(row),
   notFoundReason: "MEAL_NOT_FOUND",
@@ -70,6 +70,9 @@ export const getMealByID = (
   db: Database,
   id: MealId,
 ): Promise<MealOut | null> => mealReader.getByIDOrNull(db, id);
+
+export const getMealByShortcode = (db: Database, shortcode: string) =>
+  mealReader.getByShortcode(db, shortcode);
 
 /** Throws MEAL_NOT_FOUND if the meal is missing — for callers that need a value. */
 const requireMeal = (db: Database, id: MealId): Promise<MealOut> =>

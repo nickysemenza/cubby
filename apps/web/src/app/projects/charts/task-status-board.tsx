@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
@@ -57,6 +58,7 @@ export function TaskStatusBoard({
         }
         return {
           projectId: row.projectId,
+          projectShortcode: proj?.shortcode ?? null,
           name: proj?.name ?? "Unknown project",
           date: proj?.startDate ?? "",
           breakdown: row,
@@ -119,14 +121,18 @@ export function TaskStatusBoard({
           {rows.map((row) => (
             <tr key={row.projectId} className="border-border/50 border-t">
               <td className="max-w-[150px] truncate py-2 pr-2 font-medium">
-                <Link
-                  to="/projects/$id"
-                  params={{ id: row.projectId }}
-                  className="hover:underline"
-                  title={row.name}
-                >
-                  {row.name}
-                </Link>
+                {row.projectShortcode ? (
+                  <Link
+                    to={entities.project.routes.detail}
+                    params={entityDetailParams(row.projectShortcode)}
+                    className="hover:underline"
+                    title={row.name}
+                  >
+                    {row.name}
+                  </Link>
+                ) : (
+                  <span title={row.name}>{row.name}</span>
+                )}
               </td>
               {statuses.map((status) => {
                 const count = counts(row.breakdown, status);

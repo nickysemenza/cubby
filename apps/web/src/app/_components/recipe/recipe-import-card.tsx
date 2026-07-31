@@ -316,8 +316,8 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
   if (result.status === "done") {
     return (
       <Link
-        to="/recipes/$id"
-        params={{ id: result.id }}
+        to="/recipes/$shortcode"
+        params={{ shortcode: result.shortcode }}
         className="flex items-center gap-1 text-positive text-sm"
       >
         <Check className="size-4" /> Imported

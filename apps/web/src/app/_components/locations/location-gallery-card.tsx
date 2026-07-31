@@ -14,6 +14,7 @@ import { LocationIcon } from "./location-icons";
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 type ProductPreview = {
   id: string;
+  shortcode: string;
   name: string;
   totalAmount: string;
 };
@@ -54,6 +55,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
       }
       productMap.set(item.product.id, {
         id: item.product.id,
+        shortcode: item.product.shortcode,
         name: item.product.name,
         totalAmount: `${item.amount.value} ${item.amount.unit}`,
       });
@@ -104,8 +106,8 @@ export const LocationGalleryCard = function LocationGalleryCard({
                 className="size-3.5 shrink-0"
               />
               <Link
-                to="/locations/$id"
-                params={{ id: location.id }}
+                to="/locations/$shortcode"
+                params={{ shortcode: location.shortcode }}
                 className="min-w-0 truncate font-medium text-xs hover:text-primary hover:underline"
                 title={location.name}
               >
@@ -147,8 +149,8 @@ export const LocationGalleryCard = function LocationGalleryCard({
               <Row key={product.id} align="center" gap="sm">
                 <ProductPreviewImage product={product} />
                 <Link
-                  to="/products/$id"
-                  params={{ id: product.id }}
+                  to="/products/$shortcode"
+                  params={{ shortcode: product.shortcode }}
                   className="line-clamp-2 flex-1 text-2xs leading-tight hover:text-primary"
                   title={product.name}
                 >
@@ -182,8 +184,8 @@ function ProductPreviewImage({ product }: { product: ProductPreview }) {
       <ImageWithPreview
         src={image.url}
         alt={product.name}
-        to="/products/$id"
-        params={{ id: product.id }}
+        to="/products/$shortcode"
+        params={{ shortcode: product.shortcode }}
         size={32}
         previewSize={200}
       />
@@ -192,8 +194,8 @@ function ProductPreviewImage({ product }: { product: ProductPreview }) {
 
   return (
     <Link
-      to="/products/$id"
-      params={{ id: product.id }}
+      to="/products/$shortcode"
+      params={{ shortcode: product.shortcode }}
       className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
     >
       <EntityIcon

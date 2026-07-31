@@ -10,6 +10,7 @@ import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
+import { entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
@@ -48,7 +49,7 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
 
   // The caller only mounts this section for a line that has a charge; this keeps
   // the parent link's `params` honest rather than asserting a non-null id.
-  if (!expense.purchaseId) return null;
+  if (!expense.purchaseId || !expense.purchaseShortcode) return null;
 
   // `isPending` gates the line list: without it "only line on this charge"
   // flashes on every load, which reads as an answer rather than a pending state.
@@ -70,8 +71,7 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
           {/* The charge's own page is the primary hop — it owns the invoice,
               the stated total, and every line at once. */}
           <Link
-            to="/purchases/$id"
-            params={{ id: expense.purchaseId }}
+            {...entityDetailLink("purchase", expense.purchaseShortcode)}
             className="min-w-0 hover:underline"
           >
             {expense.vendor ? (

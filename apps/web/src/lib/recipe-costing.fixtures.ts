@@ -1,9 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
 import {
   unsafeIngredientId,
+  unsafeIngredientShortcode,
   unsafeProductId,
   unsafeProductShortcode,
   unsafeRecipeId,
+  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
@@ -98,6 +100,7 @@ export const ingredientWith = (
   product: IngredientWithFoodOut["product"],
 ): IngredientWithFoodOut => ({
   id: unsafeIngredientId(idStr),
+  shortcode: unsafeIngredientShortcode("ING-2222"),
   name,
   recipe: null,
   recipeUsages: [],
@@ -139,7 +142,12 @@ export const makeEntry = (
   id: idStr,
   type: "ingredient",
   ...dates,
-  ingredient: { id: unsafeIngredientId(idStr), name, ...dates },
+  ingredient: {
+    id: unsafeIngredientId(idStr),
+    shortcode: unsafeIngredientShortcode(`ING-${idStr}`),
+    name,
+    ...dates,
+  },
   recipe: null,
   amounts,
   modifier: modifier ?? null,
@@ -167,6 +175,7 @@ export const makeSubRecipe = (
   ingredients: SectionIngredientOut[],
 ): RecipeOut => ({
   id: unsafeRecipeId(idStr),
+  shortcode: unsafeRecipeShortcode("RCP-2222"),
   name,
   ...dates,
   meta: null,
@@ -182,6 +191,7 @@ export const makeSubRecipe = (
 // each row's sectionName) and run the unified engine.
 export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
   id: unsafeRecipeId("root"),
+  shortcode: unsafeRecipeShortcode("RCP-3333"),
   name: "root",
   ...dates,
   meta: null,

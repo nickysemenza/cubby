@@ -58,7 +58,7 @@ import {
   makeRecipeInput,
 } from "./repo.fixtures";
 import { createTask, deleteTasks } from "./task";
-import { findOrCreateVendor, mergeVendors } from "./vendor";
+import { findOrCreateVendor, getVendorByID, mergeVendors } from "./vendor";
 
 // Repo-layer tests for the WASM-driven, highest-logic problem scans. The
 // coverage/UPC find* helpers are exercised through the public findAllProblems
@@ -1187,6 +1187,7 @@ describe("problems — brand-label spelling variants", () => {
     const odd = await seedProduct("Ryobi sander", "RYOBI");
 
     const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
+    const canonicalProduct = drill.id < saw.id ? drill : saw;
     expect(manufacturerSpellingVariants).toEqual([
       {
         value: "RYOBI",
@@ -1194,13 +1195,15 @@ describe("problems — brand-label spelling variants", () => {
         canonical: "Ryobi",
         canonicalCount: 2,
         sampleId: odd.id,
+        sampleShortcode: odd.shortcode,
         // Shared with the vendor detector, which needs an id for the spelling it
         // MERGES INTO. Only that caller reads it (a manufacturer is a string, so
         // its fix is a rename, not a merge) and `problemsFastSchema` strips it
         // from this key on the wire — but the SQL selects it for both, so it is
         // pinned here too. `min(id::text)` over the canonical spelling's two
         // products, derived rather than hardcoded since uuids decide which.
-        canonicalSampleId: drill.id < saw.id ? drill.id : saw.id,
+        canonicalSampleId: canonicalProduct.id,
+        canonicalSampleShortcode: canonicalProduct.shortcode,
       },
     ]);
   });
@@ -1269,6 +1272,8 @@ describe("problems — duplicate vendors", () => {
   // Idempotent by contract (vendor.integration.test pins it), so this reads an
   // existing roster row's id rather than creating anything.
   const vendorIdOf = (name: string) => findOrCreateVendor(ctx.db, name);
+  const vendorOf = async (name: string) =>
+    getVendorByID(ctx.db, await vendorIdOf(name));
 
   it("pairs two spellings of one vendor, keeping the one with more charges", async () => {
     await seedCharge("Amazon", "AMZ-1");
@@ -1276,6 +1281,8 @@ describe("problems — duplicate vendors", () => {
     await seedCharge("amazon", "AMZ-3");
 
     const { duplicateVendors } = await findFastProblems(ctx.db);
+    const sample = await vendorOf("amazon");
+    const canonicalSample = await vendorOf("Amazon");
     expect(duplicateVendors).toEqual([
       {
         value: "amazon",
@@ -1285,8 +1292,10 @@ describe("problems — duplicate vendors", () => {
         count: 1,
         canonical: "Amazon",
         canonicalCount: 2,
-        sampleId: await vendorIdOf("amazon"),
-        canonicalSampleId: await vendorIdOf("Amazon"),
+        sampleId: sample.id,
+        sampleShortcode: sample.shortcode,
+        canonicalSampleId: canonicalSample.id,
+        canonicalSampleShortcode: canonicalSample.shortcode,
       },
     ]);
     // A duplicate roster row is wrong and drivable to zero, so unlike the

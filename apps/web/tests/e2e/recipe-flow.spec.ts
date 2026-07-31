@@ -19,23 +19,34 @@ test.describe("Recipe Flow", () => {
       .getByRole("textbox", { name: "Step" })
       .fill("Mix in two tablespoons of water, then knead until smooth.");
     await page.getByRole("button", { name: /^Create$/i }).click();
-    await expect(page).toHaveURL(/\/recipes\/[a-f0-9-]+/, { timeout: 15000 });
+    await expect(page).toHaveURL(
+      /\/recipes\/RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+      { timeout: 15000 },
+    );
 
-    const recipeId = page.url().match(/\/recipes\/([a-f0-9-]+)/)?.[1];
-    expect(recipeId).toBeTruthy();
+    const recipeShortcode = page
+      .url()
+      .match(/\/recipes\/(RCP-[A-Z0-9]{4})/)?.[1];
+    expect(recipeShortcode).toBeTruthy();
 
     const databaseUrl = process.env.E2E_DATABASE_URL;
-    if (!databaseUrl || !recipeId) {
+    if (!databaseUrl || !recipeShortcode) {
       throw new Error("E2E database or recipe flow identity was unavailable");
     }
     const generatedAt = new Date().toISOString();
 
     const pool = new Pool({ connectionString: databaseUrl });
     try {
-      const recipeResult = await pool.query<{ name: string }>(
-        `SELECT "name" FROM "Recipe" WHERE "id" = $1`,
-        [recipeId],
+      // The URL only carries the public shortcode; resolve it to the real row
+      // (and its uuid `id`, which `AiAnalysis.entityId` below still stores).
+      const recipeResult = await pool.query<{ id: string; name: string }>(
+        `SELECT "id", "name" FROM "Recipe" WHERE "shortcode" = $1`,
+        [recipeShortcode],
       );
+      const recipeRow = recipeResult.rows[0];
+      if (!recipeRow) throw new Error("Recipe fixture missing");
+      const recipeId = recipeRow.id;
+
       const sectionResult = await pool.query<{
         id: string;
         instructions: Array<{ instruction: string }>;
@@ -47,9 +58,8 @@ test.describe("Recipe Flow", () => {
          LIMIT 1`,
         [recipeId],
       );
-      const recipeRow = recipeResult.rows[0];
       const sectionRow = sectionResult.rows[0];
-      if (!recipeRow || !sectionRow) throw new Error("Recipe fixture missing");
+      if (!sectionRow) throw new Error("Recipe fixture missing");
 
       const fingerprint = createHash("sha256")
         .update(

@@ -58,6 +58,7 @@ export const findProductsWithNoImages = async (
 ): Promise<
   Array<{
     id: ProductId;
+    shortcode: string;
     name: string;
     manufacturer: string;
     upc: string | null;
@@ -75,6 +76,7 @@ export const findProductsWithNoImages = async (
   const results = await dbClient
     .select({
       id: product.id,
+      shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
       upc: product.upc,

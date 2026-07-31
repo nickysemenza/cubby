@@ -103,6 +103,7 @@ const expenseCrud = createEntityCrud({
 });
 
 export const getExpenseByID = expenseCrud.getByID;
+export const getExpenseByShortcode = expenseCrud.getByShortcode;
 
 /**
  * Resolve the `{vendor, orderId}` a caller still passes by NAME into the charge

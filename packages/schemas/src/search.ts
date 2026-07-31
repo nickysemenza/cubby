@@ -82,6 +82,12 @@ export type SearchMatchKind = z.infer<typeof searchMatchKindSchema>;
 
 const searchResultBaseFields = {
   id: z.string(),
+  /**
+   * The entity's public id. Present alongside `id` because a search result is
+   * both a thing to NAVIGATE to (shortcode) and a row the client may need to
+   * key or de-dupe internally (uuid) — every search surface links via this.
+   */
+  shortcode: z.string(),
   name: z.string(),
   subtitle: z.string().nullable(),
   typeHint: z.string().nullable(),

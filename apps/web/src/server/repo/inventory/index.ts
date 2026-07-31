@@ -30,6 +30,7 @@ export {
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByID,
+  getInventoryEntryByShortcode,
   getInventoryForProducts,
   inventoryentryList,
   updateInventoryEntry,

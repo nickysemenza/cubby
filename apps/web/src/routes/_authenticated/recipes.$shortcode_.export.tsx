@@ -1,3 +1,4 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -60,13 +61,17 @@ const searchSchema = z.object({
 
 const searchDefaults = { format: undefined, scale: undefined } as const;
 
-export const Route = createFileRoute("/_authenticated/recipes/$id_/export")({
+export const Route = createFileRoute(
+  "/_authenticated/recipes/$shortcode_/export",
+)({
   ssr: false,
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.recipe.getByID.queryOptions({ id: params.id }),
+      context.trpc.recipe.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -75,20 +80,26 @@ export const Route = createFileRoute("/_authenticated/recipes/$id_/export")({
   component: RecipeExportPage,
 });
 
+/** Guard split — see the note on RecipeDetailPage in recipes.$shortcode.tsx. */
 function RecipeExportPage() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
+  const api = useTRPC();
+  const { data: recipe } = useSuspenseQuery(
+    api.recipe.getByShortcode.queryOptions({ shortcode }),
+  );
+  if (!recipe) return null;
+  return <RecipeExportBody recipe={recipe} />;
+}
+
+function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
   const { format: rawFormat, scale } = Route.useSearch();
   const navigate = useNavigate();
-  const api = useTRPC();
   const [flowReady, setFlowReady] = useState(false);
   const handleFlowReadyChange = useCallback((ready: boolean) => {
     setFlowReady(ready);
   }, []);
 
-  const { data: recipe } = useSuspenseQuery(
-    api.recipe.getByID.queryOptions({ id }),
-  );
-  useDocumentTitle(recipe.name ? `${recipe.name} — export` : undefined);
+  useDocumentTitle(`${recipe.name} — export`);
 
   const format: ExportFormat = rawFormat ?? "prep";
   const factor = scale ?? 1;

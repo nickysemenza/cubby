@@ -88,8 +88,8 @@ export const RecipeIngredientList: React.FC<{
   /** The prioritized totals gaps (same source as the coverage popover) — makes
    * each missing Cost/Weight cell a deep-link to its fix. */
   gaps?: RecipeTotalsGap[];
-  /** Current recipe id, for routing a sub-recipe's "set amount" fix. */
-  recipeId?: string;
+  /** Current recipe's public id, for routing a sub-recipe's "set amount" fix. */
+  recipeShortcode?: string;
 }> = ({
   ingredients,
   ingMap,
@@ -97,7 +97,7 @@ export const RecipeIngredientList: React.FC<{
   perServing,
   hideSummary,
   gaps,
-  recipeId,
+  recipeShortcode,
 }) => {
   const totals = costing?.totals;
   const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
@@ -280,7 +280,7 @@ export const RecipeIngredientList: React.FC<{
               ) : (
                 <MissingMeasureCell
                   gap={gapForRow(row)}
-                  currentRecipeId={recipeId ?? ""}
+                  currentRecipeShortcode={recipeShortcode ?? ""}
                   reason={`${measure.error}`}
                 />
               )}
@@ -321,7 +321,7 @@ export const RecipeIngredientList: React.FC<{
               ) : (
                 <MissingMeasureCell
                   gap={gapForRow(row)}
-                  currentRecipeId={recipeId ?? ""}
+                  currentRecipeShortcode={recipeShortcode ?? ""}
                   reason={`${measure.error}`}
                 />
               )}
@@ -444,12 +444,12 @@ export const RecipeIngredientList: React.FC<{
     createActionsColumnBase(columnHelper, (row) =>
       match(row)
         .with({ type: "ingredient" }, (row) => ({
-          to: "/ingredients/$id" as const,
-          params: { id: row.ingredient.id },
+          to: "/ingredients/$shortcode" as const,
+          params: { shortcode: row.ingredient.shortcode },
         }))
         .with({ type: "recipe" }, (row) => ({
-          to: "/recipes/$id" as const,
-          params: { id: row.recipe.id },
+          to: "/recipes/$shortcode" as const,
+          params: { shortcode: row.recipe.shortcode },
         }))
         .exhaustive(),
     ),

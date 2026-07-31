@@ -9,14 +9,13 @@ import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 
-export const Route = createFileRoute("/_authenticated/purchases/$id")({
+export const Route = createFileRoute("/_authenticated/purchases/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
-    // `purchase.getByID` takes the id as a BARE scalar, not `{ id }` (see
-    // routers/purchase.ts). No branding needed: a branded zod schema's INPUT
-    // type is plain `string`.
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.purchase.getByID.queryOptions(params.id),
+      context.trpc.purchase.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -34,13 +33,17 @@ export const Route = createFileRoute("/_authenticated/purchases/$id")({
 });
 
 function PurchaseDetailPage() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
   const api = useTRPC();
   const { data: purchase } = useSuspenseQuery(
-    api.purchase.getByID.queryOptions(id),
+    api.purchase.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(purchaseLabel(purchase));
+  useDocumentTitle(purchase ? purchaseLabel(purchase) : undefined);
 
-  return <PurchaseDetail key={id} purchase={purchase} />;
+  // The loader already threw notFound for an unknown code; this guard only
+  // satisfies the nullable output type.
+  if (!purchase) return null;
+
+  return <PurchaseDetail key={shortcode} purchase={purchase} />;
 }

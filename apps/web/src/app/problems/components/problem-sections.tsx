@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
-import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
   type ChargeNotReconciling,
@@ -13,7 +12,6 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { getMiscDisplayName } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
@@ -41,7 +39,7 @@ import {
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
+import { EntityIcon, entities, entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { productRecipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -291,80 +289,6 @@ function MissingEmbeddingsBackfillAction() {
   );
 }
 
-function searchableEntityRoute(entityRef: SearchableEntityRef) {
-  return match(entityRef)
-    .with({ entityType: "product" }, (e) => ({
-      to: "/products/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "location" }, (e) => ({
-      to: "/locations/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "ingredient" }, (e) => ({
-      to: "/ingredients/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "recipe" }, (e) => ({
-      to: "/recipes/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "cookbook" }, (e) => ({
-      to: "/cookbooks/$cookbookId" as const,
-      params: { cookbookId: unsafeCookbookId(e.entityId) },
-    }))
-    .with({ entityType: "inventory" }, (e) => ({
-      to: "/inventory/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "meal" }, (e) => ({
-      to: "/meals/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "project" }, (e) => ({
-      to: "/projects/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "task" }, (e) => ({
-      to: "/tasks/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .with({ entityType: "expense" }, (e) => ({
-      to: "/expenses/$id" as const,
-      params: { id: e.entityId },
-    }))
-    .exhaustive();
-}
-
-/**
- * Route to any entity's detail page, by the full `Entity` union (unlike
- * `searchableEntityRoute` above, which only covers the entities global search
- * can return). Params come from the shared `entityDetailParams` helper (the
- * cookbook `$cookbookId` special case); the `to` literal still has to be
- * matched by hand so it stays a real union member of `EntityDetailRoute`
- * rather than widening to `string` — `.exhaustive()` makes a newly-added
- * `Entity` variant a compile error here until it's routed.
- */
-function targetEntityRoute(entity: Entity, id: string) {
-  const to = match(entity)
-    .with("ingredient", () => "/ingredients/$id" as const)
-    .with("product", () => "/products/$id" as const)
-    .with("recipe", () => "/recipes/$id" as const)
-    .with("cookbook", () => "/cookbooks/$cookbookId" as const)
-    .with("location", () => "/locations/$id" as const)
-    .with("inventory", () => "/inventory/$id" as const)
-    .with("meal", () => "/meals/$id" as const)
-    .with("project", () => "/projects/$id" as const)
-    .with("task", () => "/tasks/$id" as const)
-    .with("vendor", () => "/vendors/$id" as const)
-    .with("purchase", () => "/purchases/$id" as const)
-    .with("expense", () => "/expenses/$id" as const)
-    .with("usda-food", () => "/usda/$id" as const)
-    .with("image", () => "/images/$id" as const)
-    .exhaustive();
-  return { to, params: entityDetailParams(entity, id) };
-}
-
 /**
  * `{pluralLabel} · {edgeKey}` — clusters violations first by the entity left
  * dangling, then by the specific FK column, so 34 possible edges don't render
@@ -402,26 +326,25 @@ function sourceDetail(sourceTable: string, sourceId: string): ReactNode {
 
 /**
  * The soft-deleted target the dangling edge still points at. No name to show
- * (the row is gone from every normal query), so this links the entity +
- * truncated id rather than truncating a name — the acceptable shape for a
- * surface `EntityInlineLink` doesn't fit, per the entities.tsx rule that a
- * rendered entity is never plain unlinked text.
+ * (the row is gone from every normal query), so this shows the entity +
+ * truncated id rather than a name. Deliberately NOT a link: the target is
+ * soft-deleted, so every detail route 404s on it — this is one of the two
+ * documented exceptions to the entities.tsx "a rendered entity is always
+ * clickable" rule, alongside orphaned embeddings.
  */
 function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
-  const { to, params } = targetEntityRoute(v.targetEntity, v.targetId);
   return (
-    <Link key="target" to={to} params={params}>
-      <Badge
-        variant="outline"
-        title={v.targetId}
-        // Free-form identifier, not a categorical tag — opt out of the
-        // mono-uppercase stamp (matches the location/vendor badge idiom).
-        className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
-      >
-        <EntityIcon entity={v.targetEntity} colored className="size-3" />
-        {entities[v.targetEntity].label} {v.targetId.slice(0, 8)}
-      </Badge>
-    </Link>
+    <Badge
+      key="target"
+      variant="outline"
+      title={v.targetId}
+      // Free-form identifier, not a categorical tag — opt out of the
+      // mono-uppercase stamp (matches the location/vendor badge idiom).
+      className="flex items-center gap-1 font-sans normal-case tracking-normal"
+    >
+      <EntityIcon entity={v.targetEntity} colored className="size-3" />
+      {entities[v.targetEntity].label} {v.targetId.slice(0, 8)}
+    </Badge>
   );
 }
 
@@ -445,22 +368,6 @@ const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
 const TRACKER_GROUP_TITLE = Object.fromEntries(
   TRACKER_GROUPS.map((g) => [g.type, g.title]),
 ) as Record<ProjectAttentionType, string>;
-
-const trackerRoute = (item: ProjectAttentionItem) =>
-  match(item.entityType)
-    .with("project", () => ({
-      to: "/projects/$id" as const,
-      params: { id: item.entityId },
-    }))
-    .with("task", () => ({
-      to: "/tasks/$id" as const,
-      params: { id: item.entityId },
-    }))
-    .with("expense", () => ({
-      to: "/expenses/$id" as const,
-      params: { id: item.entityId },
-    }))
-    .exhaustive();
 
 const trackerSeverityVariant = (severity: ProjectAttentionItem["severity"]) =>
   match(severity)
@@ -494,7 +401,10 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
           ]
         : []),
     ],
-    route: trackerRoute(item),
+    // `href` is already a shortcode-bearing path built server-side
+    // (`/tasks/${row.shortcode}` etc. in server/repo/project/attention.ts) —
+    // no uuid-to-shortcode resolution is needed here.
+    route: { href: item.href },
     editLabel: `Open ${item.entityType}`,
   };
 }
@@ -585,7 +495,7 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   const base = {
     title: item.name,
     subtitle: byManufacturer(item.manufacturer),
-    route: { to: "/products/$id" as const, params: { id: item.id } },
+    route: entityDetailLink("product", item.shortcode),
     editLabel: "Open product",
   };
   const inlineFix = (label: string) => ({
@@ -673,7 +583,11 @@ function locationBadges(
   locations: ProductMissingPrice["locations"],
 ): ReactNode[] {
   return locations.map((location) => (
-    <Link key={location.id} to="/locations/$id" params={{ id: location.id }}>
+    <Link
+      key={location.id}
+      to="/locations/$shortcode"
+      params={{ shortcode: location.shortcode }}
+    >
       <Badge
         variant="outline"
         // Free-form location names — opt out of the mono-uppercase stamp.
@@ -730,8 +644,8 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       badges: product.locations.map((location) => (
         <Link
           key={location.id}
-          to="/locations/$id"
-          params={{ id: location.id }}
+          to="/locations/$shortcode"
+          params={{ shortcode: location.shortcode }}
         >
           <Badge
             variant="outline"
@@ -743,7 +657,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           </Badge>
         </Link>
       )),
-      route: { to: "/products/$id", params: { id: product.id } },
+      route: entityDetailLink("product", product.shortcode),
     }),
   }),
   section({
@@ -760,7 +674,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
       details: [createdAgoDetail(product.createdAt)],
-      route: { to: "/products/$id", params: { id: product.id } },
+      route: entityDetailLink("product", product.shortcode),
       inlineFix: {
         label: "Delete",
         render: (close) => (
@@ -786,7 +700,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: unpricedSubtitle(product),
       badges: locationBadges(product.locations),
-      route: { to: "/products/$id", params: { id: product.id } },
+      route: entityDetailLink("product", product.shortcode),
     }),
   }),
   section({
@@ -805,7 +719,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: getMiscDisplayName(product.name),
       subtitle: unpricedSubtitle(product),
       badges: locationBadges(product.locations),
-      route: { to: "/products/$id", params: { id: product.id } },
+      route: entityDetailLink("product", product.shortcode),
     }),
   }),
   section({
@@ -848,7 +762,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       details: [
         `Used in ${ing.recipeCount} recipe${ing.recipeCount === 1 ? "" : "s"}`,
       ],
-      route: { to: "/ingredients/$id", params: { id: ing.id } },
+      route: entityDetailLink("ingredient", ing.shortcode),
       // The workbench can actually create the product; the detail page can't.
       customActions: <WorkbenchFixLink ingredientId={ing.id} />,
     }),
@@ -869,7 +783,11 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: ing.name,
       details: [createdAgoDetail(ing.createdAt)],
       badges: ing.products.map((prod) => (
-        <Link key={prod.id} to="/products/$id" params={{ id: prod.id }}>
+        <Link
+          key={prod.id}
+          to="/products/$shortcode"
+          params={{ shortcode: prod.shortcode }}
+        >
           <Badge
             variant="outline"
             // Free-form product names — opt out of the mono-uppercase stamp.
@@ -880,7 +798,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           </Badge>
         </Link>
       )),
-      route: { to: "/ingredients/$id", params: { id: ing.id } },
+      route: entityDetailLink("ingredient", ing.shortcode),
       inlineFix: {
         label: "Delete + product(s)",
         render: (close) => (
@@ -912,7 +830,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     renderItem: (ing) => ({
       title: ing.name,
       details: [createdAgoDetail(ing.createdAt)],
-      route: { to: "/ingredients/$id", params: { id: ing.id } },
+      route: entityDetailLink("ingredient", ing.shortcode),
       inlineFix: {
         label: "Delete",
         render: (close) => (
@@ -967,7 +885,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           className="text-sm"
         />,
       ],
-      route: { to: "/locations/$id", params: { id: loc.id } },
+      route: entityDetailLink("location", loc.shortcode),
       editLabel: "Open location",
       customActions: <RecountLink locationId={loc.id} />,
     }),
@@ -988,7 +906,11 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: item.product.name,
       subtitle: `${item.amount.value} ${item.amount.unit}`,
       badges: [
-        <Link key="loc" to="/locations/$id" params={{ id: item.location.id }}>
+        <Link
+          key="loc"
+          to="/locations/$shortcode"
+          params={{ shortcode: item.location.shortcode }}
+        >
           <Badge
             variant="outline"
             // Free-form location names — opt out of the mono-uppercase stamp.
@@ -1000,7 +922,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         </Link>,
       ],
       details: [createdAgoDetail(item.createdAt)],
-      route: { to: "/inventory/$id", params: { id: item.id } },
+      route: entityDetailLink("inventory", item.shortcode),
       editLabel: "Open inventory entry",
       customActions: <RecountLink locationId={item.location.id} />,
     }),
@@ -1018,7 +940,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       key: v.value,
       title: v.value,
       subtitle: variantSubtitle(v, "product"),
-      route: { to: "/products/$id", params: { id: v.sampleId } },
+      route: entityDetailLink("product", v.sampleShortcode),
       editLabel: "Open product",
       customActions: <ManufacturerVariantLink manufacturer={v.value} />,
     }),
@@ -1040,7 +962,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       // Weighed by charges, not by roster rows — a duplicate is 1 row either way,
       // so the charge count is what says which spelling is the real one.
       subtitle: variantSubtitle(v, "charge"),
-      route: { to: "/vendors/$id", params: { id: v.sampleId } },
+      route: entityDetailLink("vendor", v.sampleShortcode),
       editLabel: "Open vendor",
       inlineFix: {
         label: "Merge",
@@ -1063,7 +985,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: item.product.name,
       subtitle: `${item.amount.value} ${item.amount.unit}`,
       details: [createdAgoDetail(item.createdAt)],
-      route: { to: "/inventory/$id", params: { id: item.id } },
+      route: entityDetailLink("inventory", item.shortcode),
       editLabel: "Open inventory entry",
       // Draining Unknown is a recount rooted there — same deep link the other
       // recount detectors offer.
@@ -1089,7 +1011,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
       badges: product.upc ? [<CodeChip key="upc">{product.upc}</CodeChip>] : [],
-      route: { to: "/products/$id", params: { id: product.id } },
+      route: entityDetailLink("product", product.shortcode),
     }),
   }),
   section({
@@ -1112,7 +1034,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           {location.imageCount} {location.imageCount === 1 ? "photo" : "photos"}
         </Badge>,
       ],
-      route: { to: "/locations/$id", params: { id: location.id } },
+      route: entityDetailLink("location", location.shortcode),
     }),
   }),
   section({
@@ -1125,10 +1047,16 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       "Semantic search rows whose entity no longer exists. These are safe to clean up.",
     emptyMessage: "No orphaned search embeddings.",
     renderItem: (embedding) => ({
+      // The embedding row's own id is stable and unique on its own — no route
+      // to derive a fallback key from (see the comment on `route` below).
+      key: embedding.id,
       title: `${embedding.entityType} · ${embedding.entityId.slice(0, 8)}`,
       subtitle: embedding.model,
       details: [createdAgoDetail(embedding.createdAt)],
-      route: searchableEntityRoute(embedding),
+      // No `route`: this row exists precisely BECAUSE its entity was deleted
+      // (an orphaned embedding), so there is no live page to link to — the
+      // pre-cutover code linked to a uuid URL that already 404'd. Leave it
+      // unlinked rather than "restoring" a link to nothing.
       inlineFix: {
         label: "Clean up",
         render: (close) => (
@@ -1149,7 +1077,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     headerAction: <MissingEmbeddingsBackfillAction />,
     renderItem: (entity) => ({
       title: `${entity.entityType} · ${entity.entityId.slice(0, 8)}`,
-      route: searchableEntityRoute(entity),
+      // Live entity ⇒ always resolvable to a real page, unlike the orphaned
+      // side of this pair — see the note on `entityMissingEmbeddingSchema`.
+      route: entityDetailLink(entity.entityType, entity.shortcode),
     }),
   }),
   section({
@@ -1163,7 +1093,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     emptyMessage: "No recipes reference a deleted sub-recipe.",
     renderItem: (recipe) => ({
       title: recipe.name,
-      route: { to: "/recipes/$id", params: { id: recipe.id } },
+      route: entityDetailLink("recipe", recipe.shortcode),
       editLabel: "Open recipe",
     }),
   }),
@@ -1195,11 +1125,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         sourceDetail(v.sourceTable, v.sourceId),
       ],
       badges: [referentialTargetBadge(v)],
-      // The target, not the source: it's the soft-deleted row the edge
-      // shouldn't still be pointing at, and (unlike `sourceTable`, an
-      // arbitrary pgTable name) it's always a real entity with a detail route.
-      route: targetEntityRoute(v.targetEntity, v.targetId),
-      editLabel: `Open ${entities[v.targetEntity].label.toLowerCase()}`,
+      // No route: the target is the SOFT-DELETED row the edge shouldn't still
+      // point at, so every detail route 404s on it by design. The pre-cutover
+      // code linked it anyway — to a uuid URL that already dead-ended.
     }),
   }),
   section({
@@ -1276,7 +1204,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
             : []),
           <CodeChip key="upc">{product.upc}</CodeChip>,
         ],
-        route: { to: "/products/$id", params: { id: product.id } },
+        route: entityDetailLink("product", product.shortcode),
         editLabel: "Open product",
         customActions: <UpcApplyAction product={product} />,
       };
@@ -1327,7 +1255,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
               ]
             : []),
         ],
-        route: { to: "/purchases/$id", params: { id: charge.id } },
+        route: entityDetailLink("purchase", charge.shortcode),
         editLabel: "Open charge",
       };
     },

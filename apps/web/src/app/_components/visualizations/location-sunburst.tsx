@@ -240,14 +240,19 @@ function HoverTooltip({
     <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
-        <Link
-          to="/locations/$id"
-          params={{ id: node.data.id }}
-          className="hover:underline"
-          style={{ pointerEvents: "auto" }}
-        >
-          {node.data.name}
-        </Link>
+        {node.data.shortcode ? (
+          <Link
+            to="/locations/$shortcode"
+            params={{ shortcode: node.data.shortcode }}
+            className="hover:underline"
+            style={{ pointerEvents: "auto" }}
+          >
+            {node.data.name}
+          </Link>
+        ) : (
+          // The synthetic "All Locations" root has no row behind it.
+          <span>{node.data.name}</span>
+        )}
       </div>
       <div className="mt-1 space-y-1 text-muted-foreground">
         <LocationTypeLabel type={node.data.type} />

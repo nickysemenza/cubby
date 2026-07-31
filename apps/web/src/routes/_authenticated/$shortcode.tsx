@@ -1,13 +1,18 @@
 /**
- * Shortcode landing route
+ * Shortcode landing route — the compact URL a QR label or a typed code lands on.
  *
- * Handles URLs like /L-A3F2, /P-X7K9, or /R-Y8M3 from QR-code labels.
+ * Handles `/LOC-A3F2`, `/PRD-X7K9`, and every other prefix, plus the pre-cutover
+ * single-letter forms (`/L-A3F2`) that are printed on labels already stuck to
+ * things. `parseShortcode` canonicalizes those, so a legacy scan ends up at the
+ * same canonical URL as a fresh one — never at a uuid.
  *
- * - **Location** shortcodes render a phone-first scan landing (see
+ * - **Location** codes render a phone-first scan landing in place (see
  *   {@link LocationScanLanding}) — a scanned bin QR is a physical entry point
  *   ("what's in here / add something here"), not a cue to open the full desktop
  *   detail page.
- * - **Product** and **recipe** shortcodes redirect to their detail pages.
+ * - **Everything else** redirects to its entity-scoped detail URL. That needs no
+ *   lookup at all: the prefix alone names the entity, and the detail route does
+ *   its own 404 if the code turns out to be unknown.
  */
 
 import { parseShortcode } from "@cubby/shared";
@@ -18,56 +23,32 @@ import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
-    const { shortcode } = params;
+    const parsed = parseShortcode(params.shortcode);
+    if (!parsed) throw notFound();
 
-    // Parse shortcode to determine entity type
-    const parsed = parseShortcode(shortcode);
-    if (!parsed) {
-      // Not a valid shortcode format - show 404
-      throw notFound();
-    }
-
-    // Location: resolve and render the scan landing (no redirect). Prime the
-    // same query the component reads so it hydrates without a second fetch.
     if (parsed.type === "location") {
+      // Prime the same query the component reads so it hydrates without a
+      // second fetch.
       const location = await context.queryClient.ensureQueryData(
-        context.trpc.location.getByShortcode.queryOptions({ shortcode }),
+        context.trpc.location.getByShortcode.queryOptions({
+          shortcode: parsed.shortcode,
+        }),
       );
       if (!location) throw notFound();
       return;
     }
 
-    if (parsed.type === "product") {
-      const product = await context.queryClient.fetchQuery(
-        context.trpc.product.getByShortcode.queryOptions({ shortcode }),
-      );
-      if (!product) throw notFound();
-      throw redirect({
-        to: "/products/$id",
-        params: { id: product.id },
-        replace: true,
-      });
-    }
-
-    if (parsed.type === "recipe") {
-      const recipe = await context.queryClient.fetchQuery(
-        context.trpc.recipe.getByShortcode.queryOptions({ shortcode }),
-      );
-      if (!recipe) throw notFound();
-      throw redirect({
-        to: "/recipes/$id",
-        params: { id: recipe.id },
-        replace: true,
-      });
-    }
-
-    // Should never reach here (parseShortcode only yields the three types).
-    throw notFound();
+    throw redirect({
+      to: entities[parsed.type].routes.detail,
+      params: entityDetailParams(parsed.shortcode),
+      replace: true,
+    });
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
@@ -76,7 +57,7 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
       <Empty>
         <EmptyTitle>Nothing found for that code</EmptyTitle>
         <EmptyDescription>
-          This QR label doesn't match a location, product, or recipe.
+          This QR label doesn't match anything in Cubby.
         </EmptyDescription>
       </Empty>
     </Page>
@@ -87,8 +68,8 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
 function ShortcodeLandingPage() {
   const { shortcode } = Route.useParams();
   const api = useTRPC();
-  // The loader only reaches this component for a location shortcode
-  // (product/recipe throw redirect) and has already primed this query.
+  // The loader only reaches this component for a location shortcode (everything
+  // else throws redirect) and has already primed this query.
   const { data: location } = useSuspenseQuery(
     api.location.getByShortcode.queryOptions({ shortcode }),
   );

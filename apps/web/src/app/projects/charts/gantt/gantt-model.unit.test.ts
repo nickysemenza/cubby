@@ -1,4 +1,9 @@
-import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
+import {
+  unsafeProjectId,
+  unsafeProjectShortcode,
+  unsafeTaskId,
+  unsafeTaskShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import { toDayIndex } from "./gantt-date";
@@ -8,6 +13,19 @@ import {
   type GanttProjectRow,
   type GanttRow,
 } from "./gantt-model";
+
+// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
+const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+let projectShortcodeCounter = 0;
+const nextProjectShortcode = () =>
+  unsafeProjectShortcode(
+    `PRJ-234${SHORTCODE_ALPHABET[projectShortcodeCounter++ % SHORTCODE_ALPHABET.length]}`,
+  );
+let taskShortcodeCounter = 0;
+const nextTaskShortcode = () =>
+  unsafeTaskShortcode(
+    `TSK-234${SHORTCODE_ALPHABET[taskShortcodeCounter++ % SHORTCODE_ALPHABET.length]}`,
+  );
 
 function project(params: {
   id: string;
@@ -25,6 +43,7 @@ function project(params: {
   const doneTaskCount = params.doneTaskCount ?? 0;
   return {
     id: unsafeProjectId(params.id),
+    shortcode: nextProjectShortcode(),
     name: params.id,
     status: params.status ?? "planning",
     kind: params.kind ?? null,
@@ -92,10 +111,12 @@ function task(params: {
 }): TaskOut {
   return {
     id: unsafeTaskId(params.id),
+    shortcode: nextTaskShortcode(),
     name: params.id,
     status: params.status ?? "not_started",
     projectId:
       params.projectId != null ? unsafeProjectId(params.projectId) : null,
+    projectShortcode: null,
     parentTaskId:
       params.parentTaskId != null ? unsafeTaskId(params.parentTaskId) : null,
     dueDate: params.dueDate ?? null,
@@ -105,6 +126,7 @@ function task(params: {
     projectName: null,
     subjectProductId: null,
     subjectProductName: null,
+    subjectProductShortcode: null,
     parentTaskName: null,
     blockedByIds: [],
     blockingIds: [],

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { useAllInventoryItems } from "../_components/inventory/use-all-inventory-items";
 import {
@@ -252,8 +253,8 @@ export function useIsometricPantry() {
           const hit = hitTestRooms(mouseX, mouseY, roomsRef.current, cam);
           if (hit) {
             navigate({
-              to: "/locations/$id",
-              params: { id: hit.locationId },
+              to: entities.location.routes.detail,
+              params: entityDetailParams(hit.locationShortcode),
             });
           }
         }
@@ -334,8 +335,8 @@ export function useIsometricPantry() {
           const hit = hitTestRooms(mouseX, mouseY, rooms, camera);
           if (hit) {
             navigate({
-              to: "/locations/$id",
-              params: { id: hit.locationId },
+              to: entities.location.routes.detail,
+              params: entityDetailParams(hit.locationShortcode),
             });
           }
         }

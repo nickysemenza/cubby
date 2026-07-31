@@ -12,6 +12,7 @@ import type {
 import { TaskHeatmap } from "~/app/projects/charts/task-heatmap";
 import { Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 
 /** Stable empty default — never a fresh `[]` per render (would churn memos). */
@@ -58,6 +59,7 @@ function buildFlatTaskRows(tasks: TaskOut[]): {
     return {
       kind: "task",
       id: t.id,
+      shortcode: t.shortcode,
       name: t.name,
       depth: 0,
       status: t.status,
@@ -100,7 +102,11 @@ function TasksGanttTimeline({ tasks }: { tasks: TaskOut[] }) {
   const renderName = useCallback((row: GanttRow): ReactNode => {
     if (row.kind !== "task") return null;
     return (
-      <Link to="/tasks/$id" params={{ id: row.id }} className="hover:underline">
+      <Link
+        to={entities.task.routes.detail}
+        params={entityDetailParams(row.shortcode)}
+        className="hover:underline"
+      >
         {row.name}
       </Link>
     );

@@ -10,6 +10,7 @@ import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
 import { EditableCell } from "../data-table/editable-cell";
@@ -84,9 +85,15 @@ export function ImageDetail({ image }: ImageDetailProps) {
         />
       ))
       .with("PROJECT", () => (
+        // KNOWN GAP: `ImageWithEntity.entityId` is a generic polymorphic
+        // reference (packages/schemas/src/image.ts) — a uuid regardless of
+        // owning entity, with no denormalized shortcode. Routed through the
+        // manifest (rather than a hand-rolled `/projects/$id`, which is no
+        // longer a real route) so this at least resolves once `project`
+        // gains a shortcode here; until then it's a dead link either way.
         <Link
-          to="/projects/$id"
-          params={{ id: entityId }}
+          to={entities.project.routes.detail}
+          params={entityDetailParams(entityId)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
@@ -96,17 +103,19 @@ export function ImageDetail({ image }: ImageDetailProps) {
         // Cookbook covers are tracked by FK, not the join-table ownership this
         // view resolves, so entityId/entityName are unset and the guard above
         // returns first — this case exists only for exhaustiveness.
-        <a
-          href={`/cookbooks/${entityId}`}
+        <Link
+          to={entities.cookbook.routes.detail}
+          params={entityDetailParams(entityId)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
-        </a>
+        </Link>
       ))
       .with("PURCHASE", () => (
+        // KNOWN GAP: same as PROJECT above.
         <Link
-          to="/purchases/$id"
-          params={{ id: entityId }}
+          to={entities.purchase.routes.detail}
+          params={entityDetailParams(entityId)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}

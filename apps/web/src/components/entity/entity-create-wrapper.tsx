@@ -16,11 +16,10 @@ interface EntityCreateWrapperProps<TResult extends { id: string }> {
   children: (props: CreateModeProps<TResult>) => ReactNode;
 }
 
-export function EntityCreateWrapper<TData, TResult extends { id: string }>({
-  entity,
-  mutationOptions,
-  children,
-}: EntityCreateWrapperProps<TResult>) {
+export function EntityCreateWrapper<
+  TData,
+  TResult extends { id: string; shortcode: string },
+>({ entity, mutationOptions, children }: EntityCreateWrapperProps<TResult>) {
   const { error, isPending, handleCreate, handleCreateAsync, handleCancel } =
     useEntityCreateMode<TData, TResult>(entity, mutationOptions);
 

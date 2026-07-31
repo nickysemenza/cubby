@@ -20,9 +20,12 @@ test.describe("Create Ingredient", () => {
     await page.getByRole("button", { name: /^Create$/ }).click();
 
     // Expect redirect to ingredient detail page
-    await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
-      timeout: 15000,
-    });
+    await expect(page).toHaveURL(
+      /\/ingredients\/ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+      {
+        timeout: 15000,
+      },
+    );
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
       ingredientName,
       { timeout: 10000 },

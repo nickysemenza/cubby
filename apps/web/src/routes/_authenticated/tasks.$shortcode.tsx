@@ -8,11 +8,13 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 
-export const Route = createFileRoute("/_authenticated/tasks/$id")({
+export const Route = createFileRoute("/_authenticated/tasks/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.task.getByID.queryOptions({ id: params.id }),
+      context.trpc.task.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -30,13 +32,17 @@ export const Route = createFileRoute("/_authenticated/tasks/$id")({
 });
 
 function TaskDetailPage() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
   const api = useTRPC();
   const { data: task } = useSuspenseQuery(
-    api.task.getByID.queryOptions({ id }),
+    api.task.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(task.name);
+  useDocumentTitle(task?.name);
 
-  return <TaskDetail key={id} task={task} />;
+  // The loader already threw notFound for an unknown code; this guard only
+  // satisfies the nullable output type.
+  if (!task) return null;
+
+  return <TaskDetail key={shortcode} task={task} />;
 }

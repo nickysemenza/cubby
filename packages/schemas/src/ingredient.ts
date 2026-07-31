@@ -2,7 +2,7 @@ import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { id, ingredientId, recipeId } from "./identifiers";
+import { id, ingredientId, ingredientShortcode, recipeId } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
@@ -59,6 +59,7 @@ export type IngredientSortField = (typeof ingredientSortableFields)[number];
 
 export const ingredientOutFields = {
   id: ingredientId,
+  shortcode: ingredientShortcode,
   ...ingredientBaseFields,
   // Base measurement kinds the user has marked "not applicable" for this
   // ingredient (e.g. volume on a count-only item). The DB column is non-null

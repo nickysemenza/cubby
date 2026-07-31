@@ -1,3 +1,4 @@
+import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
 /**
  * Location tree and hierarchy operations.
  * Build location trees, type counts, and import updates.
@@ -112,6 +113,7 @@ export const buildLocationTree = async (db: Database) => {
       ? await getDb(db)
           .select({
             id: inventoryEntry.id,
+            shortcode: inventoryEntry.shortcode,
             locationId: inventoryEntry.locationId,
             amount: inventoryEntry.amount,
             productId: inventoryEntry.productId,
@@ -135,6 +137,7 @@ export const buildLocationTree = async (db: Database) => {
     const existing = inventoryByLocationId.get(entry.locationId) ?? [];
     existing.push({
       id: entry.id,
+      shortcode: unsafeInventoryShortcode(entry.shortcode),
       amount: entry.amount,
       productName: entry.productName,
       productId: entry.productId,

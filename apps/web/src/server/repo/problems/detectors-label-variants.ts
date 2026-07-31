@@ -96,7 +96,11 @@ const findSpellingVariants = async (
     WITH spellings AS (
       SELECT ${column} AS value,
              ${weight}::int AS count,
-             min(id::text) AS "sampleId",
+             -- Same row as the old min(id::text) (ascending-first == min), but
+             -- paired via array position with its shortcode so the two always
+             -- name the same record.
+             (array_agg(id::text ORDER BY id::text))[1] AS "sampleId",
+             (array_agg(shortcode ORDER BY id::text))[1] AS "sampleShortcode",
              ${canonicalKey(column)} AS key
       FROM ${table}
       WHERE "deletedAt" IS NULL
@@ -114,13 +118,14 @@ const findSpellingVariants = async (
       SELECT s.*,
              first_value(s.value) OVER w AS canonical,
              first_value(s.count) OVER w AS "canonicalCount",
-             first_value(s."sampleId") OVER w AS "canonicalSampleId"
+             first_value(s."sampleId") OVER w AS "canonicalSampleId",
+             first_value(s."sampleShortcode") OVER w AS "canonicalSampleShortcode"
       FROM spellings s
       INNER JOIN drifted d ON d.key = s.key
       WINDOW w AS (PARTITION BY s.key ORDER BY s.count DESC, s.value ASC)
     )
-    SELECT value, count, "sampleId", canonical, "canonicalCount",
-           "canonicalSampleId"
+    SELECT value, count, "sampleId", "sampleShortcode", canonical,
+           "canonicalCount", "canonicalSampleId", "canonicalSampleShortcode"
     FROM ranked
     WHERE value <> canonical
     ORDER BY "canonicalCount" DESC, count DESC, value ASC

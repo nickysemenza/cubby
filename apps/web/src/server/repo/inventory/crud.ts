@@ -182,7 +182,7 @@ const fetchInventoryById = async (
 // Read path through the shared reader. The write path stays hand-rolled: create/
 // update recompute valuation from the product price and guard live targets.
 const inventoryReader = createEntityReader({
-  entityName: "inventory",
+  entity: "inventory",
   fetchById: fetchInventoryById,
   fromDB: (_db, row: InventoryEntryDeepDB) => dbInventoryEntryToAPI(row),
   notFoundReason: "INVENTORY_NOT_FOUND",
@@ -190,6 +190,9 @@ const inventoryReader = createEntityReader({
 
 export const getInventoryEntryByID = (db: Database, id: InventoryId) =>
   inventoryReader.getByIDOrNull(db, id);
+
+export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
+  inventoryReader.getByShortcode(db, shortcode);
 
 /** Filters for inventory list queries */
 interface InventoryFilters {

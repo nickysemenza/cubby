@@ -2,6 +2,7 @@ import type { TaskOut } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { formatDate, StatusIcon } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { CalendarHeatmap } from "./calendar-heatmap";
@@ -71,8 +72,8 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
         >
           <StatusIcon status={task.status} />
           <Link
-            to="/tasks/$id"
-            params={{ id: task.id }}
+            to={entities.task.routes.detail}
+            params={entityDetailParams(task.shortcode)}
             className="truncate hover:underline"
             title={task.name}
           >

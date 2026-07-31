@@ -9,6 +9,7 @@ import { usePageCount } from "~/components/page/Page";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
@@ -82,8 +83,8 @@ export function PurchaseList() {
         meta: { className: "w-56", mobile: { slot: "title", priority: 0 } },
         cell: (info) => (
           <TableLink
-            to="/purchases/$id"
-            params={{ id: info.row.original.id }}
+            to={entities.purchase.routes.detail}
+            params={entityDetailParams(info.row.original.shortcode)}
             className="block truncate"
           >
             {info.getValue()}

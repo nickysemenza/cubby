@@ -25,6 +25,7 @@ import {
 } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { type ChainNode, longestChains } from "./gantt-chain";
 import { toDayIndex, todayPlain } from "./gantt-date";
 import { buildProjectRows, type DayRange, type GanttRow } from "./gantt-model";
@@ -147,9 +148,13 @@ export function ProjectGantt({
     // Group rows are portfolio-only and never reach `renderName` anyway
     // (the chart's NameCell renders them itself).
     if (row.kind === "group") return row.label;
-    const to = row.kind === "project" ? "/projects/$id" : "/tasks/$id";
+    const entity = row.kind === "project" ? "project" : "task";
     return (
-      <Link to={to} params={{ id: row.id }} className="hover:underline">
+      <Link
+        to={entities[entity].routes.detail}
+        params={entityDetailParams(row.shortcode)}
+        className="hover:underline"
+      >
         {row.name}
       </Link>
     );
@@ -194,8 +199,8 @@ export function ProjectGantt({
             {unscheduled.map((task) => (
               <Link
                 key={task.id}
-                to="/tasks/$id"
-                params={{ id: task.id }}
+                to={entities.task.routes.detail}
+                params={entityDetailParams(task.shortcode)}
                 className="max-w-64 truncate rounded-sm bg-muted px-2 py-1 text-xs hover:underline"
                 title={task.name}
               >

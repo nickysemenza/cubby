@@ -26,6 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "../task-options";
@@ -113,7 +114,11 @@ export function TaskCard({
     });
   }, [task.id, task.status, task.projectId, task.trade]);
 
-  const open = () => navigate({ to: "/tasks/$id", params: { id: task.id } });
+  const open = () =>
+    navigate({
+      to: entities.task.routes.detail,
+      params: entityDetailParams(task.shortcode),
+    });
 
   // A ranged task (dueDate + dueEndDate) is overdue only once its *end* passes
   // — a dueDate in the past with a dueEndDate still ahead means it's currently

@@ -581,7 +581,10 @@ function MobileGalleryDrillDown({
       if (location.children && location.children.length > 0) {
         setPath((prev) => [...prev, location]);
       } else {
-        navigate({ to: "/locations/$id", params: { id: location.id } });
+        navigate({
+          to: "/locations/$shortcode",
+          params: { shortcode: location.shortcode },
+        });
       }
     },
     [navigate],

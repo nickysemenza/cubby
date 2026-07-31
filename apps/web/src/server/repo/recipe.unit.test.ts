@@ -156,6 +156,7 @@ describe("recipe repository helpers", () => {
 
       expect(result).toEqual({
         id: RECIPE_ID,
+        shortcode: "RCP-A3F2",
         name: "Test Recipe",
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
@@ -172,7 +173,7 @@ describe("recipe repository helpers", () => {
           url: "https://example.com/recipe",
         },
       });
-      expect(result).not.toHaveProperty("shortcode");
+      expect(result.shortcode).toBe("RCP-A3F2");
       expect(result).not.toHaveProperty("deletedAt");
       expect(result).not.toHaveProperty("totalsComputedAt");
       expect(result).not.toHaveProperty("SourceType");
@@ -233,7 +234,10 @@ describe("recipe repository helpers", () => {
         },
       ],
     });
-    expect(result).not.toHaveProperty("shortcode");
+    // `shortcode` is deliberately PRESENT — it became the recipe's public id in
+    // the 2026-07 cutover, and the detail route/labels read it. Only the truly
+    // DB-only columns stay out of the API shape.
+    expect(result.shortcode).toBe("RCP-A3F2");
     expect(result).not.toHaveProperty("deletedAt");
     expect(result).not.toHaveProperty("SourceType");
     expect(result.images).toHaveLength(1);
@@ -291,7 +295,7 @@ describe("recipe repository helpers", () => {
     expect(appearsInRecipes).toHaveLength(1);
     expect(recipeUsages[0]?.recipe).not.toHaveProperty("totals");
     expect(appearsInRecipes[0]).not.toHaveProperty("totals");
-    expect(recipeUsages[0]?.recipe).not.toHaveProperty("shortcode");
+    expect(recipeUsages[0]?.recipe.shortcode).toBeDefined();
     expect(recipeUsageOut.parse(recipeUsages[0])).toEqual(recipeUsages[0]);
   });
 });

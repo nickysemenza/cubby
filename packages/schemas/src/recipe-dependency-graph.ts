@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { cookbookId, recipeId } from "./identifiers";
+import { cookbookId, recipeId, recipeShortcode } from "./identifiers";
 
 // Node + edge shapes for the recipe-as-ingredient dependency graph.
 // An edge points parent → sub ("uses / depends on"): the source recipe contains
 // an ingredient row whose `recipeId` resolves to the target (sub-)recipe.
 const recipeDepNodeSchema = z.object({
   id: recipeId,
+  shortcode: recipeShortcode,
   name: z.string(),
   cookbookId: cookbookId.nullable(),
   cookbookName: z.string().nullable(),

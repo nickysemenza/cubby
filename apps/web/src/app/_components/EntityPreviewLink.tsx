@@ -56,13 +56,26 @@ export function EntityPreviewLink({
         delay={300}
         closeDelay={150}
         render={
-          <Link
-            to={entities[entity].routes.detail}
-            params={entityDetailParams(entity, id)}
-            target={openInNewTab ? "_blank" : undefined}
-            rel={openInNewTab ? "noopener noreferrer" : undefined}
-            className={className}
-          />
+          // usda-food is the one HoverPreviewEntity that isn't shortcode-keyed
+          // (its route stays `/usda/$id`, keyed on `String(fdc_id)`) — see the
+          // `usda`/`image` carve-out on `entityDetailParams`.
+          entity === "usda-food" ? (
+            <Link
+              to="/usda/$id"
+              params={{ id }}
+              target={openInNewTab ? "_blank" : undefined}
+              rel={openInNewTab ? "noopener noreferrer" : undefined}
+              className={className}
+            />
+          ) : (
+            <Link
+              to={entities[entity].routes.detail}
+              params={entityDetailParams(id)}
+              target={openInNewTab ? "_blank" : undefined}
+              rel={openInNewTab ? "noopener noreferrer" : undefined}
+              className={className}
+            />
+          )
         }
       >
         {children}

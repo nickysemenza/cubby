@@ -276,7 +276,10 @@ function Graph({
                 onMouseEnter={() => setHovered(node)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={() =>
-                  navigate({ to: "/recipes/$id", params: { id: node.id } })
+                  navigate({
+                    to: "/recipes/$shortcode",
+                    params: { shortcode: node.shortcode },
+                  })
                 }
               >
                 <circle

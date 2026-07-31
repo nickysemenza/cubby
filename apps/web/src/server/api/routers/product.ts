@@ -11,6 +11,7 @@ import {
   type IngredientId,
   type ProductId,
   productId,
+  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import {
   productApplyUpcInput,
@@ -24,7 +25,6 @@ import {
   productMarkUsdaUnavailableManyInput,
   productPickerItemOut,
   productQuickCreatePayload,
-  productShortcodeInput,
   productShortcodeListOut,
   productShortcodesInput,
   productSortableFields,
@@ -44,7 +44,6 @@ import { getErrorMessage } from "~/lib/error-utils";
 import {
   deleteProducts,
   getCategoryDistribution,
-  getProductByShortcode,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
   getProductsSharingTags,
@@ -53,6 +52,7 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import {
   runMutationSideEffects,
@@ -111,7 +111,8 @@ const { list } = createEntityListProcedure({
 
 // Create standardized detail/create/update procedures using the enriched schema
 // (create + update are overridden below for side effects).
-const { getByID } = createEntityCrudWithoutListProcedures({
+const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
+  entityName: "product",
   schemas: {
     createInput: productCreateInput,
     // Defaults-stripped so a partial update never resets an omitted field (e.g.
@@ -123,6 +124,21 @@ const { getByID } = createEntityCrudWithoutListProcedures({
   repository: {
     getByID: async (services, id: ProductId) => {
       return await getProductWithFood(services.db, services.usdaClient, id);
+    },
+    // Resolves the shortcode itself rather than reusing a plain repo-level
+    // reader: `getByID` above returns the USDA-enriched shape
+    // (`productWithFoodOut`), and the factory requires both procedures to
+    // share one output schema, so this has to go through the same
+    // enrichment `getByID` does.
+    getByShortcode: async (services, shortcode) => {
+      const id = await resolveLiveShortcode(services.db, shortcode, "product");
+      return id
+        ? await getProductWithFood(
+            services.db,
+            services.usdaClient,
+            unsafeProductId(id),
+          )
+        : null;
     },
     create: async (services, data) => {
       return await createProductWithFood(
@@ -380,14 +396,6 @@ const getByShortcodes = protectedProcedure
   .output(productShortcodeListOut)
   .query(async ({ ctx, input }) => {
     return await getProductsByShortcodes(ctx.db, input.shortcodes);
-  });
-
-// Get product by shortcode (e.g., P-X7K9)
-const getByShortcode = protectedProcedure
-  .input(productShortcodeInput)
-  .output(productTopLevelOut.nullable())
-  .query(async ({ ctx, input }) => {
-    return await getProductByShortcode(ctx.db, input.shortcode);
   });
 
 // Batch-create products for the enrichment workbench's "Create products" action,

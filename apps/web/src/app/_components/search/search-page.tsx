@@ -18,7 +18,7 @@ import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skelet
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Input } from "~/components/ui/input";
-import { EntityIcon, entities } from "~/entities/entities";
+import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -193,12 +193,12 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           onClick={() => {
             pushRecent({
               entityType: "ingredient",
-              id: conversion.ingredientId,
+              shortcode: conversion.ingredientShortcode,
               name: conversion.ingredientName,
             });
             navigate({
               to: entities.ingredient.routes.detail,
-              params: { id: conversion.ingredientId },
+              params: entityDetailParams(conversion.ingredientShortcode),
             });
           }}
           className="w-full rounded-lg border border-[var(--border)] bg-card px-4 py-4 text-left transition-colors hover:bg-muted/50"
@@ -252,13 +252,13 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                     as="button"
                     align="center"
                     gap="sm"
-                    key={`jump-${jump.entityType}-${jump.id}`}
+                    key={`jump-${jump.entityType}-${jump.shortcode}`}
                     type="button"
                     onClick={() => {
                       pushRecent(jump);
                       navigate({
                         to: entities[entity].routes.detail,
-                        params: { id: jump.id },
+                        params: entityDetailParams(jump.shortcode),
                       });
                     }}
                     className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"

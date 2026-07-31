@@ -41,9 +41,11 @@ export type RecipeTotalsGap =
   | {
       source: "ingredient";
       ingredientId: string;
+      ingredientShortcode: string;
       name: string;
       /** Single-product -> deep-link target; null routes to the ingredient hub. */
       productId: string | null;
+      productShortcode: string | null;
       /** The recipe line's primary unit (drives the example in the suggestion). */
       lineUnit: string | null;
       lineKind: LineKind;
@@ -58,6 +60,8 @@ export type RecipeTotalsGap =
       rowId: string;
       /** The sub-recipe being referenced. */
       recipeId: string;
+      /** The sub-recipe's public id, for its detail-route deep-link. */
+      recipeShortcode: string;
       name: string;
       lineUnit: string | null;
       lineKind: LineKind;
@@ -104,7 +108,9 @@ const classifyLine = (unit: string | null): LineKind => {
 
 interface GapAccumulator {
   name: string;
+  ingredientShortcode: string;
   productId: string | null;
+  productShortcode: string | null;
   lineUnit: string | null;
   lineKind: LineKind;
   products: IngredientWithFoodLeanOut["product"];
@@ -234,6 +240,7 @@ export const deriveRecipeTotalsGaps = (
         source: "recipe",
         rowId: row.id,
         recipeId: row.recipe.id,
+        recipeShortcode: row.recipe.shortcode,
         name: row.recipe.name,
         lineUnit,
         lineKind: classifyLine(lineUnit),
@@ -263,7 +270,9 @@ export const deriveRecipeTotalsGaps = (
     const lineUnit = row.amounts[0]?.unit ?? null;
     byIngredientId.set(id, {
       name: row.ingredient.name,
+      ingredientShortcode: row.ingredient.shortcode,
       productId: products.length === 1 ? products[0]!.id : null,
+      productShortcode: products.length === 1 ? products[0]!.shortcode : null,
       lineUnit,
       lineKind: classifyLine(lineUnit),
       products,
@@ -280,8 +289,10 @@ export const deriveRecipeTotalsGaps = (
     gaps.push({
       source: "ingredient",
       ingredientId,
+      ingredientShortcode: acc.ingredientShortcode,
       name: acc.name,
       productId: acc.productId,
+      productShortcode: acc.productShortcode,
       lineUnit: acc.lineUnit,
       lineKind: acc.lineKind,
       missing: acc.missing,

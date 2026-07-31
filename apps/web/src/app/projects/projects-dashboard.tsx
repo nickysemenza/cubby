@@ -44,6 +44,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
@@ -464,8 +465,8 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
           <Row key={task.id} align="center" gap="sm" className="text-sm">
             <StatusIcon status={task.status} />
             <Link
-              to="/tasks/$id"
-              params={{ id: task.id }}
+              to={entities.task.routes.detail}
+              params={entityDetailParams(task.shortcode)}
               className="truncate hover:underline"
             >
               {task.name}
@@ -850,7 +851,11 @@ function ProjectCard({
   const overBudget = estimate != null && spent > estimate;
 
   return (
-    <Link to="/projects/$id" params={{ id: project.id }} className="block">
+    <Link
+      to={entities.project.routes.detail}
+      params={entityDetailParams(project.shortcode)}
+      className="block"
+    >
       <Card
         size="sm"
         className="overflow-hidden transition-colors hover:bg-muted/50"

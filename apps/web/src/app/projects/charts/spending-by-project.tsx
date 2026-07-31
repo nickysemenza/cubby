@@ -3,6 +3,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
+import { entityDetailLink } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
@@ -29,6 +30,7 @@ export function SpendingByProject({
         .map((r) => ({
           project: r.projectName,
           id: r.projectId,
+          shortcode: r.projectShortcode,
           cost: r.spend,
         }))
         .reverse(),
@@ -65,8 +67,8 @@ export function SpendingByProject({
         enableGridX
         enableGridY={false}
         onClick={(bar) => {
-          const id = bar.data.id;
-          if (id) navigate({ to: "/projects/$id", params: { id } });
+          const shortcode = bar.data.shortcode;
+          if (shortcode) navigate(entityDetailLink("project", shortcode));
         }}
         tooltip={({ indexValue, value }) => (
           <ChartTooltip>

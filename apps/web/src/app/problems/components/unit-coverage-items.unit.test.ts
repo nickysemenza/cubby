@@ -1,4 +1,9 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeIngredientShortcode,
+  unsafeProductId,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import {
   buildUnitCoverageItems,
@@ -11,18 +16,21 @@ type Partial_ = Parameters<typeof buildUnitCoverageItems>[1][number];
 type Islanded = Parameters<typeof buildUnitCoverageItems>[2][number];
 
 const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
-  id: "p1",
+  id: unsafeProductId("p1"),
+  shortcode: unsafeProductShortcode("PRD-P1"),
   name: "Saffron",
   manufacturer: "generic",
   createdAt: new Date(0),
   isIngredient: true,
   usdaUnavailable: false,
   ingredientId: null,
+  ingredientShortcode: null,
   ...over,
 });
 
 const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
-  id: "p2",
+  id: unsafeProductId("p2"),
+  shortcode: unsafeProductShortcode("PRD-P2"),
   name: "Aji amarillo",
   manufacturer: "generic",
   coverage: {
@@ -33,11 +41,13 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   hasUsdaLink: false,
   usdaUnavailable: false,
   ingredientId: unsafeIngredientId("i2"),
+  ingredientShortcode: unsafeIngredientShortcode("ING-I2"),
   ...over,
 });
 
 const islandedProduct = (over: Partial<Islanded> = {}): Islanded => ({
-  id: "p3",
+  id: unsafeProductId("p3"),
+  shortcode: unsafeProductShortcode("PRD-P3"),
   name: "Brown sugar",
   manufacturer: "Domino",
   islandCount: 2,

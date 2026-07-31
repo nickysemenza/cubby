@@ -1414,6 +1414,7 @@ export function DesignGallery() {
 // codes: 208 kcal, 203 protein, 204 fat, 205 carbs, 291 fiber, 307 sodium.
 const RECIPE_SAMPLE: RecipePreview = {
   id: "sample-recipe",
+  shortcode: "RCP-2345",
   name: "RT-Style Chicken Rice Bowl",
   yieldText: "makes 1 serving",
   cost: 0.48,
@@ -1427,6 +1428,7 @@ const RECIPE_SAMPLE: RecipePreview = {
 };
 const INGREDIENT_SAMPLE: IngredientPreview = {
   id: "sample-ingredient",
+  shortcode: "ING-3456",
   name: "cilantro",
   aliases: ["coriander", "fresh coriander"],
   nutrients: buildNutrients({
@@ -1446,6 +1448,7 @@ const INGREDIENT_SAMPLE: IngredientPreview = {
 };
 const PRODUCT_SAMPLE: ProductPreview = {
   id: "sample-product",
+  shortcode: "PRD-4567",
   name: "kosher salt",
   identity: "Diamond Crystal · food",
   nutrients: buildNutrients({ sodium: 40000 }),
@@ -1459,29 +1462,32 @@ const USDA_SAMPLE: UsdaPreview = {
   dataType: "branded_food",
   brand: "Diamond Crystal",
   nutrients: buildNutrients({ sodium: 40000 }),
-  linkedProductId: "sample-product",
+  linkedProductShortcode: "PRD-2345",
   linkedProductName: "kosher salt",
 };
 const LOCATION_SAMPLE: LocationPreview = {
   id: "sample-location",
+  shortcode: "LOC-5678",
   name: "Top Shelf",
   type: "shelf",
-  parent: { id: "sample-parent", name: "Pantry" },
+  parent: { shortcode: "LOC-EFGH", name: "Pantry" },
   itemCount: 12,
   subCount: 3,
 };
 const INVENTORY_SAMPLE: InventoryPreview = {
   id: "sample-inventory",
+  shortcode: "INV-6789",
   productName: "Diamond Crystal Kosher Salt",
-  productId: "sample-product",
+  productShortcode: "PRD-2345",
   locationName: "Top Shelf",
-  locationId: "sample-location",
+  locationShortcode: "LOC-5678",
   locationType: "shelf",
   amountText: "3 lb",
   valuation: 11.97,
 };
 const COOKBOOK_SAMPLE: CookbookPreview = {
   id: "sample-cookbook",
+  shortcode: "CKB-789A",
   name: "Salt Fat Acid Heat",
   authors: ["Samin Nosrat"],
   subjects: ["Cooking", "Technique"],
@@ -1490,6 +1496,7 @@ const COOKBOOK_SAMPLE: CookbookPreview = {
 };
 const MEAL_SAMPLE: MealPreview = {
   id: "sample-meal",
+  shortcode: "MEL-89AB",
   name: "Sunday Supper",
   date: "2026-08-09",
   recipeNames: ["Buttermilk-Brined Chicken", "Kale Caesar"],
@@ -1499,6 +1506,7 @@ const MEAL_SAMPLE: MealPreview = {
 };
 const PROJECT_SAMPLE: ProjectPreview = {
   id: "sample-project",
+  shortcode: "PRJ-9ABC",
   name: "Backyard Deck Rebuild",
   icon: "🔨",
   status: "in_progress",
@@ -1512,6 +1520,7 @@ const PROJECT_SAMPLE: ProjectPreview = {
 };
 const TASK_SAMPLE: TaskPreview = {
   id: "sample-task",
+  shortcode: "TSK-ABCD",
   name: "Sand and stain the railing",
   status: "in_progress",
   trade: "finishes",
@@ -1522,6 +1531,7 @@ const TASK_SAMPLE: TaskPreview = {
 };
 const EXPENSE_SAMPLE: ExpensePreview = {
   id: "sample-expense",
+  shortcode: "EXP-BCDE",
   name: "Cedar decking boards",
   cost: 340,
   date: "2026-07-10",
@@ -1535,6 +1545,7 @@ const EXPENSE_SAMPLE: ExpensePreview = {
 // reconciliation caption is the whole point of the card, so the sample shows it.
 const PURCHASE_SAMPLE: PurchasePreview = {
   id: "sample-purchase",
+  shortcode: "PUR-CDEF",
   orderId: "WN63446464",
   date: "2026-07-10",
   statedTotal: 412.18,
@@ -1545,6 +1556,7 @@ const PURCHASE_SAMPLE: PurchasePreview = {
 };
 const VENDOR_SAMPLE: VendorPreview = {
   id: "sample-vendor",
+  shortcode: "VEN-DEFG",
   name: "Home Depot",
   purchaseCount: 27,
   spend: 8412.55,

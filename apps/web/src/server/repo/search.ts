@@ -107,6 +107,7 @@ const searchQueries = {
       client
         .select({
           id: product.id,
+          shortcode: product.shortcode,
           name: product.name,
           subtitle: product.manufacturer,
           entityType: sql<"product">`'product'`.as("entityType"),
@@ -130,6 +131,7 @@ const searchQueries = {
       client
         .select({
           id: recipe.id,
+          shortcode: recipe.shortcode,
           name: recipe.name,
           subtitle: sql<string | null>`null`.as("subtitle"),
           entityType: sql<"recipe">`'recipe'`.as("entityType"),
@@ -157,6 +159,7 @@ const searchQueries = {
       client
         .select({
           id: ingredient.id,
+          shortcode: ingredient.shortcode,
           name: ingredient.name,
           subtitle: sql<string | null>`null`.as("subtitle"),
           entityType: sql<"ingredient">`'ingredient'`.as("entityType"),
@@ -187,6 +190,7 @@ const searchQueries = {
       client
         .select({
           id: cookbook.id,
+          shortcode: cookbook.shortcode,
           name: cookbook.name,
           // Authors read as the byline; empty array ⇒ no subtitle.
           subtitle: sql<
@@ -226,6 +230,7 @@ const searchQueries = {
       client
         .select({
           id: location.id,
+          shortcode: location.shortcode,
           name: location.name,
           subtitle: location.type,
           entityType: sql<"location">`'location'`.as("entityType"),
@@ -258,6 +263,7 @@ const searchQueries = {
       client
         .select({
           id: inventoryEntry.id,
+          shortcode: inventoryEntry.shortcode,
           name: product.name,
           subtitle: location.name,
           entityType: sql<"inventory">`'inventory'`.as("entityType"),
@@ -300,6 +306,7 @@ const searchQueries = {
           // Meal.name is nullable; the date is the fallback display name (it is
           // how the calendar labels an unnamed meal).
           id: meal.id,
+          shortcode: meal.shortcode,
           name: sql<string>`COALESCE(NULLIF(${meal.name}, ''), ${meal.date}::text)`.as(
             "name",
           ),
@@ -333,6 +340,7 @@ const searchQueries = {
       client
         .select({
           id: project.id,
+          shortcode: project.shortcode,
           name: project.name,
           subtitle: project.kind,
           entityType: sql<"project">`'project'`.as("entityType"),
@@ -368,6 +376,7 @@ const searchQueries = {
       client
         .select({
           id: task.id,
+          shortcode: task.shortcode,
           name: task.name,
           subtitle: project.name,
           entityType: sql<"task">`'task'`.as("entityType"),
@@ -414,6 +423,7 @@ const searchQueries = {
       client
         .select({
           id: expense.id,
+          shortcode: expense.shortcode,
           name: expense.name,
           subtitle: project.name,
           entityType: sql<"expense">`'expense'`.as("entityType"),

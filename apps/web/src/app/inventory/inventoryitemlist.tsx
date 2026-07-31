@@ -8,6 +8,7 @@ import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { NoneValue } from "~/components/ui/none-value";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { multiSelectFilterFn } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
@@ -151,7 +152,10 @@ export function InventoryItemList() {
         // including the click fence, without which this click would also open
         // the amount editor).
         renderDisplay: (content, row) => (
-          <Link to="/inventory/$id" params={{ id: row.id }}>
+          <Link
+            to={entities.inventory.routes.detail}
+            params={entityDetailParams(row.shortcode)}
+          >
             {content}
           </Link>
         ),

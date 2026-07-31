@@ -29,6 +29,7 @@ import {
   createMeal,
   deleteMeals,
   getMealByID,
+  getMealByShortcode,
   getMealsByDateRange,
   mealList,
   removeMealRecipe,
@@ -41,6 +42,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const {
   getByID,
+  getByShortcode,
   list,
   create,
   update,
@@ -62,6 +64,8 @@ const {
       }
       return res;
     },
+    getByShortcode: (services, shortcode) =>
+      getMealByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       mealList(services.db, filters, sort, pagination),
     create: async (services, data) =>
@@ -150,9 +154,11 @@ const getShoppingList = protectedProcedure
         lines.push({ recipeId: mr.recipeId, scale: mr.scale });
         lineMeta.push({
           mealId: m.id,
+          mealShortcode: m.shortcode,
           mealName: m.name,
           date: m.date,
           recipeId: mr.recipeId,
+          recipeShortcode: mr.recipe.shortcode,
           recipeName: mr.recipe.name,
           scale: mr.scale,
         });
@@ -166,6 +172,7 @@ const getShoppingList = protectedProcedure
         const have = n.haveValue ?? 0;
         return {
           ingredientId: n.ingredientId,
+          ingredientShortcode: n.ingredientShortcode,
           name: n.name,
           basisUnit: n.basisUnit,
           needValue: n.needValue,
@@ -193,6 +200,7 @@ const getShoppingList = protectedProcedure
 
 export const mealRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   create,
   update,

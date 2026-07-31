@@ -117,8 +117,8 @@ function UsageTable({
             <TableRow key={row.ingredientId}>
               <TableCell className="whitespace-normal">
                 <Link
-                  to="/ingredients/$id"
-                  params={{ id: row.ingredientId }}
+                  to="/ingredients/$shortcode"
+                  params={{ shortcode: row.shortcode }}
                   className="hover:underline"
                 >
                   {row.name}

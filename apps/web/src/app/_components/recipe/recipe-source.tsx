@@ -68,10 +68,10 @@ export function RecipeSourceLink({
           <span className="truncate">{s.book}</span>
         </>
       );
-      return s.cookbookId ? (
+      return s.cookbookShortcode ? (
         <Link
-          to="/cookbooks/$cookbookId"
-          params={{ cookbookId: s.cookbookId }}
+          to="/cookbooks/$shortcode"
+          params={{ shortcode: s.cookbookShortcode }}
           className={cn(rowCn, "hover:underline")}
           onClick={onClick}
         >

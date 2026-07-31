@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { ingredientAvailabilityStatus } from "./availability";
-import { ingredientId, mealId, mealRecipeId, recipeId } from "./identifiers";
+import {
+  ingredientId,
+  ingredientShortcode,
+  mealId,
+  mealRecipeId,
+  mealShortcode,
+  recipeId,
+  recipeShortcode,
+} from "./identifiers";
 import { mealDate, mealScale } from "./meal-shared";
 import {
   createItemsResponseSchema,
@@ -100,6 +108,7 @@ export type ScaledTotals = z.infer<typeof scaledTotals>;
 /** A recipe as summarized inside a meal (no ingredient graph). */
 export const mealRecipeSummary = z.object({
   id: recipeId,
+  shortcode: recipeShortcode,
   name: z.string(),
   servings: z.number().nullish(),
   yield: recipeYieldSchema.nullish(),
@@ -131,6 +140,7 @@ export type MealTotals = z.infer<typeof mealTotals>;
 
 export const mealOut = z.object({
   id: mealId,
+  shortcode: mealShortcode,
   date: mealDate,
   name: z.string().nullable(),
   sortOrder: z.number().int().nullable(),
@@ -167,9 +177,11 @@ export const mealListOut = z.array(mealOut);
 /** Which meal/recipe contributed how much of an item's total need. */
 export const shoppingListContribution = z.object({
   mealId,
+  mealShortcode,
   mealName: z.string().nullable(),
   date: mealDate,
   recipeId,
+  recipeShortcode,
   recipeName: z.string(),
   scale: mealScale,
   /** This contribution's need, in the item's `basisUnit`. */
@@ -179,6 +191,7 @@ export type ShoppingListContribution = z.infer<typeof shoppingListContribution>;
 
 export const shoppingListItem = z.object({
   ingredientId: ingredientId.nullable(),
+  ingredientShortcode: ingredientShortcode.nullable(),
   name: z.string(),
   /** Unit `needValue`/`haveValue` are expressed in: grams when convertible, else the need's own unit. */
   basisUnit: z.string().nullable(),

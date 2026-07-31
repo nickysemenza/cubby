@@ -86,7 +86,7 @@ const MISSING_CHIPS: {
  * so the coverage popover *and* the per-row "missing cost" cell in the
  * ingredient list point at the exact same fix — one source of truth.
  */
-function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeId: string) {
+function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeShortcode: string) {
   if (gap.source === "ingredient") {
     return {
       to: "/ingredients/workbench" as const,
@@ -96,9 +96,12 @@ function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeId: string) {
   const edit =
     gap.kind === "set-subrecipe-amount" || gap.kind === "set-subrecipe-yield";
   return {
-    to: "/recipes/$id" as const,
+    to: "/recipes/$shortcode" as const,
     params: {
-      id: gap.kind === "set-subrecipe-amount" ? currentRecipeId : gap.recipeId,
+      shortcode:
+        gap.kind === "set-subrecipe-amount"
+          ? currentRecipeShortcode
+          : gap.recipeShortcode,
     },
     search: { edit: edit ? true : undefined },
   };
@@ -112,16 +115,16 @@ function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeId: string) {
  */
 function TotalsGapAction({
   gap,
-  currentRecipeId,
+  currentRecipeShortcode,
   cta,
 }: {
   gap: RecipeTotalsGap;
-  currentRecipeId: string;
+  currentRecipeShortcode: string;
   cta: string;
 }) {
   return (
     <Link
-      {...gapFixLinkProps(gap, currentRecipeId)}
+      {...gapFixLinkProps(gap, currentRecipeShortcode)}
       className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
     >
       {cta}
@@ -132,10 +135,10 @@ function TotalsGapAction({
 
 function TotalsGapList({
   gaps,
-  currentRecipeId,
+  currentRecipeShortcode,
 }: {
   gaps: RecipeTotalsGap[];
-  currentRecipeId: string;
+  currentRecipeShortcode: string;
 }) {
   return (
     <ul className="divide-y divide-border/60">
@@ -171,7 +174,7 @@ function TotalsGapList({
             </div>
             <TotalsGapAction
               gap={gap}
-              currentRecipeId={currentRecipeId}
+              currentRecipeShortcode={currentRecipeShortcode}
               cta={cta}
             />
           </Row>
@@ -190,9 +193,12 @@ function TotalsGapList({
 export function RecipeTotalsCoverageButton({
   gaps,
   currentRecipeId,
+  currentRecipeShortcode,
 }: {
   gaps: RecipeTotalsGap[];
+  /** Scopes the "Open all in workbench" link — the workbench filters by id, not shortcode. */
   currentRecipeId: string;
+  currentRecipeShortcode: string;
 }) {
   if (gaps.length === 0) return null;
 
@@ -225,7 +231,10 @@ export function RecipeTotalsCoverageButton({
             ))}
           </Row>
         </PopoverHeader>
-        <TotalsGapList gaps={gaps} currentRecipeId={currentRecipeId} />
+        <TotalsGapList
+          gaps={gaps}
+          currentRecipeShortcode={currentRecipeShortcode}
+        />
         <Link
           to="/ingredients/workbench"
           search={{ recipe: currentRecipeId }}
@@ -253,11 +262,11 @@ export function RecipeTotalsCoverageButton({
  */
 export function MissingMeasureCell({
   gap,
-  currentRecipeId,
+  currentRecipeShortcode,
   reason,
 }: {
   gap: RecipeTotalsGap | undefined;
-  currentRecipeId: string;
+  currentRecipeShortcode: string;
   /** The engine's error string, surfaced on hover for detail. */
   reason: string;
 }) {
@@ -271,7 +280,7 @@ export function MissingMeasureCell({
   const { lead } = suggestionFor(gap);
   return (
     <Link
-      {...gapFixLinkProps(gap, currentRecipeId)}
+      {...gapFixLinkProps(gap, currentRecipeShortcode)}
       title={`${reason} — ${lead}`}
       className="text-warning underline decoration-dotted underline-offset-2 hover:text-warning/80"
     >

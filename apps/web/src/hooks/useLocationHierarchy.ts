@@ -34,6 +34,8 @@ function toPricingStatus(
 export interface LocationHierarchyNode {
   name: string;
   id: LocationId;
+  /** Public id — the sunburst/treemap link by it. `null` on the synthetic root. */
+  shortcode: string | null;
   type: LocationType;
   /** Value used for D3 sizing - can be set based on use case */
   value: number;
@@ -107,6 +109,7 @@ export function useLocationHierarchy(
       return {
         name: location.name,
         id: location.id,
+        shortcode: location.shortcode,
         type: location.type,
         value,
         directCount,
@@ -130,7 +133,9 @@ export function useLocationHierarchy(
 
     return {
       name: "All Locations",
+      // Synthetic aggregate root — not a real location, so nothing to link to.
       id: ROOT_LOCATION_ID,
+      shortcode: null,
       type: "room" as LocationType,
       value:
         valuationMode === "equalWeight" ? allNodes.length : totalCount || 1,

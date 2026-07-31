@@ -31,6 +31,7 @@ import {
   createProject,
   deleteProjects,
   getProjectByID,
+  getProjectByShortcode,
   projectDashboardSummary,
   projectList,
   projectNameOptions,
@@ -44,6 +45,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const {
   getByID,
+  getByShortcode,
   list,
   create,
   update,
@@ -59,6 +61,8 @@ const {
   },
   repository: {
     getByID: async (services, id: ProjectId) => getProjectByID(services.db, id),
+    getByShortcode: (services, shortcode) =>
+      getProjectByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       projectList(services.db, filters, sort, pagination),
     create: async (services, data) =>
@@ -129,6 +133,7 @@ const createFromTasks = protectedProcedure
 
 export const projectRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   create,
   update,

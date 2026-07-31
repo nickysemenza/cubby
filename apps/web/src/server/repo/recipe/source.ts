@@ -1,4 +1,8 @@
-import { type CookbookId, unsafeCookbookId } from "@cubby/schemas/identifiers";
+import {
+  type CookbookId,
+  unsafeCookbookId,
+  unsafeCookbookShortcode,
+} from "@cubby/schemas/identifiers";
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import { match, P } from "ts-pattern";
 
@@ -14,6 +18,7 @@ type SourceColumns = {
   SourceType: string | null;
   SourceData: string | null;
   cookbookId?: string | null;
+  cookbookShortcode?: string | null;
 };
 
 // Provenance override for recipes whose source isn't a website URL (e.g. EPUB
@@ -24,6 +29,7 @@ export type RecipeProvenance = {
   sourceType: "Book" | "Website" | "Other" | "Notion";
   sourceData: string | null;
   cookbookId?: CookbookId | null;
+  cookbookShortcode?: string | null;
 };
 
 /** Tagged provenance → the DB column triple. The encode mirror of {@link recipeSourceFromDb}. */
@@ -59,6 +65,7 @@ export function recipeSourceFromDb({
   SourceType,
   SourceData,
   cookbookId,
+  cookbookShortcode,
 }: SourceColumns): RecipeSource {
   // `P.string.minLength(1)` preserves the original `&& SourceData` truthiness
   // guard: null and "" both fall through to `{ type: "other" }`.
@@ -70,6 +77,9 @@ export function recipeSourceFromDb({
           type: "book" as const,
           book: SourceData,
           cookbookId: cookbookId ? unsafeCookbookId(cookbookId) : null,
+          cookbookShortcode: cookbookShortcode
+            ? unsafeCookbookShortcode(cookbookShortcode)
+            : null,
         }),
       )
       .with(

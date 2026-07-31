@@ -19,10 +19,10 @@ const SHELL = "rounded-lg border border-[var(--border)] px-4 py-2 print:hidden";
  * to one (sub-recipe rows carry no ingredient id). */
 function IngredientStatusLink({ row }: { row: IngredientAvailability }) {
   const className = cn("truncate", statusClass(row.status));
-  return row.ingredientId ? (
+  return row.shortcode ? (
     <Link
-      to="/ingredients/$id"
-      params={{ id: row.ingredientId }}
+      to="/ingredients/$shortcode"
+      params={{ shortcode: row.shortcode }}
       className={cn(className, "hover:underline")}
       title={row.name}
     >

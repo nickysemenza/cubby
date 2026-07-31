@@ -29,6 +29,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type AuditableEntity,
   entityManifest,
+  type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn } from "drizzle-orm";
@@ -40,6 +41,7 @@ import {
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 /** A soft-deletable table the factory can update by id. */
 type CrudTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
@@ -60,8 +62,8 @@ type CrudTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
 type ReaderDb = Database | DrizzleTransaction;
 
 interface EntityReaderConfig<TRow, TOut, TId extends string, TDb = Database> {
-  /** Used only in the 404 message. */
-  entityName: string;
+  /** Drives the 404 message and the shortcode this reader resolves. */
+  entity: ShortcodeEntity;
   /** Relations-loaded fetch of a live row by id; `undefined` when absent. */
   fetchById: (db: TDb, id: TId) => Promise<TRow | undefined>;
   /** DB row → API shape. Async to support mappers that do a follow-up query. */
@@ -75,6 +77,13 @@ export interface EntityReader<TOut, TId extends string, TDb = Database> {
   getByID: (db: TDb, id: TId) => Promise<TOut>;
   /** Fetch by id, returning `null` when there is no live row. */
   getByIDOrNull: (db: TDb, id: TId) => Promise<TOut | null>;
+  /**
+   * Fetch by PUBLIC id — the shortcode that URLs and MCP speak — returning
+   * `null` when the code is malformed, belongs to another entity, or names a
+   * row that no longer lives. Every detail route enters through here, which is
+   * why it is on the factory rather than hand-rolled per entity.
+   */
+  getByShortcode: (db: TDb, shortcode: string) => Promise<TOut | null>;
 }
 
 export function createEntityReader<
@@ -95,13 +104,27 @@ export function createEntityReader<
     if (result === null) {
       throw createAppError(
         config.notFoundReason,
-        `${config.entityName} ${id} not found`,
+        `${config.entity} ${id} not found`,
       );
     }
     return result;
   };
 
-  return { getByID, getByIDOrNull };
+  const getByShortcode = async (
+    db: TDb,
+    shortcode: string,
+  ): Promise<TOut | null> => {
+    // `resolveLiveShortcode` pins the entity, so another entity's (valid) code
+    // resolves to null here rather than to a uuid of the wrong type.
+    const id = await resolveLiveShortcode(
+      db as Database | DrizzleTransaction,
+      shortcode,
+      config.entity,
+    );
+    return id === null ? null : getByIDOrNull(db, id as TId);
+  };
+
+  return { getByID, getByIDOrNull, getByShortcode };
 }
 
 interface EntityCrudConfig<
@@ -110,10 +133,10 @@ interface EntityCrudConfig<
   TOut,
   TUpdate,
   TId extends string,
-> extends Omit<EntityReaderConfig<TRow, TOut, TId, ReaderDb>, "entityName"> {
+> extends Omit<EntityReaderConfig<TRow, TOut, TId, ReaderDb>, "entity"> {
   table: TTable;
   /** Manifest key — drives the auditable / soft-delete behavior. */
-  entity: AuditableEntity;
+  entity: AuditableEntity & ShortcodeEntity;
   /** Update payload → column values handed to the UPDATE. */
   toUpdate: (data: TUpdate) => PgUpdateSetSource<TTable>;
   /** Columns whose change is recorded in the audit diff. */
@@ -146,7 +169,7 @@ export function createEntityCrud<
 ): EntityCrud<TOut, TUpdate, TId> {
   const manifest = entityManifest[config.entity];
   const reader = createEntityReader<TRow, TOut, TId, ReaderDb>({
-    entityName: config.entity,
+    entity: config.entity,
     fetchById: config.fetchById,
     fromDB: config.fromDB,
     notFoundReason: config.notFoundReason,

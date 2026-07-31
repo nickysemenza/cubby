@@ -1,6 +1,7 @@
 import type { AgentResult } from "@cubby/schemas/agent";
+import { searchableEntities } from "@cubby/schemas/entity-manifest";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode, type ShortcodeType } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -30,7 +31,7 @@ import {
 } from "~/components/ui/command";
 import { IconTile } from "~/components/ui/icon-tile";
 import { Spinner } from "~/components/ui/spinner";
-import { EntityIcon, entities } from "~/entities/entities";
+import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/integrations/trpc/react";
 import { setFlag, useFlag } from "~/lib/flags";
@@ -67,6 +68,12 @@ interface GlobalCommandMenuProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
+
+/** Narrow a shortcode's entity to the searchable subset `recents` stores. */
+const isSearchableEntity = (
+  entity: ShortcodeType,
+): entity is ShortcodeType & SearchableEntity =>
+  (searchableEntities as readonly string[]).includes(entity);
 
 export function GlobalCommandMenu({
   open: externalOpen,
@@ -113,23 +120,27 @@ export function GlobalCommandMenu({
   React.useEffect(() => {
     if (agentError) toast.error(agentError);
   }, [agentError]);
-  // Shortcode detection and lookup
+  // Shortcode detection and lookup. The queries exist only to PREVIEW the name
+  // in the menu — navigation needs no lookup at all, since the prefix already
+  // names the entity and the code is the URL. They key on the canonical form so
+  // a typed legacy code (`P-4K7M`) previews as well as a current one.
   const parsedShortcode = searchScope ? null : parseShortcode(search);
+  const canonicalShortcode = parsedShortcode?.shortcode ?? "";
   const locationQuery = useQuery({
     ...trpc.location.getByShortcode.queryOptions({
-      shortcode: search.toUpperCase(),
+      shortcode: canonicalShortcode,
     }),
     enabled: parsedShortcode?.type === "location",
   });
   const productQuery = useQuery({
     ...trpc.product.getByShortcode.queryOptions({
-      shortcode: search.toUpperCase(),
+      shortcode: canonicalShortcode,
     }),
     enabled: parsedShortcode?.type === "product",
   });
   const recipeQuery = useQuery({
     ...trpc.recipe.getByShortcode.queryOptions({
-      shortcode: search.toUpperCase(),
+      shortcode: canonicalShortcode,
     }),
     enabled: parsedShortcode?.type === "recipe",
   });
@@ -144,31 +155,23 @@ export function GlobalCommandMenu({
           : null;
 
   const goToShortcode = () => {
-    if (parsedShortcode?.type === "location" && locationQuery.data) {
+    if (!parsedShortcode) return;
+    // Recents needs a name, so it only gets an entry once the preview query has
+    // landed — navigation itself never waits on it. `entityType` is narrowed to
+    // the SEARCHABLE entities: vendor and purchase have shortcodes but aren't in
+    // that union, and they have no preview query here either.
+    if (shortcodeResult && isSearchableEntity(parsedShortcode.type)) {
       pushRecent({
-        entityType: "location",
-        id: locationQuery.data.id,
-        name: locationQuery.data.name,
+        entityType: parsedShortcode.type,
+        shortcode: parsedShortcode.shortcode,
+        name: shortcodeResult.name,
       });
-      navigate({ to: `/locations/${locationQuery.data.id}` });
-      setOpen(false);
-    } else if (parsedShortcode?.type === "product" && productQuery.data) {
-      pushRecent({
-        entityType: "product",
-        id: productQuery.data.id,
-        name: productQuery.data.name,
-      });
-      navigate({ to: `/products/${productQuery.data.id}` });
-      setOpen(false);
-    } else if (parsedShortcode?.type === "recipe" && recipeQuery.data) {
-      pushRecent({
-        entityType: "recipe",
-        id: recipeQuery.data.id,
-        name: recipeQuery.data.name,
-      });
-      navigate({ to: `/recipes/${recipeQuery.data.id}` });
-      setOpen(false);
     }
+    navigate({
+      to: entities[parsedShortcode.type].routes.detail,
+      params: entityDetailParams(parsedShortcode.shortcode),
+    });
+    setOpen(false);
   };
 
   // The ⌘K hotkey is owned by the app shell (__root.tsx) so the shortcut works
@@ -195,15 +198,30 @@ export function GlobalCommandMenu({
 
   const goToEntity = (
     entityType: SearchableEntity,
-    id: string,
+    shortcode: string,
     name?: string,
   ) => {
     const entity = entities[entityTypeMap[entityType]];
     if (entity) {
-      if (name) pushRecent({ entityType, id, name });
-      navigate({ to: `/${entity.basePath}/${id}` });
+      if (name) pushRecent({ entityType, shortcode, name });
+      navigate({
+        to: entity.routes.detail,
+        params: entityDetailParams(shortcode),
+      });
       setOpen(false);
     }
+  };
+
+  // An agent citation's shortcode is nullable: sources are scraped out of MCP
+  // tool payloads, and not every projection carries one. No code means no
+  // navigation — better a dead click than a uuid URL that 404s.
+  const goToSource = (
+    entityType: SearchableEntity,
+    shortcode: string | null,
+    name?: string,
+  ) => {
+    if (!shortcode) return;
+    goToEntity(entityType, shortcode, name);
   };
 
   const goToSearchResult = (item: SearchResultItem) => {
@@ -295,9 +313,7 @@ export function GlobalCommandMenu({
             toolCalls={agent.result?.toolCalls ?? []}
             showToolCalls={isDevtoolsVisible}
             onBack={exitAnswerMode}
-            onSelectSource={(entityType, id, name) =>
-              goToEntity(entityType, id, name)
-            }
+            onSelectSource={goToSource}
           />
         ) : (
           <>
@@ -309,7 +325,7 @@ export function GlobalCommandMenu({
                   onSelect={() =>
                     goToEntity(
                       "ingredient",
-                      conversion.ingredientId,
+                      conversion.ingredientShortcode,
                       conversion.ingredientName,
                     )
                   }
@@ -489,10 +505,14 @@ export function GlobalCommandMenu({
                   <CommandGroup heading="Jump back">
                     {recents.map((recent) => (
                       <CommandItem
-                        key={`recent-${recent.entityType}-${recent.id}`}
-                        value={`recent-${recent.id}`}
+                        key={`recent-${recent.entityType}-${recent.shortcode}`}
+                        value={`recent-${recent.shortcode}`}
                         onSelect={() =>
-                          goToEntity(recent.entityType, recent.id, recent.name)
+                          goToEntity(
+                            recent.entityType,
+                            recent.shortcode,
+                            recent.name,
+                          )
                         }
                         className="flex items-center gap-2"
                       >
@@ -593,9 +613,10 @@ interface AnswerViewProps {
   toolCalls: AgentResult["toolCalls"];
   showToolCalls: boolean;
   onBack: () => void;
+  /** `shortcode` is null when the tool payload carried no public id. */
   onSelectSource: (
     entityType: SearchableEntity,
-    id: string,
+    shortcode: string | null,
     name?: string,
   ) => void;
 }
@@ -647,7 +668,7 @@ function AnswerView({
             key={`${source.entityType}-${source.id}`}
             value={`source-${source.entityType}-${source.id}`}
             onSelect={() =>
-              onSelectSource(source.entityType, source.id, source.name)
+              onSelectSource(source.entityType, source.shortcode, source.name)
             }
             className="flex items-center gap-2"
           >

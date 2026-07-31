@@ -498,12 +498,12 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       }
     >
       <DetailSections sections={sections} rawData={expense} />
-      {expense.purchaseId ? (
+      {expense.purchaseId && expense.purchaseShortcode ? (
         <SplitExpenseDialog
           open={splitOpen}
           onOpenChange={setSplitOpen}
           expense={expense}
-          purchaseId={expense.purchaseId}
+          purchaseShortcode={expense.purchaseShortcode}
         />
       ) : null}
       {expense.productId ? (

@@ -28,6 +28,7 @@ import {
   createPurchase,
   deletePurchases,
   getPurchaseByID,
+  getPurchaseByShortcode,
   getPurchaseExpenses,
   linkExpensesToPurchase,
   mergePurchases,
@@ -36,7 +37,10 @@ import {
   updatePurchase,
 } from "~/server/repo/purchase";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createEntityListProcedure } from "../crud-factory";
+import {
+  createEntityListProcedure,
+  createGetByShortcodeProcedure,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const { list } = createEntityListProcedure({
@@ -59,6 +63,12 @@ const getByID = protectedProcedure
   .input(purchaseId)
   .output(purchaseOut)
   .query(({ ctx, input }) => getPurchaseByID(ctx.db, input));
+
+const getByShortcode = createGetByShortcodeProcedure(
+  "purchase",
+  purchaseOut,
+  (ctx, shortcode) => getPurchaseByShortcode(ctx.db, shortcode),
+);
 
 /** This charge's lines — the expense table on a purchase detail page. */
 const expenses = protectedProcedure
@@ -143,6 +153,7 @@ const deleteItem = protectedProcedure
 
 export const purchaseRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   expenses,
   create,

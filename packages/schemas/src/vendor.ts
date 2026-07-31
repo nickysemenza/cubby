@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
-import { vendorId } from "./identifiers";
+import { vendorId, vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 
 /**
@@ -56,6 +56,7 @@ export type VendorSortField = (typeof vendorSortableFields)[number];
 
 export const vendorOut = z.object({
   id: vendorId,
+  shortcode: vendorShortcode,
   ...vendorFields,
   /** Live purchases pointing at this vendor. Gates deletion. */
   purchaseCount: z.number().int(),

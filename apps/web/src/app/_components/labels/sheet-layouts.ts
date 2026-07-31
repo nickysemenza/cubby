@@ -46,6 +46,12 @@ export function isSheetFormat(format: string): format is SheetFormat {
   return format in SHEET_LAYOUTS;
 }
 
+/**
+ * Locations and products only, deliberately. All twelve entities carry a
+ * shortcode now, but a QR label is a physical sticker — it belongs on a bin or a
+ * thing you own, not on a task or an expense. Don't widen this to the full
+ * entity roster just because the codes exist.
+ */
 export interface LabelItem {
   shortcode: string;
   name: string;

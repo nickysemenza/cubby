@@ -7,6 +7,7 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
 import {
   inventoryId,
+  inventoryShortcode,
   locationId,
   locationShortcode,
   productId,
@@ -189,6 +190,7 @@ export const locationChildCountsOut = z.record(
 /** Minimal inventory item info for tree display */
 const inventoryItemForTree = z.object({
   id: inventoryId,
+  shortcode: inventoryShortcode,
   amount,
   productName: z.string(),
   productId,

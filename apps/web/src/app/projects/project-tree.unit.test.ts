@@ -1,13 +1,30 @@
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  unsafeProjectId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ProjectOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import { buildProjectTree } from "./project-tree";
+
+// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
+const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+let projectShortcodeCounter = 0;
+const nextProjectShortcode = () => {
+  const n = projectShortcodeCounter++;
+  const hi =
+    SHORTCODE_ALPHABET[
+      Math.floor(n / SHORTCODE_ALPHABET.length) % SHORTCODE_ALPHABET.length
+    ];
+  const lo = SHORTCODE_ALPHABET[n % SHORTCODE_ALPHABET.length];
+  return unsafeProjectShortcode(`PRJ-23${hi}${lo}`);
+};
 
 /** Minimal `ProjectOut`-shaped fixture — only `id`/`parentProjectId` vary;
  * every other field is a fixed, valid default the builder never reads. */
 function proj(id: string, parentProjectId?: string): ProjectOut {
   return {
     id: unsafeProjectId(id),
+    shortcode: nextProjectShortcode(),
     name: id,
     status: "planning",
     kind: null,

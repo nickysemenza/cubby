@@ -7,8 +7,17 @@
  * and linked-product-id lookup the service layer composes.
  */
 
-import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
-import { unsafeProductId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  ProductId,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientShortcode,
+  unsafeLocationShortcode,
+  unsafeProductId,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type {
   DuplicateUniqueProduct,
@@ -36,6 +45,7 @@ import type { Database, DrizzleClient } from "~/server/db";
 import {
   expense,
   image,
+  ingredient,
   inventoryEntry,
   product,
   productImage,
@@ -58,6 +68,7 @@ export type { ProductWithBetterUpcData };
 
 type ProductWithUpcGapCandidate = {
   id: ProductId;
+  shortcode: ProductShortcode;
   name: string;
   manufacturer: string;
   upc: string;
@@ -75,6 +86,7 @@ export const findDuplicateUniqueProducts = async (
       id: true,
       name: true,
       manufacturer: true,
+      shortcode: true,
       expectedQuantity: true,
     },
     with: {
@@ -89,6 +101,7 @@ export const findDuplicateUniqueProducts = async (
             columns: {
               id: true,
               name: true,
+              shortcode: true,
             },
           },
         },
@@ -102,11 +115,13 @@ export const findDuplicateUniqueProducts = async (
     )
     .map((prod) => ({
       id: prod.id,
+      shortcode: unsafeProductShortcode(prod.shortcode),
       name: prod.name,
       manufacturer: prod.manufacturer,
       expectedQuantity: prod.expectedQuantity,
       locations: prod.inventoryEntry.map((entry) => ({
         id: entry.location.id,
+        shortcode: unsafeLocationShortcode(entry.location.shortcode),
         name: entry.location.name,
       })),
     }));
@@ -198,6 +213,7 @@ export const findOrphanedProducts = async (
       id: product.id,
       name: product.name,
       manufacturer: product.manufacturer,
+      shortcode: product.shortcode,
       createdAt: product.createdAt,
     })
     .from(product)
@@ -220,7 +236,10 @@ export const findOrphanedProducts = async (
       ),
     );
 
-  return orphaned;
+  return orphaned.map((row) => ({
+    ...row,
+    shortcode: unsafeProductShortcode(row.shortcode),
+  }));
 };
 
 // Find stocked products with no `price`.
@@ -244,12 +263,14 @@ export const findProductsMissingPrice = async (
 
   const stockedWithoutPrice = await dbClient.query.product.findMany({
     where: and(notDeleted(product), isNull(product.price)),
-    columns: { id: true, name: true, manufacturer: true },
+    columns: { id: true, name: true, manufacturer: true, shortcode: true },
     with: {
       inventoryEntry: {
         where: notDeleted(inventoryEntry),
         columns: { id: true, amount: true },
-        with: { location: { columns: { id: true, name: true } } },
+        with: {
+          location: { columns: { id: true, name: true, shortcode: true } },
+        },
       },
     },
   });
@@ -264,6 +285,7 @@ export const findProductsMissingPrice = async (
 
     const item: ProductMissingPrice = {
       id: prod.id,
+      shortcode: unsafeProductShortcode(prod.shortcode),
       name: prod.name,
       manufacturer: prod.manufacturer,
       inventoryQuantity: prod.inventoryEntry.reduce(
@@ -272,6 +294,7 @@ export const findProductsMissingPrice = async (
       ),
       locations: prod.inventoryEntry.map((entry) => ({
         id: entry.location.id,
+        shortcode: unsafeLocationShortcode(entry.location.shortcode),
         name: entry.location.name,
       })),
     };
@@ -303,12 +326,21 @@ export const findProductsWithoutMappings = async (
       id: product.id,
       name: product.name,
       manufacturer: product.manufacturer,
+      shortcode: product.shortcode,
       createdAt: product.createdAt,
       ingredientId: product.ingredientId,
+      // Through a LEFT JOIN (not the FK column) — the linked ingredient's own
+      // shortcode, so a null just means "no ingredient linked", matching the
+      // nullability of `ingredientId` itself.
+      ingredientShortcode: ingredient.shortcode,
       usdaUnavailable: product.usdaUnavailable,
       category: product.category,
     })
     .from(product)
+    .leftJoin(
+      ingredient,
+      and(eq(ingredient.id, product.ingredientId), notDeleted(ingredient)),
+    )
     .where(
       and(
         notDeleted(product),
@@ -333,12 +365,26 @@ export const findProductsWithoutMappings = async (
   // coverage meaning); category never surfaces in the result shape.
   return productsWithoutMappings
     .filter((p) => !isMiscProduct(p.name) && !isNonFoodCategory(p.category))
-    .map(({ ingredientId, usdaUnavailable, category: _category, ...rest }) => ({
-      ...rest,
-      isIngredient: ingredientId != null,
-      usdaUnavailable: usdaUnavailable ?? false,
-      ingredientId,
-    }));
+    .map(
+      ({
+        ingredientId,
+        ingredientShortcode,
+        usdaUnavailable,
+        category: _category,
+        shortcode,
+        ...rest
+      }) => ({
+        ...rest,
+        shortcode: unsafeProductShortcode(shortcode),
+        isIngredient: ingredientId != null,
+        usdaUnavailable: usdaUnavailable ?? false,
+        ingredientId,
+        ingredientShortcode:
+          ingredientShortcode != null
+            ? unsafeIngredientShortcode(ingredientShortcode)
+            : null,
+      }),
+    );
 };
 
 // Synthesize a product's *effective* conversion edges (stored mappings + price
@@ -376,6 +422,7 @@ export const findProductsWithUpcGaps = async (
   const rows = await dbClient
     .select({
       id: product.id,
+      shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
       upc: product.upc,
@@ -419,6 +466,7 @@ export const findProductsWithUpcGaps = async (
 
   return candidates.map((candidate) => ({
     ...candidate,
+    shortcode: unsafeProductShortcode(candidate.shortcode),
     hasImage: Boolean(candidate.hasImage),
   }));
 };
@@ -479,6 +527,11 @@ export const recipeUsageCountsByProduct = async (
 // of doing all of it twice (the perf win behind the always-on navbar badge).
 // The coverage grading (USDA enrichment, synthesis, conversionCoverage,
 // islanding) all lives in the service.
+// Carries `shortcode` (product) and `ingredient.shortcode` — needed by the
+// service layer to populate `IngredientWithPartialCoverage.shortcode`/
+// `ingredientShortcode` and `ProductWithIslandedMappings.shortcode` (see
+// problems.service.ts's `findProductCoverageProblems`, which owns assembling
+// those rows and currently omits both fields from its push()es).
 export const loadProductsForCoverage = async (db: Database) =>
   getDb(db).query.product.findMany({
     where: notDeleted(product),
@@ -486,6 +539,7 @@ export const loadProductsForCoverage = async (db: Database) =>
       id: true,
       name: true,
       manufacturer: true,
+      shortcode: true,
       upc: true,
       fdc_id: true,
       price: true,
@@ -500,7 +554,7 @@ export const loadProductsForCoverage = async (db: Database) =>
       },
       // The linked ingredient's N/A opt-outs, so partial coverage grades only the
       // kinds that apply (a count-only item isn't flagged for a volume it never uses).
-      ingredient: { columns: { naKinds: true } },
+      ingredient: { columns: { naKinds: true, shortcode: true } },
     },
   });
 

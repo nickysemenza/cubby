@@ -24,6 +24,7 @@ export {
   createTask,
   deleteTasks,
   getTaskByID,
+  getTaskByShortcode,
   getTasksByIDs,
   moveTasks,
   reorderTasks,

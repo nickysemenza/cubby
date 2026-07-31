@@ -23,12 +23,16 @@ import {
   createVendor,
   deleteVendors,
   getVendorByID,
+  getVendorByShortcode,
   mergeVendors,
   updateVendor,
   vendorList,
   vendorOptions,
 } from "~/server/repo/vendor";
-import { createEntityListProcedure } from "../crud-factory";
+import {
+  createEntityListProcedure,
+  createGetByShortcodeProcedure,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const { list } = createEntityListProcedure({
@@ -51,6 +55,12 @@ const getByID = protectedProcedure
   .input(vendorId)
   .output(vendorOut)
   .query(({ ctx, input }) => getVendorByID(ctx.db, input));
+
+const getByShortcode = createGetByShortcodeProcedure(
+  "vendor",
+  vendorOut,
+  (ctx, shortcode) => getVendorByShortcode(ctx.db, shortcode),
+);
 
 /**
  * The vendor picklist — feeds the ledger's Vendor filter and the purchase form's
@@ -89,6 +99,7 @@ const deleteItem = protectedProcedure
 
 export const vendorRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   options,
   create,

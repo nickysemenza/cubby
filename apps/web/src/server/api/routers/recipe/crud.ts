@@ -15,7 +15,6 @@ import {
   recipeIdsInput,
   recipeListItemOut,
   recipeOut,
-  recipeShortcodeInput,
   recipeSortableFields,
   recipeTagsOut,
   recipeUpdateData,
@@ -65,81 +64,80 @@ const { list } = createEntityListProcedure({
   entityName: "recipe",
 });
 
-const { getByID, create, update } = createEntityCrudWithoutListProcedures({
-  schemas: {
-    createInput: recipeCreateInput,
-    updateInput: recipeUpdateData,
-    output: recipeOut,
-    createOutput: recipeWithSideEffectsOut,
-    updateOutput: recipeWithSideEffectsOut,
-    idSchema: recipeId,
-  },
-  repository: {
-    getByID: async (services, id: RecipeId) => {
-      const res = await getRecipeByID(services.db, id);
-      if (res === null) {
-        throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
-      }
-      return res;
+const { getByID, getByShortcode, create, update } =
+  createEntityCrudWithoutListProcedures({
+    entityName: "recipe",
+    schemas: {
+      createInput: recipeCreateInput,
+      updateInput: recipeUpdateData,
+      output: recipeOut,
+      createOutput: recipeWithSideEffectsOut,
+      updateOutput: recipeWithSideEffectsOut,
+      idSchema: recipeId,
     },
-    create: async (services, data) => {
-      const created = await createRecipe(
-        services.db,
-        data,
-        services.actorContext,
-      );
-      // Persist recompute work through the background dispatcher. In dev this
-      // still drains inline, but the operation is visible on Background Jobs.
-      const recipeBatches =
-        await services.services.recipeCosting.dispatchRecompute([created.id], {
-          source: "recipe.create",
+    repository: {
+      getByID: async (services, id: RecipeId) => {
+        const res = await getRecipeByID(services.db, id);
+        if (res === null) {
+          throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+        }
+        return res;
+      },
+      getByShortcode: (services, shortcode) =>
+        getRecipeByShortcode(services.db, shortcode),
+      create: async (services, data) => {
+        const created = await createRecipe(
+          services.db,
+          data,
+          services.actorContext,
+        );
+        // Persist recompute work through the background dispatcher. In dev this
+        // still drains inline, but the operation is visible on Background Jobs.
+        const recipeBatches =
+          await services.services.recipeCosting.dispatchRecompute(
+            [created.id],
+            {
+              source: "recipe.create",
+              entity: { entityType: "recipe", entityId: created.id },
+            },
+          );
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "created",
           entity: { entityType: "recipe", entityId: created.id },
+          source: "recipe.create",
         });
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "created",
-        entity: { entityType: "recipe", entityId: created.id },
-        source: "recipe.create",
-      });
-      return {
-        ...created,
-        sideEffects: {
-          backgroundBatches: [...recipeBatches, ...backgroundBatches],
-        },
-      };
-    },
-    update: async (services, id: RecipeId, data) => {
-      const updated = await updateRecipe(
-        services.db,
-        id,
-        data,
-        services.actorContext,
-      );
-      const recipeBatches =
-        await services.services.recipeCosting.dispatchRecompute([id], {
-          source: "recipe.update",
+        return {
+          ...created,
+          sideEffects: {
+            backgroundBatches: [...recipeBatches, ...backgroundBatches],
+          },
+        };
+      },
+      update: async (services, id: RecipeId, data) => {
+        const updated = await updateRecipe(
+          services.db,
+          id,
+          data,
+          services.actorContext,
+        );
+        const recipeBatches =
+          await services.services.recipeCosting.dispatchRecompute([id], {
+            source: "recipe.update",
+            entity: { entityType: "recipe", entityId: id },
+          });
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "updated",
           entity: { entityType: "recipe", entityId: id },
+          source: "recipe.update",
         });
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "updated",
-        entity: { entityType: "recipe", entityId: id },
-        source: "recipe.update",
-      });
-      return {
-        ...updated,
-        sideEffects: {
-          backgroundBatches: [...recipeBatches, ...backgroundBatches],
-        },
-      };
+        return {
+          ...updated,
+          sideEffects: {
+            backgroundBatches: [...recipeBatches, ...backgroundBatches],
+          },
+        };
+      },
     },
-  },
-});
-
-// Get recipe by shortcode (e.g., R-X7K9)
-const getByShortcode = protectedProcedure
-  .input(recipeShortcodeInput)
-  .output(recipeOut.nullable())
-  .query(async ({ ctx, input }) => {
-    return await getRecipeByShortcode(ctx.db, input.shortcode);
   });
 
 // Batched fetch by id — mirrors ingredient.getManyByIDs. Used by client-side

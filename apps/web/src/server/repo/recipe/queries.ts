@@ -4,7 +4,12 @@
  */
 
 import type { CookbookId, IngredientId } from "@cubby/schemas/identifiers";
-import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeIngredientShortcode,
+  unsafeRecipeId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   IngredientCooccurrence,
   IngredientEdge,
@@ -57,7 +62,14 @@ export const getIngredientCooccurrence = async (
             columns: {},
             where: notDeleted(recipeSectionIngredient),
             with: {
-              ingredient: { columns: { id: true, name: true, recipeId: true } },
+              ingredient: {
+                columns: {
+                  id: true,
+                  shortcode: true,
+                  name: true,
+                  recipeId: true,
+                },
+              },
             },
           },
         },
@@ -68,6 +80,7 @@ export const getIngredientCooccurrence = async (
   // Build ingredient -> recipe count map and recipe -> ingredients map
   const ingredientRecipeCount = new Map<string, number>();
   const ingredientNames = new Map<string, string>();
+  const ingredientShortcodes = new Map<string, string>();
   const recipeIngredients = new Map<string, Set<string>>();
 
   for (const r of recipes) {
@@ -79,6 +92,7 @@ export const getIngredientCooccurrence = async (
           // Only include regular ingredients, not recipe references
           ingredientIds.add(si.ingredient.id);
           ingredientNames.set(si.ingredient.id, si.ingredient.name);
+          ingredientShortcodes.set(si.ingredient.id, si.ingredient.shortcode);
         }
       }
     }
@@ -100,18 +114,24 @@ export const getIngredientCooccurrence = async (
   // Also track which recipes contain each pair
   const cooccurrence = new Map<
     string,
-    { count: number; recipes: Array<{ id: string; name: string }> }
+    {
+      count: number;
+      recipes: Array<{ id: string; shortcode: string; name: string }>;
+    }
   >();
 
   // Need to also track recipe names
   const recipeNames = new Map<string, string>();
+  const recipeShortcodes = new Map<string, string>();
   for (const r of recipes) {
     recipeNames.set(r.id, r.name);
+    recipeShortcodes.set(r.id, r.shortcode);
   }
 
   for (const [recipeId, ingredientIds] of recipeIngredients) {
     const ids = Array.from(ingredientIds);
     const recipeName = recipeNames.get(recipeId) ?? "Unknown";
+    const recipeShortcode = recipeShortcodes.get(recipeId) ?? "";
     // For each pair of ingredients in this recipe
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
@@ -119,7 +139,11 @@ export const getIngredientCooccurrence = async (
         const key = [ids[i], ids[j]].sort().join("|");
         const existing = cooccurrence.get(key) ?? { count: 0, recipes: [] };
         existing.count += 1;
-        existing.recipes.push({ id: recipeId, name: recipeName });
+        existing.recipes.push({
+          id: recipeId,
+          shortcode: recipeShortcode,
+          name: recipeName,
+        });
         cooccurrence.set(key, existing);
       }
     }
@@ -138,6 +162,7 @@ export const getIngredientCooccurrence = async (
         weight: data.count,
         recipes: data.recipes.map((r) => ({
           id: unsafeRecipeId(r.id),
+          shortcode: unsafeRecipeShortcode(r.shortcode),
           name: r.name,
         })),
       });
@@ -150,6 +175,7 @@ export const getIngredientCooccurrence = async (
   for (const id of ingredientsWithEdges) {
     nodes.push({
       id: unsafeIngredientId(id),
+      shortcode: unsafeIngredientShortcode(ingredientShortcodes.get(id) ?? ""),
       name: ingredientNames.get(id) ?? "Unknown",
       recipeCount: ingredientRecipeCount.get(id) ?? 0,
     });
@@ -192,7 +218,7 @@ export const getRecipeDependencyGraph = async (
     where: cookbookId
       ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
       : notDeleted(recipe),
-    columns: { id: true, name: true, cookbookId: true },
+    columns: { id: true, shortcode: true, name: true, cookbookId: true },
     with: {
       sections: {
         // Exclude soft-deleted sections/usages so removed sub-recipe links
@@ -217,6 +243,7 @@ export const getRecipeDependencyGraph = async (
   for (const r of recipes) {
     nodes.set(r.id, {
       id: r.id,
+      shortcode: unsafeRecipeShortcode(r.shortcode),
       name: r.name,
       cookbookId: r.cookbookId,
       cookbookName: nameFor(r.cookbookId),
@@ -249,11 +276,12 @@ export const getRecipeDependencyGraph = async (
         notDeleted(recipe),
         inArray(recipe.id, [...externalSubIds].map(unsafeRecipeId)),
       ),
-      columns: { id: true, name: true, cookbookId: true },
+      columns: { id: true, shortcode: true, name: true, cookbookId: true },
     });
     for (const e of externals) {
       nodes.set(e.id, {
         id: e.id,
+        shortcode: unsafeRecipeShortcode(e.shortcode),
         name: e.name,
         cookbookId: e.cookbookId,
         cookbookName: nameFor(e.cookbookId),
@@ -297,6 +325,7 @@ export const getIngredientUsage = async (
               ingredient: {
                 columns: {
                   id: true,
+                  shortcode: true,
                   name: true,
                   recipeId: true,
                   deletedAt: true,
@@ -311,6 +340,7 @@ export const getIngredientUsage = async (
 
   const recipeCount = new Map<IngredientId, number>();
   const names = new Map<IngredientId, string>();
+  const shortcodes = new Map<IngredientId, string>();
   for (const r of recipes) {
     const ids = new Set<IngredientId>();
     for (const section of r.sections) {
@@ -320,6 +350,7 @@ export const getIngredientUsage = async (
         if (ing && !ing.recipeId && !ing.deletedAt) {
           ids.add(ing.id);
           names.set(ing.id, ing.name);
+          shortcodes.set(ing.id, ing.shortcode);
         }
       }
     }
@@ -331,6 +362,7 @@ export const getIngredientUsage = async (
   const rows = [...recipeCount.entries()]
     .map(([ingredientId, count]) => ({
       ingredientId,
+      shortcode: unsafeIngredientShortcode(shortcodes.get(ingredientId) ?? ""),
       name: names.get(ingredientId) ?? "Unknown",
       recipeCount: count,
     }))

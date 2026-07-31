@@ -10,6 +10,7 @@ import {
   type IngredientId,
   ingredientId,
   recipeId,
+  unsafeIngredientId,
 } from "@cubby/schemas/identifiers";
 import {
   enrichmentRowsOut,
@@ -44,6 +45,7 @@ import {
   ingredientList,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createIngredient as createIngredientService,
   enrichmentWorkbench as enrichmentWorkbenchService,
@@ -89,43 +91,63 @@ const { list } = createEntityListProcedure({
   entityName: "ingredient",
 });
 
-const { getByID, create } = createEntityCrudWithoutListProcedures({
-  schemas: {
-    createInput: ingredientCreateInput,
-    updateInput: ingredientUpdateData,
-    output: ingredientWithFoodOut,
-    createOutput: ingredientWithFoodAndSideEffectsOut,
-    idSchema: ingredientId,
-  },
-  repository: {
-    getByID: async (services, id: IngredientId) => {
-      return await getIngredientByID(services.db, services.usdaClient, id);
+const { getByID, getByShortcode, create } =
+  createEntityCrudWithoutListProcedures({
+    entityName: "ingredient",
+    schemas: {
+      createInput: ingredientCreateInput,
+      updateInput: ingredientUpdateData,
+      output: ingredientWithFoodOut,
+      createOutput: ingredientWithFoodAndSideEffectsOut,
+      idSchema: ingredientId,
     },
-    create: async (services, data) => {
-      const ingredient = await createIngredientService(
-        services.db,
-        services.usdaClient,
-        data,
-        services.actorContext,
-      );
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "created",
-        entity: { entityType: "ingredient", entityId: ingredient.id },
-        source: "ingredient.create",
-      });
-      return { ...ingredient, sideEffects: { backgroundBatches } };
+    repository: {
+      getByID: async (services, id: IngredientId) => {
+        return await getIngredientByID(services.db, services.usdaClient, id);
+      },
+      // Resolves the shortcode itself: `getByID` above returns the
+      // USDA-enriched shape (`ingredientWithFoodOut`), which the plain repo
+      // reader's `getByShortcode` (unenriched) doesn't produce, and the
+      // factory requires both procedures to share one output schema.
+      getByShortcode: async (services, shortcode) => {
+        const id = await resolveLiveShortcode(
+          services.db,
+          shortcode,
+          "ingredient",
+        );
+        return id
+          ? await getIngredientByID(
+              services.db,
+              services.usdaClient,
+              unsafeIngredientId(id),
+            )
+          : null;
+      },
+      create: async (services, data) => {
+        const ingredient = await createIngredientService(
+          services.db,
+          services.usdaClient,
+          data,
+          services.actorContext,
+        );
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "created",
+          entity: { entityType: "ingredient", entityId: ingredient.id },
+          source: "ingredient.create",
+        });
+        return { ...ingredient, sideEffects: { backgroundBatches } };
+      },
+      update: async (services, id: IngredientId, data) => {
+        return await updateIngredientService(
+          services.db,
+          services.usdaClient,
+          id,
+          data,
+          services.actorContext,
+        );
+      },
     },
-    update: async (services, id: IngredientId, data) => {
-      return await updateIngredientService(
-        services.db,
-        services.usdaClient,
-        id,
-        data,
-        services.actorContext,
-      );
-    },
-  },
-});
+  });
 
 // Custom update: an ingredient edit changes its contribution to recipe cost, so
 // recompute every dependent recipe eagerly (covers UI + MCP, which both call
@@ -337,6 +359,7 @@ export const ingredientRouter = createTRPCRouter({
   matchNames,
   resolveOrCreate,
   getByID,
+  getByShortcode,
   getManyByIDs,
   list,
   merge,

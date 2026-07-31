@@ -17,32 +17,38 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 
-export const Route = createFileRoute("/_authenticated/projects/$id")({
+export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.project.getByID.queryOptions({ id: params.id }),
+      context.trpc.project.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
 
     // Non-blocking warm of the sections rendered below the spec plate — the
-    // notFound decision above only needs `getByID`, so these don't gate it.
+    // notFound decision above doesn't depend on them, so they don't gate it.
     // Same params as the component's own queries (both sides call the helpers
     // in project-query-params.ts) so they land in the same cache entry instead
     // of double-fetching.
+    //
+    // These key on the project's UUID, not its shortcode: the subtree filters
+    // are internal query inputs, and the public id has already done its job by
+    // getting us the row.
     void context.queryClient.prefetchQuery(
       context.trpc.task.chartData.queryOptions(
-        projectSubtreeTasksFilters(params.id),
+        projectSubtreeTasksFilters(data.id),
       ),
     );
     void context.queryClient.prefetchQuery(
       context.trpc.expense.chartData.queryOptions(
-        projectSubtreeExpensesFilters(params.id),
+        projectSubtreeExpensesFilters(data.id),
       ),
     );
     void context.queryClient.prefetchQuery(
       context.trpc.project.list.queryOptions(
-        projectGanttSubtreeQueryParams(params.id),
+        projectGanttSubtreeQueryParams(data.id),
       ),
     );
     void context.queryClient.prefetchQuery(
@@ -65,13 +71,17 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
 });
 
 function ProjectDetailRoute() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
   const api = useTRPC();
   const { data: project } = useSuspenseQuery(
-    api.project.getByID.queryOptions({ id }),
+    api.project.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(project.name);
+  useDocumentTitle(project?.name);
+
+  // The loader already threw notFound for an unknown code; this guard only
+  // satisfies the nullable output type.
+  if (!project) return null;
 
   return <ProjectDetailPage project={project} />;
 }

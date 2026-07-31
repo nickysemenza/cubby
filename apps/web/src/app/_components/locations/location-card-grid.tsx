@@ -202,14 +202,14 @@ function LocationCard({
           <CardThumbnail
             images={location.images}
             alt={location.name}
-            to="/locations/$id"
-            params={{ id: location.id }}
+            to="/locations/$shortcode"
+            params={{ shortcode: location.shortcode }}
           />
         ) : null
       }
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
       className="h-full"
-      detailsHref={`/locations/${location.id}`}
+      detailsHref={`/locations/${location.shortcode}`}
     >
       {/* Valuation row */}
       {hasInventory && (

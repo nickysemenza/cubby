@@ -67,8 +67,8 @@ function FlowSourceContent({
       <span className="min-w-0 font-medium text-xs leading-tight">
         {usage.type === "recipe" ? (
           <Link
-            to="/recipes/$id"
-            params={{ id }}
+            to="/recipes/$shortcode"
+            params={{ shortcode: usage.recipe.shortcode }}
             search={{ view: "flow" }}
             className={dottedEntityLink}
             title={`Open ${name} flow`}

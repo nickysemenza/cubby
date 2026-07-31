@@ -115,6 +115,7 @@ export class AvailabilityService {
         if (si.type === "recipe") {
           return {
             ingredientId: null,
+            shortcode: null,
             name: si.recipe.name,
             need: si.amounts[0] ?? null,
             basisUnit: null,
@@ -127,6 +128,7 @@ export class AvailabilityService {
         if (!need) {
           return {
             ingredientId: si.ingredient.id,
+            shortcode: ingMap.get(si.ingredient.id)?.shortcode ?? null,
             name: si.ingredient.name,
             need: null,
             basisUnit: null,
@@ -138,6 +140,7 @@ export class AvailabilityService {
         const g = byKey.get(String(idx));
         return {
           ingredientId: si.ingredient.id,
+          shortcode: ingMap.get(si.ingredient.id)?.shortcode ?? null,
           name: si.ingredient.name,
           need,
           basisUnit: g?.basis_unit ?? need.unit,
@@ -153,6 +156,7 @@ export class AvailabilityService {
 
     return {
       recipeId,
+      recipeShortcode: recipe.shortcode,
       recipeName: recipe.name,
       coverage:
         resolvable.length === 0 ? 1 : available.length / resolvable.length,
@@ -280,6 +284,7 @@ export class AvailabilityService {
         const g = byKey.get(ingredientId);
         return {
           ingredientId,
+          ingredientShortcode: ingMap.get(ingredientId)?.shortcode ?? null,
           name: contribs[0]?.name ?? "",
           basisUnit: g?.basis_unit ?? contribs[0]?.scaledNeed.unit ?? null,
           needValue: g?.need_value ?? 0,

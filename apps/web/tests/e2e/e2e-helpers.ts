@@ -89,7 +89,12 @@ export async function createLocation(page: Page, name: string) {
   await waitForFormHydration(page);
   await page.getByPlaceholder("Enter location name").fill(name);
   await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(/\/locations\/[a-f0-9-]+/, { timeout: 15000 });
+  await expect(page).toHaveURL(
+    /\/locations\/LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+    {
+      timeout: 15000,
+    },
+  );
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 10000 });
 }
 
@@ -109,7 +114,12 @@ export async function createProduct(
     await page.getByPlaceholder("Enter manufacturer").fill(opts.manufacturer);
   }
   await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
+  await expect(page).toHaveURL(
+    /\/products\/PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+    {
+      timeout: 15000,
+    },
+  );
   // PageHero renders the entity label ("Product") as an eyebrow above the <h1>,
   // which is the bare product name.
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
@@ -124,7 +134,9 @@ export async function createIngredientViaForm(page: Page, name: string) {
   await waitForFormHydration(page);
   await fillInput(page, "Enter ingredient name", name);
   await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, { timeout: 15000 });
+  const ingredientShortcodeRe =
+    /\/ingredients\/ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/;
+  await expect(page).toHaveURL(ingredientShortcodeRe, { timeout: 15000 });
 }
 
 // Create a product linked to an existing ingredient, with two unit→price
@@ -168,7 +180,12 @@ export async function createProductWithIngredientMappings(
   await page.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
 
   await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
+  await expect(page).toHaveURL(
+    /\/products\/PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+    {
+      timeout: 15000,
+    },
+  );
   // PageHero renders the entity label ("Product") as an eyebrow above the <h1>,
   // which is the bare product name.
   await expect(
@@ -210,7 +227,12 @@ export async function addInventory(
   await page.getByRole("textbox", { name: "Amount Unit" }).fill(unit);
 
   await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(/\/inventory\/[a-f0-9-]+/, { timeout: 15000 });
+  await expect(page).toHaveURL(
+    /\/inventory\/INV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+    {
+      timeout: 15000,
+    },
+  );
   await expect(page.getByText(productName).first()).toBeVisible({
     timeout: 10000,
   });

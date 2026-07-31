@@ -19,6 +19,7 @@ export {
   createMeal,
   deleteMeals,
   getMealByID,
+  getMealByShortcode,
   getMealsByDateRange,
   mealList,
   removeMealRecipe,

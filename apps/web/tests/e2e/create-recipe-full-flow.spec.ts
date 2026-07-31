@@ -68,7 +68,10 @@ test.describe("Create Recipe - Full Flow", () => {
 
     // Submit recipe
     await page.getByRole("button", { name: /^Create$/i }).click();
-    await expect(page).toHaveURL(/\/recipes\/[a-f0-9-]+/, { timeout: 15000 });
+    await expect(page).toHaveURL(
+      /\/recipes\/RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
+      { timeout: 15000 },
+    );
 
     // Verify recipe created
     await expect(

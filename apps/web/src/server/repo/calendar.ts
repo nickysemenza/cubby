@@ -4,6 +4,7 @@ import type {
   CalendarRangeInput,
   CalendarRangeOut,
 } from "@cubby/schemas/calendar";
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import { addDays } from "date-fns";
 import { and, gte, isNotNull, lte, or, sql } from "drizzle-orm";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -74,6 +75,7 @@ export async function getCalendarRange(
       getDb(db)
         .select({
           id: project.id,
+          shortcode: project.shortcode,
           name: project.name,
           status: project.status,
           kind: project.kind,
@@ -89,6 +91,7 @@ export async function getCalendarRange(
     items.push({
       kind: "meal",
       id: meal.id,
+      shortcode: meal.shortcode,
       title: meal.name || "Meal",
       startDate: meal.date,
       endDateExclusive: shiftPlainDate(meal.date, 1),
@@ -109,6 +112,7 @@ export async function getCalendarRange(
     items.push({
       kind: "task",
       id: value.id,
+      shortcode: value.shortcode,
       title: value.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),
@@ -125,6 +129,7 @@ export async function getCalendarRange(
     items.push({
       kind: "expense",
       id: value.id,
+      shortcode: value.shortcode,
       title: value.name,
       startDate: value.date,
       endDateExclusive: shiftPlainDate(value.date, 1),
@@ -156,6 +161,7 @@ export async function getCalendarRange(
     items.push({
       kind: "project",
       id: row.id,
+      shortcode: unsafeProjectShortcode(row.shortcode),
       title: row.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),

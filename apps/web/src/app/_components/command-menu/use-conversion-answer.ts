@@ -12,7 +12,7 @@ interface ConversionAnswer {
   /** The formatted input amount, e.g. "250 g" */
   input: string;
   ingredientName: string;
-  ingredientId: string;
+  ingredientShortcode: string;
   /** The formatted converted amount, e.g. "2 cups" */
   result: string;
   /** Cost of that amount via the ingredient's price mappings, if priced */
@@ -81,7 +81,7 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
       return {
         input: wasm.format_amount(amount),
         ingredientName: ingredient.name,
-        ingredientId: ingredient.id,
+        ingredientShortcode: ingredient.shortcode,
         result: wasm.format_amount(converted),
         cost,
       };

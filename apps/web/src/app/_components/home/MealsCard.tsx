@@ -74,8 +74,8 @@ export function MealsCard() {
             return (
               <Link
                 key={meal.id}
-                to="/meals/$id"
-                params={{ id: meal.id }}
+                to="/meals/$shortcode"
+                params={{ shortcode: meal.shortcode }}
                 className="flex min-w-0 items-center justify-between gap-2 border-[var(--border)] border-b pb-1 text-sm last:border-b-0 hover:bg-muted/50"
               >
                 <Row align="baseline" gap="xs" className="min-w-0">

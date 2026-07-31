@@ -7,6 +7,11 @@
  */
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientShortcode,
+  unsafeProductId,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   IngredientWithoutProduct,
   IngredientWithUnusedAliases,
@@ -55,6 +60,7 @@ export const findIngredientsWithoutProduct = async (
   const rows = await dbClient
     .select({
       id: ingredient.id,
+      shortcode: ingredient.shortcode,
       name: ingredient.name,
       recipeCount: sql<number>`count(distinct ${recipe.id})`,
     })
@@ -96,9 +102,13 @@ export const findIngredientsWithoutProduct = async (
         ),
       ),
     )
-    .groupBy(ingredient.id, ingredient.name);
+    .groupBy(ingredient.id, ingredient.name, ingredient.shortcode);
 
-  return rows.map((r) => ({ ...r, recipeCount: Number(r.recipeCount) }));
+  return rows.map((r) => ({
+    ...r,
+    shortcode: unsafeIngredientShortcode(r.shortcode),
+    recipeCount: Number(r.recipeCount),
+  }));
 };
 
 // Find ingredients carrying ≥1 "unused" alias — one that's redundant (case-only
@@ -190,6 +200,7 @@ export const findIngredientsWithUnusedAliases = async (
   const withAliases = await dbClient
     .select({
       id: ingredient.id,
+      shortcode: ingredient.shortcode,
       name: ingredient.name,
       aliases: ingredient.aliases,
     })
@@ -213,6 +224,7 @@ export const findIngredientsWithUnusedAliases = async (
     if (unusedAliases.length > 0) {
       problems.push({
         id: ing.id,
+        shortcode: unsafeIngredientShortcode(ing.shortcode),
         name: ing.name,
         aliases: ing.aliases,
         unusedAliases,
@@ -237,12 +249,16 @@ export const findUnusedIngredients = async (
   const rows = await dbClient
     .select({
       id: ingredient.id,
+      shortcode: ingredient.shortcode,
       name: ingredient.name,
       createdAt: ingredient.createdAt,
-      products: sql<{ id: string; name: string }[]>`
+      products: sql<{ id: string; shortcode: string; name: string }[]>`
         coalesce(
-          json_agg(json_build_object('id', ${product.id}, 'name', ${product.name}))
-            filter (where ${product.id} is not null),
+          json_agg(json_build_object(
+            'id', ${product.id},
+            'shortcode', ${product.shortcode},
+            'name', ${product.name}
+          )) filter (where ${product.id} is not null),
           '[]'
         )`,
     })
@@ -279,12 +295,26 @@ export const findUnusedIngredients = async (
         ),
       ),
     )
-    .groupBy(ingredient.id, ingredient.name, ingredient.createdAt);
+    .groupBy(
+      ingredient.id,
+      ingredient.shortcode,
+      ingredient.name,
+      ingredient.createdAt,
+    );
 
   const withProduct: UnusedIngredient[] = [];
   const withoutProduct: UnusedIngredient[] = [];
   for (const row of rows) {
-    (row.products.length > 0 ? withProduct : withoutProduct).push(row);
+    const item: UnusedIngredient = {
+      ...row,
+      shortcode: unsafeIngredientShortcode(row.shortcode),
+      products: row.products.map((p) => ({
+        ...p,
+        id: unsafeProductId(p.id),
+        shortcode: unsafeProductShortcode(p.shortcode),
+      })),
+    };
+    (item.products.length > 0 ? withProduct : withoutProduct).push(item);
   }
   return { withProduct, withoutProduct };
 };

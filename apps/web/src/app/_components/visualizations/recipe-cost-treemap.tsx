@@ -9,7 +9,8 @@ import { VizTooltip } from "./viz-overlay";
 
 interface CostNode {
   name: string;
-  id: string | null;
+  /** The ingredient's public id — null for a sub-recipe row (nothing to link). */
+  shortcode: string | null;
   // Unique identity per rendered cell: the recipeSectionIngredient row id.
   // `id` above is the ingredient id, which is NOT unique here — the same
   // ingredient can legitimately appear in multiple sections (or twice in one),
@@ -49,7 +50,8 @@ export default function RecipeCostTreemap({
             ? ing.recipe.name
             : "Unknown";
 
-      const id = ing.type === "ingredient" ? ing.ingredient.id : null;
+      const shortcode =
+        ing.type === "ingredient" ? ing.ingredient.shortcode : null;
       // ing.id is the recipeSectionIngredient row id — unique per rendered cell.
       const rowKey = ing.id;
 
@@ -58,7 +60,7 @@ export default function RecipeCostTreemap({
         const cost = priceResult.value.value;
         pricedItems.push({
           name,
-          id,
+          shortcode,
           rowKey,
           value: cost,
           percentage: totalCost > 0 ? (cost / totalCost) * 100 : 0,
@@ -67,7 +69,7 @@ export default function RecipeCostTreemap({
       } else {
         unpricedItems.push({
           name,
-          id,
+          shortcode,
           rowKey,
           value: 1, // Placeholder value for layout
           percentage: 0,
@@ -237,10 +239,10 @@ function Treemap({ data }: TreemapProps) {
                             : "var(--muted-foreground)",
                       }}
                     >
-                      {node.data.id ? (
+                      {node.data.shortcode ? (
                         <Link
-                          to="/ingredients/$id"
-                          params={{ id: node.data.id }}
+                          to="/ingredients/$shortcode"
+                          params={{ shortcode: node.data.shortcode }}
                           className="hover:underline"
                           style={{ pointerEvents: "auto" }}
                         >

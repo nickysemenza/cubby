@@ -27,7 +27,15 @@ type TRPCMutationOptions = object;
  * - Navigation to entity detail on success
  * - Navigation to entity list on cancel
  */
-export function useEntityCreateMode<TData, TResult extends { id: string }>(
+export function useEntityCreateMode<
+  TData,
+  // `shortcode` is required, not optional: this navigates to the new row's
+  // detail page, and detail routes are keyed on the public id. Typing it here
+  // is what stops a create mutation whose result lacks one from compiling —
+  // the uuid-in-a-shortcode-slot bug the href guard can't see, because the
+  // entity (and therefore the path) is a variable.
+  TResult extends { id: string; shortcode: string },
+>(
   entityKey: Entity,
   mutationOptions: TRPCMutationOptions,
   callbacks?: EntityMutationCallbacks<TResult>,
@@ -51,7 +59,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
       }
 
       callbacks?.onSuccess?.(result);
-      navigate({ to: `/${entities[entityKey].basePath}/${result.id}` });
+      navigate({ to: `/${entities[entityKey].basePath}/${result.shortcode}` });
     },
     onError: (error: unknown) => {
       setError(getErrorMessage(error));

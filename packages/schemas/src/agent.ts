@@ -11,6 +11,13 @@ import { searchableEntitySchema } from "./search";
 export const agentSourceSchema = z.object({
   entityType: searchableEntitySchema,
   id: z.string(),
+  /**
+   * Public id, when the tool result carried one. Nullable because sources are
+   * scraped out of MCP tool payloads, and not every projection exposes a
+   * shortcode yet — a citation without one renders as plain text rather than a
+   * link, which beats linking to a uuid URL that no longer exists.
+   */
+  shortcode: z.string().nullable(),
   name: z.string(),
   /** Optional one-line context, e.g. "Paloform · milk-crate". */
   detail: z.string().nullable().optional(),

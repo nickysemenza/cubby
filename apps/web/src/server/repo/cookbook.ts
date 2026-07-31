@@ -13,7 +13,11 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
+import {
+  type CookbookId,
+  type RecipeId,
+  unsafeCookbookShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
@@ -173,6 +177,7 @@ export const listCookbooks = async (
   const rows = await getDb(db)
     .select({
       id: cookbook.id,
+      shortcode: cookbook.shortcode,
       book: cookbook.name,
       author: cookbook.author,
       subjects: cookbook.subjects,
@@ -192,6 +197,7 @@ export const listCookbooks = async (
   return rows.map((r) => ({
     ...r,
     id: r.id,
+    shortcode: unsafeCookbookShortcode(r.shortcode),
     coverUrl: r.coverUrl ?? null,
   }));
 };

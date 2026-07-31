@@ -19,7 +19,6 @@ import {
   locationIdsInput,
   locationListItemOut,
   locationParentOptionsOut,
-  locationShortcodeInput,
   locationShortcodesInput,
   locationSortableFields,
   locationsWithParentNameOut,
@@ -86,65 +85,69 @@ const { list } = createEntityListProcedure({
 });
 
 // Create standardized getByID, create, update procedures using factory
-const { getByID, create, update } = createEntityCrudWithoutListProcedures({
-  schemas: {
-    createInput: locationCreateInput,
-    updateInput: locationUpdateData,
-    output: infLocation,
-    createOutput: infLocationWithSideEffects,
-    updateOutput: infLocationWithSideEffects,
-    idSchema: locationId,
-  },
-  repository: {
-    getByID: async (services, id: LocationId) => {
-      return await getLocationById(services.db, id);
+const { getByID, getByShortcode, create, update } =
+  createEntityCrudWithoutListProcedures({
+    entityName: "location",
+    schemas: {
+      createInput: locationCreateInput,
+      updateInput: locationUpdateData,
+      output: infLocation,
+      createOutput: infLocationWithSideEffects,
+      updateOutput: infLocationWithSideEffects,
+      idSchema: locationId,
     },
-    create: async (services, data) => {
-      const location = await createLocation(
-        services.db,
-        data,
-        services.actorContext,
-      );
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "created",
-        entity: { entityType: "location", entityId: location.id },
-        source: "location.create",
-        // A location created WITH photos must trigger the AI description /
-        // inventory refresh too — without this it's born with a NULL description
-        // (only location.update was setting the flag).
-        locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
-      });
-      return { ...location, sideEffects: { backgroundBatches } };
-    },
-    update: async (services, id: LocationId, data) => {
-      const imagesChanged =
-        (data.pendingImageIds?.length ?? 0) > 0 ||
-        (data.removeImageIds?.length ?? 0) > 0;
-      const updated = await updateLocation(
-        services.db,
-        id,
-        data,
-        services.actorContext,
-      );
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "updated",
-        entity: { entityType: "location", entityId: id },
-        source: "location.update",
-        locationImagesChanged: imagesChanged,
-      });
-      if (!imagesChanged) {
-        return { ...updated, sideEffects: { backgroundBatches } };
-      }
+    repository: {
+      getByID: async (services, id: LocationId) => {
+        return await getLocationById(services.db, id);
+      },
+      getByShortcode: (services, shortcode) =>
+        getLocationByShortcode(services.db, shortcode),
+      create: async (services, data) => {
+        const location = await createLocation(
+          services.db,
+          data,
+          services.actorContext,
+        );
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "created",
+          entity: { entityType: "location", entityId: location.id },
+          source: "location.create",
+          // A location created WITH photos must trigger the AI description /
+          // inventory refresh too — without this it's born with a NULL description
+          // (only location.update was setting the flag).
+          locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
+        });
+        return { ...location, sideEffects: { backgroundBatches } };
+      },
+      update: async (services, id: LocationId, data) => {
+        const imagesChanged =
+          (data.pendingImageIds?.length ?? 0) > 0 ||
+          (data.removeImageIds?.length ?? 0) > 0;
+        const updated = await updateLocation(
+          services.db,
+          id,
+          data,
+          services.actorContext,
+        );
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "updated",
+          entity: { entityType: "location", entityId: id },
+          source: "location.update",
+          locationImagesChanged: imagesChanged,
+        });
+        if (!imagesChanged) {
+          return { ...updated, sideEffects: { backgroundBatches } };
+        }
 
-      if (updated.images.length === 0) {
-        await updateLocationAiDescription(services.db, id, null);
-      }
+        if (updated.images.length === 0) {
+          await updateLocationAiDescription(services.db, id, null);
+        }
 
-      const refreshed = await getLocationById(services.db, id);
-      return { ...refreshed, sideEffects: { backgroundBatches } };
+        const refreshed = await getLocationById(services.db, id);
+        return { ...refreshed, sideEffects: { backgroundBatches } };
+      },
     },
-  },
-});
+  });
 
 const getLocationTypesCount = protectedProcedure
   .output(locationTypeCountsOut)
@@ -220,14 +223,6 @@ const getByShortcodes = protectedProcedure
   .output(locationsWithParentNameOut)
   .query(async ({ ctx, input }) => {
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
-  });
-
-// Get location by shortcode (e.g., L-A3F2)
-const getByShortcode = protectedProcedure
-  .input(locationShortcodeInput)
-  .output(infLocation.nullable())
-  .query(async ({ ctx, input }) => {
-    return await getLocationByShortcode(ctx.db, input.shortcode);
   });
 
 // Get recently active locations for scanner quick-select

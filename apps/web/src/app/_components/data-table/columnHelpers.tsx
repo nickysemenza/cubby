@@ -193,11 +193,31 @@ declare module "@tanstack/react-table" {
 
 interface BaseRow {
   id: string | number;
+  // The public id. Absent on `image` rows (the one entity `createNameColumn`
+  // links that stays keyed on its uuid) and on rows from an entity whose
+  // schema hasn't grown a `shortcode` yet — `nameColumnParams` below falls
+  // back to `id` in both cases rather than mislabeling a uuid as one.
+  shortcode?: string;
   // Nullable: `meal.name` is optional (an unnamed meal is identified by its
   // date). Widened from `string` so such entities can use these factories at
   // all — see `emptyLabel` on createNameColumn.
   name?: string | null;
   createdAt?: string | Date;
+}
+
+/**
+ * `TableLink` params for an entity's own row — `{ id }` for `image` (the one
+ * `createNameColumn` entity with no shortcode route), `{ shortcode }`
+ * everywhere else. Falls back to the row's `id` when `shortcode` is absent
+ * (an entity whose schema hasn't grown one yet) rather than a hard crash;
+ * that fallback produces a dead link, same as before this entity gains one.
+ */
+function nameColumnParams(
+  entity: Entity,
+  row: BaseRow,
+): { id: string } | { shortcode: string } {
+  if (entity === "image") return { id: String(row.id) };
+  return { shortcode: row.shortcode ?? String(row.id) };
 }
 
 interface ImageRow extends BaseRow {
@@ -397,7 +417,7 @@ export function createNameColumn<T extends BaseRow>(
                   <TooltipTrigger render={<span className="block truncate" />}>
                     <TableLink
                       to={entities[entity].routes.detail}
-                      params={{ id: String(info.row.original.id) }}
+                      params={nameColumnParams(entity, info.row.original)}
                     >
                       {v || value}
                     </TableLink>
@@ -418,7 +438,7 @@ export function createNameColumn<T extends BaseRow>(
             <TooltipTrigger render={<span className="block truncate" />}>
               <TableLink
                 to={entities[entity].routes.detail}
-                params={{ id: String(info.row.original.id) }}
+                params={nameColumnParams(entity, info.row.original)}
               >
                 {value}
               </TableLink>
@@ -732,7 +752,9 @@ interface ActionsColumnOptions<T> {
  * Creates a standard actions column with a dropdown menu.
  * Includes "View Details" link by default, with optional extra actions.
  */
-export function createActionsColumn<T extends { id: string | number }>(
+export function createActionsColumn<
+  T extends { id: string | number; shortcode?: string },
+>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
   options?: ActionsColumnOptions<T>,
@@ -741,7 +763,10 @@ export function createActionsColumn<T extends { id: string | number }>(
     columnHelper,
     (row) => ({
       to: entities[entity].routes.detail,
-      params: { id: String(row.id) },
+      params: nameColumnParams(entity, {
+        id: row.id,
+        shortcode: row.shortcode,
+      }),
     }),
     options?.extraActions,
   );
@@ -754,9 +779,12 @@ export function createActionsColumn<T extends { id: string | number }>(
  */
 export function createActionsColumnBase<T>(
   columnHelper: ColumnHelper<T>,
-  getLinkProps: (
-    row: T,
-  ) => { to: EntityDetailRoute; params: EntityDetailParams } | null,
+  getLinkProps: (row: T) => {
+    to: EntityDetailRoute;
+    // `{ id }` covers `image`, the one entity `EntityDetailRoute` includes
+    // that isn't shortcode-routed.
+    params: EntityDetailParams | { id: string };
+  } | null,
   extraActions?: (row: T) => ReactNode,
 ) {
   return columnHelper.display({
@@ -1578,6 +1606,8 @@ export function createPlainDateColumn<
 interface ProjectRefRow {
   projectId: string | null;
   projectName: string | null;
+  /** Public id, denormalized next to the name — the link target. */
+  projectShortcode: string | null;
 }
 
 /**
@@ -1653,9 +1683,11 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
+                  // The combobox value carries the project's uuid; the row
+                  // carries its public id, denormalized alongside `projectName`.
                   <TableLink
-                    to="/projects/$id"
-                    params={{ id: v.id }}
+                    to="/projects/$shortcode"
+                    params={{ shortcode: row.projectShortcode ?? "" }}
                     variant="muted"
                   >
                     {v.name}
@@ -1680,6 +1712,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 interface ProductRefRow {
   productId: string | null;
   productName: string | null;
+  productShortcode: string | null;
 }
 
 /** A task's product subject uses explicit field names so it cannot be confused
@@ -1687,6 +1720,7 @@ interface ProductRefRow {
 interface SubjectProductRefRow {
   subjectProductId: string | null;
   subjectProductName: string | null;
+  subjectProductShortcode: string | null;
 }
 
 /**
@@ -1752,9 +1786,11 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
+                  // The combobox value carries the product's uuid; the row
+                  // carries its public id, denormalized alongside `productName`.
                   <TableLink
-                    to="/products/$id"
-                    params={{ id: v.id }}
+                    to="/products/$shortcode"
+                    params={{ shortcode: row.productShortcode ?? "" }}
                     variant="muted"
                   >
                     {v.name}
@@ -1835,9 +1871,11 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
+                  // Task rows denormalize `subjectProductShortcode` next to
+                  // `subjectProductName`, same as the project link above.
                   <TableLink
-                    to="/products/$id"
-                    params={{ id: v.id }}
+                    to="/products/$shortcode"
+                    params={{ shortcode: row.subjectProductShortcode ?? "" }}
                     variant="muted"
                   >
                     {v.name}

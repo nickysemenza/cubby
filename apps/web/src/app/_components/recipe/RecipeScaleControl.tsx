@@ -31,9 +31,10 @@ type AnchorMode = ScaleAnchor["type"];
  * hub (which lists its products).
  */
 export interface MissingWeightLink {
-  ingredientId: string;
+  ingredientShortcode: string;
   name: string;
-  productId: string | null;
+  /** Single-product ingredient links straight to the product instead. */
+  productShortcode: string | null;
 }
 
 interface RecipeScaleControlProps {
@@ -255,12 +256,17 @@ export function RecipeScaleControl({
                 </p>
                 <Stack as="ul" gap="xs">
                   {missingWeightLinks.map((link) => (
-                    <li key={link.ingredientId}>
+                    <li key={link.ingredientShortcode}>
                       <Link
                         to={
-                          link.productId ? "/products/$id" : "/ingredients/$id"
+                          link.productShortcode
+                            ? "/products/$shortcode"
+                            : "/ingredients/$shortcode"
                         }
-                        params={{ id: link.productId ?? link.ingredientId }}
+                        params={{
+                          shortcode:
+                            link.productShortcode ?? link.ingredientShortcode,
+                        }}
                         className="text-primary underline-offset-2 hover:underline"
                         onClick={() => setOpen(false)}
                       >

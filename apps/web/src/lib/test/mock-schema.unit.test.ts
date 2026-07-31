@@ -16,6 +16,11 @@ import {
 } from "@cubby/schemas/problems";
 import { productCreateInput } from "@cubby/schemas/product";
 import { recipeCreateInput, recipeOut } from "@cubby/schemas/recipe";
+import {
+  SHORTCODE_PREFIX,
+  type ShortcodeType,
+  shortcodeSchema,
+} from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { mock } from "./mock-schema";
@@ -101,5 +106,38 @@ describe("mock() policy", () => {
     // NB: with fillOptionals, `upperValue` and `value` are independent randoms,
     // so a refine like `upperValue > value` is NOT guaranteed — that is why the
     // default policy omits optionals, and why refined fields need an override.
+  });
+});
+
+describe("mock() regex-constrained strings", () => {
+  // Without regex support the generator emitted lorem words for any `.regex()`
+  // field, which silently produced fixtures that could never satisfy their own
+  // schema — that was a real 16-test failure before this landed.
+  it("satisfies the pattern it was built from", () => {
+    const cases = [
+      z.string().regex(/^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      z.string().regex(/^[a-f0-9]{8}$/),
+      z.string().regex(/^v\d+$/),
+      z.string().regex(/^[A-Z]{2,4}$/),
+      z.string().regex(/^ab?c*d+$/),
+    ];
+    for (const schema of cases) {
+      const value = mock(z.object({ v: schema }), { seed: 7 }).v;
+      expect(
+        schema.safeParse(value).success,
+        `generated ${JSON.stringify(value)} for ${schema.def.checks?.length ?? 0} check(s)`,
+      ).toBe(true);
+    }
+  });
+
+  it("generates a real shortcode for every entity prefix", () => {
+    // The case the cutover actually depends on: `mock(taskOut)` and friends
+    // must produce codes their own branded schema accepts.
+    for (const entity of Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]) {
+      const schema = shortcodeSchema(entity);
+      const value = mock(z.object({ code: schema }), { seed: 3 }).code;
+      expect(schema.safeParse(value).success, `${entity}: ${value}`).toBe(true);
+    }
   });
 });
