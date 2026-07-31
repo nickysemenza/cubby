@@ -20,13 +20,14 @@ const PROJECT_SCOPED_PAGE_SIZE = 500;
 
 /** The task/expense `chartData` endpoints take the bare filters object (no
  * sort/pagination wrapper — they fetch-all). One subtree fetch feeds the
- * Gantt, the Task Timeline, the Task Board view, and the Budget/spend
- * charts — all of which need the whole (incl. done/past) subtree picture.
- * The Tasks/Expenses *list* views intentionally do NOT read from this
- * fetch (see `openTaskFilters`/`plannedExpenseFilters` in
- * `project-detail-page.tsx`) — a completed project with hundreds of historical
- * rows shouldn't pull them all in just to render its default (open-tasks /
- * recent-expenses) view. */
+ * Gantt, the Task Timeline, the Task Board view, the Budget/spend charts, AND
+ * (as of `project-detail-page.tsx`'s embedded Tasks/Expenses section tables)
+ * those tables too — the previously-separate scoped `task.list`/`expense.list`
+ * queries that bounded what those tables rendered were removed, since they
+ * were redundant round-trips over data this fetch already has. The one
+ * default those scoped queries used to encode (List view showing open tasks
+ * first) is now a visible, user-clearable column filter on the embedded
+ * `TaskList` (`OPEN_TASK_FILTERS`), not a separate fetch. */
 export function projectSubtreeTasksFilters(projectId: string) {
   return { projectId, includeSubProjects: true };
 }

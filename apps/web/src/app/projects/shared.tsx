@@ -10,6 +10,7 @@ import type {
 } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import {
+  type ColumnFiltersState,
   type ColumnHelper,
   createColumnHelper,
   type FilterFn,
@@ -31,6 +32,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import {
   type VendorName,
@@ -110,6 +112,13 @@ import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { TradeBadge, tradeOptions } from "./trade-options";
+
+/**
+ * Stable empty default for `defaultColumnFilters` — an inline `= []` would
+ * allocate a fresh array every render and destabilize the `useState`
+ * initializer's closure (guard-enforced: `unstable-hook-default`).
+ */
+const NO_COLUMN_FILTERS: ColumnFiltersState = [];
 
 /**
  * Human-facing labels for the raw DB enum values (`@cubby/schemas/project`).
@@ -289,6 +298,7 @@ const EMBEDDED_TASK_COLUMNS: VisibilityState = { createdAt: false };
 export function TaskList({
   tasks,
   showProjectColumn = true,
+  defaultColumnFilters = NO_COLUMN_FILTERS,
 }: {
   tasks: TaskOut[];
   /**
@@ -297,10 +307,15 @@ export function TaskList({
    * where every row is the same project. Callers pass `false` there.
    */
   showProjectColumn?: boolean;
+  /** Seeds the table's column filters once on mount; the table owns the state after that. */
+  defaultColumnFilters?: ColumnFiltersState;
 }) {
   const api = useTRPC();
   const lastSelectedIdRef = useRef<string | null>(null);
   const shiftKeyRef = useRef(false);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
+    () => defaultColumnFilters,
+  );
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -431,9 +446,11 @@ export function TaskList({
     state: {
       rowSelection: bulkActionsState.rowSelection,
       columnVisibility,
+      columnFilters,
     },
     onRowSelectionChange: bulkActionsState.onRowSelectionChange,
     onColumnVisibilityChange,
+    onColumnFiltersChange: setColumnFilters,
     initialState: {
       pagination: { pageSize: 25 },
     },
@@ -870,6 +887,7 @@ export function ExpenseList({
   tradeFilter,
   costTypeFilter,
   showProjectColumn = true,
+  defaultColumnFilters = NO_COLUMN_FILTERS,
 }: {
   expenses: ExpenseOut[];
   /** Controlled column filters, driven by the Trade × Cost Type pivot click. */
@@ -881,10 +899,15 @@ export function ExpenseList({
    * pass `false` there.
    */
   showProjectColumn?: boolean;
+  /** Seeds the table's column filters once on mount; the table owns the state after that. */
+  defaultColumnFilters?: ColumnFiltersState;
 }) {
   const api = useTRPC();
   const lastSelectedIdRef = useRef<string | null>(null);
   const shiftKeyRef = useRef(false);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
+    () => defaultColumnFilters,
+  );
 
   const updateExpenseMutation = useUpdateMutation({
     mutationFn: api.expense.update.mutationOptions,
@@ -1105,24 +1128,38 @@ export function ExpenseList({
     state: {
       rowSelection: bulkActionsState.rowSelection,
       columnVisibility,
+      columnFilters,
     },
     onRowSelectionChange: bulkActionsState.onRowSelectionChange,
     onColumnVisibilityChange,
+    onColumnFiltersChange: setColumnFilters,
     initialState: {
       pagination: { pageSize: 25 },
     },
   });
 
-  // Mirror the pivot's active cell onto the table's column filters. Wrapped in
-  // a one-element array because both columns are multi-select: their filterFn
-  // expects a set, and a bare scalar would make it match every row.
+  // Mirror the pivot's active cell (Trade × Cost Type matrix click) onto the
+  // table's column filters. Guarded by a ref so it fires only on a real pivot
+  // transition — an unguarded effect writes `undefined` into both columns on
+  // mount, wiping any seeded default or user-set filter. Wrapped in a
+  // one-element array because both columns are multi-select (their filterFn
+  // expects a set; a bare scalar would match every row).
+  const lastPivotRef = useRef<{
+    trade: Trade | null;
+    costType: CostType | null;
+  }>({ trade: null, costType: null });
   useEffect(() => {
+    const prev = lastPivotRef.current;
+    const nextTrade = tradeFilter ?? null;
+    const nextCostType = costTypeFilter ?? null;
+    if (prev.trade === nextTrade && prev.costType === nextCostType) return;
+    lastPivotRef.current = { trade: nextTrade, costType: nextCostType };
     table
       .getColumn("trade")
-      ?.setFilterValue(tradeFilter ? [tradeFilter] : undefined);
+      ?.setFilterValue(nextTrade ? [nextTrade] : undefined);
     table
       .getColumn("costType")
-      ?.setFilterValue(costTypeFilter ? [costTypeFilter] : undefined);
+      ?.setFilterValue(nextCostType ? [nextCostType] : undefined);
   }, [table, tradeFilter, costTypeFilter]);
 
   if (expenses.length === 0) {

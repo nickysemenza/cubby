@@ -1,15 +1,15 @@
-import type {
-  ExpenseOut,
-  ProjectKind,
-  ProjectOut,
-  ProjectStatus,
-  TaskOut,
-  Trade,
+import {
+  type ExpenseOut,
+  type ProjectKind,
+  type ProjectOut,
+  type ProjectStatus,
+  type TaskOut,
+  type Trade,
+  taskStatusValues,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
+import type { ColumnFiltersState } from "@tanstack/react-table";
 import {
-  ChevronDown,
-  ChevronRight,
   Clock,
   ExternalLink,
   FileText,
@@ -45,11 +45,6 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/components/ui/collapsible";
 import {
   Empty,
   EmptyDescription,
@@ -127,18 +122,14 @@ const TASKS_VIEW_OPTIONS: ViewSwitcherOption<"list" | "board">[] = [
 const NO_EXPENSES: ExpenseOut[] = [];
 const NO_CHILD_PROJECTS: ProjectOut[] = [];
 
-/** Cap for the Tasks section's scoped open/history `task.list` queries —
- * generous relative to any real project's task count, within the shared
- * `MAX_PAGE_SIZE`. */
-const TASKS_SECTION_PAGE_SIZE = 500;
-
-/** Cap for the Expenses section's scoped planned/history `expense.list`
- * queries — same rationale as `TASKS_SECTION_PAGE_SIZE`. */
-const EXPENSES_SECTION_PAGE_SIZE = 500;
-
-/** The default "recent actual expenses" page is deliberately small — it's a
- * glance, not the ledger (History expands to the full expense list). */
-const RECENT_EXPENSES_PAGE_SIZE = 15;
+/** Tasks section default: the embedded `TaskList` gets fed the full subtree
+ * (open + done), but seeds its column-filter state to exclude `done` so open
+ * work shows first — a user-visible, user-clearable filter rather than a
+ * separately-fetched scoped query. Module scope: it's passed as a prop, and
+ * an inline literal here would be a fresh reference every render. */
+const OPEN_TASK_FILTERS: ColumnFiltersState = [
+  { id: "status", value: taskStatusValues.filter((s) => s !== "done") },
+];
 
 interface ProjectDetailPageProps {
   project: ProjectOut;
@@ -451,128 +442,32 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const hasSubtree = project.rollup.subtree.projectCount > 0;
   const [tasksView, setTasksView] = useState<"list" | "board">("list");
 
-  // Tasks section (List view): scoped to open (non-done) tasks only — a
-  // completed project can carry hundreds of historical tasks, and those
-  // shouldn't be fetched/rendered on initial load just to show the active
-  // work. Separate from `subtreeTasks` above (Board view keeps using that
-  // one — its optimistic drag/drop patches the `task.chartData` cache keyed
-  // on those exact filters, so it can't be pointed at a different query).
-  const openTaskFilters = useMemo(
-    () => ({
-      projectId: project.id,
-      includeSubProjects: true,
-      completion: "open" as const,
-    }),
-    [project.id],
-  );
-  const { data: openTasksPage } = useQuery(
-    api.task.list.queryOptions({
-      filters: openTaskFilters,
-      pagination: { pageIndex: 0, pageSize: TASKS_SECTION_PAGE_SIZE },
-    }),
-  );
-  const openTasks = openTasksPage?.items ?? NO_TASKS;
-  const topLevelOpenTasks = useMemo(
-    () => openTasks.filter((t) => t.parentTaskId == null),
-    [openTasks],
-  );
-
-  // History: completed tasks, fetched only once the disclosure below is
-  // opened — `enabled` keeps this off the initial page load entirely.
-  const [isTaskHistoryOpen, setIsTaskHistoryOpen] = useState(false);
-  const doneTaskFilters = useMemo(
-    () => ({
-      projectId: project.id,
-      includeSubProjects: true,
-      completion: "done" as const,
-    }),
-    [project.id],
-  );
-  const { data: doneTasksPage } = useQuery({
-    ...api.task.list.queryOptions({
-      filters: doneTaskFilters,
-      pagination: { pageIndex: 0, pageSize: TASKS_SECTION_PAGE_SIZE },
-    }),
-    enabled: isTaskHistoryOpen,
-  });
-  const doneTasks = doneTasksPage?.items ?? NO_TASKS;
-  const topLevelDoneTasks = useMemo(
-    () => doneTasks.filter((t) => t.parentTaskId == null),
-    [doneTasks],
-  );
-
   // Full subtree expense history — feeds the Budget card + the spend charts
-  // below, both of which need the complete picture. The Expenses section's
-  // *list* view intentionally does NOT read from this (see the scoped
-  // planned/recent/history queries further down) — a completed project's
-  // full expense ledger shouldn't be fetched/rendered just to show the
-  // section's default (planned + recent) view.
+  // below, AND (as of the column-filter default below) the embedded Expenses
+  // section table, so there's a single subtree fetch instead of a separate
+  // scoped `expense.list` round-trip just to bound what that table renders.
   const { data: chartExpenses = NO_EXPENSES } = useQuery(
     api.expense.chartData.queryOptions(
       projectSubtreeExpensesFilters(project.id),
     ),
   );
 
-  // Expenses section (default view): planned expenses + a small recency-
-  // capped page of already-made ones, rather than the full ledger above.
-  const plannedExpenseFilters = useMemo(
-    () => ({
-      projectId: project.id,
-      includeSubProjects: true,
-      future: true,
-    }),
-    [project.id],
-  );
-  const { data: plannedExpensesPage } = useQuery(
-    api.expense.list.queryOptions({
-      filters: plannedExpenseFilters,
-      pagination: { pageIndex: 0, pageSize: EXPENSES_SECTION_PAGE_SIZE },
-    }),
-  );
-  const plannedExpenses = plannedExpensesPage?.items ?? NO_EXPENSES;
-
-  const recentActualExpenseFilters = useMemo(
-    () => ({
-      projectId: project.id,
-      includeSubProjects: true,
-      future: false,
-    }),
-    [project.id],
-  );
-  // `expense.list`'s default sort (date desc, nulls last) is exactly what's
-  // wanted here, so no explicit `sort` is passed.
-  const { data: recentActualExpensesPage } = useQuery(
-    api.expense.list.queryOptions({
-      filters: recentActualExpenseFilters,
-      pagination: { pageIndex: 0, pageSize: RECENT_EXPENSES_PAGE_SIZE },
-    }),
-  );
-  const recentActualExpenses = recentActualExpensesPage?.items ?? NO_EXPENSES;
-
-  // Merge the two bounded pages for display — each page is independently
-  // sorted, so the combined list needs its own newest-first, nulls-last pass.
-  const defaultSectionExpenses = useMemo(
+  // The embedded ExpenseList holds no sorting state, and `chartData` returns
+  // rows date-ASCENDING — so feeding `chartExpenses` straight through would
+  // make page 1 the OLDEST rows. Flip to newest-first, nulls-last (matching
+  // the old scoped-query default) before handing it to the table. Do NOT
+  // replace this with `initialState.sorting` instead — the date column has
+  // no `sortingFn` and nulls-handling there is unverified.
+  const sortedSubtreeExpenses = useMemo(
     () =>
-      [...plannedExpenses, ...recentActualExpenses].sort((a, b) => {
+      [...chartExpenses].sort((a, b) => {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
         if (!b.date) return -1;
         return b.date.localeCompare(a.date);
       }),
-    [plannedExpenses, recentActualExpenses],
+    [chartExpenses],
   );
-
-  // History: the full expense ledger, fetched only once the disclosure
-  // below is opened — `enabled` keeps this off the initial page load.
-  const [isExpenseHistoryOpen, setIsExpenseHistoryOpen] = useState(false);
-  const { data: expenseHistoryPage } = useQuery({
-    ...api.expense.list.queryOptions({
-      filters: projectSubtreeExpensesFilters(project.id),
-      pagination: { pageIndex: 0, pageSize: EXPENSES_SECTION_PAGE_SIZE },
-    }),
-    enabled: isExpenseHistoryOpen,
-  });
-  const expenseHistory = expenseHistoryPage?.items ?? NO_EXPENSES;
 
   // Decompose spend into actual / committed / contributions rather than showing
   // one blended figure. Own-scope split feeds the hero; the whole-subtree split
@@ -709,10 +604,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   ) => {
     setActiveMatrixCell((current) => {
       const clear = current?.trade === trade && current.costType === costType;
-      // The pivot is built from the full subtree ledger (`chartExpenses`) —
-      // a matched expense may not be in the section's default bounded view,
-      // so expand History to the full list rather than filtering to nothing.
-      if (!clear) setIsExpenseHistoryOpen(true);
       return clear ? null : { trade, costType };
     });
     expensesRef.current?.scrollIntoView({
@@ -987,10 +878,10 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
-  // Board view keeps showing the full (incl. done) subtree — see the
-  // `subtreeTasks` comment above; List view is the scoped open-tasks set.
-  const visibleTaskCount =
-    tasksView === "board" ? topLevelTasks.length : topLevelOpenTasks.length;
+  // Both views render the full top-level subtree now — List view's default
+  // "open work first" ordering is a column filter on the embedded TaskList
+  // (see `OPEN_TASK_FILTERS`), not a separate scoped fetch.
+  const visibleTaskCount = topLevelTasks.length;
 
   const tasksSection: DetailSection = {
     title: "Tasks",
@@ -1035,31 +926,11 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           maxHeightClassName="max-h-[70vh]"
         />
       ) : (
-        <Stack gap="sm">
-          <TaskList tasks={topLevelOpenTasks} showProjectColumn={hasSubtree} />
-          <Collapsible
-            open={isTaskHistoryOpen}
-            onOpenChange={setIsTaskHistoryOpen}
-          >
-            <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
-              {isTaskHistoryOpen ? (
-                <ChevronDown className="size-3" />
-              ) : (
-                <ChevronRight className="size-3" />
-              )}
-              History
-              {isTaskHistoryOpen &&
-                topLevelDoneTasks.length > 0 &&
-                ` (${topLevelDoneTasks.length})`}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2">
-              <TaskList
-                tasks={topLevelDoneTasks}
-                showProjectColumn={hasSubtree}
-              />
-            </CollapsibleContent>
-          </Collapsible>
-        </Stack>
+        <TaskList
+          tasks={topLevelTasks}
+          showProjectColumn={hasSubtree}
+          defaultColumnFilters={OPEN_TASK_FILTERS}
+        />
       ),
   };
 
@@ -1184,8 +1055,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     zone: hasSubtree ? "full" : "main",
     headerAction: (
       <Row align="center" gap="sm">
-        {defaultSectionExpenses.length > 0 && (
-          <Badge variant="outline">{defaultSectionExpenses.length}</Badge>
+        {sortedSubtreeExpenses.length > 0 && (
+          <Badge variant="outline">{sortedSubtreeExpenses.length}</Badge>
         )}
         <Button
           type="button"
@@ -1200,38 +1071,12 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
     content: (
       <div ref={expensesRef}>
-        <Stack gap="sm">
-          <ExpenseList
-            expenses={defaultSectionExpenses}
-            tradeFilter={activeMatrixCell?.trade ?? null}
-            costTypeFilter={activeMatrixCell?.costType ?? null}
-            showProjectColumn={hasSubtree}
-          />
-          <Collapsible
-            open={isExpenseHistoryOpen}
-            onOpenChange={setIsExpenseHistoryOpen}
-          >
-            <CollapsibleTrigger className="flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
-              {isExpenseHistoryOpen ? (
-                <ChevronDown className="size-3" />
-              ) : (
-                <ChevronRight className="size-3" />
-              )}
-              History
-              {isExpenseHistoryOpen &&
-                expenseHistory.length > 0 &&
-                ` (${expenseHistory.length})`}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2">
-              <ExpenseList
-                expenses={expenseHistory}
-                tradeFilter={activeMatrixCell?.trade ?? null}
-                costTypeFilter={activeMatrixCell?.costType ?? null}
-                showProjectColumn={hasSubtree}
-              />
-            </CollapsibleContent>
-          </Collapsible>
-        </Stack>
+        <ExpenseList
+          expenses={sortedSubtreeExpenses}
+          tradeFilter={activeMatrixCell?.trade ?? null}
+          costTypeFilter={activeMatrixCell?.costType ?? null}
+          showProjectColumn={hasSubtree}
+        />
       </div>
     ),
   };
