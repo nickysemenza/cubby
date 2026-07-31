@@ -10,6 +10,8 @@ import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type {
   ExpenseId,
   ExpenseShortcode,
+  ProductId,
+  ProductShortcode,
   ProjectId,
   ProjectShortcode,
   PurchaseId,
@@ -17,6 +19,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseId,
+  unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
 } from "@cubby/schemas/identifiers";
@@ -76,9 +79,10 @@ type ExpenseUpdateData = ExpenseUpdateInput["data"];
  */
 type ResolvedExpenseUpdate = Omit<
   ExpenseUpdateData,
-  "vendor" | "orderId" | "projectId" | "purchaseId"
+  "vendor" | "orderId" | "projectId" | "productId" | "purchaseId"
 > & {
   projectId?: ProjectId | null;
+  productId?: ProductId | null;
   purchaseId?: PurchaseId | null;
 };
 
@@ -95,6 +99,21 @@ const resolveLiveProjectId = async (
     );
   }
   return unsafeProjectId(id);
+};
+
+/** Resolve a product shortcode to the live uuid stored in the expense FK. */
+const resolveLiveProductId = async (
+  tx: DrizzleTransaction,
+  shortcode: ProductShortcode,
+): Promise<ProductId> => {
+  const id = await resolveLiveShortcode(tx, shortcode, "product");
+  if (!id) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product not found: ${shortcode}`,
+    );
+  }
+  return unsafeProductId(id);
 };
 
 /** Resolve a purchase (charge) shortcode to a live uuid, or throw. */
@@ -351,6 +370,7 @@ export const updateExpense = async (
     vendor: _vendor,
     orderId: _orderId,
     projectId,
+    productId,
     purchaseId,
     ...restColumns
   } = data;
@@ -376,6 +396,13 @@ export const updateExpense = async (
           ? null
           : await resolveLiveProjectId(tx, projectId);
 
+    const resolvedProductId =
+      productId === undefined
+        ? undefined
+        : productId === null
+          ? null
+          : await resolveLiveProductId(tx, productId);
+
     // An explicit `purchaseId` short-circuits `resolveCharge` entirely (see the
     // field's doc): an id is never a guess, so there's nothing to resolve.
     // Resolving THROUGH `resolveLivePurchaseId` (live-only) folds in what
@@ -391,6 +418,9 @@ export const updateExpense = async (
       ...restColumns,
       ...(resolvedProjectId !== undefined
         ? { projectId: resolvedProjectId }
+        : {}),
+      ...(resolvedProductId !== undefined
+        ? { productId: resolvedProductId }
         : {}),
     };
 
@@ -521,6 +551,9 @@ export const createExpense = async (
     const projectId = data.projectId
       ? await resolveLiveProjectId(tx, data.projectId)
       : null;
+    const productId = data.productId
+      ? await resolveLiveProductId(tx, data.productId)
+      : null;
 
     const created = await insertWithShortcode(tx, "expense", {
       name: data.name,
@@ -532,7 +565,7 @@ export const createExpense = async (
       notes: data.notes,
       future: data.future,
       projectId,
-      productId: data.productId,
+      productId,
       purchaseId,
     });
     await logAuditEntry(tx, actor, {

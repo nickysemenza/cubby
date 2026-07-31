@@ -1,3 +1,4 @@
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import {
   NONEXISTENT_UUID,
   seedFromCSV,
@@ -7,7 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import { createProduct, getProductByID } from "~/server/repo/product";
 import {
   listParams,
   makeLocationInput,
@@ -44,7 +45,7 @@ describe("inventory router", () => {
 
     // Create inventory entry data
     const inventoryData = {
-      productId: product.id,
+      productId: product.shortcode,
       locationId: location.id,
       amount: {
         value: 5,
@@ -225,6 +226,8 @@ describe("inventory router", () => {
     );
 
     const product2Id = seed.productIds.get("Product 2")!;
+    const product2Shortcode = (await getProductByID(ctx.db, product2Id))
+      .shortcode;
     const location1Id = seed.locationIds.get("Location 1")!;
     const location2Id = location2.id;
     const createdEntryId = seed.inventoryIds.get("Product 1@Location 1")!;
@@ -233,7 +236,7 @@ describe("inventory router", () => {
     const updatedEntry = await caller.update({
       id: createdEntryId,
       data: {
-        productId: product2Id,
+        productId: product2Shortcode,
       },
     });
 
@@ -281,6 +284,12 @@ describe("inventory router", () => {
     const product1Id = seed.productIds.get("Bulk Product 1")!;
     const product2Id = seed.productIds.get("Bulk Product 2")!;
     const product3Id = seed.productIds.get("Bulk Product 3")!;
+    const product1Shortcode = (await getProductByID(ctx.db, product1Id))
+      .shortcode;
+    const product2Shortcode = (await getProductByID(ctx.db, product2Id))
+      .shortcode;
+    const product3Shortcode = (await getProductByID(ctx.db, product3Id))
+      .shortcode;
     const existingEntryId = seed.inventoryIds.get(
       "Bulk Product 1@Bulk Location",
     )!;
@@ -291,19 +300,19 @@ describe("inventory router", () => {
       items: [
         {
           id: existingEntryId, // Update existing entry
-          productId: product1Id,
+          productId: product1Shortcode,
           locationId: locationId,
           amount: { value: 5, unit: "pieces" },
         },
         {
           // Create new entry
-          productId: product2Id,
+          productId: product2Shortcode,
           locationId: locationId,
           amount: { value: 2, unit: "kg" },
         },
         {
           // Create another new entry
-          productId: product3Id,
+          productId: product3Shortcode,
           locationId: locationId,
           amount: { value: 10, unit: "grams" },
         },
@@ -586,15 +595,16 @@ describe("inventory router", () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
     const nonExistentId = NONEXISTENT_UUID;
+    const nonExistentProductCode = unsafeProductShortcode("PRD-ZZZZ");
 
     // Try to create inventory entry with non-existent product
     await expect(
       caller.create({
-        productId: nonExistentId,
+        productId: nonExistentProductCode,
         locationId: nonExistentId,
         amount: { value: 1, unit: "piece" },
       }),
-    ).rejects.toThrow(/does not exist/);
+    ).rejects.toThrow(/not found/);
 
     // Seed a valid entry
     const seed = await seedFromCSV(
@@ -616,9 +626,9 @@ describe("inventory router", () => {
     await expect(
       caller.update({
         id: entryId,
-        data: { productId: nonExistentId },
+        data: { productId: nonExistentProductCode },
       }),
-    ).rejects.toThrow(/does not exist/);
+    ).rejects.toThrow(/not found/);
   });
 
   describe("backfillInventoryValuations", () => {
@@ -644,7 +654,7 @@ describe("inventory router", () => {
 
       // Create inventory via router - should compute valuation
       const entry = await caller.create({
-        productId: product.id,
+        productId: product.shortcode,
         locationId: location.id,
         amount: { value: 5, unit: "each" },
       });

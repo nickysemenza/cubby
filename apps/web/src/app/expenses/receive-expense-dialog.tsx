@@ -16,7 +16,6 @@ import { useQuery } from "@tanstack/react-query";
 import { type FC, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { buildProductComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getOptionalLocationId,
   optionalLocationField,
@@ -78,7 +77,13 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   });
 
   const initialProduct = useMemo(
-    () => (product ? buildProductComboboxItem(product) : null),
+    () =>
+      product
+        ? {
+            id: product.shortcode,
+            name: `${product.name} (${product.manufacturer})`,
+          }
+        : null,
     [product],
   );
 

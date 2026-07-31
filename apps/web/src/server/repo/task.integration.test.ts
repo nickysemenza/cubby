@@ -1,5 +1,5 @@
 import {
-  unsafeProductId,
+  unsafeProductShortcode,
   unsafeProjectShortcode,
   unsafeTaskShortcode,
 } from "@cubby/schemas/identifiers";
@@ -932,7 +932,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       taskCreateInput.parse({
         trade: "mechanical",
         name: "Service furnace",
-        subjectProductId: furnace.id,
+        subjectProductId: furnace.shortcode,
       }),
       ctx.actor,
     );
@@ -952,7 +952,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
         trade: "mechanical",
         name: "Inspect air handler",
         parentTaskId: parent.id,
-        subjectProductId: airHandler.id,
+        subjectProductId: airHandler.shortcode,
       }),
       ctx.actor,
     );
@@ -977,7 +977,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
   });
 
   it("rejects nonexistent and soft-deleted subject products", async () => {
-    const bogus = unsafeProductId("00000000-0000-0000-0000-000000000000");
+    const bogus = unsafeProductShortcode("PRD-ZZZZ");
     await expect(
       createTask(
         ctx.db,
@@ -1009,7 +1009,7 @@ describe("task repository — subtasks (parentTaskId)", () => {
       updateTask(
         ctx.db,
         taskWithoutProduct.id,
-        { subjectProductId: deleted.id },
+        { subjectProductId: deleted.shortcode },
         ctx.actor,
       ),
     ).rejects.toThrow(/product.*not found/i);
@@ -1030,7 +1030,7 @@ describe("task repository — subject product filters and search", () => {
       taskCreateInput.parse({
         trade: "mechanical",
         name: "Replace pleated media",
-        subjectProductId: furnace.id,
+        subjectProductId: furnace.shortcode,
       }),
       ctx.actor,
     );

@@ -1,8 +1,8 @@
 import type { DetectedItem } from "@cubby/schemas/ai";
-import {
-  type LocationId,
-  type ProductId,
-  unsafeProductId,
+import type {
+  LocationId,
+  ProductId,
+  ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { AllowedImageType } from "@cubby/schemas/image";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,7 +28,7 @@ import {
 } from "~/app/_components/combobox/with-search-hook";
 import {
   getOptionalIngredientId,
-  getProductId,
+  getProductShortcode,
   requiredProductField,
 } from "~/app/_components/form-fields";
 import { ComboboxField } from "~/app/_components/form-utils";
@@ -40,7 +40,6 @@ import {
   PersistentScanner,
   type ScanFeedbackEntry,
 } from "~/app/_components/inventory/persistent-scanner";
-import { useProductSearch } from "~/app/_components/products/use-product-search";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -116,7 +115,7 @@ export function SessionCaptureActions({
   const [recentScans, setRecentScans] = useState<ScanFeedbackEntry[]>([]);
   const [suggestions, setSuggestions] = useState<DetectedItem[]>([]);
   const [suggestionProductOverrides, setSuggestionProductOverrides] = useState<
-    Record<number, ComboboxItem | null>
+    Record<number, ComboboxItem<ProductShortcode> | null>
   >({});
   const [detectionCacheStatus, setDetectionCacheStatus] = useState<
     "hit" | "miss" | null
@@ -172,7 +171,10 @@ export function SessionCaptureActions({
             data.items.map((item, index) => [
               index,
               item.matchedProduct
-                ? { id: item.matchedProduct.id, name: item.matchedProduct.name }
+                ? {
+                    id: item.matchedProduct.shortcode,
+                    name: item.matchedProduct.name,
+                  }
                 : null,
             ]),
           ),
@@ -254,9 +256,7 @@ export function SessionCaptureActions({
   const addSuggestion = async (item: DetectedItem, index: number) => {
     const { matchedProduct: _matchedProduct, ...detectedItem } = item;
     const override = suggestionProductOverrides[index];
-    const productId = override
-      ? unsafeProductId(override.id)
-      : (item.matchedProduct?.id ?? undefined);
+    const productId = override?.id ?? item.matchedProduct?.shortcode;
     try {
       await approveDetectedItem.mutateAsync({
         locationId: location.id,
@@ -295,7 +295,7 @@ export function SessionCaptureActions({
 
     try {
       const inventory = await createInventory.mutateAsync({
-        productId: product.id,
+        productId: product.shortcode,
         locationId: location.id,
         amount: { value: 1, unit: "each" },
       });
@@ -397,7 +397,7 @@ export function SessionCaptureActions({
         data: { pendingImageIds: [init.imageId] },
       });
       const created = await createInventory.mutateAsync({
-        productId: product.id,
+        productId: product.shortcode,
         locationId: location.id,
         amount: { value: 1, unit: "each" },
       });
@@ -728,14 +728,46 @@ function SuggestionProductOverride({
   onChange,
 }: {
   item: DetectedItem;
-  value: ComboboxItem | null;
-  onChange: (value: ComboboxItem | null) => void;
+  value: ComboboxItem<ProductShortcode> | null;
+  onChange: (value: ComboboxItem<ProductShortcode> | null) => void;
 }) {
-  const { items, onSearchChange, isLoading } = useProductSearch();
+  return (
+    <WithProductSearch>
+      {({ items, onSearchChange, isLoading, onOpenChange }) => (
+        <SuggestionProductCombobox
+          itemName={item.name}
+          items={items}
+          onSearchChange={onSearchChange}
+          isLoading={isLoading}
+          onOpenChange={onOpenChange}
+          value={value}
+          onChange={onChange}
+        />
+      )}
+    </WithProductSearch>
+  );
+}
 
+function SuggestionProductCombobox({
+  itemName,
+  items,
+  onSearchChange,
+  isLoading,
+  onOpenChange,
+  value,
+  onChange,
+}: {
+  itemName: string;
+  items: ComboboxItem<ProductShortcode>[];
+  onSearchChange: (query: string) => void;
+  isLoading: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: ComboboxItem<ProductShortcode> | null;
+  onChange: (value: ComboboxItem<ProductShortcode> | null) => void;
+}) {
   useEffect(() => {
-    onSearchChange(item.name);
-  }, [item.name, onSearchChange]);
+    onSearchChange(itemName);
+  }, [itemName, onSearchChange]);
 
   return (
     <DialogCompatibleCombobox
@@ -743,6 +775,7 @@ function SuggestionProductOverride({
       items={items}
       onSearchChange={onSearchChange}
       isLoading={isLoading}
+      onOpenChange={onOpenChange}
       value={value}
       setValue={onChange}
     />
@@ -779,11 +812,11 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
   const quickCreateMutateRef = useRef(quickCreateProduct.mutateAsync);
   quickCreateMutateRef.current = quickCreateProduct.mutateAsync;
   const handleQuickCreate = useCallback(
-    async (name: string): Promise<ComboboxItem<ProductId>> => {
+    async (name: string): Promise<ComboboxItem<ProductShortcode>> => {
       const created = await quickCreateMutateRef.current({ name });
       invalidateTRPCQueries(queryClient, productMutationInvalidateKeys);
       return {
-        id: created.id,
+        id: created.shortcode,
         name: `${created.name} (${created.manufacturer})`,
       };
     },
@@ -803,7 +836,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
         event.preventDefault();
         void form.handleSubmit((values) =>
           createInventory.mutate({
-            productId: getProductId(values.product),
+            productId: getProductShortcode(values.product),
             locationId,
             amount: values.amount,
           }),

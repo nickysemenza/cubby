@@ -24,6 +24,7 @@ import {
   type PurchaseId,
   type PurchaseShortcode,
   unsafeExpenseId,
+  unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
   unsafePurchaseShortcode,
@@ -922,6 +923,24 @@ export const splitExpense = async (
       );
     }
 
+    const productShortcodes = parts
+      .map((part) => part.productId)
+      .filter((code): code is NonNullable<typeof code> => code !== null);
+    const productIds = await resolveLiveShortcodes(
+      tx,
+      productShortcodes,
+      "product",
+    );
+    const missingProducts = productShortcodes.filter(
+      (code) => !productIds.has(code),
+    );
+    if (missingProducts.length > 0) {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        `Product(s) not found: ${missingProducts.join(", ")}`,
+      );
+    }
+
     if (original.cost !== null) {
       await tx
         .update(purchase)
@@ -952,6 +971,9 @@ export const splitExpense = async (
         }
         projectId = unsafeProjectId(projectUuid);
       }
+      const productId = part.productId
+        ? unsafeProductId(productIds.get(part.productId) ?? "")
+        : null;
       const row = await insertWithShortcode(tx, "expense", {
         name: part.name,
         cost: part.cost,
@@ -962,7 +984,7 @@ export const splitExpense = async (
         notes: null,
         future: original.future,
         projectId,
-        productId: part.productId,
+        productId,
         purchaseId: chargeId,
       });
       inserted.push(row.id);

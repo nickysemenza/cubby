@@ -448,7 +448,7 @@ const taskCreateShape = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
   projectId: projectShortcode.nullable().default(null),
-  subjectProductId: productId.nullable().default(null),
+  subjectProductId: productShortcode.nullable().default(null),
   // If set and either relation is omitted/null, the created task inherits the
   // parent's projectId and subjectProductId (see repo/task/crud.ts's
   // createTask) — one-time at create, no ongoing sync afterwards.
@@ -805,7 +805,7 @@ const expenseCreateShape = {
   notes: z.string().nullable().default(null),
   future: z.boolean().default(false),
   projectId: projectShortcode.nullable().default(null),
-  productId: productId.nullable().default(null),
+  productId: productShortcode.nullable().default(null),
   vendor: z.string().nullable().default(null),
   orderId: z.string().nullable().default(null),
 };

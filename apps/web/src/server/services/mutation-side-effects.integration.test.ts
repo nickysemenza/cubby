@@ -62,7 +62,7 @@ describe("mutation side effects integration", () => {
       mock(taskCreateInput, {
         overrides: {
           name: "Maintain manifest tarp",
-          subjectProductId: product.id,
+          subjectProductId: product.shortcode,
         },
       }),
       ctx.actor,

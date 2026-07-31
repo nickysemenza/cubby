@@ -8,13 +8,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import {
-  buildLocationComboboxItem,
-  buildProductComboboxItem,
-} from "~/app/_components/combobox/combobox-builders";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getLocationId,
-  getProductId,
+  getProductShortcode,
   inventoryItemWithIdFields,
   requiredLocationField,
 } from "~/app/_components/form-fields";
@@ -157,7 +154,10 @@ export default function BulkInventoryForm({
     seededLocationIdRef.current = selectedLocationId;
     const existingItems: z.infer<typeof inventoryItemSchema>[] =
       inventoryItemsData.items.map((item) => ({
-        product: buildProductComboboxItem(item.product),
+        product: {
+          id: item.product.shortcode,
+          name: `${item.product.name} (${item.product.manufacturer})`,
+        },
         amount: item.amount,
         id: item.id,
       }));
@@ -193,10 +193,10 @@ export default function BulkInventoryForm({
     async (barcode: string, index: number) => {
       const product = await lookupUpc(barcode);
       if (product) {
-        form.setValue(
-          `items.${index}.product`,
-          buildProductComboboxItem(product),
-        );
+        form.setValue(`items.${index}.product`, {
+          id: product.shortcode,
+          name: `${product.name} (${product.manufacturer})`,
+        });
         toast.success(`Found: ${product.name}`);
       }
     },
@@ -246,7 +246,7 @@ export default function BulkInventoryForm({
           const res: InventoryBulkOperationItem = {
             locationId,
             ...(item.id && { id: unsafeInventoryId(item.id) }),
-            productId: getProductId(item.product),
+            productId: getProductShortcode(item.product),
             amount: item.amount,
           };
           return res;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import {
   expenseShortcode,
-  productId,
+  productShortcode,
   projectShortcode,
   purchaseShortcode,
   vendorShortcode,
@@ -258,7 +258,7 @@ export const splitExpenseInput = z.object({
         costType: costTypeSchema,
         trade: tradeSchema,
         projectId: projectShortcode.nullable().default(null),
-        productId: productId.nullable().default(null),
+        productId: productShortcode.nullable().default(null),
       }),
     )
     .min(2),

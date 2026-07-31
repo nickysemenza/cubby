@@ -11,7 +11,7 @@
 
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { amount } from "@cubby/schemas/codec";
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type { LocationId, ProductShortcode } from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import {
   getOptionalIngredientId,
-  getOptionalProductId,
+  getOptionalProductShortcode,
   optionalIngredientField,
   requiredProductField,
 } from "~/app/_components/form-fields";
@@ -44,8 +44,8 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "../combobox/combobox-types";
+import { WithProductSearch } from "../combobox/with-search-hook";
 import { ProductFormFields } from "../products/product-form-fields";
-import { useProductSearch } from "../products/use-product-search";
 import { useUpcAwareCreate } from "../products/use-upc-aware-create";
 import { AmountFieldGroup } from "./amount-field-group";
 import {
@@ -60,7 +60,7 @@ interface QuickInventoryAddProps {
    * Prefills the select-mode product picker (and restores it after each add) —
    * used when the surface already knows the product, e.g. a product page.
    */
-  initialProduct?: ComboboxItem<ProductId>;
+  initialProduct?: ComboboxItem<ProductShortcode>;
 }
 
 // Schema for select mode (existing product)
@@ -105,9 +105,6 @@ export function QuickInventoryAdd({
 
   const imageState = useImageState();
 
-  // Product search for the combobox in select mode
-  const productSearch = useProductSearch();
-
   // --- Select mode form ---
   const selectForm = useForm<SelectFormValues>({
     resolver: zodResolver(selectFormSchema),
@@ -131,7 +128,7 @@ export function QuickInventoryAdd({
 
   const onSelectSubmit = async (values: SelectFormValues) => {
     await addMutation.mutateAsync({
-      productId: getOptionalProductId(values.product)!,
+      productId: getOptionalProductShortcode(values.product)!,
       locationId,
       amount: values.amount,
     });
@@ -185,7 +182,7 @@ export function QuickInventoryAdd({
       // Step 2: Create the inventory entry
       try {
         const inventory = await inventoryCreateMutation.mutateAsync({
-          productId: newProduct.id,
+          productId: newProduct.shortcode,
           locationId,
           amount: values.amount,
         });
@@ -222,7 +219,7 @@ export function QuickInventoryAdd({
 
   // Switch to create mode with initial product name from search text
   const handleCreateNew = useCallback(
-    (name: string): Promise<ComboboxItem<ProductId>> => {
+    (name: string): Promise<ComboboxItem<ProductShortcode>> => {
       createForm.reset({
         name,
         manufacturer: UNSPECIFIED_MANUFACTURER,
@@ -240,7 +237,7 @@ export function QuickInventoryAdd({
       imageState.reset();
       setMode("create");
       // Return a never-resolving promise — the combobox will unmount before it matters
-      return new Promise<ComboboxItem<ProductId>>(() => {});
+      return new Promise<ComboboxItem<ProductShortcode>>(() => {});
     },
     [createForm, imageState],
   );
@@ -263,15 +260,20 @@ export function QuickInventoryAdd({
           <div className="flex flex-col gap-2">
             <Row align="end" gap="sm">
               <div className="flex-1">
-                <ComboboxField
-                  form={selectForm}
-                  name="product"
-                  label="Add Product"
-                  items={productSearch.items}
-                  onSearchChange={productSearch.onSearchChange}
-                  isLoading={productSearch.isLoading}
-                  onCreateNew={onCreateNew}
-                />
+                <WithProductSearch>
+                  {({ items, onSearchChange, isLoading, onOpenChange }) => (
+                    <ComboboxField
+                      form={selectForm}
+                      name="product"
+                      label="Add Product"
+                      items={items}
+                      onSearchChange={onSearchChange}
+                      isLoading={isLoading}
+                      onCreateNew={onCreateNew}
+                      onOpenChange={onOpenChange}
+                    />
+                  )}
+                </WithProductSearch>
               </div>
               <Button
                 type="button"

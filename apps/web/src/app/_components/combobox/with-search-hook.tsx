@@ -1,7 +1,7 @@
 import type {
   IngredientId,
   LocationId,
-  ProductId,
+  ProductShortcode,
   ProjectShortcode,
   RecipeId,
   TaskShortcode,
@@ -22,7 +22,6 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
-  buildProductComboboxItem,
   buildProjectComboboxItem,
   buildRecipeComboboxItem,
   buildTaskComboboxItem,
@@ -191,7 +190,7 @@ export function WithLocationSearch({
 
 export function WithProductSearch({
   children,
-}: WithEntitySearchProps<ProductId>) {
+}: WithEntitySearchProps<ProductShortcode>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -202,7 +201,7 @@ export function WithProductSearch({
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog<ProductId>();
+  } = useEntitySearchWithDialog<ProductShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   // `product.search` (not `.list`): the picker needs only {id, name,
@@ -225,7 +224,10 @@ export function WithProductSearch({
       ),
     invalidateKeys: productMutationInvalidateKeys,
     onSuccess: (newProduct) =>
-      resolveWithEntity(buildProductComboboxItem(newProduct)),
+      resolveWithEntity({
+        id: newProduct.shortcode,
+        name: `${newProduct.name} (${newProduct.manufacturer})`,
+      }),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
 
@@ -249,7 +251,11 @@ export function WithProductSearch({
         </Suspense>
       )}
       {children({
-        items: data?.items.map(buildProductComboboxItem) ?? [],
+        items:
+          data?.items.map((product) => ({
+            id: product.shortcode,
+            name: `${product.name} (${product.manufacturer})`,
+          })) ?? [],
         onSearchChange,
         isLoading,
         onCreateNew,

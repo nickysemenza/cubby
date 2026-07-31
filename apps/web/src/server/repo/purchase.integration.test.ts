@@ -613,7 +613,7 @@ describe("purchase repository — splitExpense", () => {
             costType: "tools",
             trade: "cabinetry",
             projectId: project.id,
-            productId: product.id,
+            productId: product.shortcode,
           },
           {
             name: "blade portion",

@@ -1,5 +1,4 @@
 import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
-import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -38,7 +37,7 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
       { productId: product.id, locationId, amount },
       TEST_ACTOR,
     );
-    const item: InventoryBulkOperationItem = {
+    const item = {
       id: entry.id,
       productId: product.id,
       locationId,

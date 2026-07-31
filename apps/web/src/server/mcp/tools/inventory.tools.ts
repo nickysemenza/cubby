@@ -113,7 +113,7 @@ export function registerInventoryTools(server: McpServer) {
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.inventory.create({
-        productId: await resolvePublicId(caller, "product", params.productId),
+        productId: params.productId,
         locationId: await resolvePublicId(
           caller,
           "location",
@@ -157,11 +157,7 @@ export function registerInventoryTools(server: McpServer) {
         );
       }
       if (params.productId !== undefined) {
-        data.productId = await resolvePublicId(
-          caller,
-          "product",
-          params.productId,
-        );
+        data.productId = params.productId;
       }
       if (params.locationId !== undefined) {
         data.locationId = await resolvePublicId(

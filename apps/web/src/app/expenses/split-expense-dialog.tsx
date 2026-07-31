@@ -352,7 +352,7 @@ export function SplitExpenseDialog({
                   projectId: part.projectId
                     ? unsafeProjectShortcode(part.projectId)
                     : null,
-                  productId: part.keepProduct ? expense.productId : null,
+                  productId: part.keepProduct ? expense.productShortcode : null,
                 })),
               })
             }

@@ -36,6 +36,11 @@ import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
 
+type ResolvedInventoryBulkOperationItem = Omit<
+  InventoryBulkOperationItem,
+  "productId"
+> & { productId: ProductId };
+
 /** Batch fetch inventory entries with full relations, preserving order. */
 async function batchFetchResults(
   tx: DrizzleTransaction,
@@ -60,7 +65,7 @@ async function batchFetchResults(
 export const bulkProcessInventoryEntries = async (
   db: Database,
   locationId: LocationId,
-  items: InventoryBulkOperationItem[],
+  items: ResolvedInventoryBulkOperationItem[],
   actor: ActorContext,
   // When the client passes the time it loaded the snapshot, reject the commit if
   // anything at the location changed since — this form deletes-on-omit, so a stale

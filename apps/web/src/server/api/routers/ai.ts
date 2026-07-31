@@ -25,14 +25,17 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
+import { unsafeProductId } from "@cubby/schemas/identifiers";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
   getAnthropicClient,
 } from "~/server/clients/anthropic";
+import { createAppError } from "~/server/errors/app-error";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
 import {
   approveDetectedInventoryItem,
@@ -98,9 +101,23 @@ export const aiRouter = createTRPCRouter({
     .input(approveDetectedInventoryItemInput)
     .output(approveDetectedInventoryItemOut)
     .mutation(async ({ ctx, input }) => {
+      const resolvedProductId = input.productId
+        ? await resolveLiveShortcode(ctx.db, input.productId, "product")
+        : null;
+      if (input.productId && !resolvedProductId) {
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          `Product not found: ${input.productId}`,
+        );
+      }
       return await approveDetectedInventoryItem(
         ctx.db,
-        input,
+        {
+          ...input,
+          productId: resolvedProductId
+            ? unsafeProductId(resolvedProductId)
+            : null,
+        },
         ctx.actorContext,
       );
     }),

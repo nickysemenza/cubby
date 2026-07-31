@@ -6,7 +6,13 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { type InventoryId, inventoryId } from "@cubby/schemas/identifiers";
+import {
+  type InventoryId,
+  inventoryId,
+  type ProductId,
+  type ProductShortcode,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
   inventoryBulkOperationPayload,
@@ -42,6 +48,10 @@ import {
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
+import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -51,6 +61,21 @@ import {
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+/** Resolve the public product id once before entering UUID-only repo code. */
+async function resolveProductId(
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: ProductShortcode,
+): Promise<ProductId> {
+  const resolved = await resolveLiveShortcode(db, shortcode, "product");
+  if (!resolved) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product not found: ${shortcode}`,
+    );
+  }
+  return unsafeProductId(resolved);
+}
 
 // Create standardized CRUD procedures using factory
 const { list } = createEntityListProcedure({
@@ -95,10 +120,11 @@ const { getByID, getByShortcode, create, update } =
       getByShortcode: (services, shortcode) =>
         getInventoryEntryByShortcode(services.db, shortcode),
       create: async (services, data) => {
+        const productId = await resolveProductId(services.db, data.productId);
         // Check if this is a unique product that already exists elsewhere
         const duplicate = await checkUniqueProductDuplicate(
           services.db,
-          data.productId,
+          productId,
           data.locationId,
         );
 
@@ -111,7 +137,7 @@ const { getByID, getByShortcode, create, update } =
 
         const created = await createInventoryEntry(
           services.db,
-          data,
+          { ...data, productId },
           services.actorContext,
         );
         const backgroundBatches = await runMutationSideEffects(services.db, {
@@ -122,10 +148,13 @@ const { getByID, getByShortcode, create, update } =
         return { ...created, sideEffects: { backgroundBatches } };
       },
       update: async (services, id: InventoryId, data) => {
+        const productId = data.productId
+          ? await resolveProductId(services.db, data.productId)
+          : undefined;
         const updated = await updateInventoryEntry(
           services.db,
           id,
-          data,
+          { ...data, productId },
           services.actorContext,
         );
         const backgroundBatches = await runMutationSideEffects(services.db, {
@@ -156,12 +185,27 @@ const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
   .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
+    const productShortcodes = [...new Set(input.items.map((i) => i.productId))];
+    const resolvedProducts = await resolveLiveShortcodes(
+      ctx.db,
+      productShortcodes,
+      "product",
+    );
+    const missing = productShortcodes.filter(
+      (shortcode) => !resolvedProducts.has(shortcode),
+    );
+    if (missing.length > 0) {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        `Product(s) not found: ${missing.join(", ")}`,
+      );
+    }
     const result = await bulkProcessInventoryEntries(
       ctx.db,
       input.locationId,
       input.items.map((item) => ({
         id: item.id,
-        productId: item.productId,
+        productId: unsafeProductId(resolvedProducts.get(item.productId) ?? ""),
         locationId: item.locationId ?? input.locationId,
         amount: item.amount,
       })),

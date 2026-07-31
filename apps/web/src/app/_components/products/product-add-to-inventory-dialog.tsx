@@ -6,12 +6,11 @@
  * the amount and the create.
  */
 
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type FC, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { buildProductComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getOptionalLocationId,
   optionalLocationField,
@@ -35,7 +34,11 @@ type AddToInventoryValues = z.infer<typeof formSchema>;
 interface ProductAddToInventoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product: { id: ProductId; name: string; manufacturer: string };
+  product: {
+    shortcode: ProductShortcode;
+    name: string;
+    manufacturer: string;
+  };
 }
 
 export const ProductAddToInventoryDialog: FC<
@@ -48,7 +51,10 @@ export const ProductAddToInventoryDialog: FC<
   const locationId = getOptionalLocationId(form.watch("location"));
 
   const initialProduct = useMemo(
-    () => buildProductComboboxItem(product),
+    () => ({
+      id: product.shortcode,
+      name: `${product.name} (${product.manufacturer})`,
+    }),
     [product],
   );
 
