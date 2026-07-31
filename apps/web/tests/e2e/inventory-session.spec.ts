@@ -10,14 +10,16 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
   const secondProduct = `Recount clamp ${suffix}`;
 
   await createLocation(page, locationName);
-  const locationId = page.url().split("/").pop();
-  expect(locationId).toBeTruthy();
+  // The detail URL is the public id now, and so is the session's `parent`
+  // search param — no uuid ever reaches a URL, query string included.
+  const locationCode = page.url().split("/").pop();
+  expect(locationCode).toMatch(/^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
   await createProduct(page, firstProduct);
   await createProduct(page, secondProduct);
   await addInventory(page, firstProduct, locationName, 1, "each");
   await addInventory(page, secondProduct, locationName, 1, "each");
 
-  await page.goto(`/inventory/session?parentId=${locationId}`);
+  await page.goto(`/inventory/session?parent=${locationCode}`);
   await page.waitForLoadState("networkidle");
 
   await expect(
