@@ -13,12 +13,14 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import type {
   ProductId,
+  ProductShortcode,
   ProjectId,
   ProjectShortcode,
   TaskId,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  unsafeProductId,
   unsafeProjectId,
   unsafeTaskId,
   unsafeTaskShortcode,
@@ -235,6 +237,18 @@ async function assertSubjectProductLive(
   }
 }
 
+/** Resolve a public product shortcode to the live uuid stored in the task FK. */
+async function resolveSubjectProductId(
+  tx: DrizzleTransaction,
+  shortcode: ProductShortcode,
+): Promise<ProductId> {
+  const resolved = await resolveLiveShortcode(tx, shortcode, "product");
+  if (!resolved) {
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${shortcode} not found`);
+  }
+  return unsafeProductId(resolved);
+}
+
 /** Reject giving a parent to a task that already has live subtasks of its own. */
 async function assertNoLiveSubtasks(
   tx: DrizzleTransaction,
@@ -353,7 +367,9 @@ export const createTask = async (
       }
       projectId = unsafeProjectId(resolved);
     }
-    let subjectProductId = data.subjectProductId;
+    let subjectProductId = data.subjectProductId
+      ? await resolveSubjectProductId(tx, data.subjectProductId)
+      : null;
 
     if (parentTaskId) {
       const parent = await validateParentTask(tx, parentTaskId);
@@ -465,9 +481,13 @@ export const updateTask = async (
       projectId = null;
     }
 
-    if (data.subjectProductId) {
-      await assertSubjectProductLive(tx, data.subjectProductId);
-    }
+    const subjectProductId =
+      data.subjectProductId === undefined
+        ? undefined
+        : data.subjectProductId === null
+          ? null
+          : await resolveSubjectProductId(tx, data.subjectProductId);
+    if (subjectProductId) await assertSubjectProductLive(tx, subjectProductId);
 
     // Full-replacement set: resolve every requested shortcode to a live uuid
     // up front — `replaceDependencyEdges`'s own not-found check operates on
@@ -495,7 +515,7 @@ export const updateTask = async (
       name: data.name,
       status: data.status,
       projectId,
-      subjectProductId: data.subjectProductId,
+      subjectProductId,
       parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,

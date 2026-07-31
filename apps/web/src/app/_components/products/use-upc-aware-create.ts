@@ -1,8 +1,7 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { useCallback } from "react";
 import { useUpcLookup } from "~/app/_components/inventory/hooks/useUpcLookup";
-import { buildProductComboboxItem } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
 
 /**
@@ -14,18 +13,21 @@ import type { ComboboxItem } from "../combobox/combobox-types";
  * so the combobox selects nothing.
  */
 export function useUpcAwareCreate(
-  fallbackCreate: (name: string) => Promise<ComboboxItem<ProductId>>,
+  fallbackCreate: (name: string) => Promise<ComboboxItem<ProductShortcode>>,
 ) {
   const { lookupUpc } = useUpcLookup();
 
   return useCallback(
-    async (term: string): Promise<ComboboxItem<ProductId>> => {
+    async (term: string): Promise<ComboboxItem<ProductShortcode>> => {
       const trimmed = term.trim();
       const parsed = upcSchema.safeParse(trimmed);
       if (parsed.success) {
         const product = await lookupUpc(parsed.data);
         if (!product) throw new Error("UPC lookup failed");
-        return buildProductComboboxItem(product);
+        return {
+          id: product.shortcode,
+          name: `${product.name} (${product.manufacturer})`,
+        };
       }
       return fallbackCreate(trimmed);
     },

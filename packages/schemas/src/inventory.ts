@@ -185,7 +185,7 @@ export const inventoryCountsByLocationOut = z.record(
 
 export const inventoryUpdatePayloadData = z.object({
   amount: positiveAmount.optional(),
-  productId: productId.optional(),
+  productId: productShortcode.optional(),
   locationId: locationId.optional(),
 });
 
@@ -198,7 +198,7 @@ export const inventoryUpdateInput = z.object({
 export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 
 export const inventoryCreatePayloadData = z.object({
-  productId: productId,
+  productId: productShortcode,
   locationId: locationId,
   amount: positiveAmount,
 });
@@ -206,7 +206,7 @@ export const inventoryCreatePayloadData = z.object({
 // Schema for bulk inventory operations
 const inventoryBulkOperationItem = z.object({
   id: inventoryId.optional(),
-  productId: productId,
+  productId: productShortcode,
   locationId: locationId,
   amount: positiveAmount,
 });

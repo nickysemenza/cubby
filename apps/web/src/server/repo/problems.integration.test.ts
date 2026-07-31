@@ -314,7 +314,7 @@ describe("problems repo", () => {
           trade: "other",
           costType: "tools",
           name: "orphan-guard expense",
-          productId: bought.id,
+          productId: bought.shortcode,
         }),
         ctx.actor,
       );
@@ -351,7 +351,7 @@ describe("problems repo", () => {
         taskCreateInput.parse({
           name: "Replace furnace filter",
           trade: "mechanical",
-          subjectProductId: maintained.id,
+          subjectProductId: maintained.shortcode,
         }),
         ctx.actor,
       );

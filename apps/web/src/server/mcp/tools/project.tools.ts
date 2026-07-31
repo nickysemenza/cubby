@@ -51,7 +51,6 @@ import {
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
-  resolveOptionalId,
   slimExpense,
   slimProject,
   slimTask,
@@ -326,22 +325,14 @@ export function registerProjectTools(server: McpServer) {
     create: async (caller, params) =>
       caller.task.create({
         ...params,
-        subjectProductId: await resolveOptionalId(
-          caller,
-          "product",
-          params.subjectProductId,
-        ),
+        subjectProductId: params.subjectProductId,
       }),
-    resolveUpdateData: async (caller, data) =>
+    resolveUpdateData: async (_caller, data) =>
       data.subjectProductId === undefined
         ? data
         : {
             ...data,
-            subjectProductId: await resolveOptionalId(
-              caller,
-              "product",
-              data.subjectProductId as string | null,
-            ),
+            subjectProductId: data.subjectProductId,
           },
   });
 
@@ -421,18 +412,14 @@ export function registerProjectTools(server: McpServer) {
     create: async (caller, params) =>
       caller.expense.create({
         ...params,
-        productId: await resolveOptionalId(caller, "product", params.productId),
+        productId: params.productId,
       }),
-    resolveUpdateData: async (caller, data) =>
+    resolveUpdateData: async (_caller, data) =>
       data.productId === undefined
         ? data
         : {
             ...data,
-            productId: await resolveOptionalId(
-              caller,
-              "product",
-              data.productId as string | null,
-            ),
+            productId: data.productId,
           },
   });
 

@@ -1,6 +1,9 @@
-import type { ProductId, ProjectShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ProductShortcode,
+  ProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import {
-  unsafeProductId,
+  unsafeProductShortcode,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -56,7 +59,7 @@ interface CreateTaskDialogProps {
   presetTrade?: Trade;
   presetDate?: string;
   presetName?: string;
-  presetSubjectProductId?: ProductId | null;
+  presetSubjectProductId?: ProductShortcode | null;
   presetSubjectProductName?: string | null;
 }
 
@@ -120,7 +123,7 @@ export function CreateTaskDialog({
         dueDate: values.dueDate,
         dueEndDate: null,
         subjectProductId: values.subjectProduct?.id
-          ? unsafeProductId(values.subjectProduct.id)
+          ? unsafeProductShortcode(values.subjectProduct.id)
           : null,
         // Default when the trade field is left unset — see the schema note.
         trade: values.trade ?? "other",

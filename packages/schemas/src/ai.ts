@@ -6,6 +6,7 @@ import {
   inventoryId,
   locationId,
   productId,
+  productShortcode,
 } from "./identifiers";
 import { locationType } from "./location";
 import { productCategory } from "./product";
@@ -103,6 +104,7 @@ export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
 
 export const detectedProductMatchSchema = z.object({
   id: productId,
+  shortcode: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
   category: productCategory.nullable(),
@@ -134,7 +136,7 @@ export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
 export const approveDetectedInventoryItemInput = z.object({
   locationId,
   item: detectedInventoryItemSchema,
-  productId: productId.nullable().optional(),
+  productId: productShortcode.nullable().optional(),
 });
 
 export const approveDetectedInventoryItemOut = z.object({

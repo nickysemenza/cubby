@@ -578,7 +578,11 @@ describe("product repository", () => {
 
         await createExpense(
           ctx.db,
-          { ...makeExpenseInput(), name: "Linked", productId: bought.id },
+          {
+            ...makeExpenseInput(),
+            name: "Linked",
+            productId: bought.shortcode,
+          },
           ctx.actor,
         );
         // The poison row: a real expense with no product, which is the common
@@ -606,7 +610,11 @@ describe("product repository", () => {
         );
         const { output: p } = await createExpense(
           ctx.db,
-          { ...makeExpenseInput(), name: "Deleted", productId: product.id },
+          {
+            ...makeExpenseInput(),
+            name: "Deleted",
+            productId: product.shortcode,
+          },
           ctx.actor,
         );
         await deleteExpenses(ctx.db, [p.id], ctx.actor);
@@ -892,7 +900,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Acquisition",
             cost: 100,
-            productId: product.id,
+            productId: product.shortcode,
           },
           ctx.actor,
         );
@@ -902,7 +910,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Refund",
             cost: -30,
-            productId: product.id,
+            productId: product.shortcode,
           },
           ctx.actor,
         );
@@ -944,7 +952,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Live",
             cost: 50,
-            productId: product.id,
+            productId: product.shortcode,
           },
           ctx.actor,
         );
@@ -954,7 +962,7 @@ describe("product repository", () => {
             ...makeExpenseInput(),
             name: "Deleted",
             cost: 999,
-            productId: product.id,
+            productId: product.shortcode,
           },
           ctx.actor,
         );
@@ -989,7 +997,7 @@ describe("product repository", () => {
                 ...makeExpenseInput(),
                 name: `${name} line`,
                 cost,
-                productId: created.id,
+                productId: created.shortcode,
               },
               ctx.actor,
             );
@@ -1034,7 +1042,7 @@ describe("product repository", () => {
               ...makeExpenseInput(),
               name: "doomed",
               cost: 500,
-              productId: created.id,
+              productId: created.shortcode,
             },
             ctx.actor,
           );
@@ -1268,7 +1276,7 @@ describe("product repository", () => {
         {
           ...makeExpenseInput(),
           name: "blocking expense",
-          productId: bought.id,
+          productId: bought.shortcode,
         },
         ctx.actor,
       );
@@ -1303,7 +1311,7 @@ describe("product repository", () => {
         taskCreateInput.parse({
           name: "Replace furnace filter",
           trade: "mechanical",
-          subjectProductId: furnace.id,
+          subjectProductId: furnace.shortcode,
         }),
         ctx.actor,
       );
@@ -1393,7 +1401,11 @@ describe("product repository", () => {
       );
       const { output: exp } = await createExpense(
         ctx.db,
-        { ...makeExpenseInput(), name: "backstop expense", productId: prod.id },
+        {
+          ...makeExpenseInput(),
+          name: "backstop expense",
+          productId: prod.shortcode,
+        },
         ctx.actor,
       );
 

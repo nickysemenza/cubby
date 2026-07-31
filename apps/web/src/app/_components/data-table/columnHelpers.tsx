@@ -4,9 +4,10 @@ import {
   type IngredientId,
   type LocationId,
   type ProductId,
+  type ProductShortcode,
   type ProjectShortcode,
   type RecipeId,
-  unsafeProductId,
+  unsafeProductShortcode,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
@@ -1749,18 +1750,18 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     /** Enable inline editing via an async product picker. `clearable` always
      * on — an expense's product is optional. */
     editable?: {
-      onSave: (newProductId: ProductId | null, row: T) => Promise<void>;
+      onSave: (newProductId: ProductShortcode | null, row: T) => Promise<void>;
     };
   },
 ) {
   const cellData = entityCellData<T>(
     "product",
     (row) =>
-      row.productId && row.productName
-        ? { id: row.productId, name: row.productName }
+      row.productShortcode && row.productName
+        ? { id: row.productShortcode, name: row.productName }
         : null,
     options?.editable
-      ? (row, id) => options.editable!.onSave(unsafeProductId(id), row)
+      ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
       : undefined,
   );
   return columnHelper.accessor(
@@ -1783,8 +1784,10 @@ export function createProductLinkColumn<T extends ProductRefRow>(
         const { id, name, shortcode } = info.getValue();
 
         if (options?.editable) {
-          const current: ComboboxItem<ProductId> | null =
-            id && name ? { id: unsafeProductId(id), name } : null;
+          const current: ComboboxItem<ProductShortcode> | null =
+            shortcode && name
+              ? { id: unsafeProductShortcode(shortcode), name }
+              : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -1798,11 +1801,9 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
-                  // The combobox value carries the product's uuid; the row
-                  // carries its public id, denormalized alongside `productName`.
                   <TableLink
                     to="/products/$shortcode"
-                    params={{ shortcode: row.productShortcode ?? "" }}
+                    params={{ shortcode: v.id }}
                     variant="muted"
                   >
                     {v.name}
@@ -1838,18 +1839,18 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     editable?: {
-      onSave: (newProductId: ProductId | null, row: T) => Promise<void>;
+      onSave: (newProductId: ProductShortcode | null, row: T) => Promise<void>;
     };
   },
 ) {
   const cellData = entityCellData<T>(
     "product",
     (row) =>
-      row.subjectProductId && row.subjectProductName
-        ? { id: row.subjectProductId, name: row.subjectProductName }
+      row.subjectProductShortcode && row.subjectProductName
+        ? { id: row.subjectProductShortcode, name: row.subjectProductName }
         : null,
     options?.editable
-      ? (row, id) => options.editable!.onSave(unsafeProductId(id), row)
+      ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
       : undefined,
   );
 
@@ -1873,8 +1874,10 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
         const { id, name, shortcode } = info.getValue();
 
         if (options?.editable) {
-          const current: ComboboxItem<ProductId> | null =
-            id && name ? { id: unsafeProductId(id), name } : null;
+          const current: ComboboxItem<ProductShortcode> | null =
+            shortcode && name
+              ? { id: unsafeProductShortcode(shortcode), name }
+              : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -1888,11 +1891,9 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               renderValue={(v) => {
                 if (!v) return <NoneValue />;
                 return (
-                  // Task rows denormalize `subjectProductShortcode` next to
-                  // `subjectProductName`, same as the project link above.
                   <TableLink
                     to="/products/$shortcode"
-                    params={{ shortcode: row.subjectProductShortcode ?? "" }}
+                    params={{ shortcode: v.id }}
                     variant="muted"
                   >
                     {v.name}

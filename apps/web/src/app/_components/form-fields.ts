@@ -9,9 +9,10 @@ import { positiveAmount } from "@cubby/schemas/codec";
 import type {
   IngredientId,
   LocationId,
-  ProductId,
+  ProductShortcode,
   RecipeId,
 } from "@cubby/schemas/identifiers";
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 
@@ -20,7 +21,7 @@ import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
  * Use with ComboboxFieldWithSearch searchType="product"
  *
  * Note: The type remains `ComboboxItem | null` for form compatibility.
- * Use `getProductId(values.product)` after validation to extract the ID.
+ * Use `getProductShortcode(values.product)` after validation to extract the ID.
  */
 export const requiredProductField = ComboboxItem.nullable().refine(
   (item) => item !== null,
@@ -51,17 +52,13 @@ export const optionalIngredientField = ComboboxItem.nullable();
 // -----------------------------------------------------------------------------
 // ID Extraction Helpers
 // -----------------------------------------------------------------------------
-// These functions extract branded IDs from combobox items, centralizing the
-// type cast in one place. Use these instead of `item.id as ProductId` etc.
+// These functions extract branded IDs from combobox items at the form boundary.
 
-/**
- * Extracts the ProductId from a required product combobox field.
- * Use after form validation when product is guaranteed to be non-null.
- */
-export function getProductId(
+/** Extracts the public ProductShortcode used by product FK write inputs. */
+export function getProductShortcode(
   item: z.input<typeof requiredProductField>,
-): ProductId {
-  return item!.id as ProductId;
+): ProductShortcode {
+  return unsafeProductShortcode(item!.id);
 }
 
 /**
@@ -74,15 +71,12 @@ export function getLocationId(
   return item!.id as LocationId;
 }
 
-/**
- * Extracts an optional ProductId from a nullable product combobox field.
- * Returns undefined if the combobox is empty or has an empty id.
- */
-export function getOptionalProductId(
+/** Extracts an optional public ProductShortcode from a product combobox. */
+export function getOptionalProductShortcode(
   item: ComboboxItem | null | undefined,
-): ProductId | undefined {
+): ProductShortcode | undefined {
   if (!item?.id) return undefined;
-  return item.id as ProductId;
+  return unsafeProductShortcode(item.id);
 }
 
 /**

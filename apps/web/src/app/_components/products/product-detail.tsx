@@ -354,13 +354,13 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       <CreateExpenseDialog
         open={recordSaleOpen}
         onOpenChange={setRecordSaleOpen}
-        presetProductId={product.id}
+        presetProductId={product.shortcode}
         intent="disposition"
       />
       <CreateTaskDialog
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
-        presetSubjectProductId={product.id}
+        presetSubjectProductId={product.shortcode}
         presetSubjectProductName={product.name}
       />
     </Page>

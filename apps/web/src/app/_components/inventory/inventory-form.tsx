@@ -1,4 +1,4 @@
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type { LocationId, ProductShortcode } from "@cubby/schemas/identifiers";
 import type {
   InventoryUpdateInput,
   inventoryCreatePayloadData,
@@ -9,13 +9,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
-import {
-  buildLocationComboboxItem,
-  buildProductComboboxItem,
-} from "~/app/_components/combobox/combobox-builders";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getLocationId,
-  getProductId,
+  getProductShortcode,
   inventoryItemWithLocationFields,
 } from "~/app/_components/form-fields";
 import { Card, CardContent } from "~/components/ui/card";
@@ -65,7 +62,10 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     resolver: zodResolver(formSchema),
     defaultValues: {
       product: inventoryItem
-        ? buildProductComboboxItem(inventoryItem.product)
+        ? {
+            id: inventoryItem.product.shortcode,
+            name: `${inventoryItem.product.name} (${inventoryItem.product.manufacturer})`,
+          }
         : undefined,
       location: inventoryItem
         ? buildLocationComboboxItem(inventoryItem.location)
@@ -78,7 +78,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     const amount = values.amount;
     if (mode === "create") {
       const createData: z.infer<typeof inventoryCreatePayloadData> = {
-        productId: getProductId(values.product),
+        productId: getProductShortcode(values.product),
         locationId: getLocationId(values.location),
         amount,
       };
@@ -91,8 +91,8 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       ) {
         updates.amount = amount;
       }
-      const productIdChange = detectComboboxIdChange<ProductId>(
-        inventoryItem.product.id,
+      const productIdChange = detectComboboxIdChange<ProductShortcode>(
+        inventoryItem.product.shortcode,
         values.product,
       );
       if (productIdChange) {

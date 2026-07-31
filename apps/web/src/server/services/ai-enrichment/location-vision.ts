@@ -15,7 +15,13 @@ import type {
 } from "@cubby/schemas/ai";
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
-import { type LocationId, unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  type LocationId,
+  type ProductId,
+  type ProductShortcode,
+  unsafeProductId,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -72,6 +78,7 @@ export function isLocationHasNoImagesToAnalyzeError(
 
 interface DetectedProductMatch {
   id: ReturnType<typeof unsafeProductId>;
+  shortcode: ProductShortcode;
   name: string;
   manufacturer: string;
   category: ProductCategory | null;
@@ -300,6 +307,7 @@ async function matchDetectedItems(
     let matched: DetectedProductMatch | null = exactMatched
       ? {
           id: exactMatched.id,
+          shortcode: exactMatched.shortcode,
           name: exactMatched.name,
           manufacturer: exactMatched.manufacturer,
           category: exactMatched.category,
@@ -318,6 +326,7 @@ async function matchDetectedItems(
       ) {
         matched = {
           id: unsafeProductId(semanticMatch.item.id),
+          shortcode: unsafeProductShortcode(semanticMatch.item.shortcode),
           name: semanticMatch.item.name,
           manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
           category:
@@ -333,6 +342,7 @@ async function matchDetectedItems(
       matchedProduct: matched
         ? {
             id: matched.id,
+            shortcode: matched.shortcode,
             name: matched.name,
             manufacturer: matched.manufacturer,
             category: matched.category,
@@ -433,7 +443,9 @@ export async function detectInventoryItems(
 
 export async function approveDetectedInventoryItem(
   db: Database,
-  input: ApproveDetectedInventoryItemInput,
+  input: Omit<ApproveDetectedInventoryItemInput, "productId"> & {
+    productId?: ProductId | null;
+  },
   actor: ActorContext,
 ): Promise<ApproveDetectedInventoryItemOut> {
   const productName = itemProductName(input.item);

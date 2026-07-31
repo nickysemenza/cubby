@@ -1,4 +1,7 @@
-import type { ProductId, ProjectShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ProductShortcode,
+  ProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
@@ -57,7 +60,7 @@ interface CreateExpenseDialogProps {
    * picker in quick-add; linking an existing expense happens via the Product
    * field on the expense detail page.
    */
-  presetProductId?: ProductId | null;
+  presetProductId?: ProductShortcode | null;
   presetDate?: string;
   presetFuture?: boolean;
   /**

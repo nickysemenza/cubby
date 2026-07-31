@@ -1,4 +1,4 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { CalendarPlus, Info, Link2, ListChecks } from "lucide-react";
@@ -350,11 +350,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "For",
       value: (
-        <EditableEntityCell<ProductId>
+        <EditableEntityCell<ProductShortcode>
           value={
-            task.subjectProductId && task.subjectProductName
+            task.subjectProductShortcode && task.subjectProductName
               ? {
-                  id: task.subjectProductId,
+                  id: task.subjectProductShortcode,
                   name: task.subjectProductName,
                 }
               : null
@@ -370,16 +370,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           }}
           SearchProvider={WithProductSearch}
           renderValue={(value) =>
-            // The combobox value carries the product's uuid; the task
-            // carries its public id, denormalized alongside
-            // `subjectProductName`.
-            value && task.subjectProductShortcode ? (
+            value ? (
               <EntityInlineLink
                 entity="product"
                 data={{
                   id: value.id,
                   name: value.name,
-                  shortcode: task.subjectProductShortcode,
+                  shortcode: value.id,
                 }}
               />
             ) : (
@@ -546,7 +543,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         presetName={task.name}
         presetProjectId={task.projectId}
         presetTrade={task.trade}
-        presetSubjectProductId={task.subjectProductId}
+        presetSubjectProductId={task.subjectProductShortcode}
         presetSubjectProductName={task.subjectProductName}
       />
       {deleteDialog}
