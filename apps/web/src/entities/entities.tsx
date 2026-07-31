@@ -282,7 +282,7 @@ const entityDefinitions = {
       detail: "/purchases/$shortcode",
       list: "/purchases",
     },
-    // A purchase carries the charge's documents (invoices/receipts), like
+    // A Purchase carries its documents (invoices/receipts), like
     // project's photos — same commonSections shape.
     detail: { commonSections: ["images", "history"] },
     // No `name` column — a purchase's identity is (vendor, orderId, date), not

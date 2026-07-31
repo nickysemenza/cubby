@@ -82,7 +82,7 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
     {
       id: "unattached",
       label: "Unattached",
-      description: "Ledger lines with no purchase attached",
+      description: "Expenses with no Purchase attached",
       // The Purchase column retains the historical `vendor` id so existing
       // vendor URLs, sorting, and mixed vendor-or-none filters keep working.
       filters: [{ id: "vendor", value: [FILTER_NONE] }],

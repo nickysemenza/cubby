@@ -80,7 +80,7 @@ const renderCell = (expense: ExpenseOut) => {
 };
 
 describe("expenses Purchase column", () => {
-  it("keeps charge navigation separate from the vendor edit pencil", () => {
+  it("keeps purchase navigation separate from the vendor edit pencil", () => {
     renderCell(LINKED);
 
     const link = screen.getByRole("link", { name: "ORDER-42" });

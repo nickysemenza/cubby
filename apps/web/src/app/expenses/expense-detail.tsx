@@ -30,13 +30,13 @@ import { entityCellClipboard } from "../_components/data-table/inventory-column-
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { ExpenseChargeSection } from "./expense-charge-section";
 import {
   costTypeBadgeVariant,
   costTypeLabels,
   costTypeOptions,
   futureFilterOptions,
 } from "./expense-options";
+import { ExpensePurchaseSection } from "./expense-purchase-section";
 import { ProjectSuggestionChips } from "./project-suggestion-chips";
 import { ReceiveExpenseDialog } from "./receive-expense-dialog";
 import { SplitExpenseDialog } from "./split-expense-dialog";
@@ -259,8 +259,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             expense.vendor ? { id: expense.vendor, name: expense.vendor } : null
           }
           label="vendor"
-          // A charge's vendor is optional — clearing detaches the line from its
-          // charge, exactly as emptying the old text input did.
+          // A purchase's vendor is optional — clearing detaches the line from its
+          // purchase, exactly as emptying the old text input did.
           clearable
           trigger="pencil"
           onSave={async (vendor) => {
@@ -436,16 +436,16 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
         </Button>
       ) : undefined,
     },
-    // Gated on having a CHARGE, not an order id: the charge is the parent link,
+    // Gated on having a PURCHASE, not an order id: the purchase is the parent link,
     // and a third of vendor-bearing lines belong to one without the vendor ever
     // giving us an order id. Lines with no vendor recorded have no transaction to
     // show, which is the only case that leaves the panel off.
     ...(expense.purchaseId
       ? [
           {
-            title: "This Charge",
+            title: "Purchase",
             icon: Receipt,
-            content: <ExpenseChargeSection expense={expense} />,
+            content: <ExpensePurchaseSection expense={expense} />,
           },
         ]
       : []),
@@ -483,15 +483,15 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       heroStats={heroStats}
       actions={
         <Row align="center" gap="sm">
-          {/* A split files its parts under this line's CHARGE, so a line with no
-              charge has nothing to file them under — `splitExpense` refuses with
+          {/* A split files its parts under this line's PURCHASE, so a line with no
+              purchase has nothing to file them under — `splitExpense` refuses with
               "record its vendor first". Disabled with that explanation rather
               than surfaced as an error toast: the fix is a field on this page. */}
           <span
             title={
               expense.purchaseId
                 ? undefined
-                : "Record this line's vendor first — a split files its parts under the line's charge."
+                : "Record this expense's vendor first — a split files its parts under the same purchase."
             }
           >
             <Button

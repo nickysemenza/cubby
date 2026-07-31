@@ -17,7 +17,7 @@
  */
 
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
-import type { ChargeNotReconciling } from "@cubby/schemas/problems";
+import type { PurchaseNotReconciling } from "@cubby/schemas/problems";
 import {
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
@@ -63,9 +63,9 @@ type ChargeSumRow = {
  * Ordered by the size of the discrepancy, largest first — this is a worklist,
  * and a $400 gap is worth looking at before a $2 one.
  */
-export const findChargesNotReconciling = async (
+export const findPurchasesNotReconciling = async (
   db: Database,
-): Promise<ChargeNotReconciling[]> => {
+): Promise<PurchaseNotReconciling[]> => {
   const lineTotal = sql`COALESCE(sum(e."cost"), 0)`;
   const res = await getDb(db).execute<ChargeSumRow>(sql`
     SELECT

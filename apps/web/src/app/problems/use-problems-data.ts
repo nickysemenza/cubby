@@ -78,7 +78,7 @@ export function useProblemsData(opts?: {
         manufacturerSpellingVariants:
           fast.data?.manufacturerSpellingVariants ?? [],
         duplicateVendors: fast.data?.duplicateVendors ?? [],
-        chargesNotReconciling: fast.data?.chargesNotReconciling ?? [],
+        purchasesNotReconciling: fast.data?.purchasesNotReconciling ?? [],
         referentialLivenessViolations:
           fast.data?.referentialLivenessViolations ?? [],
         ingredientsWithPartialCoverage:

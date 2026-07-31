@@ -16,7 +16,7 @@ import { formatCurrency } from "~/lib/utils";
  * aggregate. The twin of `ProjectBreakdown`, down to the top-12-by-absolute-net
  * cut, so a roster of ~114 vendors doesn't produce an unreadably tall bar list.
  *
- * Expenses with no charge attached (no vendor recorded) are excluded
+ * Expenses with no Purchase attached (no Vendor recorded) are excluded
  * server-side by the inner join, so these bars deliberately do NOT sum to the
  * Net stat tile above — see `repo/expense/analytics.ts`.
  */

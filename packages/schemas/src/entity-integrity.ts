@@ -73,7 +73,7 @@ export const edgeRoleSchema = z.enum([
   "media",
   /** A money row rolled up under the target. */
   "ledger",
-  /** A vendor charge recorded against the target. */
+  /** A vendor purchase recorded against the target. */
   "transaction",
   /** A pointer to the target from another entity's own record. */
   "reference",

@@ -15,8 +15,8 @@ import {
 import { costTypeSchema, plainDate, tradeSchema } from "./project";
 
 /**
- * Purchase — ONE vendor transaction, and the home for charge-level truth: the
- * charge's stated total, its documents, its identity.
+ * Purchase — ONE vendor transaction, and the home for purchase-level truth:
+ * its stated total, documents, and identity.
  *
  * `Vendor ──< Purchase ──< Expense`. A purchase is identified by its `orderId`
  * when the vendor issues one, and is otherwise one per expense row. **All money
@@ -40,14 +40,14 @@ const purchaseFields = {
     .string()
     .nullable()
     .describe(
-      'The vendor\'s own order/receipt id — Amazon "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325". Free text: every retailer formats these differently and validating them would only reject real data. Unique per vendor when present; null for the ~40% of charges that never got one.',
+      'The vendor\'s own order/receipt id — Amazon "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325". Free text: every retailer formats these differently and validating them would only reject real data. Unique per vendor when present; null for the ~40% of purchases that never got one.',
     ),
-  date: plainDate.nullable().describe("The charge date"),
+  date: plainDate.nullable().describe("The purchase transaction date"),
   statedTotal: z
     .number()
     .nullable()
     .describe(
-      "What the charge itself says it was, in dollars. NEVER summed into spend — spend is SUM(expense.cost). Purely a reconciliation cue against the lines below it, and a mismatch is often correct (a partial refund reduces a line without changing what the charge stated).",
+      "What the purchase paperwork says the total was, in dollars. NEVER summed into spend — spend is SUM(expense.cost). Purely a reconciliation cue against the expenses below it, and a mismatch is often correct (a partial refund reduces an expense without changing the stated paperwork total).",
     ),
   notes: z.string().nullable(),
 };
@@ -74,7 +74,7 @@ export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
 /**
  * A partial update makes every create field optional. `removeImageIds` /
  * `imageOrder` are update-only — you can't reorder or detach a document on a
- * charge that doesn't exist yet — so they come in through `extend`, exactly as
+ * purchase that doesn't exist yet — so they come in through `extend`, exactly as
  * `productUpdateData` does.
  */
 export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape, {
@@ -93,12 +93,12 @@ export const purchaseUpdateInput = z.object({
 });
 export type PurchaseUpdateInput = z.infer<typeof purchaseUpdateInput>;
 
-/** Mutually-exclusive health buckets for the expense lines under one charge. */
-export const purchaseLineStatus = z.enum(["empty", "unpriced", "priced"]);
-export type PurchaseLineStatus = z.infer<typeof purchaseLineStatus>;
+/** Mutually exclusive health buckets for the Expenses under one Purchase. */
+export const purchaseExpenseStatus = z.enum(["empty", "unpriced", "priced"]);
+export type PurchaseExpenseStatus = z.infer<typeof purchaseExpenseStatus>;
 
 /**
- * The soft reconciliation verdict for a charge's stated total versus its lines.
+ * The soft reconciliation verdict for a Purchase's stated total versus its Expenses.
  * `unknown` means there is no stated total to compare against.
  */
 export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
@@ -108,27 +108,29 @@ export const purchaseFilterFields = {
   search: z.string().optional().describe("Substring match on order id"),
   vendorId: oneOrMany(vendorShortcode).optional(),
   orderId: oneOrMany(z.string()).optional(),
-  /** `"none"` matches charges with no order id — the ~40% the vendor never issued one for. */
+  /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
-  /** `"none"` matches charges with no `statedTotal` recorded yet. */
+  /** `"none"` matches purchases with no `statedTotal` recorded yet. */
   statedTotalPresenceFilter: presenceFilter,
-  /** Empty, partly-unpriced, or fully-priced line sets; several values OR. */
-  lineStatus: oneOrMany(purchaseLineStatus).optional(),
+  /** Empty, partly unpriced, or fully priced Expense sets; several values OR. */
+  expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
-  /** `"none"` matches charges with no live invoice/receipt document. */
+  /** `"none"` matches purchases with no live invoice/receipt document. */
   documentPresenceFilter: presenceFilter,
   /**
    * Inclusive bounds on SUM(expense.cost), in dollars. Bounds only apply to
-   * charges with at least one priced line, so empty/unpriced-only charges do
+   * Purchases with at least one priced Expense, so empty or unpriced-only Purchases do
    * not masquerade as zero-dollar credits.
    */
   expenseTotalMin: z.coerce.number().optional(),
   expenseTotalMax: z.coerce.number().optional(),
   dateFrom: plainDate
     .optional()
-    .describe("Inclusive lower bound on charge date"),
-  dateTo: plainDate.optional().describe("Inclusive upper bound on charge date"),
+    .describe("Inclusive lower bound on purchase date"),
+  dateTo: plainDate
+    .optional()
+    .describe("Inclusive upper bound on purchase date"),
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -152,18 +154,18 @@ export const purchaseOut = z.object({
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
   expenseCount: z.number().int(),
-  /** Live lines whose cost has not been recorded yet. */
+  /** Live Expenses whose cost has not been recorded yet. */
   unpricedExpenseCount: z.number().int(),
   /**
-   * `SUM(cost)` over this charge's live expenses. THIS is the charge's spend;
+   * `SUM(cost)` over this purchase's live expenses. THIS is the purchase's spend;
    * `statedTotal` is only what the paperwork claimed. They may legitimately
    * disagree — see the reconciliation note on `statedTotal`.
    */
   expenseTotal: z.number(),
-  /** Live invoice/receipt documents filed against this charge. */
+  /** Live invoice/receipt documents filed against this purchase. */
   documentCount: z.number().int(),
   /**
-   * The charge's filed documents — the emailed PDF invoice, a photo of the paper
+   * The purchase's filed documents — the emailed PDF invoice, a photo of the paper
    * slip, or both, in display order.
    *
    * `contentType` is load-bearing, unlike the project analogue's summary shape:
@@ -233,7 +235,7 @@ export const reconcilePurchase = (p: {
 /**
  * One invoice spanning trades — Flow Form Plumbing's $2,516 covering both
  * rough-in and fixtures. Explicitly **not** for payment schedules: those are
- * separate charges, so they are separate purchases.
+ * separate transactions, so they are separate Purchases.
  */
 export const linkExpensesToPurchaseInput = z.object({
   purchaseId: purchaseShortcode,
@@ -244,7 +246,7 @@ export type LinkExpensesToPurchaseInput = z.infer<
 >;
 
 /**
- * Split one expense into parts against the same charge — replaces the
+ * Split one expense into parts against the same purchase — replaces the
  * `(combo, saw portion)` naming convention that encoded splits in 12 row names.
  * Each part keeps its own trade/costType/project/product.
  */
@@ -266,7 +268,7 @@ export const splitExpenseInput = z.object({
 export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
 
 /**
- * Merge charges the backfill couldn't group — the 364 singletons with no order
+ * Merge purchases the backfill couldn't group — the 364 singletons with no order
  * id, which no key could have joined (`(vendor, date)` would have falsely merged
  * 71 rows across 31 groups). A user action, never a backfill guess.
  */

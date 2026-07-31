@@ -16,7 +16,7 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { VendorChargesTable } from "./vendor-charges-table";
+import { VendorPurchasesTable } from "./vendor-purchases-table";
 
 interface VendorDetailProps {
   vendor: VendorOut;
@@ -24,7 +24,7 @@ interface VendorDetailProps {
 
 /**
  * Vendor detail — deliberately thin. A vendor is a ROSTER entry, not a
- * workspace: identity plus the two rollups, and its charges as a hop to where
+ * workspace: identity plus the two rollups, and its purchases as a hop to where
  * the money actually lives (`Expense`, one level further down).
  *
  * It exists because every entity in `entities.tsx` has a detail route, so a
@@ -50,7 +50,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     invalidateKeys: vendorMutationInvalidateKeys,
   });
 
-  // `deleteVendors` refuses while live charges point at the vendor
+  // `deleteVendors` refuses while live purchases point at the vendor
   // (VENDOR_HAS_PURCHASES) — the dialog's error toast carries that message, and
   // the re-point path is `mergePurchases`, not a cascade.
   const { deleteButton, deleteDialog } = useEntityDelete({
@@ -70,7 +70,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     invalidateKeys: vendorMutationInvalidateKeys,
     redirectTo: "/vendors",
     description:
-      "A vendor with charges still pointing at it can't be deleted — move those charges first. Otherwise this removes the vendor from the roster.",
+      "A vendor with purchases still pointing at it can't be deleted — move those purchases first. Otherwise this removes the vendor from the roster.",
   });
 
   const fields: BasicInfoField[] = [
@@ -141,9 +141,9 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     },
     // Read-only rollups, spelled out here as well as in the hero so the fact
     // sheet is complete. `spend` is SUM(expense.cost) over this vendor's
-    // charges' lines — never a column, and never `purchase.statedTotal`.
+    // purchases' lines — never a column, and never `purchase.statedTotal`.
     {
-      label: "Charges",
+      label: "Purchases",
       value: (
         <span className="font-mono tabular-nums">{vendor.purchaseCount}</span>
       ),
@@ -165,17 +165,17 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       content: <BasicInfo fields={fields} />,
     },
     {
-      title: "Charges",
+      title: "Purchases",
       icon: Receipt,
       // The page's primary content — everything else is metadata.
       zone: "main",
-      content: <VendorChargesTable vendor={vendor} />,
+      content: <VendorPurchasesTable vendor={vendor} />,
     },
     ...commonSections,
   ];
 
   const heroStats: DetailHeroStat[] = [
-    { label: "Charges", value: vendor.purchaseCount },
+    { label: "Purchases", value: vendor.purchaseCount },
     { label: "Spend", value: formatCurrency(vendor.spend, 0) },
   ];
 
@@ -188,11 +188,11 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       // Only the unusual state gets a placard: a roster entry no money has gone
       // to yet (the whole point of a vendor table — its free-text predecessor
       // could never hold one), which is also the only state `deleteVendors`
-      // accepts. A vendor WITH charges needs no stamp; the Charges hero stat
+      // accepts. A vendor WITH purchases needs no stamp; the Purchases hero stat
       // already says how many.
       heroStamp={
         vendor.purchaseCount === 0
-          ? { label: "No charges", tone: "ink" }
+          ? { label: "No purchases", tone: "ink" }
           : undefined
       }
       heroStats={heroStats}

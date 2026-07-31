@@ -20,10 +20,10 @@ import {
 } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import {
-  purchaseLineStatusOptions,
-  purchaseLineTotalOptions,
+  purchaseExpenseStatusOptions,
+  purchaseExpenseTotalOptions,
   purchaseReconciliationOptions,
-  resolvePurchaseLineTotalFilter,
+  resolvePurchaseExpenseTotalFilter,
 } from "~/app/purchases/purchase-options";
 import {
   dueRangeOptions,
@@ -191,7 +191,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       // Vendor **ids**, not the free-text name that used to sit on the row: a
-      // vendor is a real entity now, reached through the charge
+      // vendor is a real entity now, reached through the purchase
       // (`expense.purchaseId → Purchase.vendorId`). So this is `idMulti` on
       // `vendorId`, modelled on `project` above — the column still RENDERS the
       // name, but the roster and the filter trade in ids, which is what makes
@@ -207,7 +207,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       // mean guessing at a roster the URL can't see.
       //
       // `(none)` is the where-did-this-come-from worklist: `purchase.vendorId`
-      // is NOT NULL, so "no vendor" and "no charge attached" are one predicate.
+      // is NOT NULL, so "no vendor" and "no purchase attached" are one predicate.
       columnId: "vendor",
       field: "vendorId",
       kind: "idMulti",
@@ -218,8 +218,8 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       // "none" is the unreconciled worklist — no order id recorded. The id lives
-      // on the CHARGE now, so this covers both "a charge with no order id" and
-      // "no charge at all"; both have always read as "no order id" here.
+      // on the PURCHASE now, so this covers both "a purchase with no order id" and
+      // "no purchase at all"; both have always read as "no order id" here.
       columnId: "orderId",
       field: "orderIdPresenceFilter",
       kind: "presence",
@@ -227,13 +227,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("order id"),
     },
     {
-      // URL-only, like `productId` above — seeded by the charge section's header
+      // URL-only, like `productId` above — seeded by the purchase section's header
       // and the ledger's Order # cell, surfaced as a ScopeChip.
       // Its `columnId` can't be `orderId`: that one is the presence control,
       // and a second spec on the same id would read the same filter slot.
       //
       // No longer paired with a vendor. The order id resolves through
-      // `purchaseId`, and `(vendorId, orderId)` is partial-unique on the charge,
+      // `purchaseId`, and `(vendorId, orderId)` is partial-unique on the purchase,
       // so a short id like Tool Nirvana's "#11325" can't reach another
       // retailer's — the pairing existed only because the old key was two loose
       // string columns on the ledger row.
@@ -246,7 +246,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       // URL-only, like `productId`/`orderIdExact` above — seeded by a deep
-      // link from a charge's own detail page, surfaced as a ScopeChip. Its
+      // link from a purchase's own detail page, surfaced as a ScopeChip. Its
       // `columnId` is distinct from both of those (and from `orderId`'s
       // presence control): two specs may not share a slot.
       columnId: "purchaseId",
@@ -275,21 +275,21 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
   ],
 
-  // One row per vendor charge. These specs cover `purchaseFiltersSchema`,
+  // One row per vendor purchase. These specs cover `purchaseFiltersSchema`,
   // including the exact line-total bounds kept URL-only for callers that need
-  // values outside the UI presets. A charge has its own detail route, so there
+  // values outside the UI presets. A purchase has its own detail route, so there
   // is no expense-style exact-order-id scope here.
   purchase: [
     {
-      // `?q=`, the money family's search key — and it hangs on `charge`, not
-      // `orderId`. `charge` IS purchase's name column (`standardColumns` is
+      // `?q=`, the money family's search key — and it hangs on `purchase`, not
+      // `orderId`. `purchase` IS purchase's name column (`standardColumns` is
       // `[]`, so there's no hook-prepended `name`): a bespoke accessor over
       // `purchaseLabel`, which is why it's absent from `purchaseSortableFields`
       // and stays unsortable. Server-side the term is a substring match on the
       // ORDER ID; the `orderId` column's own control is the presence worklist
       // below, and two specs can't share a `columnId` — they'd read the same
       // filter slot.
-      columnId: "charge",
+      columnId: "purchase",
       field: "search",
       urlKey: "q",
       kind: "text",
@@ -301,10 +301,10 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       //
       // No `nullable` sentinels — `Purchase.vendorId` is NOT NULL, so there is
       // no "(none)" cohort to offer. (Expense's vendor filter does have them,
-      // because there "no vendor" means "no charge attached".)
+      // because there "no vendor" means "no purchase attached".)
       //
       // `optionsKey: "vendor"` names the same key as expense's spec but is fed a
-      // DIFFERENT roster: this page injects `vendor.options` (charge counts),
+      // DIFFERENT roster: this page injects `vendor.options` (purchase counts),
       // the ledger injects `expense.vendorOptions` (ledger-row counts). Rosters
       // stay page-fed per `filterOptions`; they must not be collapsed into one
       // shared options hook.
@@ -316,7 +316,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       optionsKey: "vendor",
     },
     {
-      // "(none)" is the reconciliation worklist: the ~40% of charges the vendor
+      // "(none)" is the reconciliation worklist: the ~40% of purchases the vendor
       // never issued an order id for.
       columnId: "orderId",
       field: "orderIdPresenceFilter",
@@ -334,7 +334,7 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       expand: resolveDateRange,
     },
     {
-      // "(none)" is the charges with no paperwork total recorded yet — the ones
+      // "(none)" is the purchases with no paperwork total recorded yet — the ones
       // `ReconciliationBadge` has nothing to reconcile against.
       columnId: "statedTotal",
       field: "statedTotalPresenceFilter",
@@ -344,19 +344,19 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "expenseCount",
-      field: "lineStatus",
+      field: "expenseStatus",
       urlKey: "lines",
       kind: "multiselect",
-      placeholder: "Filter by line status...",
-      options: purchaseLineStatusOptions,
+      placeholder: "Filter by expense status...",
+      options: purchaseExpenseStatusOptions,
     },
     {
       columnId: "expenseTotal",
       urlKey: "lineTotal",
       kind: "range",
-      placeholder: "Filter by line total...",
-      options: purchaseLineTotalOptions,
-      expand: resolvePurchaseLineTotalFilter,
+      placeholder: "Filter by expense total...",
+      options: purchaseExpenseTotalOptions,
+      expand: resolvePurchaseExpenseTotalFilter,
     },
     {
       columnId: "reconciliation",
@@ -377,14 +377,14 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       urlKey: "lineTotalMin",
       urlOnly: true,
       kind: "text",
-      placeholder: "Minimum line total...",
+      placeholder: "Minimum expense total...",
     },
     {
       columnId: "expenseTotalMax",
       urlKey: "lineTotalMax",
       urlOnly: true,
       kind: "text",
-      placeholder: "Maximum line total...",
+      placeholder: "Maximum expense total...",
     },
   ],
 

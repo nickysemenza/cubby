@@ -42,7 +42,7 @@ export function CreateVendorDialog({
       schema={quickAddVendorSchema}
       defaultValues={defaultValues}
       title="New Vendor"
-      description="A place money goes. Charges attach to it afterward; all spend lives on their lines."
+      description="A place money goes. Purchases attach to it afterward; all spend lives on their expenses."
       mutationFn={api.vendor.create.mutationOptions}
       successMessage={(vendor) => `Added "${vendor.name}"`}
       invalidateKeys={vendorMutationInvalidateKeys}

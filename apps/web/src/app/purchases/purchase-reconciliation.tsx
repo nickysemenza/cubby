@@ -12,7 +12,7 @@ import { formatCurrency } from "~/lib/utils";
  * `statedTotal` vs `SUM(expense.cost)`, as a **soft** cue.
  *
  * Deliberately not an error tone and never a blocker: a mismatch is frequently
- * CORRECT — a partial refund reduces a line without changing what the charge
+ * CORRECT — a partial refund reduces a line without changing what the purchase
  * itself stated — so the worst state here is `warning`, and nothing on the page
  * gates a write on it. `"unknown"` (no stated total recorded) is a quiet
  * neutral, not a problem to fix.
@@ -66,10 +66,10 @@ export const ReconciliationNote: FC<{
 }> = ({ status }) => (
   <Description size="xs">
     {status === "unknown" &&
-      "No stated total recorded yet — nothing to compare the lines against. Add what the receipt or invoice says to turn this into a cue."}
+      "No stated total recorded yet — nothing to compare the expenses against. Add what the receipt or invoice says to turn this into a cue."}
     {status === "match" &&
-      "The lines add up to what the charge stated. Stated totals are never summed into spend — spend is always the lines."}
+      "The expenses add up to what the purchase stated. Stated totals are never summed into spend — spend is always the expenses."}
     {status === "mismatch" &&
-      "The lines don't add up to what the charge stated. That's often correct: a partial refund reduces a line without changing what the paperwork claimed. Nothing here needs fixing unless a line is genuinely wrong or missing."}
+      "The expenses don't add up to what the purchase stated. That's often correct: a partial refund reduces an expense without changing what the paperwork claimed. Nothing here needs fixing unless an expense is genuinely wrong or missing."}
   </Description>
 );

@@ -81,7 +81,7 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "media",
       label: "receipt attachments",
       description:
-        "The emailed invoice PDF or a photo of the paper receipt attached to a purchase (a vendor charge).",
+        "The emailed invoice PDF or a photo of the paper receipt attached to a purchase.",
       liveness: { kind: "must-target-live" },
     },
   },
@@ -282,7 +282,7 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "transaction",
       label: "purchases",
       description:
-        "A charge recorded against this vendor. A Purchase is one vendor charge (identified by its orderId when the vendor issues one), not the spend ledger itself — the Vendor ──< Purchase ──< Expense chain.",
+        "A purchase recorded against this vendor. A Purchase is one vendor transaction (identified by its orderId when the vendor issues one), not the spend ledger itself — the Vendor ──< Purchase ──< Expense chain.",
       liveness: { kind: "must-target-live" },
     },
   },

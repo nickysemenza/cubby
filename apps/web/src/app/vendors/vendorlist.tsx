@@ -49,9 +49,9 @@ export function VendorList() {
     updateVendorMutation.mutateAsync,
   );
 
-  // `deleteVendors` refuses while live charges still point at the vendor
+  // `deleteVendors` refuses while live purchases still point at the vendor
   // (VENDOR_HAS_PURCHASES) — the server message surfaces in the delete dialog's
-  // error toast, which is the intended UX: re-point the charges first.
+  // error toast, which is the intended UX: re-point the purchases first.
   const deletableConfig = useDeletableConfig({
     mutationFn: api.vendor.delete.mutationOptions,
     entityLabel: "Vendor",
@@ -88,7 +88,7 @@ export function VendorList() {
       }),
       columnHelper.accessor((row) => row.purchaseCount, {
         id: "purchaseCount",
-        header: "Charges",
+        header: "Purchases",
         meta: {
           numeric: true,
           className: "w-24",

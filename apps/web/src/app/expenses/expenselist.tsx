@@ -235,7 +235,7 @@ export function ExpenseList() {
         },
       ),
       // The column keeps the historical `vendor` id and editor/filter wiring,
-      // but presents the linked charge as the primary accounting relationship.
+      // but presents the linked Purchase as the primary accounting relationship.
       expenseVendorColumn(
         columnHelper,
         async (vendor, expense) => {
@@ -319,7 +319,7 @@ export function ExpenseList() {
   // situation as `?productId=` above — `orderIdExact` has no column, so it needs
   // its own visible surface. No lookup query: the order id IS the display value.
   // It no longer arrives paired with a `vendor` (an order id resolves through
-  // the charge, where `(vendorId, orderId)` is partial-unique), so clearing it
+  // the Purchase, where `(vendorId, orderId)` is partial-unique), so clearing it
   // drops `order` and nothing else; a Vendor selection is a real column filter
   // with its own chip.
   const scopedOrderId = expensesSearch.order;
@@ -333,12 +333,12 @@ export function ExpenseList() {
     <ScopeChip name="Order" value={scopedOrderId} onClear={clearOrderScope} />
   ) : undefined;
 
-  // `?purchaseId=` (a deep link from the charge's own detail page) is the same
+  // `?purchaseId=` (a deep link from the Purchase detail page) is the same
   // invisible-filter situation as `?productId=` above — the manifest's
   // `purchaseId` spec has no column, so it needs its own visible surface. Like
   // `productScopeChip`, this resolves a display label via a lookup query rather
   // than showing the raw id — `purchaseLabel` over the fetched `PurchaseOut`,
-  // the same helper `link-expenses-dialog.tsx` uses for a charge's identity.
+  // the same helper `link-expenses-dialog.tsx` uses for a Purchase's identity.
   const scopedPurchaseId = expensesSearch.purchaseId;
   const scopedPurchaseQuery = useQuery({
     // Bare scalar id, not `{ id }` — see routers/purchase.ts.

@@ -21,6 +21,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -67,7 +68,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     invalidateKeys: purchaseMutationInvalidateKeys,
   });
 
-  // `deletePurchases` NULLs `purchaseId` on the charge's expenses rather than
+  // `deletePurchases` NULLs `purchaseId` on the purchase's expenses rather than
   // deleting them — the lines survive as unattached ledger rows — so this needs
   // no dependency guard, but the copy should say where the money goes.
   const { deleteButton, deleteDialog } = useEntityDelete({
@@ -86,7 +87,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     invalidateKeys: purchaseMutationInvalidateKeys,
     redirectTo: "/purchases",
     description:
-      "The charge and its documents go; its expense lines stay in the ledger, unattached to any charge.",
+      "The purchase and its documents go; its expenses stay in the ledger, unattached to any purchase.",
   });
 
   const status = reconcilePurchase(purchase);
@@ -203,9 +204,9 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   ];
 
   const sections: DetailSection[] = [
-    // The lines ARE the charge's money, so they lead the wide column.
+    // The lines ARE the purchase's money, so they lead the wide column.
     {
-      title: "Lines",
+      title: "Expenses",
       icon: ReceiptText,
       zone: "main",
       headerAction: (
@@ -217,14 +218,22 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             {formatCurrency(purchase.expenseTotal)}
           </span>
           {/* Sits with the lines rather than in the page actions: it edits THIS
-              section's contents, unlike Merge (which consumes other charges). */}
+              section's contents, unlike Merge (which consumes other purchases). */}
           <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
             <Link2 />
             Attach existing expenses
           </Button>
         </Row>
       ),
-      content: <ExpenseList expenses={expenses} />,
+      content: (
+        <Stack gap="sm">
+          <Description>
+            Expenses are this purchase&apos;s categorized spend lines. Every
+            dollar lives on them, not on the stated total.
+          </Description>
+          <ExpenseList expenses={expenses} />
+        </Stack>
+      ),
     },
     {
       title: "Documents",
@@ -253,7 +262,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             </span>
           </Row>
           <Row align="center" justify="between" gap="sm">
-            <span className="text-muted-foreground text-sm">Lines</span>
+            <span className="text-muted-foreground text-sm">Expenses</span>
             <span className="font-mono text-sm tabular-nums">
               {formatCurrency(purchase.expenseTotal)}
             </span>
@@ -312,8 +321,11 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
         ),
     },
     { label: "Date", value: purchase.date ?? "—" },
-    { label: "Lines", value: purchase.expenseCount },
-    { label: "Line total", value: formatCurrency(purchase.expenseTotal, 0) },
+    { label: "Expenses", value: purchase.expenseCount },
+    {
+      label: "Expense total",
+      value: formatCurrency(purchase.expenseTotal, 0),
+    },
     {
       label: "Stated",
       value:
@@ -329,7 +341,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       entity="purchase"
       title={purchaseLabel(purchase)}
       rawData={purchase}
-      // Never a "red"/error tone: a charge whose lines disagree with its stated
+      // Never a "red"/error tone: a purchase whose lines disagree with its stated
       // total is frequently correct (a partial refund), so the strongest signal
       // this page gives is the warning-toned badge in the Reconciliation card.
       heroStamp={
@@ -348,7 +360,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             onClick={() => setMergeOpen(true)}
           >
             <Merge />
-            Merge charges
+            Merge purchases
           </Button>
           {deleteButton}
         </Row>

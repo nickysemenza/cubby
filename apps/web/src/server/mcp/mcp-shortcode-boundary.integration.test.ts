@@ -1185,6 +1185,17 @@ describe("specialized tools round-trip on shortcodes", () => {
     );
     expectOk(slice);
     expect(structured(slice).type).toBe("orphanedProducts");
+
+    const removedAlias = await callTool(
+      "list_problems",
+      { type: "chargesNotReconciling" },
+      caller,
+    );
+    expectOk(removedAlias);
+    expect(structured(removedAlias).error).toContain("Unknown problem type");
+    expect(structured(removedAlias).availableTypes).toContain(
+      "purchasesNotReconciling",
+    );
   });
 
   it("split_expense takes its expenseId/projectId/productId by shortcode (the intended contract)", async () => {

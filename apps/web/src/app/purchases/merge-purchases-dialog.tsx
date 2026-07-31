@@ -28,13 +28,13 @@ import { useActionMutation } from "../_components/hooks/useActionMutation";
 
 const NO_CANDIDATES: PurchaseOut[] = [];
 
-/** Generous relative to any one vendor's charge count, within MAX_PAGE_SIZE. */
+/** Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE. */
 const CANDIDATE_PAGE_SIZE = 200;
 
 /**
- * Fold other charges of the SAME vendor into this one.
+ * Fold other purchases of the SAME vendor into this one.
  *
- * For the charges the backfill couldn't group — the singletons with no order id,
+ * For the purchases the backfill couldn't group — the singletons with no order id,
  * which no key could have joined without falsely merging unrelated transactions.
  *
  * The picker is scoped to one vendor because the mutation refuses to cross
@@ -46,7 +46,7 @@ const CANDIDATE_PAGE_SIZE = 200;
  * Not built on the shared `MergeConfirmation`: that component is
  * ingredient-specific (it fetches `entityIntegrity.previewOperation` for its keeper
  * ranking), and there is no purchase-side impact preview to rank by — the keeper
- * is fixed here, it's the charge you're looking at.
+ * is fixed here, it's the purchase you're looking at.
  */
 export function MergePurchasesDialog({
   open,
@@ -77,7 +77,7 @@ export function MergePurchasesDialog({
 
   const mergeMutation = useActionMutation({
     mutationFn: api.purchase.merge.mutationOptions,
-    success: "Charges merged",
+    success: "Purchases merged",
     invalidateKeys: purchaseMutationInvalidateKeys,
     onSuccess: () => {
       setSelected([]);
@@ -121,9 +121,9 @@ export function MergePurchasesDialog({
         <DialogHeader>
           <DialogTitle>Merge into {purchaseLabel(purchase)}</DialogTitle>
           <DialogDescription>
-            Pick other {purchase.vendorName ?? "vendor"} charges to fold in.
-            Their lines and documents move onto this charge; the folded charges
-            are then deleted.
+            Pick other {purchase.vendorName ?? "vendor"} purchases to fold in.
+            Their expenses and documents move onto this purchase; the folded
+            purchases are then deleted.
           </DialogDescription>
         </DialogHeader>
 
@@ -131,7 +131,7 @@ export function MergePurchasesDialog({
           <Empty variant="minimal" className="py-6">
             <EmptyTitle>Nothing to merge</EmptyTitle>
             <EmptyDescription>
-              {purchase.vendorName ?? "This vendor"} has no other charges on
+              {purchase.vendorName ?? "This vendor"} has no other purchases on
               file.
             </EmptyDescription>
           </Empty>
@@ -162,8 +162,8 @@ export function MergePurchasesDialog({
 
         <Description size="xs">
           One purchase is one vendor transaction, never a contract — a payment
-          schedule stays as separate charges. Merge only rows that are genuinely
-          the same transaction.
+          schedule stays as separate purchases. Merge only rows that are
+          genuinely the same transaction.
         </Description>
 
         {selected.length > 0 && (

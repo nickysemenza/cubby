@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { CreatePurchaseDialog } from "./create-purchase-dialog";
 
-/** The Purchases list toolbar action: opens the new-charge dialog (there is no
- * /purchases/new route — a charge is four fields, so it stays a single click
+/** The Purchases list toolbar action: opens the new-purchase dialog (there is no
+ * /purchases/new route — a purchase is four fields, so it stays a single click
  * from the list). */
 export function PurchaseActions() {
   const [open, setOpen] = useState(false);

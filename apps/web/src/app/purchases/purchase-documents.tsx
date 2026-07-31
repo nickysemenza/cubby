@@ -21,7 +21,7 @@ import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 
 /**
- * A charge's paper trail: the emailed PDF invoice, the photo of the paper slip.
+ * A purchase's paper trail: the emailed PDF invoice, the photo of the paper slip.
  *
  * PDFs and images share one relation (`PurchaseImage`), so `partitionEntityFiles`
  * splits them on `contentType` — a PDF handed to the image grid renders as a
@@ -92,7 +92,7 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
         <EntityImageList
           images={images}
           showViewAllButton={false}
-          // Non-PDF images reach a charge only through MCP `attach_file` (the
+          // Non-PDF images reach a purchase only through MCP `attach_file` (the
           // upload widget accepts PDF only), so this is their sole detach path.
           // Same server field the PDF removal uses — `removeImageIds`, handled
           // by `syncPurchaseImages` — and re-sending an already-detached id is a
@@ -113,12 +113,12 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
           </EmptyMedia>
           <EmptyTitle>No documents</EmptyTitle>
           <EmptyDescription>
-            The invoice, receipt or paper slip that documents this charge.
+            The invoice, receipt or paper slip that documents this purchase.
           </EmptyDescription>
         </Empty>
       )}
 
-      {/* `folder` is the charge id, so R2 keys read as
+      {/* `folder` is the purchase id, so R2 keys read as
           .../documents/<purchaseId>/invoice.pdf. */}
       <PendingDocumentUpload
         label="Invoices & receipts (PDF)"
@@ -154,7 +154,7 @@ export const PurchaseDocuments: FC<{ purchase: PurchaseOut }> = ({
       />
       <Description size="xs">
         Emailed PDF invoices and photos of paper slips. Amounts never come from
-        a document — every dollar lives on the charge's expense lines.
+        a document — every dollar lives on the purchase's expense lines.
       </Description>
     </Stack>
   );

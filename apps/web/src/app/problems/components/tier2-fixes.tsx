@@ -60,23 +60,23 @@ export function OrphanedDeleteFix({
   );
 }
 
-/** `1 charge` / `4 charges` — a vendor's weight in the merge decision. */
-const charges = (n: number) => `${n} charge${n === 1 ? "" : "s"}`;
+/** `1 purchase` / `4 purchases` — a vendor's weight in the merge decision. */
+const purchases = (n: number) => `${n} purchase${n === 1 ? "" : "s"}`;
 
 /**
- * Fold a duplicate vendor into the spelling that carries more charges.
+ * Fold a duplicate vendor into the spelling that carries more purchases.
  *
  * The one Problems fix that RETIRES an entity rather than editing a field, so it
  * spells out both sides and which one survives before offering the button —
  * `mergeVendors` soft-deletes the loser, and there is no restore.
  *
  * All of the actual work belongs to `mergeVendors` (repo/vendor.ts): it carries
- * `website`/`notes` over only when the keeper lacks them, and folds any charges
+ * `website`/`notes` over only when the keeper lacks them, and folds any purchases
  * the two vendors hold under the same order id, which the partial-unique
  * `(vendorId, orderId)` index would otherwise reject. Nothing here re-derives any
  * of that; it passes two ids.
  *
- * Invalidates the PURCHASE key set, not just the vendor one: folding a charge
+ * Invalidates the PURCHASE key set, not just the vendor one: folding a purchase
  * re-parents its expenses, so the expense/project/dashboard rollups go stale too
  * — the same reason `purchaseMutationInvalidateKeys` is a superset of
  * `vendorMutationInvalidateKeys`.
@@ -114,9 +114,9 @@ export function DuplicateVendorMergeFix({
     <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Merge <span className="font-medium">{variant.value}</span> (
-        {charges(variant.count)}) into{" "}
+        {purchases(variant.count)}) into{" "}
         <span className="font-medium">{variant.canonical}</span> (
-        {charges(variant.canonicalCount)})? Every charge moves to{" "}
+        {purchases(variant.canonicalCount)})? Every purchase moves to{" "}
         {variant.canonical} and {variant.value} leaves the roster. Its website
         and notes carry over only where {variant.canonical} has none.
       </p>

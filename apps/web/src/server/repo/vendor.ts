@@ -74,7 +74,7 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     code: "block-live-purchase",
     effect: "block",
     description:
-      "A vendor with charges still pointing at it can't be deleted — a vendor with purchases is load-bearing history.",
+      "A vendor with purchases still pointing at it can't be deleted — those purchases are load-bearing history.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -88,7 +88,7 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     // Calling it `repoint` understated the destructive half of the operation.
     effect: "move-dedupe",
     description:
-      "A merged vendor's charges re-point onto the surviving vendor; charges that collide on the same order id are folded into one instead.",
+      "A merged vendor's purchases re-point onto the surviving vendor; purchases that collide on the same order id are folded into one instead.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
@@ -652,7 +652,7 @@ export const deleteVendors = async (
         .join(", ");
       throw createAppError(
         "VENDOR_HAS_PURCHASES",
-        `Cannot delete a vendor with charges still pointing at it: ${detail}. Move or delete those charges first.`,
+        `Cannot delete a vendor with purchases still pointing at it: ${detail}. Move or delete those purchases first.`,
       );
     }
 
@@ -778,7 +778,7 @@ export const previewMergeVendors = async (
         code: "fold-live-purchase-by-order",
         effect: "move-dedupe",
         description:
-          "A merged vendor's charge that collides on the same order id as another charge in the merge set is folded into the survivor instead of re-pointed.",
+          "A merged vendor's purchase that collides on the same order id as another purchase in the merge set is folded into the survivor instead of re-pointed.",
       },
       edgeKey: "Purchase.vendorId",
       label: "purchases folded into a same-order survivor",
@@ -817,7 +817,7 @@ export const previewMergeVendors = async (
         code: "transitive-expense-repoint",
         effect: "repoint",
         description:
-          "Expenses on a folded charge move onto the surviving charge along with it.",
+          "Expenses on a folded purchase move onto the surviving purchase along with it.",
       },
       label: "expenses moved by a fold",
       byTargetId: byVendorFromPurchase(expenseMoveCounts),
@@ -827,7 +827,7 @@ export const previewMergeVendors = async (
         code: "transitive-document-move-dedupe",
         effect: "move-dedupe",
         description:
-          "Documents on a folded charge move onto the surviving charge, skipping any already filed there.",
+          "Documents on a folded purchase move onto the surviving purchase, skipping any already filed there.",
       },
       label: "documents moved by a fold",
       byTargetId: byVendorFromPurchase(imageMoveCounts),

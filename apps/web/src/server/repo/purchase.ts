@@ -108,7 +108,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     code: "clear-live-fk-with-audit",
     effect: "detach",
     description:
-      "Deleting a charge nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a charge must never delete spend. Each detach is logged to the audit trail.",
+      "Deleting a purchase nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a purchase must never delete spend. Each detach is logged to the audit trail.",
   },
   "PurchaseImage.purchaseId": {
     code: "soft-delete-association",
@@ -123,13 +123,13 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     code: "repoint-live-fk-with-audit",
     effect: "repoint",
     description:
-      "Merging a charge re-points its expenses onto the surviving charge, logged to the audit trail.",
+      "Merging a purchase re-points its expenses onto the surviving purchase, logged to the audit trail.",
   },
   "PurchaseImage.purchaseId": {
     code: "move-dedupe-and-soft-delete-source",
     effect: "move-dedupe",
     description:
-      "The absorbed charge's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
+      "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
   },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
@@ -344,8 +344,8 @@ const syncPurchaseImages = async (
  * which Postgres rejects outright with `invalid input syntax for type uuid`.
  * Mirrors `toUuids` on the expense side.
  */
-const lineStatusCondition = (
-  values: PurchaseFilters["lineStatus"],
+const expenseStatusCondition = (
+  values: PurchaseFilters["expenseStatus"],
 ): SQL | undefined => {
   const selected = values ? [values].flat() : [];
   if (selected.length === 0) return undefined;
@@ -407,7 +407,7 @@ const buildPurchaseWhereClause = (
         purchase.statedTotal,
         filters.statedTotalPresenceFilter,
       ),
-      lineStatusCondition(filters.lineStatus),
+      expenseStatusCondition(filters.expenseStatus),
       reconciliationCondition(filters.reconciliation),
       documentPresenceCondition(filters.documentPresenceFilter),
       filters.expenseTotalMin !== undefined
@@ -737,7 +737,7 @@ export const updatePurchase = async (
       if (clash) {
         throw createAppError(
           "PURCHASE_MERGE_ORDER_COLLISION",
-          `Another charge for this vendor already carries order id ${nextOrderId}. Merge the two charges instead of moving this one onto it.`,
+          `Another purchase for this vendor already carries order id ${nextOrderId}. Merge the two purchases instead of moving this one onto it.`,
         );
       }
     }
@@ -919,7 +919,7 @@ export const splitExpense = async (
     if (!chargeId) {
       throw createAppError(
         "PURCHASE_NOT_FOUND",
-        `Cannot split an expense with no charge attached (${expenseId}) — record its vendor first.`,
+        `Cannot split an expense with no purchase attached (${expenseId}) — record its vendor first.`,
       );
     }
 
@@ -1353,12 +1353,12 @@ export const mergePurchases = async (
       if (violation.kind === "cross-vendor") {
         throw createAppError(
           "PURCHASE_MERGE_VENDOR_MISMATCH",
-          `Cannot merge charges across vendors: ${violation.offendingIds.join(", ")} belong to a different vendor than ${keepId}.`,
+          `Cannot merge purchases across vendors: ${violation.offendingIds.join(", ")} belong to a different vendor than ${keepId}.`,
         );
       }
       throw createAppError(
         "PURCHASE_MERGE_ORDER_COLLISION",
-        `Cannot merge charges that each carry an order id (${violation.orderIds.join(", ")}) — those are separate transactions.`,
+        `Cannot merge purchases that each carry an order id (${violation.orderIds.join(", ")}) — those are separate transactions.`,
       );
     }
 
@@ -1602,9 +1602,9 @@ export const previewMergePurchases = async (
             code: "block-purchase-not-found",
             effect: "block",
             description:
-              "The keeper charge doesn't exist or has already been deleted.",
+              "The keeper purchase doesn't exist or has already been deleted.",
           },
-          label: "missing keeper charge",
+          label: "missing keeper purchase",
           byTargetId: { [keepId]: 1 },
         }),
       ]),
@@ -1622,9 +1622,9 @@ export const previewMergePurchases = async (
               code: "block-cross-vendor-merge",
               effect: "block",
               description:
-                "Purchases across different vendors can't be merged — a merge re-points a charge's expenses and documents, never its vendor.",
+                "Purchases across different vendors can't be merged — a merge re-points a purchase's expenses and documents, never its vendor.",
             },
-            label: "charges belonging to a different vendor",
+            label: "purchases belonging to a different vendor",
             byTargetId: Object.fromEntries(
               violation.offendingIds.map((id) => [id, 1]),
             ),
@@ -1634,9 +1634,9 @@ export const previewMergePurchases = async (
               code: "block-order-collision-merge",
               effect: "block",
               description:
-                "More than one charge in this merge set carries its own order id — those are separate transactions and can't be merged.",
+                "More than one purchase in this merge set carries its own order id — those are separate transactions and can't be merged.",
             },
-            label: "charges each carrying an order id",
+            label: "purchases each carrying an order id",
             byTargetId: Object.fromEntries(
               violation.offendingIds.map((id) => [id, 1]),
             ),
@@ -1674,7 +1674,7 @@ export const previewMergePurchases = async (
       disposition: {
         code: "soft-delete-source-purchase",
         effect: "soft-delete",
-        description: "The merged-away charges are soft-deleted.",
+        description: "The merged-away purchases are soft-deleted.",
       },
       label: "source purchases removed",
       byTargetId: Object.fromEntries(losers.map((id) => [id, 1])),
