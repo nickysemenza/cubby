@@ -9,6 +9,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
 import { HeartPulse, Trash2, Waypoints } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useProblemsData } from "~/app/problems/use-problems-data";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -150,6 +151,35 @@ export function EntityIntegrityTab() {
   );
 }
 
+/**
+ * A dense hairline row — the repeated unit of the detail panel's lists.
+ *
+ * The sub-scale vertical padding lives here, once, rather than as a density
+ * marker scattered across every list that needs it (see the Spacing note in
+ * apps/web/CLAUDE.md: encapsulate density in a component rather than repeating
+ * the escape hatch).
+ */
+function HairlineRow({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="border-[var(--border)] border-b py-1.5 last:border-b-0" /* tight */
+    >
+      {children}
+    </div>
+  );
+}
+
+/** One step of an FK path (column plus direction) — a dense inline token. */
+function PathStepChip({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="border border-[var(--border)] px-1 py-0.5 font-mono text-2xs" /* tight */
+    >
+      {children}
+    </span>
+  );
+}
+
 function EntityChip({
   entity,
   onClick,
@@ -182,10 +212,10 @@ function RelationshipProvenanceView({
         {provenance.steps.map((step, i) => (
           <Row key={step.edge} gap="xs" align="center">
             {i > 0 && <span className="text-muted-foreground">→</span>}
-            <span className="border border-[var(--border)] px-1 py-0.5 font-mono text-2xs">
+            <PathStepChip>
               {step.edge}
               <span className="text-muted-foreground"> ({step.direction})</span>
-            </span>
+            </PathStepChip>
           </Row>
         ))}
       </Row>
@@ -239,7 +269,7 @@ function RelationshipRow({
 function IncomingEdgeRow({ edge }: { edge: PhysicalEdge }) {
   const exempt = edge.semantics.liveness.kind === "allow-target-deleted";
   return (
-    <div className="border-[var(--border)] border-b py-1.5 last:border-b-0">
+    <HairlineRow>
       <Row gap="xs" align="center" wrap>
         <span className="font-mono text-2xs">
           {edge.sourceTable}.{edge.sourceColumn}
@@ -256,7 +286,7 @@ function IncomingEdgeRow({ edge }: { edge: PhysicalEdge }) {
           {edge.semantics.liveness.reason}
         </p>
       )}
-    </div>
+    </HairlineRow>
   );
 }
 
@@ -266,10 +296,7 @@ function OperationBlock({ operation }: { operation: LifecycleOperation }) {
       <Eyebrow>{operation.operation}</Eyebrow>
       <Stack gap="tight">
         {operation.dispositions.map((d) => (
-          <div
-            key={d.edgeKey}
-            className="border-[var(--border)] border-b py-1.5 last:border-b-0"
-          >
+          <HairlineRow key={d.edgeKey}>
             <Row justify="between" align="start" gap="sm" wrap>
               <span className="font-mono text-2xs">{d.edgeKey}</span>
               <Badge variant={EFFECT_VARIANT[d.disposition.effect]}>
@@ -281,7 +308,7 @@ function OperationBlock({ operation }: { operation: LifecycleOperation }) {
             <p className="font-mono text-2xs text-muted-foreground">
               {d.disposition.code}
             </p>
-          </div>
+          </HairlineRow>
         ))}
       </Stack>
     </Stack>
@@ -294,7 +321,7 @@ function ViolationRow({
   violation: ReferentialLivenessViolation;
 }) {
   return (
-    <div className="border-[var(--border)] border-b py-1.5 last:border-b-0">
+    <HairlineRow>
       <Row gap="xs" align="center" wrap>
         <Badge variant="destructive">{violation.role}</Badge>
         <span className="font-mono text-2xs">
@@ -302,7 +329,7 @@ function ViolationRow({
         </span>
       </Row>
       <p className="text-xs">{violation.description}</p>
-    </div>
+    </HairlineRow>
   );
 }
 
@@ -343,7 +370,16 @@ function EntityDetailPanel({
             "No local table"
           )}
           {row.lifecycle.delete
-            ? ` · ${row.lifecycle.delete.mode} delete${row.lifecycle.delete.bulk ? " · bulk" : " · single"}`
+            ? `;
+· $
+{
+  row.lifecycle.delete.mode;
+}
+delete$;
+{
+  row.lifecycle.delete.bulk ? " · bulk" : " · single";
+}
+`
             : " · not deletable"}
           {row.lifecycle.merge ? " · mergeable" : ""}
         </CardDescription>
@@ -356,7 +392,16 @@ function EntityDetailPanel({
               <Stack gap="tight">
                 {violations.map((v) => (
                   <ViolationRow
-                    key={`${v.edgeKey}-${v.sourceId}`}
+                    key={`;
+$;
+{
+  v.edgeKey;
+}
+-$;
+{
+  v.sourceId;
+}
+`}
                     violation={v}
                   />
                 ))}
