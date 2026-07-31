@@ -529,20 +529,19 @@ export function expenseCostTypeColumn(
   });
 }
 
-/** Trade column — glyph badge + required `trade` write. `exactFilter` sets
- * `filterFn: "equalsString"` (the pivot's controlled trade filter must select
- * one trade, not substring-match); `emptyAsNull` renders an empty cell instead
- * of the muted dash. */
+/** Trade column — glyph badge + required `trade` write. `emptyAsNull` renders
+ * an empty cell instead of the muted dash. The multiselect `filterConfig` gives
+ * the column `multiSelectFilterFn` (set membership), which the pivot's
+ * single-trade selection satisfies as a one-element array. */
 export function expenseTradeColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (trade: Trade, expense: ExpenseOut) => Promise<void>,
   opts?: {
     mobile?: MobileColumnMeta;
     emptyAsNull?: boolean;
-    exactFilter?: boolean;
   },
 ) {
-  const column = createFilterableSelectColumn(helper, "trade", {
+  return createFilterableSelectColumn(helper, "trade", {
     header: "Trade",
     className: "w-32",
     placeholder: "Filter by trade...",
@@ -563,12 +562,6 @@ export function expenseTradeColumn(
       },
     },
   });
-  // `createFilterableSelectColumn` doesn't expose a `filterFn` option, so the
-  // exact-match override is applied on the returned column def — load-bearing
-  // for the pivot's single-trade selection, don't drop it.
-  return opts?.exactFilter
-    ? { ...column, filterFn: "equalsString" as const }
-    : column;
 }
 
 /** Cost column — `decimals`/`signedTone` tune the embedded whole-dollar,
@@ -1008,8 +1001,7 @@ export function ExpenseList({
       ),
       // Negative rows are credits/contributions (money in) — `signedTone`
       // greens them so they don't read as spend; `decimals: 0` keeps the
-      // embedded table's whole-dollar density. `exactFilter` keeps the pivot's
-      // controlled trade filter to a single trade.
+      // embedded table's whole-dollar density.
       expenseTradeColumn(
         expenseHelper,
         async (trade, expense) => {
@@ -1020,7 +1012,6 @@ export function ExpenseList({
         },
         {
           emptyAsNull: true,
-          exactFilter: true,
           mobile: { slot: "meta", priority: 60 },
         },
       ),
