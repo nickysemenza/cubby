@@ -20,14 +20,14 @@ import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import { confidenceColor } from "../ai/ai-suggest";
 import { UsdaFoodResultRow } from "../usda/usda-food-result-row";
-import { DialogCompatibleCombobox } from "./combobox-dialog";
 import type { ComboboxItem } from "./combobox-types";
+import { EntityPicker } from "./entity-picker";
 
 interface UsdaFoodSearchFieldProps {
   /**
    * Seeds the search so candidates appear immediately (e.g. the ingredient or
    * product name). The user can still type to refine. We fall back to this until
-   * the user types, because `DialogCompatibleCombobox` resets its own input to "".
+   * the user types, because `EntityPicker` resets its own input to "".
    * Also used as the ingredient name for the "Suggest with AI" action.
    */
   initialQuery?: string;
@@ -192,7 +192,7 @@ export function UsdaFoodSearchField({
       </Row>
       <Row align="center" gap="sm">
         <div className="flex-1">
-          <DialogCompatibleCombobox
+          <EntityPicker
             label="USDA food"
             items={items}
             isLoading={parsedFdcId != null ? byIdLoading : isLoading}
