@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils";
 
 /**
  * The minimum a PDF viewer actually needs. Deliberately NOT the full `ImageOut`:
- * a purchase's `images` are a `{id,url,filename,contentType}` summary (a charge's
+ * a purchase's `images` are a `{id,url,filename,contentType}` summary (a vendor event's
  * filed invoice), and demanding `key`/`size`/`status`/timestamps here forced that
  * caller into a per-document `image.getByID` round-trip just to satisfy the type.
  * `size` stays optional and the byte chip hides when it's absent.
@@ -97,7 +97,7 @@ const DocumentViewer: FC<{
 
 /**
  * Inline viewers for a set of attached PDF documents — originally a product's
- * manuals, now also a purchase's filed charge invoices (see `ViewableDocument`).
+ * manuals, now also a Purchase's filed invoices (see `ViewableDocument`).
  *
  * <iframe> over <object>/<embed>: all three invoke the same native PDF viewer
  * on desktop, but <object>'s fallback detection is unreliable in Chromium and

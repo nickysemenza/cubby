@@ -14,13 +14,16 @@ sometimes wears three different names across layers.
 
 - Entity nouns are always **Vendor**, **Purchase**, and **Expense** in UI copy,
   MCP contracts, and documentation: `Vendor ──< Purchase ──< Expense`.
-- A **Purchase** is one vendor transaction. Do not use “charge” as an alias for
-  the entity. “Charge” remains valid only in its ordinary sense, such as a card
-  charge or delivery charge.
+- A **Purchase** is one vendor order, receipt, or deliberately separate purchase
+  event. It is not a card charge; “charge” remains valid only for a
+  FinancialTransaction or an ordinary delivery/service charge.
 - An **Expense** is the categorized spend line within a Purchase and is the only
   place money lives. “Expense line” or, after that relationship has been made
   explicit, “line” is acceptable shorthand; a bare “line” must not introduce
   the entity on its own.
+- A **FinancialTransaction** is settlement evidence (a statement charge, refund,
+  payment, or adjustment), never a spend-ledger row. It may link to one Purchase;
+  one Purchase may have many settlement entries.
 
 ---
 
@@ -42,8 +45,10 @@ sometimes wears three different names across layers.
 | Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects. |
 | Task | "Task" | `Task` / `task` | `Task` | A unit of work, optionally inside a Project; blocked-by edges to other Tasks. |
 | Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, `kind`, website, notes). Identity only — no money. |
-| Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | **ONE vendor transaction.** Identity (`vendorId` + optional `orderId`), purchase date, an optional never-summed `statedTotal`, and its documents. ⚠️ Renamed meaning — see below. |
+| Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | One vendor order/receipt event: identity (`vendorId` + optional `orderId`), vendor date, literal never-summed `statedTotal`, and documents. ⚠️ Renamed meaning — see below. |
 | Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
+| Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases. |
+| Financial transaction | "Transaction" | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction` | Settlement evidence with a signed amount and optional Purchase link. Never spend. |
 | Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice). |
 
 ---
@@ -150,18 +155,24 @@ Vendor ──< Purchase ──< Expense
   └── name (unique), website, notes
 ```
 
+Settlement is a separate axis:
+
+```
+FinancialAccount ──< FinancialTransaction >──o Purchase
+```
+
 - **Vendor** (`Vendor`) — the roster of places money goes. Name is uniquely
   indexed (live rows). Holds **identity only** — its `spend` and `purchaseCount`
   are correlated rollups, not columns. Deliberately thin: contractor metadata
   (license, COI) and vendor-level documents (W-9, contracts) are the natural
   follow-ons, and would arrive as additive columns.
-- **Purchase** (`Purchase`) — **ONE vendor transaction**.
+- **Purchase** (`Purchase`) — one vendor order, receipt, or deliberately separate purchase event.
   `vendorId` is NOT NULL; `orderId` is the vendor's own free-text order/receipt
   id, unique per vendor via a **partial-unique `(vendorId, orderId)` index where
   `orderId IS NOT NULL`** — one order is one Purchase, which is why there is no
   `splitPurchase`. About 40% of Purchases have no order id at all (a contractor's
   progress payment, a farmers-market run).
-  - `purchase.date` is the **purchase transaction** date; `expense.date` stays the **ledger**
+  - `purchase.date` is the **vendor order/receipt** date; `expense.date` stays the **ledger**
     date that drives monthly buckets and project windows. An invoice dated the
     3rd can clear on the 8th, and they may differ.
   - `statedTotal` is what the paperwork *claimed*, in dollars. It is **never
@@ -170,10 +181,9 @@ Vendor ──< Purchase ──< Expense
     without changing what the purchase paperwork stated). `reconcilePurchase` returns
     `unknown | match | mismatch` as a **soft** flag; nothing rejects a write and
     nothing back-computes a cost from it.
-  - A Purchase is **not** a contract: 11 progress payments to one contractor are
-    **11 purchases**, not one. The contract-level rollup already exists and is
-    `Project`. Nor is it guaranteed 1:1 with a *card charge* — Amazon bills per
-    shipment; that's the deferred `Payment` axis.
+  - A Purchase is **not** a contract or card charge. The contract-level rollup is
+    `Project`; installments, shipment billing, split tender, and refunds are
+    separate FinancialTransactions linked to the truthful vendor Purchase.
 - **Expense** (`Expense`) — the categorized spend line within a Purchase, and **the only place
   money lives**. Every `SUM(cost)` in the codebase reads `Expense` alone.
   `purchaseId` is nullable: a row with no Purchase attached is exactly "no vendor

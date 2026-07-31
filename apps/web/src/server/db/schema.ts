@@ -9,8 +9,15 @@ import type {
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type {
+  FinancialAccountIdentity,
+  FinancialAccountSourceAlias,
+} from "@cubby/schemas/financial-account";
+import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
+import type {
   CookbookId,
   ExpenseId,
+  FinancialAccountId,
+  FinancialTransactionId,
   IngredientId,
   InventoryId,
   LocationId,
@@ -1002,10 +1009,33 @@ export const vendor = pgTable(
   ],
 );
 
+/** A settlement account, including provisional evidence from receipts. */
+export const financialAccount = pgTable(
+  "FinancialAccount",
+  {
+    id: pkUuid<FinancialAccountId>(),
+    shortcode: shortcodeColumn(),
+    name: text("name").notNull(),
+    identity: jsonb("identity").notNull().$type<FinancialAccountIdentity>(),
+    provisional: boolean("provisional").notNull().default(false),
+    sourceAliases: jsonb("sourceAliases")
+      .notNull()
+      .$type<FinancialAccountSourceAlias[]>()
+      .default([]),
+    notes: text("notes"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    shortcodeUnique("FinancialAccount", table.shortcode),
+    index("FinancialAccount_name_idx").on(table.name),
+    index("FinancialAccount_provisional_idx").on(table.provisional),
+  ],
+);
+
 /**
- * ONE vendor transaction — the home for charge-level truth (its stated total,
- * its documents, its identity). See packages/schemas/src/purchase.ts for the
- * domain doc, including why 11 progress payments are 11 purchases and not one.
+ * One vendor order, receipt, or deliberately separate purchase event — the home
+ * for vendor-side truth (literal stated total, documents, and identity).
  *
  * **No money is summed from this table.** Spend is `SUM(expense.cost)`.
  */
@@ -1019,17 +1049,15 @@ export const purchase = pgTable(
       .$type<VendorId>()
       .references(() => vendor.id),
     // The vendor's own order/receipt identifier. Free text — every retailer
-    // formats these differently. Null on the ~40% of charges the vendor never
+    // formats these differently. Null on the ~40% of events where the vendor never
     // issued one for (a contractor's progress payment, a farmers-market run).
     orderId: text("orderId"),
-    // The charge date. Distinct from `expense.date`, which stays the LEDGER date
+    // The vendor order/receipt date. Distinct from `expense.date`, which stays the LEDGER date
     // driving monthly buckets and project date windows — an invoice dated the
     // 3rd can clear on the 8th.
     date: date("date", { mode: "string" }),
-    // What the charge itself says it was. NEVER summed into spend: it's a
-    // reconciliation cue against this charge's expenses, and a mismatch is often
-    // correct (a partial refund reduces a line without changing what the charge
-    // stated). See project.costEstimate on why dollars need double precision.
+    // The literal vendor-printed total. NEVER summed into spend and never
+    // rewritten to match settlement; FinancialTransaction owns charges/refunds.
     statedTotal: doublePrecision("statedTotal"),
     notes: text("notes"),
     ...baseTimestamps(),
@@ -1038,10 +1066,9 @@ export const purchase = pgTable(
   (table) => [
     shortcodeUnique("Purchase", table.shortcode),
     // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
-    // lets the many `(vendorId, null)` charges coexist — a contractor's 11
-    // progress payments are 11 rows against one vendor with no order id between
-    // them. This index is also what makes `findOrCreatePurchase` unambiguous
-    // (no "which charge?" branch on the import hot path) and why no
+    // lets the many `(vendorId, null)` purchase events coexist. This index is
+    // also what makes `findOrCreatePurchase` unambiguous
+    // (no "which purchase?" branch on the import hot path) and why no
     // `splitPurchase` operation is needed at all.
     uniqueIndex("Purchase_vendorId_orderId_key")
       .on(table.vendorId, table.orderId)
@@ -1057,10 +1084,10 @@ export const purchase = pgTable(
 );
 
 /**
- * A charge's documents — the emailed PDF invoice, a photo of the paper slip, or
+ * A Purchase's documents — the emailed PDF invoice, a photo of the paper slip, or
  * both. A join table rather than a direct `imageId?` on `purchase` so it reuses
  * `associatePendingImages` and the `attach_file` path, and so one statement
- * `Image` can be filed against several charges. Mirrors `projectImage` below.
+ * `Image` can be filed against several Purchases. Mirrors `projectImage` below.
  */
 export const purchaseImage = pgTable(
   "PurchaseImage",
@@ -1083,6 +1110,49 @@ export const purchaseImage = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("PurchaseImage_purchaseId_idx").on(table.purchaseId),
     index("PurchaseImage_imageId_idx").on(table.imageId),
+  ],
+);
+
+/**
+ * A settlement-side event. Amounts are evidence only: they never participate
+ * in spend/project/calendar rollups, which remain derived from Expense.cost.
+ */
+export const financialTransaction = pgTable(
+  "FinancialTransaction",
+  {
+    id: pkUuid<FinancialTransactionId>(),
+    shortcode: shortcodeColumn(),
+    accountId: uuid("accountId")
+      .notNull()
+      .$type<FinancialAccountId>()
+      .references(() => financialAccount.id),
+    purchaseId: uuid("purchaseId")
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
+    kind: text("kind").notNull(),
+    status: text("status").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    transactionDate: date("transactionDate", { mode: "string" }),
+    postedDate: date("postedDate", { mode: "string" }),
+    merchant: text("merchant"),
+    rawDescription: text("rawDescription"),
+    sourceCategory: text("sourceCategory"),
+    sourceRefs: jsonb("sourceRefs")
+      .notNull()
+      .$type<FinancialTransactionSourceRef[]>()
+      .default([]),
+    notes: text("notes"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    shortcodeUnique("FinancialTransaction", table.shortcode),
+    index("FinancialTransaction_accountId_idx").on(table.accountId),
+    index("FinancialTransaction_purchaseId_idx").on(table.purchaseId),
+    index("FinancialTransaction_kind_idx").on(table.kind),
+    index("FinancialTransaction_status_idx").on(table.status),
+    index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
+    index("FinancialTransaction_postedDate_idx").on(table.postedDate),
   ],
 );
 
@@ -1385,6 +1455,13 @@ export const vendorRelations = relations(vendor, ({ many }) => ({
   purchases: many(purchase),
 }));
 
+export const financialAccountRelations = relations(
+  financialAccount,
+  ({ many }) => ({
+    transactions: many(financialTransaction),
+  }),
+);
+
 export const purchaseRelations = relations(purchase, ({ one, many }) => ({
   vendor: one(vendor, {
     fields: [purchase.vendorId],
@@ -1392,7 +1469,22 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
   }),
   expenses: many(expense),
   images: many(purchaseImage),
+  financialTransactions: many(financialTransaction),
 }));
+
+export const financialTransactionRelations = relations(
+  financialTransaction,
+  ({ one }) => ({
+    account: one(financialAccount, {
+      fields: [financialTransaction.accountId],
+      references: [financialAccount.id],
+    }),
+    purchase: one(purchase, {
+      fields: [financialTransaction.purchaseId],
+      references: [purchase.id],
+    }),
+  }),
+);
 
 export const purchaseImageRelations = relations(purchaseImage, ({ one }) => ({
   purchase: one(purchase, {

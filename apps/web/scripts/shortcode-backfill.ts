@@ -86,6 +86,8 @@ const q = async <T = Record<string, unknown>>(
 const TABLE: Record<ShortcodeType, string> = {
   cookbook: "Cookbook",
   expense: "Expense",
+  financialAccount: "FinancialAccount",
+  financialTransaction: "FinancialTransaction",
   ingredient: "Ingredient",
   inventory: "InventoryEntry",
   location: "Location",

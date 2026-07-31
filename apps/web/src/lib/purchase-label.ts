@@ -4,7 +4,7 @@ import { parsePlainDate } from "./plain-date";
 /**
  * A purchase's human label.
  *
- * `Purchase` has no `name` column — a charge's identity is `(vendor, orderId,
+ * `Purchase` has no `name` column — its vendor identity is `(vendor, orderId,
  * date)` (see `packages/schemas/src/purchase.ts`), and ~40% of charges never got
  * an order id from the vendor at all. Every surface that renders one
  * (`EntityInlineLink`, the hover preview, an embedded charges table) therefore

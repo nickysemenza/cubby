@@ -161,9 +161,9 @@ export function MergePurchasesDialog({
         )}
 
         <Description size="xs">
-          One purchase is one vendor transaction, never a contract — a payment
-          schedule stays as separate purchases. Merge only rows that are
-          genuinely the same transaction.
+          One purchase is one vendor order or receipt event, never a contract —
+          a payment schedule stays as separate purchases. Merge only rows that
+          are genuinely the same transaction.
         </Description>
 
         {selected.length > 0 && (

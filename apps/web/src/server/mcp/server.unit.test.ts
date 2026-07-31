@@ -439,6 +439,8 @@ describe("listMcpToolCatalog", () => {
       project: ["project", "projects"],
       task: ["task", "tasks"],
       expense: ["expense", "expenses"],
+      financialAccount: ["financial_account", "financial_accounts"],
+      financialTransaction: ["financial_transaction", "financial_transactions"],
       // vendor/purchase expose get/list/create/update but NOT delete, so the
       // loop below never asks for delete_vendors / delete_purchases. Note that
       // `purchase` here is the vendor transaction, not the old flat ledger row —
@@ -535,11 +537,16 @@ describe("listMcpToolCatalog", () => {
     // Two field names are excluded because they are free text, not cubby
     // entity references, despite the "Id" suffix: `orderId` (a vendor's own
     // order/receipt number — every retailer formats these differently) and
-    // `externalId` (an ASIN/part-number on `Product.externalIds`). The
+    // `externalId` / `externalAccountId` are provider-owned identifiers (an
+    // ASIN, statement id, or account id), not Cubby entity references. The
     // mealRecipe `id` on update_meal_recipe/remove_meal_recipe is the one
     // declared uuid exception (see MCP_SERVER_INSTRUCTIONS) — it's a bare
     // `z.string()` with no pattern at all, by design.
-    const FREE_TEXT_ID_FIELDS = new Set(["orderId", "externalId"]);
+    const FREE_TEXT_ID_FIELDS = new Set([
+      "orderId",
+      "externalId",
+      "externalAccountId",
+    ]);
     const DECLARED_UUID_EXCEPTIONS = new Set([
       "create_recipe.sections[].id",
       "create_recipe.sections[].ingredients[].id",

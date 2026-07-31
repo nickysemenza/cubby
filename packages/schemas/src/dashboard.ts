@@ -16,6 +16,8 @@ export const dashboardCountsOut = z.object({
   vendor: z.number().int(),
   purchase: z.number().int(),
   expense: z.number().int(),
+  financialAccount: z.number().int(),
+  financialTransaction: z.number().int(),
   image: z.number().int(),
   usdaFoods: z.number().int(),
 });

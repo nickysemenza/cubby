@@ -29,12 +29,14 @@ export const entitySchema = z.enum([
   "meal",
   "project",
   "task",
-  // Vendor ──< Purchase ──< Expense. A `purchase` is ONE vendor transaction
+  // Vendor ──< Purchase ──< Expense. A `purchase` is a vendor order/receipt event
   // (identified by its `orderId` when the vendor issues one); an `expense` is
   // one categorized line of spend, and all money lives there.
   "vendor",
   "purchase",
   "expense",
+  "financialAccount",
+  "financialTransaction",
   "usda-food",
   "image",
 ]);

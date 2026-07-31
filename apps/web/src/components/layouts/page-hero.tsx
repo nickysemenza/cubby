@@ -70,6 +70,8 @@ const ENTITY_NAV_GROUP: Partial<Record<Entity, string>> = {
   project: "House",
   task: "House",
   expense: "House",
+  financialAccount: "Finance",
+  financialTransaction: "Finance",
 };
 
 /** One eyebrow path segment. `to` is set only for the leading nav-group

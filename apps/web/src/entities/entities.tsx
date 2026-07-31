@@ -22,6 +22,7 @@ import {
   CalendarDays,
   Carrot,
   ChefHat,
+  CreditCard,
   Hammer,
   Image,
   ListChecks,
@@ -308,6 +309,40 @@ const entityDefinitions = {
       defaultSort: "date",
       standardColumns: ["name", "createdAt"],
       sortableFields: expenseSortableFields,
+    },
+  },
+  financialAccount: {
+    label: "Financial Account",
+    pluralLabel: "Accounts",
+    basePath: "financial-accounts",
+    lucideIcon: CreditCard,
+    color: entityColor("financialAccount", {
+      bg: "bg-slate/20",
+      text: "text-slate",
+      border: "border-l-slate",
+    }),
+    routes: {
+      detail: "/financial-accounts/$shortcode",
+      list: "/financial-accounts",
+    },
+    detail: { commonSections: ["history"] },
+    list: { defaultSort: "name", standardColumns: [], sortableFields: [] },
+  },
+  financialTransaction: {
+    label: "Financial Transaction",
+    pluralLabel: "Transactions",
+    basePath: "financial-transactions",
+    lucideIcon: CreditCard,
+    color: entityColor("financialTransaction", { bg: "bg-primary/10" }),
+    routes: {
+      detail: "/financial-transactions/$shortcode",
+      list: "/financial-transactions",
+    },
+    detail: { commonSections: ["history"] },
+    list: {
+      defaultSort: "postedDate",
+      standardColumns: [],
+      sortableFields: [],
     },
   },
   "usda-food": {

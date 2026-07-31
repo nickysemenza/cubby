@@ -31,6 +31,8 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   expense,
+  financialAccount,
+  financialTransaction,
   ingredient,
   inventoryEntry,
   location,
@@ -73,6 +75,8 @@ export type ShortcodeTable = PgTable & {
 export const SHORTCODE_TABLE = {
   cookbook,
   expense,
+  financialAccount,
+  financialTransaction,
   ingredient,
   inventory: inventoryEntry,
   location,

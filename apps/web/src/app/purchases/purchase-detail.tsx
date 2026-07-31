@@ -36,6 +36,7 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
@@ -48,7 +49,7 @@ import {
 const NO_EXPENSES: ExpenseOut[] = [];
 
 /**
- * One vendor transaction: what the paperwork said (`statedTotal`, documents) and
+ * One vendor order/receipt event: what the paperwork said (`statedTotal`, documents) and
  * what it actually cost (its expense lines). The two are compared but never
  * reconciled INTO each other — stated totals are a cue, spend is always the
  * lines.
@@ -282,6 +283,17 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           </Row>
           <ReconciliationNote status={status} />
         </Stack>
+      ),
+    },
+    {
+      title: "Financial settlement",
+      icon: Scale,
+      content: (
+        <FinancialSettlement
+          purchase={
+            purchase as Parameters<typeof FinancialSettlement>[0]["purchase"]
+          }
+        />
       ),
     },
     {

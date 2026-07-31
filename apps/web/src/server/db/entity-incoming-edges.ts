@@ -40,6 +40,7 @@ import type { AnyColumn } from "drizzle-orm";
 import {
   cookbook,
   expense,
+  financialTransaction,
   ingredient,
   inventoryEntry,
   location,
@@ -169,7 +170,16 @@ export const INCOMING_EDGES = {
   purchase: edges({
     "Expense.purchaseId": { column: expense.purchaseId },
     "PurchaseImage.purchaseId": { column: purchaseImage.purchaseId },
+    "FinancialTransaction.purchaseId": {
+      column: financialTransaction.purchaseId,
+    },
   }),
+  financialAccount: edges({
+    "FinancialTransaction.accountId": {
+      column: financialTransaction.accountId,
+    },
+  }),
+  financialTransaction: edges({}),
   // No table carries a live FK at these three: `expense`/`inventory` are leaf
   // ledger/stock rows nothing else points back at, and `usda-food` has no
   // local table at all (it's resolved at query time via `product.fdc_id`, a

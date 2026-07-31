@@ -1,5 +1,5 @@
 /**
- * Purchase repository — ONE vendor transaction per row.
+ * Purchase repository — one vendor order/receipt event per row.
  *
  * `Vendor ──< Purchase ──< Expense`. See packages/schemas/src/purchase.ts for
  * the domain doc: why 11 progress payments are 11 purchases and not one, why
@@ -9,8 +9,8 @@
  * The partial-unique `(vendorId, orderId) WHERE orderId IS NOT NULL AND live`
  * index is the load-bearing constraint in this file. It is what makes
  * `findOrCreatePurchase` unambiguous on the import hot path (one order can only
- * ever be one charge, so there's no "which charge?" branch), and it is what
- * `mergePurchases` has to defend against — two charges both carrying the same
+ * ever be one Purchase, so there's no ambiguous branch), and it is what
+ * `mergePurchases` has to defend against — two rows both carrying the same
  * non-null order id can't both survive a merge.
  */
 
@@ -19,6 +19,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
+import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-transaction";
 import {
   type ExpenseId,
   type PurchaseId,
@@ -65,7 +66,13 @@ import {
 } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { expense, image, purchase, purchaseImage } from "~/server/db/schema";
+import {
+  expense,
+  financialTransaction,
+  image,
+  purchase,
+  purchaseImage,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -116,6 +123,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Image associations are soft-deleted with the purchase; the underlying images are not.",
   },
+  "FinancialTransaction.purchaseId": {
+    code: "clear-live-fk-with-audit",
+    effect: "detach",
+    description:
+      "Deleting a purchase detaches its linked financial settlement entries; financial evidence remains retained on its account.",
+  },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
@@ -130,6 +143,12 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
+  },
+  "FinancialTransaction.purchaseId": {
+    code: "repoint-live-fk-with-audit",
+    effect: "repoint",
+    description:
+      "Merging purchases re-points their linked financial settlement entries to the surviving purchase.",
   },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
@@ -184,6 +203,34 @@ const purchaseDocumentCount = correlated<number>(
      WHERE pi."purchaseId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
 );
 
+const purchaseFinancialTransactionCount = correlated<number>(
+  `(SELECT count(*)::int FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."deletedAt" IS NULL AND ft."status" <> 'void')`,
+);
+const purchasePostedFinancialTransactionCount = correlated<number>(
+  `(SELECT count(*)::int FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."deletedAt" IS NULL AND ft."status" = 'posted')`,
+);
+const purchaseOutstandingFinancialTransactionCount = correlated<number>(
+  `(SELECT count(*)::int FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."deletedAt" IS NULL AND ft."status" IN ('expected', 'pending'))`,
+);
+const purchasePostedFinancialTotal = correlated<number>(
+  `(SELECT COALESCE(sum(ft."amount") FILTER (WHERE ft."status" = 'posted'), 0)::double precision
+     FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."deletedAt" IS NULL AND ft."status" <> 'void')`,
+);
+const purchaseProjectedFinancialTotal = correlated<number>(
+  `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
+     FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."deletedAt" IS NULL AND ft."status" <> 'void')`,
+);
+
 const purchaseVendorName = correlated<string | null>(
   `(SELECT v."name" FROM "Vendor" v
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
@@ -215,6 +262,12 @@ const purchaseColumns = {
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
   documentCount: purchaseDocumentCount,
+  financialTransactionCount: purchaseFinancialTransactionCount,
+  postedFinancialTransactionCount: purchasePostedFinancialTransactionCount,
+  outstandingFinancialTransactionCount:
+    purchaseOutstandingFinancialTransactionCount,
+  postedFinancialTotal: purchasePostedFinancialTotal,
+  projectedFinancialTotal: purchaseProjectedFinancialTotal,
 } as const;
 
 type PurchaseRow = {
@@ -232,6 +285,45 @@ type PurchaseRow = {
   unpricedExpenseCount: number;
   expenseTotal: number;
   documentCount: number;
+  financialTransactionCount: number;
+  postedFinancialTransactionCount: number;
+  outstandingFinancialTransactionCount: number;
+  postedFinancialTotal: number;
+  projectedFinancialTotal: number;
+};
+
+const cents = (value: number) => Math.round(value * 100);
+const financialReconciliation = (
+  row: PurchaseRow,
+): FinancialReconciliationSummary => {
+  const transactionCount = Number(row.financialTransactionCount);
+  const postedTransactionCount = Number(row.postedFinancialTransactionCount);
+  const outstandingTransactionCount = Number(
+    row.outstandingFinancialTransactionCount,
+  );
+  const postedTotal = Number(row.postedFinancialTotal);
+  const projectedTotal = Number(row.projectedFinancialTotal);
+  const comparable = row.unpricedExpenseCount === 0 && transactionCount > 0;
+  const comparisonTotal =
+    outstandingTransactionCount > 0 ? projectedTotal : postedTotal;
+  const delta = comparable ? comparisonTotal - Number(row.expenseTotal) : null;
+  return {
+    status: !comparable
+      ? "unknown"
+      : outstandingTransactionCount > 0 &&
+          cents(projectedTotal) === cents(Number(row.expenseTotal))
+        ? "pending"
+        : outstandingTransactionCount === 0 &&
+            cents(postedTotal) === cents(Number(row.expenseTotal))
+          ? "match"
+          : "mismatch",
+    transactionCount,
+    postedTransactionCount,
+    outstandingTransactionCount,
+    postedTotal,
+    projectedTotal,
+    delta,
+  };
 };
 
 const dbPurchaseToAPI = (
@@ -249,6 +341,7 @@ const dbPurchaseToAPI = (
   unpricedExpenseCount: Number(row.unpricedExpenseCount),
   expenseTotal: Number(row.expenseTotal),
   documentCount: Number(row.documentCount),
+  financialReconciliation: financialReconciliation(row),
   images,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -874,7 +967,7 @@ export const linkExpensesToPurchase = async (
  *
  * Replaces the `(combo, saw portion)` naming convention that encoded splits in
  * 12 row names. Each part keeps its own trade/costType/project/product — that's
- * the point: a combo-kit purchase is one charge whose saw half is `tools` and
+ * the point: a combo-kit purchase is one vendor event whose saw half is `tools` and
  * whose blade half is `materials`.
  *
  * `statedTotal` is seeded from the original cost when the charge doesn't have one
@@ -912,7 +1005,7 @@ export const splitExpense = async (
       );
     }
 
-    // Ensure the row HAS a charge before splitting: parts of one purchase must
+    // Ensure the row HAS a Purchase before splitting: parts of one vendor event must
     // share one parent, and a vendorless row has none yet. Nothing to invent a
     // vendor from, so this is the one case a split can't proceed.
     const chargeId = original.purchaseId;
@@ -1111,7 +1204,7 @@ export const foldChargeInto = async (
   survivorId: PurchaseId,
   actor: ActorContext,
 ): Promise<void> => {
-  // Charge-level truth has to come along, not just the lines and documents.
+  // Purchase-level vendor truth has to come along, not just the lines and documents.
   // `statedTotal` especially: it is the reconciliation cue the whole `Purchase`
   // table exists to hold, and dropping it here meant a vendor typo-fix on a
   // single-line charge silently destroyed it (the fold is reached from
@@ -1179,6 +1272,40 @@ export const foldChargeInto = async (
       entityId: row.id,
       action: "update" as const,
       changes: { purchaseId: { from: deadId, to: survivorId } },
+    })),
+  );
+
+  const movingTransactions = await tx
+    .select({
+      id: financialTransaction.id,
+      purchaseId: financialTransaction.purchaseId,
+    })
+    .from(financialTransaction)
+    .where(
+      and(
+        eq(financialTransaction.purchaseId, deadId),
+        notDeleted(financialTransaction),
+      ),
+    );
+
+  await tx
+    .update(financialTransaction)
+    .set({ purchaseId: survivorId })
+    .where(
+      and(
+        eq(financialTransaction.purchaseId, deadId),
+        notDeleted(financialTransaction),
+      ),
+    );
+
+  await logAuditEntries(
+    tx,
+    actor,
+    movingTransactions.map((row) => ({
+      entityType: "financialTransaction" as const,
+      entityId: row.id,
+      action: "update" as const,
+      changes: { purchaseId: { from: row.purchaseId, to: survivorId } },
     })),
   );
 
@@ -1420,7 +1547,7 @@ export const mergePurchases = async (
  * Soft-delete charges.
  *
  * Removal-path invariant (root CLAUDE.md, guard-enforced): the same transaction
- * soft-deletes the charge's `PurchaseImage` rows and NULLS `purchaseId` on its
+ * soft-deletes the Purchase's `PurchaseImage` rows and NULLS `purchaseId` on its
  * expenses. Nulling rather than cascading is the point — an expense is the money,
  * and deleting a charge must never delete spend. Those rows fall back to reading
  * as "no vendor recorded", which is exactly what they are once the charge is gone.
@@ -1472,6 +1599,40 @@ export const deletePurchases = async (
       actor,
       detaching.map((row) => ({
         entityType: "expense" as const,
+        entityId: row.id,
+        action: "update" as const,
+        changes: { purchaseId: { from: row.purchaseId, to: null } },
+      })),
+    );
+
+    const detachingTransactions = await tx
+      .select({
+        id: financialTransaction.id,
+        purchaseId: financialTransaction.purchaseId,
+      })
+      .from(financialTransaction)
+      .where(
+        and(
+          inArray(financialTransaction.purchaseId, ids),
+          notDeleted(financialTransaction),
+        ),
+      );
+
+    await tx
+      .update(financialTransaction)
+      .set({ purchaseId: null })
+      .where(
+        and(
+          inArray(financialTransaction.purchaseId, ids),
+          notDeleted(financialTransaction),
+        ),
+      );
+
+    await logAuditEntries(
+      tx,
+      actor,
+      detachingTransactions.map((row) => ({
+        entityType: "financialTransaction" as const,
         entityId: row.id,
         action: "update" as const,
         changes: { purchaseId: { from: row.purchaseId, to: null } },

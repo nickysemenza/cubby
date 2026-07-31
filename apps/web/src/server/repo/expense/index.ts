@@ -4,7 +4,7 @@
  * An Expense is ONE categorized line of spend, and **all money in the system
  * lives here** — every `SUM(cost)` in the codebase reads this table alone. It
  * hangs off two optional parents: a `Project` (its budget envelope) and a
- * `Purchase` (the vendor charge it was part of). See
+ * `Purchase` (the vendor order/receipt event it was part of). See
  * packages/schemas/src/project.ts for the domain doc comment. Import expense
  * operations from `~/server/repo/expense` (this barrel).
  *

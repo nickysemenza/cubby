@@ -7,6 +7,7 @@ import {
   purchaseShortcode,
   vendorShortcode,
 } from "./identifiers";
+import { financialReconciliationSummary } from "./financial-transaction";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -15,7 +16,8 @@ import {
 import { costTypeSchema, plainDate, tradeSchema } from "./project";
 
 /**
- * Purchase — ONE vendor transaction, and the home for purchase-level truth:
+ * Purchase — one vendor order, receipt, or deliberately separate purchase
+ * event, and the home for purchase-level truth:
  * its stated total, documents, and identity.
  *
  * `Vendor ──< Purchase ──< Expense`. A purchase is identified by its `orderId`
@@ -23,15 +25,10 @@ import { costTypeSchema, plainDate, tradeSchema } from "./project";
  * lives on `expense`** — every `SUM(cost)` in the codebase reads `Expense`
  * alone, and `statedTotal` below is never summed into spend.
  *
- * The consistency rule that keeps this honest: one purchase = one vendor
- * transaction, never a contract. Masseria Calderisi's 11 progress payments are
- * **11 purchases**, not one — grouping them would make `Purchase` mean
- * "transaction" in one case and "contract" in another. The contract-level rollup
- * already exists and is `Project`.
- *
- * A purchase is therefore not guaranteed 1:1 with a *card charge* — Amazon bills
- * per shipment. That's the deferred `Payment` axis's job; pre-splitting on a
- * guess would trade real complexity today for a speculative feature.
+ * The consistency rule that keeps this honest: one purchase is one vendor-side
+ * event, never a contract and never a card charge. Settlement is represented by
+ * FinancialTransaction, so one Purchase may have installments, split tender,
+ * shipment charges, and later refunds without changing its vendor identity.
  */
 
 const purchaseFields = {
@@ -42,7 +39,7 @@ const purchaseFields = {
     .describe(
       'The vendor\'s own order/receipt id — Amazon "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325". Free text: every retailer formats these differently and validating them would only reject real data. Unique per vendor when present; null for the ~40% of purchases that never got one.',
     ),
-  date: plainDate.nullable().describe("The purchase transaction date"),
+  date: plainDate.nullable().describe("The vendor order or receipt date"),
   statedTotal: z
     .number()
     .nullable()
@@ -162,6 +159,8 @@ export const purchaseOut = z.object({
    * disagree — see the reconciliation note on `statedTotal`.
    */
   expenseTotal: z.number(),
+  /** Settlement evidence only; never participates in spend rollups. */
+  financialReconciliation: financialReconciliationSummary,
   /** Live invoice/receipt documents filed against this purchase. */
   documentCount: z.number().int(),
   /**

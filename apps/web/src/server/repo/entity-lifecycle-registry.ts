@@ -39,6 +39,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { COOKBOOK_DELETE_EDGE_POLICY } from "~/server/repo/cookbook";
+import { FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY } from "~/server/repo/financial-account";
 import { IMAGE_HARD_DELETE } from "~/server/repo/image";
 import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
@@ -128,6 +129,14 @@ export const ENTITY_LIFECYCLE_REGISTRY: EntityLifecycleRegistryEntry[] = [
   // a real (bulk, soft) delete op — declared explicitly with an empty policy
   // rather than omitted.
   { entity: "expense", operation: "delete", policy: {} },
+  {
+    entity: "financialAccount",
+    operation: "delete",
+    policy: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY,
+  },
+  // Financial transactions have no incoming edges, but are soft-deletable
+  // evidence records and so need their lifecycle operation declared explicitly.
+  { entity: "financialTransaction", operation: "delete", policy: {} },
   { entity: "image", operation: "delete", policy: IMAGE_HARD_DELETE },
   // No entry for "usda-food": no local table, and no delete or merge
   // operation at all (entityManifest["usda-food"].lifecycle is

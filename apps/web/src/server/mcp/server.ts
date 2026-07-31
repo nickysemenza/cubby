@@ -7,6 +7,7 @@ import { registerMcpApps } from "./apps";
 import { installMockStrippedListToolsHandler } from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
 import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
+import { registerFinancialTools } from "./tools/financial.tools";
 import { registerImageTools } from "./tools/image.tools";
 import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
@@ -42,7 +43,9 @@ Entity ids are public shortcodes, not uuids. Every top-level entity id you recei
 - TSK- task
 - EXP- expense
 - VEN- vendor
-- PUR- purchase (one vendor transaction — see the ledger note below; it is not an expense)
+- PUR- purchase (one vendor order/receipt event — see the ledger note below; it is not an expense or a card charge)
+- FAC- financial account
+- FTX- financial transaction
 - CKB- cookbook
 A code with the wrong prefix for the field it's passed to (a LOC- code where a tool wants a product) is rejected by input validation before the tool runs, so a mismatched or unresolvable code never reaches a write.
 
@@ -56,9 +59,10 @@ Workflow tips:
 - Recipes: prefer create_recipe_from_text for pasted prep sheets; use create_recipe when you already have ingredient ids.
 - Problems: list_problems countsOnly=true for cheap triage; reparse_stale_parses recovers mis-merged ingredient lines.
 - Projects: list_projects/list_tasks/list_expenses are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
-- Ledger shape: \`Vendor ──< Purchase ──< Expense\`. ALL money lives on \`expense\` — list_expenses/create_expense are the spend ledger. A \`purchase\` is ONE vendor transaction (it used to mean the ledger row; it no longer does), and its \`statedTotal\` is a reconciliation cue that is never summed into spend.
+- Ledger shape: \`Vendor ──< Purchase ──< Expense\`. ALL money lives on \`expense\` — list_expenses/create_expense are the spend ledger. A \`purchase\` is one vendor order, receipt, or deliberately separate purchase event (it is not a card charge), and its \`statedTotal\` is always the literal vendor-printed total and is never summed into spend.
 - Reconciling a vendor export against the ledger: match_expenses (read-only, ranks candidates for the whole batch) → update_expense to set vendor/orderId on what you confirm, or split_expense when one ledger row aggregates several export lines. Never write from a match without confirming it — and run match_expenses BEFORE create_expense, since the row you are about to add usually already exists under a different name.
 - Reconciling a purchase against its paperwork: update_purchase records \`statedTotal\`; list_problems type="purchasesNotReconciling" is the worklist of purchases whose expenses don't add up to it (a soft flag, often legitimately mismatched after a partial refund).
+- Financial settlement is separate evidence: FinancialTransaction amounts never enter spend. A Purchase is the vendor order/receipt; it may have several FTX- rows (installments, refunds, split tender). Use list_financial_transactions with purchaseId to inspect those rows.
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
@@ -75,6 +79,7 @@ function registerTools(server: McpServer) {
   registerProblemsTools(server);
   registerProjectTools(server);
   registerPurchaseTools(server);
+  registerFinancialTools(server);
   registerMealTools(server);
   registerUsdaTools(server);
   registerImageTools(server);

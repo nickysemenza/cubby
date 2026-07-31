@@ -40,6 +40,10 @@ import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedCookbooksShortcodeRouteImport } from './routes/_authenticated/cookbooks.$shortcode'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses.index'
 import { Route as AuthenticatedExpensesShortcodeRouteImport } from './routes/_authenticated/expenses.$shortcode'
+import { Route as AuthenticatedFinancialAccountsIndexRouteImport } from './routes/_authenticated/financial-accounts.index'
+import { Route as AuthenticatedFinancialAccountsShortcodeRouteImport } from './routes/_authenticated/financial-accounts.$shortcode'
+import { Route as AuthenticatedFinancialTransactionsIndexRouteImport } from './routes/_authenticated/financial-transactions.index'
+import { Route as AuthenticatedFinancialTransactionsShortcodeRouteImport } from './routes/_authenticated/financial-transactions.$shortcode'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
 import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
@@ -253,6 +257,30 @@ const AuthenticatedExpensesShortcodeRoute =
   AuthenticatedExpensesShortcodeRouteImport.update({
     id: '/expenses/$shortcode',
     path: '/expenses/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialAccountsIndexRoute =
+  AuthenticatedFinancialAccountsIndexRouteImport.update({
+    id: '/financial-accounts/',
+    path: '/financial-accounts/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialAccountsShortcodeRoute =
+  AuthenticatedFinancialAccountsShortcodeRouteImport.update({
+    id: '/financial-accounts/$shortcode',
+    path: '/financial-accounts/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialTransactionsIndexRoute =
+  AuthenticatedFinancialTransactionsIndexRouteImport.update({
+    id: '/financial-transactions/',
+    path: '/financial-transactions/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialTransactionsShortcodeRoute =
+  AuthenticatedFinancialTransactionsShortcodeRouteImport.update({
+    id: '/financial-transactions/$shortcode',
+    path: '/financial-transactions/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedImagesIndexRoute =
@@ -570,6 +598,8 @@ export interface FileRoutesByFullPath {
   '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
   '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
+  '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
+  '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -603,6 +633,8 @@ export interface FileRoutesByFullPath {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
+  '/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
+  '/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
   '/images/': typeof AuthenticatedImagesIndexRoute
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -650,6 +682,8 @@ export interface FileRoutesByTo {
   '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
   '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
+  '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
+  '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -683,6 +717,8 @@ export interface FileRoutesByTo {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
+  '/financial-accounts': typeof AuthenticatedFinancialAccountsIndexRoute
+  '/financial-transactions': typeof AuthenticatedFinancialTransactionsIndexRoute
   '/images': typeof AuthenticatedImagesIndexRoute
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
@@ -733,6 +769,8 @@ export interface FileRoutesById {
   '/_authenticated/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
   '/_authenticated/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
   '/_authenticated/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
+  '/_authenticated/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
+  '/_authenticated/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
   '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -766,6 +804,8 @@ export interface FileRoutesById {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
+  '/_authenticated/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
+  '/_authenticated/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
   '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -816,6 +856,8 @@ export interface FileRouteTypes {
     | '/account/connected-apps'
     | '/cookbooks/$shortcode'
     | '/expenses/$shortcode'
+    | '/financial-accounts/$shortcode'
+    | '/financial-transactions/$shortcode'
     | '/images/$id'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
@@ -849,6 +891,8 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/cookbooks/'
     | '/expenses/'
+    | '/financial-accounts/'
+    | '/financial-transactions/'
     | '/images/'
     | '/ingredients/'
     | '/inventory/'
@@ -896,6 +940,8 @@ export interface FileRouteTypes {
     | '/account/connected-apps'
     | '/cookbooks/$shortcode'
     | '/expenses/$shortcode'
+    | '/financial-accounts/$shortcode'
+    | '/financial-transactions/$shortcode'
     | '/images/$id'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
@@ -929,6 +975,8 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/cookbooks'
     | '/expenses'
+    | '/financial-accounts'
+    | '/financial-transactions'
     | '/images'
     | '/ingredients'
     | '/inventory'
@@ -978,6 +1026,8 @@ export interface FileRouteTypes {
     | '/_authenticated/account/connected-apps'
     | '/_authenticated/cookbooks/$shortcode'
     | '/_authenticated/expenses/$shortcode'
+    | '/_authenticated/financial-accounts/$shortcode'
+    | '/_authenticated/financial-transactions/$shortcode'
     | '/_authenticated/images/$id'
     | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
@@ -1011,6 +1061,8 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/_authenticated/cookbooks/'
     | '/_authenticated/expenses/'
+    | '/_authenticated/financial-accounts/'
+    | '/_authenticated/financial-transactions/'
     | '/_authenticated/images/'
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
@@ -1264,6 +1316,34 @@ declare module '@tanstack/react-router' {
       path: '/expenses/$shortcode'
       fullPath: '/expenses/$shortcode'
       preLoaderRoute: typeof AuthenticatedExpensesShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial-accounts/': {
+      id: '/_authenticated/financial-accounts/'
+      path: '/financial-accounts'
+      fullPath: '/financial-accounts/'
+      preLoaderRoute: typeof AuthenticatedFinancialAccountsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial-accounts/$shortcode': {
+      id: '/_authenticated/financial-accounts/$shortcode'
+      path: '/financial-accounts/$shortcode'
+      fullPath: '/financial-accounts/$shortcode'
+      preLoaderRoute: typeof AuthenticatedFinancialAccountsShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial-transactions/': {
+      id: '/_authenticated/financial-transactions/'
+      path: '/financial-transactions'
+      fullPath: '/financial-transactions/'
+      preLoaderRoute: typeof AuthenticatedFinancialTransactionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial-transactions/$shortcode': {
+      id: '/_authenticated/financial-transactions/$shortcode'
+      path: '/financial-transactions/$shortcode'
+      fullPath: '/financial-transactions/$shortcode'
+      preLoaderRoute: typeof AuthenticatedFinancialTransactionsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/images/': {
@@ -1630,6 +1710,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAccountConnectedAppsRoute: typeof AuthenticatedAccountConnectedAppsRoute
   AuthenticatedCookbooksShortcodeRoute: typeof AuthenticatedCookbooksShortcodeRoute
   AuthenticatedExpensesShortcodeRoute: typeof AuthenticatedExpensesShortcodeRoute
+  AuthenticatedFinancialAccountsShortcodeRoute: typeof AuthenticatedFinancialAccountsShortcodeRoute
+  AuthenticatedFinancialTransactionsShortcodeRoute: typeof AuthenticatedFinancialTransactionsShortcodeRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
@@ -1660,6 +1742,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedVendorsShortcodeRoute: typeof AuthenticatedVendorsShortcodeRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
+  AuthenticatedFinancialAccountsIndexRoute: typeof AuthenticatedFinancialAccountsIndexRoute
+  AuthenticatedFinancialTransactionsIndexRoute: typeof AuthenticatedFinancialTransactionsIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
@@ -1697,6 +1781,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedAccountConnectedAppsRoute,
   AuthenticatedCookbooksShortcodeRoute: AuthenticatedCookbooksShortcodeRoute,
   AuthenticatedExpensesShortcodeRoute: AuthenticatedExpensesShortcodeRoute,
+  AuthenticatedFinancialAccountsShortcodeRoute:
+    AuthenticatedFinancialAccountsShortcodeRoute,
+  AuthenticatedFinancialTransactionsShortcodeRoute:
+    AuthenticatedFinancialTransactionsShortcodeRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsShortcodeRoute:
     AuthenticatedIngredientsShortcodeRoute,
@@ -1730,6 +1818,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedVendorsShortcodeRoute: AuthenticatedVendorsShortcodeRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
+  AuthenticatedFinancialAccountsIndexRoute:
+    AuthenticatedFinancialAccountsIndexRoute,
+  AuthenticatedFinancialTransactionsIndexRoute:
+    AuthenticatedFinancialTransactionsIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,

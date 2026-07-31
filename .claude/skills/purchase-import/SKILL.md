@@ -1,12 +1,43 @@
 ---
 name: purchase-import
-description: Reconcile a vendor purchase/order export (Amazon takeout, eBay CSV, Home Depot, Direct Tools Outlet, Gmail receipts) against cubby's expense ledger — matching rows, correcting costs, booking refunds, capturing vendor identifiers, and reconciling a purchase against its stated total. Use whenever the user supplies an order-history export, receipts, or a vendor account dump and wants it matched to the ledger, or asks about missing/duplicate/understated purchases or expenses.
+description: Reconcile vendor orders, receipts, and financial statements against Cubby's Expenses, Purchases, FinancialAccounts, and FinancialTransactions. Use when the user supplies order exports, receipts, statement rows, or vendor account dumps and wants source coverage checked, rows deduplicated, spend lines matched, settlement evidence recorded, refunds handled, or financial reconciliation verified.
 ---
 
 # Importing a vendor purchase export
 
 Goal: link export lines to `Expense` rows, correct costs, book refunds, capture identifiers.
 This file is weighted toward **failure modes** — the happy path is easy, the traps are what cost hours.
+
+## Financial settlement workflow
+
+Vendor documents control Purchase identity, literal `statedTotal`, and Expense
+lines. Statements and card/bank exports control `FinancialTransaction` amount,
+account, status, and posting date. Do not let either source overwrite the
+other's authority.
+
+1. Establish source coverage and deduplicate source rows before writing.
+2. Propose matches first; use `match_expenses` for vendor order/line evidence.
+3. Resolve an account by source external ID, then source aliases, then one
+   unambiguous network/last-four candidate. Last four alone is not unique. Create
+   a provisional `FAC-` account when the evidence is only `Visa ····3692`.
+4. Normalize statement signs to Cubby: positive is a charge/outflow; negative is
+   a refund/inflow. A Monarch negative charge becomes positive here.
+5. Search `list_financial_transactions` by source/reference before creating.
+   When statement data arrives for an expected refund, update that entry to
+   `posted` and append its source reference (read–merge–write arrays).
+6. Link each truthful settlement entry to its original `PUR-` Purchase. A
+   Purchase may have installments, split tender, shipment billing, and refunds;
+   do not create a second Purchase for a refund. A transaction spanning several
+   Purchases stays unlinked until allocation support exists.
+7. Verify the Purchase financial reconciliation. FinancialTransaction amounts
+   are evidence only: never create, alter, or net Expenses from them.
+
+Examples: `PUR-4W2J` keeps the literal $60.56 vendor total, a +$60.56 posted
+charge, and a −$9.07 refund on the same Purchase (match at $51.49). Ferguson
+deposit plus balance is two Transactions on one Purchase; Amazon split shipment
+billing is several charge Transactions on one order; split tender links two
+accounts to one Purchase; a store-credit refund is a negative stored-value
+Transaction on the original Purchase.
 
 ## ⚠️ `Purchase` changed meaning — read this before your first write
 
@@ -21,7 +52,7 @@ Vendor ──< Purchase ──< Expense
 - **A ledger line is now an `Expense`.** Everything this skill used to call "a purchase row" — name,
   cost, date, trade, costType, projectId, productId — is an `Expense`. **All money lives on
   `Expense`**; every `SUM(cost)` reads that table alone.
-- **`Purchase` now means ONE vendor transaction**: `vendorId` (NOT NULL), optional
+- **`Purchase` now means one vendor order, receipt, or deliberately separate purchase event**: `vendorId` (NOT NULL), optional
   `orderId`, `date`, optional `statedTotal`, notes, and its documents. It holds **no** money.
 - **`Vendor`** is a real roster (`name` unique, `website`, `notes`), not a text column.
 
@@ -179,25 +210,21 @@ roster, open a purchase, or set a `statedTotal`:
    order is therefore worthless, while the same inference about 2026-07 is solid. State the window
    explicitly whenever you argue from silence.
 
-**Source hierarchy — prefer settlement figures over anything else.** Ranked by trustworthiness:
+**Source authority — do not collapse these layers.**
 
 | Source | Gives you | Trust |
 | --- | --- | --- |
-| **Card / bank statement** | **what actually cleared, and when — charges AND refunds** | **settlement — beats everything** |
+| **Card / bank statement** | **what actually cleared, and when — charges AND refunds** | financial settlement evidence; does not change the vendor total or Expense lines |
 | eBay **seller** `OrdersReport` CSV | `Sold For`, `Total Price`, sale date, buyer | settlement — best of the per-vendor sources |
 | eBay "You got paid" email | confirmed payment amount | settlement |
 | Vendor order confirmation email | order total, per-line prices | ordered, not settled |
 | ui.com-style confirmation | *no prices at all* — invoice is a separate download | needs the status page |
 | **Marketplace/listing exports** | **asking prices and a "Sold" flag** | **weakest — see Phase 4** |
 
-**The card statement is the top of this table and the most under-used source here.** It is the only
-one that proves a refund *landed* rather than was promised, and it silently corrects the derived
-figures every other path produces. One 2026-07-31 pass over a pasted statement excerpt closed three
-open questions at once: a $29.27 SuperBrightLEDs cable refund that vendor email only ever *promised*
-"on receipt" had in fact posted 2025-09-15; a Golden State Lumber partial cancellation resting on
-operator recollection alone was proven by a `+$1,346.71` credit posted the day after the order; and
-two prorated figures were 1–2¢ off the real credits. Ask for it whenever a refund amount is derived
-rather than read, or whenever a note says an amount is unconfirmed.
+**Statements prove whether settlement landed, not what the vendor order said.**
+Use them to create or update FinancialTransactions, including expected refunds;
+keep vendor receipts as the source for Purchase identity, stated totals, tax,
+shipping, products, and project attribution.
 
 Getting it: **Monarch's MCP has been paused since at least 2026-07** ("a data portability question
 raised by one of our partners"), so `GetTransactions` returns a notice, not data — do not plan a
@@ -282,9 +309,10 @@ its output correctly:
   whole reason this phase exists. And tokenizers miss compound words (`labelmaker`/"label maker",
   `stepstool`/"step stool", `straightedge`/"straight edges"), so sweep the zero-overlap bucket by eye
   before discarding it.
-- **`dayDelta` is the validation signal.** Genuine matches cluster at **0–1 day**. Candidates
-  scattered across a ±14d window are coincidences — in the 2026-07 pass, 209 amount matches graded
-  down to 97 real ones.
+- **`dayDelta` is supporting vendor-export evidence, never a required rule.** Genuine vendor-order
+  matches often cluster near the Expense date, but invoices, shipping, and ledger dates can differ.
+  Do not use date proximity to accept or reject a statement settlement match; FinancialTransactions
+  have their own transaction and posting dates.
 - **Costs are tax-inclusive; the house rate is 8.625%** — but do **not** hand-test discrete
   hypotheses (`cost`, `cost × 1.08625`, `cost ÷ 1.08625`, order-total). That is what failed before:
   pre-tax entry was a recurring bug class (24 rows in one pass, found four separate ways *because
@@ -354,22 +382,13 @@ lines can sit weeks from the order date. Post-split this is stronger, not weaker
 hang off one `Purchase`, so the group is a parent link rather than a two-column string match, and
 `statedTotal` can hold the $306.27 the search was looking for.
 
-⚠️ **When the source is a CARD STATEMENT, that remedy is unavailable — a statement has no order ids
-at all.** So the one arm that reliably catches the mirror trap is off the table, on exactly the source
-most likely to trip it: a statement gives you one settled total per card charge, while a well-imported
-order is often *split into per-line siblings*, meaning the number you are searching for appears
-nowhere in the ledger. `match_expenses` will report those rows as `unmatched` and it looks precisely
-like missing spend. On 2026-07-31 a six-row Golden State Lumber statement sweep came back with four
-rows unmatched — read naively, **$2,076.13 of unbooked spend**. Every one was already booked:
-`38882920` as $777.62 + $33.76 + $26.31 + $54.31 delivery = $892.00, `38929210` as
-$511.55 + $8.74 + $54.31 = $574.60, and two more likewise, each purchase's `expenseTotal` matching the
-card to the cent.
-
-**For a statement row, go through the PURCHASE, not the ledger line.** `list_purchases` filtered by
-`vendorId` (with `dateFrom`/`dateTo`) returns `expenseTotal` per purchase — compare the statement amount
-against *that*, since it is the only figure that re-aggregates a split back into what the card saw.
-Only conclude "missing" when no purchase for that vendor in the window totals the statement amount.
-Reserve `match_expenses` for statement rows whose vendor has no purchases at all.
+⚠️ **A card or bank statement is settlement evidence, not an Expense import.** Normalize each
+statement row into a FinancialTransaction, deduplicate it by source reference, and link it to a
+Purchase only when vendor/order evidence identifies one truthful purchase event. Do not require the
+statement amount to equal one Expense or even the Purchase's aggregate Expense total: installments,
+split tender, shipment billing, refunds, and store credit legitimately produce several settlement
+rows. An unmatched statement row remains an unlinked FinancialTransaction; it does not prove that
+spend is missing and must never create or mutate an Expense automatically.
 
 **Check the refund file before adding ANY expense — not just when reconciling.** This is the single
 most expensive omission found so far. A 2026-07-28 pass added rows whose notes read *"order had no
@@ -604,7 +623,7 @@ single call.
   after itself.
 - **Merging purchases** is **`merge_purchases`**, for the ~364 order-less singletons no key could have
   grouped. It refuses across vendors (that would rewrite who was paid) and refuses when both sides
-  carry a non-null order id (two real order ids are two real transactions). Destructive and with no
+  carry a non-null order id (two real order ids are two real purchase events). Destructive and with no
   inverse — there is deliberately **no `splitPurchase`**, one order being one purchase by construction.
   A user action, never a guess: propose the merge and get an explicit yes.
 
@@ -625,12 +644,9 @@ single call.
   row is visible to the (vendor, orderId) refund reconciliation"*. The refund's own document number
   goes in `notes`.
 
-  Worth stating explicitly because the entity definition argues the other way and the argument is
-  wrong. A refund genuinely *is* a separate settlement event, with its own document number and its own
-  date — so "one `Purchase` = one vendor transaction" reads as license to mint a second purchase for it.
-  A 2026-07-31 pass reasoned exactly that way (Zoro cash refund 1297816, booked as `PUR-5V8T`) and had
-  to `merge_purchases` it back into the order's purchase. **Check what the ledger already does before
-  reasoning from the schema** — one `list_expenses costMax: -0.01` would have shown the convention.
+  The refund's settlement is a separate negative FinancialTransaction, but its Expense and settlement
+  link both remain on the original Purchase. The refund document number is evidence, not a new order
+  identity. This is why a refund must not mint a second Purchase.
 
   The shapes:
   - Full return of a whole order → negative expense at full price, same `trade`, `projectId: null`, on
@@ -646,21 +662,10 @@ single call.
   - Buy-and-return where **neither** side is in the ledger → nets to zero, do nothing. This is most
     of any refund file (85 of 115 orders in one pass).
 
-  **`statedTotal` on a purchase that holds a refund: ASK, don't assume.** Once the credit sits on the
-  Purchase, setting `statedTotal` to the receipt figure guarantees a permanent mismatch
-  exactly equal to the refund — the gap *is* the return, reported correctly. Reconciling cleanly and
-  recording the receipt's own stated figure are mutually exclusive here; no arrangement gives both.
-  Three live precedents and no single default, so put it to the operator:
-  - `statedTotal: null` — the four Amazon returns. Nothing flags, but the receipt total is not captured
-    as a field. Those rows are sparse bulk-created ones with null notes, so read this as absence of
-    data rather than a considered choice.
-  - `statedTotal` = the receipt figure — what Phase 4 otherwise prescribes, and a standing entry in
-    `purchasesNotReconciling`. Defensible: a mismatch there is a soft flag, not an error.
-  - `statedTotal` = the NET — operator's choice on Zoro 32401787 (2026-07-31): $51.49 recorded so the
-    four lines reconcile exactly, with both real figures ($60.56 charged, $9.07 refunded) written into
-    the purchase notes alongside a "this is deliberate, don't correct it back" marker. The cost is that
-    the purchase can no longer answer *"did the receipt total match what I booked?"* from its fields
-    alone. If you take this option, write the stated figures into `notes` or they are gone.
+  **`statedTotal` is always the literal vendor-printed total.** Never choose gross/net/null to make
+  reconciliation look clean, and never net a refund into this field. Record the original charge and
+  refund as separate FinancialTransactions; their projected or posted total reconciles against the
+  live Expenses while the Purchase preserves what the vendor document actually printed.
 - Only add an expense when the **project is known** — date inside a project's window *and* a semantic
   fit. Check project windows first; a project's last activity date tells you if it's live.
 - Non-tool/household items stay out of the project ledger unless the operator says otherwise. Ask
@@ -724,26 +729,18 @@ Two more disposal notes:
 
 ## Phase 5 — reconcile
 
-**This check does not model refunds — read the row's notes before "correcting" anything it flags.**
-An expense whose cost was deliberately reduced to the kept items after a partial refund will fail it
-forever. In the 2026-07-28 pass it produced 5 mismatches and **all 5 were false**: four carried notes
-documenting the refund, one was an explicit operator decision. A buy-and-return pair (a `$X` line
-plus a `-$X` line on the same purchase) also nets to zero and trips a naive per-purchase sum. Group the
-export's lines by order *and check their dates* — a return line booked weeks later will drag a naive
-`min(date)`/`first(date)` off by a month and fake a "wrong order id" finding.
+Run these checks in order:
 
-Two checks, in order:
-
-1. **Purchase vs. its Expenses** — `statedTotal` against `SUM(expense.cost)`. Do not hand-write this:
-   it is `list_problems` with `type: "purchasesNotReconciling"` (see Phase 4). A single-row comparison
-   for every purchase that has a stated total, which is the reason to record one while you're
-   importing. It is a **soft** flag: a worklist, not an error list.
-
-   If that call is unavailable, the fallback is per-purchase, not a rebuild: `get_purchase` returns
-   `statedTotal` and `expenseTotal` side by side on every purchase you touched, and
-   `list_problems countsOnly: true` still gives the global count. Confirm the purchases you wrote
-   rather than skipping the check.
-2. **Purchase vs. the export** — for each purchase with an `orderId`, compare its Expenses against that
+1. **Settlement vs. Expenses** — inspect each touched Purchase's `financialReconciliation` summary.
+   `pending` means expected/pending settlement entries project to the Expense total; `match` means
+   posted settlement equals it; `unknown` means an Expense is unpriced or no non-void transaction
+   exists; `mismatch` is the advisory investigation worklist. Use
+   `purchaseFinancialSettlementMismatches` for the global worklist. Never alter Expenses merely to
+   clear this status.
+2. **Purchase paperwork vs. Expenses** — retain `purchasesNotReconciling` as a separate advisory
+   evidence check. A refund can legitimately make the literal vendor `statedTotal` differ from
+   current Expense spend; do not rewrite the stated total to hide that fact.
+3. **Purchase vs. the vendor export** — for each purchase with an `orderId`, compare its Expenses against that
    order's total and its individual export lines. In the 2026-07 pass this flagged
    **3 mismatches out of 162** — and caught a row recorded at $49.51 that was really $123.51, whose
    derived net had been reported as a $4.51 gain when it was a $78.51 loss. Worth far more than any

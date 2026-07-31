@@ -4,6 +4,8 @@ import { entities } from "~/entities/entities";
 import type { useTRPC } from "~/integrations/trpc/react";
 import {
   expenseMutationInvalidateKeys,
+  financialAccountMutationInvalidateKeys,
+  financialTransactionMutationInvalidateKeys,
   ingredientAllMutationInvalidateKeys,
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
@@ -74,6 +76,8 @@ export const standardEntities = [
   "expense",
   "vendor",
   "purchase",
+  "financialAccount",
+  "financialTransaction",
 ] as const;
 type StandardEntity = (typeof standardEntities)[number];
 
@@ -211,6 +215,14 @@ const entityContracts = {
   purchase: standardContract("purchase", purchaseMutationInvalidateKeys, {
     detailId: "scalar",
   }),
+  financialAccount: standardContract(
+    "financialAccount",
+    financialAccountMutationInvalidateKeys,
+  ),
+  financialTransaction: standardContract(
+    "financialTransaction",
+    financialTransactionMutationInvalidateKeys,
+  ),
 } satisfies Record<Entity, EntityContract>;
 
 export function getEntityContract(entity: Entity): EntityContract {

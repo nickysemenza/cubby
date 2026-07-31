@@ -26,6 +26,8 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   // On the money path, same as expense.
   purchase: "var(--primary)",
   expense: "var(--primary)",
+  financialAccount: "var(--slate)",
+  financialTransaction: "var(--primary)",
   image: "var(--slate)",
   "usda-food": "var(--positive)",
 };

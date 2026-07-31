@@ -75,7 +75,7 @@ const toUuids = async (
  * Here `expense.purchaseId` is referenced from the OUTER query, where the alias
  * is applied correctly, and the sub-select stands alone.
  *
- * `notDeleted(purchase)` is mandatory: a soft-deleted charge is still a row, so
+ * `notDeleted(purchase)` is mandatory: a soft-deleted Purchase is still a row, so
  * without it an expense whose charge was deleted would keep matching its old
  * vendor. Same class of bug as the one that made `findOrphanedProducts` miss 18
  * of 20 real hits (#428).
@@ -231,7 +231,7 @@ export const buildExpenseWhereClause = async (
       // Vendor is a joined entity now, so this matches vendor IDS through the
       // charge instead of an exact string on the row. `(none)` still ORs in, same
       // rule as project above — and because `purchase.vendorId` is NOT NULL, "no
-      // vendor" and "no charge" are one predicate: `purchaseId IS NULL`.
+      // vendor" and "no Purchase" are one predicate: `purchaseId IS NULL`.
       or(
         vendorUuids.length > 0
           ? chargeCondition(db, eqAny(purchase.vendorId, vendorUuids))

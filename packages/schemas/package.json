@@ -44,7 +44,9 @@
     "./dashboard": "./src/dashboard.ts",
     "./project": "./src/project.ts",
     "./vendor": "./src/vendor.ts",
-    "./purchase": "./src/purchase.ts"
+    "./purchase": "./src/purchase.ts",
+    "./financial-account": "./src/financial-account.ts",
+    "./financial-transaction": "./src/financial-transaction.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

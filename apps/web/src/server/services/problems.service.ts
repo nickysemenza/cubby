@@ -66,12 +66,15 @@ import {
   countEntitiesMissingEmbeddings,
   countReparseableLines,
   findCoverageTotals as findCoverageTotalsRepo,
+  findDuplicateFinancialAccountSourceAliases,
+  findDuplicateFinancialTransactionSourceRefs,
   findDuplicateUniqueProducts,
   findDuplicateVendors,
   findEmptyLocations,
   findEntitiesMissingEmbeddings,
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
+  findInvalidFinancialJson,
   findLinkedProductIds,
   findLocationsWithoutAiDescription,
   findManufacturerSpellingVariants,
@@ -81,6 +84,7 @@ import {
   findProductsMissingPrice,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
+  findPurchaseFinancialSettlementMismatches,
   findPurchasesNotReconciling,
   findReferentialLivenessViolations,
   findStaleIngredientParses,
@@ -506,6 +510,13 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // One grouped SQL scan that returns only the offenders (the stated-total
       // comparison is a HAVING, not a JS filter) — cheap enough for this group.
       purchasesNotReconciling: () => findPurchasesNotReconciling(scoped),
+      purchaseFinancialSettlementMismatches: () =>
+        findPurchaseFinancialSettlementMismatches(scoped),
+      duplicateFinancialTransactionSourceRefs: () =>
+        findDuplicateFinancialTransactionSourceRefs(scoped),
+      duplicateFinancialAccountSourceAliases: () =>
+        findDuplicateFinancialAccountSourceAliases(scoped),
+      invalidFinancialJson: () => findInvalidFinancialJson(scoped),
       // Two UNION ALL queries over 34 indexed FK joins. Sits in this group
       // rather than its own because the cost is I/O, not the CPU the other
       // groups exist to isolate — and it shares this fan-out's single
@@ -538,6 +549,13 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
     purchasesNotReconciling: r.purchasesNotReconciling,
+    purchaseFinancialSettlementMismatches:
+      r.purchaseFinancialSettlementMismatches,
+    duplicateFinancialTransactionSourceRefs:
+      r.duplicateFinancialTransactionSourceRefs,
+    duplicateFinancialAccountSourceAliases:
+      r.duplicateFinancialAccountSourceAliases,
+    invalidFinancialJson: r.invalidFinancialJson,
     referentialLivenessViolations: r.referentialLivenessViolations,
   };
 };
