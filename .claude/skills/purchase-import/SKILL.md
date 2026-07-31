@@ -28,7 +28,7 @@ Vendor ──< Purchase ──< Expense
 **`create_purchase` / `get_purchase` / `list_purchases` / `update_purchase` still exist — but they
 mean the CHARGE now, not the ledger line.** The names were reused when `Purchase` was re-pointed. So
 the failure mode here is *not* an unknown-tool error: it is writing the wrong entity. What actually
-stops you is the schema. `purchaseCreateInput` requires `vendorId` (a uuid) and has no
+stops you is the schema. `purchaseCreateInput` requires `vendorId` (a `VEN-` shortcode) and has no
 `name`/`cost`/`trade`/`costType`, so a stale caller passing the old ledger shape gets a **zod
 validation error on `vendorId`**. Read that error as "you reached for the old model" and re-read this
 block.
@@ -55,7 +55,7 @@ to a `Vendor` + `Purchase`, creating both on first sight. There is no "create th
 and no id to look up. `expenseOut` still returns `vendor` and `orderId` (through the join) and now
 also returns `purchaseId` + `vendorId`.
 
-Four consequences that bite:
+Five consequences that bite:
 
 - **`vendor` and `orderId` travel together.** An order id with no vendor is **silently dropped** — an
   order id is only unique *within* a vendor, so alone it can't name a transaction. An
@@ -73,7 +73,16 @@ Four consequences that bite:
   the same charge automatically.
 - **Vendor names are matched EXACTLY** (trimmed, not case-folded) and **there is no vendor-merge
   operation in v1**. `Amazon` / `amazon` / `Amazon.com` become three roster rows. Spell a vendor the
-  way the ledger already spells it — check the roster before inventing a spelling.
+  way the ledger already spells it — check the roster before inventing a spelling. Note the roster
+  spelling often differs from the letterhead: the ledger says `Lutz Plumbing` where the invoice reads
+  *Lutz Bath & Kitchen*, `CabinetParts` where the email header reads *CabinetParts.com*. Follow the
+  roster. (`update_vendor` renaming IS safe — charges reference by id, nothing is re-keyed and no
+  spend moves — but that's a deliberate roster decision, not something to do mid-import.)
+- **A charge minted this way has NO `date`.** Resolving `vendor` + `orderId` through `update_expense`
+  creates the `Purchase` with `date: null`; it does not inherit the expense's date. Every charge
+  created this way in the 2026-07-31 pass came back dateless and needed a follow-up
+  `update_purchase`. Set `date` (and `statedTotal`) on the charge right after the write that minted
+  it — a dateless charge falls out of every `dateFrom`/`dateTo` filter on `list_purchases`.
 
 **`Vendor` and `Purchase` have a full MCP toolset.** You do not need SQL or the web UI to read the
 roster, open a charge, or set a `statedTotal`:
@@ -84,14 +93,29 @@ roster, open a charge, or set a `statedTotal`:
 | write | `create_vendor`, `update_vendor` | `create_purchase`, `update_purchase` |
 
 - `list_vendors` is where a `vendorId` comes from — `list_expenses`, `list_purchases` and
-  `create_purchase` all filter/write by vendor **id**, and a uuid is the only form they accept. It
-  also returns `purchaseCount` and `spend` per vendor.
+  `create_purchase` all filter/write by vendor **id**, and since the shortcode cutover a `VEN-`
+  shortcode is the only form they accept (a uuid is now a zod error, not a fallback). It also returns
+  `purchaseCount` and `spend` per vendor.
+- **One id in this skill's path is still a raw uuid: `productId`.** Every other id crossing MCP is a
+  shortcode, but the expense create/update shape and its list filter (`packages/schemas/src/project.ts`
+  ~770/808/866) and `splitExpenseInput`'s `parts[].productId`
+  (`packages/schemas/src/purchase.ts:235`) all still take the branded **uuid** — note `projectId` and
+  `vendorId` sitting right beside them *are* shortcodes. So a call that links a product mixes
+  `PRJ-`/`EXP-` codes with a bare uuid — and worse, **`productId` means different things in and
+  out**: `expenseMcpOut` overrides it to a `productShortcode` (`project.ts:1357`, "same product-FK
+  swap as `taskMcpOut`"), so the `productId` you read off an expense is a `PRD-` code that the very
+  next `update_expense`/`split_expense` will reject. Don't round-trip it; carry the uuid separately.
+  The boundary test named
+  "split_expense takes its expenseId/projectId/productId by shortcode" asserts the intent but passes
+  no `productId`, so it does not actually cover this — don't read it as proof the code works.
 - `list_purchases` filters on `vendorId`, `orderId`, `search` (substring on order id),
   `dateFrom`/`dateTo`, `orderIdPresenceFilter` and `statedTotalPresenceFilter` — the last is the
   not-yet-reconciled worklist.
 - **Delete is deliberately withheld for both.** Deleting a vendor refuses while live charges point at
   it; deleting a charge nulls `purchaseId` on real money. Those stay UI-only.
-- `attach_file` files the invoice — it takes `entityType: "purchase"`.
+- `attach_file` files the invoice — it takes the charge's **`PUR-` shortcode as `entityId`** and
+  **no `entityType`** (the prefix names the entity; asking for both invited a mismatched pair, so the
+  field was deliberately dropped). See the size trap in Phase 4 before trying to attach a PDF.
 
 ## Ground rules
 
@@ -111,6 +135,15 @@ roster, open a charge, or set a `statedTotal`:
    `Unit Price` / `Unit Price Tax` / `Total Amount` per line; Gmail receipts do not. With per-line
    prices you never invent a split. Verify `Total Amount` is per-line, not a repeated order total
    (count multi-line orders whose lines all share one total).
+
+   **Then decide whether a printed price is UNIT or EXTENDED, by arithmetic — never by eye.** A
+   receipt showing `2 x Widget … $1.61` may mean $1.61 each or $1.61 for both, and the layout rarely
+   says. Sum the lines both ways and see which lands near the order total. CabinetParts order
+   `F3380366` reads as **$52.60** taken as line totals against a **$121.43** order — a gap far too
+   large for tax and shipping — but **$96.60** as unit x qty, leaving a plausible $24.83. Getting
+   this backwards understates an order by half and quietly corrupts every per-item basis you derive
+   from it. An all-qty-1 order (CabinetParts `F3359420`) is immune, which is exactly why the trap
+   only shows up on the orders you didn't check.
 3. **Dedupe refund/return rows.** Amazon's `Refund Details.csv` repeats refund events — 33 of 164
    rows in the 2026-07 export, an 18% overstatement. Dedupe on
    `(order, amount, refund date, quantity, reason, disbursement type)` *before summing anything*.
@@ -225,6 +258,14 @@ its output correctly:
   the raw `amountDelta`: a residual of exactly `9.99` or `12.50` is shipping, which a
   hypothesis check would have silently rejected. Hand-rounded variants (a $599.00 row for a $599.99
   unit price) land inside the window rather than needing their own rule.
+- **The tax BASE is not always the whole subtotal — freight is often exempt.** Lutz invoice `1207`
+  states subtotal $2,030.75 and tax $170.41. Checking 8.625% against that subtotal computes $175.15
+  and reads as a $4.74 error; the rate is actually charged on the $1,975.75 of *goods*, with the
+  $55.00 freight untaxed ($1,975.75 x 0.08625 = $170.41 to the cent). Before calling a tax figure
+  wrong, try the subtotal **minus shipping/freight** as the base. Ferguson does the opposite —
+  $2,025.50 tax charged at order level with $0 freight — so neither is the default. When you find
+  one, write the base into the charge notes: a later pass will re-derive the "discrepancy" and try
+  to fix it.
 - **Always pass `orderId` when the line has one** — see the mirror trap in Phase 3. That arm ignores
   the day window on purpose.
 
@@ -342,9 +383,28 @@ single call.
     reduces a line without changing what the charge stated). Nothing rejects a write over it and
     nothing back-computes a cost from it. **`update_purchase` is how you set it** (`create_purchase`
     can carry it too) — no web-UI detour, and no reason to leave it blank on a charge you imported.
+
+    **The one real carve-out: paperwork that states no total.** An eBay order email prints an item
+    price and nothing else — no tax line, no order total — while the ledger row is tax-inclusive.
+    Recording the $60.99 item price against a $66.25 row would flag that charge in
+    `chargesNotReconciling` forever as a false positive. Leave `statedTotal` null when the source
+    genuinely never stated one, and say so in the expense notes so the next pass doesn't "finish the
+    job". `statedTotalPresenceFilter: "none"` is a worklist, not a defect list.
   - The PDF invoice / receipt photo now has a home: `attach_file` with
-    `entityType: "purchase"`, `entityId: <purchaseId from the expense row>`, `contentType:
-    "application/pdf"`. One `Image` can be filed against several charges (a statement covering both).
+    `entityId: <the PUR- shortcode from the expense row>` and `contentType: "application/pdf"`.
+    **There is no `entityType` field** — the prefix picks the entity. One `Image` can be filed
+    against several charges (a statement covering both).
+
+    ⚠️ **You probably cannot do this from the main loop.** `data` wants base64, and a perfectly
+    ordinary one-page receipt blows the context: a 71KB PDF is **94,684 base64 characters**, which
+    `Read` truncates (~22k chars delivered, and the full file is billed near 90k tokens *in* before
+    the same payload is echoed *out* in the tool call). Don't try to page through it and reassemble —
+    a mis-stitched receipt is worse than none. Either hand the upload to a subagent, which pipes the
+    bytes straight into `attach_file` without them landing in the conversation, or ask the operator
+    to drag the file onto the charge in the UI. `url` is the only cheap path, and only when the file
+    is already on a public http(s) URL — do not upload a private receipt somewhere to manufacture one.
+    Filing the document is optional; the ledger reconciles without it, so **never hold up the numbers
+    on an attachment.**
 - Per-charge queries are one row each now — no reconstructing groups from `(vendor, orderId)` strings,
   and **no SQL**:
   - **Charges whose lines don't add up to what the charge said it was** is
@@ -364,6 +424,25 @@ single call.
   never a new column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces
   the whole set**, so read-then-merge. Partial unique index on `(productId, source)` = one id per
   source.
+
+  **Some vendors print ONLY their own code, and it encodes the real model.** Ferguson never shows a
+  manufacturer model number — its order confirmation and its bid both list `WGR366`, `SCL3050USTR`,
+  `BSHX78CM5N`. Those are the maker's models with a brand letter prefixed (and, for Sub-Zero, the
+  slashes stripped): `GR366`, `CL3050U/S/T/R`, `SHX78CM5N`, each confirmed against the manufacturer.
+  So: put the vendor code in `externalIds` **and** recover the real model with one web check per
+  item — don't leave `model` empty and don't write the decoded guess unverified. The check earns its
+  keep: `CL3050U**ID**/S/T/R` is the internal-dispenser variant, and only the absent `ID` tells you
+  which unit was actually bought. Contrast a distributor like Lutz, which prints genuine
+  manufacturer part numbers (`K50-102-ST-SN`, `9611-K50-SN`) that go straight into `model`.
+- **`create_product` has no `model` field** — create, then `update_product` to set `model`,
+  `category`, `expectedQuantity`, `tags` and `externalIds`. Budget two calls per product.
+- **Tag a durable and its consumables with the same value** (`subzero-fridge`, `ews-under-sink`,
+  `wolf-hood-36`); `category` distinguishes them (`household` vs `supplies`). This is how a filter
+  finds its fridge when neither name shares a token. And put a maintenance task's `subjectProductId`
+  on the **durable asset, not the consumable** — the schema is explicit that "a product can
+  accumulate a chronological history of many tasks", which only makes sense for the thing that
+  persists. Point "replace fridge water filter" at the filter and the fridge's own page shows no
+  service history at all.
 - **Splitting a line** is **`split_expense`**: pass the `expenseId` and ≥2 parts, each with its own
   `name`/`cost`/`costType`/`trade`/`projectId`/`productId`. The parts land on the same charge, the
   original is soft-deleted, and the charge's `statedTotal` is **seeded from the original cost** when
@@ -375,16 +454,58 @@ single call.
   Do **not** fake it with `create_expense` per part plus `delete_expenses` on the original (the old
   MCP workaround). That hand-rolled path loses the `statedTotal` seeding and the shared-charge
   guarantee, which are the two things making the split worth doing.
+
+  **Splitting off a receipt's line extensions? Allocate the add-ons — they don't all share a base.**
+  Ledger costs are tax-inclusive while a receipt's line extensions are pre-tax, so parts copied
+  straight off the lines undershoot the original and leave a phantom gap against `statedTotal`.
+  Spread each add-on over the lines it was actually assessed on, which is **not** always all of them:
+  on Golden State Lumber's Sales Order 41287100, sales tax (8.625%) applied to the whole subtotal
+  *including the $50 delivery charge*, while the 1% CA lumber products assessment applied to the
+  lumber only. Derive each rate from the receipt (`add-on ÷ its base`) instead of assuming the house
+  8.625% covers everything — a rate that comes out absurd means you guessed the wrong base. Round
+  each part to cents last and put any leftover penny on the largest part, so the parts sum to the
+  original exactly. A delivery/freight line is its own part: `costType: "services"`,
+  `trade: "logistics"`, not `materials`.
+
+  ⚠️ **The split soft-deletes the original — and its `notes` go with it.** Phase 3 tells you to write
+  a line itemization onto an aggregate row; splitting that row then buries the itemization on a
+  deleted record. **Put invoice-level narrative on the CHARGE (`update_purchase` notes) before you
+  split**, and give each part only what is specific to it. The charge is the right home anyway: it is
+  what the paperwork describes, it survives every future re-split, and it is where the tax base and
+  stated total already live.
+
+  Allocate tax per line and the rounding will not close: Lutz `1207`'s six goods lines sum to $170.40
+  of tax against a stated $170.41. Put the odd cent on the largest line and say which one carries it,
+  rather than leaving the parts a cent short of the charge.
 - **One invoice spanning trades** (Flow Form Plumbing's $2,516 covering rough-in *and* fixtures) is
   **`link_expenses_to_purchase`** — re-parent existing expenses onto one charge. It moves no money.
   Explicitly **not** for payment schedules: separate charges stay separate purchases, so a
   contractor's 11 progress payments are **11 charges**, not one. The contract-level rollup is
   `Project`.
+
+  ⚠️ **"Payment schedule" does NOT cover a deposit-plus-balance on a single order.** The distinction
+  is whether one document fixes the scope and the total. A contractor's progress payments have no
+  such document — that's why they stay separate. Ferguson order `5099637` does: one order
+  confirmation, one order number, a fixed line-item list, one total, paid $13,000 on 2024-05-14 and
+  $12,734.51 on 2024-06-07. That is **one charge with two lines**, and the schema agrees — the
+  partial-unique `(vendorId, orderId)` index means the order number can only ever live on one charge,
+  so booked as two, *neither* could carry the order id and both were invisible to every per-order
+  query. Also note `link_expenses_to_purchase` only re-parents: it leaves the drained charge behind,
+  empty, and charge deletion is UI-only. To combine, use `merge_purchases` instead — it cleans up
+  after itself.
 - **Merging charges** is **`merge_purchases`**, for the ~364 order-less singletons no key could have
   grouped. It refuses across vendors (that would rewrite who was paid) and refuses when both sides
   carry a non-null order id (two real order ids are two real transactions). Destructive and with no
   inverse — there is deliberately **no `splitPurchase`**, one order being one charge by construction.
   A user action, never a guess: propose the merge and get an explicit yes.
+
+  **It leaves nothing to clean up.** `foldChargeInto` (`repo/purchase.ts`) soft-deletes the loser
+  inside the same transaction — *"this helper only ever soft-deletes `deadId`, so it frees a slot and
+  never claims one"* — re-points the expenses with an audit row each, and carries the loser's
+  `statedTotal`/`notes`/`date` into any field the survivor lacks (never overwriting; a genuine
+  conflict is recorded in the audit row instead). So don't tell the operator they need a UI step
+  afterwards. And merging **moves no money between months**: `expense.date` is the ledger date that
+  drives the buckets, and only `purchase.date` belongs to the charge.
 - **Refund handling** is unchanged, by shape:
   - Full return → negative expense at full price, same `trade`, `projectId: null`.
   - Partial refund on a multi-item order → **reduce the expense cost** to the kept items. (Operator
@@ -471,6 +592,11 @@ Two checks, in order:
    it is `list_problems` with `type: "chargesNotReconciling"` (see Phase 4). A single-row comparison
    for every charge that has a stated total, which is the reason to record one while you're
    importing. It is a **soft** flag: a worklist, not an error list.
+
+   If that call is unavailable, the fallback is per-charge, not a rebuild: `get_purchase` returns
+   `statedTotal` and `expenseTotal` side by side on every charge you touched, and
+   `list_problems countsOnly: true` still gives the global count. Confirm the charges you wrote
+   rather than skipping the check.
 2. **Charge vs. the export** — for each charge with an `orderId`, compare its lines against that
    order's total and its individual lines in the export. In the 2026-07 pass this flagged
    **3 mismatches out of 162** — and caught a row recorded at $49.51 that was really $123.51, whose
