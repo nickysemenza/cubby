@@ -64,7 +64,7 @@ const parseCost = (raw: string): number => {
  * Seeded with two parts carrying the original's trade / cost type / project, and
  * the whole cost on the first, so the common case is "rename part 1, type part
  * 2's share". Each part then keeps its OWN trade and cost type, which is the
- * point: a combo kit is one charge whose saw half is `tools` and whose blade
+ * point: a combo kit is one Purchase whose saw half is `tools` and whose blade
  * half is `materials`.
  *
  * The parts do NOT have to add up. A mismatched sum is shown as a cue and
@@ -81,8 +81,8 @@ export function SplitExpenseDialog({
   onOpenChange: (open: boolean) => void;
   expense: ExpenseOut;
   /**
-   * The charge the parts get filed under, as its public id. Required, not
-   * derived: `splitExpense` refuses an expense with no charge attached, so the
+   * The Purchase the parts get filed under, as its public id. Required, not
+   * derived: `splitExpense` refuses an Expense with no Purchase attached, so the
    * caller gates the whole action on having one rather than surfacing that
    * refusal as a toast. Also the post-split redirect target.
    */
@@ -149,12 +149,12 @@ export function SplitExpenseDialog({
 
   const splitMutation = useActionMutation({
     mutationFn: api.purchase.split.mutationOptions,
-    success: (items) => `Split into ${items.length} lines`,
+    success: (items) => `Split into ${items.length} expenses`,
     invalidateKeys: expenseMutationInvalidateKeys,
     onSuccess: () => {
       onOpenChange(false);
       // This expense no longer exists — staying here would render a deleted row.
-      // The charge is where every part now lives.
+      // The Purchase is where every part now lives.
       void navigate(entityDetailLink("purchase", purchaseShortcode));
     },
   });
@@ -185,9 +185,9 @@ export function SplitExpenseDialog({
         <DialogHeader>
           <DialogTitle>Split "{expense.name}"</DialogTitle>
           <DialogDescription>
-            The parts below are filed under the same charge and{" "}
-            <strong>this line is deleted</strong> — a split replaces the row, it
-            doesn't add to it. Each part carries its own trade and cost type,
+            The parts below are filed under the same Purchase and{" "}
+            <strong>this Expense is deleted</strong> — a split replaces the row,
+            it doesn't add to it. Each part carries its own trade and cost type,
             which is what makes a combo kit's saw half tools and its blade half
             materials.
           </DialogDescription>
@@ -345,7 +345,7 @@ export function SplitExpenseDialog({
           </Row>
           {/* A cue, never a gate. The parts are recorded exactly as typed:
               a partial refund or a discount applied to one half legitimately
-              makes the halves disagree with the original charge. */}
+              makes the halves disagree with the original Expense. */}
           {delta !== null ? (
             <StatusText tone="warning" className="text-xs">
               Parts are {formatCurrency(Math.abs(delta))}{" "}

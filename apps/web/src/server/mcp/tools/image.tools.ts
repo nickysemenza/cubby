@@ -24,14 +24,14 @@ export function registerImageTools(server: McpServer) {
     name: "attach_file",
     description:
       "Attach an image or PDF to a product, recipe, location, project, or " +
-      "purchase (a vendor charge — this is how a receipt or an emailed PDF " +
+      "purchase (one vendor transaction — this is how a receipt or an emailed PDF " +
       "invoice gets filed against the transaction it documents). " +
       "Provide the file as EITHER `data` (base64, or a data: URI) OR `url` " +
       "(an http(s) link to fetch) — exactly one. For base64, set `contentType` " +
       "(image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, " +
       "or application/pdf) unless a data: URI already carries it. Resolve the " +
       "target shortcode first via search_products / list_recipes / list_locations / " +
-      "list_projects; for a charge use list_purchases / get_purchase, or read " +
+      "list_projects; for a purchase use list_purchases / get_purchase, or read " +
       "`purchaseId` off any expense row (list_expenses / get_expense).",
     // `entityType` is dropped on purpose: a shortcode's prefix already names
     // the entity, so asking for both invites a mismatched pair. The handler

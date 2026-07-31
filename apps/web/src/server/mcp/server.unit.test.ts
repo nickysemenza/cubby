@@ -24,6 +24,7 @@ import {
   createMcpServer,
   listMcpResourceCatalog,
   listMcpToolCatalog,
+  MCP_SERVER_INSTRUCTIONS,
   slimMeal,
   slimProduct,
   slimUsdaFood,
@@ -394,6 +395,26 @@ describe("createMcpServer registration", () => {
 });
 
 describe("listMcpToolCatalog", () => {
+  it("advertises canonical purchase and expense terminology", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const listPurchases = tools.find((tool) => tool.name === "list_purchases");
+    expect(listPurchases).toBeDefined();
+    const properties = (
+      listPurchases?.inputSchema as
+        | {
+            properties?: Record<string, unknown>;
+          }
+        | undefined
+    )?.properties;
+
+    expect(properties).toHaveProperty("expenseStatus");
+    expect(properties).not.toHaveProperty("lineStatus");
+    expect(listPurchases?.description).toContain("List vendor purchases");
+    expect(listPurchases?.description).not.toMatch(/vendor charges/i);
+    expect(MCP_SERVER_INSTRUCTIONS).toContain('type="purchasesNotReconciling"');
+    expect(MCP_SERVER_INSTRUCTIONS).not.toContain("chargesNotReconciling");
+  });
+
   it("keeps manifest MCP operations aligned with registered tools", async () => {
     type Operation = "list" | "get" | "create" | "update" | "delete";
     const slugs: Record<
@@ -420,7 +441,7 @@ describe("listMcpToolCatalog", () => {
       expense: ["expense", "expenses"],
       // vendor/purchase expose get/list/create/update but NOT delete, so the
       // loop below never asks for delete_vendors / delete_purchases. Note that
-      // `purchase` here is the vendor CHARGE, not the old flat ledger row —
+      // `purchase` here is the vendor transaction, not the old flat ledger row —
       // that one is `expense` above, and it is the one that owns money.
       vendor: ["vendor", "vendors"],
       purchase: ["purchase", "purchases"],

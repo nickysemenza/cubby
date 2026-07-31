@@ -229,7 +229,7 @@ describe("manifest key uniqueness", () => {
 
 /**
  * The two order-id filters are independent: `?order=` is the exact "rest of
- * this charge" scope, `?orderId=` is the has/none reconciliation worklist. They
+ * this Purchase" scope, `?orderId=` is the has/none reconciliation worklist. They
  * must be able to coexist in one URL and land on different server fields.
  */
 describe("expense order-id filters", () => {
@@ -258,7 +258,7 @@ describe("expense order-id filters", () => {
     // the group key was two loose string columns on the ledger row. The order id
     // now resolves through `purchaseId` against a partial-unique
     // `(vendorId, orderId)`, so a short id is unambiguous on its own — and the
-    // charge section links to the charge itself rather than to this scope.
+    // Purchase section links to the Purchase itself rather than to this scope.
     expect(build({ order: "WN63446464" })).toEqual({
       orderId: "WN63446464",
     });
@@ -286,7 +286,7 @@ describe("expense order-id filters", () => {
  * The Vendor filter is id-based now (`Vendor` is a real roster), so it must land
  * on `vendorId` — a name in the `?vendor=` slot is branded as an id and matched
  * as one, never re-resolved. Its `(none)` sentinel still routes to
- * `vendorPresenceFilter`, which server-side means "no charge attached".
+ * `vendorPresenceFilter`, which server-side means "no Purchase attached".
  */
 describe("expense vendor filter", () => {
   const build = (search: Record<string, unknown>) => {
@@ -308,7 +308,7 @@ describe("expense vendor filter", () => {
       vendorId: ["vendor-1"],
       vendorPresenceFilter: "none",
     });
-    // The sentinel alone is the no-charge worklist — no `vendorId` key at all.
+    // The sentinel alone is the no-Purchase worklist — no `vendorId` key at all.
     expect(build({ vendor: FILTER_NONE })).toEqual({
       vendorPresenceFilter: "none",
     });
@@ -388,7 +388,7 @@ describe("vendor filters", () => {
 });
 
 /**
- * The charges table's worklist filters. These used to be a
+ * The Purchases table's worklist filters. These used to be a
  * LOCAL manifest in `app/purchases/purchase-filters.ts` (specs + header controls
  * + a hand-written `buildFilters` + a hand-rolled search-fields Record), because
  * this file was off-limits to the agent that built the page. They pin the wiring
@@ -403,8 +403,8 @@ describe("purchase filters", () => {
     );
   };
 
-  it("routes ?q= to the search field via the charge column", () => {
-    // The search hangs on `charge` (purchase's name column — a bespoke accessor
+  it("routes ?q= to the search field via the purchase column", () => {
+    // The search hangs on `purchase` (the Purchase name column — a bespoke accessor
     // over `purchaseLabel`, since `standardColumns` is `[]`), not on `orderId`,
     // whose control is the presence worklist. Server-side it's a substring match
     // on the order id.
@@ -437,8 +437,8 @@ describe("purchase filters", () => {
   });
 
   it("routes ?orderId= and ?statedTotal= to their presence fields", () => {
-    // Both are reconciliation worklists: charges the vendor issued no order id
-    // for, and charges with no paperwork total recorded yet.
+    // Both are reconciliation worklists: Purchases the Vendor issued no order id
+    // for, and Purchases with no paperwork total recorded yet.
     expect(build({ orderId: "none", statedTotal: "none" })).toEqual({
       orderIdPresenceFilter: "none",
       statedTotalPresenceFilter: "none",
@@ -449,7 +449,7 @@ describe("purchase filters", () => {
     ]);
   });
 
-  it("routes line health, reconciliation, documents, and total presets", () => {
+  it("routes Expense health, reconciliation, documents, and total presets", () => {
     expect(
       build({
         lines: "unpriced,priced",
@@ -458,14 +458,14 @@ describe("purchase filters", () => {
         lineTotal: "gte200",
       }),
     ).toEqual({
-      lineStatus: ["unpriced", "priced"],
+      expenseStatus: ["unpriced", "priced"],
       reconciliation: ["mismatch", "unknown"],
       documentPresenceFilter: "none",
       expenseTotalMin: 200,
     });
   });
 
-  it("passes exact line-total bounds through for server coercion", () => {
+  it("passes exact Expense-total bounds through for server coercion", () => {
     expect(build({ lineTotalMin: "-25", lineTotalMax: "500" })).toEqual({
       expenseTotalMin: "-25",
       expenseTotalMax: "500",
@@ -495,7 +495,7 @@ describe("purchase filters", () => {
       getEntityFilters("purchase"),
     );
     expect(columnBacked.map((spec) => spec.columnId)).toEqual([
-      "charge",
+      "purchase",
       "vendor",
       "orderId",
       "date",
@@ -538,7 +538,7 @@ describe("purchase filters", () => {
   it("round-trips a ?vendor= scope through the URL", () => {
     // The point of the manifest entry: the param survives the route's schema
     // fragment, decodes into the multi column's ARRAY state, and re-encodes to
-    // the same key — so a shared link lands on the same charges.
+    // the same key — so a shared link lands on the same Purchases.
     const specs = getEntityFilters("purchase");
     const url = z
       .object(entityFilterSearchFields("purchase"))

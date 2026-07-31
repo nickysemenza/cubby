@@ -11,7 +11,7 @@ export const entityImage = z.enum([
   "RECIPE",
   "COOKBOOK",
   "PROJECT",
-  // A charge's documents — the emailed PDF invoice and/or a photo of the paper
+  // A purchase's documents — the emailed PDF invoice and/or a photo of the paper
   // slip. Same join-table machinery as the galleries above; the PDF renders in
   // an iframe rather than as a thumbnail (see `isDocumentFile`).
   "PURCHASE",

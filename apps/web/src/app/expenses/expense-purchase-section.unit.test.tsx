@@ -18,7 +18,7 @@ vi.mock("~/integrations/trpc/react", () => ({
   useTRPC: () => ({
     expense: {
       chargeContext: {
-        queryOptions: (id: string) => ({ queryKey: ["charge-context", id] }),
+        queryOptions: (id: string) => ({ queryKey: ["purchase-context", id] }),
       },
     },
   }),
@@ -51,7 +51,7 @@ vi.mock("@tanstack/react-router", () => ({
   },
 }));
 
-import { ExpenseChargeSection } from "./expense-charge-section";
+import { ExpensePurchaseSection } from "./expense-purchase-section";
 
 const expense: ExpenseOut = {
   id: unsafeExpenseShortcode("EXP-2345"),
@@ -84,14 +84,14 @@ const purchase = {
   vendorName: "Tool Nirvana",
 };
 
-describe("ExpenseChargeSection", () => {
-  it("renders the canonical purchase label as the only charge link", () => {
+describe("ExpensePurchaseSection", () => {
+  it("renders the canonical purchase label as the only purchase link", () => {
     useQueryMock.mockReturnValue({
       data: { purchase, siblings: [] },
       isPending: false,
     });
 
-    render(<ExpenseChargeSection expense={expense} />);
+    render(<ExpensePurchaseSection expense={expense} />);
 
     const chargeLink = screen.getByRole("link", { name: /#11325/ });
     expect(chargeLink).toHaveAttribute("href", "/purchases/PUR-2345");
@@ -103,7 +103,7 @@ describe("ExpenseChargeSection", () => {
     expect(screen.getAllByText("#11325")).toHaveLength(1);
   });
 
-  it("uses the canonical charge date for an orderless purchase label", () => {
+  it("uses the canonical purchase date for an orderless purchase label", () => {
     useQueryMock.mockReturnValue({
       data: {
         purchase: { ...purchase, orderId: null },
@@ -112,7 +112,7 @@ describe("ExpenseChargeSection", () => {
       isPending: false,
     });
 
-    render(<ExpenseChargeSection expense={{ ...expense, orderId: null }} />);
+    render(<ExpensePurchaseSection expense={{ ...expense, orderId: null }} />);
 
     const chargeLink = screen.getByRole("link", {
       name: /Tool Nirvana.*Jul 29, 2026/,

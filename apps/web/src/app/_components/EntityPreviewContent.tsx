@@ -1009,10 +1009,10 @@ export function ExpensePreviewContent({ expenseId }: { expenseId: string }) {
 // ── Purchase ────────────────────────────────────────────────────────────────
 
 /**
- * Cross-link to the vendor that issued a charge — the charge's primary
+ * Cross-link to the vendor that issued a purchase — the purchase's primary
  * context. `purchaseOut.vendorId` is the vendor's shortcode (per the
  * vendor/purchase shortcode cutover), denormalized alongside `vendorName` by
- * the charge query, so the cross-link needs no lookup of its own.
+ * the purchase query, so the cross-link needs no lookup of its own.
  */
 const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
   to: "/vendors/$shortcode",
@@ -1037,8 +1037,8 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
     entity: "purchase",
     routeParam: vm.id,
     icon: <EntityIcon entity="purchase" size={14} colored />,
-    // No `name` column on a charge — the shared label ladder owns this so the
-    // hovercard and every inline link read the same charge the same way.
+    // No `name` column on a purchase — the shared label ladder owns this so the
+    // hovercard and every inline link read the same purchase the same way.
     name: purchaseLabel(vm),
     tag: "purchase",
     identity: vm.date ? formatDate(vm.date) : undefined,
@@ -1051,17 +1051,17 @@ export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
         kind: "stats",
         stats: [
           {
-            // The charge's real spend. `statedTotal` rides along as a caption
+            // The purchase's real spend. `statedTotal` rides along as a caption
             // rather than a peer stat — it is what the paperwork claimed, never
             // money (see purchase.ts), and the two legitimately disagree.
-            label: "Line total",
+            label: "Expense total",
             value: formatCurrency(vm.expenseTotal),
             caption:
               vm.statedTotal != null
                 ? `of ${formatCurrency(vm.statedTotal, 0)} stated`
                 : undefined,
           },
-          { label: "Lines", value: vm.expenseCount },
+          { label: "Expenses", value: vm.expenseCount },
           {
             label: "Order #",
             value: vm.orderId ? (
@@ -1123,10 +1123,10 @@ export function toVendorCard(vm: VendorPreview): ManifestCardProps {
       {
         kind: "stats",
         stats: [
-          // `spend` is SUM(expense.cost) over this vendor's charges' lines — a
+          // `spend` is SUM(expense.cost) over this vendor's purchases' lines — a
           // rollup, never a column on the vendor row.
           { label: "Spend", value: formatCurrency(vm.spend, 0) },
-          { label: "Charges", value: vm.purchaseCount },
+          { label: "Purchases", value: vm.purchaseCount },
         ],
       },
     ],

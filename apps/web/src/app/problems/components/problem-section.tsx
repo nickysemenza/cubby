@@ -52,7 +52,7 @@ const ROUTE_NOUN: Record<string, string> = {
   "/recipes/$shortcode": "recipe",
   "/inventory/$shortcode": "inventory entry",
   "/locations/$shortcode": "location",
-  "/purchases/$shortcode": "charge",
+  "/purchases/$shortcode": "purchase",
   "/vendors/$shortcode": "vendor",
 };
 

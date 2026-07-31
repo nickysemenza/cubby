@@ -73,11 +73,11 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 **Images**
 - S3/R2-backed image upload with presigned URLs
-- Linked to products, locations, recipes, projects, or a purchase (a charge's invoice/receipt)
+- Linked to products, locations, recipes, projects, or a purchase (its invoice/receipt)
 
 **Project Tracker**
 - Household projects, tasks, and expenses (the spend ledger) — migrated from Notion into first-class entities
-- Vendor roster and per-charge `Purchase` records: order id, charge date, stated total, and the invoice PDF, with split/link/merge operations over the lines
+- Vendor roster and per-transaction `Purchase` records: order id, purchase date, stated total, and invoice PDF, with split/link/merge operations over the Expenses
 - Blocked-by dependency edges between projects and between tasks
 - Dashboard with overview/charts/data/gallery views (spending, timelines, task heatmaps, dependency graph)
 - Detail pages with full inline editing, markdown notes, and image galleries
@@ -160,7 +160,7 @@ Products can be inventoried — an **Inventory Entry** specifies the amount of a
 
 The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Expenses** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
 
-Spend itself is three entities, `Vendor ──< Purchase ──< Expense`: a **Vendor** is the roster of places money goes (identity only), a **Purchase** is **one vendor transaction** — its `orderId`, charge date, an optional `statedTotal`, and its invoice documents — and an **Expense** is a categorized line of that charge. **All money lives on `Expense`**: every `SUM(cost)` reads it alone, and `purchase.statedTotal` is never summed into spend (it's a soft reconciliation cue, and a mismatch is often correct). A partial-unique `(vendorId, orderId)` index makes one order exactly one charge. ⚠️ `Purchase` **changed meaning** in this split — the old flat ledger row is now `Expense`; see [docs/terminology.md](docs/terminology.md#vendor-vs-purchase-vs-expense).
+Spend itself is three entities, `Vendor ──< Purchase ──< Expense`: a **Vendor** is the roster of places money goes (identity only), a **Purchase** is **one vendor transaction** — its `orderId`, purchase date, an optional `statedTotal`, and its invoice documents — and an **Expense** is a categorized spend line within that Purchase. **All money lives on `Expense`**: every `SUM(cost)` reads it alone, and `purchase.statedTotal` is never summed into spend (it's a soft reconciliation cue, and a mismatch is often correct). A partial-unique `(vendorId, orderId)` index makes one order exactly one Purchase. ⚠️ `Purchase` **changed meaning** in this split — the old flat ledger row is now `Expense`; see [docs/terminology.md](docs/terminology.md#vendor-vs-purchase-vs-expense).
 
 ### Public identifiers — shortcodes
 
@@ -214,7 +214,7 @@ erDiagram
     Image ||--o{ Project : "linked to"
 
     Vendor ||--o{ Purchase : "issued"
-    Purchase ||--o{ Expense : "has lines"
+    Purchase ||--o{ Expense : "has expenses"
     Image ||--o{ Purchase : "documents"
     Product ||--o{ Expense : "bought as"
 ```
@@ -500,7 +500,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Recently shipped
 
-- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is one vendor transaction, holding the order id, charge date, an optional never-summed `statedTotal`, and the invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight, so importers didn't change. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`. Two Problems detectors became unrepresentable and were deleted (`findOrdersWithPartialVendor`, `findVendorSpellingVariants`).
+- **Vendor / Purchase / Expense split** — the flat spend ledger became `Vendor ──< Purchase ──< Expense`. The old ledger row is now **`Expense`** (routes `/expenses`, MCP `*_expense(s)` tools); **`Purchase`** is one vendor transaction, holding the order id, purchase date, an optional never-summed `statedTotal`, and the invoice PDF; **`Vendor`** is a real roster. Create/update inputs still take `vendor` (a name) and `orderId` and resolve both on first sight, so importers didn't change. New operations: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`. Two Problems detectors became unrepresentable and were deleted (`findOrdersWithPartialVendor`, `findVendorSpellingVariants`).
 - **Project tracker migration + maturation** — the household projects/tasks/expenses databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/expenses`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
 - **Unified planning calendar** — meals, task ranges, planned/actual expenses, and project spans share a filterable month view with a day drawer, quick-add flows, and selective drag-to-reschedule. The Meals calendar tab reuses the same implementation.
 - **Meal planning v1** — plan recipes onto a calendar (month + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).

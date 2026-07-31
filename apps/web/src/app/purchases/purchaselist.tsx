@@ -35,12 +35,12 @@ import { ReconciliationBadge } from "./purchase-reconciliation";
 const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
 
 /**
- * The charges table — one row per vendor transaction.
+ * The purchases table — one row per vendor transaction.
  *
  * Columns split the two totals on purpose: `statedTotal` is what the paperwork
  * claimed and is NEVER summed (no footer total on that column — a column sum of
  * stated totals would read as spend, which it explicitly isn't), while
- * `expenseTotal` is `SUM(expense.cost)` and IS the charge's spend.
+ * `expenseTotal` is `SUM(expense.cost)` and IS the purchase's spend.
  */
 export function PurchaseList() {
   const api = useTRPC();
@@ -48,7 +48,7 @@ export function PurchaseList() {
 
   // Runtime roster for the manifest's `vendor` spec (`optionsKey: "vendor"`).
   // The option's VALUE is the vendor id — the spec is `idMulti` on `vendorId`,
-  // so a name here would be branded into a lie and match nothing. The charge
+  // so a name here would be branded into a lie and match nothing. The purchase
   // count rides in `hint`, never the label (the label is what filter chips and
   // the collapsed multi-select summary interpolate, and what the type-ahead
   // matches on), and each option keeps the vendor's brand mark.
@@ -77,10 +77,10 @@ export function PurchaseList() {
     () => [
       // A purchase has no `name`, so this is its name column: the identity
       // ladder from `purchaseLabel` (order id, else vendor · date), linked to
-      // the charge itself and carrying the order-id substring search.
+      // the purchase itself and carrying the order-id substring search.
       columnHelper.accessor((row) => purchaseLabel(row), {
-        id: "charge",
-        header: "Charge",
+        id: "purchase",
+        header: "Purchase",
         enableSorting: false,
         meta: { className: "w-56", mobile: { slot: "title", priority: 0 } },
         cell: (info) => (
@@ -114,7 +114,7 @@ export function PurchaseList() {
         },
       }),
       // Raw vendor id, mono — the value a receipt prints. Its header control is
-      // the presence worklist: the ~40% of charges with no order id at all.
+      // the presence worklist: the ~40% of purchases with no order id at all.
       createTextColumn(columnHelper, "orderId", {
         header: "Order #",
         className: "w-40 font-mono",
@@ -126,7 +126,7 @@ export function PurchaseList() {
       }),
       // Hand-rolled rather than `createCurrencyColumn`: that factory footers a
       // column total, and a summed `statedTotal` column would read as spend.
-      // Stated totals are a per-charge reconciliation cue only.
+      // Stated totals are a per-purchase reconciliation cue only.
       columnHelper.accessor((row) => row.statedTotal, {
         id: "statedTotal",
         header: "Stated",
@@ -142,7 +142,7 @@ export function PurchaseList() {
       }),
       columnHelper.accessor((row) => row.expenseCount, {
         id: "expenseCount",
-        header: "Lines",
+        header: "Expenses",
         meta: {
           numeric: true,
           className: "w-32",
@@ -162,9 +162,9 @@ export function PurchaseList() {
           );
         },
       }),
-      // THIS is the charge's spend, so it does carry a footer total.
+      // THIS is the purchase's spend, so it does carry a footer total.
       createCurrencyColumn(columnHelper, "expenseTotal", {
-        header: "Line total",
+        header: "Expense total",
         className: "w-28",
         zeroAsEmpty: false,
         signedTone: true,
@@ -228,7 +228,7 @@ export function PurchaseList() {
     () => data.reduce((sum, row) => sum + row.expenseTotal, 0),
     [data],
   );
-  const loadedLines = useMemo(
+  const loadedExpenses = useMemo(
     () => data.reduce((sum, row) => sum + row.expenseCount, 0),
     [data],
   );
@@ -236,9 +236,9 @@ export function PurchaseList() {
   return (
     <div>
       <Grid cols="summary" className="mb-4">
-        <StatTile label="Charges">{totalCount ?? 0}</StatTile>
+        <StatTile label="Purchases">{totalCount ?? 0}</StatTile>
         <StatTile label="Shown">{data.length}</StatTile>
-        <StatTile label="Lines (shown)">{loadedLines}</StatTile>
+        <StatTile label="Expenses (shown)">{loadedExpenses}</StatTile>
         <StatTile label="Spend (shown)">
           {formatCurrency(loadedTotal, 0)}
         </StatTile>

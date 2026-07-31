@@ -398,16 +398,16 @@ export const entityManifest = {
     searchable: false,
     countable: true,
     relationships: [],
-    // Deletable in the app (blocked while live charges reference it), and
+    // Deletable in the app (blocked while live purchases reference it), and
     // mergeable — two roster rows for one real vendor is a reported defect.
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No delete: `deleteVendors` refuses while live charges still reference the
+    // No delete: `deleteVendors` refuses while live purchases still reference the
     // vendor, and an agent has no way to rehome them.
     mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
   },
   // ONE vendor transaction — identity (`vendorId` + optional `orderId`), the
-  // charge date, an optional `statedTotal` that is never summed into spend, and
+  // purchase date, an optional `statedTotal` that is never summed into spend, and
   // its documents. Money lives on the expenses below it.
   purchase: {
     dbTable: "Purchase",
@@ -423,7 +423,7 @@ export const entityManifest = {
       imageGallery("PurchaseImage", "purchaseId"),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No delete: soft-deleting a charge nulls `purchaseId` on real money —
+    // No delete: soft-deleting a purchase nulls `purchaseId` on real money —
     // stays UI-only. The restructuring ops (split/link/merge) are NOT missing
     // from this list because they're withheld — they aren't CRUD ops at all, so
     // this roster (get/list/create/update) doesn't cover them. They're exposed
@@ -442,7 +442,7 @@ export const entityManifest = {
     searchable: true,
     countable: true,
     relationships: [
-      path("purchase", "Charge", "purchase", out("Expense.purchaseId")),
+      path("purchase", "Purchase", "purchase", out("Expense.purchaseId")),
       path("project", "Project", "project", out("Expense.projectId")),
       path("product", "Product", "product", out("Expense.productId")),
     ],

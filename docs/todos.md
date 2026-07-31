@@ -321,7 +321,7 @@ Roughly priority order.
   `bulk_set_expense_trade` / `bulk_set_expense_cost_type` classifiers); and
   `Vendor`/`Purchase` now have a full MCP toolset (`list_`/`get_`/`create_`/
   `update_` for both, delete deliberately withheld), so an agent-driven import
-  can read the roster and set a charge's `statedTotal` without SQL or the web UI.
+  can read the roster and set a purchase's `statedTotal` without SQL or the web UI.
   **Still open:** quick-capture Add Task/Project/Expense in the navbar-create +
   palette registry (House is the only domain with no quick-add path); a House
   tile on the home dashboard over the currently-unused `task.summary`.
@@ -392,13 +392,13 @@ are an inventory convenience, not things with a cost basis or a lifecycle. Linki
 a $171 clamp run to a $5 bucket would make "net cost" mean two different things
 depending on the product. Those rows stay unlinked — the designed default.
 
-**The `Receipt` phase SHIPPED as `Vendor ──< Purchase ──< Expense`** — the charge got
+**The `Receipt` phase SHIPPED as `Vendor ──< Purchase ──< Expense`** — the purchase got
 its own table rather than a receipt hanging off the ledger row, so `Vendor` is a real
-roster and `Purchase` holds the order id, charge date, `statedTotal`, notes, and its
+roster and `Purchase` holds the order id, purchase date, `statedTotal`, notes, and its
 documents (`PurchaseImage`, `attach_file` with `entityType: "purchase"`). The emailed
-PDF invoice finally has a home, and reconciling one charge against N rows is a
+PDF invoice finally has a home, and reconciling one purchase against N rows is a
 single-row comparison (`statedTotal` vs `SUM(expense.cost)`, surfaced as the
-`chargesNotReconciling` Problems detector) instead of a reconstructed
+`purchasesNotReconciling` Problems detector) instead of a reconstructed
 `GROUP BY (vendor, orderId)`.
 Also landed: `linkExpensesToPurchase`, `splitExpense`, `mergePurchases`, and the
 deletion of two now-unrepresentable Problems detectors
@@ -463,11 +463,11 @@ Deferred phases — each purely additive on top of v1, with its promotion trigge
   `expenseId?` soft-link) — was `ReceiptLine`. Optional **SKU-level** itemization,
   **pure annotation**: rollups only ever read `Expense`, lines need no product, and a
   sum mismatch is a soft display-level flag, never enforced. Note `Expense` already
-  covers *categorized* splitting of a charge (that's what `splitExpense` is for), so
+  covers *categorized* splitting of a purchase (that's what `splitExpense` is for), so
   the only thing left here is store SKUs/quantities. **Trigger**: actually wanting
   them.
 - [ ] **`ExpenseProduct`** join + `quantity`, replacing `expense.productId` (was
-  `PurchaseProduct`, renamed since `Purchase` now means the charge). **Trigger**: one
+  `PurchaseProduct`, renamed since `Purchase` now means the purchase). **Trigger**: one
   ledger row genuinely needing 2+ products (combo kit) that `splitExpense` can't
   reasonably split, or a correct unit-price observation on a multi-quantity buy.
   Mechanical migration: insert-select from the non-null column, drop it, update read
@@ -501,7 +501,7 @@ is not a new feature; it is Phase 3 of the purchase-import skill, now stated exp
 there. Two classes are genuinely never products: **service/labor lines** (no object, and
 `Expense.productId` is an `acquisition` edge whose net-cost derivation a labor line would
 inflate — work *about* a product is `Task.subjectProductId`) and **installments**
-(`hotel payment 3/11`, `retaining wall 2/2` — that grouping is the charge and the project).
+(`hotel payment 3/11`, `retaining wall 2/2` — that grouping is the purchase and the project).
 
 - [ ] **No `software` slot in `productCategoryValues`** — blocks productizing subscriptions,
   which are the only genuinely high-frequency repeat purchases in the ledger. The enum is
@@ -513,8 +513,8 @@ inflate — work *about* a product is `Task.subjectProductId`) and **installment
   value + a theme entry. **Trigger**: wanting per-subscription lifetime spend
   (`chief architect monthly` is $1,791 across 9 rows today and has nowhere to roll up).
   Keep the recurrence *schedule* off `Product` — the product is the license, the payments
-  are expenses, same rule as 11 progress payments being 11 charges.
-- [ ] **`servicesWithProduct` advisory detector** — mirrors `chargesNotReconciling` in shape
+  are expenses, same rule as 11 progress payments being 11 purchases.
+- [ ] **`servicesWithProduct` advisory detector** — mirrors `purchasesNotReconciling` in shape
   (soft worklist, not an error list). Reports **zero** on the live ledger today, so any row
   appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
   constraint: `costType` is an operator-assigned *reporting* dimension and is already
@@ -556,7 +556,7 @@ tools" is a query, not a place); **disposition status enum** (the $0-exit conven
 makes it derivable); **line items as financial truth** — still rejected, and *not* what
 the `Vendor ──< Purchase ──< Expense` split did. The rejected shape puts a **new
 money-bearing level below** the ledger row, so a row's cost becomes a sum over its
-children and every row needs itemizing to be trusted — unwarranted when 95% of charges
+children and every row needs itemizing to be trusted — unwarranted when 95% of purchases
 are single-trade. What shipped adds a header **above** the row that carries **no
 money**: the ledger row (now `Expense`) is still the money, untouched, and `Purchase`
 holds identity plus a `statedTotal` that is **never summed into spend**. Spend is
@@ -678,14 +678,14 @@ unit-mapping ids, background job/batch ids, and the dev-only diagnostics in
 `problems.tools.ts` (an orphaned embedding may name a row that no longer
 resolves, and a liveness violation's `sourceTable` can be a join table).
 
-### BUG: a charge minted from an expense gets no date (propagation fixed)
+### BUG: a purchase minted from an expense gets no date (propagation fixed)
 
 **Found 2026-07-31** during the 22-receipt tool/3D-printer ingest, which created
-the first 15 charges ever minted through the live code path.
+the first 15 purchases ever minted through the live code path.
 
 **Symptom.** `create_expense` / `update_expense` with a `vendor` name (± `orderId`)
-find-or-creates the `Purchase`, and that new charge always lands with
-`date: null` — even though the expense carries a real `date`. Seven charges in
+find-or-creates the `Purchase`, and that new purchase always lands with
+`date: null` — even though the expense carries a real `date`. Seven purchases in
 that ingest came back dateless and had to be backfilled by hand with
 `update_purchase`.
 
@@ -707,12 +707,12 @@ equivalent test, comment, or TODO for `date` anywhere. The two nulls also have
 (`statedTotalPresenceFilter: "none"`), a null `date` is pure loss.
 
 **Impact.** `purchaseList`'s `dateFrom`/`dateTo` (purchase.ts:350-352) silently
-exclude a dateless charge, and the default `date desc` sort has nothing to order
-it by — it goes quietly missing from date-filtered views. For a charge with no
+exclude a dateless purchase, and the default `date desc` sort has nothing to order
+it by — it goes quietly missing from date-filtered views. For a purchase with no
 `orderId` either, `purchaseLabel` (`lib/purchase-label.ts:28-30`) also degrades to
 a bare vendor name.
 
-**Blast radius today: zero.** 0 of 862 live charges have a null date — but only
+**Blast radius today: zero.** 0 of 862 live purchases have a null date — but only
 because 847 came from the one-shot 2026-07-29 backfill (which set dates directly)
 and today's 15 were hand-corrected. Latent, not active. Low urgency, cheap fix.
 
@@ -720,13 +720,13 @@ and today's 15 were hand-corrected. Latent, not active. Low urgency, cheap fix.
 
 - [x] **Propagate it.** Shipped 2026-07-31. `resolveCharge` now carries the
   expense's effective date into `findOrCreatePurchase`, covering both expense
-  creation and attaching a vendor later without overwriting an existing charge.
-  Seeding the charge date from the ledger date is safe in a way seeding
+  creation and attaching a vendor later without overwriting an existing purchase.
+  Seeding the purchase date from the ledger date is safe in a way seeding
   `statedTotal` is not: nothing reconciles against
   `purchase.date`, so a day's imprecision costs nothing, whereas a guessed stated
-  total would manufacture false `chargesNotReconciling` flags. `update_purchase`
+  total would manufacture false `purchasesNotReconciling` flags. `update_purchase`
   still overrides when the receipt disagrees. Integration coverage now asserts
-  both implicit creation paths and live-charge-only `purchaseDate` resolution.
+  both implicit creation paths and live-purchase-only `purchaseDate` resolution.
 - [ ] **Then consider making `Purchase.date` NOT NULL** (`db/schema.ts:1028`),
   which is the real intent. Nothing to backfill (0 nulls). Consequences to handle,
   not surprises to discover:

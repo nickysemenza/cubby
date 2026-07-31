@@ -5,7 +5,7 @@ import { createPaginatedResponseSchema } from "./pagination";
 
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:
- * a vendor issues charges (`purchase`), each of which carries one or more
+ * a vendor issues purchases (`purchase`), each of which carries one or more
  * categorized lines of spend (`expense`). All money lives on `expense`; a
  * vendor holds identity only.
  *
@@ -92,7 +92,7 @@ export type VendorOptionsOut = z.infer<typeof vendorOptionsOut>;
  * `findOrCreateVendor` matches names exactly, so an importer meeting a new
  * spelling mints a new roster row; nothing on the write path can safely decide
  * two spellings are the same vendor. This is how a human says so. See
- * `mergeVendors` in repo/vendor.ts for what happens to charges the two vendors
+ * `mergeVendors` in repo/vendor.ts for what happens to purchases the two vendors
  * hold under the same order id.
  */
 export const mergeVendorsInput = z.object({

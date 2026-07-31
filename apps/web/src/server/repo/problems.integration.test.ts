@@ -1419,16 +1419,16 @@ describe("problems — charges not reconciling", () => {
       100,
     );
 
-    const { chargesNotReconciling } = await findFastProblems(ctx.db);
+    const { purchasesNotReconciling } = await findFastProblems(ctx.db);
 
     // The detector's id is the canonical public purchase id.
     // Ordered by the size of the discrepancy: $200 before $15.
-    expect(chargesNotReconciling.map((c) => c.id)).toEqual([
+    expect(purchasesNotReconciling.map((c) => c.id)).toEqual([
       bigCharge.id,
       smallCharge.id,
     ]);
-    expect(chargesNotReconciling.map((c) => c.id)).not.toContain(okCharge.id);
-    expect(chargesNotReconciling[1]).toMatchObject({
+    expect(purchasesNotReconciling.map((c) => c.id)).not.toContain(okCharge.id);
+    expect(purchasesNotReconciling[1]).toMatchObject({
       id: smallCharge.id,
       vendorName: "Reconcile Depot",
       orderId: "RD-SMALL",
@@ -1449,8 +1449,8 @@ describe("problems — charges not reconciling", () => {
       orderId: "NP-1",
     });
 
-    const { chargesNotReconciling } = await findFastProblems(ctx.db);
-    expect(chargesNotReconciling).toEqual([]);
+    const { purchasesNotReconciling } = await findFastProblems(ctx.db);
+    expect(purchasesNotReconciling).toEqual([]);
   });
 
   it("sums only live lines, so emptying one re-opens the discrepancy", async () => {
@@ -1469,12 +1469,12 @@ describe("problems — charges not reconciling", () => {
     const charge = await setStated(kept.purchaseId as PurchaseShortcode, 100);
 
     const before = await findFastProblems(ctx.db);
-    expect(before.chargesNotReconciling).toEqual([]);
+    expect(before.purchasesNotReconciling).toEqual([]);
 
     await deleteExpenses(ctx.db, [refunded.id], ctx.actor);
 
     const after = await findFastProblems(ctx.db);
-    expect(after.chargesNotReconciling).toMatchObject([
+    expect(after.purchasesNotReconciling).toMatchObject([
       {
         id: charge.id,
         statedTotal: 100,
@@ -1493,11 +1493,11 @@ describe("problems — charges not reconciling", () => {
     });
     await setStated(line.purchaseId as PurchaseShortcode, 100);
 
-    const { chargesNotReconciling } = await findFastProblems(ctx.db);
-    expect(chargesNotReconciling).toHaveLength(1);
+    const { purchasesNotReconciling } = await findFastProblems(ctx.db);
+    expect(purchasesNotReconciling).toHaveLength(1);
     // A mismatch is frequently correct (a partial refund), so it must never
     // reach `totalProblems` or the navbar badge.
-    expect(PROBLEM_CLASS.chargesNotReconciling).not.toBe("defect");
-    expect(sumProblemSections({ chargesNotReconciling }, "defect")).toBe(0);
+    expect(PROBLEM_CLASS.purchasesNotReconciling).not.toBe("defect");
+    expect(sumProblemSections({ purchasesNotReconciling }, "defect")).toBe(0);
   });
 });

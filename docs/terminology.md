@@ -10,6 +10,18 @@ sometimes wears three different names across layers.
 > lives in Rust/WASM (`recipebridge`), not TS. See [CLAUDE.md](../CLAUDE.md) for
 > where logic belongs. This doc is about *names*, not where logic runs.
 
+## Naming policy
+
+- Entity nouns are always **Vendor**, **Purchase**, and **Expense** in UI copy,
+  MCP contracts, and documentation: `Vendor ──< Purchase ──< Expense`.
+- A **Purchase** is one vendor transaction. Do not use “charge” as an alias for
+  the entity. “Charge” remains valid only in its ordinary sense, such as a card
+  charge or delivery charge.
+- An **Expense** is the categorized spend line within a Purchase and is the only
+  place money lives. “Expense line” or, after that relationship has been made
+  explicit, “line” is acceptable shorthand; a bare “line” must not introduce
+  the entity on its own.
+
 ---
 
 ## Core entities
@@ -30,9 +42,9 @@ sometimes wears three different names across layers.
 | Project | "Project" | `Project` / `project` | `Project` | A household undertaking (furniture, renovation, …) grouping Tasks and Expenses; blocked-by edges to other Projects. |
 | Task | "Task" | `Task` / `task` | `Task` | A unit of work, optionally inside a Project; blocked-by edges to other Tasks. |
 | Vendor | "Vendor" | `Vendor` / `vendor` | `Vendor` | The roster of places money goes (name unique, `kind`, website, notes). Identity only — no money. |
-| Purchase | "Purchase" / "Charge" | `Purchase` / `purchase` | `Purchase` | **ONE vendor transaction.** Identity (`vendorId` + optional `orderId`), charge date, an optional never-summed `statedTotal`, and its documents. ⚠️ Renamed meaning — see below. |
+| Purchase | "Purchase" | `Purchase` / `purchase` | `Purchase` | **ONE vendor transaction.** Identity (`vendorId` + optional `orderId`), purchase date, an optional never-summed `statedTotal`, and its documents. ⚠️ Renamed meaning — see below. |
 | Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
-| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (a charge's invoice). |
+| Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice). |
 
 ---
 
@@ -119,7 +131,7 @@ The household project tracker (migrated from Notion) is a self-contained module:
   blocked-by structure.
 - **Expense** — the spend ledger (route `/expenses`). `future = true` marks
   planned (not yet actual) spend. Free-text `name` + `cost`, with an optional
-  `productId` link (bridge v1) and an optional `purchaseId` naming the charge it
+  `productId` link (bridge v1) and an optional `purchaseId` naming the Purchase it
   came from.
 
 ---
@@ -129,7 +141,7 @@ The household project tracker (migrated from Notion) is a self-contained module:
 > ⚠️ **`Purchase` changed meaning.** It used to *be* the ledger line — a name, a
 > cost, a date, a trade. That row is now **`Expense`**. Any older note, commit
 > message, or agent transcript saying "purchase" about a line of spend means
-> `Expense`. `Purchase` today is the *transaction* the line was part of.
+> `Expense`. `Purchase` today is the *transaction* the Expense was part of.
 
 ```
 Vendor ──< Purchase ──< Expense
@@ -143,28 +155,28 @@ Vendor ──< Purchase ──< Expense
   are correlated rollups, not columns. Deliberately thin: contractor metadata
   (license, COI) and vendor-level documents (W-9, contracts) are the natural
   follow-ons, and would arrive as additive columns.
-- **Purchase** (`Purchase`) — **ONE vendor transaction**, i.e. a charge.
+- **Purchase** (`Purchase`) — **ONE vendor transaction**.
   `vendorId` is NOT NULL; `orderId` is the vendor's own free-text order/receipt
   id, unique per vendor via a **partial-unique `(vendorId, orderId)` index where
-  `orderId IS NOT NULL`** — one order is one charge, which is why there is no
-  `splitPurchase`. About 40% of charges have no order id at all (a contractor's
+  `orderId IS NOT NULL`** — one order is one Purchase, which is why there is no
+  `splitPurchase`. About 40% of Purchases have no order id at all (a contractor's
   progress payment, a farmers-market run).
-  - `purchase.date` is the **charge** date; `expense.date` stays the **ledger**
+  - `purchase.date` is the **purchase transaction** date; `expense.date` stays the **ledger**
     date that drives monthly buckets and project windows. An invoice dated the
     3rd can clear on the 8th, and they may differ.
   - `statedTotal` is what the paperwork *claimed*, in dollars. It is **never
-    summed into spend** — it is purely a reconciliation cue against the charge's
-    lines, and a mismatch is often correct (a partial refund reduces a line
-    without changing what the charge stated). `reconcilePurchase` returns
+    summed into spend** — it is purely a reconciliation cue against the Purchase's
+    Expenses, and a mismatch is often correct (a partial refund reduces an Expense
+    without changing what the purchase paperwork stated). `reconcilePurchase` returns
     `unknown | match | mismatch` as a **soft** flag; nothing rejects a write and
     nothing back-computes a cost from it.
-  - A charge is **not** a contract: 11 progress payments to one contractor are
+  - A Purchase is **not** a contract: 11 progress payments to one contractor are
     **11 purchases**, not one. The contract-level rollup already exists and is
     `Project`. Nor is it guaranteed 1:1 with a *card charge* — Amazon bills per
     shipment; that's the deferred `Payment` axis.
-- **Expense** (`Expense`) — the categorized line of spend, and **the only place
+- **Expense** (`Expense`) — the categorized spend line within a Purchase, and **the only place
   money lives**. Every `SUM(cost)` in the codebase reads `Expense` alone.
-  `purchaseId` is nullable: a row with no charge attached is exactly "no vendor
+  `purchaseId` is nullable: a row with no Purchase attached is exactly "no vendor
   recorded", since `purchase.vendorId` is NOT NULL.
 
 **API shape vs. columns.** `expense.vendor` and `expense.orderId` are no longer

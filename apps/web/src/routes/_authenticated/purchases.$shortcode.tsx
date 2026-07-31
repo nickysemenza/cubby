@@ -22,10 +22,12 @@ export const Route = createFileRoute("/_authenticated/purchases/$shortcode")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <Page variant="list" title="Charge not found" entity="purchase" compact>
+    <Page variant="list" title="Purchase not found" entity="purchase" compact>
       <Empty>
-        <EmptyTitle>Charge not found</EmptyTitle>
-        <EmptyDescription>This charge is no longer available.</EmptyDescription>
+        <EmptyTitle>Purchase not found</EmptyTitle>
+        <EmptyDescription>
+          This purchase is no longer available.
+        </EmptyDescription>
       </Empty>
     </Page>
   ),

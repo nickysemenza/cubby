@@ -51,7 +51,7 @@ const CANDIDATE_PAGE_SIZE = 100;
  *
  * `vendorPresenceFilter: "none"` ORs with `vendorId` rather than ANDing (see
  * `expenseFilterFields`), so the default is literally one filter: "this vendor
- * OR no charge recorded". Deliberately NOT scoped by `orderId` — the contractor
+ * OR no purchase recorded". Deliberately NOT scoped by `orderId` — the contractor
  * case this operation exists for is an invoice whose lines never got an order
  * id, so filtering to order-bearing rows would hide exactly the rows we need.
  */
@@ -59,21 +59,21 @@ type CandidateScope = "vendorOrUnattached" | "unattached" | "any";
 
 const SCOPE_OPTIONS: FilterableComboboxItem[] = [
   { value: "vendorOrUnattached", label: "This vendor or unattached" },
-  { value: "unattached", label: "Unattached lines only" },
-  { value: "any", label: "Any ledger line" },
+  { value: "unattached", label: "Unattached expenses only" },
+  { value: "any", label: "Any expense" },
 ];
 
 /**
- * Attach existing ledger lines to this charge — one invoice spanning trades
+ * Attach existing ledger lines to this purchase — one invoice spanning trades
  * (Flow Form Plumbing's $2,516 covering rough-in *and* fixtures, which is two
- * expenses with different `trade` values under one charge).
+ * expenses with different `trade` values under one purchase).
  *
  * Explicitly not "group by order id": a contractor's invoice usually has no
  * order id at all, which is why the picker's default scope is vendor-or-
  * unattached rather than anything keyed on `orderId`.
  *
  * Nothing is pre-validated here beyond the scoping — `linkExpensesToPurchase`
- * only refuses on a missing charge, and that refusal surfaces as this dialog's
+ * only refuses on a missing purchase, and that refusal surfaces as this dialog's
  * error toast rather than as a rule duplicated in the UI.
  */
 export function LinkExpensesDialog({
@@ -115,9 +115,9 @@ export function LinkExpensesDialog({
     enabled: open,
   });
 
-  // Lines already filed under THIS charge are its existing lines, not
-  // candidates. Lines under some OTHER charge stay in the list on purpose (they
-  // move off it) — the row's Charge column is what makes that visible.
+  // Lines already filed under THIS purchase are its existing lines, not
+  // candidates. Lines under some OTHER purchase stay in the list on purpose (they
+  // move off it) — the row's Purchase column is what makes that visible.
   const candidates = useMemo(
     () =>
       candidatesQuery.data?.items.filter(
@@ -137,7 +137,7 @@ export function LinkExpensesDialog({
 
   const linkMutation = useActionMutation({
     mutationFn: api.purchase.link.mutationOptions,
-    success: "Lines attached to this charge",
+    success: "Expenses attached to this purchase",
     invalidateKeys: purchaseMutationInvalidateKeys,
     onSuccess: () => {
       setSelected([]);
@@ -160,12 +160,13 @@ export function LinkExpensesDialog({
     >
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>Attach lines to {purchaseLabel(purchase)}</DialogTitle>
+          <DialogTitle>
+            Attach expenses to {purchaseLabel(purchase)}
+          </DialogTitle>
           <DialogDescription>
-            One invoice can span trades — a plumber's single charge covering
-            rough-in and fixtures is two ledger lines under one charge.
-            Attaching moves each line onto this charge (and off whatever charge
-            it was on).
+            One purchase can span trades — a plumber&apos;s single transaction
+            covering rough-in and fixtures can have two Expenses. Attaching
+            moves each expense onto this purchase and off its current purchase.
           </DialogDescription>
         </DialogHeader>
 
@@ -173,7 +174,7 @@ export function LinkExpensesDialog({
           <Input
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search line names…"
+            placeholder="Search expense names…"
             className="flex-1"
           />
           <FilterableCombobox
@@ -189,29 +190,29 @@ export function LinkExpensesDialog({
         </Row>
 
         {candidatesQuery.isPending ? (
-          <Description>Loading lines…</Description>
+          <Description>Loading expenses…</Description>
         ) : candidates.length === 0 ? (
           <Empty variant="minimal" className="py-6">
-            <EmptyTitle>No lines to attach</EmptyTitle>
+            <EmptyTitle>No expenses to attach</EmptyTitle>
             <EmptyDescription>
-              Nothing matches this scope. Widen it to any ledger line, or clear
-              the search.
+              Nothing matches this scope. Widen it to any expense, or clear the
+              search.
             </EmptyDescription>
           </Empty>
         ) : (
           // `table-fixed` (the primitive's default) with sized columns, so the
           // picker always fits the dialog and long names truncate instead of
-          // pushing the Charge column out of view.
+          // pushing the Purchase column out of view.
           <Table containerClassName="max-h-72 overflow-y-auto border border-[var(--border)]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8" />
-                <TableHead>Line</TableHead>
+                <TableHead>Expense</TableHead>
                 <TableHead className="w-24">Date</TableHead>
                 <TableHead className="w-20 text-right">Cost</TableHead>
                 <TableHead className="w-36">Trade</TableHead>
                 <TableHead className="w-32">Project</TableHead>
-                <TableHead className="w-24">Charge</TableHead>
+                <TableHead className="w-24">Purchase</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -269,12 +270,12 @@ export function LinkExpensesDialog({
                       <NoneValue />
                     )}
                   </TableCell>
-                  {/* Which charge the line is on TODAY — the one thing that
+                  {/* Which purchase the line is on TODAY — the one thing that
                       makes "attach" honest, since attaching an already-filed
-                      line moves it off that charge. */}
+                      line moves it off that purchase. */}
                   <TableCell className="truncate text-muted-foreground">
                     {row.purchaseId ? (
-                      (row.vendor ?? "another charge")
+                      (row.vendor ?? "another purchase")
                     ) : (
                       <span className="font-mono text-2xs text-slate uppercase tracking-wider">
                         unattached
@@ -288,8 +289,8 @@ export function LinkExpensesDialog({
         )}
 
         <Description size="xs">
-          A payment schedule is NOT one invoice — separate charges stay separate
-          purchases. Attach only lines that are genuinely part of this one
+          A payment schedule is not one Purchase — separate transactions stay
+          separate Purchases. Attach only Expenses that genuinely belong to this
           transaction.
         </Description>
 
@@ -300,7 +301,7 @@ export function LinkExpensesDialog({
             </span>
             {selected.length > 0 && (
               <Description size="2xs">
-                Charge total would go to{" "}
+                Purchase expense total would go to{" "}
                 {formatCurrency(purchase.expenseTotal + selectedTotal)}
               </Description>
             )}

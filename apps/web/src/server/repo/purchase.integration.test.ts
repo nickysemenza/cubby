@@ -770,7 +770,7 @@ describe("purchase repository — splitExpense", () => {
     expect(reconcilePurchase(charge)).toBe("mismatch");
 
     // The soft worklist that surfaces this now lives in Problems
-    // (`findChargesNotReconciling`), which does the comparison in SQL — see
+    // (`findPurchasesNotReconciling`), which does the comparison in SQL — see
     // problems.integration.test.ts. `reconcilePurchase` above is the shared
     // verdict both sides use, so asserting it here is asserting the same rule.
   });
@@ -1380,19 +1380,21 @@ describe("purchase repository — purchase worklist filters", () => {
   it("filters the disjoint empty, unpriced, and fully-priced line states", async () => {
     const seeded = await seed();
 
-    expect(await ids({ lineStatus: "empty" })).toEqual(new Set([seeded.empty]));
-    expect(await ids({ lineStatus: "unpriced" })).toEqual(
+    expect(await ids({ expenseStatus: "empty" })).toEqual(
+      new Set([seeded.empty]),
+    );
+    expect(await ids({ expenseStatus: "unpriced" })).toEqual(
       new Set([seeded.unpriced]),
     );
-    expect(await ids({ lineStatus: "priced" })).toEqual(
+    expect(await ids({ expenseStatus: "priced" })).toEqual(
       new Set([seeded.match, seeded.mismatch, seeded.credit]),
     );
-    expect(await ids({ lineStatus: ["unpriced", "priced"] })).toEqual(
+    expect(await ids({ expenseStatus: ["unpriced", "priced"] })).toEqual(
       new Set([seeded.unpriced, seeded.match, seeded.mismatch, seeded.credit]),
     );
 
     const unpriced = (
-      await purchaseList(ctx.db, { lineStatus: "unpriced" }, [], page)
+      await purchaseList(ctx.db, { expenseStatus: "unpriced" }, [], page)
     ).data[0];
     expect(unpriced?.expenseCount).toBe(1);
     expect(unpriced?.unpricedExpenseCount).toBe(1);

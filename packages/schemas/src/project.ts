@@ -784,16 +784,16 @@ const expenseFields = {
     .string()
     .nullable()
     .describe(
-      'The vendor\'s order/receipt id — e.g. Amazon "111-1234567-1234567", Home Depot "WN63446464". Free text; formats differ per retailer. Rows sharing one orderId belong to the same charge, which is now a real `Purchase` row rather than a two-column string match.',
+      'The vendor\'s order/receipt id — e.g. Amazon "111-1234567-1234567", Home Depot "WN63446464". Free text; formats differ per retailer. Expenses sharing one orderId belong to the same Purchase rather than a two-column string match.',
     ),
 };
 
 const expenseCreateShape = {
   ...expenseFields,
   /**
-   * Attach directly to a known charge, bypassing the `{vendor, orderId}`
+   * Attach directly to a known Purchase, bypassing the `{vendor, orderId}`
    * name-resolution path. The precise form, for callers that already hold a
-   * purchase id (the purchase detail page's "add a line"); `vendor`/`orderId`
+   * Purchase id (the Purchase detail page's "add an Expense"); `vendor`/`orderId`
    * stay the ergonomic form for importers and quick-add. When both are given,
    * this wins — an explicit id is never a guess.
    */
@@ -879,9 +879,9 @@ export const expenseFilterFields = {
    */
   vendorId: oneOrMany(vendorShortcode).optional(),
   /**
-   * `"none"` matches expenses with no charge attached — the
+   * `"none"` matches expenses with no purchase attached — the
    * where-did-this-come-from worklist. Since `purchase.vendorId` is NOT NULL,
-   * "no vendor" and "no charge" are the same predicate: `purchaseId IS NULL`.
+   * "no vendor" and "no purchase" are the same predicate: `purchaseId IS NULL`.
    * ORs with `vendorId` rather than ANDing, so "Amazon or no vendor recorded" is
    * one filter.
    */
@@ -983,8 +983,8 @@ export const expenseFilterFields = {
    */
   orderId: oneOrMany(z.string()).optional(),
   /**
-   * Exact match on the charge itself — the "show me the rest of this charge"
-   * scope, seeded from the URL only (a deep link from the charge's own detail
+   * Exact match on the purchase itself — the "show me the rest of this purchase"
+   * scope, seeded from the URL only (a deep link from the purchase's own detail
    * page), same shape as `productId` above. Simpler than either
    * `vendorId`/`orderId`: `purchaseId` is a column ON `expense`, not resolved
    * through `Purchase` like they are, so the repo needs no `chargeCondition`
@@ -1018,14 +1018,14 @@ export const expenseOut = z.object({
   id: expenseShortcode,
   ...expenseFields,
   /**
-   * The charge this line belongs to. Null for the rows with no vendor recorded —
+   * The purchase this expense belongs to. Null for rows with no vendor recorded —
    * there's no transaction to attach them to, and inventing one would fabricate
-   * a charge that never happened.
+   * a purchase that was never recorded.
    */
   purchaseId: purchaseShortcode.nullable(),
-  /** The linked charge's own date, distinct from this ledger line's date. */
+  /** The linked purchase's own date, distinct from this expense's ledger date. */
   purchaseDate: plainDate.nullable(),
-  /** The charge's vendor, denormalized onto the line so tables can link it. */
+  /** The purchase's vendor, denormalized onto the expense so tables can link it. */
   vendorId: vendorShortcode.nullable(),
   projectName: z.string().nullable(),
   // Null when unlinked *or* when the linked product has been soft-deleted —
@@ -1122,7 +1122,7 @@ export type ExpenseProjectAggregate = z.infer<typeof expenseProjectAggregate>;
  * `expense.purchaseId → Purchase.vendorId → Vendor`.
  *
  * Like `byProject`, this is an INNER join, so it deliberately does **not** sum
- * to `summary.net`: every expense with no charge attached (no vendor recorded)
+ * to `summary.net`: every Expense with no Purchase attached (no vendor recorded)
  * is excluded, and there are ~193 of those. That asymmetry is the same one
  * `byProject` already has, and it is the honest shape — a left join would
  * invent an "unknown vendor" bucket that is really "we never wrote it down".
@@ -1265,7 +1265,7 @@ export const expenseMatchCandidate = z.object({
    * Does this row's vendor agree with the one on the export line?
    *
    * `null` = nothing to compare (the export line carried no vendor, or the
-   * ledger row has no charge) — unknown, NOT clean. `false` is a real conflict.
+   * Expense has no Purchase) — unknown, NOT clean. `false` is a real conflict.
    *
    * Load-bearing on an `order_id` hit: an order id is only unique WITHIN a
    * vendor (`Purchase_vendorId_orderId_key`), so a short id can collide across

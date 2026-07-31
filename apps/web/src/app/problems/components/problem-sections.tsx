@@ -2,10 +2,10 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
 import {
   type AllProblems,
-  type ChargeNotReconciling,
   type CoverageTotals,
   type LabelVariant,
   type ProductMissingPrice,
+  type PurchaseNotReconciling,
   TRACKER_PROBLEM_KEY_BY_TYPE,
 } from "@cubby/schemas/problems";
 import type {
@@ -601,10 +601,10 @@ function locationBadges(
   ));
 }
 
-/** `Stated $431.24 · lines $416.24 across 3 lines` — the charge card's subtitle. */
-function chargeSubtitle(charge: ChargeNotReconciling): string {
-  const lines = `${charge.expenseCount} ${charge.expenseCount === 1 ? "line" : "lines"}`;
-  return `Stated ${formatCurrency(charge.statedTotal)} · lines ${formatCurrency(charge.expenseTotal)} across ${lines}`;
+/** `Stated $431.24 · expenses $416.24 across 3 expenses`. */
+function purchaseSubtitle(purchase: PurchaseNotReconciling): string {
+  const expenses = `${purchase.expenseCount} ${purchase.expenseCount === 1 ? "expense" : "expenses"}`;
+  return `Stated ${formatCurrency(purchase.statedTotal)} · expenses ${formatCurrency(purchase.expenseTotal)} across ${expenses}`;
 }
 
 /**
@@ -615,13 +615,13 @@ function chargeSubtitle(charge: ChargeNotReconciling): string {
  * simply be a stated total recorded before a line was added. `reconciliationDelta`
  * is the shared derivation (lines − stated), so this can't drift from the badge.
  */
-function chargeDeltaHint(charge: ChargeNotReconciling): string | null {
-  const delta = reconciliationDelta(charge);
+function purchaseDeltaHint(purchase: PurchaseNotReconciling): string | null {
+  const delta = reconciliationDelta(purchase);
   if (delta === null) return null;
   const gap = formatCurrency(Math.abs(delta));
   return delta < 0
-    ? `Lines come in ${gap} under the stated total — the shape a partial refund leaves, or a line not recorded yet.`
-    : `Lines come in ${gap} over the stated total — an extra line, or a stated total captured before one was added.`;
+    ? `Expenses come in ${gap} under the stated total — the shape a partial refund leaves, or an expense not recorded yet.`
+    : `Expenses come in ${gap} over the stated total — an extra expense, or a stated total captured before one was added.`;
 }
 
 /**
@@ -953,16 +953,16 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     entity: "vendor",
     title: "One vendor, two roster rows",
     description:
-      "Vendor names are matched exactly when a charge is imported, so the same vendor entered two ways becomes two roster rows — and that vendor's spend splits across both. Merging folds one into the other, charges and all. Only spellings that normalize to the same name are compared, so a genuine abbreviation (B&H vs B&H Photo) is never guessed at here.",
+      "Vendor names are matched exactly when a purchase is imported, so the same vendor entered two ways becomes two roster rows — and that vendor's spend splits across both. Merging folds one into the other, purchases and all. Only spellings that normalize to the same name are compared, so a genuine abbreviation (B&H vs B&H Photo) is never guessed at here.",
     emptyMessage: "Every vendor on the roster is spelled one way.",
     renderItem: (v) => ({
       // Names are unique among live vendors, so the variant spelling is a stable
       // per-card key.
       key: v.value,
       title: v.value,
-      // Weighed by charges, not by roster rows — a duplicate is 1 row either way,
-      // so the charge count is what says which spelling is the real one.
-      subtitle: variantSubtitle(v, "charge"),
+      // Weighed by purchases, not by roster rows — a duplicate is 1 row either way,
+      // so the purchase count is what says which spelling is the real one.
+      subtitle: variantSubtitle(v, "purchase"),
       route: entityDetailLink("vendor", v.sampleId),
       editLabel: "Open vendor",
       inlineFix: {
@@ -1212,28 +1212,28 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     },
   }),
   section({
-    id: "charges-not-reconciling",
+    id: "purchases-not-reconciling",
     label: "Stated totals",
-    select: (p) => p.chargesNotReconciling,
+    select: (p) => p.purchasesNotReconciling,
     // Advisory, so it declares `coverage` — that marker is what keeps it out of
     // the defect list, out of the red, and out of `totalProblems`. No meter: a
-    // discrepancy isn't a fraction of a population, and "N of M charges
+    // discrepancy isn't a fraction of a population, and "N of M purchases
     // reconcile" would read as a score to drive to 100%, which this isn't.
     coverage: {},
     entity: "purchase",
-    title: "Stated Totals That Don't Match the Lines",
+    title: "Stated Totals That Don't Match the Expenses",
     description:
-      "What the paperwork claimed, next to what the charge's lines actually add up to. A cue, not a fault: a partial refund reduces a line without changing what the charge originally stated, so plenty of these are correct exactly as they are. Stated totals are never summed into spend — spend is always the lines — so nothing here needs doing unless a line is genuinely wrong or missing.",
+      "What the paperwork claimed, next to what the purchase's expenses actually add up to. A cue, not a fault: a partial refund reduces an expense without changing what the purchase originally stated, so plenty of these are correct exactly as they are. Stated totals are never summed into spend — spend is always the expenses — so nothing here needs doing unless an expense is genuinely wrong or missing.",
     emptyMessage:
-      "Every charge with a stated total agrees with its lines. Charges with no stated total recorded aren't compared.",
-    renderItem: (charge) => {
-      const hint = chargeDeltaHint(charge);
+      "Every purchase with a stated total agrees with its expenses. Purchases with no stated total recorded aren't compared.",
+    renderItem: (purchase) => {
+      const hint = purchaseDeltaHint(purchase);
       return {
-        // A charge has no name, and two charges from one vendor would otherwise
+        // A purchase has no name, and two purchases from one vendor would otherwise
         // share a card key by way of the title.
-        key: charge.id,
-        title: charge.vendorName ?? "Vendor deleted",
-        subtitle: chargeSubtitle(charge),
+        key: purchase.id,
+        title: purchase.vendorName ?? "Vendor deleted",
+        subtitle: purchaseSubtitle(purchase),
         details: hint
           ? [
               <div key="hint" className="text-muted-foreground text-sm">
@@ -1242,22 +1242,22 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
             ]
           : [],
         badges: [
-          // The same soft `warning`-tone verdict the ledger column and the charge
+          // The same soft `warning`-tone verdict the ledger column and the purchase
           // page show, from the same `reconcilePurchase` — never a defect red.
-          <ReconciliationBadge key="reconciliation" purchase={charge} />,
-          ...(charge.orderId
-            ? [<CodeChip key="order">{charge.orderId}</CodeChip>]
+          <ReconciliationBadge key="reconciliation" purchase={purchase} />,
+          ...(purchase.orderId
+            ? [<CodeChip key="order">{purchase.orderId}</CodeChip>]
             : []),
-          ...(charge.date
+          ...(purchase.date
             ? [
                 <Badge key="date" variant="outline">
-                  {formatDate(charge.date)}
+                  {formatDate(purchase.date)}
                 </Badge>,
               ]
             : []),
         ],
-        route: entityDetailLink("purchase", charge.id),
-        editLabel: "Open charge",
+        route: entityDetailLink("purchase", purchase.id),
+        editLabel: "Open purchase",
       };
     },
   }),

@@ -65,7 +65,6 @@ import {
   applyReparsedStaleLines,
   countEntitiesMissingEmbeddings,
   countReparseableLines,
-  findChargesNotReconciling,
   findCoverageTotals as findCoverageTotalsRepo,
   findDuplicateUniqueProducts,
   findDuplicateVendors,
@@ -82,6 +81,7 @@ import {
   findProductsMissingPrice,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
+  findPurchasesNotReconciling,
   findReferentialLivenessViolations,
   findStaleIngredientParses,
   findStaleLocations,
@@ -505,7 +505,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       duplicateVendors: () => findDuplicateVendors(scoped),
       // One grouped SQL scan that returns only the offenders (the stated-total
       // comparison is a HAVING, not a JS filter) — cheap enough for this group.
-      chargesNotReconciling: () => findChargesNotReconciling(scoped),
+      purchasesNotReconciling: () => findPurchasesNotReconciling(scoped),
       // Two UNION ALL queries over 34 indexed FK joins. Sits in this group
       // rather than its own because the cost is I/O, not the CPU the other
       // groups exist to isolate — and it shares this fan-out's single
@@ -537,7 +537,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
-    chargesNotReconciling: r.chargesNotReconciling,
+    purchasesNotReconciling: r.purchasesNotReconciling,
     referentialLivenessViolations: r.referentialLivenessViolations,
   };
 };

@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { RECONCILIATION_TOLERANCE, reconcilePurchase } from "./purchase";
+import {
+  purchaseFilterFields,
+  RECONCILIATION_TOLERANCE,
+  reconcilePurchase,
+} from "./purchase";
+
+describe("purchase filter terminology", () => {
+  it("exposes expenseStatus and removes the old lineStatus field", () => {
+    expect(purchaseFilterFields).toHaveProperty("expenseStatus");
+    expect(purchaseFilterFields).not.toHaveProperty("lineStatus");
+  });
+});
 
 /**
  * The single verdict function behind the charge list column, the charge detail

@@ -218,7 +218,7 @@ const labelVariantFields = {
   value: z.string(),
   /**
    * How much backs this spelling: products carrying it for a manufacturer, live
-   * charges pointing at it for a vendor (whose name is unique per row, so
+   * purchases pointing at it for a vendor (whose name is unique per row, so
    * counting rows there could never produce a majority).
    */
   count: z.number().int(),
@@ -360,22 +360,22 @@ export const productWithBetterUpcDataSchema = z.object({
 });
 
 /**
- * A charge whose live lines don't add up to what the charge itself stated.
+ * A purchase whose live expenses don't add up to its stated paperwork total.
  *
  * **Advisory, not a defect** — hence its non-defect `PROBLEM_CLASS`. `Purchase.
  * statedTotal` is what the paperwork claimed and is never summed into spend
  * (spend is `SUM(expense.cost)` = `expenseTotal` below), so a disagreement is a
- * cue to look, not a fault: a partial refund reduces a line without changing what
- * the charge originally stated. Nothing offers to "fix" one of these, because the
- * only mechanical fix would be back-computing a cost from `statedTotal`, which is
- * forbidden.
+ * cue to look, not a fault: a partial refund reduces an Expense without changing
+ * what the Purchase paperwork originally stated. Nothing offers to "fix" one of
+ * these because the only mechanical fix would be back-computing a cost from
+ * `statedTotal`, which is forbidden.
  *
- * `statedTotal` is non-nullable here: a charge with none recorded reconciles as
+ * `statedTotal` is non-nullable here: a purchase with none recorded reconciles as
  * `"unknown"` and can't mismatch, so it never becomes a row. The delta is
  * deliberately NOT a field — `reconciliationDelta` already derives it from these
  * two numbers for the list column and the detail cue.
  */
-export const chargeNotReconcilingSchema = z.object({
+export const purchaseNotReconcilingSchema = z.object({
   id: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
@@ -383,7 +383,7 @@ export const chargeNotReconcilingSchema = z.object({
   date: plainDate.nullable(),
   /** What the paperwork claimed. Never spend. */
   statedTotal: z.number(),
-  /** `SUM(cost)` over the charge's live lines — the charge's real spend. */
+  /** `SUM(cost)` over the purchase's live expenses — its real spend. */
   expenseTotal: z.number(),
   expenseCount: z.number().int(),
 });
@@ -416,7 +416,7 @@ const problemsFastShape = {
   unknownParkedItems: z.array(unknownParkedItemSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
-  chargesNotReconciling: z.array(chargeNotReconcilingSchema),
+  purchasesNotReconciling: z.array(purchaseNotReconcilingSchema),
   // A live row still pointing at a soft-deleted target — see
   // `findReferentialLivenessViolations`. DB-only and cheap (one UNION ALL over
   // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
@@ -512,7 +512,7 @@ export type ProblemKey = keyof typeof allProblemArrayFields;
  *
  * `coverage` is really "the non-defect bucket", and it carries one more kind of
  * row: ADVISORY cues, which are frequently correct exactly as they stand
- * (`chargesNotReconciling` — a partial refund legitimately leaves a charge's lines
+ * (`purchasesNotReconciling` — a partial refund legitimately leaves a purchase's expenses
  * disagreeing with what its paperwork stated). Those aren't a data-entry backlog,
  * but the operative contract is the same one this class exists to express — not
  * wrong, never forced to zero, never in `totalProblems` or the badge, never
@@ -539,7 +539,7 @@ export const PROBLEM_CLASS = {
   // split across both — and it converges to zero: `mergeVendors` folds the pair
   // and the pair never comes back (the live roster sits at 0 across 114 vendors).
   // Not `coverage`: there is no backlog being worked through and no denominator,
-  // and unlike `chargesNotReconciling` a reported row is never legitimately
+  // and unlike `purchasesNotReconciling` a reported row is never legitimately
   // correct as it stands.
   duplicateVendors: "defect",
   // A dangling reference is unambiguously wrong and converges to zero — it can
@@ -570,11 +570,11 @@ export const PROBLEM_CLASS = {
   staleLocations: "coverage",
   neverVerifiedInventory: "coverage",
   productsWithNoImages: "coverage",
-  // Advisory, not backlog (see the note above): a charge whose lines disagree
+  // Advisory, not backlog (see the note above): a purchase whose expenses disagree
   // with its stated total is often correct as-is, and the only mechanical "fix"
   // would be back-computing a cost from `statedTotal` — which nothing may do. So
   // it is reported, never counted, and never red.
-  chargesNotReconciling: "coverage",
+  purchasesNotReconciling: "coverage",
 } as const satisfies Record<ProblemKey, "defect" | "coverage">;
 
 const isDefectKey = (key: string): boolean =>
@@ -726,7 +726,9 @@ export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;
-export type ChargeNotReconciling = z.infer<typeof chargeNotReconcilingSchema>;
+export type PurchaseNotReconciling = z.infer<
+  typeof purchaseNotReconcilingSchema
+>;
 export type EntityMissingEmbedding = z.infer<
   typeof entityMissingEmbeddingSchema
 >;
