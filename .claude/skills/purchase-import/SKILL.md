@@ -188,11 +188,27 @@ roster, open a charge, or set a `statedTotal`:
 
 | Source | Gives you | Trust |
 | --- | --- | --- |
-| eBay **seller** `OrdersReport` CSV | `Sold For`, `Total Price`, sale date, buyer | settlement — best |
+| **Card / bank statement** | **what actually cleared, and when — charges AND refunds** | **settlement — beats everything** |
+| eBay **seller** `OrdersReport` CSV | `Sold For`, `Total Price`, sale date, buyer | settlement — best of the per-vendor sources |
 | eBay "You got paid" email | confirmed payment amount | settlement |
 | Vendor order confirmation email | order total, per-line prices | ordered, not settled |
 | ui.com-style confirmation | *no prices at all* — invoice is a separate download | needs the status page |
 | **Marketplace/listing exports** | **asking prices and a "Sold" flag** | **weakest — see Phase 4** |
+
+**The card statement is the top of this table and the most under-used source here.** It is the only
+one that proves a refund *landed* rather than was promised, and it silently corrects the derived
+figures every other path produces. One 2026-07-31 pass over a pasted statement excerpt closed three
+open questions at once: a $29.27 SuperBrightLEDs cable refund that vendor email only ever *promised*
+"on receipt" had in fact posted 2025-09-15; a Golden State Lumber partial cancellation resting on
+operator recollection alone was proven by a `+$1,346.71` credit posted the day after the order; and
+two prorated figures were 1–2¢ off the real credits. Ask for it whenever a refund amount is derived
+rather than read, or whenever a note says an amount is unconfirmed.
+
+Getting it: **Monarch's MCP has been paused since at least 2026-07** ("a data portability question
+raised by one of our partners"), so `GetTransactions` returns a notice, not data — do not plan a
+verification around it. Ask the operator to paste the rows instead; the export format is
+`date,merchant,category,account,original_statement,,amount,,owner,` with **charges negative and
+credits positive**.
 
 `~/Documents/personal/backups/random data dumps/purchases/` holds the exports — note the
 `purchases/` subdirectory, one level below where this file used to point. Currently:
@@ -342,6 +358,23 @@ which is why it outranks every amount hit; that arm also ignores the day window,
 lines can sit weeks from the order date. Post-split this is stronger, not weaker: both sibling lines
 hang off one `Purchase`, so the group is a parent link rather than a two-column string match, and
 `statedTotal` can hold the $306.27 the search was looking for.
+
+⚠️ **When the source is a CARD STATEMENT, that remedy is unavailable — a statement has no order ids
+at all.** So the one arm that reliably catches the mirror trap is off the table, on exactly the source
+most likely to trip it: a statement gives you one settled total per charge, while a well-imported
+order is often *split into per-line siblings*, meaning the number you are searching for appears
+nowhere in the ledger. `match_expenses` will report those rows as `unmatched` and it looks precisely
+like missing spend. On 2026-07-31 a six-row Golden State Lumber statement sweep came back with four
+rows unmatched — read naively, **$2,076.13 of unbooked spend**. Every one was already booked:
+`38882920` as $777.62 + $33.76 + $26.31 + $54.31 delivery = $892.00, `38929210` as
+$511.55 + $8.74 + $54.31 = $574.60, and two more likewise, each charge's `expenseTotal` matching the
+card to the cent.
+
+**For a statement row, go through the CHARGE, not the ledger line.** `list_purchases` filtered by
+`vendorId` (with `dateFrom`/`dateTo`) returns `expenseTotal` per charge — compare the statement amount
+against *that*, since it is the only figure that re-aggregates a split back into what the card saw.
+Only conclude "missing" when no charge for that vendor in the window totals the statement amount.
+Reserve `match_expenses` for statement rows whose vendor has no charges at all.
 
 **Check the refund file before adding ANY expense — not just when reconciling.** This is the single
 most expensive omission found so far. A 2026-07-28 pass added rows whose notes read *"order had no
@@ -587,15 +620,52 @@ single call.
   conflict is recorded in the audit row instead). So don't tell the operator they need a UI step
   afterwards. And merging **moves no money between months**: `expense.date` is the ledger date that
   drives the buckets, and only `purchase.date` belongs to the charge.
-- **Refund handling** is unchanged, by shape:
-  - Full return → negative expense at full price, same `trade`, `projectId: null`.
+- **Refund handling.** Settle *where the credit is filed* before picking a shape — that part is not a
+  judgement call:
+
+  **A refund line belongs on the PURCHASE's own charge, keyed to the original `orderId`** — never on a
+  new charge of its own keyed to the refund document number. Every return in this ledger is filed that
+  way (`EXP-JE2A` Huepar laser, `EXP-FC8F` compactor pad, `EXP-6EY8` grinding wheel, `EXP-7FPA` fish
+  tape), and a 2026-07-29 pass deliberately backfilled the original order id onto each one *"so this
+  row is visible to the (vendor, orderId) refund reconciliation"*. The refund's own document number
+  goes in `notes`.
+
+  Worth stating explicitly because the entity definition argues the other way and the argument is
+  wrong. A refund genuinely *is* a separate settlement event, with its own document number and its own
+  date — so "one `Purchase` = one vendor transaction" reads as license to mint a second charge for it.
+  A 2026-07-31 pass reasoned exactly that way (Zoro cash refund 1297816, booked as `PUR-5V8T`) and had
+  to `merge_purchases` it back into the order's charge. **Check what the ledger already does before
+  reasoning from the schema** — one `list_expenses costMax: -0.01` would have shown the convention.
+
+  The shapes:
+  - Full return of a whole order → negative expense at full price, same `trade`, `projectId: null`, on
+    the order's own charge. Buy and return then net to $0 there — `PUR-3GRN`, `PUR-5MFF` and `PUR-E37R`
+    each read `expenseCount: 2, expenseTotal: 0`.
+  - **Full return of ONE line within a multi-line order** → book every receipt line *including* the
+    returned one, then add a `−$X` credit line for it on the same charge. Do **not** just omit the
+    returned line: the charge should itemize what the receipt actually listed, and the buy/credit pair
+    nets to zero anyway. (Zoro 32401787: a $9.07 threaded rod returned out of a 3-line $60.56 order.)
   - Partial refund on a multi-item order → **reduce the expense cost** to the kept items. (Operator
     chose this 11/11 in 2026-07; it fits materials orders better than the tool-lifecycle negative-row
-    convention, which is for a tool leaving the collection.) The charge's `statedTotal` stays at what
-    the vendor stated — do **not** adjust it to match, and do not read the resulting mismatch as an
-    error.
+    convention, which is for a tool leaving the collection.)
   - Buy-and-return where **neither** side is in the ledger → nets to zero, do nothing. This is most
     of any refund file (85 of 115 orders in one pass).
+
+  **`statedTotal` on a charge that holds a refund: ASK, don't assume.** Once the credit sits on the
+  purchase's charge, setting `statedTotal` to the receipt figure guarantees a permanent mismatch
+  exactly equal to the refund — the gap *is* the return, reported correctly. Reconciling cleanly and
+  recording the receipt's own stated figure are mutually exclusive here; no arrangement gives both.
+  Three live precedents and no single default, so put it to the operator:
+  - `statedTotal: null` — the four Amazon returns. Nothing flags, but the receipt total is not captured
+    as a field. Those rows are sparse bulk-created ones with null notes, so read this as absence of
+    data rather than a considered choice.
+  - `statedTotal` = the receipt figure — what Phase 4 otherwise prescribes, and a standing entry in
+    `chargesNotReconciling`. Defensible: a mismatch there is a soft flag, not an error.
+  - `statedTotal` = the NET — operator's choice on Zoro 32401787 (2026-07-31): $51.49 recorded so the
+    four lines reconcile exactly, with both real figures ($60.56 charged, $9.07 refunded) written into
+    the charge notes alongside a "this is deliberate, don't correct it back" marker. The cost is that
+    the charge can no longer answer *"did the receipt total match what I booked?"* from its fields
+    alone. If you take this option, write the stated figures into `notes` or they are gone.
 - Only add an expense when the **project is known** — date inside a project's window *and* a semantic
   fit. Check project windows first; a project's last activity date tells you if it's live.
 - Non-tool/household items stay out of the project ledger unless the operator says otherwise. Ask
