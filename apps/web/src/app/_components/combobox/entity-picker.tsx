@@ -17,8 +17,6 @@ const ENTITY_CODE: Record<PickerEntity, string> = {
   vendor: "VEN",
 };
 
-const SHORTCODE_LIKE = /^[a-z]{1,3}-\S+$/i;
-
 export function matchesPickerItem(
   item: ComboboxItem,
   rawQuery: string,
@@ -53,8 +51,9 @@ export interface EntityPickerProps<TId extends string> {
 /**
  * The shared Base UI assignment picker. The input is both the closed display
  * and the open search field, so opening an editor never introduces a second
- * focus target. Entity pickers add the attached ledger-code tab; USDA reuses
- * the same shell without one and supplies a rich row renderer.
+ * focus target. Entity shortcodes remain searchable metadata without becoming
+ * visual chrome; USDA and static form pickers reuse the shell without an
+ * entity and may supply their own rich rows.
  */
 export function EntityPicker<TId extends string>({
   entity,
@@ -118,7 +117,9 @@ export function EntityPicker<TId extends string>({
     entity != null && parsedCode != null && parsedCode.type !== entity;
   const searchingForCode =
     normalizedQuery !== "" &&
-    (parsedCode != null || SHORTCODE_LIKE.test(normalizedQuery));
+    (parsedCode != null ||
+      (entity != null &&
+        normalizedQuery.toUpperCase().startsWith(`${ENTITY_CODE[entity]}-`)));
   const searchSettled =
     onSearchChange == null ||
     normalizedQuery.toLocaleLowerCase() ===
@@ -180,27 +181,12 @@ export function EntityPicker<TId extends string>({
     >
       <ComboboxPrimitive.InputGroup
         ref={anchorRef}
-        className={cn(
-          "flex w-full items-stretch",
-          entity && "-ml-[6px] w-[calc(100%+6px)]",
-        )}
+        className="flex w-full items-stretch"
       >
-        {entity && (
-          <span
-            aria-hidden
-            className={cn(
-              "relative z-10 flex shrink-0 items-center justify-center rounded-l-sm border border-border border-r-0 bg-muted font-mono text-2xs text-slate tracking-wider",
-              compact ? "w-9" : "w-10",
-              "after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-primary",
-            )}
-          >
-            {ENTITY_CODE[entity]}
-          </span>
-        )}
         <div
           className={cn(
             "flex min-w-0 flex-1 items-center border border-border bg-input/20 transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 hover:bg-input/30",
-            entity ? "rounded-r-sm" : "rounded-sm",
+            "rounded-sm",
             compact ? "h-7" : "h-9 max-sm:h-10",
           )}
         >
@@ -280,6 +266,13 @@ export function EntityPicker<TId extends string>({
                     renderItem && "items-start whitespace-normal",
                   )}
                 >
+                  {item.color && (
+                    <span
+                      aria-hidden
+                      className="size-2 shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    />
+                  )}
                   {item.icon && <span className="shrink-0">{item.icon}</span>}
                   {renderItem ? (
                     <span className="min-w-0 flex-1">{renderItem(item)}</span>
@@ -291,11 +284,6 @@ export function EntityPicker<TId extends string>({
                       {item.secondary && (
                         <span className="max-w-40 truncate text-muted-foreground text-xs">
                           {item.secondary}
-                        </span>
-                      )}
-                      {item.shortcode && (
-                        <span className="shrink-0 font-mono text-2xs text-slate tracking-wider">
-                          {item.shortcode}
                         </span>
                       )}
                     </span>

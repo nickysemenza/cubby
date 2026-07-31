@@ -57,7 +57,7 @@ describe("matchesPickerItem", () => {
 describe("EntityPicker", () => {
   it("uses one direct-focus input and renders the selected item as a checked result", async () => {
     render(<Harness />);
-    expect(screen.getByText("PRD")).toBeInTheDocument();
+    expect(screen.queryByText("PRD")).not.toBeInTheDocument();
 
     const input = screen.getByRole("combobox", { name: "product" });
     openPicker(input);
@@ -65,7 +65,9 @@ describe("EntityPicker", () => {
 
     const popup = document.querySelector("[data-combobox-popup]");
     expect(popup).toBeInstanceOf(HTMLElement);
-    expect(within(popup as HTMLElement).getByText("PRD-2ABC")).toBeVisible();
+    expect(
+      within(popup as HTMLElement).queryByText("PRD-2ABC"),
+    ).not.toBeInTheDocument();
     expect(
       within(popup as HTMLElement).getByRole("option", {
         name: /Cordless Drill Makita PRD-2ABC/,
@@ -159,6 +161,50 @@ describe("EntityPicker", () => {
     expect(screen.getByText("LOC-2ABC is not a PRD code.")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Create product/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(["H-E-B", "Co-op", "A-1", "Q-tips"])(
+    "offers creation for a hyphenated name: %s",
+    (name) => {
+      render(
+        <EntityPicker
+          entity="vendor"
+          label="vendor"
+          items={[]}
+          value={null}
+          setValue={vi.fn()}
+          onCreateNew={vi.fn(async (createdName) => ({
+            id: createdName,
+            name: createdName,
+          }))}
+        />,
+      );
+      const input = screen.getByRole("combobox", { name: "vendor" });
+      openPicker(input);
+      fireEvent.change(input, { target: { value: name } });
+      expect(
+        screen.getByRole("button", { name: `Create vendor: ${name}` }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("does not offer creation for a malformed code using the entity prefix", () => {
+    render(
+      <EntityPicker
+        entity="vendor"
+        label="vendor"
+        items={[]}
+        value={null}
+        setValue={vi.fn()}
+        onCreateNew={vi.fn(async (name) => ({ id: name, name }))}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "vendor" });
+    openPicker(input);
+    fireEvent.change(input, { target: { value: "VEN-not-a-code" } });
+    expect(
+      screen.queryByRole("button", { name: /Create vendor/ }),
     ).not.toBeInTheDocument();
   });
 });

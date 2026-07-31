@@ -6,12 +6,12 @@ import { sumBy } from "es-toolkit";
 import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { FilterableCombobox } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
 import {
   Dialog,
@@ -235,7 +235,7 @@ export function SplitExpenseDialog({
                 />
               </Row>
               <Row align="center" gap="sm" wrap>
-                <FilterableCombobox
+                <StaticPicker
                   items={costTypeOptions}
                   value={part.costType}
                   onValueChange={(next) => {
@@ -245,14 +245,18 @@ export function SplitExpenseDialog({
                     }
                   }}
                   className="w-36"
+                  label={`Part ${index + 1} cost type`}
+                  compact
                 />
-                <FilterableCombobox
+                <StaticPicker
                   items={tradeOptions}
                   value={part.trade}
                   onValueChange={(next) => {
                     if (next) updatePart(part.key, { trade: next as Trade });
                   }}
                   className="w-40"
+                  label={`Part ${index + 1} trade`}
+                  compact
                 />
                 <div className="w-48">
                   <WithProjectSearch>

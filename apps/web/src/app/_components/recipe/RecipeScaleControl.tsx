@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -84,6 +85,14 @@ export function RecipeScaleControl({
         }),
       ),
     [recipe.sections],
+  );
+  const ingredientOptions = useMemo(
+    () =>
+      ingredientRows.map((row) => ({
+        value: row.id,
+        label: `${row.name} (${row.value} ${row.unit})`,
+      })),
+    [ingredientRows],
   );
 
   const scaled = factor !== 1;
@@ -181,23 +190,19 @@ export function RecipeScaleControl({
           </Stack>
 
           {mode === "ingredient" && (
-            <select
-              aria-label="Ingredient to scale by"
-              className="h-7 w-full rounded-md border border-input bg-card px-2 text-xs"
+            <StaticPicker
+              items={ingredientOptions}
               value={ingredientRowId}
-              onChange={(e) => {
-                setIngredientRowId(e.target.value);
-                const row = ingredientRows.find((r) => r.id === e.target.value);
+              onValueChange={(value) => {
+                const nextValue = value ?? "";
+                setIngredientRowId(nextValue);
+                const row = ingredientRows.find((r) => r.id === nextValue);
                 if (row) setDraft(String(row.value));
               }}
-            >
-              <option value="">Choose an ingredient…</option>
-              {ingredientRows.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} ({r.value} {r.unit})
-                </option>
-              ))}
-            </select>
+              label="Ingredient to scale by"
+              placeholder="Choose an ingredient…"
+              compact
+            />
           )}
 
           <Row

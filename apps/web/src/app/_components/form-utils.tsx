@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
-import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { Spinner } from "~/components/ui/spinner";
@@ -21,6 +20,7 @@ import { useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem, PickerEntity } from "./combobox/combobox-types";
 import { EntityPicker } from "./combobox/entity-picker";
+import { StaticPicker } from "./combobox/static-picker";
 import { DatePickerInput } from "./date-picker-input";
 import { FormFieldGroup } from "./forms/form-field-group";
 
@@ -687,7 +687,7 @@ export function UnifiedTextField<
 
 /**
  * Select field over a **fixed, in-memory option list** (enums, small static
- * sets). Backed by {@link FilterableCombobox} for type-to-filter.
+ * sets). Backed by the shared Base UI picker shell for type-to-filter.
  *
  * Pick the right combobox for the job:
  * - `SelectField` — static options, page-level forms.
@@ -708,7 +708,12 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
-  options: { value: string; label: string; icon?: React.ReactNode }[];
+  options: {
+    value: string;
+    label: string;
+    icon?: React.ReactNode;
+    color?: string;
+  }[];
   placeholder?: string;
   nullable?: boolean;
   disabled?: boolean;
@@ -731,13 +736,14 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
-          <FilterableCombobox
+          <StaticPicker
             items={items}
             value={field.value ?? (nullable ? "__none__" : null)}
             onValueChange={(value) =>
               field.onChange(value === "__none__" ? null : value)
             }
             placeholder={placeholder || `Select ${label.toLowerCase()}`}
+            label={label.toLowerCase()}
             disabled={disabled}
           />
         </FormFieldGroup>

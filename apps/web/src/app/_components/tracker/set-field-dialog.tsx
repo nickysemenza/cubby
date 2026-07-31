@@ -1,10 +1,8 @@
 import { useState } from "react";
+import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import {
-  FilterableCombobox,
-  type FilterableComboboxItem,
-} from "~/components/ui/combobox";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 
 interface SetFieldItem {
   id: string;
@@ -72,10 +70,11 @@ export function SetFieldDialog({
       isPending={isPending}
     >
       <FormFieldGroup label={fieldLabel}>
-        <FilterableCombobox
+        <StaticPicker
           items={options}
           value={value}
           onValueChange={setValue}
+          label={fieldLabel.toLowerCase()}
           placeholder={`Select a ${fieldLabel.toLowerCase()}…`}
         />
       </FormFieldGroup>
