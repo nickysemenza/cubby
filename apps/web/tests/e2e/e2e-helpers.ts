@@ -81,6 +81,37 @@ export async function fillInput(
   await input.blur();
 }
 
+/**
+ * Locate the inline cell editor's input.
+ *
+ * `EditableCell`'s editor is portaled to <body> via `CellEditorOverlay`, so it
+ * is NOT under the row it edits. Scope by the overlay's stable `data-slot`
+ * instead of `input:focus` — the editor's `autoFocus` is a race (the trigger
+ * can keep focus after the opening click, and the input is briefly
+ * `disabled={isPending}` during a commit), so `input:focus` intermittently
+ * matches nothing and hangs `.fill()` for the full test timeout. Only one
+ * editor overlay is mounted at a time (`edit.isEditing`), so no row scoping is
+ * needed.
+ */
+function cellEditorInput(page: Page): Locator {
+  return page.locator('[data-slot="cell-editor-overlay"] input');
+}
+
+/**
+ * Fill the open inline cell editor and commit with Enter.
+ *
+ * The caller opens the editor first (clicking "Edit value"). `.fill()` focuses
+ * the element itself, so this never depends on `autoFocus` landing; the
+ * `toBeEnabled` wait rides out the `disabled={isPending}` window.
+ */
+export async function fillCellEditor(page: Page, value: string) {
+  const input = cellEditorInput(page);
+  await expect(input).toBeVisible();
+  await expect(input).toBeEnabled();
+  await input.fill(value);
+  await input.press("Enter");
+}
+
 // Helper to create a location via UI. Asserts the id-bearing detail URL and
 // that the name renders, so callers (and the create-location spec) get the same
 // coverage the inline flow used to.
