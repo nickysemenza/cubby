@@ -79,7 +79,7 @@ export async function projectPortfolioAnalytics(
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
     return {
-      projectId: id,
+      projectId: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
       projectName: nameById.get(id) ?? "",
       actual: subtree.actualSpent,
       committed: subtree.committedSpent,
@@ -89,8 +89,7 @@ export async function projectPortfolioAnalytics(
 
   const spendingByProject = ids
     .map((id) => ({
-      projectId: id,
-      projectShortcode: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
+      projectId: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
       projectName: nameById.get(id) ?? "",
       spend: (subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP).spent,
     }))
@@ -159,8 +158,7 @@ export async function projectPortfolioAnalytics(
       openTaskCountByProject.set(row.projectId, row.openTaskCount);
   }
   const taskHeatmap = ids.map((id) => ({
-    projectId: id,
-    projectShortcode: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
+    projectId: shortcodeById.get(id) ?? unsafeProjectShortcode(""),
     projectName: nameById.get(id) ?? "",
     openTaskCount: openTaskCountByProject.get(id) ?? 0,
   }));

@@ -68,10 +68,19 @@ const {
       getMealByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       mealList(services.db, filters, sort, pagination),
-    create: async (services, data) =>
-      createMeal(services.db, data, services.actorContext),
-    update: async (services, id: MealId, data) =>
-      updateMeal(services.db, id, data, services.actorContext),
+    create: async (services, data) => {
+      const output = await createMeal(services.db, data, services.actorContext);
+      return { output, entityId: output.id };
+    },
+    update: async (services, id: MealId, data) => {
+      const output = await updateMeal(
+        services.db,
+        id,
+        data,
+        services.actorContext,
+      );
+      return { output, entityId: output.id };
+    },
     delete: async (services, ids) => {
       await deleteMeals(services.db, ids, services.actorContext);
       return undefined;

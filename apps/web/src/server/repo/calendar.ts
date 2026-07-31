@@ -4,7 +4,11 @@ import type {
   CalendarRangeInput,
   CalendarRangeOut,
 } from "@cubby/schemas/calendar";
-import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeExpenseShortcode,
+  unsafeProjectShortcode,
+  unsafeTaskShortcode,
+} from "@cubby/schemas/identifiers";
 import { addDays } from "date-fns";
 import { and, gte, isNotNull, lte, or, sql } from "drizzle-orm";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
@@ -111,8 +115,8 @@ export async function getCalendarRange(
     if (!startDate || !endDate) continue;
     items.push({
       kind: "task",
-      id: value.id,
-      shortcode: value.shortcode,
+      id: row.id,
+      shortcode: unsafeTaskShortcode(row.shortcode),
       title: value.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),
@@ -128,8 +132,8 @@ export async function getCalendarRange(
     if (!value.date) continue;
     items.push({
       kind: "expense",
-      id: value.id,
-      shortcode: value.shortcode,
+      id: row.id,
+      shortcode: unsafeExpenseShortcode(row.shortcode),
       title: value.name,
       startDate: value.date,
       endDateExclusive: shiftPlainDate(value.date, 1),

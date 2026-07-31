@@ -11,7 +11,11 @@
  * nothing to split. `split` here splits an *expense* into lines of one charge.
  */
 
-import { purchaseId } from "@cubby/schemas/identifiers";
+import {
+  purchaseShortcode,
+  unsafeExpenseId,
+  unsafePurchaseId,
+} from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
   linkExpensesToPurchaseInput,
@@ -36,6 +40,12 @@ import {
   splitExpense,
   updatePurchase,
 } from "~/server/repo/purchase";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+  resolveShortcode,
+} from "~/server/repo/shortcode-resolver";
+import { createAppError } from "~/server/errors/app-error";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
   createEntityListProcedure,
@@ -60,9 +70,15 @@ const { list } = createEntityListProcedure({
 });
 
 const getByID = protectedProcedure
-  .input(purchaseId)
+  .input(purchaseShortcode)
   .output(purchaseOut)
-  .query(({ ctx, input }) => getPurchaseByID(ctx.db, input));
+  .query(async ({ ctx, input }) => {
+    const id = await resolveLiveShortcode(ctx.db, input, "purchase");
+    if (!id) {
+      throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${input}`);
+    }
+    return getPurchaseByID(ctx.db, unsafePurchaseId(id));
+  });
 
 const getByShortcode = createGetByShortcodeProcedure(
   "purchase",
@@ -72,22 +88,30 @@ const getByShortcode = createGetByShortcodeProcedure(
 
 /** This charge's lines — the expense table on a purchase detail page. */
 const expenses = protectedProcedure
-  .input(purchaseId)
+  .input(purchaseShortcode)
   .output(z.array(expenseOut))
-  .query(({ ctx, input }) => getPurchaseExpenses(ctx.db, input));
+  .query(async ({ ctx, input }) => {
+    const id = await resolveLiveShortcode(ctx.db, input, "purchase");
+    if (!id) {
+      throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${input}`);
+    }
+    return getPurchaseExpenses(ctx.db, unsafePurchaseId(id));
+  });
 
 const create = protectedProcedure
   .input(purchaseCreateInput)
   .output(purchaseOut)
-  .mutation(({ ctx, input }) =>
-    createPurchase(ctx.db, input, ctx.actorContext),
+  .mutation(
+    async ({ ctx, input }) =>
+      (await createPurchase(ctx.db, input, ctx.actorContext)).output,
   );
 
 const update = protectedProcedure
   .input(purchaseUpdateInput)
   .output(purchaseOut)
-  .mutation(({ ctx, input }) =>
-    updatePurchase(ctx.db, input, ctx.actorContext),
+  .mutation(
+    async ({ ctx, input }) =>
+      (await updatePurchase(ctx.db, input, ctx.actorContext)).output,
   );
 
 /**
@@ -104,13 +128,28 @@ const link = protectedProcedure
       input,
       ctx.actorContext,
     );
+    const resolved = await resolveLiveShortcodes(
+      ctx.db,
+      input.expenseIds,
+      "expense",
+    );
     await runMutationSideEffectsForEntities(
       ctx.db,
-      input.expenseIds.map((id) => ({
-        action: "updated" as const,
-        entity: { entityType: "expense" as const, entityId: id },
-        source: "purchase.link",
-      })),
+      input.expenseIds.flatMap((code) => {
+        const uuid = resolved.get(code);
+        return uuid
+          ? [
+              {
+                action: "updated" as const,
+                entity: {
+                  entityType: "expense" as const,
+                  entityId: unsafeExpenseId(uuid),
+                },
+                source: "purchase.link",
+              },
+            ]
+          : [];
+      }),
     );
     return result;
   });
@@ -121,18 +160,43 @@ const split = protectedProcedure
   .output(z.array(expenseOut))
   .mutation(async ({ ctx, input }) => {
     const items = await splitExpense(ctx.db, input, ctx.actorContext);
+    // The original is already soft-deleted by the time we get here —
+    // `resolveShortcode` (not the live-only variant) is what still names it.
+    const originalRef = await resolveShortcode(ctx.db, input.expenseId);
+    const newIds = await resolveLiveShortcodes(
+      ctx.db,
+      items.map((item) => item.id),
+      "expense",
+    );
     await runMutationSideEffectsForEntities(ctx.db, [
       // The original is gone and each part is new, so both sides need indexing.
-      {
-        action: "deleted" as const,
-        entity: { entityType: "expense" as const, entityId: input.expenseId },
-        source: "purchase.split",
-      },
-      ...items.map((item) => ({
-        action: "created" as const,
-        entity: { entityType: "expense" as const, entityId: item.id },
-        source: "purchase.split",
-      })),
+      ...(originalRef && originalRef.entity === "expense"
+        ? [
+            {
+              action: "deleted" as const,
+              entity: {
+                entityType: "expense" as const,
+                entityId: unsafeExpenseId(originalRef.id),
+              },
+              source: "purchase.split",
+            },
+          ]
+        : []),
+      ...items.flatMap((item) => {
+        const uuid = newIds.get(item.id);
+        return uuid
+          ? [
+              {
+                action: "created" as const,
+                entity: {
+                  entityType: "expense" as const,
+                  entityId: unsafeExpenseId(uuid),
+                },
+                source: "purchase.split",
+              },
+            ]
+          : [];
+      }),
     ]);
     return items;
   });
@@ -146,7 +210,7 @@ const merge = protectedProcedure
   );
 
 const deleteItem = protectedProcedure
-  .input(z.object({ ids: z.array(purchaseId).min(1) }))
+  .input(z.object({ ids: z.array(purchaseShortcode).min(1) }))
   .mutation(async ({ ctx, input }) => {
     await deletePurchases(ctx.db, input.ids, ctx.actorContext);
   });

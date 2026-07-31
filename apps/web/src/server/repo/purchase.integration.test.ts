@@ -1,7 +1,23 @@
-import type { PurchaseId } from "@cubby/schemas/identifiers";
-import { unsafePurchaseId } from "@cubby/schemas/identifiers";
+import type {
+  ExpenseId,
+  ExpenseShortcode,
+  PurchaseId,
+  PurchaseShortcode,
+  VendorId,
+  VendorShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  unsafeExpenseId,
+  unsafePurchaseId,
+  unsafePurchaseShortcode,
+  unsafeVendorId,
+} from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
-import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
+import {
+  type ExpenseOut,
+  expenseCreateInput,
+  projectCreateInput,
+} from "@cubby/schemas/project";
 import {
   purchaseCreateInput,
   reconcilePurchase,
@@ -21,6 +37,7 @@ vi.mock("~/server/utils/s3", async (importOriginal) => ({
   deleteS3Object: vi.fn(async () => undefined),
 }));
 
+import type { Database } from "~/server/db";
 import {
   expense,
   image,
@@ -38,7 +55,7 @@ import {
   deleteExpenses,
   expenseAnalytics,
   expenseList,
-  getExpenseByID,
+  getExpenseByShortcode,
 } from "./expense";
 import { createProduct } from "./product";
 import {
@@ -52,6 +69,7 @@ import {
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
+  getPurchaseByShortcode,
   getPurchaseExpenses,
   linkExpensesToPurchase,
   mergePurchases,
@@ -60,6 +78,7 @@ import {
   updatePurchase,
 } from "./purchase";
 import { makeExpenseInput, makeProductInput } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 import { deleteVendors, findOrCreateVendor, getVendorByID } from "./vendor";
 
 /**
@@ -73,6 +92,67 @@ import { deleteVendors, findOrCreateVendor, getVendorByID } from "./vendor";
  */
 
 const page = { pageIndex: 0, pageSize: 100 };
+
+/**
+ * Shortcode ⇄ uuid bridges for this test file. Post-cutover, `PurchaseOut`,
+ * `ExpenseOut` and `VendorOut` speak PUBLIC shortcodes only — but a handful of
+ * internal reads (`getPurchaseByID`, `getPurchaseExpenses`) and this file's
+ * own white-box raw-schema assertions still key on the private uuid (see the
+ * root CLAUDE.md note on shortcodes being the public id). These collapse the
+ * `resolveLiveShortcode` + `unsafe*Id` dance to one call per direction instead
+ * of hand-rolling it at every call site.
+ */
+const purchaseUuid = async (
+  db: Database,
+  shortcode: PurchaseShortcode,
+): Promise<PurchaseId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "purchase");
+  if (!id) throw new Error(`test setup: purchase ${shortcode} did not resolve`);
+  return unsafePurchaseId(id);
+};
+
+const vendorUuid = async (
+  db: Database,
+  shortcode: VendorShortcode,
+): Promise<VendorId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "vendor");
+  if (!id) throw new Error(`test setup: vendor ${shortcode} did not resolve`);
+  return unsafeVendorId(id);
+};
+
+const expenseUuid = async (
+  db: Database,
+  shortcode: ExpenseShortcode,
+): Promise<ExpenseId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "expense");
+  if (!id) throw new Error(`test setup: expense ${shortcode} did not resolve`);
+  return unsafeExpenseId(id);
+};
+
+/** `findOrCreateVendor` hands back the internal uuid; `purchaseCreateInput`,
+ * `updatePurchase`'s `data.vendorId`, and `PurchaseOut.vendorId` are all public
+ * shortcodes now. Collapses the "create by name, get its shortcode" idiom used
+ * throughout this file. */
+const vendorShortcodeByName = async (
+  db: Database,
+  name: string,
+): Promise<VendorShortcode> => {
+  const id = await findOrCreateVendor(db, name);
+  return (await getVendorByID(db, id)).id;
+};
+
+/** Every expense read in this file expects the row to be live — a throwing
+ * wrapper around the shortcode-keyed reader, mirroring the throwing contract
+ * `getExpenseByID` used to give this file before `ExpenseOut.id` became a
+ * shortcode. */
+const expenseByShortcode = async (
+  db: Database,
+  shortcode: ExpenseShortcode,
+): Promise<ExpenseOut> => {
+  const row = await getExpenseByShortcode(db, shortcode);
+  if (!row) throw new Error(`test setup: expense ${shortcode} not found`);
+  return row;
+};
 
 describe("purchase repository — findOrCreatePurchase", () => {
   const ctx = withTestDb();
@@ -125,8 +205,8 @@ describe("purchase repository — findOrCreatePurchase", () => {
 
     const chargeA = await getPurchaseByID(ctx.db, a);
     const chargeB = await getPurchaseByID(ctx.db, b);
-    expect(chargeA.vendorId).toBe(toolNirvana);
-    expect(chargeB.vendorId).toBe(otherStore);
+    expect(chargeA.vendorId).toBe((await getVendorByID(ctx.db, toolNirvana)).id);
+    expect(chargeB.vendorId).toBe((await getVendorByID(ctx.db, otherStore)).id);
     // Each charge resolves its OWN vendor name through the join.
     expect(chargeA.vendorName).toBe("Tool Nirvana");
     expect(chargeB.vendorName).toBe("Metal Supermarkets");
@@ -191,7 +271,7 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
   it("creates the vendor + charge on first use and REUSES both on the second", async () => {
     // The unchanged input shape is the point of the split: MCP, quick-add and
     // the purchase-import skill never learned about vendor or purchase ids.
-    const first = await createExpense(
+    const { output: first } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -203,7 +283,7 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
       ),
       ctx.actor,
     );
-    const second = await createExpense(
+    const { output: second } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -230,19 +310,22 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
 
     // One vendor, one charge, two lines.
     expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(1);
-    const lines = await getPurchaseExpenses(ctx.db, first.purchaseId!);
+    const lines = await getPurchaseExpenses(
+      ctx.db,
+      await purchaseUuid(ctx.db, first.purchaseId!),
+    );
     expect(lines.map((l) => l.id).sort()).toEqual([first.id, second.id].sort());
   });
 
   it("a vendor with NO orderId gets its own charge each time", async () => {
-    const walkInA = await createExpense(
+    const { output: walkInA } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "counter sale a", vendor: "Tool Nirvana" }),
       ),
       ctx.actor,
     );
-    const walkInB = await createExpense(
+    const { output: walkInB } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "counter sale b", vendor: "Tool Nirvana" }),
@@ -259,7 +342,7 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
   });
 
   it("no vendor at all gets purchaseId: null, and a lone orderId is dropped", async () => {
-    const chargeless = await createExpense(
+    const { output: chargeless } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "cash, no receipt", vendor: null }),
@@ -272,7 +355,7 @@ describe("purchase repository — charge resolution from {vendor, orderId}", () 
     // An order id ALONE can't name a transaction (they're unique only per
     // vendor), so it is dropped rather than half-recorded as a charge nobody
     // could identify.
-    const orphanOrderId = await createExpense(
+    const { output: orphanOrderId } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -298,7 +381,7 @@ describe("purchase repository — linkExpensesToPurchase", () => {
     // Flow Form Plumbing's single invoice covering rough-in AND fixtures: one
     // charge, two trades, and no order id anywhere — the shape this whole model
     // exists to serve.
-    const roughIn = await createExpense(
+    const { output: roughIn } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -309,7 +392,7 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       ),
       ctx.actor,
     );
-    const fixtures = await createExpense(
+    const { output: fixtures } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "fixtures", cost: 1000, trade: "plumbing" }),
@@ -319,8 +402,8 @@ describe("purchase repository — linkExpensesToPurchase", () => {
     expect(roughIn.purchaseId).toBeNull();
     expect(fixtures.orderId).toBeNull();
 
-    const vendorId = await findOrCreateVendor(ctx.db, "Flow Form Plumbing");
-    const charge = await createPurchase(
+    const vendorId = await vendorShortcodeByName(ctx.db, "Flow Form Plumbing");
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
         vendorId,
@@ -336,13 +419,16 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       ctx.actor,
     );
 
-    const lines = await getPurchaseExpenses(ctx.db, charge.id);
+    const lines = await getPurchaseExpenses(
+      ctx.db,
+      await purchaseUuid(ctx.db, charge.id),
+    );
     expect(lines.map((l) => l.id).sort()).toEqual(
       [roughIn.id, fixtures.id].sort(),
     );
 
     // Both lines now read the vendor through the charge, still with no order id.
-    const reread = await getExpenseByID(ctx.db, roughIn.id);
+    const reread = await expenseByShortcode(ctx.db, roughIn.id);
     expect(reread.purchaseId).toBe(charge.id);
     expect(reread.vendor).toBe("Flow Form Plumbing");
     expect(reread.orderId).toBeNull();
@@ -354,7 +440,7 @@ describe("purchase repository — linkExpensesToPurchase", () => {
   });
 
   it("re-points a line that already had a different charge", async () => {
-    const line = await createExpense(
+    const { output: line } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "misfiled line", cost: 12, vendor: "Amazon" }),
@@ -364,8 +450,8 @@ describe("purchase repository — linkExpensesToPurchase", () => {
     const originalCharge = line.purchaseId;
     expect(originalCharge).not.toBeNull();
 
-    const vendorId = await findOrCreateVendor(ctx.db, "Amazon Business");
-    const target = await createPurchase(
+    const vendorId = await vendorShortcodeByName(ctx.db, "Amazon Business");
+    const { output: target } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "AB-1" }),
       ctx.actor,
@@ -377,12 +463,16 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       ctx.actor,
     );
 
-    expect((await getExpenseByID(ctx.db, line.id)).purchaseId).toBe(target.id);
-    expect(await getPurchaseExpenses(ctx.db, originalCharge!)).toHaveLength(0);
+    expect((await expenseByShortcode(ctx.db, line.id)).purchaseId).toBe(
+      target.id,
+    );
+    expect(
+      await getPurchaseExpenses(ctx.db, await purchaseUuid(ctx.db, originalCharge!)),
+    ).toHaveLength(0);
   });
 
   it("refuses an unknown charge, and no-ops on a selection with no live lines", async () => {
-    const line = await createExpense(
+    const { output: line } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "link guard line", cost: 9 }),
@@ -395,7 +485,7 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       linkExpensesToPurchase(
         ctx.db,
         {
-          purchaseId: unsafePurchaseId("00000000-0000-0000-0000-000000000000"),
+          purchaseId: unsafePurchaseShortcode("PUR-9999"),
           expenseIds: [line.id],
         },
         ctx.actor,
@@ -405,8 +495,8 @@ describe("purchase repository — linkExpensesToPurchase", () => {
       cause: { reason: "PURCHASE_NOT_FOUND" },
     });
 
-    const vendorId = await findOrCreateVendor(ctx.db, "Link Guard Vendor");
-    const target = await createPurchase(
+    const vendorId = await vendorShortcodeByName(ctx.db, "Link Guard Vendor");
+    const { output: target } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "LG-1" }),
       ctx.actor,
@@ -428,7 +518,7 @@ describe("purchase repository — splitExpense", () => {
   const ctx = withTestDb();
 
   it("files the parts against the same charge, soft-deletes the original, and seeds statedTotal", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "split project" }),
       ctx.actor,
@@ -439,7 +529,7 @@ describe("purchase repository — splitExpense", () => {
       ctx.actor,
     );
 
-    const combo = await createExpense(
+    const { output: combo } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -453,9 +543,14 @@ describe("purchase repository — splitExpense", () => {
       ctx.actor,
     );
     const chargeId = combo.purchaseId!;
+    // Resolved while everything is still live — `combo` (and its charge) survive
+    // this test, but the ORIGINAL expense row is soft-deleted by `splitExpense`
+    // below, so its own uuid must be captured before that happens.
+    const chargeUuid = await purchaseUuid(ctx.db, chargeId);
+    const comboUuid = await expenseUuid(ctx.db, combo.id);
     // `findOrCreatePurchase` records no stated total, so the split has something
     // to seed.
-    expect((await getPurchaseByID(ctx.db, chargeId)).statedTotal).toBeNull();
+    expect((await getPurchaseByID(ctx.db, chargeUuid)).statedTotal).toBeNull();
 
     const parts = await splitExpense(
       ctx.db,
@@ -512,29 +607,29 @@ describe("purchase repository — splitExpense", () => {
     const [originalRow] = await getDb(ctx.db)
       .select({ deletedAt: expense.deletedAt })
       .from(expense)
-      .where(eq(expense.id, combo.id));
+      .where(eq(expense.id, comboUuid));
     expect(originalRow?.deletedAt).not.toBeNull();
-    const lines = await getPurchaseExpenses(ctx.db, chargeId);
+    const lines = await getPurchaseExpenses(ctx.db, chargeUuid);
     expect(lines.map((l) => l.id).sort()).toEqual(
       parts.map((p) => p.id).sort(),
     );
 
     // `statedTotal` is seeded from the original cost so the parts have something
     // to reconcile against.
-    const charge = await getPurchaseByID(ctx.db, chargeId);
+    const charge = await getPurchaseByID(ctx.db, chargeUuid);
     expect(charge.statedTotal).toBe(100);
     expect(charge.expenseTotal).toBe(100);
     expect(reconcilePurchase(charge)).toBe("match");
   });
 
   it("does not overwrite a statedTotal the charge already had", async () => {
-    const vendorId = await findOrCreateVendor(ctx.db, "Stated Total Vendor");
-    const charge = await createPurchase(
+    const vendorId = await vendorShortcodeByName(ctx.db, "Stated Total Vendor");
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, statedTotal: 431.24 }),
       ctx.actor,
     );
-    const line = await createExpense(
+    const { output: line } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -563,11 +658,14 @@ describe("purchase repository — splitExpense", () => {
       ctx.actor,
     );
 
-    expect((await getPurchaseByID(ctx.db, charge.id)).statedTotal).toBe(431.24);
+    expect(
+      (await getPurchaseByID(ctx.db, await purchaseUuid(ctx.db, charge.id)))
+        .statedTotal,
+    ).toBe(431.24);
   });
 
   it("ACCEPTS a deliberately mismatched sum and merely reports it", async () => {
-    const combo = await createExpense(
+    const { output: combo } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -580,6 +678,7 @@ describe("purchase repository — splitExpense", () => {
       ctx.actor,
     );
     const chargeId = combo.purchaseId!;
+    const chargeUuid = await purchaseUuid(ctx.db, chargeId);
 
     // 60 + 25 = 85 against a $100 charge. Nothing validates that the parts add
     // up, so this write must SUCCEED — a partial refund reduces a line without
@@ -607,12 +706,12 @@ describe("purchase repository — splitExpense", () => {
     );
     expect(parts.map((p) => p.cost).sort()).toEqual([25, 60]);
 
-    const charge = await getPurchaseByID(ctx.db, chargeId);
+    const charge = await getPurchaseByID(ctx.db, chargeUuid);
     // Nothing back-computed a cost: the stated total is still the original 100
     // and the lines still sum to 85. The disagreement is REPORTED, not fixed.
     expect(charge.statedTotal).toBe(100);
     expect(
-      (await getPurchaseExpenses(ctx.db, chargeId)).reduce(
+      (await getPurchaseExpenses(ctx.db, chargeUuid)).reduce(
         (sum, l) => sum + (l.cost ?? 0),
         0,
       ),
@@ -627,7 +726,7 @@ describe("purchase repository — splitExpense", () => {
   });
 
   it("refuses to split an expense with no charge attached", async () => {
-    const chargeless = await createExpense(
+    const { output: chargeless } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({ name: "no vendor line", cost: 50 }),
@@ -673,18 +772,18 @@ describe("purchase repository — mergePurchases", () => {
 
   it("re-points expenses, moves documents, and soft-deletes the loser", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Merge Vendor");
-    const keeper = await createPurchase(
+    const { output: keeper } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, date: "2024-01-01" }),
       ctx.actor,
     );
-    const loser = await createPurchase(
+    const { output: loser } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, date: "2024-01-02" }),
       ctx.actor,
     );
 
-    const keeperLine = await createExpense(
+    const { output: keeperLine } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -695,7 +794,7 @@ describe("purchase repository — mergePurchases", () => {
       ),
       ctx.actor,
     );
-    const loserLine = await createExpense(
+    const { output: loserLine } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -750,12 +849,12 @@ describe("purchase repository — mergePurchases", () => {
   it("lets the keeper ADOPT a loser's order id when it had none", async () => {
     // The common shape: a hand-entered charge later matched to a vendor export.
     const vendorId = await findOrCreateVendor(ctx.db, "Adopt Vendor");
-    const keeper = await createPurchase(
+    const { output: keeper } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: null }),
       ctx.actor,
     );
-    const loser = await createPurchase(
+    const { output: loser } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "ADOPT-1" }),
       ctx.actor,
@@ -774,12 +873,12 @@ describe("purchase repository — mergePurchases", () => {
   it("refuses to merge across vendors", async () => {
     const vendorA = await findOrCreateVendor(ctx.db, "Vendor A");
     const vendorB = await findOrCreateVendor(ctx.db, "Vendor B");
-    const keeper = await createPurchase(
+    const { output: keeper } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: vendorA }),
       ctx.actor,
     );
-    const other = await createPurchase(
+    const { output: other } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: vendorB }),
       ctx.actor,
@@ -803,12 +902,12 @@ describe("purchase repository — mergePurchases", () => {
 
   it("refuses when both sides carry a non-null order id", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Two Orders Vendor");
-    const keeper = await createPurchase(
+    const { output: keeper } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "ORD-1" }),
       ctx.actor,
     );
-    const loser = await createPurchase(
+    const { output: loser } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "ORD-2" }),
       ctx.actor,
@@ -832,7 +931,7 @@ describe("purchase repository — mergePurchases", () => {
 
   it("a self-merge (or an empty merge set) returns the keeper untouched", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Self Merge Charge");
-    const keeper = await createPurchase(
+    const { output: keeper } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "SELF-1" }),
       ctx.actor,
@@ -867,12 +966,12 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     const homeDepot = await findOrCreateVendor(ctx.db, "Home Depot");
     // Order ids are only unique PER VENDOR, so "#11325" legitimately exists at
     // both retailers — which is exactly how a vendor move can collide.
-    const held = await createPurchase(
+    const { output: held } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "#11325" }),
       ctx.actor,
     );
-    const moving = await createPurchase(
+    const { output: moving } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: toolNirvana, orderId: "#11325" }),
       ctx.actor,
@@ -894,7 +993,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
 
     // Same collision reached by moving the OTHER half of the key: retyping this
     // charge's order id onto one its own vendor already holds.
-    const sibling = await createPurchase(
+    const { output: sibling } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "WN-1" }),
       ctx.actor,
@@ -912,7 +1011,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
 
     // The check is scoped to LIVE charges and to the key actually changing: a
     // move to a vendor that doesn't hold this order id still goes through.
-    const moved = await updatePurchase(
+    const { output: moved } = await updatePurchase(
       ctx.db,
       { id: moving.id, data: { orderId: "TN-99" } },
       ctx.actor,
@@ -923,7 +1022,7 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
   it("refuses a soft-deleted vendorId and an unknown charge id", async () => {
     const live = await findOrCreateVendor(ctx.db, "Still Trading");
     const gone = await findOrCreateVendor(ctx.db, "Out Of Business");
-    const charge = await createPurchase(
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: live, orderId: "LIV-1" }),
       ctx.actor,
@@ -964,7 +1063,7 @@ describe("purchase repository — deletion cascades", () => {
   const ctx = withTestDb();
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {
-    const line = await createExpense(
+    const { output: line } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -1012,7 +1111,7 @@ describe("purchase repository — deletion cascades", () => {
   });
 
   it("deleting ONE expense leaves the charge intact", async () => {
-    const keep = await createExpense(
+    const { output: keep } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -1024,7 +1123,7 @@ describe("purchase repository — deletion cascades", () => {
       ),
       ctx.actor,
     );
-    const doomed = await createExpense(
+    const { output: doomed } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -1051,7 +1150,7 @@ describe("purchase repository — deletion cascades", () => {
   });
 
   it("a charge with no lines left totals 0, not null", async () => {
-    const only = await createExpense(
+    const { output: only } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -1097,12 +1196,12 @@ describe("purchase repository — sorting over the joined name and rollups", () 
   const seed = async () => {
     const aaa = await findOrCreateVendor(ctx.db, "AAA Supply");
     const zzz = await findOrCreateVendor(ctx.db, "ZZZ Supply");
-    const small = await createPurchase(
+    const { output: small } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: aaa, orderId: "SORT-SMALL" }),
       ctx.actor,
     );
-    const big = await createPurchase(
+    const { output: big } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: zzz, orderId: "SORT-BIG" }),
       ctx.actor,
@@ -1158,7 +1257,7 @@ describe("purchase repository — rollups never see a charge", () => {
   const ctx = withTestDb();
 
   it("every rollup is byte-identical with and without charges, and ignores statedTotal", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "rollup guard project",
@@ -1224,7 +1323,7 @@ describe("purchase repository — rollups never see a charge", () => {
 
     // Now attach every one of those expenses to a real charge.
     const vendorId = await findOrCreateVendor(ctx.db, "Rollup Guard Vendor");
-    const charge = await createPurchase(
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
         vendorId,
@@ -1292,7 +1391,7 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
   const ctx = withTestDb();
 
   it("resolves vendor/orderId to null and stops matching the vendorId filter", async () => {
-    const line = await createExpense(
+    const { output: line } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -1336,7 +1435,7 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
   });
 
   it("a soft-deleted VENDOR blanks the name while the charge and its money survive", async () => {
-    const line = await createExpense(
+    const { output: line } = await createExpense(
       ctx.db,
       expenseCreateInput.parse(
         makeExpenseInput({
@@ -1385,7 +1484,7 @@ describe("purchase repository — documents", () => {
 
   it("attaches a PDF to a charge and reads it back as a document", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Metal Supermarkets");
-    const charge = await createPurchase(
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "MS-INVOICE-1" }),
       ctx.actor,
@@ -1433,7 +1532,7 @@ describe("purchase repository — documents", () => {
 
   it("the browser's two-phase document upload files the object under a purchase-scoped folder", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Folder Vendor");
-    const charge = await createPurchase(
+    const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId, orderId: "FV-1" }),
       ctx.actor,

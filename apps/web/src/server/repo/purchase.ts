@@ -21,9 +21,13 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type ExpenseId,
+  unsafeExpenseId,
+  unsafeProjectId,
   type PurchaseId,
   unsafePurchaseId,
   unsafePurchaseShortcode,
+  type PurchaseShortcode,
+  unsafeVendorId,
   unsafeVendorShortcode,
   type VendorId,
 } from "@cubby/schemas/identifiers";
@@ -84,12 +88,14 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
-import { assertVendorLive } from "~/server/repo/vendor";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "Expense.purchaseId": {
@@ -166,16 +172,19 @@ const purchaseVendorName = correlated<string | null>(
 );
 
 // The vendor's public id, denormalized alongside its name so a charge row can
-// link to the vendor without a second query.
-const purchaseVendorShortcode = correlated<string | null>(
-  `(SELECT v."shortcode" FROM "Vendor" v
-     WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
+// link to the vendor without a second query. Deliberately NOT filtered on the
+// vendor's own `deletedAt`: `purchase.vendorId` is a NOT NULL FK, and a
+// shortcode is a permanent tombstone even past a soft delete (see
+// "Shortcodes are the public id" in root CLAUDE.md), so this must always
+// resolve — unlike `purchaseVendorName`, which deliberately goes null to
+// signal "this vendor was soft-deleted".
+const purchaseVendorShortcode = correlated<string>(
+  `(SELECT v."shortcode" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId")`,
 );
 
 const purchaseColumns = {
   id: purchase.id,
   shortcode: purchase.shortcode,
-  vendorId: purchase.vendorId,
   orderId: purchase.orderId,
   date: purchase.date,
   statedTotal: purchase.statedTotal,
@@ -191,7 +200,6 @@ const purchaseColumns = {
 type PurchaseRow = {
   id: PurchaseId;
   shortcode: string;
-  vendorId: VendorId;
   orderId: string | null;
   date: string | null;
   statedTotal: number | null;
@@ -199,7 +207,7 @@ type PurchaseRow = {
   createdAt: Date;
   updatedAt: Date;
   vendorName: string | null;
-  vendorShortcode: string | null;
+  vendorShortcode: string;
   expenseCount: number;
   expenseTotal: number;
 };
@@ -208,17 +216,13 @@ const dbPurchaseToAPI = (
   row: PurchaseRow,
   images: PurchaseOut["images"] = [],
 ): PurchaseOut => ({
-  id: row.id,
-  shortcode: unsafePurchaseShortcode(row.shortcode),
-  vendorId: row.vendorId,
+  id: unsafePurchaseShortcode(row.shortcode),
+  vendorId: unsafeVendorShortcode(row.vendorShortcode),
   orderId: row.orderId,
   date: row.date,
   statedTotal: row.statedTotal,
   notes: row.notes,
   vendorName: row.vendorName,
-  vendorShortcode: row.vendorShortcode
-    ? unsafeVendorShortcode(row.vendorShortcode)
-    : null,
   expenseCount: Number(row.expenseCount),
   expenseTotal: Number(row.expenseTotal),
   images,
@@ -498,12 +502,21 @@ export const createPurchase = async (
   db: Database,
   data: PurchaseCreateInput,
   actor: ActorContext,
-): Promise<PurchaseOut> => {
+): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
   const id = await withTransaction(db, async (tx) => {
-    // An FK proves the vendor row exists, not that it's live.
-    await assertVendorLive(tx, data.vendorId);
+    // Resolving to a LIVE row is the FK-liveness check itself — an FK proves
+    // the vendor row exists, not that it's live, but `resolveLiveShortcode`
+    // returns null for a soft-deleted one.
+    const vendorUuid = await resolveLiveShortcode(tx, data.vendorId, "vendor");
+    if (!vendorUuid) {
+      throw createAppError(
+        "VENDOR_NOT_FOUND",
+        `Vendor not found: ${data.vendorId}`,
+      );
+    }
+    const vendorId = unsafeVendorId(vendorUuid);
     const created = await insertWithShortcode(tx, "purchase", {
-      vendorId: data.vendorId,
+      vendorId,
       orderId: data.orderId?.trim() || null,
       date: data.date,
       statedTotal: data.statedTotal,
@@ -527,7 +540,7 @@ export const createPurchase = async (
     });
     return created.id;
   });
-  return getPurchaseByID(db, id);
+  return { output: await getPurchaseByID(db, id), entityId: id };
 };
 
 const PURCHASE_AUDIT_FIELDS = [
@@ -542,8 +555,16 @@ export const updatePurchase = async (
   db: Database,
   input: PurchaseUpdateInput,
   actor: ActorContext,
-): Promise<PurchaseOut> => {
-  const { id, data } = input;
+): Promise<{ output: PurchaseOut; entityId: PurchaseId }> => {
+  const { data } = input;
+  const resolvedId = await resolveLiveShortcode(db, input.id, "purchase");
+  if (!resolvedId) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchase not found: ${input.id}`,
+    );
+  }
+  const id = unsafePurchaseId(resolvedId);
 
   await withTransaction(db, async (tx) => {
     const before = await tx.query.purchase.findFirst({
@@ -553,8 +574,17 @@ export const updatePurchase = async (
       throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
     }
 
+    // Resolving to a LIVE row is the liveness check itself.
+    let resolvedVendorId: VendorId | undefined;
     if (data.vendorId !== undefined) {
-      await assertVendorLive(tx, data.vendorId);
+      const vendorUuid = await resolveLiveShortcode(tx, data.vendorId, "vendor");
+      if (!vendorUuid) {
+        throw createAppError(
+          "VENDOR_NOT_FOUND",
+          `Vendor not found: ${data.vendorId}`,
+        );
+      }
+      resolvedVendorId = unsafeVendorId(vendorUuid);
     }
 
     // This is the one writer that can move BOTH halves of the partial-unique
@@ -565,7 +595,7 @@ export const updatePurchase = async (
     // so it surfaced as an untyped 500 instead of the message
     // `renameChargeOrderId` was built to give. Pre-checked with a SELECT for the
     // same reason it is there: a failed statement poisons the transaction.
-    const nextVendorId = data.vendorId ?? before.vendorId;
+    const nextVendorId = resolvedVendorId ?? before.vendorId;
     const nextOrderId =
       data.orderId === undefined
         ? before.orderId
@@ -606,7 +636,7 @@ export const updatePurchase = async (
       tx,
       purchase,
       buildPartialUpdateValues({
-        vendorId: data.vendorId,
+        vendorId: resolvedVendorId,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
         date: data.date,
@@ -627,7 +657,7 @@ export const updatePurchase = async (
     }
   });
 
-  return getPurchaseByID(db, id);
+  return { output: await getPurchaseByID(db, id), entityId: id };
 };
 
 /**
@@ -643,7 +673,36 @@ export const linkExpensesToPurchase = async (
   input: LinkExpensesToPurchaseInput,
   actor: ActorContext,
 ): Promise<PurchaseOut> => {
-  const { purchaseId, expenseIds } = input;
+  const purchaseUuid = await resolveLiveShortcode(
+    db,
+    input.purchaseId,
+    "purchase",
+  );
+  if (!purchaseUuid) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchase not found: ${input.purchaseId}`,
+    );
+  }
+  const purchaseId = unsafePurchaseId(purchaseUuid);
+
+  const resolvedExpenses = await resolveLiveShortcodes(
+    db,
+    input.expenseIds,
+    "expense",
+  );
+  const missingExpenses = input.expenseIds.filter(
+    (code) => !resolvedExpenses.has(code),
+  );
+  if (missingExpenses.length > 0) {
+    throw createAppError(
+      "EXPENSE_NOT_FOUND",
+      `Expense(s) not found: ${missingExpenses.join(", ")}`,
+    );
+  }
+  const expenseIds = input.expenseIds.map((code) =>
+    unsafeExpenseId(resolvedExpenses.get(code) ?? ""),
+  );
 
   await withTransaction(db, async (tx) => {
     const target = await tx.query.purchase.findFirst({
@@ -710,7 +769,19 @@ export const splitExpense = async (
   input: SplitExpenseInput,
   actor: ActorContext,
 ): Promise<ExpenseOut[]> => {
-  const { expenseId, parts } = input;
+  const { parts } = input;
+  const resolvedExpenseId = await resolveLiveShortcode(
+    db,
+    input.expenseId,
+    "expense",
+  );
+  if (!resolvedExpenseId) {
+    throw createAppError(
+      "EXPENSE_NOT_FOUND",
+      `Expense not found: ${input.expenseId}`,
+    );
+  }
+  const expenseId = unsafeExpenseId(resolvedExpenseId);
 
   const createdIds = await withTransaction(db, async (tx) => {
     const original = await tx.query.expense.findFirst({
@@ -749,6 +820,21 @@ export const splitExpense = async (
 
     const inserted: ExpenseId[] = [];
     for (const part of parts) {
+      let projectId = null;
+      if (part.projectId) {
+        const projectUuid = await resolveLiveShortcode(
+          tx,
+          part.projectId,
+          "project",
+        );
+        if (!projectUuid) {
+          throw createAppError(
+            "PROJECT_NOT_FOUND",
+            `Project not found: ${part.projectId}`,
+          );
+        }
+        projectId = unsafeProjectId(projectUuid);
+      }
       const row = await insertWithShortcode(tx, "expense", {
         name: part.name,
         cost: part.cost,
@@ -758,7 +844,7 @@ export const splitExpense = async (
         url: original.url,
         notes: null,
         future: original.future,
-        projectId: part.projectId,
+        projectId,
         productId: part.productId,
         purchaseId: chargeId,
       });
@@ -1082,9 +1168,19 @@ export const mergePurchases = async (
   input: MergePurchasesInput,
   actor: ActorContext,
 ): Promise<PurchaseOut> => {
-  const { keepId, mergeIds } = input;
-
-  const losers = mergeIds.filter((id) => id !== keepId);
+  const codes = [input.keepId, ...input.mergeIds];
+  const resolved = await resolveLiveShortcodes(db, codes, "purchase");
+  const missing = codes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchase(s) not found: ${missing.join(", ")}`,
+    );
+  }
+  const keepId = unsafePurchaseId(resolved.get(input.keepId) ?? "");
+  const losers = input.mergeIds
+    .map((code) => unsafePurchaseId(resolved.get(code) ?? ""))
+    .filter((id) => id !== keepId);
   if (losers.length === 0) return getPurchaseByID(db, keepId);
 
   await withTransaction(db, async (tx) => {
@@ -1195,10 +1291,22 @@ export const mergePurchases = async (
  */
 export const deletePurchases = async (
   db: Database,
-  ids: PurchaseId[],
+  shortcodes: PurchaseShortcode[],
   actor: ActorContext,
 ): Promise<void> => {
-  if (ids.length === 0) return;
+  if (shortcodes.length === 0) return;
+
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "purchase");
+  const missing = shortcodes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchases not found or already deleted: ${missing.join(", ")}`,
+    );
+  }
+  const ids = shortcodes.map((code) =>
+    unsafePurchaseId(resolved.get(code) ?? ""),
+  );
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, purchase, ids, "Purchase");

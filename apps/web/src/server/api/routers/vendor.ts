@@ -8,7 +8,10 @@
  * searchable-crud factory's embedding side-effects would be wrong here.
  */
 
-import { vendorId } from "@cubby/schemas/identifiers";
+import {
+  unsafeVendorId,
+  vendorShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   mergeVendorsInput,
   vendorCreateInput,
@@ -19,6 +22,7 @@ import {
   vendorUpdateInput,
 } from "@cubby/schemas/vendor";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   createVendor,
   deleteVendors,
@@ -29,6 +33,7 @@ import {
   vendorList,
   vendorOptions,
 } from "~/server/repo/vendor";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createEntityListProcedure,
   createGetByShortcodeProcedure,
@@ -52,9 +57,15 @@ const { list } = createEntityListProcedure({
 });
 
 const getByID = protectedProcedure
-  .input(vendorId)
+  .input(vendorShortcode)
   .output(vendorOut)
-  .query(({ ctx, input }) => getVendorByID(ctx.db, input));
+  .query(async ({ ctx, input }) => {
+    const id = await resolveLiveShortcode(ctx.db, input, "vendor");
+    if (!id) {
+      throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${input}`);
+    }
+    return getVendorByID(ctx.db, unsafeVendorId(id));
+  });
 
 const getByShortcode = createGetByShortcodeProcedure(
   "vendor",
@@ -73,12 +84,18 @@ const options = protectedProcedure
 const create = protectedProcedure
   .input(vendorCreateInput)
   .output(vendorOut)
-  .mutation(({ ctx, input }) => createVendor(ctx.db, input, ctx.actorContext));
+  .mutation(
+    async ({ ctx, input }) =>
+      (await createVendor(ctx.db, input, ctx.actorContext)).output,
+  );
 
 const update = protectedProcedure
   .input(vendorUpdateInput)
   .output(vendorOut)
-  .mutation(({ ctx, input }) => updateVendor(ctx.db, input, ctx.actorContext));
+  .mutation(
+    async ({ ctx, input }) =>
+      (await updateVendor(ctx.db, input, ctx.actorContext)).output,
+  );
 
 /**
  * Fold duplicate roster rows into one. Charges follow the keeper; any two charges
@@ -92,7 +109,7 @@ const merge = protectedProcedure
   .mutation(({ ctx, input }) => mergeVendors(ctx.db, input, ctx.actorContext));
 
 const deleteItem = protectedProcedure
-  .input(z.object({ ids: z.array(vendorId).min(1) }))
+  .input(z.object({ ids: z.array(vendorShortcode).min(1) }))
   .mutation(async ({ ctx, input }) => {
     await deleteVendors(ctx.db, input.ids, ctx.actorContext);
   });

@@ -604,7 +604,7 @@ describe("product repository", () => {
           makeProductInput({ name: "Refunded Product", upc: "710000000003" }),
           ctx.actor,
         );
-        const p = await createExpense(
+        const { output: p } = await createExpense(
           ctx.db,
           { ...makeExpenseInput(), name: "Deleted", productId: product.id },
           ctx.actor,
@@ -938,7 +938,7 @@ describe("product repository", () => {
           }),
           ctx.actor,
         );
-        const live = await createExpense(
+        const { output: live } = await createExpense(
           ctx.db,
           {
             ...makeExpenseInput(),
@@ -948,7 +948,7 @@ describe("product repository", () => {
           },
           ctx.actor,
         );
-        const deleted = await createExpense(
+        const { output: deleted } = await createExpense(
           ctx.db,
           {
             ...makeExpenseInput(),
@@ -1028,7 +1028,7 @@ describe("product repository", () => {
             "710000000035",
             [40],
           );
-          const doomed = await createExpense(
+          const { output: doomed } = await createExpense(
             ctx.db,
             {
               ...makeExpenseInput(),
@@ -1263,7 +1263,7 @@ describe("product repository", () => {
         makeProductInput({ name: "Expense-Blocked Product" }),
         ctx.actor,
       );
-      const expense = await createExpense(
+      const { output: expense } = await createExpense(
         ctx.db,
         {
           ...makeExpenseInput(),
@@ -1298,7 +1298,7 @@ describe("product repository", () => {
         makeProductInput({ name: "Task-Blocked Furnace" }),
         ctx.actor,
       );
-      const maintenance = await createTask(
+      const { output: maintenance } = await createTask(
         ctx.db,
         taskCreateInput.parse({
           name: "Replace furnace filter",
@@ -1391,7 +1391,7 @@ describe("product repository", () => {
         makeProductInput({ name: "Backstop Expense Product" }),
         ctx.actor,
       );
-      const exp = await createExpense(
+      const { output: exp } = await createExpense(
         ctx.db,
         { ...makeExpenseInput(), name: "backstop expense", productId: prod.id },
         ctx.actor,

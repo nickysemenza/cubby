@@ -18,7 +18,7 @@
  * `loadProjectSubtreeRollups`). `projectDashboardSummary` passes its bundle
  * in; `problems.service.ts` calls this standalone and lets it load its own.
  */
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   isLiveProjectStatus,
   type ProjectAttentionItem,
@@ -36,11 +36,13 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import { householdDaysAgo, householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { listActionableTasks } from "~/server/repo/task/actionable";
 import {
   loadProjectSubtreeRollups,
@@ -186,12 +188,12 @@ export async function computeAttentionItems(
     const effectiveDue = effectiveTaskDueDate(row);
     if (!effectiveDue || effectiveDue >= today) continue;
     items.push({
-      key: attentionKey("overdue_task", row.id),
+      key: attentionKey("overdue_task", row.shortcode),
       type: "overdue_task",
       severity: "critical",
       description: `"${row.name}" was due ${effectiveDue} and is still open`,
       entityType: "task",
-      entityId: row.id,
+      entityId: row.shortcode,
       date: effectiveDue,
       amount: null,
       href: `/tasks/${row.shortcode}`,
@@ -250,12 +252,12 @@ export async function computeAttentionItems(
     const lastActivityDate = householdLocalDate(lastActivity);
     if (lastActivityDate >= activityCutoff) continue;
     items.push({
-      key: attentionKey("stalled_project", row.id),
+      key: attentionKey("stalled_project", row.shortcode),
       type: "stalled_project",
       severity: "warning",
       description: `"${row.name}" has had no project, task, or expense activity in ${STALE_ACTIVITY_DAYS}+ days`,
       entityType: "project",
-      entityId: row.id,
+      entityId: row.shortcode,
       date: lastActivityDate,
       amount: null,
       href: `/projects/${row.shortcode}`,
@@ -279,12 +281,12 @@ export async function computeAttentionItems(
     const spend = subtree.actualSpent + subtree.committedSpent;
     if (spend > 0 && subtree.costEstimate === null) {
       items.push({
-        key: attentionKey("missing_budget", row.id),
+        key: attentionKey("missing_budget", row.shortcode),
         type: "missing_budget",
         severity: "info",
         description: `"${row.name}" has $${spend.toFixed(0)} in spend but no budget estimate`,
         entityType: "project",
-        entityId: row.id,
+        entityId: row.shortcode,
         date: null,
         amount: spend,
         href: `/projects/${row.shortcode}`,
@@ -295,12 +297,12 @@ export async function computeAttentionItems(
   // 4. past_due_planned_expense
   for (const row of pastDueExpenseRows) {
     items.push({
-      key: attentionKey("past_due_planned_expense", row.id),
+      key: attentionKey("past_due_planned_expense", row.shortcode),
       type: "past_due_planned_expense",
       severity: "warning",
       description: `"${row.name}" was planned for ${row.date} but hasn't been logged as spent`,
       entityType: "expense",
-      entityId: row.id,
+      entityId: row.shortcode,
       date: row.date,
       amount: null,
       href: `/expenses/${row.shortcode}`,
@@ -312,12 +314,12 @@ export async function computeAttentionItems(
   // "uncategorized" value added there).
   for (const row of unclassifiedExpenseRows) {
     items.push({
-      key: attentionKey("unclassified_expense", row.id),
+      key: attentionKey("unclassified_expense", row.shortcode),
       type: "unclassified_expense",
       severity: "info",
       description: `"${row.name}" has no trade or cost recorded`,
       entityType: "expense",
-      entityId: row.id,
+      entityId: row.shortcode,
       date: row.date,
       amount: null,
       href: `/expenses/${row.shortcode}`,
@@ -326,25 +328,45 @@ export async function computeAttentionItems(
 
   // 6. blocked_work — in_progress project with >=1 blocked task and zero
   // unblocked `next` tasks (no available next action).
+  //
+  // `actionable`'s tasks carry the public `projectId` (a shortcode); resolve
+  // the ones in play back to the uuid this file's Sets/`inProjectScope` key
+  // on, in ONE batched lookup rather than per-task.
+  const actionableProjectCodes = uniq(
+    [
+      ...actionable.next.map((t) => t.projectId),
+      ...actionable.blocked.map((b) => b.task.projectId),
+    ].filter((code): code is NonNullable<typeof code> => code != null),
+  );
+  const actionableProjectRefs = await resolveShortcodes(
+    db,
+    actionableProjectCodes,
+  );
+  const toProjectUuid = (code: string): ProjectId | null => {
+    const ref = actionableProjectRefs.get(code);
+    return ref ? unsafeProjectId(ref.id) : null;
+  };
+
   const projectsWithNext = new Set<ProjectId>();
   for (const t of actionable.next) {
-    if (t.projectId && inProjectScope(t.projectId))
-      projectsWithNext.add(t.projectId);
+    const projectId = t.projectId ? toProjectUuid(t.projectId) : null;
+    if (projectId && inProjectScope(projectId)) projectsWithNext.add(projectId);
   }
   const projectsWithBlocked = new Set<ProjectId>();
   for (const b of actionable.blocked) {
-    if (b.task.projectId && inProjectScope(b.task.projectId))
-      projectsWithBlocked.add(b.task.projectId);
+    const projectId = b.task.projectId ? toProjectUuid(b.task.projectId) : null;
+    if (projectId && inProjectScope(projectId))
+      projectsWithBlocked.add(projectId);
   }
   for (const row of inProgressProjectRows) {
     if (projectsWithBlocked.has(row.id) && !projectsWithNext.has(row.id)) {
       items.push({
-        key: attentionKey("blocked_work", row.id),
+        key: attentionKey("blocked_work", row.shortcode),
         type: "blocked_work",
         severity: "warning",
         description: `"${row.name}" has blocked tasks and no unblocked next action`,
         entityType: "project",
-        entityId: row.id,
+        entityId: row.shortcode,
         date: null,
         amount: null,
         href: `/projects/${row.shortcode}`,
@@ -371,12 +393,12 @@ export async function computeAttentionItems(
       row.startDate > window.derivedStart
     ) {
       items.push({
-        key: attentionKey("date_window_drift", row.id, "start"),
+        key: attentionKey("date_window_drift", row.shortcode, "start"),
         type: "date_window_drift",
         severity: "info",
         description: `Start date ${row.startDate} is after the earliest dated work (${window.derivedStart})`,
         entityType: "project",
-        entityId: row.id,
+        entityId: row.shortcode,
         date: window.derivedStart,
         amount: null,
         href: `/projects/${row.shortcode}`,
@@ -388,12 +410,12 @@ export async function computeAttentionItems(
       row.endDate < window.derivedEnd
     ) {
       items.push({
-        key: attentionKey("date_window_drift", row.id, "end"),
+        key: attentionKey("date_window_drift", row.shortcode, "end"),
         type: "date_window_drift",
         severity: "info",
         description: `End date ${row.endDate} is before the latest dated work (${window.derivedEnd})`,
         entityType: "project",
-        entityId: row.id,
+        entityId: row.shortcode,
         date: window.derivedEnd,
         amount: null,
         href: `/projects/${row.shortcode}`,

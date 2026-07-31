@@ -24,7 +24,7 @@ describe("globalSearch: tracker entities", () => {
   const ctx = withTestDb();
 
   it("finds a project by name and reports status + spent enrichment", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: {
@@ -78,7 +78,7 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds a project by notes text", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: {
@@ -96,14 +96,14 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds a task by name and reports status + projectName enrichment", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Manifest Task Project" },
       }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: {
@@ -130,7 +130,7 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds a task by trade text", async () => {
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: {
@@ -148,14 +148,14 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds an expense by name and reports cost + projectName enrichment", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Manifest Expense Project" },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { output: expense } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -180,7 +180,7 @@ describe("globalSearch: tracker entities", () => {
   });
 
   it("finds an expense by trade or notes text", async () => {
-    const byTrade = await createExpense(
+    const { output: byTrade } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -190,7 +190,7 @@ describe("globalSearch: tracker entities", () => {
       }),
       ctx.actor,
     );
-    const byNotes = await createExpense(
+    const { output: byNotes } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: {
@@ -386,21 +386,21 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
   const ctx = withTestDb();
 
   it("round-trips project/task/expense refs, preserving ref order", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Hydrate Ref Project" },
       }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Hydrate Ref Task", projectId: project.id },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { output: expense } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: { name: "Hydrate Ref Expense", projectId: project.id },
@@ -431,7 +431,7 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
   });
 
   it("drops refs that don't resolve to a live row", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Hydrate Missing Ref Project" },

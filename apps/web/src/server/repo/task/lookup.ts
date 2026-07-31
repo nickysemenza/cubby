@@ -1,4 +1,5 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
+import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -40,8 +41,26 @@ import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
+import { resolveShortcode, resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
+
+/**
+ * Resolve a batch of shortcodes to their (unbranded) uuids for use in a WHERE
+ * clause. Unknown/malformed codes simply drop out — a filter naming a code
+ * that doesn't exist should match nothing, not throw.
+ */
+const toUuids = async (
+  db: Database,
+  codes: readonly string[],
+): Promise<string[]> => {
+  if (codes.length === 0) return [];
+  const resolved = await resolveShortcodes(db, codes);
+  return codes.flatMap((code) => {
+    const ref = resolved.get(code);
+    return ref ? [ref.id] : [];
+  });
+};
 
 /**
  * The `task.projectId` WHERE condition for a `projectId` + `includeSubProjects`
@@ -59,15 +78,17 @@ import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
  */
 export async function buildTaskProjectCondition(
   db: Database,
-  projectId: ProjectId | ProjectId[] | undefined,
+  projectId: ProjectShortcode | ProjectShortcode[] | undefined,
   includeSubProjects: boolean | undefined,
   presence?: PresenceFilter,
 ): Promise<SQL | undefined> {
   const presenceCond = presenceCondition(task.projectId, presence);
-  const selected = projectId ? [projectId].flat() : [];
+  const selectedCodes = projectId ? [projectId].flat() : [];
+  if (selectedCodes.length === 0) return presenceCond;
+  const selected = (await toUuids(db, selectedCodes)).map(unsafeProjectId);
   if (selected.length === 0) return presenceCond;
   if (!includeSubProjects)
-    return or(eqAny(task.projectId, projectId), presenceCond);
+    return or(eqAny(task.projectId, selected), presenceCond);
 
   const { childrenByParent } = await loadProjectTree(db);
   return or(
@@ -127,6 +148,9 @@ export const taskList = async (
     filters.includeSubProjects,
     filters.projectPresenceFilter,
   );
+  const parentTaskUuid = filters.parentTaskId
+    ? await resolveShortcode(db, filters.parentTaskId)
+    : null;
   const subjectProductNameMatches = filters.search
     ? dbClient
         .select({ id: product.id })
@@ -164,8 +188,8 @@ export const taskList = async (
       ),
       eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
-      filters.parentTaskId
-        ? eq(task.parentTaskId, filters.parentTaskId)
+      parentTaskUuid && parentTaskUuid.entity === "task"
+        ? eq(task.parentTaskId, unsafeTaskId(parentTaskUuid.id))
         : undefined,
       // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
       // ranged task still inside its window isn't treated as overdue, matching

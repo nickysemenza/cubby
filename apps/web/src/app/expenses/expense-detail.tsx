@@ -331,15 +331,16 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           )}
           SearchProvider={WithProjectSearch}
           renderValue={(v) =>
-            // The combobox value carries the project's uuid; the expense
-            // carries its public id, denormalized alongside `projectName`.
-            v && expense.projectShortcode ? (
+            // `expense.projectId` is the project's shortcode (per the
+            // project shortcode cutover), the same value the combobox
+            // carries — so both EntityInlineLink id slots read from it.
+            v && expense.projectId ? (
               <EntityInlineLink
                 entity="project"
                 data={{
                   id: v.id,
                   name: v.name,
-                  shortcode: expense.projectShortcode,
+                  shortcode: expense.projectId,
                 }}
               />
             ) : (
@@ -510,12 +511,12 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       }
     >
       <DetailSections sections={sections} rawData={expense} />
-      {expense.purchaseId && expense.purchaseShortcode ? (
+      {expense.purchaseId ? (
         <SplitExpenseDialog
           open={splitOpen}
           onOpenChange={setSplitOpen}
           expense={expense}
-          purchaseShortcode={expense.purchaseShortcode}
+          purchaseShortcode={expense.purchaseId}
         />
       ) : null}
       {expense.productId ? (

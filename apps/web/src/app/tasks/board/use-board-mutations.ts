@@ -1,4 +1,7 @@
-import { type TaskId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  type TaskShortcode,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   TaskBoardInput,
   TaskBoardOut,
@@ -119,7 +122,9 @@ export function useBoardMutations(target: BoardCacheTarget) {
             // Re-brand at the string→domain boundary (mutation inputs widen
             // branded ids to plain `string`).
             projectId:
-              data.projectId == null ? null : unsafeProjectId(data.projectId),
+              data.projectId == null
+                ? null
+                : unsafeProjectShortcode(data.projectId),
             projectName: nextProjectName ?? null,
           }
         : {}),
@@ -242,10 +247,11 @@ export function useBoardMutations(target: BoardCacheTarget) {
   });
 
   return {
-    moveTask: (taskId: TaskId, patch: TaskBoardPatch) =>
+    moveTask: (taskId: TaskShortcode, patch: TaskBoardPatch) =>
       update.mutate({ id: taskId, data: patch }),
     reorderTasks: (input: TaskBulkReorderInput) => reorder.mutate(input),
-    deleteTask: (taskId: TaskId) => remove.mutateAsync({ ids: [taskId] }),
+    deleteTask: (taskId: TaskShortcode) =>
+      remove.mutateAsync({ ids: [taskId] }),
     isDeleting: remove.isPending,
   };
 }

@@ -1,4 +1,7 @@
-import { unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  unsafeProjectId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ProjectCreateInput } from "@cubby/schemas/project";
 import {
   expenseCreateInput,
@@ -34,7 +37,7 @@ describe("project repository", () => {
   const ctx = withTestDb();
 
   it("creates a project and surfaces it in the list", async () => {
-    const created = await createProject(
+    const { output: created } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "test project a",
@@ -81,7 +84,7 @@ describe("project repository", () => {
       "https://drive.google.com/drive/folders/create123?usp=sharing";
     const notionUrl =
       "https://www.notion.so/workspace/Create-0123456789abcdef?pvs=4";
-    const created = await createProject(
+    const { output: created, entityId: createdEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "project resource links",
@@ -95,7 +98,9 @@ describe("project repository", () => {
       googleDriveFolderUrl: driveUrl,
       notionPageUrl: notionUrl,
     });
-    await expect(getProjectByID(ctx.db, created.id)).resolves.toMatchObject({
+    await expect(
+      getProjectByID(ctx.db, createdEntityId),
+    ).resolves.toMatchObject({
       googleDriveFolderUrl: driveUrl,
       notionPageUrl: notionUrl,
     });
@@ -104,7 +109,7 @@ describe("project repository", () => {
       "https://drive.google.com/drive/u/1/folders/update456?resourcekey=key";
     const updatedNotionUrl =
       "https://cubby.notion.site/Update-0123456789abcdef#details";
-    const updated = await updateProject(
+    const { output: updated } = await updateProject(
       ctx.db,
       created.id,
       {
@@ -118,7 +123,7 @@ describe("project repository", () => {
       notionPageUrl: updatedNotionUrl,
     });
 
-    const cleared = await updateProject(
+    const { output: cleared } = await updateProject(
       ctx.db,
       created.id,
       { googleDriveFolderUrl: null, notionPageUrl: null },
@@ -131,7 +136,7 @@ describe("project repository", () => {
 
     const audit = await getAuditLog(ctx.db, {
       entityType: "project",
-      entityId: created.id,
+      entityId: createdEntityId,
       limit: 20,
     });
     const updateChanges = audit.entries
@@ -189,7 +194,7 @@ describe("project repository", () => {
   });
 
   it("rolls up spend (including future expenses) and task counts", async () => {
-    const project = await createProject(
+    const { output: project, entityId: projectEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project rollup" }),
       ctx.actor,
@@ -220,7 +225,7 @@ describe("project repository", () => {
       ctx.actor,
     );
 
-    const doneTask = await createTask(
+    const { output: doneTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -250,7 +255,7 @@ describe("project repository", () => {
       ctx.actor,
     );
 
-    const result = await getProjectByID(ctx.db, project.id);
+    const result = await getProjectByID(ctx.db, projectEntityId);
     // spent includes the future expense — matches the retired Notion rollup's
     // semantics (a planned spend still counts toward the running total).
     // subtree equals own here — this project is a leaf (no sub-projects).
@@ -277,23 +282,25 @@ describe("project repository", () => {
   });
 
   it("replaces the blockedByIds dependency set on update, both directions readable", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project a" }),
       ctx.actor,
     );
-    const projectB = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project b" }),
-      ctx.actor,
-    );
-    const projectC = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project c" }),
-      ctx.actor,
-    );
+    const { output: projectB, entityId: projectBEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "test project b" }),
+        ctx.actor,
+      );
+    const { output: projectC, entityId: projectCEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "test project c" }),
+        ctx.actor,
+      );
 
-    const updatedA = await updateProject(
+    const { output: updatedA } = await updateProject(
       ctx.db,
       projectA.id,
       { blockedByIds: [projectB.id, projectC.id] },
@@ -303,11 +310,11 @@ describe("project repository", () => {
       new Set([projectB.id, projectC.id]),
     );
 
-    const projectBAfter = await getProjectByID(ctx.db, projectB.id);
+    const projectBAfter = await getProjectByID(ctx.db, projectBEntityId);
     expect(projectBAfter.blockingIds).toEqual([projectA.id]);
 
     // Replace the set (drop C, keep B) — full replacement, not an append.
-    const updatedAgain = await updateProject(
+    const { output: updatedAgain } = await updateProject(
       ctx.db,
       projectA.id,
       { blockedByIds: [projectB.id] },
@@ -315,12 +322,12 @@ describe("project repository", () => {
     );
     expect(updatedAgain.blockedByIds).toEqual([projectB.id]);
 
-    const projectCAfter = await getProjectByID(ctx.db, projectC.id);
+    const projectCAfter = await getProjectByID(ctx.db, projectCEntityId);
     expect(projectCAfter.blockingIds).toEqual([]);
   });
 
   it("rejects a self-reference in blockedByIds", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project self-ref" }),
       ctx.actor,
@@ -337,18 +344,19 @@ describe("project repository", () => {
   });
 
   it("dedupes duplicate ids in blockedByIds down to a single edge", async () => {
-    const projectA = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project dedupe a" }),
-      ctx.actor,
-    );
-    const projectB = await createProject(
+    const { output: projectA, entityId: projectAEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "test project dedupe a" }),
+        ctx.actor,
+      );
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project dedupe b" }),
       ctx.actor,
     );
 
-    const updated = await updateProject(
+    const { output: updated } = await updateProject(
       ctx.db,
       projectA.id,
       { blockedByIds: [projectB.id, projectB.id] },
@@ -359,17 +367,17 @@ describe("project repository", () => {
     const edges = await getDb(ctx.db)
       .select()
       .from(projectDependency)
-      .where(eq(projectDependency.projectId, projectA.id));
+      .where(eq(projectDependency.projectId, projectAEntityId));
     expect(edges).toHaveLength(1);
   });
 
   it("rejects a nonexistent id in blockedByIds with NOT_FOUND (not a raw 500)", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project missing dep" }),
       ctx.actor,
     );
-    const missingId = unsafeProjectId("00000000-0000-0000-0000-000000000000");
+    const missingId = unsafeProjectShortcode("PRJ-9999");
 
     await expect(
       updateProject(
@@ -382,11 +390,12 @@ describe("project repository", () => {
   });
 
   it("soft-deletes project images when the project is deleted", async () => {
-    const projectWithImage = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project with image" }),
-      ctx.actor,
-    );
+    const { output: projectWithImage, entityId: projectWithImageEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "test project with image" }),
+        ctx.actor,
+      );
     const img = await insertAndReturn(ctx.db, image, {
       key: "test-project-image-key",
       url: "https://example.com/test-project-image.jpg",
@@ -396,7 +405,7 @@ describe("project repository", () => {
       status: "UPLOADED",
     });
     const projImg = await insertAndReturn(ctx.db, projectImage, {
-      projectId: projectWithImage.id,
+      projectId: projectWithImageEntityId,
       imageId: img.id,
     });
 
@@ -409,7 +418,7 @@ describe("project repository", () => {
   });
 
   it("blocks deletion while live tasks or expenses still reference the project", async () => {
-    const projectWithTask = await createProject(
+    const { output: projectWithTask } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project with task" }),
       ctx.actor,
@@ -427,7 +436,7 @@ describe("project repository", () => {
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
     ).rejects.toThrow(/still have tasks/);
 
-    const projectWithExpense = await createProject(
+    const { output: projectWithExpense } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project with expense" }),
       ctx.actor,
@@ -448,16 +457,18 @@ describe("project repository", () => {
   });
 
   it("hard-deletes dependency edges (both directions) when a project is deleted", async () => {
-    const projectA = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project a" }),
-      ctx.actor,
-    );
-    const projectB = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project b" }),
-      ctx.actor,
-    );
+    const { output: projectA, entityId: projectAEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "test project a" }),
+        ctx.actor,
+      );
+    const { output: projectB, entityId: projectBEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "test project b" }),
+        ctx.actor,
+      );
     await updateProject(
       ctx.db,
       projectA.id,
@@ -474,13 +485,13 @@ describe("project repository", () => {
       .from(projectDependency)
       .where(
         or(
-          eq(projectDependency.projectId, projectB.id),
-          eq(projectDependency.blockedByProjectId, projectB.id),
+          eq(projectDependency.projectId, projectBEntityId),
+          eq(projectDependency.blockedByProjectId, projectBEntityId),
         ),
       );
     expect(remainingEdges).toHaveLength(0);
 
-    const projectAAfter = await getProjectByID(ctx.db, projectA.id);
+    const projectAAfter = await getProjectByID(ctx.db, projectAEntityId);
     expect(projectAAfter.blockedByIds).toEqual([]);
   });
 });
@@ -489,18 +500,18 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   const ctx = withTestDb();
 
   it("sets, changes, and clears parentProjectId", async () => {
-    const parentA = await createProject(
+    const { output: parentA, entityId: parentAEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "parent a" }),
       ctx.actor,
     );
-    const parentB = await createProject(
+    const { output: parentB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "parent b" }),
       ctx.actor,
     );
 
-    const created = await createProject(
+    const { output: created } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "child at create",
@@ -511,10 +522,10 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(created.parentProjectId).toBe(parentA.id);
     expect(created.parentProjectName).toBe(parentA.name);
 
-    const parentAAfter = await getProjectByID(ctx.db, parentA.id);
+    const parentAAfter = await getProjectByID(ctx.db, parentAEntityId);
     expect(parentAAfter.childProjectIds).toEqual([created.id]);
 
-    const changed = await updateProject(
+    const { output: changed } = await updateProject(
       ctx.db,
       created.id,
       { parentProjectId: parentB.id },
@@ -523,10 +534,10 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(changed.parentProjectId).toBe(parentB.id);
     expect(changed.parentProjectName).toBe(parentB.name);
 
-    const parentAAfterMove = await getProjectByID(ctx.db, parentA.id);
+    const parentAAfterMove = await getProjectByID(ctx.db, parentAEntityId);
     expect(parentAAfterMove.childProjectIds).toEqual([]);
 
-    const cleared = await updateProject(
+    const { output: cleared } = await updateProject(
       ctx.db,
       created.id,
       { parentProjectId: null },
@@ -537,7 +548,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("rejects a nonexistent or soft-deleted parentProjectId with NOT_FOUND", async () => {
-    const missingId = unsafeProjectId("00000000-0000-0000-0000-000000000000");
+    const missingId = unsafeProjectShortcode("PRJ-9999");
     await expect(
       createProject(
         ctx.db,
@@ -549,12 +560,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project not-found parent" }),
       ctx.actor,
     );
-    const deletedParent = await createProject(
+    const { output: deletedParent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "soon-deleted parent" }),
       ctx.actor,
@@ -572,7 +583,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("rejects a self-parent with SELF_DEPENDENCY", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "test project self-parent" }),
       ctx.actor,
@@ -589,17 +600,17 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("rejects a cycle (A -> B -> C; making A a child of C) with PROJECT_CYCLE", async () => {
-    const a = await createProject(
+    const { output: a, entityId: aEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "cycle a" }),
       ctx.actor,
     );
-    const b = await createProject(
+    const { output: b } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "cycle b", parentProjectId: a.id }),
       ctx.actor,
     );
-    const c = await createProject(
+    const { output: c } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "cycle c", parentProjectId: b.id }),
       ctx.actor,
@@ -611,17 +622,17 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     // Unaffected: the original chain still holds.
-    const aAfter = await getProjectByID(ctx.db, a.id);
+    const aAfter = await getProjectByID(ctx.db, aEntityId);
     expect(aAfter.parentProjectId).toBeNull();
   });
 
   it("rejects deletion while live child projects still reference the parent, succeeds once reparented away", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "parent with child" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child, entityId: childEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "child blocking delete",
@@ -638,17 +649,20 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await updateProject(ctx.db, child.id, { parentProjectId: null }, ctx.actor);
     await deleteProjects(ctx.db, [parent.id], ctx.actor);
 
-    const parentAfter = await getProjectByID(ctx.db, child.id).catch((e) => e);
+    const parentAfter = await getProjectByID(ctx.db, childEntityId).catch(
+      (e) => e,
+    );
     expect(parentAfter).toBeDefined();
   });
 
   it("accumulates subtree rollups over 3 levels; a leaf's subtree equals its own numbers", async () => {
-    const grandparent = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "subtree grandparent" }),
-      ctx.actor,
-    );
-    const parent = await createProject(
+    const { output: grandparent, entityId: grandparentEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "subtree grandparent" }),
+        ctx.actor,
+      );
+    const { output: parent, entityId: parentEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "subtree parent",
@@ -656,7 +670,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       }),
       ctx.actor,
     );
-    const leaf = await createProject(
+    const { output: leaf, entityId: leafEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "subtree leaf",
@@ -699,7 +713,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       ctx.actor,
     );
 
-    const leafDoneTask = await createTask(
+    const { output: leafDoneTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -728,7 +742,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       ctx.actor,
     );
 
-    const leafAfter = await getProjectByID(ctx.db, leaf.id);
+    const leafAfter = await getProjectByID(ctx.db, leafEntityId);
     expect(leafAfter.rollup.subtree).toEqual({
       spent: leafAfter.rollup.spent,
       actualSpent: leafAfter.rollup.actualSpent,
@@ -742,7 +756,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     });
     expect(leafAfter.rollup.subtree.spent).toBe(40);
 
-    const parentAfter = await getProjectByID(ctx.db, parent.id);
+    const parentAfter = await getProjectByID(ctx.db, parentEntityId);
     expect(parentAfter.rollup.subtree).toEqual({
       spent: 60, // 20 (own) + 40 (leaf)
       actualSpent: 60, // all non-future, positive
@@ -755,7 +769,10 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       costEstimate: null,
     });
 
-    const grandparentAfter = await getProjectByID(ctx.db, grandparent.id);
+    const grandparentAfter = await getProjectByID(
+      ctx.db,
+      grandparentEntityId,
+    );
     expect(grandparentAfter.rollup.subtree).toEqual({
       spent: 70, // 10 (own) + 20 (parent) + 40 (leaf)
       actualSpent: 70,
@@ -781,12 +798,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("sums subtree costEstimate over non-null values, null when the subtree has none", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "estimate parent", costEstimate: 100 }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "estimate child",
@@ -830,7 +847,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
    * else.
    */
   it("a leaf's subtree rollup and subtree estimate degenerate to its own (the UI's no-branch invariant)", async () => {
-    const leaf = await createProject(
+    const { output: leaf } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "invariant leaf", costEstimate: 42 }),
       ctx.actor,
@@ -891,12 +908,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("filters the list by topLevelOnly and parentProjectId", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "filter parent" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "filter child",
@@ -922,12 +939,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("includeSubProjects expands the expense filter to the whole subtree", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "subtree filter parent" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "subtree filter child",
@@ -935,7 +952,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       }),
       ctx.actor,
     );
-    const grandchild = await createProject(
+    const { output: grandchild } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "subtree filter grandchild",
@@ -992,7 +1009,7 @@ describe("project repository — date windows (derivation)", () => {
   const ctx = withTestDb();
 
   it("derives dates purely from own content when no override is set", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "dates content only" }),
       ctx.actor,
@@ -1033,7 +1050,7 @@ describe("project repository — date windows (derivation)", () => {
   });
 
   it("resolves start and end independently: an explicit start overrides while a null end still derives", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "dates per-side override",
@@ -1060,12 +1077,12 @@ describe("project repository — date windows (derivation)", () => {
   });
 
   it("propagates a child's OVERRIDE into the parent's derived window, not the child's raw content dates", async () => {
-    const parent = await createProject(
+    const { output: parent } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "dates parent propagation" }),
       ctx.actor,
     );
-    const child = await createProject(
+    const { output: child } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "dates child propagation",
@@ -1093,7 +1110,7 @@ describe("project repository — date windows (derivation)", () => {
   });
 
   it("returns an all-null date window with 'none' sources for a project with no content and no override", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "dates empty" }),
       ctx.actor,
@@ -1171,7 +1188,7 @@ describe("project repository — date windows (derivation)", () => {
   it("sorts by effective start, folding override and both content sources", async () => {
     // Override far in the past — must sort first ascending even though its
     // own content is much later.
-    const overridden = await createProject(
+    const { output: overridden } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "sort override early",
@@ -1192,7 +1209,7 @@ describe("project repository — date windows (derivation)", () => {
 
     // No override, and its EXPENSE predates its task — the coalesce-chain bug
     // sorted this by the task min (2024-08-01) instead of 2024-03-01.
-    const derived = await createProject(
+    const { output: derived } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "sort derived middle" }),
       ctx.actor,
@@ -1222,7 +1239,7 @@ describe("project repository — date windows (derivation)", () => {
 
     // Neither override nor content — sorts last in BOTH directions (the
     // house-wide nulls-last convention).
-    const undated = await createProject(
+    const { output: undated } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "sort undated" }),
       ctx.actor,
@@ -1268,7 +1285,7 @@ describe("project dashboard — attention detector + summary", () => {
   const ctx = withTestDb();
 
   it("flags missing_budget only for a project with spend and no estimate", async () => {
-    const noEstimate = await createProject(
+    const { output: noEstimate } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "attention no estimate" }),
       ctx.actor,
@@ -1286,7 +1303,7 @@ describe("project dashboard — attention detector + summary", () => {
       ctx.actor,
     );
 
-    const withEstimate = await createProject(
+    const { output: withEstimate } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "attention with estimate",
@@ -1316,7 +1333,7 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("flags blocked_work for an in_progress project whose only task is blocked (no next task)", async () => {
-    const blockedProject = await createProject(
+    const { output: blockedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "attention blocked project",
@@ -1324,7 +1341,7 @@ describe("project dashboard — attention detector + summary", () => {
       }),
       ctx.actor,
     );
-    const blockedTask = await createTask(
+    const { output: blockedTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1337,7 +1354,7 @@ describe("project dashboard — attention detector + summary", () => {
 
     // Control: an in_progress project with an open (unblocked) task must NOT
     // be flagged — it has a `next` task available.
-    const unblockedProject = await createProject(
+    const { output: unblockedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "attention unblocked project",
@@ -1364,17 +1381,17 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("scopes dashboard attention to matched projects while retaining unassigned work", async () => {
-    const includedProject = await createProject(
+    const { output: includedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "attention included" }),
       ctx.actor,
     );
-    const excludedProject = await createProject(
+    const { output: excludedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "attention excluded" }),
       ctx.actor,
     );
-    const included = await createTask(
+    const { output: included } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1384,7 +1401,7 @@ describe("project dashboard — attention detector + summary", () => {
       }),
       ctx.actor,
     );
-    const excluded = await createTask(
+    const { output: excluded } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1394,7 +1411,7 @@ describe("project dashboard — attention detector + summary", () => {
       }),
       ctx.actor,
     );
-    const unassigned = await createTask(
+    const { output: unassigned } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -1417,7 +1434,7 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("flags date_window_drift on both a too-late start and a too-early end", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "attention drift both",
@@ -1460,8 +1477,8 @@ describe("project dashboard — attention detector + summary", () => {
     ]);
     expect(drift.map((d) => d.severity)).toEqual(["info", "info"]);
     expect(drift.map((d) => d.href)).toEqual([
-      `/projects/${project.shortcode}`,
-      `/projects/${project.shortcode}`,
+      `/projects/${project.id}`,
+      `/projects/${project.id}`,
     ]);
     const startItem = drift.find((d) => d.date === "2024-01-01");
     expect(startItem?.description).toBe(
@@ -1484,7 +1501,7 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("does not flag date_window_drift when the override is wider than derived, or exactly equal to it", async () => {
-    const wider = await createProject(
+    const { output: wider } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "attention drift wider",
@@ -1506,7 +1523,7 @@ describe("project dashboard — attention detector + summary", () => {
       ctx.actor,
     );
 
-    const exact = await createProject(
+    const { output: exact } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "attention drift exact",
@@ -1535,7 +1552,7 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("an omitted statusScope includes `done` projects in the list and in actualSpend/committedSpend", async () => {
-    const projectA = await createProject(
+    const { output: projectA } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "summary spend a",
@@ -1543,12 +1560,12 @@ describe("project dashboard — attention detector + summary", () => {
       }),
       ctx.actor,
     );
-    const projectB = await createProject(
+    const { output: projectB } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "summary spend b", status: "planning" }),
       ctx.actor,
     );
-    const projectDone = await createProject(
+    const { output: projectDone } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "summary spend done", status: "done" }),
       ctx.actor,
@@ -1622,8 +1639,10 @@ describe("project dashboard — summary scope filters", () => {
   const ctx = withTestDb();
 
   /** Every fixture here is a bare project; only the scoped columns vary. */
-  const mkProject = (input: Partial<ProjectCreateInput> & { name: string }) =>
-    createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+  const mkProject = async (input: Partial<ProjectCreateInput> & { name: string }) => {
+    const { output } = await createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+    return output;
+  };
 
   /** Names of the projects the summary's scoped set actually returned. */
   const scopedNames = (summary: { projects: Array<{ name: string }> }) =>
@@ -1933,8 +1952,10 @@ describe("project dashboard — summary scope filters", () => {
 describe("project dashboard — portfolio analytics", () => {
   const ctx = withTestDb();
 
-  const mkProject = (input: Partial<ProjectCreateInput> & { name: string }) =>
-    createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+  const mkProject = async (input: Partial<ProjectCreateInput> & { name: string }) => {
+    const { output } = await createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+    return output;
+  };
 
   const mkExpense = (
     name: string,
@@ -1946,6 +1967,7 @@ describe("project dashboard — portfolio analytics", () => {
       trade?: "other" | "plumbing";
     } = {},
   ) =>
+unwrap(
     createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1958,7 +1980,7 @@ describe("project dashboard — portfolio analytics", () => {
         date: extra.date ?? "2025-03-15",
       }),
       ctx.actor,
-    );
+    ));
 
   /**
    * parent (est 100) ── child (est 50); plus an unrelated `done` project.
@@ -2037,19 +2059,16 @@ describe("project dashboard — portfolio analytics", () => {
     expect(analytics.spendingByProject).toEqual([
       {
         projectId: solo.id,
-        projectShortcode: solo.shortcode,
         projectName: "analytics solo",
         spend: 200,
       },
       {
         projectId: parent.id,
-        projectShortcode: parent.shortcode,
         projectName: "analytics parent",
         spend: 150,
       },
       {
         projectId: child.id,
-        projectShortcode: child.shortcode,
         projectName: "analytics child",
         spend: 25,
       },
@@ -2078,7 +2097,6 @@ describe("project dashboard — portfolio analytics", () => {
     expect(analytics.spendingByProject).toEqual([
       {
         projectId: parent.id,
-        projectShortcode: parent.shortcode,
         projectName: "analytics parent",
         spend: 150,
       },
@@ -2149,7 +2167,7 @@ describe("project dashboard — portfolio analytics", () => {
         ctx.actor,
       );
     }
-    const doneTask = await createTask(
+    const { output: doneTask } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -2164,20 +2182,17 @@ describe("project dashboard — portfolio analytics", () => {
     expect(analytics.taskHeatmap).toEqual([
       {
         projectId: child.id,
-        projectShortcode: child.shortcode,
         projectName: "analytics child",
         openTaskCount: 2,
       },
       // 1, not 3 — own open tasks only, and the done one doesn't count.
       {
         projectId: parent.id,
-        projectShortcode: parent.shortcode,
         projectName: "analytics parent",
         openTaskCount: 1,
       },
       {
         projectId: solo.id,
-        projectShortcode: solo.shortcode,
         projectName: "analytics solo",
         openTaskCount: 0,
       },

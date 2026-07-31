@@ -31,6 +31,7 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 import { createTask } from "./task";
 
 describe("searchable entity loader maps", () => {
@@ -69,25 +70,34 @@ describe("searchable entity loader maps", () => {
       makeRecipeInput({ name: "Loader recipe" }),
       ctx.actor,
     );
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       mock(projectCreateInput, { overrides: { name: "Loader project" } }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
-        overrides: { name: "Loader task", projectId: project.id },
+        overrides: { name: "Loader task", projectId: project.output.id },
       }),
       ctx.actor,
     );
-    const expense = await createExpense(
+    const { output: expense } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
-        overrides: { name: "Loader expense", projectId: project.id },
+        overrides: { name: "Loader expense", projectId: project.output.id },
       }),
       ctx.actor,
     );
+    // `createExpense` returns only the public shortcode; the embedding table
+    // is keyed by the internal uuid, so resolve it back for the `ids` map
+    // below (project/task already expose their uuid via `.entityId`).
+    const expenseUuid = await resolveLiveShortcode(
+      ctx.db,
+      expense.id,
+      "expense",
+    );
+    if (!expenseUuid) throw new Error("expense not found after create");
     const cookbook = await upsertCookbook(
       ctx.db,
       {
@@ -116,9 +126,9 @@ describe("searchable entity loader maps", () => {
       location: location.id,
       inventory: inventory.id,
       meal: meal.id,
-      project: project.id,
-      task: task.id,
-      expense: expense.id,
+      project: project.entityId,
+      task: task.entityId,
+      expense: expenseUuid,
     } satisfies Record<SearchableEntity, string>;
 
     const batch = await getEmbeddingTextsForEntityTypes(ctx.db, [

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
-import { vendorId, vendorShortcode } from "./identifiers";
+import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 
 /**
@@ -33,7 +33,7 @@ export type VendorCreateInput = z.infer<typeof vendorCreateInput>;
 export const vendorUpdateData = deriveUpdateData(vendorCreateShape);
 export type VendorUpdateData = z.infer<typeof vendorUpdateData>;
 export const vendorUpdateInput = z.object({
-  id: vendorId,
+  id: vendorShortcode,
   data: vendorUpdateData,
 });
 export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
@@ -55,8 +55,7 @@ export const vendorSortableFields = [
 export type VendorSortField = (typeof vendorSortableFields)[number];
 
 export const vendorOut = z.object({
-  id: vendorId,
-  shortcode: vendorShortcode,
+  id: vendorShortcode,
   ...vendorFields,
   /** Live purchases pointing at this vendor. Gates deletion. */
   purchaseCount: z.number().int(),
@@ -80,7 +79,7 @@ export type VendorListResponse = z.infer<typeof vendorListResponse>;
  */
 export const vendorOptionsOut = z.array(
   z.object({
-    id: vendorId,
+    id: vendorShortcode,
     name: z.string(),
     count: z.number().int(),
   }),
@@ -97,7 +96,7 @@ export type VendorOptionsOut = z.infer<typeof vendorOptionsOut>;
  * hold under the same order id.
  */
 export const mergeVendorsInput = z.object({
-  keepId: vendorId,
-  mergeIds: z.array(vendorId).min(1),
+  keepId: vendorShortcode,
+  mergeIds: z.array(vendorShortcode).min(1),
 });
 export type MergeVendorsInput = z.infer<typeof mergeVendorsInput>;

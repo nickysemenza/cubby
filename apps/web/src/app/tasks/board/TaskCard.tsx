@@ -117,7 +117,7 @@ export function TaskCard({
   const open = () =>
     navigate({
       to: entities.task.routes.detail,
-      params: entityDetailParams(task.shortcode),
+      params: entityDetailParams(task.id),
     });
 
   // A ranged task (dueDate + dueEndDate) is overdue only once its *end* passes
@@ -253,7 +253,7 @@ export function TaskCard({
             </Badge>
           )}
           {showTrade && <TradeBadge trade={task.trade} />}
-          {showProject && task.projectId && task.projectShortcode && (
+          {showProject && task.projectId && (
             // biome-ignore lint/a11y/noStaticElementInteractions: bare stopPropagation guard so a card click doesn't fire when the inner link is used
             <span
               onClick={(e) => e.stopPropagation()}
@@ -265,7 +265,7 @@ export function TaskCard({
                 truncate
                 data={{
                   id: task.projectId,
-                  shortcode: task.projectShortcode,
+                  shortcode: task.projectId,
                   name: task.projectName ?? "",
                 }}
               />

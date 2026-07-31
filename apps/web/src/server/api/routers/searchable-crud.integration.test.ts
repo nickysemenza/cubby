@@ -1,4 +1,4 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import { ingredientCreateInput } from "@cubby/schemas/ingredient";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
@@ -28,7 +28,7 @@ describe("searchable CRUD factory", () => {
         overrides: { name: "Searchable CRUD project" },
       }),
     );
-    expectTypeOf(created.id).toEqualTypeOf<ProjectId>();
+    expectTypeOf(created.id).toEqualTypeOf<ProjectShortcode>();
 
     const updated = await caller.update({
       id: created.id,
@@ -98,7 +98,10 @@ describe("every entity router stamps a usable, correctly-prefixed shortcode on c
         overrides: { name: "Shortcode Ground Truth Vendor" },
       }),
     );
-    expect(parseShortcode(created.shortcode)).toMatchObject({
+    // `vendor.id` IS the shortcode now — vendor has no separate `.shortcode`
+    // field (collapsed in the shortcode cutover, unlike product/location/
+    // ingredient above, which haven't gone through it yet).
+    expect(parseShortcode(created.id)).toMatchObject({
       type: "vendor",
       legacy: false,
     });

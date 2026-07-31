@@ -301,7 +301,7 @@ describe("problems repo", () => {
         makeProductInput({ name: "Bought Not Yet Stocked" }),
         ctx.actor,
       );
-      const expense = await createExpense(
+      const { output: expense } = await createExpense(
         ctx.db,
         expenseCreateInput.parse({
           trade: "other",
@@ -339,7 +339,7 @@ describe("problems repo", () => {
         makeProductInput({ name: "Maintained Furnace" }),
         ctx.actor,
       );
-      const task = await createTask(
+      const { output: task } = await createTask(
         ctx.db,
         taskCreateInput.parse({
           name: "Replace furnace filter",
@@ -794,7 +794,7 @@ describe("problems service — tracker slice", () => {
   const ctx = withTestDb();
 
   it("surfaces an overdue task and a past-due planned expense in their slices", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "tracker slice project",
@@ -802,7 +802,7 @@ describe("problems service — tracker slice", () => {
       }),
       ctx.actor,
     );
-    const overdue = await createTask(
+    const { output: overdue } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -813,7 +813,7 @@ describe("problems service — tracker slice", () => {
       ctx.actor,
     );
     // Control: a task due in the future is not overdue.
-    const upcoming = await createTask(
+    const { output: upcoming } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -823,7 +823,7 @@ describe("problems service — tracker slice", () => {
       }),
       ctx.actor,
     );
-    const pastDuePlanned = await createExpense(
+    const { output: pastDuePlanned } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -861,7 +861,7 @@ describe("problems service — tracker slice", () => {
   });
 
   it("excludes rows belonging to a deleted project", async () => {
-    const project = await createProject(
+    const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "tracker deleted project",
@@ -869,7 +869,7 @@ describe("problems service — tracker slice", () => {
       }),
       ctx.actor,
     );
-    const task = await createTask(
+    const { output: task } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
@@ -879,7 +879,7 @@ describe("problems service — tracker slice", () => {
       }),
       ctx.actor,
     );
-    const planned = await createExpense(
+    const { output: planned } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
         trade: "other",
@@ -935,7 +935,7 @@ describe("problems service — tracker slice", () => {
       );
     };
 
-    const live = await createProject(
+    const { output: live } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "budget live project",
@@ -943,7 +943,7 @@ describe("problems service — tracker slice", () => {
       }),
       ctx.actor,
     );
-    const finished = await createProject(
+    const { output: finished } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "budget finished project",
@@ -1256,6 +1256,7 @@ describe("problems — duplicate vendors", () => {
   // a second spelling mints a second roster row. Each distinct orderId is a
   // separate charge on that vendor, which is what the detector weighs.
   const seedCharge = (vendor: string, orderId: string) =>
+unwrap(
     createExpense(
       ctx.db,
       expenseCreateInput.parse(
@@ -1267,7 +1268,7 @@ describe("problems — duplicate vendors", () => {
         }),
       ),
       ctx.actor,
-    );
+    ));
 
   // Idempotent by contract (vendor.integration.test pins it), so this reads an
   // existing roster row's id rather than creating anything.
@@ -1362,18 +1363,20 @@ describe("problems — charges not reconciling", () => {
   // land on ONE charge. `statedTotal` is charge-level and is set afterwards —
   // there is deliberately no path that derives it from the lines.
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+unwrap(
     createExpense(
       ctx.db,
       expenseCreateInput.parse(makeExpenseInput(overrides)),
       ctx.actor,
-    );
+    ));
 
   const setStated = (id: PurchaseId, statedTotal: number) =>
+unwrap(
     updatePurchase(
       ctx.db,
       purchaseUpdateInput.parse({ id, data: { statedTotal } }),
       ctx.actor,
-    );
+    ));
 
   it("flags charges whose lines don't add up, biggest gap first, and leaves a matching one alone", async () => {
     const big = await seedLine({

@@ -210,34 +210,34 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
     )?.deletedAt;
 
   it("deleteProjects leaves no orphan", async () => {
-    const project = await createProject(
+    const { output: project, entityId: projectId } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
         overrides: { name: "Embedding Cascade Project" },
       }),
       TEST_ACTOR,
     );
-    await seedEmbedding("project", project.id);
+    await seedEmbedding("project", projectId);
 
     await deleteProjects(ctx.db, [project.id], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt("project", project.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("project", projectId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   it("deleteTasks leaves no orphan", async () => {
-    const task = await createTask(
+    const { output: task, entityId: taskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Embedding Cascade Task" },
       }),
       TEST_ACTOR,
     );
-    await seedEmbedding("task", task.id);
+    await seedEmbedding("task", taskId);
 
     await deleteTasks(ctx.db, [task.id], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt("task", task.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("task", taskId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
@@ -246,21 +246,21 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
   // is represented via its parent). Same soft-delete/edge-cleanup/embedding
   // treatment as the explicitly-requested id.
   it("deleteTasks cascades to live subtasks (soft-deleted, edges cleaned, embeddings cleaned)", async () => {
-    const parentTask = await createTask(
+    const { output: parentTask, entityId: parentTaskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Cascade Parent", parentTaskId: null },
       }),
       TEST_ACTOR,
     );
-    const subtask = await createTask(
+    const { output: subtask, entityId: subtaskId } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Cascade Subtask", parentTaskId: parentTask.id },
       }),
       TEST_ACTOR,
     );
-    const blocker = await createTask(
+    const { output: blocker } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Cascade Blocker", parentTaskId: null },
@@ -273,27 +273,27 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
       { blockedByIds: [blocker.id] },
       TEST_ACTOR,
     );
-    await seedEmbedding("task", parentTask.id);
-    await seedEmbedding("task", subtask.id);
+    await seedEmbedding("task", parentTaskId);
+    await seedEmbedding("task", subtaskId);
 
     await deleteTasks(ctx.db, [parentTask.id], TEST_ACTOR);
 
     const parentRow = await getDb(ctx.db).query.task.findFirst({
-      where: eq(task.id, parentTask.id),
+      where: eq(task.id, parentTaskId),
     });
     const subtaskRow = await getDb(ctx.db).query.task.findFirst({
-      where: eq(task.id, subtask.id),
+      where: eq(task.id, subtaskId),
     });
     expect(parentRow?.deletedAt).not.toBeNull();
     expect(subtaskRow?.deletedAt).not.toBeNull();
 
     const remainingEdges = await getDb(ctx.db).query.taskDependency.findMany({
-      where: eq(taskDependency.taskId, subtask.id),
+      where: eq(taskDependency.taskId, subtaskId),
     });
     expect(remainingEdges).toHaveLength(0);
 
-    expect(await embeddingDeletedAt("task", parentTask.id)).not.toBeNull();
-    expect(await embeddingDeletedAt("task", subtask.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("task", parentTaskId)).not.toBeNull();
+    expect(await embeddingDeletedAt("task", subtaskId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
@@ -332,18 +332,18 @@ describe("tracker removal cascades entity embeddings (no orphans)", () => {
   });
 
   it("deleteExpenses leaves no orphan", async () => {
-    const expense = await createExpense(
+    const { output: expense, entityId: expenseId } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: { name: "Embedding Cascade Expense" },
       }),
       TEST_ACTOR,
     );
-    await seedEmbedding("expense", expense.id);
+    await seedEmbedding("expense", expenseId);
 
     await deleteExpenses(ctx.db, [expense.id], TEST_ACTOR);
 
-    expect(await embeddingDeletedAt("expense", expense.id)).not.toBeNull();
+    expect(await embeddingDeletedAt("expense", expenseId)).not.toBeNull();
     expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

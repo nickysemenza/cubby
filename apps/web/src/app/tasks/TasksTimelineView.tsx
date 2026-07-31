@@ -59,7 +59,7 @@ function buildFlatTaskRows(tasks: TaskOut[]): {
     return {
       kind: "task",
       id: t.id,
-      shortcode: t.shortcode,
+      shortcode: t.id,
       name: t.name,
       depth: 0,
       status: t.status,

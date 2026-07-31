@@ -12,7 +12,11 @@
  * the repo — never client-side.
  */
 
-import { type ProjectId, projectId } from "@cubby/schemas/identifiers";
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
+import {
+  projectShortcode,
+  unsafeProjectId,
+} from "@cubby/schemas/identifiers";
 import {
   createProjectFromTasksInput,
   createProjectFromTasksOut,
@@ -39,6 +43,8 @@ import {
   updateProject,
 } from "~/server/repo/project";
 import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { createAppError } from "~/server/errors/app-error";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -57,19 +63,28 @@ const {
     output: projectOut,
     filters: projectFiltersSchema,
     sort: { sortableFields: projectSortableFields, defaultSort: "createdAt" },
-    idSchema: projectId,
+    idSchema: projectShortcode,
   },
   repository: {
-    getByID: async (services, id: ProjectId) => getProjectByID(services.db, id),
+    getByID: async (services, shortcode: ProjectShortcode) => {
+      const id = await resolveLiveShortcode(services.db, shortcode, "project");
+      if (!id) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project not found: ${shortcode}`,
+        );
+      }
+      return getProjectByID(services.db, unsafeProjectId(id));
+    },
     getByShortcode: (services, shortcode) =>
       getProjectByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       projectList(services.db, filters, sort, pagination),
     create: async (services, data) =>
       createProject(services.db, data, services.actorContext),
-    update: async (services, id: ProjectId, data) =>
-      updateProject(services.db, id, data, services.actorContext),
-    delete: async (services, ids) => {
+    update: async (services, shortcode: ProjectShortcode, data) =>
+      updateProject(services.db, shortcode, data, services.actorContext),
+    delete: async (services, ids: ProjectShortcode[]) => {
       await deleteProjects(services.db, ids, services.actorContext);
       return undefined;
     },
@@ -108,27 +123,26 @@ const createFromTasks = protectedProcedure
   .input(createProjectFromTasksInput)
   .output(createProjectFromTasksOut)
   .mutation(async ({ ctx, input }) => {
-    const result = await createProjectFromTasks(
-      ctx.db,
-      input,
-      ctx.actorContext,
-    );
+    const { output, projectEntityId, taskEntityIds } =
+      await createProjectFromTasks(ctx.db, input, ctx.actorContext);
     // Fire-and-forget wave-wide dispatch (embedding refresh) — the output
     // schema (createProjectFromTasksOut) has no sideEffects slot to report it
     // through, unlike the task-bulk mutations' *ListAndSideEffectsOut shape.
+    // Uses the INTERNAL uuids (not `output`'s public shortcodes) since that's
+    // what the embedding pipeline keys on.
     await runMutationSideEffectsForEntities(ctx.db, [
       {
         action: "created" as const,
-        entity: { entityType: "project" as const, entityId: result.project.id },
+        entity: { entityType: "project" as const, entityId: projectEntityId },
         source: "project.createFromTasks",
       },
-      ...result.tasks.map((item) => ({
+      ...taskEntityIds.map((entityId) => ({
         action: "updated" as const,
-        entity: { entityType: "task" as const, entityId: item.id },
+        entity: { entityType: "task" as const, entityId },
         source: "project.createFromTasks",
       })),
     ]);
-    return result;
+    return output;
   });
 
 export const projectRouter = createTRPCRouter({

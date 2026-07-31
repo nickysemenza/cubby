@@ -10,7 +10,7 @@ import type {
 
 /** Shape of a `project` row as returned by a plain (no relations) select. */
 export type ProjectRow = {
-  id: ProjectOut["id"];
+  id: ProjectId;
   shortcode: string;
   name: string;
   status: ProjectOut["status"];
@@ -119,33 +119,31 @@ const dbProjectToAPI = ({
   ownRollup: ProjectOwnRollup;
   subtreeRollup: ProjectSubtreeRollup;
   dates: ProjectDateWindow;
-  blockedByIds: ProjectId[];
-  blockingIds: ProjectId[];
+  blockedByIds: string[];
+  blockingIds: string[];
   parentProjectName: string | null;
   parentProjectShortcode: string | null;
-  childProjectIds: ProjectId[];
+  childProjectIds: string[];
 }): ProjectOut => ({
-  id: row.id,
-  shortcode: unsafeProjectShortcode(row.shortcode),
+  id: unsafeProjectShortcode(row.shortcode),
   name: row.name,
   status: row.status,
   kind: row.kind,
   locations: row.locations,
   costEstimate: row.costEstimate,
-  parentProjectId: row.parentProjectId,
-  parentProjectName,
-  parentProjectShortcode: parentProjectShortcode
+  parentProjectId: parentProjectShortcode
     ? unsafeProjectShortcode(parentProjectShortcode)
     : null,
-  childProjectIds,
+  parentProjectName,
+  childProjectIds: childProjectIds.map(unsafeProjectShortcode),
   startDate: row.startDate,
   endDate: row.endDate,
   icon: row.icon,
   notes: row.notes,
   googleDriveFolderUrl: row.googleDriveFolderUrl,
   notionPageUrl: row.notionPageUrl,
-  blockedByIds,
-  blockingIds,
+  blockedByIds: blockedByIds.map(unsafeProjectShortcode),
+  blockingIds: blockingIds.map(unsafeProjectShortcode),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   rollup: { ...ownRollup, subtree: subtreeRollup },
@@ -170,20 +168,24 @@ export const hydrateProjectRow = (
     blockedBy: Map<ProjectId, ProjectId[]>;
     blocking: Map<ProjectId, ProjectId[]>;
   },
-): ProjectOut =>
-  dbProjectToAPI({
+): ProjectOut => {
+  const toShortcode = (id: ProjectId) => context.shortcodeById.get(id) ?? "";
+  return dbProjectToAPI({
     row,
     ownRollup: context.ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
     subtreeRollup:
       context.subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
     dates: context.dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
-    blockedByIds: dependencies.blockedBy.get(row.id) ?? [],
-    blockingIds: dependencies.blocking.get(row.id) ?? [],
+    blockedByIds: (dependencies.blockedBy.get(row.id) ?? []).map(toShortcode),
+    blockingIds: (dependencies.blocking.get(row.id) ?? []).map(toShortcode),
     parentProjectName: row.parentProjectId
       ? (context.nameById.get(row.parentProjectId) ?? null)
       : null,
     parentProjectShortcode: row.parentProjectId
       ? (context.shortcodeById.get(row.parentProjectId) ?? null)
       : null,
-    childProjectIds: context.childrenByParent.get(row.id) ?? [],
+    childProjectIds: (context.childrenByParent.get(row.id) ?? []).map(
+      toShortcode,
+    ),
   });
+};

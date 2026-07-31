@@ -49,7 +49,8 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
 
   // The caller only mounts this section for a line that has a charge; this keeps
   // the parent link's `params` honest rather than asserting a non-null id.
-  if (!expense.purchaseId || !expense.purchaseShortcode) return null;
+  // `purchaseId` is the charge's shortcode (per the purchase shortcode cutover).
+  if (!expense.purchaseId) return null;
 
   // `isPending` gates the line list: without it "only line on this charge"
   // flashes on every load, which reads as an answer rather than a pending state.
@@ -71,7 +72,7 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
           {/* The charge's own page is the primary hop — it owns the invoice,
               the stated total, and every line at once. */}
           <Link
-            {...entityDetailLink("purchase", expense.purchaseShortcode)}
+            {...entityDetailLink("purchase", expense.purchaseId)}
             className="min-w-0 hover:underline"
           >
             {expense.vendor ? (
@@ -120,7 +121,11 @@ export const ExpenseChargeSection: FC<{ expense: ExpenseOut }> = ({
         <Stack gap="tight">
           {others.map((line) => (
             <Row key={line.id} align="center" justify="between" gap="sm">
-              <EntityInlineLink entity="expense" data={line} truncate />
+              <EntityInlineLink
+                entity="expense"
+                data={{ ...line, shortcode: line.id }}
+                truncate
+              />
               <Row
                 align="center"
                 gap="sm"

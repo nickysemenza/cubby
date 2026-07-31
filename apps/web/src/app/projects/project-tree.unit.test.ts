@@ -1,38 +1,23 @@
-import {
-  unsafeProjectId,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ProjectOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import { buildProjectTree } from "./project-tree";
 
-// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
-const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-let projectShortcodeCounter = 0;
-const nextProjectShortcode = () => {
-  const n = projectShortcodeCounter++;
-  const hi =
-    SHORTCODE_ALPHABET[
-      Math.floor(n / SHORTCODE_ALPHABET.length) % SHORTCODE_ALPHABET.length
-    ];
-  const lo = SHORTCODE_ALPHABET[n % SHORTCODE_ALPHABET.length];
-  return unsafeProjectShortcode(`PRJ-23${hi}${lo}`);
-};
-
 /** Minimal `ProjectOut`-shaped fixture — only `id`/`parentProjectId` vary;
- * every other field is a fixed, valid default the builder never reads. */
+ * every other field is a fixed, valid default the builder never reads.
+ * `id`/`parentProjectId` are now the shortcode itself (post-cutover); these
+ * are unsafe casts, not zod-validated, so the readable test names double as
+ * the fixture's "shortcode" without needing to match the real PRJ-XXXX shape. */
 function proj(id: string, parentProjectId?: string): ProjectOut {
   return {
-    id: unsafeProjectId(id),
-    shortcode: nextProjectShortcode(),
-    parentProjectShortcode: null,
+    id: unsafeProjectShortcode(id),
     name: id,
     status: "planning",
     kind: null,
     locations: [],
     costEstimate: null,
     parentProjectId:
-      parentProjectId != null ? unsafeProjectId(parentProjectId) : null,
+      parentProjectId != null ? unsafeProjectShortcode(parentProjectId) : null,
     startDate: null,
     endDate: null,
     icon: null,

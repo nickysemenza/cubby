@@ -128,17 +128,16 @@ const houseStatusProject = projectOut.omit({
 });
 
 /** Upcoming-task row for `get_house_status` — enough to name and schedule the
- * task; `get_task` / `list_actionable_tasks` own the blocking graph. `taskOut`
- * already carries a shortcode for each of these ids (from the previous
- * cutover pass) — picked here in place of `id`/`projectId`/`subjectProductId`
- * rather than alongside them, since this tool bypasses the `slim*`
- * projections that would otherwise do that swap (see `registerRouterTool`'s
- * doc comment). */
+ * task; `get_task` / `list_actionable_tasks` own the blocking graph. `taskOut`'s
+ * own `id` and `projectId` ARE shortcodes now, so they're picked directly.
+ * `subjectProductShortcode` is still separate because product keeps a uuid `id`
+ * alongside its code — this tool bypasses the `slim*` projections that would
+ * otherwise do that swap (see `registerRouterTool`'s doc comment). */
 const houseStatusTask = taskOut.pick({
-  shortcode: true,
+  id: true,
   name: true,
   status: true,
-  projectShortcode: true,
+  projectId: true,
   projectName: true,
   subjectProductShortcode: true,
   subjectProductName: true,

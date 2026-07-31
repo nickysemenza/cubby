@@ -18,7 +18,11 @@
  * project/analytics.ts's `projectRollups` split (`spent := sum(cost)` is the
  * same identity as this file's `net`).
  */
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectShortcode,
+  unsafeProjectShortcode,
+  unsafeVendorShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ExpenseAnalyticsOut,
   ExpenseFilters,
@@ -104,7 +108,7 @@ export async function expenseAnalytics(
     // of hiding a deleted parent's name elsewhere in the expense API.
     getDb(db)
       .select({
-        projectId: expense.projectId,
+        projectShortcode: project.shortcode,
         projectName: project.name,
         ...aggregateSelect(),
       })
@@ -114,7 +118,7 @@ export async function expenseAnalytics(
         and(eq(expense.projectId, project.id), notDeleted(project)),
       )
       .where(and(whereClause, isNotNull(expense.projectId)))
-      .groupBy(expense.projectId, project.name),
+      .groupBy(project.shortcode, project.name),
     // Spend by the vendor the money went to, resolved through the charge:
     // expense → Purchase → Vendor. Inner-joined for the same reason `byProject`
     // is, with the same consequence: charge-less rows (no vendor recorded) are
@@ -137,7 +141,7 @@ export async function expenseAnalytics(
     // sub-selects `project`.
     getDb(db)
       .select({
-        vendorId: chargeJoin.vendorId,
+        vendorShortcode: vendor.shortcode,
         vendorName: vendor.name,
         ...aggregateSelect(),
       })
@@ -151,7 +155,7 @@ export async function expenseAnalytics(
         and(eq(chargeJoin.vendorId, vendor.id), notDeleted(vendor)),
       )
       .where(whereClause)
-      .groupBy(chargeJoin.vendorId, vendor.name),
+      .groupBy(vendor.shortcode, vendor.name),
   ]);
 
   // A GROUP-BY-less aggregate always returns exactly one row, even over zero
@@ -174,13 +178,14 @@ export async function expenseAnalytics(
     tradeCostMatrix,
     monthly,
     cumulative,
-    byProject: byProjectRows.map((row) => ({
+    byProject: byProjectRows.map(({ projectShortcode, ...row }) => ({
       ...row,
-      // Guaranteed non-null by the `isNotNull(expense.projectId)` filter
-      // above — Drizzle just doesn't narrow the select's inferred type from it.
-      projectId: row.projectId!,
+      projectId: unsafeProjectShortcode(projectShortcode),
     })),
-    byVendor,
+    byVendor: byVendor.map(({ vendorShortcode, ...row }) => ({
+      ...row,
+      vendorId: unsafeVendorShortcode(vendorShortcode),
+    })),
   };
 }
 
@@ -200,20 +205,23 @@ export async function expenseAnalytics(
  */
 export async function expenseTradeAffinity(
   db: Database,
-): Promise<{ projectId: ProjectId; trade: Trade; count: number }[]> {
+): Promise<{ projectId: ProjectShortcode; trade: Trade; count: number }[]> {
   const rows = await getDb(db)
     .select({
-      projectId: expense.projectId,
+      projectShortcode: project.shortcode,
       trade: expense.trade,
       count: sql<number>`count(*)::int`,
     })
     .from(expense)
+    .innerJoin(
+      project,
+      and(eq(expense.projectId, project.id), notDeleted(project)),
+    )
     .where(and(notDeleted(expense), isNotNull(expense.projectId)))
-    .groupBy(expense.projectId, expense.trade);
+    .groupBy(project.shortcode, expense.trade);
 
   return rows.map((row) => ({
-    // Non-null by the isNotNull filter; Drizzle doesn't narrow from it.
-    projectId: row.projectId!,
+    projectId: unsafeProjectShortcode(row.projectShortcode),
     trade: row.trade,
     count: row.count,
   }));

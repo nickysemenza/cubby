@@ -7,7 +7,19 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
-import type { ExpenseId, PurchaseId } from "@cubby/schemas/identifiers";
+import type {
+  ExpenseId,
+  ExpenseShortcode,
+  ProjectId,
+  ProjectShortcode,
+  PurchaseId,
+  PurchaseShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  unsafeExpenseId,
+  unsafeProjectId,
+  unsafePurchaseId,
+} from "@cubby/schemas/identifiers";
 import type {
   ExpenseBulkCostTypeInput,
   ExpenseBulkMoveInput,
@@ -37,19 +49,84 @@ import {
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { assertProjectLive } from "~/server/repo/project";
 import {
-  assertPurchaseLive,
   findOrCreatePurchase,
   foldChargeInto,
   renameChargeOrderId,
 } from "~/server/repo/purchase";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { createAppError } from "~/server/errors/app-error";
 import { findOrCreateVendor } from "~/server/repo/vendor";
 import { dbExpenseToAPI, type ExpenseRow } from "./helpers";
 
 /** `expenseUpdateData` has no standalone type export — derive it from the input. */
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
+
+/**
+ * The DB-column shape `expenseCrud`'s `toUpdate` writes — `ExpenseUpdateData`
+ * with `vendor`/`orderId` (resolved separately into `purchaseId`, never
+ * columns) dropped and `projectId`/`purchaseId` narrowed from the PUBLIC
+ * shortcode brand to the internal uuid FK. Resolution happens in
+ * `updateExpense` before this shape is built — `toUpdate` is a pure
+ * synchronous mapper and can't do the DB lookup itself.
+ */
+type ResolvedExpenseUpdate = Omit<
+  ExpenseUpdateData,
+  "vendor" | "orderId" | "projectId" | "purchaseId"
+> & {
+  projectId?: ProjectId | null;
+  purchaseId?: PurchaseId | null;
+};
+
+/** Resolve a project shortcode to a live uuid, or throw. */
+const resolveLiveProjectId = async (
+  tx: DrizzleTransaction,
+  shortcode: ProjectShortcode,
+): Promise<ProjectId> => {
+  const id = await resolveLiveShortcode(tx, shortcode, "project");
+  if (!id) {
+    throw createAppError(
+      "PROJECT_NOT_FOUND",
+      `Project not found: ${shortcode}`,
+    );
+  }
+  return unsafeProjectId(id);
+};
+
+/** Resolve a purchase (charge) shortcode to a live uuid, or throw. */
+const resolveLivePurchaseId = async (
+  tx: DrizzleTransaction,
+  shortcode: PurchaseShortcode,
+): Promise<PurchaseId> => {
+  const id = await resolveLiveShortcode(tx, shortcode, "purchase");
+  if (!id) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchase not found: ${shortcode}`,
+    );
+  }
+  return unsafePurchaseId(id);
+};
+
+/** Batch-resolve expense shortcodes to live uuids, or throw naming the misses. */
+const resolveLiveExpenseIdsOrThrow = async (
+  tx: DrizzleTransaction,
+  shortcodes: ExpenseShortcode[],
+): Promise<ExpenseId[]> => {
+  const resolved = await resolveLiveShortcodes(tx, shortcodes, "expense");
+  const missing = shortcodes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "EXPENSE_NOT_FOUND",
+      `Expense(s) not found: ${missing.join(", ")}`,
+    );
+  }
+  return shortcodes.map((code) => unsafeExpenseId(resolved.get(code) ?? ""));
+};
 
 // The union, not `Database`: the factory's `update` runs on a transaction and
 // reads the before-state through this. The return type is annotated explicitly
@@ -71,7 +148,7 @@ const expenseCrud = createEntityCrud({
   fetchById: fetchExpenseById,
   fromDB: (_db, row) => dbExpenseToAPI(row),
   notFoundReason: "EXPENSE_NOT_FOUND",
-  toUpdate: (data: ExpenseUpdateData) =>
+  toUpdate: (data: ResolvedExpenseUpdate) =>
     buildPartialUpdateValues({
       name: data.name,
       cost: data.cost,
@@ -254,24 +331,73 @@ const resolveCharge = async (
  */
 export const updateExpense = async (
   db: Database,
-  id: ExpenseId,
+  shortcode: ExpenseShortcode,
   data: ExpenseUpdateData,
   actor: ActorContext,
-): Promise<ExpenseOut> => {
-  const { vendor: _vendor, orderId: _orderId, ...rest } = data;
+): Promise<{ output: ExpenseOut; entityId: ExpenseId }> => {
+  const {
+    vendor: _vendor,
+    orderId: _orderId,
+    projectId,
+    purchaseId,
+    ...restColumns
+  } = data;
 
   const needsResolve =
     data.purchaseId === undefined &&
     (data.vendor !== undefined || data.orderId !== undefined);
 
   return withTransaction(db, async (tx) => {
-    // `rest` can carry an explicit `purchaseId` that never passes through
-    // `resolveCharge`, so validate it here or it goes in unchecked. Mutually
-    // exclusive with the resolve path below (`needsResolve` requires
-    // `data.purchaseId === undefined`).
-    if (rest.purchaseId) await assertPurchaseLive(tx, rest.purchaseId);
+    const resolvedId = await resolveLiveShortcode(tx, shortcode, "expense");
+    if (!resolvedId) {
+      throw createAppError(
+        "EXPENSE_NOT_FOUND",
+        `Expense not found: ${shortcode}`,
+      );
+    }
+    const id = unsafeExpenseId(resolvedId);
 
-    if (!needsResolve) return expenseCrud.update(tx, id, rest, actor);
+    const resolvedProjectId =
+      projectId === undefined
+        ? undefined
+        : projectId === null
+          ? null
+          : await resolveLiveProjectId(tx, projectId);
+
+    // An explicit `purchaseId` short-circuits `resolveCharge` entirely (see the
+    // field's doc): an id is never a guess, so there's nothing to resolve.
+    // Resolving THROUGH `resolveLivePurchaseId` (live-only) folds in what
+    // `assertPurchaseLive` used to check separately.
+    const explicitPurchaseId =
+      purchaseId === undefined
+        ? undefined
+        : purchaseId === null
+          ? null
+          : await resolveLivePurchaseId(tx, purchaseId);
+
+    const rest: ResolvedExpenseUpdate = {
+      ...restColumns,
+      ...(resolvedProjectId !== undefined
+        ? { projectId: resolvedProjectId }
+        : {}),
+    };
+
+    if (!needsResolve) {
+      return {
+        output: await expenseCrud.update(
+          tx,
+          id,
+          {
+            ...rest,
+            ...(explicitPurchaseId !== undefined
+              ? { purchaseId: explicitPurchaseId }
+              : {}),
+          },
+          actor,
+        ),
+        entityId: id,
+      };
+    }
 
     // The row's CURRENT charge, so an unchanged `{vendor}` write doesn't mint a
     // duplicate — see `resolveCharge`.
@@ -318,12 +444,15 @@ export const updateExpense = async (
       lineCount,
     });
 
-    return expenseCrud.update(
-      tx,
-      id,
-      { ...rest, ...(resolved === undefined ? {} : { purchaseId: resolved }) },
-      actor,
-    );
+    return {
+      output: await expenseCrud.update(
+        tx,
+        id,
+        { ...rest, ...(resolved === undefined ? {} : { purchaseId: resolved }) },
+        actor,
+      ),
+      entityId: id,
+    };
   });
 };
 
@@ -349,16 +478,24 @@ export const createExpense = async (
   db: Database,
   data: ExpenseCreateInput,
   actor: ActorContext,
-): Promise<ExpenseOut> => {
+): Promise<{ output: ExpenseOut; entityId: ExpenseId }> => {
   const id = await withTransaction(db, async (tx) => {
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.
     // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
-    // the only place it gets checked for liveness — an FK proves the row exists,
-    // not that it isn't tombstoned.
-    if (data.purchaseId) await assertPurchaseLive(tx, data.purchaseId);
+    // the only place it gets checked for liveness — resolving THROUGH
+    // `resolveLivePurchaseId` (live-only) folds in what `assertPurchaseLive`
+    // used to check separately (an FK proves the row exists, not that it
+    // isn't tombstoned).
+    const explicitPurchaseId = data.purchaseId
+      ? await resolveLivePurchaseId(tx, data.purchaseId)
+      : null;
     const purchaseId =
-      data.purchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
+      explicitPurchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
+
+    const projectId = data.projectId
+      ? await resolveLiveProjectId(tx, data.projectId)
+      : null;
 
     const created = await insertWithShortcode(tx, "expense", {
       name: data.name,
@@ -369,7 +506,7 @@ export const createExpense = async (
       url: data.url,
       notes: data.notes,
       future: data.future,
-      projectId: data.projectId,
+      projectId,
       productId: data.productId,
       purchaseId,
     });
@@ -380,7 +517,7 @@ export const createExpense = async (
     });
     return created.id;
   });
-  return getExpenseByID(db, id);
+  return { output: await getExpenseByID(db, id), entityId: id };
 };
 
 /**
@@ -397,12 +534,15 @@ export const moveExpenses = async (
   input: ExpenseBulkMoveInput,
   actor: ActorContext,
 ): Promise<ExpenseOut[]> => {
-  const { ids, projectId } = input;
-
   const updatedIds = await withTransaction(db, async (tx) => {
-    if (projectId !== null) {
-      await assertProjectLive(tx, projectId);
-    }
+    // Resolving THROUGH `resolveLiveProjectId` (live-only) is the liveness
+    // check itself.
+    const projectId =
+      input.projectId !== null
+        ? await resolveLiveProjectId(tx, input.projectId)
+        : null;
+
+    const ids = await resolveLiveExpenseIdsOrThrow(tx, input.ids);
 
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
@@ -447,9 +587,10 @@ export const setExpensesTrade = async (
   input: ExpenseBulkTradeInput,
   actor: ActorContext,
 ): Promise<ExpenseOut[]> => {
-  const { ids, trade } = input;
+  const { trade } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveExpenseIdsOrThrow(tx, input.ids);
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { id: true, trade: true },
@@ -487,9 +628,10 @@ export const setExpensesCostType = async (
   input: ExpenseBulkCostTypeInput,
   actor: ActorContext,
 ): Promise<ExpenseOut[]> => {
-  const { ids, costType } = input;
+  const { costType } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveExpenseIdsOrThrow(tx, input.ids);
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { id: true, costType: true },
@@ -525,12 +667,13 @@ export const setExpensesCostType = async (
 
 export const deleteExpenses = async (
   db: Database,
-  ids: ExpenseId[],
+  shortcodes: ExpenseShortcode[],
   actor: ActorContext,
 ): Promise<void> => {
-  if (ids.length === 0) return;
+  if (shortcodes.length === 0) return;
 
   await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveExpenseIdsOrThrow(tx, shortcodes);
     await lockAndValidateForDelete(tx, expense, ids, "Expense");
 
     const now = new Date();

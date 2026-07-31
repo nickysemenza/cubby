@@ -11,7 +11,18 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { ProductId, TaskId } from "@cubby/schemas/identifiers";
+import type {
+  ProductId,
+  ProjectId,
+  ProjectShortcode,
+  TaskId,
+  TaskShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  unsafeProjectId,
+  unsafeTaskId,
+  unsafeTaskShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   TaskBulkDueDateInput,
   TaskBulkMoveInput,
@@ -49,7 +60,13 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { assertProjectLive } from "~/server/repo/project";
+import {
+  type EntityRef,
+  lookupShortcodes,
+  refKey,
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbTaskToAPI } from "./helpers";
 
@@ -100,10 +117,10 @@ export async function taskDependencyIds(
   db: Database,
   taskIds: TaskId[],
 ): Promise<{
-  blockedBy: Map<TaskId, TaskId[]>;
-  blocking: Map<TaskId, TaskId[]>;
+  blockedBy: Map<TaskId, TaskShortcode[]>;
+  blocking: Map<TaskId, TaskShortcode[]>;
 }> {
-  return dependencyIdsFor(
+  const raw = await dependencyIdsFor(
     db,
     taskDependency,
     {
@@ -112,6 +129,28 @@ export async function taskDependencyIds(
     },
     taskIds,
   );
+
+  // The edge VALUES (other tasks' ids) are resolved to shortcodes here, once,
+  // batched — `dbTaskToAPI` (every consumer's eventual destination) takes
+  // `blockedByIds`/`blockingIds` as public ids, and a uuid must never reach
+  // that far. The KEYS stay the caller's own uuids (that's what every
+  // `.get(row.id)` call site keys on).
+  const allTaskIds = [
+    ...new Set([...raw.blockedBy.values(), ...raw.blocking.values()].flat()),
+  ];
+  const refs: EntityRef[] = allTaskIds.map((id) => ({ entity: "task", id }));
+  const codes = await lookupShortcodes(db, refs);
+  const toShortcodes = (ids: TaskId[]): TaskShortcode[] =>
+    ids.map((id) => unsafeTaskShortcode(codes.get(refKey("task", id)) ?? ""));
+
+  return {
+    blockedBy: new Map(
+      [...raw.blockedBy].map(([id, ids]) => [id, toShortcodes(ids)]),
+    ),
+    blocking: new Map(
+      [...raw.blocking].map(([id, ids]) => [id, toShortcodes(ids)]),
+    ),
+  };
 }
 
 /**
@@ -157,9 +196,9 @@ async function validateParentTask(
   parentId: TaskId,
 ): Promise<{
   id: TaskId;
-  projectId: TaskOut["projectId"];
-  subjectProductId: TaskOut["subjectProductId"];
-  parentTaskId: TaskOut["parentTaskId"];
+  projectId: ProjectId | null;
+  subjectProductId: ProductId | null;
+  parentTaskId: TaskId | null;
 }> {
   const parent = await tx.query.task.findFirst({
     where: and(eq(task.id, parentId), notDeleted(task)),
@@ -275,17 +314,49 @@ export const createTask = async (
   db: Database,
   data: TaskCreateInput,
   actor: ActorContext,
-): Promise<TaskOut> => {
+): Promise<{ output: TaskOut; entityId: TaskId }> => {
   const id = await withTransaction(db, async (tx) => {
     // `projectId` and `parentTaskId` both default to null through zod (see
     // taskCreateShape), so the repo can't tell "omitted" from "explicitly
     // null" — a null projectId alongside a parentTaskId is treated as
     // "inherit the parent's project", which covers both cases and lets an
-    // explicit non-null projectId still win.
-    let projectId = data.projectId;
-    let subjectProductId = data.subjectProductId;
+    // explicit non-null projectId still win. Both arrive as shortcodes;
+    // resolving THROUGH a live-only lookup is the existence+liveness check.
+    let parentTaskId: TaskId | null = null;
     if (data.parentTaskId) {
-      const parent = await validateParentTask(tx, data.parentTaskId);
+      const resolved = await resolveLiveShortcode(
+        tx,
+        data.parentTaskId,
+        "task",
+      );
+      if (!resolved) {
+        throw createAppError(
+          "TASK_NOT_FOUND",
+          `Parent task ${data.parentTaskId} not found`,
+        );
+      }
+      parentTaskId = unsafeTaskId(resolved);
+    }
+
+    let projectId: ProjectId | null = null;
+    if (data.projectId) {
+      const resolved = await resolveLiveShortcode(
+        tx,
+        data.projectId,
+        "project",
+      );
+      if (!resolved) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project ${data.projectId} not found`,
+        );
+      }
+      projectId = unsafeProjectId(resolved);
+    }
+    let subjectProductId = data.subjectProductId;
+
+    if (parentTaskId) {
+      const parent = await validateParentTask(tx, parentTaskId);
       if (projectId == null) {
         projectId = parent.projectId;
       }
@@ -302,7 +373,7 @@ export const createTask = async (
       status: data.status,
       projectId,
       subjectProductId,
-      parentTaskId: data.parentTaskId,
+      parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
       trade: data.trade,
@@ -314,7 +385,7 @@ export const createTask = async (
     });
     return created.id;
   });
-  return getTaskByID(db, id);
+  return { output: await getTaskByID(db, id), entityId: id };
 };
 
 const AUDIT_FIELDS = [
@@ -330,10 +401,16 @@ const AUDIT_FIELDS = [
 
 export const updateTask = async (
   db: Database,
-  id: TaskId,
+  shortcode: TaskShortcode,
   data: TaskUpdateData,
   actor: ActorContext,
-): Promise<TaskOut> => {
+): Promise<{ output: TaskOut; entityId: TaskId }> => {
+  const resolvedId = await resolveLiveShortcode(db, shortcode, "task");
+  if (!resolvedId) {
+    throw createAppError("TASK_NOT_FOUND", `Task ${shortcode} not found`);
+  }
+  const id = unsafeTaskId(resolvedId);
+
   const before = await fetchTaskRow(db, id);
   if (!before) {
     throw createAppError("TASK_NOT_FOUND", `Task ${id} not found`);
@@ -344,26 +421,82 @@ export const updateTask = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
+    let parentTaskId: TaskId | null | undefined;
     if (data.parentTaskId !== undefined && data.parentTaskId !== null) {
-      if (data.parentTaskId === id) {
+      if (data.parentTaskId === shortcode) {
         throw createAppError(
           "SELF_DEPENDENCY",
           "A task cannot be its own parent.",
         );
       }
-      await validateParentTask(tx, data.parentTaskId);
+      const resolvedParent = await resolveLiveShortcode(
+        tx,
+        data.parentTaskId,
+        "task",
+      );
+      if (!resolvedParent) {
+        throw createAppError(
+          "TASK_NOT_FOUND",
+          `Parent task ${data.parentTaskId} not found`,
+        );
+      }
+      parentTaskId = unsafeTaskId(resolvedParent);
+      await validateParentTask(tx, parentTaskId);
       await assertNoLiveSubtasks(tx, id);
+    } else if (data.parentTaskId === null) {
+      parentTaskId = null;
     }
+
+    let projectId: ProjectId | null | undefined;
+    if (data.projectId !== undefined && data.projectId !== null) {
+      const resolvedProject = await resolveLiveShortcode(
+        tx,
+        data.projectId,
+        "project",
+      );
+      if (!resolvedProject) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project ${data.projectId} not found`,
+        );
+      }
+      projectId = unsafeProjectId(resolvedProject);
+    } else if (data.projectId === null) {
+      projectId = null;
+    }
+
     if (data.subjectProductId) {
       await assertSubjectProductLive(tx, data.subjectProductId);
+    }
+
+    // Full-replacement set: resolve every requested shortcode to a live uuid
+    // up front — `replaceDependencyEdges`'s own not-found check operates on
+    // the FK column, so it can't be handed a shortcode.
+    let resolvedBlockedByIds: TaskId[] | undefined;
+    if (data.blockedByIds !== undefined) {
+      const resolved = await resolveLiveShortcodes(
+        tx,
+        data.blockedByIds,
+        "task",
+      );
+      const missing = data.blockedByIds.filter((code) => !resolved.has(code));
+      if (missing.length > 0) {
+        throw createAppError(
+          "TASK_NOT_FOUND",
+          `Task(s) not found: ${missing.join(", ")}`,
+        );
+      }
+      resolvedBlockedByIds = data.blockedByIds.map((code) =>
+        unsafeTaskId(resolved.get(code) ?? ""),
+      );
     }
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
-      projectId: data.projectId,
+      projectId,
       subjectProductId: data.subjectProductId,
-      parentTaskId: data.parentTaskId,
+      parentTaskId,
       dueDate: data.dueDate,
       dueEndDate: data.dueEndDate,
       trade: data.trade,
@@ -371,7 +504,7 @@ export const updateTask = async (
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
 
-    if (data.blockedByIds !== undefined) {
+    if (resolvedBlockedByIds !== undefined) {
       await replaceDependencyEdges(
         tx,
         taskDependency,
@@ -387,7 +520,7 @@ export const updateTask = async (
           notFoundReason: "TASK_NOT_FOUND",
         },
         id,
-        data.blockedByIds,
+        resolvedBlockedByIds,
       );
     }
 
@@ -413,7 +546,7 @@ export const updateTask = async (
     }
   });
 
-  return getTaskByID(db, id);
+  return { output: await getTaskByID(db, id), entityId: id };
 };
 
 /**
@@ -425,17 +558,47 @@ export const updateTask = async (
  * the UI's project picker already filters to live projects, but the tRPC API
  * is callable directly.
  */
+/** Batch-resolve task shortcodes to live uuids, or throw naming the misses. */
+const resolveLiveTaskIdsOrThrow = async (
+  tx: DrizzleTransaction,
+  shortcodes: TaskShortcode[],
+): Promise<TaskId[]> => {
+  const resolved = await resolveLiveShortcodes(tx, shortcodes, "task");
+  const missing = shortcodes.filter((code) => !resolved.has(code));
+  if (missing.length > 0) {
+    throw createAppError(
+      "TASK_NOT_FOUND",
+      `Task(s) not found: ${missing.join(", ")}`,
+    );
+  }
+  return shortcodes.map((code) => unsafeTaskId(resolved.get(code) ?? ""));
+};
+
+/** Resolve a project shortcode to a live uuid, or throw. */
+const resolveLiveTaskProjectId = async (
+  tx: DrizzleTransaction,
+  shortcode: ProjectShortcode,
+): Promise<ProjectId> => {
+  const resolved = await resolveLiveShortcode(tx, shortcode, "project");
+  if (!resolved) {
+    throw createAppError("PROJECT_NOT_FOUND", `Project ${shortcode} not found`);
+  }
+  return unsafeProjectId(resolved);
+};
+
 export const moveTasks = async (
   db: Database,
   input: TaskBulkMoveInput,
   actor: ActorContext,
 ): Promise<TaskOut[]> => {
-  const { ids, projectId } = input;
-
   const updatedIds = await withTransaction(db, async (tx) => {
-    if (projectId !== null) {
-      await assertProjectLive(tx, projectId);
-    }
+    // Resolving THROUGH a live-only lookup is the liveness check itself.
+    const projectId =
+      input.projectId !== null
+        ? await resolveLiveTaskProjectId(tx, input.projectId)
+        : null;
+
+    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
 
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
@@ -481,9 +644,10 @@ export const setTasksStatus = async (
   input: TaskBulkStatusInput,
   actor: ActorContext,
 ): Promise<TaskOut[]> => {
-  const { ids, status } = input;
+  const { status } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
       columns: { id: true, status: true },
@@ -526,9 +690,10 @@ export const setTasksTrade = async (
   input: TaskBulkTradeInput,
   actor: ActorContext,
 ): Promise<TaskOut[]> => {
-  const { ids, trade } = input;
+  const { trade } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
       columns: { id: true, trade: true },
@@ -569,9 +734,10 @@ export const setTasksDueDate = async (
   input: TaskBulkDueDateInput,
   actor: ActorContext,
 ): Promise<TaskOut[]> => {
-  const { ids, dueDate, dueEndDate } = input;
+  const { dueDate, dueEndDate } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
       columns: { id: true, dueDate: true, dueEndDate: true },
@@ -624,8 +790,27 @@ export const reorderTasks = async (
   const { ranks, move } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
-    if (move != null && move.patch.projectId != null) {
-      await assertProjectLive(tx, move.patch.projectId);
+    const rankedIds = await resolveLiveTaskIdsOrThrow(
+      tx,
+      ranks.map((r) => r.id),
+    );
+    const resolvedRanks = ranks.map((r, i) => ({
+      id: rankedIds[i] as TaskId,
+      sortOrder: r.sortOrder,
+    }));
+
+    let moveId: TaskId | undefined;
+    let movePatchProjectId: ProjectId | null | undefined;
+    if (move != null) {
+      moveId = (await resolveLiveTaskIdsOrThrow(tx, [move.id]))[0];
+      if (move.patch.projectId != null) {
+        movePatchProjectId = await resolveLiveTaskProjectId(
+          tx,
+          move.patch.projectId,
+        );
+      } else if (move.patch.projectId === null) {
+        movePatchProjectId = null;
+      }
     }
 
     // Every ranked id maps to its own new sortOrder — a single CASE-WHEN
@@ -633,27 +818,23 @@ export const reorderTasks = async (
     // helper's `::real` cast is lossless here (fine-grained midpoint writes go
     // through the single-update path in updateTask, which keeps full double
     // precision).
-    await batchUpdateWithCaseWhen(
-      tx,
-      task,
-      ranks.map((r) => ({ id: r.id, sortOrder: r.sortOrder })),
-    );
+    await batchUpdateWithCaseWhen(tx, task, resolvedRanks);
 
-    if (move != null) {
+    if (move != null && moveId != null) {
       const axisValues = buildPartialUpdateValues({
         status: move.patch.status,
-        projectId: move.patch.projectId,
+        projectId: movePatchProjectId,
         trade: move.patch.trade,
       });
       if (Object.keys(axisValues).length > 0) {
         const before = await tx.query.task.findFirst({
-          where: and(eq(task.id, move.id), notDeleted(task)),
+          where: and(eq(task.id, moveId), notDeleted(task)),
         });
         const updated = await updateLiveAndReturn(
           tx,
           task,
           axisValues,
-          move.id,
+          moveId,
         );
         const changes = before
           ? computeChanges(before, updated, ["status", "projectId", "trade"])
@@ -661,7 +842,7 @@ export const reorderTasks = async (
         if (changes) {
           await logAuditEntry(tx, actor, {
             entityType: "task",
-            entityId: move.id,
+            entityId: moveId,
             action: "update",
             changes,
           });
@@ -669,7 +850,7 @@ export const reorderTasks = async (
       }
     }
 
-    return ranks.map((r) => r.id);
+    return resolvedRanks.map((r) => r.id);
   });
 
   return getTasksByIDs(db, updatedIds);
@@ -697,12 +878,13 @@ const fetchLiveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
  */
 export const deleteTasks = async (
   db: Database,
-  ids: TaskId[],
+  shortcodes: TaskShortcode[],
   actor: ActorContext,
 ): Promise<void> => {
-  if (ids.length === 0) return;
+  if (shortcodes.length === 0) return;
 
   await withTransaction(db, async (tx) => {
+    const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);

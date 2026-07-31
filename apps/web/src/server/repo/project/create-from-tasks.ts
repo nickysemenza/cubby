@@ -9,6 +9,8 @@
  * same `tx`, mirroring `moveTasks`' own column-write shape one level down.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
+import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type {
   CreateProjectFromTasksInput,
   CreateProjectFromTasksOut,
@@ -23,18 +25,56 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { resolveLiveShortcode, resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getTasksByIDs } from "~/server/repo/task";
-import { assertProjectLive, getProjectByID } from "./crud";
+import { createAppError } from "~/server/errors/app-error";
+import { getProjectByID } from "./crud";
 
 export async function createProjectFromTasks(
   db: Database,
   input: CreateProjectFromTasksInput,
   actor: ActorContext,
-): Promise<CreateProjectFromTasksOut> {
+): Promise<{
+  output: CreateProjectFromTasksOut;
+  projectEntityId: ProjectId;
+  taskEntityIds: TaskId[];
+}> {
+  // Resolved live-only up front — the same "resolving IS the liveness check"
+  // pattern as `createProject`/`moveTasks`.
+  const resolvedTaskIds = await resolveLiveShortcodes(
+    db,
+    input.taskIds,
+    "task",
+  );
+  const missingTasks = input.taskIds.filter(
+    (code) => !resolvedTaskIds.has(code),
+  );
+  if (missingTasks.length > 0) {
+    throw createAppError(
+      "TASK_NOT_FOUND",
+      `Task(s) not found: ${missingTasks.join(", ")}`,
+    );
+  }
+  const taskIdsUuid = input.taskIds.map(
+    (code) => resolvedTaskIds.get(code) as TaskId,
+  );
+
   const { projectId, taskIds } = await withTransaction(db, async (tx) => {
+    let parentProjectId: ProjectId | null = null;
     if (input.project.parentProjectId) {
-      await assertProjectLive(tx, input.project.parentProjectId);
+      const resolved = await resolveLiveShortcode(
+        tx,
+        input.project.parentProjectId,
+        "project",
+      );
+      if (!resolved) {
+        throw createAppError(
+          "PROJECT_NOT_FOUND",
+          `Project ${input.project.parentProjectId} does not exist or has been deleted`,
+        );
+      }
+      parentProjectId = unsafeProjectId(resolved);
     }
 
     const created = await insertWithShortcode(tx, "project", {
@@ -43,7 +83,7 @@ export async function createProjectFromTasks(
       kind: input.project.kind,
       locations: input.project.locations,
       costEstimate: input.project.costEstimate,
-      parentProjectId: input.project.parentProjectId,
+      parentProjectId,
       startDate: input.project.startDate,
       endDate: input.project.endDate,
       icon: input.project.icon,
@@ -58,7 +98,7 @@ export async function createProjectFromTasks(
     });
 
     const before = await tx.query.task.findMany({
-      where: and(inArray(task.id, input.taskIds), notDeleted(task)),
+      where: and(inArray(task.id, taskIdsUuid), notDeleted(task)),
       columns: { id: true, projectId: true },
     });
 
@@ -66,7 +106,7 @@ export async function createProjectFromTasks(
       await tx
         .update(task)
         .set({ projectId: created.id })
-        .where(and(inArray(task.id, input.taskIds), notDeleted(task)));
+        .where(and(inArray(task.id, taskIdsUuid), notDeleted(task)));
 
       const auditEntries: AuditEntryInput[] = [];
       for (const row of before) {
@@ -95,5 +135,9 @@ export async function createProjectFromTasks(
     getTasksByIDs(db, taskIds),
   ]);
 
-  return { project: projectOut, tasks };
+  return {
+    output: { project: projectOut, tasks },
+    projectEntityId: projectId,
+    taskEntityIds: taskIds,
+  };
 }

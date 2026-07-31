@@ -25,8 +25,8 @@ import { toDayIndex } from "./gantt-date";
 
 export interface GanttProjectRow {
   kind: "project";
+  /** The project's shortcode — the only public id post-cutover. */
   id: string;
-  shortcode: string;
   name: string;
   depth: number;
   expandable: boolean;
@@ -62,8 +62,8 @@ export interface GanttProjectRow {
  * instead. Export it the day something genuinely needs to name it. */
 interface GanttTaskRow {
   kind: "task";
+  /** The task's shortcode — the only public id post-cutover. */
   id: string;
-  shortcode: string;
   name: string;
   depth: number;
   status: TaskStatus;
@@ -233,7 +233,6 @@ function buildProjectRow(
   return {
     kind: "project",
     id: project.id,
-    shortcode: project.shortcode,
     name: project.name,
     depth,
     expandable,
@@ -289,7 +288,6 @@ function buildTaskRow(task: TaskOut, depth: number): GanttTaskRow {
   return {
     kind: "task",
     id: task.id,
-    shortcode: task.shortcode,
     name: task.name,
     depth,
     status: task.status,

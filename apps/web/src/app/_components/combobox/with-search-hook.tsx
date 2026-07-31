@@ -2,9 +2,9 @@ import type {
   IngredientId,
   LocationId,
   ProductId,
-  ProjectId,
+  ProjectShortcode,
   RecipeId,
-  TaskId,
+  TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -296,7 +296,7 @@ export function WithRecipeSearch({
  */
 export function WithProjectSearch({
   children,
-}: WithEntitySearchProps<ProjectId>) {
+}: WithEntitySearchProps<ProjectShortcode>) {
   const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
@@ -329,7 +329,9 @@ export function WithProjectSearch({
  * Server-searched task picker — `task.list` filtered by its `search` field,
  * same pattern as `WithRecipeSearch`. No create-from-picker affordance.
  */
-export function WithTaskSearch({ children }: WithEntitySearchProps<TaskId>) {
+export function WithTaskSearch({
+  children,
+}: WithEntitySearchProps<TaskShortcode>) {
   const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
