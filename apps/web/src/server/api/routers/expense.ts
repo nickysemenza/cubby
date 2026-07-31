@@ -6,8 +6,10 @@
 import {
   type ExpenseShortcode,
   expenseShortcode,
+  purchaseShortcode,
   unsafeExpenseId,
   unsafePurchaseId,
+  vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   expenseAnalyticsOut,
@@ -23,6 +25,7 @@ import {
   expenseSortableFields,
   expenseTradeAffinityOut,
   expenseUpdateData,
+  plainDate,
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
@@ -41,7 +44,10 @@ import {
   setExpensesTrade,
   updateExpense,
 } from "~/server/repo/expense";
-import { getPurchaseExpenses } from "~/server/repo/purchase";
+import {
+  getPurchaseExpenses,
+  getPurchaseLinkIdentityByID,
+} from "~/server/repo/purchase";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -159,35 +165,53 @@ const vendorOptions = protectedProcedure
   .query(({ ctx }) => loadVendorOptions(ctx.db));
 
 /**
- * The other lines of this expense's charge — the "this charge" detail section
- * that replaced #475's "Same Order".
+ * The canonical identity and other lines of this expense's charge — the "this
+ * charge" detail section that replaced #475's "Same Order".
  *
  * Shows whenever a charge exists, not only when there's an order id: 33% of
  * vendor-bearing rows have none, and those rows still belong to a real
  * transaction. Separate from `getByID` so the detail page's main payload doesn't
  * grow a lookup only one section reads.
  */
-const chargeSiblings = protectedProcedure
+const chargeContext = protectedProcedure
   .input(expenseShortcode)
-  .output(z.array(expenseOut))
+  .output(
+    z
+      .object({
+        purchase: z.object({
+          id: purchaseShortcode,
+          orderId: z.string().nullable(),
+          date: plainDate.nullable(),
+          vendorId: vendorShortcode,
+          vendorName: z.string().nullable(),
+        }),
+        siblings: z.array(expenseOut),
+      })
+      .nullable(),
+  )
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "expense");
     if (!id) {
       throw createAppError("EXPENSE_NOT_FOUND", `Expense not found: ${input}`);
     }
     const self = await getExpenseByID(ctx.db, unsafeExpenseId(id));
-    if (!self.purchaseId) return [];
+    if (!self.purchaseId) return null;
     const purchaseId = await resolveLiveShortcode(
       ctx.db,
       self.purchaseId,
       "purchase",
     );
-    if (!purchaseId) return [];
-    const lines = await getPurchaseExpenses(
-      ctx.db,
-      unsafePurchaseId(purchaseId),
-    );
-    return lines.filter((row) => row.id !== input);
+    if (!purchaseId) return null;
+    const purchaseUuid = unsafePurchaseId(purchaseId);
+    const [purchase, lines] = await Promise.all([
+      getPurchaseLinkIdentityByID(ctx.db, purchaseUuid),
+      getPurchaseExpenses(ctx.db, purchaseUuid),
+    ]);
+    if (!purchase) return null;
+    return {
+      purchase,
+      siblings: lines.filter((row) => row.id !== input),
+    };
   });
 
 /**
@@ -290,7 +314,7 @@ export const expenseRouter = createTRPCRouter({
   tradeAffinity,
   match,
   vendorOptions,
-  chargeSiblings,
+  chargeContext,
   bulkMove,
   bulkSetTrade,
   bulkSetCostType,

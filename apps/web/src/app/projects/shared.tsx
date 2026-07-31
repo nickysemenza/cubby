@@ -780,6 +780,10 @@ export function expenseVendorColumn(
           // A charge's vendor is optional — toggling the selected row off clears
           // it, same as emptying the old text input did.
           clearable
+          // The value is a real vendor link whenever the persisted shortcode is
+          // available. Keep editing on its own control so the link is never
+          // nested inside the default button trigger.
+          trigger="pencil"
           onSave={(newVendor) => save(newVendor, expense)}
           clipboard={specFromCellData(cellData, expense)}
           SearchProvider={WithVendorSearch}
