@@ -31,7 +31,6 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
-import { resolveLiveShortcode } from "./shortcode-resolver";
 import { createTask } from "./task";
 
 describe("searchable entity loader maps", () => {
@@ -70,34 +69,25 @@ describe("searchable entity loader maps", () => {
       makeRecipeInput({ name: "Loader recipe" }),
       ctx.actor,
     );
-    const { output: project } = await createProject(
+    const { output: project, entityId: projectUuid } = await createProject(
       ctx.db,
       mock(projectCreateInput, { overrides: { name: "Loader project" } }),
       ctx.actor,
     );
-    const { output: task } = await createTask(
+    const { entityId: taskUuid } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
-        overrides: { name: "Loader task", projectId: project.output.id },
+        overrides: { name: "Loader task", projectId: project.id },
       }),
       ctx.actor,
     );
-    const { output: expense } = await createExpense(
+    const { entityId: expenseUuid } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
-        overrides: { name: "Loader expense", projectId: project.output.id },
+        overrides: { name: "Loader expense", projectId: project.id },
       }),
       ctx.actor,
     );
-    // `createExpense` returns only the public shortcode; the embedding table
-    // is keyed by the internal uuid, so resolve it back for the `ids` map
-    // below (project/task already expose their uuid via `.entityId`).
-    const expenseUuid = await resolveLiveShortcode(
-      ctx.db,
-      expense.id,
-      "expense",
-    );
-    if (!expenseUuid) throw new Error("expense not found after create");
     const cookbook = await upsertCookbook(
       ctx.db,
       {
@@ -126,8 +116,8 @@ describe("searchable entity loader maps", () => {
       location: location.id,
       inventory: inventory.id,
       meal: meal.id,
-      project: project.entityId,
-      task: task.entityId,
+      project: projectUuid,
+      task: taskUuid,
       expense: expenseUuid,
     } satisfies Record<SearchableEntity, string>;
 

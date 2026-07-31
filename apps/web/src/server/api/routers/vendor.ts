@@ -8,10 +8,7 @@
  * searchable-crud factory's embedding side-effects would be wrong here.
  */
 
-import {
-  unsafeVendorId,
-  vendorShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeVendorId, vendorShortcode } from "@cubby/schemas/identifiers";
 import {
   mergeVendorsInput,
   vendorCreateInput,
@@ -23,6 +20,7 @@ import {
 } from "@cubby/schemas/vendor";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createVendor,
   deleteVendors,
@@ -33,7 +31,6 @@ import {
   vendorList,
   vendorOptions,
 } from "~/server/repo/vendor";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createEntityListProcedure,
   createGetByShortcodeProcedure,

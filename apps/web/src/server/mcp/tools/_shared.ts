@@ -20,11 +20,11 @@ import {
 } from "@cubby/schemas/product";
 import {
   type ExpenseOut,
-  expenseOut,
+  expenseMcpOut,
   type ProjectOut,
   projectOut,
   type TaskOut,
-  taskOut,
+  taskMcpOut,
 } from "@cubby/schemas/project";
 import { type PurchaseOut, purchaseOut } from "@cubby/schemas/purchase";
 import { type RecipeTopLevel, recipeMcpOut } from "@cubby/schemas/recipe";
@@ -554,7 +554,17 @@ export const slimProject = defineSlim(
   (row: Row) => row as ProjectOut,
 );
 
-export const slimTask = defineSlim(taskOut, (row: Row) => row as TaskOut);
+/**
+ * Task's own ids are public codes already. The one exception is its product FK:
+ * product isn't cut over yet, so `subjectProductId` is still a uuid on the
+ * shared shape — MCP swaps in the code that rides alongside it, so an agent can
+ * feed the value straight back into a product tool.
+ */
+export const slimTask = defineSlim(taskMcpOut, (row: Row) => {
+  const t = row as TaskOut;
+  const { subjectProductShortcode, ...rest } = t;
+  return { ...rest, subjectProductId: subjectProductShortcode };
+});
 
 export const slimVendor = defineSlim(vendorOut, (row: Row) => row as VendorOut);
 
@@ -563,10 +573,12 @@ export const slimPurchase = defineSlim(
   (row: Row) => row as PurchaseOut,
 );
 
-export const slimExpense = defineSlim(
-  expenseOut,
-  (row: Row) => row as ExpenseOut,
-);
+/** Same product-FK swap as {@link slimTask}. */
+export const slimExpense = defineSlim(expenseMcpOut, (row: Row) => {
+  const e = row as ExpenseOut;
+  const { productShortcode, ...rest } = e;
+  return { ...rest, productId: productShortcode };
+});
 
 export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
   const m = mRow as MealOut;
@@ -753,12 +765,34 @@ const idsParam = (entity: ShortcodeEntity) =>
  * means a `LOC-` code handed to a product tool is reported as a mismatch rather
  * than silently resolving to some other table's row.
  */
+export /**
+ * Entities whose tRPC routers still address rows by uuid, so the MCP boundary
+ * has to translate for them.
+ *
+ * The five cut-over entities (project, task, expense, vendor, purchase) take
+ * the public code directly — resolving those would hand the router a uuid it
+ * now rejects. This set shrinks to empty as the rest are cut over, and when it
+ * does, `resolvePublicIds` and the `shortcode.resolveMany` router go with it.
+ */
+const ROUTER_TAKES_UUID: ReadonlySet<ShortcodeEntity> = new Set([
+  "product",
+  "location",
+  "recipe",
+  "ingredient",
+  "inventory",
+  "meal",
+  "cookbook",
+]);
+
 export async function resolvePublicIds(
   caller: Caller,
   entity: ShortcodeEntity,
   codes: readonly string[],
 ): Promise<string[]> {
   if (codes.length === 0) return [];
+  // The router speaks public ids already — nothing to translate, and the code
+  // has been validated by `idParam`'s schema at parse time.
+  if (!ROUTER_TAKES_UUID.has(entity)) return [...codes];
   const resolved = await caller.shortcode.resolveMany({ codes: [...codes] });
   const byCode = new Map(resolved.map((r) => [r.code, r]));
   return codes.map((code) => {

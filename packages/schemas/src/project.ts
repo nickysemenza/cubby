@@ -1324,8 +1324,22 @@ export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 // ---------------------------------------------------------------------------
 
 export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
-export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
-export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
+/**
+ * MCP views of task/expense. Identical to the tRPC shapes except the product
+ * FK, which carries product's public code rather than its uuid — product is not
+ * cut over yet, so the swap happens here instead of on the shared shape the UI
+ * uses. Delete these once product's own `id` is its shortcode.
+ */
+export const taskMcpOut = taskOut
+  .omit({ subjectProductShortcode: true })
+  .extend({ subjectProductId: productShortcode.nullable() });
+
+export const expenseMcpOut = expenseOut
+  .omit({ productShortcode: true })
+  .extend({ productId: productShortcode.nullable() });
+
+export const taskMcpListOut = createPaginatedResponseSchema(taskMcpOut);
+export const expenseMcpListOut = createPaginatedResponseSchema(expenseMcpOut);
 
 // ---------------------------------------------------------------------------
 // Project dashboard: bounded Overview summary + on-demand portfolio

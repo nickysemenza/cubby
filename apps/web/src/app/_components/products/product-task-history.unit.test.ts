@@ -1,4 +1,4 @@
-import { unsafeTaskId, unsafeTaskShortcode } from "@cubby/schemas/identifiers";
+import { unsafeTaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import { orderProductTasks } from "./product-task-history";
@@ -20,18 +20,17 @@ const task = (
     createdAt?: string;
   } = {},
 ): TaskOut => ({
-  id: unsafeTaskId(crypto.randomUUID()),
-  shortcode: nextTaskShortcode(),
+  // The task's public id IS its shortcode now (see the project/task/expense
+  // shortcode cutover) — there is no separate internal id on this Out type.
+  id: nextTaskShortcode(),
   name,
   status: options.status ?? "not_started",
   projectId: null,
   projectName: null,
-  projectShortcode: null,
   subjectProductId: null,
   subjectProductName: null,
   subjectProductShortcode: null,
   parentTaskId: null,
-  parentTaskShortcode: null,
   parentTaskName: null,
   dueDate: options.dueDate ?? null,
   dueEndDate: options.dueEndDate ?? null,

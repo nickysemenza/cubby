@@ -95,7 +95,10 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
             return (
               <TableRow key={task.id}>
                 <TableCell>
-                  <EntityInlineLink entity="task" data={task} />
+                  <EntityInlineLink
+                    entity="task"
+                    data={{ ...task, shortcode: task.id }}
+                  />
                 </TableCell>
                 <TableCell>
                   <Badge variant={taskStatusBadgeVariant[task.status]}>
@@ -110,15 +113,13 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
                   )}
                 </TableCell>
                 <TableCell>
-                  {task.projectId &&
-                  task.projectName &&
-                  task.projectShortcode ? (
+                  {task.projectId && task.projectName ? (
                     <EntityInlineLink
                       entity="project"
                       data={{
                         id: task.projectId,
                         name: task.projectName,
-                        shortcode: task.projectShortcode,
+                        shortcode: task.projectId,
                       }}
                     />
                   ) : (

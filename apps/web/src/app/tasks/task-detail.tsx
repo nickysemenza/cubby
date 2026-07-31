@@ -136,7 +136,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
                 entity="task"
                 data={{
                   id: subtask.id,
-                  shortcode: subtask.shortcode,
+                  shortcode: subtask.id,
                   name: subtask.name,
                 }}
                 compact
@@ -226,9 +226,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         results
           .map((r) => r.data)
           .filter((d): d is TaskOut => d != null)
-          .map(
-            (d) => [d.id, { name: d.name, shortcode: d.shortcode }] as const,
-          ),
+          .map((d) => [d.id, { name: d.name, shortcode: d.id }] as const),
       ),
     }),
   });
@@ -337,12 +335,12 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "Project",
       value:
-        task.projectId && task.projectName && task.projectShortcode ? (
+        task.projectId && task.projectName && task.projectId ? (
           <EntityInlineLink
             entity="project"
             data={{
               id: task.projectId,
-              shortcode: task.projectShortcode,
+              shortcode: task.projectId,
               name: task.projectName,
             }}
             compact
@@ -470,7 +468,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     // A subtask surfaces its parent right in the spec-plate header (in place
     // of "Project" — a subtask inherits its project from the parent, not
     // independently, so the parent link is the more useful breadcrumb here).
-    ...(task.parentTaskId && task.parentTaskName && task.parentTaskShortcode
+    ...(task.parentTaskId && task.parentTaskName && task.parentTaskId
       ? [
           {
             label: "Subtask of",
@@ -479,7 +477,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
                 entity="task"
                 data={{
                   id: task.parentTaskId,
-                  shortcode: task.parentTaskShortcode,
+                  shortcode: task.parentTaskId,
                   name: task.parentTaskName,
                 }}
                 truncate
@@ -499,12 +497,12 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "Project",
       value:
-        task.projectId && task.projectName && task.projectShortcode ? (
+        task.projectId && task.projectName && task.projectId ? (
           <EntityInlineLink
             entity="project"
             data={{
               id: task.projectId,
-              shortcode: task.projectShortcode,
+              shortcode: task.projectId,
               name: task.projectName,
             }}
             truncate

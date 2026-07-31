@@ -674,12 +674,12 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("task delete: predicted subtask cascade matches what actually gets soft-deleted", async () => {
-      const { output: parent } = await createTask(
+      const { output: parent, entityId: parentUuid } = await createTask(
         ctx.db,
         taskCreateInput.parse({ name: "Parent Task", trade: "other" }),
         ctx.actor,
       );
-      const { output: child } = await createTask(
+      const { entityId: childUuid } = await createTask(
         ctx.db,
         taskCreateInput.parse({
           name: "Subtask",
@@ -689,19 +689,19 @@ describe("operation preview / mutation parity", () => {
         ctx.actor,
       );
 
-      const preview = await previewDeleteTasks(ctx.db, [parent.id]);
+      const preview = await previewDeleteTasks(ctx.db, [parentUuid]);
       const subtaskChange = preview.changes.find(
         (c) => c.edgeKey === "Task.parentTaskId",
       );
       expect(subtaskChange?.total).toBe(1);
-      expect(subtaskChange?.byTargetId[parent.id]).toBe(1);
+      expect(subtaskChange?.byTargetId[parentUuid]).toBe(1);
 
       await deleteTasks(ctx.db, [parent.id], ctx.actor);
 
       const rows = await getDb(ctx.db)
         .select({ id: task.id, deletedAt: task.deletedAt })
         .from(task)
-        .where(inArray(task.id, [parent.id, child.id]));
+        .where(inArray(task.id, [parentUuid, childUuid]));
       for (const row of rows) {
         expect(row.deletedAt).not.toBeNull();
       }
@@ -713,30 +713,30 @@ describe("operation preview / mutation parity", () => {
         vendorCreateInput.parse({ name: "Detach Vendor" }),
         ctx.actor,
       );
-      const { output: purchase } = await createPurchase(
+      const { output: purchase, entityId: purchaseUuid } = await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({ vendorId: vendor.id }),
         ctx.actor,
       );
-      const { output: line } = await createExpense(
+      const { entityId: lineUuid } = await createExpense(
         ctx.db,
         { ...makeExpenseInput(), name: "Detach Line", purchaseId: purchase.id },
         ctx.actor,
       );
 
-      const preview = await previewDeletePurchases(ctx.db, [purchase.id]);
+      const preview = await previewDeletePurchases(ctx.db, [purchaseUuid]);
       const detachChange = preview.changes.find(
         (c) => c.edgeKey === "Expense.purchaseId",
       );
       expect(detachChange?.total).toBe(1);
-      expect(detachChange?.byTargetId[purchase.id]).toBe(1);
+      expect(detachChange?.byTargetId[purchaseUuid]).toBe(1);
 
       await deletePurchases(ctx.db, [purchase.id], ctx.actor);
 
       const [row] = await getDb(ctx.db)
         .select({ purchaseId: expense.purchaseId })
         .from(expense)
-        .where(eq(expense.id, line.id));
+        .where(eq(expense.id, lineUuid));
       expect(row?.purchaseId).toBeNull();
     });
 
@@ -1011,7 +1011,7 @@ describe("operation preview / mutation parity", () => {
     });
 
     it("expense has zero incoming edges: blockers/changes stay empty but a real consequence still surfaces as a sideEffect", async () => {
-      const { output: line } = await createExpense(
+      const { output: line, entityId: lineUuid } = await createExpense(
         ctx.db,
         { ...makeExpenseInput(), name: "Zero Edge Expense" },
         ctx.actor,
@@ -1023,7 +1023,8 @@ describe("operation preview / mutation parity", () => {
         .insert(entityEmbedding)
         .values({
           entityType: "expense",
-          entityId: line.id,
+          // EntityEmbedding is keyed by the private uuid, not the public code.
+          entityId: lineUuid,
           embeddingText: `expense ${line.id}`,
           embeddingHash: `hash-${line.id}`,
           provider: "test",
@@ -1032,7 +1033,7 @@ describe("operation preview / mutation parity", () => {
           embedding: [0, 0, 0],
         });
 
-      const preview = await previewDeleteExpenses(ctx.db, [line.id]);
+      const preview = await previewDeleteExpenses(ctx.db, [lineUuid]);
       expect(preview.blockers).toEqual([]);
       expect(preview.changes).toEqual([]);
       expect(preview.sideEffects.length).toBeGreaterThan(0);

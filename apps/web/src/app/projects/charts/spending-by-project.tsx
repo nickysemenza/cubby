@@ -30,7 +30,7 @@ export function SpendingByProject({
         .map((r) => ({
           project: r.projectName,
           id: r.projectId,
-          shortcode: r.projectShortcode,
+          shortcode: r.projectId,
           cost: r.spend,
         }))
         .reverse(),

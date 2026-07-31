@@ -1,4 +1,4 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   plainDate,
   projectKindSchema,
@@ -32,7 +32,7 @@ interface CreateProjectDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Pre-set `parentProjectId` on the created project — the detail page's
    * "New sub-project" button opens this dialog with the current project. */
-  defaultParentProjectId?: ProjectId;
+  defaultParentProjectId?: ProjectShortcode;
   presetDate?: string;
 }
 

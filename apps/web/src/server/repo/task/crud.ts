@@ -559,6 +559,23 @@ export const updateTask = async (
  * is callable directly.
  */
 /** Batch-resolve task shortcodes to live uuids, or throw naming the misses. */
+/**
+ * Resolve a bulk selection to live uuids, DROPPING codes that name nothing
+ * live. Bulk writes are documented to skip a soft-deleted or unknown id rather
+ * than reject the batch; use {@link resolveLiveTaskIdsOrThrow} where a specific
+ * id is a precondition (the reorder anchor), not part of a set.
+ */
+const resolveLiveTaskIds = async (
+  tx: DrizzleTransaction,
+  shortcodes: TaskShortcode[],
+): Promise<TaskId[]> => {
+  const resolved = await resolveLiveShortcodes(tx, shortcodes, "task");
+  return shortcodes
+    .map((code) => resolved.get(code))
+    .filter((id): id is string => id !== undefined)
+    .map(unsafeTaskId);
+};
+
 const resolveLiveTaskIdsOrThrow = async (
   tx: DrizzleTransaction,
   shortcodes: TaskShortcode[],
@@ -598,7 +615,7 @@ export const moveTasks = async (
         ? await resolveLiveTaskProjectId(tx, input.projectId)
         : null;
 
-    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveTaskIds(tx, input.ids);
 
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
@@ -647,7 +664,7 @@ export const setTasksStatus = async (
   const { status } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveTaskIds(tx, input.ids);
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
       columns: { id: true, status: true },
@@ -693,7 +710,7 @@ export const setTasksTrade = async (
   const { trade } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveTaskIds(tx, input.ids);
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
       columns: { id: true, trade: true },
@@ -737,7 +754,7 @@ export const setTasksDueDate = async (
   const { dueDate, dueEndDate } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveTaskIds(tx, input.ids);
     const before = await tx.query.task.findMany({
       where: and(inArray(task.id, ids), notDeleted(task)),
       columns: { id: true, dueDate: true, dueEndDate: true },
@@ -830,12 +847,7 @@ export const reorderTasks = async (
         const before = await tx.query.task.findFirst({
           where: and(eq(task.id, moveId), notDeleted(task)),
         });
-        const updated = await updateLiveAndReturn(
-          tx,
-          task,
-          axisValues,
-          moveId,
-        );
+        const updated = await updateLiveAndReturn(tx, task, axisValues, moveId);
         const changes = before
           ? computeChanges(before, updated, ["status", "projectId", "trade"])
           : undefined;
@@ -884,7 +896,7 @@ export const deleteTasks = async (
   if (shortcodes.length === 0) return;
 
   await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
+    const ids = await resolveLiveTaskIds(tx, shortcodes);
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);

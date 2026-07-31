@@ -466,7 +466,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             <StatusIcon status={task.status} />
             <Link
               to={entities.task.routes.detail}
-              params={entityDetailParams(task.shortcode)}
+              params={entityDetailParams(task.id)}
               className="truncate hover:underline"
             >
               {task.name}
@@ -853,7 +853,7 @@ function ProjectCard({
   return (
     <Link
       to={entities.project.routes.detail}
-      params={entityDetailParams(project.shortcode)}
+      params={entityDetailParams(project.id)}
       className="block"
     >
       <Card

@@ -769,10 +769,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       costEstimate: null,
     });
 
-    const grandparentAfter = await getProjectByID(
-      ctx.db,
-      grandparentEntityId,
-    );
+    const grandparentAfter = await getProjectByID(ctx.db, grandparentEntityId);
     expect(grandparentAfter.rollup.subtree).toEqual({
       spent: 70, // 10 (own) + 20 (parent) + 40 (leaf)
       actualSpent: 70,
@@ -798,12 +795,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   });
 
   it("sums subtree costEstimate over non-null values, null when the subtree has none", async () => {
-    const { output: parent } = await createProject(
+    const { output: parent, entityId: parentEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "estimate parent", costEstimate: 100 }),
       ctx.actor,
     );
-    const { output: child } = await createProject(
+    const { output: child, entityId: childEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "estimate child",
@@ -814,11 +811,12 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     );
 
     expect(
-      (await getProjectByID(ctx.db, parent.id)).rollup.subtree.costEstimate,
+      (await getProjectByID(ctx.db, parentEntityId)).rollup.subtree
+        .costEstimate,
     ).toBe(150);
 
     // A leaf's subtree estimate is just its own.
-    const childAfter = await getProjectByID(ctx.db, child.id);
+    const childAfter = await getProjectByID(ctx.db, childEntityId);
     expect(childAfter.rollup.subtree.costEstimate).toBe(
       childAfter.costEstimate,
     );
@@ -827,12 +825,13 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     // Parent unestimated, child estimated — the child's value still surfaces.
     await updateProject(ctx.db, parent.id, { costEstimate: null }, ctx.actor);
     expect(
-      (await getProjectByID(ctx.db, parent.id)).rollup.subtree.costEstimate,
+      (await getProjectByID(ctx.db, parentEntityId)).rollup.subtree
+        .costEstimate,
     ).toBe(50);
 
     // Nothing in the subtree estimated — null, not 0.
     await updateProject(ctx.db, child.id, { costEstimate: null }, ctx.actor);
-    const allNull = await getProjectByID(ctx.db, parent.id);
+    const allNull = await getProjectByID(ctx.db, parentEntityId);
     expect(allNull.rollup.subtree.costEstimate).toBeNull();
   });
 
@@ -847,7 +846,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
    * else.
    */
   it("a leaf's subtree rollup and subtree estimate degenerate to its own (the UI's no-branch invariant)", async () => {
-    const { output: leaf } = await createProject(
+    const { output: leaf, entityId: leafEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "invariant leaf", costEstimate: 42 }),
       ctx.actor,
@@ -891,7 +890,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     };
 
     // Both read paths the UI uses: the single-project reader and the list.
-    assertLeafInvariant(await getProjectByID(ctx.db, leaf.id));
+    assertLeafInvariant(await getProjectByID(ctx.db, leafEntityId));
     const { data } = await projectList(ctx.db, {}, [], {
       pageIndex: 0,
       pageSize: 10,
@@ -1009,7 +1008,7 @@ describe("project repository — date windows (derivation)", () => {
   const ctx = withTestDb();
 
   it("derives dates purely from own content when no override is set", async () => {
-    const { output: project } = await createProject(
+    const { output: project, entityId: projectEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "dates content only" }),
       ctx.actor,
@@ -1038,7 +1037,7 @@ describe("project repository — date windows (derivation)", () => {
       ctx.actor,
     );
 
-    const after = await getProjectByID(ctx.db, project.id);
+    const after = await getProjectByID(ctx.db, projectEntityId);
     expect(after.dates).toEqual({
       derivedStart: "2024-01-15",
       derivedEnd: "2024-02-03",
@@ -1050,7 +1049,7 @@ describe("project repository — date windows (derivation)", () => {
   });
 
   it("resolves start and end independently: an explicit start overrides while a null end still derives", async () => {
-    const { output: project } = await createProject(
+    const { output: project, entityId: projectEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({
         name: "dates per-side override",
@@ -1069,7 +1068,7 @@ describe("project repository — date windows (derivation)", () => {
       ctx.actor,
     );
 
-    const after = await getProjectByID(ctx.db, project.id);
+    const after = await getProjectByID(ctx.db, projectEntityId);
     expect(after.dates.startSource).toBe("explicit");
     expect(after.dates.effectiveStart).toBe("2024-01-01");
     expect(after.dates.endSource).toBe("derived");
@@ -1077,7 +1076,7 @@ describe("project repository — date windows (derivation)", () => {
   });
 
   it("propagates a child's OVERRIDE into the parent's derived window, not the child's raw content dates", async () => {
-    const { output: parent } = await createProject(
+    const { output: parent, entityId: parentEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "dates parent propagation" }),
       ctx.actor,
@@ -1104,18 +1103,18 @@ describe("project repository — date windows (derivation)", () => {
       ctx.actor,
     );
 
-    const parentAfter = await getProjectByID(ctx.db, parent.id);
+    const parentAfter = await getProjectByID(ctx.db, parentEntityId);
     expect(parentAfter.dates.derivedEnd).toBe("2025-12-31");
     expect(parentAfter.dates.endSource).toBe("derived");
   });
 
   it("returns an all-null date window with 'none' sources for a project with no content and no override", async () => {
-    const { output: project } = await createProject(
+    const { entityId: projectEntityId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "dates empty" }),
       ctx.actor,
     );
-    const after = await getProjectByID(ctx.db, project.id);
+    const after = await getProjectByID(ctx.db, projectEntityId);
     expect(after.dates).toEqual({
       derivedStart: null,
       derivedEnd: null,
@@ -1381,11 +1380,12 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("scopes dashboard attention to matched projects while retaining unassigned work", async () => {
-    const { output: includedProject } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "attention included" }),
-      ctx.actor,
-    );
+    const { output: includedProject, entityId: includedProjectEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "attention included" }),
+        ctx.actor,
+      );
     const { output: excludedProject } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "attention excluded" }),
@@ -1422,7 +1422,7 @@ describe("project dashboard — attention detector + summary", () => {
     );
 
     const scoped = await computeAttentionItems(ctx.db, {
-      projectIds: [includedProject.id],
+      projectIds: [includedProjectEntityId],
     });
     const overdueIds = scoped
       .filter((item) => item.type === "overdue_task")
@@ -1552,24 +1552,33 @@ describe("project dashboard — attention detector + summary", () => {
   });
 
   it("an omitted statusScope includes `done` projects in the list and in actualSpend/committedSpend", async () => {
-    const { output: projectA } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "summary spend a",
-        status: "in_progress",
-      }),
-      ctx.actor,
-    );
-    const { output: projectB } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "summary spend b", status: "planning" }),
-      ctx.actor,
-    );
-    const { output: projectDone } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "summary spend done", status: "done" }),
-      ctx.actor,
-    );
+    const { output: projectA, entityId: projectAEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "summary spend a",
+          status: "in_progress",
+        }),
+        ctx.actor,
+      );
+    const { output: projectB, entityId: projectBEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "summary spend b",
+          status: "planning",
+        }),
+        ctx.actor,
+      );
+    const { output: projectDone, entityId: projectDoneEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({
+          name: "summary spend done",
+          status: "done",
+        }),
+        ctx.actor,
+      );
     for (const [project, name, cost, future] of [
       [projectA, "summary a actual", 120, false],
       [projectA, "summary a committed", 30, true],
@@ -1592,9 +1601,9 @@ describe("project dashboard — attention detector + summary", () => {
     }
 
     const [aAfter, bAfter, doneAfter] = await Promise.all([
-      getProjectByID(ctx.db, projectA.id),
-      getProjectByID(ctx.db, projectB.id),
-      getProjectByID(ctx.db, projectDone.id),
+      getProjectByID(ctx.db, projectAEntityId),
+      getProjectByID(ctx.db, projectBEntityId),
+      getProjectByID(ctx.db, projectDoneEntityId),
     ]);
     const liveActual =
       aAfter.rollup.subtree.actualSpent + bAfter.rollup.subtree.actualSpent;
@@ -1639,8 +1648,14 @@ describe("project dashboard — summary scope filters", () => {
   const ctx = withTestDb();
 
   /** Every fixture here is a bare project; only the scoped columns vary. */
-  const mkProject = async (input: Partial<ProjectCreateInput> & { name: string }) => {
-    const { output } = await createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+  const mkProject = async (
+    input: Partial<ProjectCreateInput> & { name: string },
+  ) => {
+    const { output } = await createProject(
+      ctx.db,
+      projectCreateInput.parse(input),
+      ctx.actor,
+    );
     return output;
   };
 
@@ -1952,8 +1967,14 @@ describe("project dashboard — summary scope filters", () => {
 describe("project dashboard — portfolio analytics", () => {
   const ctx = withTestDb();
 
-  const mkProject = async (input: Partial<ProjectCreateInput> & { name: string }) => {
-    const { output } = await createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+  const mkProject = async (
+    input: Partial<ProjectCreateInput> & { name: string },
+  ) => {
+    const { output } = await createProject(
+      ctx.db,
+      projectCreateInput.parse(input),
+      ctx.actor,
+    );
     return output;
   };
 
@@ -1967,7 +1988,6 @@ describe("project dashboard — portfolio analytics", () => {
       trade?: "other" | "plumbing";
     } = {},
   ) =>
-unwrap(
     createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1980,7 +2000,7 @@ unwrap(
         date: extra.date ?? "2025-03-15",
       }),
       ctx.actor,
-    ));
+    );
 
   /**
    * parent (est 100) ── child (est 50); plus an unrelated `done` project.

@@ -379,10 +379,7 @@ export const updateVendor = async (
   const { data } = input;
   const resolvedId = await resolveLiveShortcode(db, input.id, "vendor");
   if (!resolvedId) {
-    throw createAppError(
-      "VENDOR_NOT_FOUND",
-      `Vendor not found: ${input.id}`,
-    );
+    throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${input.id}`);
   }
   const id = unsafeVendorId(resolvedId);
 

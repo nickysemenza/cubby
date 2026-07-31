@@ -93,7 +93,9 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     // gated on the vendor's own liveness via `resolveLiveJoinName`.
     purchaseId: charge ? unsafePurchaseShortcode(charge.shortcode) : null,
     vendorId:
-      charge?.vendor != null ? unsafeVendorShortcode(charge.vendor.shortcode) : null,
+      charge?.vendor != null
+        ? unsafeVendorShortcode(charge.vendor.shortcode)
+        : null,
     vendor: charge ? resolveLiveJoinName(charge.vendor) : null,
     orderId: charge?.orderId ?? null,
     createdAt: row.createdAt,

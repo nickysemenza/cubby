@@ -1,4 +1,4 @@
-import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
+import type { ProductId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import { costTypeSchema, plainDate, tradeSchema } from "@cubby/schemas/project";
 import { format } from "date-fns";
@@ -50,7 +50,7 @@ interface CreateExpenseDialogProps {
    * Read once, on mount — the caller conditionally mounts a fresh dialog
    * instance per click (see `CreateTaskDialog`'s `presetProjectId`).
    */
-  presetProjectId?: ProjectId | null;
+  presetProjectId?: ProjectShortcode | null;
   /**
    * Link the new expense to a product. Not a form field — there's no product
    * picker in quick-add; linking an existing expense happens via the Product

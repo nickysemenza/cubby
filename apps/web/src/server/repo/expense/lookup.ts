@@ -149,7 +149,10 @@ export const buildExpenseWhereClause = async (
       uniq(
         selectedProjectIds.flatMap((id) => {
           const projectId = unsafeProjectId(id);
-          return [projectId, ...collectDescendantIds(childrenByParent, projectId)];
+          return [
+            projectId,
+            ...collectDescendantIds(childrenByParent, projectId),
+          ];
         }),
       ),
     );

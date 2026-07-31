@@ -41,7 +41,10 @@ import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
-import { resolveShortcode, resolveShortcodes } from "~/server/repo/shortcode-resolver";
+import {
+  resolveShortcode,
+  resolveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 

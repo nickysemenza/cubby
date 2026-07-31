@@ -18,6 +18,7 @@ import type {
 import { and, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { task } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -25,10 +26,12 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
-import { resolveLiveShortcode, resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getTasksByIDs } from "~/server/repo/task";
-import { createAppError } from "~/server/errors/app-error";
 import { getProjectByID } from "./crud";
 
 export async function createProjectFromTasks(

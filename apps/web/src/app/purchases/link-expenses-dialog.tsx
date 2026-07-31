@@ -1,4 +1,4 @@
-import type { ExpenseId } from "@cubby/schemas/identifiers";
+import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -86,7 +86,7 @@ export function LinkExpensesDialog({
   purchase: PurchaseOut;
 }) {
   const api = useTRPC();
-  const [selected, setSelected] = useState<ExpenseId[]>([]);
+  const [selected, setSelected] = useState<ExpenseShortcode[]>([]);
   const [scope, setScope] = useState<CandidateScope>("vendorOrUnattached");
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
@@ -145,7 +145,7 @@ export function LinkExpensesDialog({
     },
   });
 
-  const toggle = (id: ExpenseId) =>
+  const toggle = (id: ExpenseShortcode) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
     );
@@ -238,7 +238,7 @@ export function LinkExpensesDialog({
                       data={{
                         id: row.id,
                         name: row.name,
-                        shortcode: row.shortcode,
+                        shortcode: row.id,
                       }}
                       truncate
                     />
@@ -257,15 +257,13 @@ export function LinkExpensesDialog({
                     <TradeBadge trade={row.trade} />
                   </TableCell>
                   <TableCell className="truncate">
-                    {row.projectId &&
-                    row.projectName &&
-                    row.projectShortcode ? (
+                    {row.projectId && row.projectName ? (
                       <EntityInlineLink
                         entity="project"
                         data={{
                           id: row.projectId,
                           name: row.projectName,
-                          shortcode: row.projectShortcode,
+                          shortcode: row.projectId,
                         }}
                         truncate
                       />

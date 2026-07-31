@@ -1,9 +1,9 @@
 import {
   type LocationId,
   type ProductId,
-  type ProjectId,
-  type PurchaseId,
-  unsafeVendorId,
+  type ProjectShortcode,
+  type PurchaseShortcode,
+  unsafeVendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -59,6 +59,13 @@ import {
 } from "./repo.fixtures";
 import { createTask, deleteTasks } from "./task";
 import { findOrCreateVendor, getVendorByID, mergeVendors } from "./vendor";
+
+/**
+ * The ledger repos hand back `{ output, entityId }` — the uuid is for audit and
+ * side-effect bookkeeping. These tests assert on the public shape.
+ */
+const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
+  (await p).output;
 
 // Repo-layer tests for the WASM-driven, highest-logic problem scans. The
 // coverage/UPC find* helpers are exercised through the public findAllProblems
@@ -921,7 +928,7 @@ describe("problems service — tracker slice", () => {
   // replaced furnace, a 2023 garden). `stalled_project` already scoped itself
   // to live projects; `missing_budget` simply didn't.
   it("asks for a budget only on live projects, not finished ones", async () => {
-    const spend = async (projectId: ProjectId, name: string) => {
+    const spend = async (projectId: ProjectShortcode, name: string) => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse({
@@ -1256,25 +1263,27 @@ describe("problems — duplicate vendors", () => {
   // a second spelling mints a second roster row. Each distinct orderId is a
   // separate charge on that vendor, which is what the detector weighs.
   const seedCharge = (vendor: string, orderId: string) =>
-unwrap(
-    createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: `${vendor} ${orderId}`,
-          cost: 10,
-          vendor,
-          orderId,
-        }),
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: `${vendor} ${orderId}`,
+            cost: 10,
+            vendor,
+            orderId,
+          }),
+        ),
+        ctx.actor,
       ),
-      ctx.actor,
-    ));
+    );
 
   // Idempotent by contract (vendor.integration.test pins it), so this reads an
-  // existing roster row's id rather than creating anything.
-  const vendorIdOf = (name: string) => findOrCreateVendor(ctx.db, name);
-  const vendorOf = async (name: string) =>
-    getVendorByID(ctx.db, await vendorIdOf(name));
+  // existing roster row's internal uuid rather than creating anything.
+  // `sampleId`/`canonicalSampleId` on the detector row are that same internal
+  // uuid (`id::text` in the SQL) — the shortcode lives in the separate
+  // `sampleShortcode`/`canonicalSampleShortcode` fields.
+  const vendorUuidOf = (name: string) => findOrCreateVendor(ctx.db, name);
 
   it("pairs two spellings of one vendor, keeping the one with more charges", async () => {
     await seedCharge("Amazon", "AMZ-1");
@@ -1282,8 +1291,10 @@ unwrap(
     await seedCharge("amazon", "AMZ-3");
 
     const { duplicateVendors } = await findFastProblems(ctx.db);
-    const sample = await vendorOf("amazon");
-    const canonicalSample = await vendorOf("Amazon");
+    const sampleUuid = await vendorUuidOf("amazon");
+    const canonicalUuid = await vendorUuidOf("Amazon");
+    const sample = await getVendorByID(ctx.db, sampleUuid);
+    const canonicalSample = await getVendorByID(ctx.db, canonicalUuid);
     expect(duplicateVendors).toEqual([
       {
         value: "amazon",
@@ -1293,10 +1304,10 @@ unwrap(
         count: 1,
         canonical: "Amazon",
         canonicalCount: 2,
-        sampleId: sample.id,
-        sampleShortcode: sample.shortcode,
-        canonicalSampleId: canonicalSample.id,
-        canonicalSampleShortcode: canonicalSample.shortcode,
+        sampleId: sampleUuid,
+        sampleShortcode: sample.id,
+        canonicalSampleId: canonicalUuid,
+        canonicalSampleShortcode: canonicalSample.id,
       },
     ]);
     // A duplicate roster row is wrong and drivable to zero, so unlike the
@@ -1325,8 +1336,11 @@ unwrap(
   });
 
   it("clears once merged with the two ids the row carries", async () => {
-    // The row's own `canonicalSampleId`/`sampleId` are exactly what the Problems
-    // card hands `mergeVendors` — this pins that they're the right way round.
+    // The row's own `canonicalSampleShortcode`/`sampleShortcode` are exactly
+    // what the Problems card hands `mergeVendors` (which now speaks
+    // shortcodes) — this pins that they're the right way round.
+    // `canonicalSampleId`/`sampleId` stay the internal uuid, asserted
+    // separately below.
     await seedCharge("Lowes", "LW-1");
     await seedCharge("Lowes", "LW-2");
     await seedCharge("Lowe's", "LW-3");
@@ -1340,8 +1354,8 @@ unwrap(
     const keeper = await mergeVendors(
       ctx.db,
       {
-        keepId: unsafeVendorId(row.canonicalSampleId),
-        mergeIds: [unsafeVendorId(row.sampleId)],
+        keepId: unsafeVendorShortcode(row.canonicalSampleShortcode),
+        mergeIds: [unsafeVendorShortcode(row.sampleShortcode)],
       },
       ctx.actor,
     );
@@ -1363,20 +1377,22 @@ describe("problems — charges not reconciling", () => {
   // land on ONE charge. `statedTotal` is charge-level and is set afterwards —
   // there is deliberately no path that derives it from the lines.
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
-unwrap(
-    createExpense(
-      ctx.db,
-      expenseCreateInput.parse(makeExpenseInput(overrides)),
-      ctx.actor,
-    ));
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(makeExpenseInput(overrides)),
+        ctx.actor,
+      ),
+    );
 
-  const setStated = (id: PurchaseId, statedTotal: number) =>
-unwrap(
-    updatePurchase(
-      ctx.db,
-      purchaseUpdateInput.parse({ id, data: { statedTotal } }),
-      ctx.actor,
-    ));
+  const setStated = (id: PurchaseShortcode, statedTotal: number) =>
+    unwrap(
+      updatePurchase(
+        ctx.db,
+        purchaseUpdateInput.parse({ id, data: { statedTotal } }),
+        ctx.actor,
+      ),
+    );
 
   it("flags charges whose lines don't add up, biggest gap first, and leaves a matching one alone", async () => {
     const big = await seedLine({
@@ -1407,20 +1423,30 @@ unwrap(
     });
     expect(okSecond.purchaseId).toBe(okFirst.purchaseId);
 
-    const bigCharge = await setStated(big.purchaseId as PurchaseId, 500);
-    const smallCharge = await setStated(small.purchaseId as PurchaseId, 100);
-    const okCharge = await setStated(okFirst.purchaseId as PurchaseId, 100);
+    const bigCharge = await setStated(big.purchaseId as PurchaseShortcode, 500);
+    const smallCharge = await setStated(
+      small.purchaseId as PurchaseShortcode,
+      100,
+    );
+    const okCharge = await setStated(
+      okFirst.purchaseId as PurchaseShortcode,
+      100,
+    );
 
     const { chargesNotReconciling } = await findFastProblems(ctx.db);
 
+    // `chargeNotReconcilingSchema.id` is the internal uuid; `shortcode` is the
+    // public code `bigCharge.id`/`smallCharge.id` (PurchaseOut.id) carry.
     // Ordered by the size of the discrepancy: $200 before $15.
-    expect(chargesNotReconciling.map((c) => c.id)).toEqual([
+    expect(chargesNotReconciling.map((c) => c.shortcode)).toEqual([
       bigCharge.id,
       smallCharge.id,
     ]);
-    expect(chargesNotReconciling.map((c) => c.id)).not.toContain(okCharge.id);
+    expect(chargesNotReconciling.map((c) => c.shortcode)).not.toContain(
+      okCharge.id,
+    );
     expect(chargesNotReconciling[1]).toMatchObject({
-      id: smallCharge.id,
+      shortcode: smallCharge.id,
       vendorName: "Reconcile Depot",
       orderId: "RD-SMALL",
       statedTotal: 100,
@@ -1457,7 +1483,7 @@ unwrap(
       vendor: "Refund Mart",
       orderId: "RM-1",
     });
-    const charge = await setStated(kept.purchaseId as PurchaseId, 100);
+    const charge = await setStated(kept.purchaseId as PurchaseShortcode, 100);
 
     const before = await findFastProblems(ctx.db);
     expect(before.chargesNotReconciling).toEqual([]);
@@ -1466,7 +1492,12 @@ unwrap(
 
     const after = await findFastProblems(ctx.db);
     expect(after.chargesNotReconciling).toMatchObject([
-      { id: charge.id, statedTotal: 100, expenseTotal: 60, expenseCount: 1 },
+      {
+        shortcode: charge.id,
+        statedTotal: 100,
+        expenseTotal: 60,
+        expenseCount: 1,
+      },
     ]);
   });
 
@@ -1477,7 +1508,7 @@ unwrap(
       vendor: "Advisory Mart",
       orderId: "AM-1",
     });
-    await setStated(line.purchaseId as PurchaseId, 100);
+    await setStated(line.purchaseId as PurchaseShortcode, 100);
 
     const { chargesNotReconciling } = await findFastProblems(ctx.db);
     expect(chargesNotReconciling).toHaveLength(1);

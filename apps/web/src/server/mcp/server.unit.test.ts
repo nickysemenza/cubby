@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { unsafeExpenseId } from "@cubby/schemas/identifiers";
+import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
 import {
   expenseOut,
@@ -995,11 +995,14 @@ describe("unknown filter keys are rejected", () => {
 });
 
 describe("household tracker synthesis + bulk tools", () => {
-  const PROJECT_A = "44444444-4444-4444-8444-444444444441";
-  const PROJECT_B = "44444444-4444-4444-8444-444444444442";
-  const PROJECT_C = "44444444-4444-4444-8444-444444444443";
-  const TASK_A = "55555555-5555-4555-8555-555555555551";
-  const EXPENSE_A = "66666666-6666-4666-8666-666666666661";
+  // project/task/expense are addressed by their public code end to end now —
+  // the tool input, the router call, and the row's own `id` are all the same
+  // value, so there is nothing left to translate in these tools.
+  const PROJECT_A = "PRJ-4442";
+  const PROJECT_B = "PRJ-4443";
+  const PROJECT_C = "PRJ-4444";
+  const TASK_A = "TSK-5552";
+  const EXPENSE_A = "EXP-6662";
 
   it("get_house_status passes filters through and trims UI-only + heavy fields", async () => {
     const project = mock(projectOut, {
@@ -1083,8 +1086,9 @@ describe("household tracker synthesis + bulk tools", () => {
       "projectId",
       "projectName",
       "status",
-      "subjectProductId",
       "subjectProductName",
+      // product keeps a uuid `id` of its own, so its ref stays an explicit code
+      "subjectProductShortcode",
       "trade",
     ]);
   });
@@ -1093,7 +1097,7 @@ describe("household tracker synthesis + bulk tools", () => {
     const candidate = (
       overrides: Partial<ExpenseMatchCandidate>,
     ): ExpenseMatchCandidate => ({
-      expenseId: unsafeExpenseId(EXPENSE_A),
+      expenseId: unsafeExpenseShortcode("EXP-3333"),
       name: "dust extractor",
       cost: 599,
       date: "2024-06-10",
@@ -1116,7 +1120,7 @@ describe("household tracker synthesis + bulk tools", () => {
     const ordered = [
       candidate({ matchedOn: "order_id", orderId: "1121197219" }),
       candidate({
-        expenseId: unsafeExpenseId(PROJECT_B),
+        expenseId: unsafeExpenseShortcode("EXP-3334"),
         name: "coincidence",
         matchedOn: "amount_date",
       }),
@@ -1144,7 +1148,7 @@ describe("household tracker synthesis + bulk tools", () => {
       { expense: { match } },
     );
 
-    expect(result.isError).not.toBe(true);
+    if (result.isError) throw new Error(JSON.stringify(result.content));
     // Every tuning knob has a schema default, so a caller passing only `rows`
     // still reaches the repo with a fully-resolved option set.
     expect(match).toHaveBeenCalledWith(
@@ -1232,7 +1236,7 @@ describe("household tracker synthesis + bulk tools", () => {
       { project: { portfolioAnalytics } },
     );
 
-    expect(result.isError).not.toBe(true);
+    if (result.isError) throw new Error(JSON.stringify(result.content));
     const structured = result.structuredContent as {
       projects: Array<Record<string, unknown>>;
       totals: Record<string, number>;
@@ -1337,10 +1341,10 @@ describe("household tracker synthesis + bulk tools", () => {
 });
 
 describe("purchase restructuring tools (split/link/merge)", () => {
-  const EXPENSE_A = "77777777-7777-4777-8777-777777777771";
-  const EXPENSE_B = "77777777-7777-4777-8777-777777777772";
-  const PURCHASE_A = "88888888-8888-4888-8888-888888888881";
-  const PURCHASE_B = "88888888-8888-4888-8888-888888888882";
+  const EXPENSE_A = "EXP-7772";
+  const EXPENSE_B = "EXP-7773";
+  const PURCHASE_A = "PUR-8882";
+  const PURCHASE_B = "PUR-8883";
 
   it("split_expense is WRITE_CLOSED, wraps the array result in items, and passes params through", async () => {
     const server = createMcpServer();

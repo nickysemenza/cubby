@@ -5,6 +5,7 @@ import type {
   PreviewOperationInput,
 } from "@cubby/schemas/entity-integrity";
 import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   unsafeCookbookId,
   unsafeExpenseId,
@@ -39,6 +40,7 @@ import {
   previewMergePurchases,
 } from "~/server/repo/purchase";
 import { previewDeleteRecipes } from "~/server/repo/recipe/crud";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { previewDeleteTasks } from "~/server/repo/task/crud";
 import {
   previewDeleteVendors,
@@ -66,6 +68,27 @@ type Planned = {
   candidates?: MergeCandidate[];
 };
 
+/**
+ * The five cut-over entities (project, task, vendor, purchase, expense) are
+ * named here by their PUBLIC shortcode, but the `preview*` planners below still
+ * take the private uuid — so resolve first rather than branding the string with
+ * `unsafe*Id`, which type-checks and then hands Postgres a `PRJ-…` for a uuid
+ * column. An unresolvable code drops out: a preview is advisory, and the
+ * mutation re-checks everything inside its own transaction anyway.
+ */
+const toUuids = async (
+  db: Database,
+  codes: readonly string[],
+  entity: ShortcodeEntity,
+): Promise<string[]> => {
+  if (codes.length === 0) return [];
+  const resolved = await resolveLiveShortcodes(db, codes, entity);
+  return codes.flatMap((code) => {
+    const id = resolved.get(code);
+    return id ? [id] : [];
+  });
+};
+
 const plan = async (
   db: Database,
   input: PreviewOperationInput,
@@ -89,20 +112,35 @@ const plan = async (
     .with({ operation: "delete", entity: "location" }, ({ ids }) =>
       previewDeleteLocations(db, ids.map(unsafeLocationId)),
     )
-    .with({ operation: "delete", entity: "project" }, ({ ids }) =>
-      previewDeleteProjects(db, ids.map(unsafeProjectId)),
+    .with({ operation: "delete", entity: "project" }, async ({ ids }) =>
+      previewDeleteProjects(
+        db,
+        (await toUuids(db, ids, "project")).map(unsafeProjectId),
+      ),
     )
-    .with({ operation: "delete", entity: "task" }, ({ ids }) =>
-      previewDeleteTasks(db, ids.map(unsafeTaskId)),
+    .with({ operation: "delete", entity: "task" }, async ({ ids }) =>
+      previewDeleteTasks(
+        db,
+        (await toUuids(db, ids, "task")).map(unsafeTaskId),
+      ),
     )
-    .with({ operation: "delete", entity: "vendor" }, ({ ids }) =>
-      previewDeleteVendors(db, ids.map(unsafeVendorId)),
+    .with({ operation: "delete", entity: "vendor" }, async ({ ids }) =>
+      previewDeleteVendors(
+        db,
+        (await toUuids(db, ids, "vendor")).map(unsafeVendorId),
+      ),
     )
-    .with({ operation: "delete", entity: "purchase" }, ({ ids }) =>
-      previewDeletePurchases(db, ids.map(unsafePurchaseId)),
+    .with({ operation: "delete", entity: "purchase" }, async ({ ids }) =>
+      previewDeletePurchases(
+        db,
+        (await toUuids(db, ids, "purchase")).map(unsafePurchaseId),
+      ),
     )
-    .with({ operation: "delete", entity: "expense" }, ({ ids }) =>
-      previewDeleteExpenses(db, ids.map(unsafeExpenseId)),
+    .with({ operation: "delete", entity: "expense" }, async ({ ids }) =>
+      previewDeleteExpenses(
+        db,
+        (await toUuids(db, ids, "expense")).map(unsafeExpenseId),
+      ),
     )
     .with({ operation: "delete", entity: "inventory" }, ({ ids }) =>
       previewDeleteInventoryEntries(db, ids.map(unsafeInventoryId)),
@@ -131,17 +169,27 @@ const plan = async (
           keepId: unsafeIngredientId(keepId ?? ""),
         }),
     )
-    .with({ operation: "merge", entity: "vendor" }, ({ mergeIds, keepId }) =>
-      previewMergeVendors(db, {
-        mergeIds: mergeIds.map(unsafeVendorId),
-        keepId: unsafeVendorId(keepId ?? ""),
-      }),
+    .with(
+      { operation: "merge", entity: "vendor" },
+      async ({ mergeIds, keepId }) =>
+        previewMergeVendors(db, {
+          mergeIds: (await toUuids(db, mergeIds, "vendor")).map(unsafeVendorId),
+          keepId: unsafeVendorId(
+            (await toUuids(db, [keepId ?? ""], "vendor"))[0] ?? "",
+          ),
+        }),
     )
-    .with({ operation: "merge", entity: "purchase" }, ({ mergeIds, keepId }) =>
-      previewMergePurchases(db, {
-        mergeIds: mergeIds.map(unsafePurchaseId),
-        keepId: unsafePurchaseId(keepId ?? ""),
-      }),
+    .with(
+      { operation: "merge", entity: "purchase" },
+      async ({ mergeIds, keepId }) =>
+        previewMergePurchases(db, {
+          mergeIds: (await toUuids(db, mergeIds, "purchase")).map(
+            unsafePurchaseId,
+          ),
+          keepId: unsafePurchaseId(
+            (await toUuids(db, [keepId ?? ""], "purchase"))[0] ?? "",
+          ),
+        }),
     )
     .exhaustive();
 

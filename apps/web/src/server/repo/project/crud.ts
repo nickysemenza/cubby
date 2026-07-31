@@ -446,7 +446,9 @@ export const deleteProjects = async (
       `Projects not found or already deleted: ${missing.join(", ")}`,
     );
   }
-  const ids = shortcodes.map((code) => unsafeProjectId(resolved.get(code) ?? ""));
+  const ids = shortcodes.map((code) =>
+    unsafeProjectId(resolved.get(code) ?? ""),
+  );
 
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, project, ids, "Project");

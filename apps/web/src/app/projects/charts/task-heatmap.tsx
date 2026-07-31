@@ -73,7 +73,7 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
           <StatusIcon status={task.status} />
           <Link
             to={entities.task.routes.detail}
-            params={entityDetailParams(task.shortcode)}
+            params={entityDetailParams(task.id)}
             className="truncate hover:underline"
             title={task.name}
           >

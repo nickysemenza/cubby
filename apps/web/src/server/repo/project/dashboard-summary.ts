@@ -293,7 +293,9 @@ export async function projectDashboardSummary(
   const statusByProject = new Map<ProjectId, ProjectTaskStatusBreakdown>();
   for (const id of ids) {
     statusByProject.set(id, {
-      projectId: unsafeProjectShortcode(subtreeLoad.shortcodeById.get(id) ?? ""),
+      projectId: unsafeProjectShortcode(
+        subtreeLoad.shortcodeById.get(id) ?? "",
+      ),
       notStarted: 0,
       later: 0,
       inProgress: 0,

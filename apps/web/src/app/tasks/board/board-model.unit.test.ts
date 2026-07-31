@@ -384,7 +384,10 @@ describe("computeMove", () => {
           projectName: "B",
         },
       }),
-    ).toEqual({ status: "in_progress", projectId: unsafeProjectShortcode("p2") });
+    ).toEqual({
+      status: "in_progress",
+      projectId: unsafeProjectShortcode("p2"),
+    });
   });
 
   it("un-assigns the project when dropping into the Inbox lane", () => {

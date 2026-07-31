@@ -211,7 +211,9 @@ export function registerInventoryTools(server: McpServer) {
         "inventory",
         items.map((item) => item.inventoryEntryId),
       );
-      const result = await caller.inventory.bulkMove({
+      // The router returns `{ items, sideEffects }`; MCP publishes just the
+      // moved rows (side effects are internal bookkeeping).
+      const { items: moved } = await caller.inventory.bulkMove({
         sourceLocationId: sourceLocationId!,
         targetLocationId: targetLocationId!,
         items: items.map((item, i) => ({
@@ -219,7 +221,7 @@ export function registerInventoryTools(server: McpServer) {
           quantity: item.quantity,
         })),
       });
-      return respondList(result, slimInventory);
+      return respondList(moved, slimInventory);
     },
   });
 

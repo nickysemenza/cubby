@@ -377,9 +377,7 @@ export async function listActionableTasks(
   // state, so they aren't all covered by `tasksById` — one batched reverse
   // lookup for whichever ones are actually referenced.
   const referencedTaskIds = [
-    ...new Set(
-      [...blockedByIds.values(), ...blockingIds.values()].flat(),
-    ),
+    ...new Set([...blockedByIds.values(), ...blockingIds.values()].flat()),
   ];
   const taskRefs: EntityRef[] = referencedTaskIds.map((id) => ({
     entity: "task",

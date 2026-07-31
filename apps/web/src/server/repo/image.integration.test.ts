@@ -1,4 +1,3 @@
-import { unsafePurchaseId } from "@cubby/schemas/identifiers";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -17,7 +16,6 @@ import {
   updateImage,
 } from "./image";
 import { createPurchase } from "./purchase";
-import { resolveLiveShortcode } from "./shortcode-resolver";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 describe("image repository", () => {
@@ -196,16 +194,14 @@ describe("image repository — purchase (charge) documents", () => {
   const makePurchase = async (orderId: string | null = null) => {
     const vendorId = await findOrCreateVendor(ctx.db, "PurchaseImage Test Co");
     const vendor = await getVendorByID(ctx.db, vendorId);
-    const charge = await createPurchase(
+    // The FK plumbing below is keyed by the private uuid, which the repo hands
+    // back alongside the public row — no second lookup needed.
+    const { output: charge, entityId } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({ vendorId: vendor.id, orderId }),
       ctx.actor,
     );
-    // Entity-attachment/FK plumbing below needs the real uuid, not the
-    // public shortcode `createPurchase` returns as `.id`.
-    const resolved = await resolveLiveShortcode(ctx.db, charge.id, "purchase");
-    if (!resolved) throw new Error("purchase not found after create");
-    return { ...charge, uuid: unsafePurchaseId(resolved) };
+    return { ...charge, uuid: entityId };
   };
 
   // The live bug: on `main`, `deleteImages` never deletes `PurchaseImage`

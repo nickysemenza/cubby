@@ -31,6 +31,7 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityEmbedding, expense } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -59,7 +60,6 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { createAppError } from "~/server/errors/app-error";
 import { findOrCreateVendor } from "~/server/repo/vendor";
 import { dbExpenseToAPI, type ExpenseRow } from "./helpers";
 
@@ -113,19 +113,23 @@ const resolveLivePurchaseId = async (
 };
 
 /** Batch-resolve expense shortcodes to live uuids, or throw naming the misses. */
-const resolveLiveExpenseIdsOrThrow = async (
+/**
+ * Resolve a bulk selection to live uuids, DROPPING codes that name nothing
+ * live. Bulk writes here are documented to skip a soft-deleted or unknown id
+ * rather than reject the whole batch — the alternative makes a selection that
+ * merely raced a delete fail entirely, and callers pass sets they didn't
+ * individually verify. A throwing variant would belong on single-row paths,
+ * where "not found" is the caller's own mistake.
+ */
+const resolveLiveExpenseIds = async (
   tx: DrizzleTransaction,
   shortcodes: ExpenseShortcode[],
 ): Promise<ExpenseId[]> => {
   const resolved = await resolveLiveShortcodes(tx, shortcodes, "expense");
-  const missing = shortcodes.filter((code) => !resolved.has(code));
-  if (missing.length > 0) {
-    throw createAppError(
-      "EXPENSE_NOT_FOUND",
-      `Expense(s) not found: ${missing.join(", ")}`,
-    );
-  }
-  return shortcodes.map((code) => unsafeExpenseId(resolved.get(code) ?? ""));
+  return shortcodes
+    .map((code) => resolved.get(code))
+    .filter((id): id is string => id !== undefined)
+    .map(unsafeExpenseId);
 };
 
 // The union, not `Database`: the factory's `update` runs on a transaction and
@@ -448,7 +452,10 @@ export const updateExpense = async (
       output: await expenseCrud.update(
         tx,
         id,
-        { ...rest, ...(resolved === undefined ? {} : { purchaseId: resolved }) },
+        {
+          ...rest,
+          ...(resolved === undefined ? {} : { purchaseId: resolved }),
+        },
         actor,
       ),
       entityId: id,
@@ -542,7 +549,7 @@ export const moveExpenses = async (
         ? await resolveLiveProjectId(tx, input.projectId)
         : null;
 
-    const ids = await resolveLiveExpenseIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveExpenseIds(tx, input.ids);
 
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
@@ -590,7 +597,7 @@ export const setExpensesTrade = async (
   const { trade } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveExpenseIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveExpenseIds(tx, input.ids);
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { id: true, trade: true },
@@ -631,7 +638,7 @@ export const setExpensesCostType = async (
   const { costType } = input;
 
   const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveExpenseIdsOrThrow(tx, input.ids);
+    const ids = await resolveLiveExpenseIds(tx, input.ids);
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
       columns: { id: true, costType: true },
@@ -673,7 +680,7 @@ export const deleteExpenses = async (
   if (shortcodes.length === 0) return;
 
   await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveExpenseIdsOrThrow(tx, shortcodes);
+    const ids = await resolveLiveExpenseIds(tx, shortcodes);
     await lockAndValidateForDelete(tx, expense, ids, "Expense");
 
     const now = new Date();

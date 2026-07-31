@@ -1,4 +1,4 @@
-import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
+import type { ProductId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   plainDate,
@@ -48,7 +48,7 @@ interface CreateTaskDialogProps {
    * re-resolves these defaults whenever it opens.
    */
   presetStatus?: TaskStatus;
-  presetProjectId?: ProjectId | null;
+  presetProjectId?: ProjectShortcode | null;
   presetTrade?: Trade;
   presetDate?: string;
   presetName?: string;

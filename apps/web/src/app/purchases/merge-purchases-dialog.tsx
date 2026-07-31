@@ -1,5 +1,5 @@
 import type { PreviewOperationInput } from "@cubby/schemas/entity-integrity";
-import type { PurchaseId } from "@cubby/schemas/identifiers";
+import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -58,7 +58,7 @@ export function MergePurchasesDialog({
   purchase: PurchaseOut;
 }) {
   const api = useTRPC();
-  const [selected, setSelected] = useState<PurchaseId[]>([]);
+  const [selected, setSelected] = useState<PurchaseShortcode[]>([]);
 
   const candidatesQuery = useQuery({
     ...api.purchase.list.queryOptions({
@@ -85,7 +85,7 @@ export function MergePurchasesDialog({
     },
   });
 
-  const toggle = (id: PurchaseId) =>
+  const toggle = (id: PurchaseShortcode) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
     );

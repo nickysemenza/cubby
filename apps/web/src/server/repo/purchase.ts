@@ -21,12 +21,12 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type ExpenseId,
+  type PurchaseId,
+  type PurchaseShortcode,
   unsafeExpenseId,
   unsafeProjectId,
-  type PurchaseId,
   unsafePurchaseId,
   unsafePurchaseShortcode,
-  type PurchaseShortcode,
   unsafeVendorId,
   unsafeVendorShortcode,
   type VendorId,
@@ -91,6 +91,7 @@ import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
+  resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
@@ -338,12 +339,21 @@ export const assertPurchaseLive = async (
   }
 };
 
-const buildPurchaseWhereClause = (filters: PurchaseFilters) =>
+/**
+ * `filters.vendorId` arrives as a public `VendorShortcode`, but the column is a
+ * uuid — so it is resolved first (`vendorUuids`) rather than compared directly,
+ * which Postgres rejects outright with `invalid input syntax for type uuid`.
+ * Mirrors `toUuids` on the expense side.
+ */
+const buildPurchaseWhereClause = (
+  filters: PurchaseFilters,
+  vendorUuids: string[] | undefined,
+) =>
   buildSearchConditions(
     purchase,
     [{ column: purchase.orderId, term: filters.search }],
     [
-      eqAny(purchase.vendorId, filters.vendorId),
+      eqAny(purchase.vendorId, vendorUuids),
       eqAny(purchase.orderId, filters.orderId),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
       presenceCondition(
@@ -372,7 +382,15 @@ export const purchaseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
-  const whereClause = buildPurchaseWhereClause(filters);
+  // An unknown code resolves to nothing and so matches nothing, which is what a
+  // filter naming a missing vendor should do — not throw.
+  const vendorCodes = filters.vendorId ? [filters.vendorId].flat() : undefined;
+  const vendorUuids = vendorCodes
+    ? [...(await resolveShortcodes(db, vendorCodes)).values()]
+        .filter((ref) => ref.entity === "vendor")
+        .map((ref) => ref.id)
+    : undefined;
+  const whereClause = buildPurchaseWhereClause(filters, vendorUuids);
   const { take, skip } = buildTakeSkip(pagination);
 
   const rows = await getDb(db)
@@ -577,7 +595,11 @@ export const updatePurchase = async (
     // Resolving to a LIVE row is the liveness check itself.
     let resolvedVendorId: VendorId | undefined;
     if (data.vendorId !== undefined) {
-      const vendorUuid = await resolveLiveShortcode(tx, data.vendorId, "vendor");
+      const vendorUuid = await resolveLiveShortcode(
+        tx,
+        data.vendorId,
+        "vendor",
+      );
       if (!vendorUuid) {
         throw createAppError(
           "VENDOR_NOT_FOUND",
@@ -686,13 +708,13 @@ export const linkExpensesToPurchase = async (
   }
   const purchaseId = unsafePurchaseId(purchaseUuid);
 
-  const resolvedExpenses = await resolveLiveShortcodes(
-    db,
-    input.expenseIds,
-    "expense",
-  );
+  // Resolve INCLUDING soft-deleted rows. A live-only lookup here would throw
+  // EXPENSE_NOT_FOUND for a tombstoned line, but this function's contract is to
+  // skip a selection with no live lines silently (see `before.length === 0`
+  // below) — only a code that names nothing at all is an error.
+  const resolvedExpenses = await resolveShortcodes(db, input.expenseIds);
   const missingExpenses = input.expenseIds.filter(
-    (code) => !resolvedExpenses.has(code),
+    (code) => resolvedExpenses.get(code)?.entity !== "expense",
   );
   if (missingExpenses.length > 0) {
     throw createAppError(
@@ -701,7 +723,7 @@ export const linkExpensesToPurchase = async (
     );
   }
   const expenseIds = input.expenseIds.map((code) =>
-    unsafeExpenseId(resolvedExpenses.get(code) ?? ""),
+    unsafeExpenseId(resolvedExpenses.get(code)?.id ?? ""),
   );
 
   await withTransaction(db, async (tx) => {

@@ -1,4 +1,4 @@
-import type { TaskId } from "@cubby/schemas/identifiers";
+import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
 import type { Row } from "@tanstack/react-table";
 import {
@@ -31,7 +31,7 @@ export function useTaskBulkActions({
   extraActions = NO_EXTRA_ACTIONS,
 }: {
   includeDueDate?: boolean;
-  onCreateProject?: (ids: TaskId[]) => void;
+  onCreateProject?: (ids: TaskShortcode[]) => void;
   extraActions?: BulkAction<TaskOut>[];
 } = {}) {
   const [moveItems, setMoveItems] = useState<TaskOut[]>([]);

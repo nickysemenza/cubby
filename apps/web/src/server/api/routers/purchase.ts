@@ -28,6 +28,7 @@ import {
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   createPurchase,
   deletePurchases,
@@ -45,7 +46,6 @@ import {
   resolveLiveShortcodes,
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
-import { createAppError } from "~/server/errors/app-error";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
   createEntityListProcedure,
@@ -75,7 +75,10 @@ const getByID = protectedProcedure
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "purchase");
     if (!id) {
-      throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${input}`);
+      throw createAppError(
+        "PURCHASE_NOT_FOUND",
+        `Purchase not found: ${input}`,
+      );
     }
     return getPurchaseByID(ctx.db, unsafePurchaseId(id));
   });
@@ -93,7 +96,10 @@ const expenses = protectedProcedure
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "purchase");
     if (!id) {
-      throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${input}`);
+      throw createAppError(
+        "PURCHASE_NOT_FOUND",
+        `Purchase not found: ${input}`,
+      );
     }
     return getPurchaseExpenses(ctx.db, unsafePurchaseId(id));
   });

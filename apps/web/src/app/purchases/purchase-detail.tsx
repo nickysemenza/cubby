@@ -120,13 +120,13 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             });
           }}
           renderValue={(value) =>
-            value && purchase.vendorName && purchase.vendorShortcode ? (
+            value && purchase.vendorName && purchase.vendorId ? (
               <EntityInlineLink
                 entity="vendor"
                 data={{
                   id: value,
                   name: purchase.vendorName,
-                  shortcode: purchase.vendorShortcode,
+                  shortcode: purchase.vendorId,
                 }}
                 compact
               />
@@ -302,13 +302,13 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     {
       label: "Vendor",
       value:
-        purchase.vendorName && purchase.vendorShortcode ? (
+        purchase.vendorName && purchase.vendorId ? (
           <EntityInlineLink
             entity="vendor"
             data={{
               id: purchase.vendorId,
               name: purchase.vendorName,
-              shortcode: purchase.vendorShortcode,
+              shortcode: purchase.vendorId,
             }}
             truncate
           />

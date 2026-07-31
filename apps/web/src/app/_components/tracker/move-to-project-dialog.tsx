@@ -1,4 +1,7 @@
-import { type ProjectId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectShortcode,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import { useMemo, useState } from "react";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -23,7 +26,7 @@ interface MoveToProjectDialogProps {
   allowNoProject?: boolean;
   /** Runs the actual mutation — kept caller-owned so this dialog has no tRPC
    * shape coupling and works for both `task.bulkMove` and `expense.bulkMove`. */
-  onConfirm: (projectId: ProjectId | null) => Promise<void>;
+  onConfirm: (projectId: ProjectShortcode | null) => Promise<void>;
   isPending: boolean;
 }
 
@@ -62,7 +65,7 @@ export function MoveToProjectDialog({
   const handleSubmit = async () => {
     if (selected === null) return;
     await onConfirm(
-      selected === NO_PROJECT_VALUE ? null : unsafeProjectId(selected),
+      selected === NO_PROJECT_VALUE ? null : unsafeProjectShortcode(selected),
     );
     setSelected(null);
   };

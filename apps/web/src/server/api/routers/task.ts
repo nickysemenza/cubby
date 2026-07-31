@@ -27,6 +27,11 @@ import {
   taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import {
   createTask,
   deleteTasks,
@@ -43,8 +48,6 @@ import {
   taskList,
   updateTask,
 } from "~/server/repo/task";
-import { resolveLiveShortcode, resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
-import { createAppError } from "~/server/errors/app-error";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -147,7 +150,10 @@ const bulkMove = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await moveTasks(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({
@@ -165,7 +171,10 @@ const bulkSetStatus = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksStatus(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({
@@ -183,7 +192,10 @@ const bulkSetTrade = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksTrade(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({
@@ -201,7 +213,10 @@ const bulkSetDueDate = protectedProcedure
   .output(taskListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksDueDate(ctx.db, input, ctx.actorContext);
-    const ids = await taskEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await taskEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({

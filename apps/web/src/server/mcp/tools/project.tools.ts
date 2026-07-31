@@ -6,8 +6,7 @@
  * get_project.
  */
 
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { expenseShortcode, projectShortcode } from "@cubby/schemas/identifiers";
+import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   expenseAnalyticsOut,
@@ -19,6 +18,7 @@ import {
   expenseMatchInput,
   expenseMatchOut,
   expenseMcpListOut,
+  expenseMcpOut,
   expenseOut,
   expenseUpdateData,
   LIVE_PROJECT_STATUSES,
@@ -38,70 +38,26 @@ import {
   taskCreateInput,
   taskFilterFields,
   taskMcpListOut,
+  taskMcpOut,
   taskOut,
   taskSummaryOut,
   taskUpdateData,
 } from "@cubby/schemas/project";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { sumBy, uniq } from "es-toolkit";
+import { sumBy } from "es-toolkit";
 import { z } from "zod";
 import {
-  type Caller,
+  idParam,
   READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerRouterTool,
+  resolveOptionalId,
   slimExpense,
   slimProject,
   slimTask,
   strictFilterInput,
   WRITE_CLOSED,
 } from "./_shared";
-
-/**
- * Batch-resolve a set of same-entity uuids to their shortcode via
- * `shortcode.lookupMany` — the reverse of `resolvePublicIdMap`, for a router
- * result (`registerRouterTool` bypasses the `slim*` projections — see that
- * function's doc comment) that carries a raw FK id with no shortcode of its
- * own. A miss (bad id, or a lookup racing a delete) resolves to `null` rather
- * than throwing — this is a display enrichment, not a write precondition.
- */
-async function shortcodesFor(
-  caller: Caller,
-  entity: ShortcodeEntity,
-  ids: readonly string[],
-): Promise<Map<string, string | null>> {
-  const unique = uniq(ids);
-  if (unique.length === 0) return new Map();
-  const rows = await caller.shortcode.lookupMany({
-    refs: unique.map((id) => ({ entity, id })),
-  });
-  return new Map(rows.map((r) => [r.id, r.shortcode]));
-}
-
-/**
- * Stamp `entityShortcode` onto a `projectAttentionItemSchema[]` array (the
- * `attention` field shared by `get_house_status` and the household-tracker
- * problem detectors) — that schema carries only `entityId` (a raw uuid), with
- * no shortcode field of its own, across `project`/`task`/`expense` rows.
- */
-async function withAttentionShortcodes(
-  caller: Caller,
-  attention: ReadonlyArray<{ entityType: string; entityId: string }>,
-) {
-  const refs = attention.map((a) => ({
-    entity: a.entityType as ShortcodeEntity,
-    id: a.entityId,
-  }));
-  if (refs.length === 0) return [];
-  const rows = await caller.shortcode.lookupMany({ refs });
-  const codeByRef = new Map(
-    rows.map((r) => [`${r.entity}:${r.id}`, r.shortcode]),
-  );
-  return attention.map(({ entityId, ...rest }) => ({
-    ...rest,
-    entityShortcode: codeByRef.get(`${rest.entityType}:${entityId}`) ?? null,
-  }));
-}
 
 // ---------------------------------------------------------------------------
 // Synthesis-read / bulk-write projections
@@ -146,20 +102,12 @@ const houseStatusTask = taskOut.pick({
   trade: true,
 });
 
-/** `projectAttentionItemSchema`'s `entityId` (raw uuid) has no shortcode
- * field of its own — resolved via one batched `shortcode.lookupMany` call in
- * `get_house_status`'s handler (`withAttentionShortcodes`) rather than edited
- * in packages/schemas. */
-const houseStatusAttentionItem = projectAttentionItemSchema
-  .omit({ entityId: true })
-  .extend({ entityShortcode: z.string().nullable() });
-
-/** `projectTaskStatusBreakdown`'s `projectId` also has no shortcode of its
- * own (same gap as `costVsEstimate`'s `projectId` — see `projectBudgetRow`
- * above); resolved via `shortcodesFor` in `get_house_status`'s handler. */
-const houseStatusTaskStatus = projectTaskStatusBreakdown
-  .omit({ projectId: true })
-  .extend({ projectShortcode: projectShortcode.nullable() });
+/** `attention[].entityId` already carries the public code (see
+ * `repo/project/attention.ts`, which selects `row.shortcode` into it), and
+ * `projectTaskStatusBreakdown.projectId` is a `projectShortcode` — so both
+ * pass straight through. */
+const houseStatusAttentionItem = projectAttentionItemSchema;
+const houseStatusTaskStatus = projectTaskStatusBreakdown;
 
 /** `project.dashboardSummary` minus `filterOptions` (UI select options only). */
 const houseStatusOut = projectDashboardSummaryOut
@@ -178,18 +126,10 @@ const houseStatusOut = projectDashboardSummaryOut
   });
 
 /** One project's planned-vs-actual envelope, derived from
- * `portfolioAnalytics.costVsEstimate` (subtree lifetime totals). That row
- * schema (`projectPortfolioAnalyticsOut.shape.costVsEstimate`'s element) only
- * carries `projectId` — unlike its `spendingByProject`/`taskHeatmap` siblings
- * in the same schema, it has no `projectShortcode` — so `get_project_budget`'s
- * handler resolves one via `shortcode.lookupMany` and stamps it on before this
- * validates. */
+ * `portfolioAnalytics.costVsEstimate` (subtree lifetime totals). Its
+ * `projectId` IS the public shortcode, so no reverse lookup is needed. */
 const projectBudgetRow = z.object({
-  // Nullable defensively — `shortcodesFor` resolves `null` on a miss rather
-  // than throwing (a display enrichment, not a write precondition); a live
-  // analytics row should always resolve, but a lookup racing a delete
-  // shouldn't sink the whole tool call.
-  projectShortcode: projectShortcode.nullable(),
+  projectId: projectShortcode,
   projectName: z.string(),
   estimate: z
     .number()
@@ -224,15 +164,9 @@ const projectBudgetOut = z.object({
   plannedVsActualByMonth: projectPortfolioAnalyticsOut.shape.plannedVsActual,
 });
 
-/**
- * `expenseMatchCandidate` carries only `expenseId` (a raw uuid, no shortcode
- * of its own — `match_expenses` predates the cutover) — rebuilt locally with
- * `expenseShortcode` swapped in, resolved batched in the handler below.
- */
+/** `expenseMatchCandidate.expenseId` is already the public code. */
 const expenseMatchCandidateMcpOut =
-  expenseMatchOut.shape.matches.element.shape.candidates.element
-    .omit({ expenseId: true })
-    .extend({ expenseShortcode: expenseShortcode.nullable() });
+  expenseMatchOut.shape.matches.element.shape.candidates.element;
 
 const expenseMatchMcpOut = expenseMatchOut.omit({ matches: true }).extend({
   matches: z.array(
@@ -261,6 +195,13 @@ async function bulkEntityWrite<T>(run: Promise<{ items: T[] }>) {
   const { items } = await run;
   return { updated: items.length, items };
 }
+
+/**
+ * Product is not cut over yet, so its FK on a task/expense is still a uuid in
+ * the shared schema. MCP takes the public code and resolves it — an override
+ * here rather than a change to packages/schemas, which tRPC and the UI share.
+ */
+const mcpProductRef = idParam("product").nullable().optional();
 
 export function registerProjectTools(server: McpServer) {
   registerEntityCrudToolset(server, {
@@ -303,21 +244,7 @@ export function registerProjectTools(server: McpServer) {
         statusScope: [...LIVE_PROJECT_STATUSES],
         ...params,
       });
-      const taskStatusShortcodeById = await shortcodesFor(
-        caller,
-        "project",
-        result.taskStatusByProject.map((row) => row.projectId),
-      );
-      return {
-        ...result,
-        taskStatusByProject: result.taskStatusByProject.map(
-          ({ projectId, ...row }) => ({
-            ...row,
-            projectShortcode: taskStatusShortcodeById.get(projectId) ?? null,
-          }),
-        ),
-        attention: await withAttentionShortcodes(caller, result.attention),
-      };
+      return result;
     },
   });
 
@@ -330,18 +257,12 @@ export function registerProjectTools(server: McpServer) {
     annotations: READ_ONLY_CLOSED,
     call: async (caller, params) => {
       const analytics = await caller.project.portfolioAnalytics(params);
-      const shortcodeById = await shortcodesFor(
-        caller,
-        "project",
-        analytics.costVsEstimate.map((row) => row.projectId),
-      );
       const projects = analytics.costVsEstimate
-        .map(({ projectId, ...row }) => {
+        .map((row) => {
           const projected = row.actual + row.committed;
           const estimate = row.estimate;
           return {
             ...row,
-            projectShortcode: shortcodeById.get(projectId) ?? null,
             projected,
             remaining: estimate === null ? null : estimate - projected,
             percentUsed:
@@ -379,11 +300,17 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "task",
-    createInput: taskCreateInput.shape,
-    updateShape: taskUpdateData.shape,
+    createInput: {
+      ...taskCreateInput.shape,
+      subjectProductId: mcpProductRef,
+    },
+    updateShape: {
+      ...taskUpdateData.shape,
+      subjectProductId: mcpProductRef,
+    },
     filterFields: taskFilterFields,
     mcpListOut: taskMcpListOut,
-    out: taskOut,
+    out: taskMcpOut,
     slim: slimTask,
     sort: { orderBy: "createdAt", direction: "desc" },
     descriptions: {
@@ -396,7 +323,26 @@ export function registerProjectTools(server: McpServer) {
       delete:
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
-    create: (caller, params) => caller.task.create(params),
+    create: async (caller, params) =>
+      caller.task.create({
+        ...params,
+        subjectProductId: await resolveOptionalId(
+          caller,
+          "product",
+          params.subjectProductId,
+        ),
+      }),
+    resolveUpdateData: async (caller, data) =>
+      data.subjectProductId === undefined
+        ? data
+        : {
+            ...data,
+            subjectProductId: await resolveOptionalId(
+              caller,
+              "product",
+              data.subjectProductId as string | null,
+            ),
+          },
   });
 
   registerRouterTool(server, {
@@ -451,11 +397,17 @@ export function registerProjectTools(server: McpServer) {
 
   registerEntityCrudToolset(server, {
     entity: "expense",
-    createInput: expenseCreateInput.shape,
-    updateShape: expenseUpdateData.shape,
+    createInput: {
+      ...expenseCreateInput.shape,
+      productId: mcpProductRef,
+    },
+    updateShape: {
+      ...expenseUpdateData.shape,
+      productId: mcpProductRef,
+    },
     filterFields: expenseFilterFields,
     mcpListOut: expenseMcpListOut,
-    out: expenseOut,
+    out: expenseMcpOut,
     slim: slimExpense,
     sort: { orderBy: "date", direction: "desc" },
     descriptions: {
@@ -466,7 +418,22 @@ export function registerProjectTools(server: McpServer) {
       update: "Update an expense's fields.",
       delete: "Soft-delete expenses by IDs.",
     },
-    create: (caller, params) => caller.expense.create(params),
+    create: async (caller, params) =>
+      caller.expense.create({
+        ...params,
+        productId: await resolveOptionalId(caller, "product", params.productId),
+      }),
+    resolveUpdateData: async (caller, data) =>
+      data.productId === undefined
+        ? data
+        : {
+            ...data,
+            productId: await resolveOptionalId(
+              caller,
+              "product",
+              data.productId as string | null,
+            ),
+          },
   });
 
   registerRouterTool(server, {
@@ -501,22 +468,7 @@ export function registerProjectTools(server: McpServer) {
     outputSchema: expenseMatchMcpOut,
     annotations: READ_ONLY_CLOSED,
     call: async (caller, params) => {
-      const result = await caller.expense.match(params);
-      const shortcodeById = await shortcodesFor(
-        caller,
-        "expense",
-        result.matches.flatMap((m) => m.candidates.map((c) => c.expenseId)),
-      );
-      return {
-        ...result,
-        matches: result.matches.map((m) => ({
-          ...m,
-          candidates: m.candidates.map(({ expenseId, ...c }) => ({
-            ...c,
-            expenseShortcode: shortcodeById.get(expenseId) ?? null,
-          })),
-        })),
-      };
+      return await caller.expense.match(params);
     },
   });
 

@@ -1134,7 +1134,7 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       projectCreateInput.parse({ name: "move tasks a" }),
       ctx.actor,
     );
-    const { output: projectB } = await createProject(
+    const { output: projectB, entityId: projectBId } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "move tasks b" }),
       ctx.actor,
@@ -1174,8 +1174,9 @@ describe("task repository — moveTasks (bulk move to project)", () => {
       auditT1.entries.some(
         (e) =>
           e.action === "update" &&
+          // the audit trail records the column write, i.e. the uuid
           (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectB.id,
+            ?.projectId?.to === projectBId,
       ),
     ).toBe(true);
   });

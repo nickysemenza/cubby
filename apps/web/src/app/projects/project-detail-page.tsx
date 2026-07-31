@@ -400,7 +400,7 @@ function SubProjectsList({
                     entity="project"
                     data={{
                       id: child.id,
-                      shortcode: child.shortcode,
+                      shortcode: child.id,
                       name: child.name,
                     }}
                     compact
@@ -650,7 +650,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const projectNamesById = useMemo(() => {
     const map = new Map<string, { name: string; shortcode: string }>();
     for (const p of projectOptions ?? [])
-      map.set(p.id, { name: p.name, shortcode: p.shortcode });
+      map.set(p.id, { name: p.name, shortcode: p.id });
     return map;
   }, [projectOptions]);
   const resolveDependencyNames = (ids: ProjectOut["blockedByIds"]) =>
@@ -882,13 +882,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             });
           }}
           renderValue={(v) =>
-            v && project.parentProjectName && project.parentProjectShortcode ? (
+            v && project.parentProjectName && project.parentProjectId ? (
               <EntityInlineLink
                 entity="project"
                 data={{
                   id: v,
                   name: project.parentProjectName,
-                  shortcode: project.parentProjectShortcode,
+                  shortcode: project.parentProjectId,
                 }}
                 compact
               />
@@ -1278,7 +1278,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     // treatment as the task subtask breadcrumb.
     ...(project.parentProjectId &&
     project.parentProjectName &&
-    project.parentProjectShortcode
+    project.parentProjectId
       ? [
           {
             label: "Sub-project of",
@@ -1288,7 +1288,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 data={{
                   id: project.parentProjectId,
                   name: project.parentProjectName,
-                  shortcode: project.parentProjectShortcode,
+                  shortcode: project.parentProjectId,
                 }}
                 truncate
               />

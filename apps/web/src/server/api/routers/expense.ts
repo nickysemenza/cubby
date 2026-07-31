@@ -26,6 +26,7 @@ import {
 } from "@cubby/schemas/project";
 import { vendorOptionsOut } from "@cubby/schemas/vendor";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   createExpense,
   deleteExpenses,
@@ -45,7 +46,6 @@ import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
-import { createAppError } from "~/server/errors/app-error";
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
@@ -93,12 +93,7 @@ const {
     create: async (services, data) =>
       await createExpense(services.db, data, services.actorContext),
     update: async (services, shortcode: ExpenseShortcode, data) =>
-      await updateExpense(
-        services.db,
-        shortcode,
-        data,
-        services.actorContext,
-      ),
+      await updateExpense(services.db, shortcode, data, services.actorContext),
     delete: async (services, ids: ExpenseShortcode[]) => {
       await deleteExpenses(services.db, ids, services.actorContext);
       return undefined;
@@ -226,7 +221,10 @@ const bulkMove = protectedProcedure
   .output(expenseListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await moveExpenses(ctx.db, input, ctx.actorContext);
-    const ids = await expenseEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await expenseEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({
@@ -244,7 +242,10 @@ const bulkSetTrade = protectedProcedure
   .output(expenseListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setExpensesTrade(ctx.db, input, ctx.actorContext);
-    const ids = await expenseEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await expenseEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({
@@ -262,7 +263,10 @@ const bulkSetCostType = protectedProcedure
   .output(expenseListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const items = await setExpensesCostType(ctx.db, input, ctx.actorContext);
-    const ids = await expenseEntityIds(ctx.db, items.map((item) => item.id));
+    const ids = await expenseEntityIds(
+      ctx.db,
+      items.map((item) => item.id),
+    );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       ids.map((entityId) => ({
