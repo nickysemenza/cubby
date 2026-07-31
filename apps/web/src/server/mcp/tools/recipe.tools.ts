@@ -26,8 +26,9 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
-import type { Caller } from "./_shared";
+import type { Caller, Row } from "./_shared";
 import {
+  defineSlim,
   getCaller,
   idParam,
   READ_ONLY_CLOSED,
@@ -138,6 +139,40 @@ async function resolveRecipeSections(
   }));
 }
 
+/**
+ * `get_recipe`'s full graph, with each line's ingredient named by its public id.
+ * The shared shape carries the uuid (the UI's hover preview fetches by it) plus
+ * a `shortcode`; MCP publishes only the latter, as `id`.
+ */
+type RecipeDetailRow = {
+  sections?: Array<{
+    ingredients?: Array<{
+      ingredient: { id: string; shortcode: string } | null;
+    }>;
+  }>;
+};
+
+const slimRecipeDetail = defineSlim(recipeDetailMcpOut, (row: Row) => {
+  const r = row as RecipeDetailRow;
+  return {
+    ...r,
+    sections: (r.sections ?? []).map((section) => ({
+      ...section,
+      ingredients: (section.ingredients ?? []).map((line) =>
+        line.ingredient
+          ? {
+              ...line,
+              ingredient: (({ id: _uuid, shortcode, ...rest }) => ({
+                ...rest,
+                id: shortcode,
+              }))(line.ingredient),
+            }
+          : line,
+      ),
+    })),
+  };
+});
+
 export function registerRecipeTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "recipe",
@@ -149,7 +184,7 @@ export function registerRecipeTools(server: McpServer) {
     mcpListOut: recipeMcpListOut,
     out: recipeMcpOut,
     detailOut: recipeDetailMcpOut,
-    detailSlim: false,
+    detailSlim: slimRecipeDetail,
     slim: slimRecipe,
     sort: { orderBy: "name" },
     descriptions: {

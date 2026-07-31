@@ -1330,13 +1330,33 @@ export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
  * cut over yet, so the swap happens here instead of on the shared shape the UI
  * uses. Delete these once product's own `id` is its shortcode.
  */
-export const taskMcpOut = taskOut
-  .omit({ subjectProductShortcode: true })
-  .extend({ subjectProductId: productShortcode.nullable() });
+export const taskMcpOut = z.object({
+  id: taskShortcode,
+  ...taskFields,
+  projectName: z.string().nullable(),
+  subjectProductName: z.string().nullable(),
+  // The product FK by PUBLIC id (product isn't cut over, so `taskFields`
+  // still types it as a uuid).
+  subjectProductId: productShortcode.nullable(),
+  parentTaskName: z.string().nullable(),
+  blockedByIds: z.array(taskShortcode),
+  blockingIds: z.array(taskShortcode),
+  subtaskCount: z.number().int(),
+  doneSubtaskCount: z.number().int(),
+  ...timestampedFields,
+});
 
-export const expenseMcpOut = expenseOut
-  .omit({ productShortcode: true })
-  .extend({ productId: productShortcode.nullable() });
+export const expenseMcpOut = z.object({
+  id: expenseShortcode,
+  ...expenseFields,
+  purchaseId: purchaseShortcode.nullable(),
+  vendorId: vendorShortcode.nullable(),
+  projectName: z.string().nullable(),
+  productName: z.string().nullable(),
+  // Same product-FK swap as `taskMcpOut`.
+  productId: productShortcode.nullable(),
+  ...timestampedFields,
+});
 
 export const taskMcpListOut = createPaginatedResponseSchema(taskMcpOut);
 export const expenseMcpListOut = createPaginatedResponseSchema(expenseMcpOut);

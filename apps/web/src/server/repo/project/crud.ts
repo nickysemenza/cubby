@@ -136,30 +136,6 @@ export const getProjectByShortcode = (db: Database, shortcode: string) =>
   projectReader.getByShortcode(db, shortcode);
 
 /**
- * The referenced project must exist and be live. Guards `parentProjectId`
- * writes (this file) and any other write that points a foreign key straight
- * at a project id without going through a picker that already filters to live
- * projects — task/expense bulk-move (`repo/task/crud.ts`'s `moveTasks`,
- * `repo/expense/crud.ts`'s `moveExpenses`) reuse this rather than
- * re-implementing the same live-row check.
- */
-export async function assertProjectLive(
-  tx: DrizzleTransaction,
-  id: ProjectId,
-): Promise<void> {
-  const live = await tx.query.project.findFirst({
-    where: and(eq(project.id, id), notDeleted(project)),
-    columns: { id: true },
-  });
-  if (!live) {
-    throw createAppError(
-      "PROJECT_NOT_FOUND",
-      `Project ${id} does not exist or has been deleted`,
-    );
-  }
-}
-
-/**
  * Walk `newParentId`'s ancestor chain (up to `MAX_PROJECT_TREE_DEPTH` hops,
  * defensively) looking for `projectId` — true if setting the parent would
  * make `projectId` its own ancestor. Mirrors

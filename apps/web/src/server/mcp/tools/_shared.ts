@@ -399,12 +399,12 @@ export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
 // Slim output projections
 // ---------------------------------------------------------------------------
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 type Slim = (row: Row) => unknown;
 const slimSchemas = new WeakMap<Slim, z.ZodType>();
 const identity: Slim = (row) => row;
 
-function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
+export function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
   slimSchemas.set(slim as Slim, schema);
   return slim;
 }
@@ -765,16 +765,19 @@ const idsParam = (entity: ShortcodeEntity) =>
  * means a `LOC-` code handed to a product tool is reported as a mismatch rather
  * than silently resolving to some other table's row.
  */
-export /**
- * Entities whose tRPC routers still address rows by uuid, so the MCP boundary
- * has to translate for them.
+/**
+ * Entities whose OWN crud router still addresses rows by uuid.
  *
- * The five cut-over entities (project, task, expense, vendor, purchase) take
- * the public code directly — resolving those would hand the router a uuid it
- * now rejects. This set shrinks to empty as the rest are cut over, and when it
- * does, `resolvePublicIds` and the `shortcode.resolveMany` router go with it.
+ * Only the crud factory may consult this: it calls `<entity>.getByID/update/
+ * delete`, so "does this entity's router take a code" is exactly the right
+ * question there. Everywhere else it is the WRONG question — a hand-rolled tool
+ * may hand an expense code to the *search* router, which takes uuids
+ * regardless — so those callers use `resolvePublicId`, which always resolves.
+ *
+ * Shrinks to empty as the remaining entities are cut over; when it does, the
+ * whole translation layer goes with it.
  */
-const ROUTER_TAKES_UUID: ReadonlySet<ShortcodeEntity> = new Set([
+const CRUD_ROUTER_TAKES_UUID: ReadonlySet<ShortcodeEntity> = new Set([
   "product",
   "location",
   "recipe",
@@ -790,9 +793,6 @@ export async function resolvePublicIds(
   codes: readonly string[],
 ): Promise<string[]> {
   if (codes.length === 0) return [];
-  // The router speaks public ids already — nothing to translate, and the code
-  // has been validated by `idParam`'s schema at parse time.
-  if (!ROUTER_TAKES_UUID.has(entity)) return [...codes];
   const resolved = await caller.shortcode.resolveMany({ codes: [...codes] });
   const byCode = new Map(resolved.map((r) => [r.code, r]));
   return codes.map((code) => {
@@ -805,6 +805,29 @@ export async function resolvePublicIds(
     }
     return hit.id;
   });
+}
+
+/**
+ * The crud factory's variant: a no-op for an entity whose own router already
+ * speaks public ids. See {@link CRUD_ROUTER_TAKES_UUID}.
+ */
+async function resolveCrudIds(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<string[]> {
+  if (!CRUD_ROUTER_TAKES_UUID.has(entity)) return [...codes];
+  return resolvePublicIds(caller, entity, codes);
+}
+
+async function resolveCrudId(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  code: string,
+): Promise<string> {
+  const [id] = await resolveCrudIds(caller, entity, [code]);
+  if (!id) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+  return id;
 }
 
 export async function resolvePublicId(
@@ -925,7 +948,7 @@ function getByIdHandler(
 ) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const caller = getCaller(extra);
-    const id = await resolvePublicId(caller, entity, params.id as string);
+    const id = await resolveCrudId(caller, entity, params.id as string);
     const result = fetch
       ? await fetch(caller, id)
       : await getEntityRouter(caller, routerName).getByID({ id });
@@ -936,7 +959,7 @@ function getByIdHandler(
 function deleteHandler(routerName: string, entity: ShortcodeEntity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const caller = getCaller(extra);
-    const ids = await resolvePublicIds(caller, entity, params.ids as string[]);
+    const ids = await resolveCrudIds(caller, entity, params.ids as string[]);
     await getEntityRouter(caller, routerName).delete({ ids });
     return { deleted: ids.length };
   };
@@ -965,7 +988,7 @@ function updateHandler(
     let data = omitBy(rest, (v) => v === undefined);
     if (resolveData) data = await resolveData(caller, data);
     const result = await getEntityRouter(caller, routerName).update({
-      id: await resolvePublicId(caller, entity, id as string),
+      id: await resolveCrudId(caller, entity, id as string),
       data,
     });
     return respond(result, slim);

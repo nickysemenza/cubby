@@ -111,7 +111,13 @@ const makeShortcodeSchema = <T extends ShortcodeType, B extends string>(
     .string()
     .trim()
     .toUpperCase()
-    .regex(shortcodeRegex(type), `Invalid ${type} shortcode`)
+    .regex(shortcodeRegex(type), {
+      // Name the offending value: a shortcode is something a human read off a
+      // label or an agent copied from an earlier response, so "which code was
+      // wrong" is the whole useful content of the failure.
+      error: (issue) =>
+        `Invalid ${type} shortcode: ${String(issue.input)} (expected ${SHORTCODE_PREFIX[type]}XXXX)`,
+    })
     .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7M`)
     .brand<B>(brand);
 

@@ -39,7 +39,6 @@
 
 export { computeAttentionItems } from "./attention";
 export {
-  assertProjectLive,
   createProject,
   deleteProjects,
   getProjectByID,

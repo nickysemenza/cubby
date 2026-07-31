@@ -316,30 +316,6 @@ const syncPurchaseImages = async (
 };
 
 /**
- * The named charge must exist and be live — the `Purchase` analogue of
- * `assertVendorLive` / `assertProjectLive`, for the same FK-checks-existence-not-
- * `deletedAt` reason. `expenseCreateInput.purchaseId` and
- * `expenseUpdateData.purchaseId` are caller-supplied ids that bypass
- * `resolveCharge`'s name resolution entirely, so this is the only thing standing
- * between a public API call and an expense attached to a tombstoned charge.
- */
-export const assertPurchaseLive = async (
-  tx: DrizzleTransaction,
-  id: PurchaseId,
-): Promise<void> => {
-  const live = await tx.query.purchase.findFirst({
-    where: and(eq(purchase.id, id), notDeleted(purchase)),
-    columns: { id: true },
-  });
-  if (!live) {
-    throw createAppError(
-      "PURCHASE_NOT_FOUND",
-      `Purchase ${id} does not exist or has been deleted`,
-    );
-  }
-};
-
-/**
  * `filters.vendorId` arrives as a public `VendorShortcode`, but the column is a
  * uuid — so it is resolved first (`vendorUuids`) rather than compared directly,
  * which Postgres rejects outright with `invalid input syntax for type uuid`.

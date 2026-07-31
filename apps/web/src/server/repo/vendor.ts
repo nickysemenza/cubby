@@ -187,34 +187,6 @@ const resolveVendorSort = (sort: SortParams) => {
   return null;
 };
 
-/**
- * The named vendor must exist and be live.
- *
- * Mirrors `assertProjectLive` (repo/project/crud.ts), and exists for the same
- * reason: an FK checks existence, not `deletedAt`, so nothing stopped a charge
- * from being pointed at a tombstoned vendor. That state was reachable in three
- * public calls — create a vendor, delete it (allowed: 0 charges, so
- * `VENDOR_HAS_PURCHASES` doesn't fire), then `purchase.update({vendorId})` — and
- * it leaves the charge resolving `vendorName` to null, which `deleteVendors`' own
- * doc calls "a lie". The codebase treated this as an invariant without enforcing
- * it.
- */
-export const assertVendorLive = async (
-  tx: DrizzleTransaction,
-  id: VendorId,
-): Promise<void> => {
-  const live = await tx.query.vendor.findFirst({
-    where: and(eq(vendor.id, id), notDeleted(vendor)),
-    columns: { id: true },
-  });
-  if (!live) {
-    throw createAppError(
-      "VENDOR_NOT_FOUND",
-      `Vendor ${id} does not exist or has been deleted`,
-    );
-  }
-};
-
 export const vendorList = async (
   db: Database,
   filters: VendorFilters,
