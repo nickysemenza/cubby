@@ -30,4 +30,6 @@ export type PickerEntity =
   | "recipe"
   | "project"
   | "task"
-  | "vendor";
+  | "vendor"
+  | "financialAccount"
+  | "purchase";

@@ -1,6 +1,8 @@
 import type {
   CookbookShortcode,
   ExpenseShortcode,
+  FinancialAccountShortcode,
+  FinancialTransactionShortcode,
   IngredientShortcode,
   InventoryShortcode,
   LocationShortcode,
@@ -84,11 +86,20 @@ export type TaskId = z.infer<typeof taskId>;
 export const [expenseId, unsafeExpenseId] = brandedId("ExpenseId");
 export type ExpenseId = z.infer<typeof expenseId>;
 
+export const [financialAccountId, unsafeFinancialAccountId] =
+  brandedId("FinancialAccountId");
+export type FinancialAccountId = z.infer<typeof financialAccountId>;
+
+export const [financialTransactionId, unsafeFinancialTransactionId] = brandedId(
+  "FinancialTransactionId",
+);
+export type FinancialTransactionId = z.infer<typeof financialTransactionId>;
+
 export const [vendorId, unsafeVendorId] = brandedId("VendorId");
 export type VendorId = z.infer<typeof vendorId>;
 
-// The charge an expense belongs to. `PurchaseId` used to brand the ledger row
-// itself; that row is now `ExpenseId` and this brands the vendor transaction.
+// The vendor purchase event an expense belongs to. `PurchaseId` used to brand
+// the ledger row itself; that row is now `ExpenseId`.
 export const [purchaseId, unsafePurchaseId] = brandedId("PurchaseId");
 export type PurchaseId = z.infer<typeof purchaseId>;
 
@@ -99,6 +110,8 @@ export {
   anyShortcodeSchema,
   cookbookShortcode,
   expenseShortcode,
+  financialAccountShortcode,
+  financialTransactionShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -114,6 +127,8 @@ export {
 export type {
   CookbookShortcode,
   ExpenseShortcode,
+  FinancialAccountShortcode,
+  FinancialTransactionShortcode,
   IngredientShortcode,
   InventoryShortcode,
   LocationShortcode,
@@ -128,6 +143,10 @@ export type {
 
 export const unsafeCookbookShortcode = makeUnsafeId<CookbookShortcode>();
 export const unsafeExpenseShortcode = makeUnsafeId<ExpenseShortcode>();
+export const unsafeFinancialAccountShortcode =
+  makeUnsafeId<FinancialAccountShortcode>();
+export const unsafeFinancialTransactionShortcode =
+  makeUnsafeId<FinancialTransactionShortcode>();
 export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
 export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();

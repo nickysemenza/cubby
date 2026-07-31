@@ -4,6 +4,8 @@ import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
   anyShortcodeSchema,
+  financialAccountShortcode,
+  financialTransactionShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -388,6 +390,48 @@ export const purchaseNotReconcilingSchema = z.object({
   expenseCount: z.number().int(),
 });
 
+export const purchaseFinancialSettlementMismatchSchema = z.object({
+  id: purchaseShortcode,
+  vendorName: z.string().nullable(),
+  expenseTotal: z.number(),
+  financialReconciliation: z.object({
+    status: z.literal("mismatch"),
+    transactionCount: z.number().int(),
+    postedTransactionCount: z.number().int(),
+    outstandingTransactionCount: z.number().int(),
+    postedTotal: z.number(),
+    projectedTotal: z.number(),
+    delta: z.number(),
+  }),
+});
+
+export const duplicateFinancialTransactionSourceRefSchema = z.object({
+  source: z.string(),
+  externalId: z.string(),
+  transactionIds: z.array(financialTransactionShortcode),
+});
+
+export const duplicateFinancialAccountSourceAliasSchema = z.object({
+  source: z.string(),
+  externalAccountId: z.string(),
+  accountIds: z.array(financialAccountShortcode),
+});
+
+export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
+  z.object({
+    entity: z.literal("financialAccount"),
+    id: financialAccountShortcode,
+    field: z.enum(["identity", "sourceAliases"]),
+    message: z.string(),
+  }),
+  z.object({
+    entity: z.literal("financialTransaction"),
+    id: financialTransactionShortcode,
+    field: z.literal("sourceRefs"),
+    message: z.string(),
+  }),
+]);
+
 // Grouped output shapes — the Problems page loads detectors in cost-grouped
 // chunks (one tRPC query each, routed through an UNBATCHED link so each runs in
 // its own Worker invocation/CPU budget; see root-provider.tsx). The groups split
@@ -417,6 +461,16 @@ const problemsFastShape = {
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
   purchasesNotReconciling: z.array(purchaseNotReconcilingSchema),
+  purchaseFinancialSettlementMismatches: z.array(
+    purchaseFinancialSettlementMismatchSchema,
+  ),
+  duplicateFinancialTransactionSourceRefs: z.array(
+    duplicateFinancialTransactionSourceRefSchema,
+  ),
+  duplicateFinancialAccountSourceAliases: z.array(
+    duplicateFinancialAccountSourceAliasSchema,
+  ),
+  invalidFinancialJson: z.array(invalidFinancialJsonSchema),
   // A live row still pointing at a soft-deleted target — see
   // `findReferentialLivenessViolations`. DB-only and cheap (one UNION ALL over
   // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
@@ -575,6 +629,10 @@ export const PROBLEM_CLASS = {
   // would be back-computing a cost from `statedTotal` — which nothing may do. So
   // it is reported, never counted, and never red.
   purchasesNotReconciling: "coverage",
+  purchaseFinancialSettlementMismatches: "coverage",
+  duplicateFinancialTransactionSourceRefs: "defect",
+  duplicateFinancialAccountSourceAliases: "defect",
+  invalidFinancialJson: "defect",
 } as const satisfies Record<ProblemKey, "defect" | "coverage">;
 
 const isDefectKey = (key: string): boolean =>
@@ -729,6 +787,16 @@ export type ProductWithBetterUpcData = z.infer<
 export type PurchaseNotReconciling = z.infer<
   typeof purchaseNotReconcilingSchema
 >;
+export type PurchaseFinancialSettlementMismatch = z.infer<
+  typeof purchaseFinancialSettlementMismatchSchema
+>;
+export type DuplicateFinancialTransactionSourceRef = z.infer<
+  typeof duplicateFinancialTransactionSourceRefSchema
+>;
+export type DuplicateFinancialAccountSourceAlias = z.infer<
+  typeof duplicateFinancialAccountSourceAliasSchema
+>;
+export type InvalidFinancialJson = z.infer<typeof invalidFinancialJsonSchema>;
 export type EntityMissingEmbedding = z.infer<
   typeof entityMissingEmbeddingSchema
 >;

@@ -250,9 +250,9 @@ const imageWithRelationsToAPI = (
     };
   }
 
-  // Check purchase associations (a charge's documents — join table filtered,
+  // Check Purchase associations (vendor documents — join table filtered,
   // but still check entity). No `notDeleted(purchase)` guard is needed beyond
-  // that: `deletePurchases` refuses while live expenses reference the charge,
+  // that: `deletePurchases` refuses while live expenses reference the Purchase,
   // unlike the four entities above whose deletion always leaves images behind.
   const purchaseAssoc = imageData.purchaseImages.find((assoc) =>
     isNotDeleted(assoc.purchase),

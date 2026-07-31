@@ -59,7 +59,7 @@ const withProjectAndParentTaskNameOnly = {
  * `vendor` and `orderId` after those stopped being columns on `Expense`: the
  * charge owns them now, so every read resolves them through this join (see
  * `dbExpenseToAPI`). Two extra `{name, deletedAt}`-shaped hops, both on indexed
- * FKs. `purchase.deletedAt` comes along so a soft-deleted charge reads as no
+ * FKs. `purchase.deletedAt` comes along so a soft-deleted Purchase reads as no
  * vendor rather than a live one, matching how `resolveLiveJoinName` treats every
  * other join here.
  */

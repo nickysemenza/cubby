@@ -51,6 +51,12 @@ export {
   countEntitiesMissingEmbeddings,
   findEntitiesMissingEmbeddings,
 } from "./detectors-embedding";
+export {
+  findDuplicateFinancialAccountSourceAliases,
+  findDuplicateFinancialTransactionSourceRefs,
+  findInvalidFinancialJson,
+  findPurchaseFinancialSettlementMismatches,
+} from "./detectors-financial";
 // Ingredient-centric detectors
 export {
   findIngredientsWithoutProduct,

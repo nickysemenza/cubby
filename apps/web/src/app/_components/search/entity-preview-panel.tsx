@@ -5,6 +5,8 @@ import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
 import { ExpenseDetail } from "~/app/expenses/expense-detail";
+import { FinancialAccountDetail } from "~/app/finance/financial-account-detail";
+import { FinancialTransactionDetail } from "~/app/finance/financial-transaction-detail";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 import { PurchaseDetail } from "~/app/purchases/purchase-detail";
@@ -152,6 +154,14 @@ export function EntityPreviewPanel({
           // which is why both arms are real rather than null.
           .with("purchase", () =>
             data ? <PurchaseDetail purchase={data as never} /> : null,
+          )
+          .with("financialAccount", () =>
+            data ? <FinancialAccountDetail account={data as never} /> : null,
+          )
+          .with("financialTransaction", () =>
+            data ? (
+              <FinancialTransactionDetail transaction={data as never} />
+            ) : null,
           )
           .exhaustive()}
       </div>

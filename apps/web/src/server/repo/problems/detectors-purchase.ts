@@ -1,7 +1,7 @@
 /**
  * Purchase-centric Problems detectors.
  *
- * A `Purchase` is ONE vendor transaction — a charge — and its `statedTotal` is
+ * A `Purchase` is one vendor order/receipt event and its `statedTotal` is
  * what the paperwork claimed. It is NEVER summed into spend (spend is
  * `SUM(expense.cost)` over the charge's live lines), so the only thing a stated
  * total can do is agree or disagree with those lines. This module reports the
@@ -49,7 +49,7 @@ type ChargeSumRow = {
  *
  * The tolerance is IMPORTED, not restated: the `HAVING` interpolates
  * `RECONCILIATION_TOLERANCE`, and every surviving row is then put through
- * `reconcilePurchase` — the same verdict function the list column and the charge
+ * `reconcilePurchase` — the same verdict function the list column and the Purchase
  * detail page use. The SQL narrows; that function decides. Both operands are
  * `double precision`, so PG and JS are doing IEEE-754 arithmetic on the same
  * bits and the two agree; the JS pass exists so a future change to the verdict

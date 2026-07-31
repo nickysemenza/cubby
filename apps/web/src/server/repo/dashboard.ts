@@ -8,6 +8,8 @@ import type { Database } from "~/server/db";
 import {
   cookbook,
   expense,
+  financialAccount,
+  financialTransaction,
   image,
   ingredient,
   inventoryEntry,
@@ -47,6 +49,14 @@ const COUNT_SOURCES = {
   vendor: { table: vendor, where: notDeleted(vendor) },
   purchase: { table: purchase, where: notDeleted(purchase) },
   expense: { table: expense, where: notDeleted(expense) },
+  financialAccount: {
+    table: financialAccount,
+    where: notDeleted(financialAccount),
+  },
+  financialTransaction: {
+    table: financialTransaction,
+    where: notDeleted(financialTransaction),
+  },
   image: { table: image, where: notDeleted(image) },
 } satisfies Record<CountableEntity, { table: PgTable; where: SQL | undefined }>;
 

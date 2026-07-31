@@ -282,7 +282,7 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "transaction",
       label: "purchases",
       description:
-        "A purchase recorded against this vendor. A Purchase is one vendor transaction (identified by its orderId when the vendor issues one), not the spend ledger itself — the Vendor ──< Purchase ──< Expense chain.",
+        "A vendor order/receipt event recorded against this vendor (identified by orderId when one is issued), not the spend ledger or a card charge — the Vendor ──< Purchase ──< Expense chain.",
       liveness: { kind: "must-target-live" },
     },
   },
@@ -301,7 +301,24 @@ export const ENTITY_EDGE_SEMANTICS = {
         "The invoice PDF or a photo of the paper receipt attached to this purchase.",
       liveness: { kind: "must-target-live" },
     },
+    "FinancialTransaction.purchaseId": {
+      role: "transaction",
+      label: "financial transactions",
+      description:
+        "A settlement-side event linked to this vendor purchase. Its amount is evidence only; spend remains SUM(Expense.cost).",
+      liveness: { kind: "must-target-live" },
+    },
   },
+  financialAccount: {
+    "FinancialTransaction.accountId": {
+      role: "transaction",
+      label: "financial transactions",
+      description:
+        "A settlement-side event recorded by this financial account.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
+  financialTransaction: {},
   expense: {},
   inventory: {},
   "usda-food": {},

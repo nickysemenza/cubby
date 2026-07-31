@@ -117,6 +117,14 @@ export const queryKeys = {
     list: procedureKey("purchase", "list"),
     all: entityKey("purchase"),
   },
+  financialAccount: {
+    all: entityKey("financialAccount"),
+    list: procedureKey("financialAccount", "list"),
+  },
+  financialTransaction: {
+    all: entityKey("financialTransaction"),
+    list: procedureKey("financialTransaction", "list"),
+  },
 } as const;
 
 export const inventoryMutationInvalidateKeys = [
@@ -278,6 +286,20 @@ export const purchaseMutationInvalidateKeys = [
   queryKeys.expense.all,
   queryKeys.project.all,
   queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+/** Finance entries are settlement evidence only, but changing one refreshes the
+ * purchase settlement summary and advisory problems. */
+export const financialAccountMutationInvalidateKeys = [
+  queryKeys.financialAccount.all,
+  queryKeys.financialTransaction.all,
+] as const satisfies readonly QueryKey[];
+
+export const financialTransactionMutationInvalidateKeys = [
+  queryKeys.financialTransaction.all,
+  queryKeys.financialAccount.all,
+  queryKeys.purchase.all,
+  queryKeys.problems.all,
 ] as const satisfies readonly QueryKey[];
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {

@@ -1,5 +1,5 @@
 /**
- * Purchase Router — ONE vendor transaction per row.
+ * Purchase Router — one vendor order/receipt event per row.
  *
  * `list` comes from the shared factory; the rest is hand-rolled for the same two
  * reasons as `vendor.ts` (correlated rollups the factory can't produce, and
@@ -89,7 +89,7 @@ const getByShortcode = createGetByShortcodeProcedure(
   (ctx, shortcode) => getPurchaseByShortcode(ctx.db, shortcode),
 );
 
-/** This charge's lines — the expense table on a purchase detail page. */
+/** This Purchase's spend lines — the Expense table on its detail page. */
 const expenses = protectedProcedure
   .input(purchaseShortcode)
   .output(z.array(expenseOut))

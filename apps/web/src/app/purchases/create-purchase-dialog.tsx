@@ -31,7 +31,7 @@ const quickAddPurchaseSchema = z.object({
 type QuickAddPurchaseValues = z.infer<typeof quickAddPurchaseSchema>;
 
 /**
- * New purchase — one vendor transaction. Deliberately money-free apart from
+ * New purchase — one vendor order or receipt event. Deliberately money-free apart from
  * `statedTotal` (what the paperwork claims): the purchase's actual spend is its
  * expense lines, added afterwards, so there's no cost field to fill in here.
  */
@@ -65,7 +65,7 @@ export function CreatePurchaseDialog({
       schema={quickAddPurchaseSchema}
       defaultValues={defaultValues}
       title="New Purchase"
-      description="One vendor transaction. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them."
+      description="One vendor order or receipt event. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them."
       mutationFn={api.purchase.create.mutationOptions}
       successMessage={(purchase) => `Logged "${purchaseLabel(purchase)}"`}
       invalidateKeys={purchaseMutationInvalidateKeys}

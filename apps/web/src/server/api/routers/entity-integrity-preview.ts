@@ -8,6 +8,8 @@ import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
 import {
   unsafeCookbookId,
   unsafeExpenseId,
+  unsafeFinancialAccountId,
+  unsafeFinancialTransactionId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
@@ -23,6 +25,8 @@ import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
 import { previewDeleteCookbooks } from "~/server/repo/cookbook";
 import { previewDeleteExpenses } from "~/server/repo/expense";
+import { previewDeleteFinancialAccounts } from "~/server/repo/financial-account";
+import { previewDeleteFinancialTransactions } from "~/server/repo/financial-transaction";
 import { previewDeleteImages } from "~/server/repo/image";
 import { previewDeleteIngredients } from "~/server/repo/ingredient/deletion";
 import {
@@ -124,6 +128,18 @@ const plan = async (
     )
     .with({ operation: "delete", entity: "expense" }, ({ ids }) =>
       previewDeleteExpenses(db, entityIds(ids).map(unsafeExpenseId)),
+    )
+    .with({ operation: "delete", entity: "financialAccount" }, ({ ids }) =>
+      previewDeleteFinancialAccounts(
+        db,
+        entityIds(ids).map(unsafeFinancialAccountId),
+      ),
+    )
+    .with({ operation: "delete", entity: "financialTransaction" }, ({ ids }) =>
+      previewDeleteFinancialTransactions(
+        db,
+        entityIds(ids).map(unsafeFinancialTransactionId),
+      ),
     )
     .with({ operation: "delete", entity: "inventory" }, ({ ids }) =>
       previewDeleteInventoryEntries(db, entityIds(ids).map(unsafeInventoryId)),

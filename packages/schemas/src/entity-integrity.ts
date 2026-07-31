@@ -3,6 +3,8 @@ import { entitySchema } from "./entity";
 import {
   cookbookShortcode,
   expenseShortcode,
+  financialAccountShortcode,
+  financialTransactionShortcode,
   ingredientShortcode,
   inventoryShortcode,
   locationShortcode,
@@ -296,6 +298,8 @@ export const previewDeleteEntitySchema = z.enum([
   "vendor",
   "purchase",
   "expense",
+  "financialAccount",
+  "financialTransaction",
   "inventory",
   "image",
 ]);
@@ -352,6 +356,8 @@ export const previewOperationInputSchema = z.union([
   previewDeleteInput("vendor", vendorShortcode),
   previewDeleteInput("purchase", purchaseShortcode),
   previewDeleteInput("expense", expenseShortcode),
+  previewDeleteInput("financialAccount", financialAccountShortcode),
+  previewDeleteInput("financialTransaction", financialTransactionShortcode),
   previewDeleteInput("inventory", inventoryShortcode),
   // Image has no shortcode and is the intentional hard-delete UUID exception.
   previewDeleteInput("image", z.uuid()),

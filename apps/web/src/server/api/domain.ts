@@ -6,6 +6,8 @@ import { calendarRouter } from "./routers/calendar";
 import { dashboardRouter } from "./routers/dashboard";
 import { entityIntegrityRouter } from "./routers/entity-integrity";
 import { expenseRouter } from "./routers/expense";
+import { financialAccountRouter } from "./routers/financial-account";
+import { financialTransactionRouter } from "./routers/financial-transaction";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
 import { inventoryRouter } from "./routers/inventory";
@@ -40,6 +42,8 @@ export const domainRouterRecord = {
   project: projectRouter,
   task: taskRouter,
   expense: expenseRouter,
+  financialAccount: financialAccountRouter,
+  financialTransaction: financialTransactionRouter,
   vendor: vendorRouter,
   purchase: purchaseRouter,
   mcp: mcpRouter,

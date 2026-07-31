@@ -24,6 +24,8 @@ const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 export const SHORTCODE_PREFIX = {
   cookbook: "CKB-",
   expense: "EXP-",
+  financialAccount: "FAC-",
+  financialTransaction: "FTX-",
   ingredient: "ING-",
   inventory: "INV-",
   location: "LOC-",
@@ -129,6 +131,14 @@ export const expenseShortcode = makeShortcodeSchema(
   "expense",
   "ExpenseShortcode",
 );
+export const financialAccountShortcode = makeShortcodeSchema(
+  "financialAccount",
+  "FinancialAccountShortcode",
+);
+export const financialTransactionShortcode = makeShortcodeSchema(
+  "financialTransaction",
+  "FinancialTransactionShortcode",
+);
 export const ingredientShortcode = makeShortcodeSchema(
   "ingredient",
   "IngredientShortcode",
@@ -162,6 +172,8 @@ export const vendorShortcode = makeShortcodeSchema("vendor", "VendorShortcode");
 const SHORTCODE_SCHEMA = {
   cookbook: cookbookShortcode,
   expense: expenseShortcode,
+  financialAccount: financialAccountShortcode,
+  financialTransaction: financialTransactionShortcode,
   ingredient: ingredientShortcode,
   inventory: inventoryShortcode,
   location: locationShortcode,
@@ -185,6 +197,12 @@ export const shortcodeSchema = <T extends ShortcodeType>(
 
 export type CookbookShortcode = z.infer<typeof cookbookShortcode>;
 export type ExpenseShortcode = z.infer<typeof expenseShortcode>;
+export type FinancialAccountShortcode = z.infer<
+  typeof financialAccountShortcode
+>;
+export type FinancialTransactionShortcode = z.infer<
+  typeof financialTransactionShortcode
+>;
 export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;

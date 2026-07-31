@@ -3,6 +3,7 @@ import type { EdgeRole, EdgeSemantics } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import {
   unsafeCookbookId,
+  unsafeFinancialAccountId,
   unsafeIngredientId,
   unsafeLocationId,
   unsafeMealId,
@@ -41,7 +42,7 @@ import { findReferentialLivenessViolations } from "./detectors-integrity";
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 34 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 36 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -136,6 +137,12 @@ const mkPurchase = async (db: Database) => {
   return insertWithShortcode(db, "purchase", { vendorId: v.id });
 };
 
+const mkFinancialAccount = (db: Database) =>
+  insertWithShortcode(db, "financialAccount", {
+    name: uniq("Financial account"),
+    identity: { kind: "cash" },
+  });
+
 const mkRecipeSection = async (db: Database) => {
   const r = await mkRecipe(db);
   return insertAndReturn(db, recipeSection, {
@@ -160,6 +167,7 @@ const TARGET_FACTORIES: Partial<
   task: mkTask,
   vendor: mkVendor,
   purchase: mkPurchase,
+  financialAccount: mkFinancialAccount,
 };
 
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
@@ -429,6 +437,25 @@ const SOURCE_FACTORIES: Record<
       imageId: img.id,
     });
   },
+
+  "FinancialTransaction.purchaseId": async (db, targetId) => {
+    const account = await mkFinancialAccount(db);
+    return insertWithShortcode(db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: unsafePurchaseId(targetId),
+      kind: "purchase",
+      status: "pending",
+      amount: 1,
+    });
+  },
+
+  "FinancialTransaction.accountId": (db, targetId) =>
+    insertWithShortcode(db, "financialTransaction", {
+      accountId: unsafeFinancialAccountId(targetId),
+      kind: "purchase",
+      status: "pending",
+      amount: 1,
+    }),
 };
 
 // ---------------------------------------------------------------------------
@@ -492,11 +519,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 34 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 36 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(34);
+    expect(derivedMustTargetLiveEdges).toHaveLength(36);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

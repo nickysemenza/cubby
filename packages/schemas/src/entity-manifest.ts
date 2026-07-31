@@ -406,8 +406,8 @@ export const entityManifest = {
     mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
   },
-  // ONE vendor transaction — identity (`vendorId` + optional `orderId`), the
-  // purchase date, an optional `statedTotal` that is never summed into spend, and
+  // One vendor order/receipt event — identity (`vendorId` + optional `orderId`),
+  // vendor date, literal `statedTotal` that is never summed into spend, and
   // its documents. Money lives on the expenses below it.
   purchase: {
     dbTable: "Purchase",
@@ -421,6 +421,12 @@ export const entityManifest = {
     relationships: [
       path("vendor", "Vendor", "vendor", out("Purchase.vendorId")),
       imageGallery("PurchaseImage", "purchaseId"),
+      path(
+        "financial-transactions",
+        "Financial transactions",
+        "financialTransaction",
+        inc("FinancialTransaction.purchaseId"),
+      ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
     // No delete: soft-deleting a purchase nulls `purchaseId` on real money —
@@ -431,6 +437,47 @@ export const entityManifest = {
     // merge_purchases) registered directly in purchase.tools.ts.
     mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
+  },
+  financialAccount: {
+    dbTable: "FinancialAccount",
+    idBrand: "FinancialAccountId",
+    shortcodePrefix: SHORTCODE_PREFIX.financialAccount,
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    searchable: false,
+    countable: true,
+    relationships: [],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
+    mcp: ALL_MCP,
+    routerStyle: "crud-factory",
+  },
+  financialTransaction: {
+    dbTable: "FinancialTransaction",
+    idBrand: "FinancialTransactionId",
+    shortcodePrefix: SHORTCODE_PREFIX.financialTransaction,
+    softDelete: true,
+    auditable: true,
+    hasImages: false,
+    searchable: false,
+    countable: true,
+    relationships: [
+      path(
+        "account",
+        "Financial account",
+        "financialAccount",
+        out("FinancialTransaction.accountId"),
+      ),
+      path(
+        "purchase",
+        "Purchase",
+        "purchase",
+        out("FinancialTransaction.purchaseId"),
+      ),
+    ],
+    lifecycle: { delete: { mode: "soft", bulk: true }, merge: false },
+    mcp: ALL_MCP,
+    routerStyle: "crud-factory",
   },
   expense: {
     dbTable: "Expense",

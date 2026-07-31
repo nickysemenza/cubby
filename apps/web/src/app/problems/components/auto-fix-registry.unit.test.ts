@@ -7,6 +7,10 @@ const problems = (overrides: Partial<AllProblems> = {}): AllProblems =>
     orphanedEntityEmbeddings: [],
     locationsWithoutAiDescription: [],
     entitiesMissingEmbeddings: [],
+    purchaseFinancialSettlementMismatches: [],
+    duplicateFinancialTransactionSourceRefs: [],
+    duplicateFinancialAccountSourceAliases: [],
+    invalidFinancialJson: [],
     ...overrides,
   }) as AllProblems;
 

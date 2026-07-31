@@ -27,6 +27,7 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { TableLink } from "../_components/table/TableLink";
+import { FinancialSettlementBadge } from "./financial-settlement";
 import { ReconciliationBadge } from "./purchase-reconciliation";
 
 // Stable empty default — an inline `?? []` would allocate a fresh array every
@@ -175,6 +176,20 @@ export function PurchaseList() {
         header: "Reconciles",
         meta: { className: "w-32", mobile: { slot: "meta", priority: 60 } },
         cell: (info) => <ReconciliationBadge purchase={info.row.original} />,
+      }),
+      columnHelper.display({
+        id: "financialSettlement",
+        header: "Settlement",
+        meta: { className: "w-28", mobile: { slot: "meta", priority: 65 } },
+        cell: (info) => (
+          <FinancialSettlementBadge
+            purchase={
+              info.row.original as Parameters<
+                typeof FinancialSettlementBadge
+              >[0]["purchase"]
+            }
+          />
+        ),
       }),
       columnHelper.accessor((row) => row.documentCount, {
         id: "documentCount",

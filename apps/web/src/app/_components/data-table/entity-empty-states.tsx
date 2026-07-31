@@ -92,6 +92,18 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Log what you've bought (or plan to) to keep a project's running cost honest.",
     actionLabel: "New Expense",
   },
+  financialAccount: {
+    title: "No financial accounts yet",
+    description:
+      "Add an account to retain statement and receipt evidence for settlement.",
+    actionLabel: "New Account",
+  },
+  financialTransaction: {
+    title: "No financial transactions yet",
+    description:
+      "Record settlement evidence without changing the expense ledger.",
+    actionLabel: "New Transaction",
+  },
   image: {
     title: "No photos yet",
     description: "Add photos to attach them to recipes, products, and places.",

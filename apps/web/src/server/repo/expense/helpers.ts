@@ -20,7 +20,7 @@ import {
 
 /**
  * Shape of an `expense` row loaded with its (nullable) parent `project`, its
- * linked `product`, and the `purchase` (charge) it belongs to — with that
+ * linked `product`, and the vendor `purchase` event it belongs to — with that
  * charge's `vendor` in turn.
  */
 
@@ -61,10 +61,10 @@ export type ExpenseRow = {
 };
 
 export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
-  // A soft-deleted charge reads as no charge at all — the same rule
+  // A soft-deleted Purchase reads as no Purchase at all — the same rule
   // `resolveLiveJoinName` applies to project/product below, so a deleted parent
   // renders blank rather than as live data.
-  const charge = row.purchase?.deletedAt === null ? row.purchase : null;
+  const purchaseRow = row.purchase?.deletedAt === null ? row.purchase : null;
 
   return {
     id: unsafeExpenseShortcode(row.shortcode),
@@ -80,25 +80,27 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
     projectName: resolveLiveJoinName(row.project),
     productId: toProductShortcode(resolveLiveJoinShortcode(row.product)),
     productName: resolveLiveJoinName(row.product),
-    // `vendor` and `orderId` are no longer columns on `Expense` — the charge
+    // `vendor` and `orderId` are no longer columns on `Expense` — the Purchase
     // owns them, and they resolve through this join. Keeping the SAME output
     // keys is deliberate: it's what let the ledger's Vendor / Order # columns,
     // the MCP surface, and the purchase-import skill survive the split
     // untouched.
     //
-    // `vendorId` is the charge's vendor FK, denormalized — always present on a
-    // live charge regardless of whether the VENDOR itself was soft-deleted
+    // `vendorId` is the Purchase's vendor FK, denormalized — always present on a
+    // live Purchase regardless of whether the VENDOR itself was soft-deleted
     // (same "shortcode is a permanent tombstone" reasoning as
     // `purchaseOut.vendorId`); `vendor` (the display name) is separately
     // gated on the vendor's own liveness via `resolveLiveJoinName`.
-    purchaseId: charge ? unsafePurchaseShortcode(charge.shortcode) : null,
-    purchaseDate: charge?.date ?? null,
+    purchaseId: purchaseRow
+      ? unsafePurchaseShortcode(purchaseRow.shortcode)
+      : null,
+    purchaseDate: purchaseRow?.date ?? null,
     vendorId:
-      charge?.vendor != null
-        ? unsafeVendorShortcode(charge.vendor.shortcode)
+      purchaseRow?.vendor != null
+        ? unsafeVendorShortcode(purchaseRow.vendor.shortcode)
         : null,
-    vendor: charge ? resolveLiveJoinName(charge.vendor) : null,
-    orderId: charge?.orderId ?? null,
+    vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
+    orderId: purchaseRow?.orderId ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

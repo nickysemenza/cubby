@@ -115,6 +115,8 @@ describe("entity manifest", () => {
       "task",
       "vendor",
       "purchase",
+      "financialAccount",
+      "financialTransaction",
       "expense",
     ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
@@ -135,6 +137,8 @@ describe("entity manifest", () => {
       "task",
       "vendor",
       "purchase",
+      "financialAccount",
+      "financialTransaction",
       "expense",
       "image",
     ]);

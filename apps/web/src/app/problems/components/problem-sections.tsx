@@ -1261,4 +1261,73 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       };
     },
   }),
+  section({
+    id: "financial-settlement-mismatches",
+    label: "Settlement",
+    select: (p) => p.purchaseFinancialSettlementMismatches,
+    // A mismatch needs review, but does not imply an Expense should be changed.
+    coverage: {},
+    entity: "purchase",
+    title: "Purchase financial settlement mismatches",
+    description:
+      "Linked settlement evidence does not agree with the live Expense total. This is advisory: statements describe settlement, while Expenses remain the only source of spend.",
+    emptyMessage: "Every comparable Purchase settlement matches its Expenses.",
+    renderItem: (item) => ({
+      title: item.vendorName ?? "Vendor deleted",
+      subtitle: `Expenses ${formatCurrency(item.expenseTotal)} · projected ${formatCurrency(item.financialReconciliation.projectedTotal)}`,
+      badges: [
+        <Badge key="status" variant="warning">
+          Settlement mismatch
+        </Badge>,
+        <Badge key="transactions" variant="outline">
+          {item.financialReconciliation.transactionCount} transactions
+        </Badge>,
+      ],
+      route: entityDetailLink("purchase", item.id),
+      editLabel: "Open purchase",
+    }),
+  }),
+  section({
+    id: "duplicate-financial-transaction-source-refs",
+    label: "Duplicate transaction refs",
+    select: (p) => p.duplicateFinancialTransactionSourceRefs,
+    entity: "financialTransaction",
+    title: "Duplicate financial transaction source references",
+    description:
+      "The same provider source and external transaction ID appears on more than one live transaction.",
+    emptyMessage: "No duplicate financial transaction references.",
+    renderItem: (item) => ({
+      title: `${item.source}: ${item.externalId}`,
+      details: [item.transactionIds.join(", ")],
+    }),
+  }),
+  section({
+    id: "duplicate-financial-account-source-aliases",
+    label: "Duplicate account aliases",
+    select: (p) => p.duplicateFinancialAccountSourceAliases,
+    entity: "financialAccount",
+    title: "Duplicate financial account source aliases",
+    description:
+      "One provider external account ID is attached to multiple live accounts.",
+    emptyMessage: "No duplicate financial account aliases.",
+    renderItem: (item) => ({
+      title: `${item.source}: ${item.externalAccountId}`,
+      details: [item.accountIds.join(", ")],
+    }),
+  }),
+  section({
+    id: "invalid-financial-json",
+    label: "Invalid finance JSON",
+    select: (p) => p.invalidFinancialJson,
+    entity: "financialAccount",
+    title: "Invalid financial evidence",
+    description:
+      "A finance-owned JSON field no longer conforms to its strict contract. The record remains visible so it can be repaired rather than crashing Problems.",
+    emptyMessage: "All financial evidence JSON is valid.",
+    renderItem: (item) => ({
+      title: `${item.entity} · ${item.field}`,
+      subtitle: item.id,
+      details: [item.message],
+    }),
+  }),
 ];

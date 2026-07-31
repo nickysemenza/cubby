@@ -116,7 +116,7 @@ const resolveLiveProductId = async (
   return unsafeProductId(id);
 };
 
-/** Resolve a purchase (charge) shortcode to a live uuid, or throw. */
+/** Resolve a Purchase shortcode to a live uuid, or throw. */
 const resolveLivePurchaseId = async (
   tx: DrizzleTransaction,
   shortcode: PurchaseShortcode,
@@ -321,8 +321,8 @@ const resolveCharge = async (
       data.orderId === undefined
         ? (current?.orderId ?? null)
         : requestedOrderId,
-    // `findOrCreatePurchase` only applies this on INSERT. An existing charge's
-    // own date is charge-level truth and must never be overwritten from a line.
+    // `findOrCreatePurchase` only applies this on INSERT. An existing Purchase's
+    // vendor date is purchase-level truth and must never be overwritten from a line.
     date: data.date,
   });
 

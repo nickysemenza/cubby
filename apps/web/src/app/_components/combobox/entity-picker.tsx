@@ -15,6 +15,8 @@ const ENTITY_CODE: Record<PickerEntity, string> = {
   project: "PRJ",
   task: "TSK",
   vendor: "VEN",
+  financialAccount: "FAC",
+  purchase: "PUR",
 };
 
 export function matchesPickerItem(
