@@ -19,8 +19,8 @@ import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
-import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
-import type { ComboboxItem } from "./combobox/combobox-types";
+import type { ComboboxItem, PickerEntity } from "./combobox/combobox-types";
+import { EntityPicker } from "./combobox/entity-picker";
 import { DatePickerInput } from "./date-picker-input";
 import { FormFieldGroup } from "./forms/form-field-group";
 
@@ -473,6 +473,8 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   onCreateNew,
   onSelect,
   onOpenChange,
+  entity,
+  clearable = true,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -488,6 +490,8 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   // Forwarded to the combobox so an async-search wrapper can defer its options
   // query until the dropdown opens.
   onOpenChange?: (open: boolean) => void;
+  entity: PickerEntity;
+  clearable?: boolean;
 }) {
   return (
     <Controller
@@ -500,7 +504,8 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
-          <DialogCompatibleCombobox
+          <EntityPicker
+            entity={entity}
             label={label?.toLowerCase() ?? "item"}
             items={items}
             onSearchChange={onSearchChange}
@@ -514,6 +519,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
             }}
             onCreateNew={onCreateNew}
             onOpenChange={onOpenChange}
+            clearable={clearable}
           />
         </FormFieldGroup>
       )}
@@ -687,7 +693,7 @@ export function UnifiedTextField<
  * - `SelectField` — static options, page-level forms.
  * - {@link ComboboxField} / `ComboboxFieldWithSearch` — async entity search
  *   (ingredient/product/location/recipe) and anything rendered inside a Dialog,
- *   where `DialogCompatibleCombobox` avoids the nested focus-trap conflict.
+ *   through the shared Base UI entity picker.
  */
 export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form,

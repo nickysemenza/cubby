@@ -62,6 +62,7 @@ export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
           isLoading={isLoading}
           onCreateNew={onCreateNew}
           onOpenChange={onOpenChange}
+          entity={searchType}
         />
       )}
     </SearchWrapper>

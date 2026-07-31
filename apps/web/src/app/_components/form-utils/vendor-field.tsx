@@ -5,7 +5,7 @@ import {
   type PathValue,
   type UseFormReturn,
 } from "react-hook-form";
-import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
+import { EntityPicker } from "../combobox/entity-picker";
 import {
   type VendorName,
   WithVendorSearch,
@@ -23,7 +23,7 @@ import { FormFieldGroup } from "../forms/form-field-group";
  * the picked option's name **verbatim**; typing a genuinely new vendor still
  * works — a first purchase at a new store shouldn't need a detour to /vendors —
  * but is no longer the accidental default, because
- * {@link DialogCompatibleCombobox} surfaces "Create new vendor: …" only once the
+ * `EntityPicker` surfaces "Create vendor: …" only once the
  * typed term matches nothing on the roster.
  *
  * The field's value stays a **plain name string** (`""` when empty), not a
@@ -65,7 +65,8 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
                 invalid={fieldState.invalid}
                 error={fieldState.error}
               >
-                <DialogCompatibleCombobox<VendorName>
+                <EntityPicker<VendorName>
+                  entity="vendor"
                   // Lowercase "vendor" (not the field's label) so the dropdown
                   // reads "Search vendor…" / "Create new vendor: Ace Hardware".
                   label="vendor"
@@ -87,6 +88,7 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
                   }
                   onCreateNew={onCreateNew}
                   onOpenChange={onOpenChange}
+                  clearable
                 />
               </FormFieldGroup>
             );

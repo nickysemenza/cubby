@@ -112,7 +112,7 @@ const openCombobox = () => {
 const clickDropdownItem = (name: string) => {
   const popup = document.querySelector("[data-combobox-popup]");
   if (!(popup instanceof HTMLElement)) throw new Error("dropdown not open");
-  fireEvent.click(within(popup).getByRole("button", { name }));
+  fireEvent.click(within(popup).getByRole("option", { name }));
 };
 
 describe("InventoryEntriesCell", () => {

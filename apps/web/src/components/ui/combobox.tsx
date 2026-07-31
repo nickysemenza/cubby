@@ -215,7 +215,7 @@ function ComboboxPopup({
           // check (DOM containment) doesn't treat clicks in here as "outside".
           data-combobox-popup=""
           // z-[200] (was z-50): must paint above CellEditorOverlay (z-100),
-          // matching DialogCompatibleCombobox's dropdown layer.
+          // matching the entity picker's dropdown layer.
           className="isolate z-[200]"
         >
           <ComboboxPrimitive.Popup

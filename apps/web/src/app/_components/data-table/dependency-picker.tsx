@@ -8,7 +8,8 @@ import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
-import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
+import type { PickerEntity } from "../combobox/combobox-types";
+import { EntityPicker } from "../combobox/entity-picker";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 
 export interface DependencyItem<TId extends string> {
@@ -25,7 +26,7 @@ export interface DependencyPickerProps<TId extends string> {
   /** WithProjectSearch / WithTaskSearch — injected so unit tests can stub it. */
   SearchProvider: (props: WithEntitySearchProps<TId>) => ReactNode;
   /** Combobox placeholder noun, e.g. "project", "task". */
-  label: string;
+  label: Extract<PickerEntity, "project" | "task">;
   /** This entity's own id — excluded from pickable options client-side (the
    * server also rejects a self-reference). */
   excludeId: TId;
@@ -37,8 +38,7 @@ export interface DependencyPickerProps<TId extends string> {
  * Editable "blocked by" dependency chips — the multi-entity sibling of
  * `EditableEntityCell`'s single-entity picker. Read mode renders
  * `renderReadChip` badges plus an Edit pencil; edit mode swaps to removable
- * chips and an add-combobox (`DialogCompatibleCombobox`, same widget
- * `EditableEntityCell` uses) with Save/Cancel. Save sends the FULL
+ * chips and the shared Base UI entity picker with Save/Cancel. Save sends the FULL
  * replacement id set — `project.update` / `task.update`'s `blockedByIds`
  * replaces the edge set wholesale server-side.
  */
@@ -122,7 +122,8 @@ export function DependencyPicker<TId extends string>({
       <Row gap="sm" align="center">
         <SearchProvider>
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
-            <DialogCompatibleCombobox
+            <EntityPicker
+              entity={label}
               label={label}
               items={items.filter(
                 (item) =>

@@ -1,10 +1,11 @@
 import type { VendorShortcode } from "@cubby/schemas/identifiers";
 import { unsafeVendorShortcode } from "@cubby/schemas/identifiers";
 import { plainDate } from "@cubby/schemas/project";
-import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useMemo } from "react";
 import { z } from "zod";
+import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
+import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -12,14 +13,10 @@ import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   NullableNumericField,
   PlainDateField,
-  SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
 
 const today = () => format(new Date(), "yyyy-MM-dd");
-
-// Stable empty default while the roster query is in flight.
-const NO_VENDOR_OPTIONS: Array<{ value: string; label: string }> = [];
 
 // `vendorId` stays a plain string here (not the branded schema) — it's the raw
 // value out of the picker, and branding happens exactly once in `buildPayload`,
@@ -49,15 +46,6 @@ export function CreatePurchaseDialog({
   presetVendorId?: VendorShortcode | null;
 }) {
   const api = useTRPC();
-  const vendorOptionsQuery = useQuery(api.vendor.options.queryOptions());
-  const vendorOptions = useMemo(
-    () =>
-      vendorOptionsQuery.data?.map(({ id, name }) => ({
-        value: id,
-        label: name,
-      })) ?? NO_VENDOR_OPTIONS,
-    [vendorOptionsQuery.data],
-  );
 
   const defaultValues = useMemo<QuickAddPurchaseValues>(
     () => ({
@@ -91,12 +79,13 @@ export function CreatePurchaseDialog({
     >
       {(form) => (
         <>
-          <SelectField
+          <EntityValueField<QuickAddPurchaseValues, VendorShortcode>
             form={form}
             name="vendorId"
+            entity="vendor"
             label="Vendor"
-            options={vendorOptions}
             placeholder="Who was paid?"
+            SearchProvider={WithVendorShortcodeSearch}
           />
           <UnifiedTextField
             form={form}

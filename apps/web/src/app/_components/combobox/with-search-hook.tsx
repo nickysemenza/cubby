@@ -6,9 +6,10 @@ import type {
   RecipeId,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -22,6 +23,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
+  buildProductComboboxItem,
   buildProjectComboboxItem,
   buildRecipeComboboxItem,
   buildTaskComboboxItem,
@@ -78,13 +80,24 @@ export function WithIngredientSearch({
   } = useEntitySearchWithDialog<IngredientId>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode =
+    parsedCode?.type === "ingredient" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+
   const { data, isLoading } = useQuery({
     ...api.ingredient.list.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled,
+    enabled: enabled && !searchingByCode,
   });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.ingredient.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "ING-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
 
   const createMutation = useActionMutation({
     mutationFn: api.ingredient.create.mutationOptions,
@@ -115,9 +128,13 @@ export function WithIngredientSearch({
         </Suspense>
       )}
       {children({
-        items: data?.items.map(buildIngredientComboboxItem) ?? [],
+        items: searchingByCode
+          ? exactItem
+            ? [buildIngredientComboboxItem(exactItem)]
+            : []
+          : (data?.items.map(buildIngredientComboboxItem) ?? []),
         onSearchChange,
-        isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onCreateNew: openDialog,
         onOpenChange,
       })}
@@ -141,13 +158,24 @@ export function WithLocationSearch({
   } = useEntitySearchWithDialog<LocationId>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode =
+    parsedCode?.type === "location" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+
   const { data, isLoading } = useQuery({
     ...api.location.list.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled,
+    enabled: enabled && !searchingByCode,
   });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.location.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "LOC-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
 
   const createMutation = useActionMutation({
     mutationFn: api.location.create.mutationOptions,
@@ -178,9 +206,13 @@ export function WithLocationSearch({
         </Suspense>
       )}
       {children({
-        items: data?.items.map(buildLocationComboboxItem) ?? [],
+        items: searchingByCode
+          ? exactItem
+            ? [buildLocationComboboxItem(exactItem)]
+            : []
+          : (data?.items.map(buildLocationComboboxItem) ?? []),
         onSearchChange,
-        isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onCreateNew: openDialog,
         onOpenChange,
       })}
@@ -207,13 +239,24 @@ export function WithProductSearch({
   // `product.search` (not `.list`): the picker needs only {id, name,
   // manufacturer}, so it skips the per-row USDA food enrichment + relation joins
   // that `.list` pays for.
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode =
+    parsedCode?.type === "product" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+
   const { data, isLoading } = useQuery({
     ...api.product.search.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled,
+    enabled: enabled && !searchingByCode,
   });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.product.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "PRD-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
 
   const createMutation = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
@@ -226,7 +269,9 @@ export function WithProductSearch({
     onSuccess: (newProduct) =>
       resolveWithEntity({
         id: newProduct.shortcode,
-        name: `${newProduct.name} (${newProduct.manufacturer})`,
+        shortcode: newProduct.shortcode,
+        name: newProduct.name,
+        secondary: newProduct.manufacturer,
       }),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
@@ -251,13 +296,13 @@ export function WithProductSearch({
         </Suspense>
       )}
       {children({
-        items:
-          data?.items.map((product) => ({
-            id: product.shortcode,
-            name: `${product.name} (${product.manufacturer})`,
-          })) ?? [],
+        items: searchingByCode
+          ? exactItem
+            ? [buildProductComboboxItem(exactItem)]
+            : []
+          : (data?.items.map(buildProductComboboxItem) ?? []),
         onSearchChange,
-        isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onCreateNew,
         onOpenChange,
       })}
@@ -272,21 +317,35 @@ export function WithRecipeSearch({
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode = parsedCode?.type === "recipe" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+
   const { data, isLoading } = useQuery({
     ...api.recipe.list.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-    enabled,
+    enabled: enabled && !searchingByCode,
   });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.recipe.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "RCP-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
 
   // For recipes, we don't provide the ability to create from this interface
   return (
     <>
       {children({
-        items: data?.items.map(buildRecipeComboboxItem) ?? [],
+        items: searchingByCode
+          ? exactItem
+            ? [buildRecipeComboboxItem(exactItem)]
+            : []
+          : (data?.items.map(buildRecipeComboboxItem) ?? []),
         onSearchChange,
-        isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onOpenChange,
       })}
     </>
@@ -294,11 +353,8 @@ export function WithRecipeSearch({
 }
 
 /**
- * Client-filtered project search — projects are a small, personal household
- * list (dozens, not thousands), so this fetches the lightweight
- * `project.options` projection once (same query/cache as `useProjectOptions`)
- * and filters it in-memory as the user types, instead of a server round trip
- * per keystroke. No create-from-picker affordance (mirrors `WithRecipeSearch`).
+ * Project search uses the normal searchable list so notes and locations can
+ * match in addition to the name. No create-from-picker affordance.
  */
 export function WithProjectSearch({
   children,
@@ -307,24 +363,37 @@ export function WithProjectSearch({
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  const { data, isLoading } = useQuery({
-    ...api.project.options.queryOptions(),
-    enabled,
-  });
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode =
+    parsedCode?.type === "project" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
 
-  const items = useMemo(() => {
-    const all = data?.map(buildProjectComboboxItem) ?? [];
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return all;
-    return all.filter((item) => item.name.toLowerCase().includes(query));
-  }, [data, searchQuery]);
+  const { data, isLoading } = useQuery({
+    ...api.project.list.queryOptions({
+      filters: { search: searchQuery },
+      pagination,
+    }),
+    enabled: enabled && !searchingByCode,
+  });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.project.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "PRJ-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
+
+  const items = searchingByCode
+    ? exactItem
+      ? [buildProjectComboboxItem(exactItem)]
+      : []
+    : (data?.items.map(buildProjectComboboxItem) ?? []);
 
   return (
     <>
       {children({
         items,
         onSearchChange,
-        isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onOpenChange,
       })}
     </>
@@ -342,20 +411,34 @@ export function WithTaskSearch({
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode = parsedCode?.type === "task" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+
   const { data, isLoading } = useQuery({
     ...api.task.list.queryOptions({
       filters: { search: searchQuery },
       pagination,
     }),
-    enabled,
+    enabled: enabled && !searchingByCode,
   });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.task.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "TSK-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
 
   return (
     <>
       {children({
-        items: data?.items.map(buildTaskComboboxItem) ?? [],
+        items: searchingByCode
+          ? exactItem
+            ? [buildTaskComboboxItem(exactItem)]
+            : []
+          : (data?.items.map(buildTaskComboboxItem) ?? []),
         onSearchChange,
-        isLoading,
+        isLoading: exactCode ? isExactLoading : isLoading,
         onOpenChange,
       })}
     </>

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ComboboxItem } from "./combobox-types";
 
 export const pagination = {
@@ -54,9 +54,10 @@ export function useEntitySearchWithDialog<TId extends string = string>() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingName, setPendingName] = useState("");
-  const [pendingResolve, setPendingResolve] = useState<
-    ((item: ComboboxItem<TId>) => void) | null
-  >(null);
+  const pendingPromiseRef = useRef<{
+    resolve: (item: ComboboxItem<TId>) => void;
+    reject: (error: Error) => void;
+  } | null>(null);
 
   const onSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
@@ -65,32 +66,38 @@ export function useEntitySearchWithDialog<TId extends string = string>() {
   const openDialog = useCallback((name: string): Promise<ComboboxItem<TId>> => {
     setPendingName(name);
     setIsDialogOpen(true);
-    return new Promise<ComboboxItem<TId>>((resolve) => {
-      setPendingResolve(() => resolve);
+    return new Promise<ComboboxItem<TId>>((resolve, reject) => {
+      pendingPromiseRef.current = { resolve, reject };
     });
   }, []);
 
   const closeDialog = useCallback(() => {
     setIsDialogOpen(false);
-    setPendingResolve(null);
+    pendingPromiseRef.current?.reject(new Error("Entity creation cancelled"));
+    pendingPromiseRef.current = null;
   }, []);
 
-  const resolveWithEntity = useCallback(
-    (item: ComboboxItem<TId>) => {
-      setIsDialogOpen(false);
-      if (pendingResolve) {
-        pendingResolve(item);
-        setPendingResolve(null);
-      }
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) setIsDialogOpen(true);
+      else closeDialog();
     },
-    [pendingResolve],
+    [closeDialog],
   );
+
+  const resolveWithEntity = useCallback((item: ComboboxItem<TId>) => {
+    setIsDialogOpen(false);
+    if (pendingPromiseRef.current) {
+      pendingPromiseRef.current.resolve(item);
+      pendingPromiseRef.current = null;
+    }
+  }, []);
 
   return {
     searchQuery,
     onSearchChange,
     isDialogOpen,
-    setIsDialogOpen,
+    setIsDialogOpen: handleDialogOpenChange,
     pendingName,
     openDialog,
     closeDialog,

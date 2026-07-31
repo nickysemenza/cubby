@@ -39,6 +39,8 @@ export interface ColumnCellData<TData> {
     row: TData,
     payload: { json?: unknown; text?: string },
   ) => Promise<unknown>;
+  /** Absent unless this specific relation is nullable. */
+  applyClear?: (row: TData) => Promise<unknown>;
 }
 
 /**
@@ -156,6 +158,7 @@ export function entityCellData<TData>(
   entity: string,
   getItem: (row: TData) => ComboboxItem | null,
   save?: (row: TData, id: string) => Promise<void>,
+  clear?: (row: TData) => Promise<void>,
 ): ColumnCellData<TData> {
   return {
     kind: `entity:${entity}`,
@@ -177,6 +180,12 @@ export function entityCellData<TData>(
           }
           await save(row, pasted.id);
           return { id: pasted.id, name: pasted.name };
+        }
+      : undefined,
+    applyClear: clear
+      ? async (row) => {
+          await clear(row);
+          return null;
         }
       : undefined,
   };

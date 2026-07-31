@@ -1151,6 +1151,9 @@ export function createSingleEntityInlineLinkColumn<
           editableConfig
             ? (row, id) => editableConfig.onSave(id, row)
             : undefined,
+          editableConfig?.clearable
+            ? (row) => editableConfig.onSave(null, row)
+            : undefined,
         );
 
   return columnHelper.accessor(
@@ -1661,6 +1664,9 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     options?.editable
       ? (row, id) => options.editable!.onSave(unsafeProjectShortcode(id), row)
       : undefined,
+    options?.editable
+      ? (row) => options.editable!.onSave(null, row)
+      : undefined,
   );
   return columnHelper.accessor(
     (row) => ({
@@ -1779,6 +1785,9 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     options?.editable
       ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
       : undefined,
+    options?.editable
+      ? (row) => options.editable!.onSave(null, row)
+      : undefined,
   );
   return columnHelper.accessor(
     (row) => ({
@@ -1867,6 +1876,9 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
         : null,
     options?.editable
       ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
+      : undefined,
+    options?.editable
+      ? (row) => options.editable!.onSave(null, row)
       : undefined,
   );
 
