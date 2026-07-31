@@ -1,5 +1,8 @@
 import type { ProductId, ProjectShortcode } from "@cubby/schemas/identifiers";
-import { unsafeProductId, unsafeProjectId } from "@cubby/schemas/identifiers";
+import {
+  unsafeProductId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   plainDate,
   type TaskStatus,
@@ -24,8 +27,9 @@ import {
 import { taskStatusOptions } from "./task-options";
 
 // projectId stays a plain string here (not the branded `projectId` schema) —
-// it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
-// applied at the tRPC-call boundary in buildPayload via `unsafeProjectId`.
+// it's the raw value out of the `SelectField` dropdown; the ProjectShortcode
+// brand is applied at the tRPC-call boundary in buildPayload via
+// `unsafeProjectShortcode` — a project is named by its public code now.
 // `trade` is required in the domain schema but NOT here — quick capture only
 // requires `name`; an omitted trade defaults to "other" in `buildPayload`
 // below, matching the domain default used elsewhere (e.g. bulk trade actions).
@@ -109,7 +113,9 @@ export function CreateTaskDialog({
       invalidateKeys={taskMutationInvalidateKeys}
       buildPayload={(values) => ({
         name: values.name,
-        projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
+        projectId: values.projectId
+          ? unsafeProjectShortcode(values.projectId)
+          : null,
         status: values.status,
         dueDate: values.dueDate,
         dueEndDate: null,
