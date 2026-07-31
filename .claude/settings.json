@@ -6,9 +6,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
+            "command": "pnpm",
             "args": [
-              "${CLAUDE_PROJECT_DIR}/scripts/setup-agent-environment.mjs",
+              "--dir",
+              "${CLAUDE_PROJECT_DIR}",
+              "run",
+              "agent:setup",
+              "--",
               "--worktree-only"
             ],
             "timeout": 600

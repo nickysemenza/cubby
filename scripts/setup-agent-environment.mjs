@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LOCKFILE = join(ROOT, "pnpm-lock.yaml");
+// pnpm 10 writes an exact copy of the active workspace lockfile here.
 const INSTALLED_LOCKFILE = join(ROOT, "node_modules/.pnpm/lock.yaml");
 const worktreeOnly = process.argv.includes("--worktree-only");
 
@@ -31,6 +32,8 @@ const gitPath = (kind) =>
 
 const isLinkedWorktree = () => {
   try {
+    // Keep this pre-install implementation aligned with
+    // apps/web/tooling/git-worktree.ts, which cannot be imported before install.
     return (
       normalize(gitPath("--git-dir")) !==
       normalize(gitPath("--git-common-dir"))

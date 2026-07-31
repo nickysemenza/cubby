@@ -4,6 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.1",
   "scripts": {
+    "agent:setup": "node scripts/setup-agent-environment.mjs",
     "dev": "pnpm -r dev",
     "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
