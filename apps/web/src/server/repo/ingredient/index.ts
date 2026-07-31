@@ -44,6 +44,5 @@ export {
   getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
   ingredientList,
-  mergeImpactForIngredients,
   searchIngredientsForMerge,
 } from "./search";

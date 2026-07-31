@@ -4,7 +4,10 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
@@ -58,6 +61,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import {
+  countByTarget,
+  impact,
+  present,
+  sideEffect,
+} from "~/server/repo/impact";
 import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
 
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
@@ -87,6 +96,24 @@ export const LOCATION_DELETE_EDGE_POLICY = {
       "A deleted location's children are orphaned to the root — their parentId is cleared rather than the deletion being blocked.",
   },
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
+
+/**
+ * Live inventory sitting in the given locations. Shared by `deleteLocations`
+ * (which refuses when any exist) and `previewDeleteLocations` (which counts
+ * them), so the two can't disagree about what counts as "still holding
+ * inventory".
+ */
+const findLocationsWithLiveInventory = (
+  db: Database | DrizzleTransaction,
+  ids: LocationId[],
+) =>
+  unwrapDb(db).query.inventoryEntry.findMany({
+    where: and(
+      inArray(inventoryEntry.locationId, ids),
+      notDeleted(inventoryEntry),
+    ),
+    columns: { locationId: true },
+  });
 
 // Verify a proposed parent location actually exists and isn't soft-deleted.
 // Without this, a dangling parentId silently inserts: wouldCreateParentCycle
@@ -332,13 +359,7 @@ export const deleteLocations = async (
     await lockAndValidateForDelete(tx, location, ids, "Location");
 
     // Safety check: don't delete if any location has inventory
-    const withInventory = await tx.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.locationId, ids),
-        notDeleted(inventoryEntry),
-      ),
-      columns: { locationId: true },
-    });
+    const withInventory = await findLocationsWithLiveInventory(tx, ids);
     await assertNoDependents({
       offendingParentIds: withInventory.map((e) => e.locationId),
       fetchNames: (failedIds) =>
@@ -393,6 +414,84 @@ export const deleteLocations = async (
 
     await logAuditEntries(tx, actor, auditEntries);
   });
+};
+
+/**
+ * What `deleteLocations` would do to the given locations, without doing it.
+ *
+ * Reads the SAME `LOCATION_DELETE_EDGE_POLICY` and the shared
+ * `findLocationsWithLiveInventory` predicate the mutation's guard uses, so the
+ * preview cannot claim a delete will succeed that the guard then refuses.
+ * `Location.parentId` carries no FK — it's `unconstrained` in
+ * `INCOMING_EDGES.location` — but the rows are real: `countByTarget` reads
+ * the column directly and counts them like any other edge, exactly matching
+ * the mutation's own `inArray(location.parentId, ids)` orphaning update.
+ *
+ * Advisory only. `deleteLocations` still re-runs every check inside its own
+ * transaction; nothing here is a lock or a permission.
+ */
+export const previewDeleteLocations = async (
+  db: Database,
+  ids: LocationId[],
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
+  const dbClient = getDb(db);
+
+  const withInventory = await findLocationsWithLiveInventory(db, ids);
+  const inventoryByTargetId: Record<string, number> = {};
+  for (const { locationId } of withInventory) {
+    inventoryByTargetId[locationId] =
+      (inventoryByTargetId[locationId] ?? 0) + 1;
+  }
+
+  const blockers = present([
+    impact({
+      disposition: LOCATION_DELETE_EDGE_POLICY["InventoryEntry.locationId"],
+      edgeKey: "InventoryEntry.locationId",
+      label: "inventory entries",
+      byTargetId: inventoryByTargetId,
+    }),
+  ]);
+
+  const changes = present([
+    impact({
+      disposition: LOCATION_DELETE_EDGE_POLICY["LocationImage.locationId"],
+      edgeKey: "LocationImage.locationId",
+      label: "image associations",
+      byTargetId: await countByTarget(
+        dbClient,
+        locationImage,
+        locationImage.locationId,
+        ids,
+      ),
+    }),
+    impact({
+      disposition: LOCATION_DELETE_EDGE_POLICY["Location.parentId"],
+      edgeKey: "Location.parentId",
+      label: "child locations detached",
+      byTargetId: await countByTarget(
+        dbClient,
+        location,
+        location.parentId,
+        ids,
+      ),
+    }),
+  ]);
+
+  const sideEffects = [
+    sideEffect({
+      code: "recompute-location-valuation",
+      label: "location valuations recomputed",
+      description:
+        "Deleting these locations queues a valuation recompute for the location tree.",
+    }),
+  ];
+
+  return { blockers, changes, sideEffects };
 };
 
 export const locationList = async (

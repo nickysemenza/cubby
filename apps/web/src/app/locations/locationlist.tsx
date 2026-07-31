@@ -67,6 +67,7 @@ export function LocationList() {
     mutationFn: api.location.delete.mutationOptions,
     entityLabel: "Location",
     invalidateKeys: locationMutationInvalidateKeys,
+    entity: "location",
   });
 
   // Memoize columns to prevent recreating on every render

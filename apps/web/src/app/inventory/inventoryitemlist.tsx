@@ -93,6 +93,7 @@ export function InventoryItemList() {
     mutationFn: api.inventory.delete.mutationOptions,
     entityLabel: "Inventory Entry",
     invalidateKeys: inventoryMutationInvalidateKeys,
+    entity: "inventory",
   });
 
   const bulkActions = useMemo(

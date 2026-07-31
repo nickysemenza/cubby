@@ -45,6 +45,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     id: inventoryitem.id,
     name: inventoryitem.product.name,
     entityLabel: "Inventory Entry",
+    entity: "inventory",
     mutationOptions: (callbacks) =>
       api.inventory.delete.mutationOptions(callbacks),
     invalidateKeys: inventoryMutationInvalidateKeys,

@@ -244,6 +244,118 @@ export const integrityCatalogSchema = z.object({
 });
 export type IntegrityCatalog = z.infer<typeof integrityCatalogSchema>;
 
+// ---------------------------------------------------------------------------
+// Operation impact previews
+// ---------------------------------------------------------------------------
+
+/**
+ * One consequence of running an operation: a blocker, a change it will make, or
+ * a side effect it will trigger.
+ *
+ * `total` is the count across all selected targets; `byTargetId` breaks it down
+ * so a bulk delete can say which of the seven products is the one with
+ * inventory. `edgeKey` is present when the item comes from a declared incoming
+ * edge, and absent for consequences that aren't edges at all (a recompute, a
+ * cache invalidation, an audit entry).
+ */
+export const impactItemSchema = z.object({
+  code: z.string().min(1),
+  effect: operationEffectSchema,
+  edgeKey: edgeKeySchema.optional(),
+  label: z.string().min(1),
+  description: z.string().min(1),
+  total: z.number().int().nonnegative(),
+  byTargetId: z.record(z.string(), z.number().int().nonnegative()),
+});
+export type ImpactItem = z.infer<typeof impactItemSchema>;
+
+/** Entities whose delete has a preview planner. */
+export const previewDeleteEntitySchema = z.enum([
+  "product",
+  "recipe",
+  "ingredient",
+  "cookbook",
+  "meal",
+  "location",
+  "project",
+  "task",
+  "vendor",
+  "purchase",
+  "expense",
+  "inventory",
+  "image",
+]);
+export type PreviewDeleteEntity = z.infer<typeof previewDeleteEntitySchema>;
+
+/** Entities that support merge. */
+export const previewMergeEntitySchema = z.enum([
+  "ingredient",
+  "vendor",
+  "purchase",
+]);
+export type PreviewMergeEntity = z.infer<typeof previewMergeEntitySchema>;
+
+export const previewOperationInputSchema = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("delete"),
+    entity: previewDeleteEntitySchema,
+    ids: z.array(z.string()).min(1).max(200),
+  }),
+  z
+    .object({
+      operation: z.literal("merge"),
+      entity: previewMergeEntitySchema,
+      /**
+       * Optional on purpose. The merge dialogs need per-candidate impact in
+       * order to CHOOSE a keeper (that is what `rankImpact` does), which they
+       * cannot do if naming the keeper is a precondition. Omit it for the
+       * ranking pass; supply it once the user has picked, for the real preview.
+       */
+      keepId: z.string().optional(),
+      mergeIds: z.array(z.string()).min(1).max(200),
+    })
+    .refine((v) => new Set(v.mergeIds).size === v.mergeIds.length, {
+      message: "mergeIds must be distinct",
+      path: ["mergeIds"],
+    })
+    .refine((v) => !v.keepId || !v.mergeIds.includes(v.keepId), {
+      message: "keepId cannot also appear in mergeIds",
+      path: ["keepId"],
+    }),
+]);
+export type PreviewOperationInput = z.infer<typeof previewOperationInputSchema>;
+
+/** Per-candidate ranking data, returned by a merge preview with no `keepId`. */
+export const mergeCandidateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Ranked descending by the dialog to default the keeper. */
+  weight: z.number().int().nonnegative(),
+  detail: z.array(z.object({ label: z.string(), count: z.number().int() })),
+});
+export type MergeCandidate = z.infer<typeof mergeCandidateSchema>;
+
+export const previewOperationSchema = z.object({
+  operation: z.enum(["delete", "merge"]),
+  entity: entitySchema,
+  /** `soft` / `hard` for a delete; null for a merge. */
+  mode: z.enum(["soft", "hard"]).nullable(),
+  targetCount: z.number().int().nonnegative(),
+  /**
+   * False when a blocker will make the mutation throw. The dialog disables
+   * confirmation on this — the ONLY thing a preview is allowed to gate, since
+   * it is not a lock and the mutation rechecks everything in its transaction.
+   */
+  canProceed: z.boolean(),
+  blockers: z.array(impactItemSchema),
+  changes: z.array(impactItemSchema),
+  sideEffects: z.array(impactItemSchema),
+  /** Present only on a merge preview asked for without a `keepId`. */
+  candidates: z.array(mergeCandidateSchema).optional(),
+  generatedAt: z.iso.datetime(),
+});
+export type PreviewOperation = z.infer<typeof previewOperationSchema>;
+
 /**
  * One live source row pointing at a soft-deleted target, on an edge whose
  * liveness rule is `must-target-live`.

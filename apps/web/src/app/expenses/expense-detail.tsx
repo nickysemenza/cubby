@@ -71,6 +71,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     id: expense.id,
     name: expense.name,
     entityLabel: "Expense",
+    entity: "expense",
     mutationOptions: (callbacks) =>
       api.expense.delete.mutationOptions(callbacks),
     invalidateKeys: expenseMutationInvalidateKeys,

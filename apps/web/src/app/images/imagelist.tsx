@@ -58,6 +58,7 @@ export default function ImageList() {
     mutationFn: api.image.delete.mutationOptions,
     entityLabel: "Image",
     invalidateKeys: IMAGE_INVALIDATE_KEYS,
+    entity: "image",
   });
 
   const updateImageMutation = useUpdateMutation({

@@ -97,6 +97,7 @@ export function ExpenseList() {
     mutationFn: api.expense.delete.mutationOptions,
     entityLabel: "Expense",
     invalidateKeys: expenseMutationInvalidateKeys,
+    entity: "expense",
   });
 
   const moveMutation = useUpdateMutation({

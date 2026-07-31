@@ -57,6 +57,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     id: product.id,
     name: product.name,
     entityLabel: "Product",
+    entity: "product",
     mutationOptions: (callbacks) =>
       api.product.delete.mutationOptions(callbacks),
     invalidateKeys: productMutationInvalidateKeys,

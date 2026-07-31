@@ -1,8 +1,13 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { useMutation } from "@tanstack/react-query";
 import pluralize from "pluralize";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
+import {
+  OperationImpact,
+  useOperationPreview,
+} from "~/app/_components/impact/operation-impact";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -30,6 +35,22 @@ export function DeleteInventoryDialog({
       onSuccess: invalidateInventory,
     }),
   );
+
+  // Impact preview — fetched only while the dialog is open, always fresh for
+  // the current items. See `useOperationPreview`'s doc comment for the
+  // gating rule.
+  const previewInput = useMemo(
+    () =>
+      items.length > 0
+        ? {
+            operation: "delete" as const,
+            entity: "inventory" as const,
+            ids: items.map((item) => item.id),
+          }
+        : null,
+    [items],
+  );
+  const preview = useOperationPreview(previewInput, open);
 
   const handleDelete = async () => {
     try {
@@ -61,6 +82,14 @@ export function DeleteInventoryDialog({
       onSubmit={handleDelete}
       isPending={deleteMutation.isPending}
       variant="destructive"
-    />
+      blocked={preview.data?.canProceed === false}
+    >
+      <OperationImpact
+        preview={preview.data}
+        isLoading={preview.isLoading}
+        isError={preview.isError}
+        onRetry={() => void preview.refetch()}
+      />
+    </BulkActionDialog>
   );
 }

@@ -25,6 +25,16 @@ interface BulkActionDialogProps<T extends { id: string }> {
   isPending: boolean;
   variant?: "default" | "destructive";
   children?: ReactNode;
+  /**
+   * Disable confirmation because the server has positively identified a blocker
+   * (an impact preview's `canProceed === false`) — the mutation would throw
+   * anyway, so this turns a confusing error toast into an explanation up front.
+   *
+   * NOT for "the preview hasn't loaded yet" or "the preview failed". Those tell
+   * us nothing about whether the mutation would succeed, and gating on them
+   * would make a preview outage an outage of every destructive action.
+   */
+  blocked?: boolean;
 }
 
 export function BulkActionDialog<T extends { id: string }>({
@@ -41,6 +51,7 @@ export function BulkActionDialog<T extends { id: string }>({
   isPending,
   variant = "default",
   children,
+  blocked = false,
 }: BulkActionDialogProps<T>) {
   const count = items.length;
   const itemWord = pluralize(itemNoun, count);
@@ -69,7 +80,11 @@ export function BulkActionDialog<T extends { id: string }>({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button variant={variant} onClick={onSubmit} disabled={isPending}>
+          <Button
+            variant={variant}
+            onClick={onSubmit}
+            disabled={isPending || blocked}
+          >
             {isPending
               ? (pendingLabel ?? `${action}ing...`)
               : (actionLabel ?? action)}

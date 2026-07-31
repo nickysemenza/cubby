@@ -56,6 +56,7 @@ export function VendorList() {
     mutationFn: api.vendor.delete.mutationOptions,
     entityLabel: "Vendor",
     invalidateKeys: vendorMutationInvalidateKeys,
+    entity: "vendor",
   });
 
   const columns = useMemo(

@@ -80,6 +80,7 @@ export function MealTable() {
     mutationFn: api.meal.delete.mutationOptions,
     entityLabel: "Meal",
     invalidateKeys: mealMutationInvalidateKeys,
+    entity: "meal",
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateMealMutation changes every render but is functionally stable

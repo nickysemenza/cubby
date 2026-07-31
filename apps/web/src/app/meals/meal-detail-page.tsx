@@ -57,6 +57,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
     id: mealId,
     name: mealName,
     entityLabel: "Meal",
+    entity: "meal",
     mutationOptions: api.meal.delete.mutationOptions,
     invalidateKeys: mealMutationInvalidateKeys,
     redirectTo: "/meals",

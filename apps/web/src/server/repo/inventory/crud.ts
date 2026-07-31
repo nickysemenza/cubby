@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type {
   InventoryId,
   LocationId,
@@ -15,7 +16,12 @@ import type { ProductCategory } from "@cubby/schemas/product";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { inventoryEntry, location, product } from "~/server/db/schema";
+import {
+  entityEmbedding,
+  inventoryEntry,
+  location,
+  product,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -39,6 +45,12 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import {
+  countByTarget,
+  impact,
+  present,
+  sideEffect,
+} from "~/server/repo/impact";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
 import type {
@@ -554,4 +566,73 @@ export const deleteInventoryEntries = async (
       })),
     );
   });
+};
+
+/**
+ * What `deleteInventoryEntries` would do to the given entries, without doing
+ * it.
+ *
+ * `inventory` has zero incoming edges (`INCOMING_EDGES.inventory` is `{}` —
+ * see `entity-incoming-edges.ts`), so there is nothing to block or cascade:
+ * `blockers` and `changes` are always empty. Two real consequences instead,
+ * both read straight off the actual delete paths rather than invented:
+ *
+ *  1. **Search index removal.** `deleteInventoryEntries` above soft-deletes
+ *     the entry's `EntityEmbedding` row in the same transaction. Counted here
+ *     with the SAME predicate that call uses (entityType match + `inArray` +
+ *     `notDeleted`), via `countByTarget`, so the two can't disagree.
+ *  2. **Location valuation recompute.** `needsValuationRecompute` in
+ *     `services/mutation-side-effects.ts` returns `true` unconditionally for
+ *     entityType `"inventory"` — create, update, AND delete alike — so the
+ *     router's delete procedure (`inventory.ts`'s `deleteItem`, via
+ *     `runMutationSideEffectsForEntities`) dispatches a background whole-tree
+ *     location-valuation recompute for every entry deleted. Unlike the
+ *     embedding cleanup this is a background job dispatch, not a per-row DB
+ *     write, so it has no natural row count — reported via `sideEffect()`
+ *     rather than `impact()`.
+ *
+ * Advisory only. `deleteInventoryEntries` still re-runs its own transaction;
+ * nothing here is a lock or a permission.
+ */
+export const previewDeleteInventoryEntries = async (
+  db: Database,
+  ids: InventoryId[],
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
+
+  const dbClient = getDb(db);
+
+  const sideEffects = present([
+    impact({
+      disposition: {
+        code: "soft-delete-search-index",
+        effect: "soft-delete",
+        description:
+          "The inventory entry's search-index entry is soft-deleted in the same transaction as the delete.",
+      },
+      label: "search index entries",
+      byTargetId: await countByTarget(
+        dbClient,
+        entityEmbedding,
+        entityEmbedding.entityId,
+        ids,
+        { extraWhere: eq(entityEmbedding.entityType, "inventory") },
+      ),
+    }),
+    sideEffect({
+      code: "location-valuation-recompute",
+      effect: "preserve",
+      label: "location valuation recompute",
+      description:
+        "Deleting an inventory entry always triggers a background whole-tree location-valuation recompute.",
+      total: ids.length,
+      byTargetId: Object.fromEntries(ids.map((id) => [id, 1])),
+    }),
+  ]);
+
+  return { blockers: [], changes: [], sideEffects };
 };

@@ -57,6 +57,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     id: vendor.id,
     name: vendor.name,
     entityLabel: "Vendor",
+    entity: "vendor",
     mutationOptions: (callbacks) =>
       api.vendor.delete.mutationOptions({
         ...callbacks,

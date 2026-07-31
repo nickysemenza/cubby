@@ -6,6 +6,7 @@
  * instead of hand-rolling `update`.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type { ExpenseId, PurchaseId } from "@cubby/schemas/identifiers";
 import type {
   ExpenseBulkCostTypeInput,
@@ -17,7 +18,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { expense } from "~/server/db/schema";
+import { entityEmbedding, expense } from "~/server/db/schema";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -36,6 +37,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { assertProjectLive } from "~/server/repo/project";
 import {
   assertPurchaseLive,
@@ -549,4 +551,59 @@ export const deleteExpenses = async (
       })),
     );
   });
+};
+
+/**
+ * What `deleteExpenses` would do to the given expenses, without doing it.
+ *
+ * `expense` has zero incoming edges (`INCOMING_EDGES.expense` is `{}` — see
+ * `entity-incoming-edges.ts`), so unlike every other preview in this feature
+ * there is nothing to block or cascade: `blockers` and `changes` are always
+ * empty. That doesn't make an expense delete a no-op — its one real
+ * consequence, read straight off `deleteExpenses` above, is the same-transaction
+ * `softDeleteEntityEmbeddingsTx` call that removes the row from search. The
+ * count here is the SAME predicate that call uses (entityType match +
+ * `inArray` + `notDeleted`), via `countByTarget`, so the two can't disagree.
+ *
+ * Unlike `inventory`, deleting an expense does NOT trigger a valuation
+ * recompute: `needsValuationRecompute` in `services/mutation-side-effects.ts`
+ * only fires for `inventory`/`product`/`location` events, and `expense`'s own
+ * manifest entry there declares `onDelete: []`. Nothing downstream recomputes
+ * off an expense delete.
+ *
+ * Advisory only. `deleteExpenses` still re-runs its own transaction; nothing
+ * here is a lock or a permission.
+ */
+export const previewDeleteExpenses = async (
+  db: Database,
+  ids: ExpenseId[],
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
+
+  const dbClient = getDb(db);
+
+  const sideEffects = present([
+    impact({
+      disposition: {
+        code: "soft-delete-search-index",
+        effect: "soft-delete",
+        description:
+          "The expense's search-index entry is soft-deleted in the same transaction as the delete.",
+      },
+      label: "search index entries",
+      byTargetId: await countByTarget(
+        dbClient,
+        entityEmbedding,
+        entityEmbedding.entityId,
+        ids,
+        { extraWhere: eq(entityEmbedding.entityType, "expense") },
+      ),
+    }),
+  ]);
+
+  return { blockers: [], changes: [], sideEffects };
 };

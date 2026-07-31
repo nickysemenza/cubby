@@ -21,6 +21,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
     id: ingredient.id,
     name: ingredient.name,
     entityLabel: "Ingredient",
+    entity: "ingredient",
     mutationOptions: (callbacks) =>
       api.ingredient.delete.mutationOptions(callbacks),
     invalidateKeys: ingredientMutationInvalidateKeys,

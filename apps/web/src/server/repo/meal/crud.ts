@@ -1,5 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -33,6 +36,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { dbMealToAPI } from "./helpers";
 
 export const MEAL_DELETE_EDGE_POLICY = {
@@ -296,4 +300,40 @@ export const removeMealRecipe = async (
     });
   });
   return requireMeal(db, mealId);
+};
+
+/**
+ * What {@link deleteMeals} would do to the given meals, without doing it.
+ *
+ * Reads the SAME `MEAL_DELETE_EDGE_POLICY` `deleteMeals` is described by. Its
+ * one incoming edge, `MealRecipe.mealId`, is a `soft-delete` cascade — there
+ * is nothing to block on, so `blockers` is always empty — counted with the
+ * identical `inArray(mealRecipe.mealId, ids) AND notDeleted(mealRecipe)`
+ * predicate `deleteMeals` updates with (via {@link countByTarget}).
+ *
+ * Advisory only. `deleteMeals` still re-runs its own cascade inside its own
+ * transaction; nothing here is a lock or a permission.
+ */
+export const previewDeleteMeals = async (
+  db: Database,
+  ids: MealId[],
+): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
+  if (ids.length === 0) return { blockers: [], changes: [] };
+
+  const disposition = MEAL_DELETE_EDGE_POLICY["MealRecipe.mealId"];
+  const changes = present([
+    impact({
+      disposition,
+      edgeKey: "MealRecipe.mealId",
+      label: "planned recipes",
+      byTargetId: await countByTarget(
+        getDb(db),
+        mealRecipe,
+        mealRecipe.mealId,
+        ids,
+      ),
+    }),
+  ]);
+
+  return { blockers: [], changes };
 };

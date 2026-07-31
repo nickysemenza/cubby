@@ -1,10 +1,15 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
+import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  OperationImpact,
+  useOperationPreview,
+} from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -24,6 +29,8 @@ interface UseEntityDeleteOptions {
   name: string;
   /** Entity type label for dialog (e.g., "Product", "Ingredient") */
   entityLabel: string;
+  /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
+  entity: PreviewDeleteEntity;
   /** tRPC delete mutation options factory */
   mutationOptions: (callbacks: {
     onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
@@ -67,6 +74,7 @@ export function useEntityDelete({
   id,
   name,
   entityLabel,
+  entity,
   mutationOptions,
   invalidateKeys,
   redirectTo,
@@ -76,6 +84,14 @@ export function useEntityDelete({
   const api = useTRPC();
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
+
+  // Impact preview — fetched only while the dialog is open, always fresh for
+  // this id. See `useOperationPreview`'s doc comment for the gating rule.
+  const previewInput = useMemo(
+    () => ({ operation: "delete" as const, entity, ids: [id] }),
+    [entity, id],
+  );
+  const preview = useOperationPreview(previewInput, showDialog);
 
   const deleteMutation = useMutation(
     mutationOptions({
@@ -142,8 +158,18 @@ export function useEntityDelete({
           setShowDialog(false);
         }}
         isPending={deleteMutation.isPending}
-      />
+        blocked={preview.data?.canProceed === false}
+      >
+        <OperationImpact
+          preview={preview.data}
+          isLoading={preview.isLoading}
+          isError={preview.isError}
+          onRetry={() => void preview.refetch()}
+        />
+      </BulkActionDialog>
     ),
+    // Not `preview` wholesale — react-query hands back a new result object
+    // every render; only the scalar fields are read.
     [
       showDialog,
       id,
@@ -152,6 +178,10 @@ export function useEntityDelete({
       description,
       deleteMutation.isPending,
       deleteMutation.mutateAsync,
+      preview.data,
+      preview.isLoading,
+      preview.isError,
+      preview.refetch,
     ],
   );
 

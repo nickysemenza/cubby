@@ -67,6 +67,7 @@ export function PurchaseList() {
     mutationFn: api.purchase.delete.mutationOptions,
     entityLabel: "Purchase",
     invalidateKeys: purchaseMutationInvalidateKeys,
+    entity: "purchase",
   });
 
   const columns = useMemo(

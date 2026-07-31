@@ -127,6 +127,7 @@ function RecipeDetailPage() {
     id,
     name: recipe.name,
     entityLabel: "Recipe",
+    entity: "recipe",
     mutationOptions: (callbacks) =>
       api.recipe.delete.mutationOptions(callbacks),
     invalidateKeys: recipeMutationInvalidateKeys,

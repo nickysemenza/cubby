@@ -42,6 +42,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
     id: image.id,
     name: image.filename,
     entityLabel: "Image",
+    entity: "image",
     mutationOptions: (callbacks) => api.image.delete.mutationOptions(callbacks),
     invalidateKeys: IMAGE_INVALIDATE_KEYS,
     redirectTo: "/images",

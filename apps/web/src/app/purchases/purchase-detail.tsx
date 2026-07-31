@@ -84,6 +84,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
     id: purchase.id,
     name: purchaseLabel(purchase),
     entityLabel: "Purchase",
+    entity: "purchase",
     mutationOptions: (callbacks) =>
       // Purchase's delete is hand-rolled and returns void rather than the crud
       // factory's side-effect summary, so there's nothing to forward into the

@@ -7,7 +7,10 @@
  * rows) inside the same transaction as the column update.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type { ProductId, TaskId } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkDueDateInput,
@@ -20,7 +23,7 @@ import type {
   TaskUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -46,6 +49,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { assertProjectLive } from "~/server/repo/project";
 import { dbTaskToAPI } from "./helpers";
 
@@ -668,6 +672,20 @@ export const reorderTasks = async (
   return getTasksByIDs(db, updatedIds);
 };
 
+/** Either a checked-out transaction or a plain client — reads work the same on both. */
+type TaskQueryClient = DrizzleClient | DrizzleTransaction;
+
+/**
+ * Live subtasks of `ids`, carrying both `id` (for `deleteTasks`' one-level
+ * cascade expansion) and `parentTaskId` (for `previewDeleteTasks`' per-parent
+ * count). Shared so the two can't disagree on which rows cascade.
+ */
+const fetchLiveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
+  dbc.query.task.findMany({
+    where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
+    columns: { id: true, parentTaskId: true },
+  });
+
 /**
  * Soft-delete tasks. One-level cascade: a deleted task's live subtasks have
  * no independent existence (they're checklist items represented via their
@@ -684,10 +702,7 @@ export const deleteTasks = async (
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
-    const liveSubtasks = await tx.query.task.findMany({
-      where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
-      columns: { id: true },
-    });
+    const liveSubtasks = await fetchLiveSubtasks(tx, ids);
     const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
 
     await tx
@@ -718,4 +733,74 @@ export const deleteTasks = async (
       })),
     );
   });
+};
+
+/**
+ * What `deleteTasks` would do to the given tasks, without doing it.
+ *
+ * Reads the SAME `TASK_DELETE_EDGE_POLICY` and the same `fetchLiveSubtasks`
+ * predicate the mutation's one-level cascade uses, so the preview's cascade
+ * expansion can't drift from the mutation's. `TaskDependency`'s two edges are
+ * counted over `allIds` (the requested ids plus their live subtasks) with
+ * `includeDeleted: true` — it's one of the two hard-delete-only source tables
+ * in the schema (no `deletedAt` column), so the default `notDeleted` filter
+ * would throw. There are no blockers: `TASK_DELETE_EDGE_POLICY` has none, and
+ * a task delete is never refused, only performed.
+ *
+ * Advisory only. `deleteTasks` still re-runs the same cascade inside its own
+ * transaction; nothing here is a lock or a permission.
+ */
+export const previewDeleteTasks = async (
+  db: Database,
+  ids: TaskId[],
+): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
+  if (ids.length === 0) return { blockers: [], changes: [] };
+
+  const dbClient = getDb(db);
+
+  const liveSubtasks = await fetchLiveSubtasks(dbClient, ids);
+  const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
+
+  const subtasksByTarget: Record<string, number> = {};
+  for (const { parentTaskId } of liveSubtasks) {
+    if (parentTaskId) {
+      subtasksByTarget[parentTaskId] =
+        (subtasksByTarget[parentTaskId] ?? 0) + 1;
+    }
+  }
+
+  const changes = present([
+    impact({
+      disposition: TASK_DELETE_EDGE_POLICY["Task.parentTaskId"],
+      edgeKey: "Task.parentTaskId",
+      label: "subtasks",
+      byTargetId: subtasksByTarget,
+    }),
+    impact({
+      disposition: TASK_DELETE_EDGE_POLICY["TaskDependency.taskId"],
+      edgeKey: "TaskDependency.taskId",
+      label: "dependency edges (blocking others)",
+      byTargetId: await countByTarget(
+        dbClient,
+        taskDependency,
+        taskDependency.taskId,
+        allIds,
+        { includeDeleted: true },
+      ),
+    }),
+    impact({
+      disposition: TASK_DELETE_EDGE_POLICY["TaskDependency.blockedByTaskId"],
+      edgeKey: "TaskDependency.blockedByTaskId",
+      label: "dependency edges (blocked by others)",
+      byTargetId: await countByTarget(
+        dbClient,
+        taskDependency,
+        taskDependency.blockedByTaskId,
+        allIds,
+        { includeDeleted: true },
+      ),
+    }),
+  ]);
+
+  return { blockers: [], changes };
 };

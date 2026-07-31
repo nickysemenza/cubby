@@ -443,6 +443,7 @@ export function RecipeList({
     mutationFn: api.recipe.delete.mutationOptions,
     entityLabel: "Recipe",
     invalidateKeys: recipeMutationInvalidateKeys,
+    entity: "recipe",
   });
 
   const {
