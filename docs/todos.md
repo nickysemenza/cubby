@@ -620,6 +620,68 @@ unit-mapping ids, background job/batch ids, and the dev-only diagnostics in
 `problems.tools.ts` (an orphaned embedding may name a row that no longer
 resolves, and a liveness violation's `sourceTable` can be a join table).
 
+### BUG: a charge minted from an expense gets no date
+
+**Found 2026-07-31** during the 22-receipt tool/3D-printer ingest, which created
+the first 15 charges ever minted through the live code path.
+
+**Symptom.** `create_expense` / `update_expense` with a `vendor` name (± `orderId`)
+find-or-creates the `Purchase`, and that new charge always lands with
+`date: null` — even though the expense carries a real `date`. Seven charges in
+that ingest came back dateless and had to be backfilled by hand with
+`update_purchase`.
+
+**Cause — a plumbing gap, not a decision.** `findOrCreatePurchase`
+(`repo/purchase.ts:465`) accepts a working `date?` param and inserts
+`date: input.date ?? null`. Its only production caller,
+`resolveCharge` (`repo/expense/crud.ts:151-232`), never passes one — and *cannot*,
+because `resolveCharge` narrows its `data` param to `{ vendor?, orderId? }`
+(crud.ts:154), so the expense's own `date` is structurally unreachable inside the
+function. The explicit `createPurchase` path (purchase.ts:505) does pass
+`date` + `statedTotal` correctly; only the implicit resolve path is broken.
+
+**It is NOT the same as the `statedTotal` null**, which is deliberate: pinned by a
+test with a comment explaining it (`purchase.integration.test.ts:456-458` — leaving
+it null gives `split_expense` something to seed) and called out in the
+`create_purchase` tool description (`mcp/tools/purchase.tools.ts:132`). There is no
+equivalent test, comment, or TODO for `date` anywhere. The two nulls also have
+*opposite* value: a null `statedTotal` is a useful worklist
+(`statedTotalPresenceFilter: "none"`), a null `date` is pure loss.
+
+**Impact.** `purchaseList`'s `dateFrom`/`dateTo` (purchase.ts:350-352) silently
+exclude a dateless charge, and the default `date desc` sort has nothing to order
+it by — it goes quietly missing from date-filtered views. For a charge with no
+`orderId` either, `purchaseLabel` (`lib/purchase-label.ts:28-30`) also degrades to
+a bare vendor name.
+
+**Blast radius today: zero.** 0 of 862 live charges have a null date — but only
+because 847 came from the one-shot 2026-07-29 backfill (which set dates directly)
+and today's 15 were hand-corrected. Latent, not active. Low urgency, cheap fix.
+
+**Fix — everything should have a date.** Two layers:
+
+- [ ] **Propagate it.** Widen `resolveCharge`'s `data` type to carry `date` and
+  pass it into `findOrCreatePurchase`. Seeding the charge date from the ledger date
+  is safe in a way seeding `statedTotal` is not: nothing reconciles against
+  `purchase.date`, so a day's imprecision costs nothing, whereas a guessed stated
+  total would manufacture false `chargesNotReconciling` flags. `update_purchase`
+  still overrides when the receipt disagrees. Add the integration test that's
+  missing — no test currently asserts `purchase.date` after a
+  `createExpense`-driven resolve.
+- [ ] **Then consider making `Purchase.date` NOT NULL** (`db/schema.ts:1028`),
+  which is the real intent. Nothing to backfill (0 nulls). Consequences to handle,
+  not surprises to discover:
+  - `foldChargeInto`'s date-carry branch (purchase.ts:919-927,
+    `survivor?.date == null && dead?.date != null`) becomes dead — simplify it.
+  - `purchaseLabel`'s dateless fallback becomes dead; the ladder collapses to
+    `orderId` → `vendor · date`.
+  - `purchaseCreateShape.date` (`packages/schemas/src/purchase.ts:60`) is
+    `plainDate.nullable().default(null)` — would have to become required, changing
+    the `create_purchase` MCP contract.
+  - ⚠️ A NOT NULL migration is **not additive**, which cuts against the standing
+    "keep schema additive/nullable" rule for this repo (dev `DATABASE_URL` is the
+    production Neon branch). Sequence it deliberately.
+
 ### MCP Apps — further candidates
 
 The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
