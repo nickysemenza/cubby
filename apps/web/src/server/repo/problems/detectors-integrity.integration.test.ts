@@ -20,33 +20,22 @@ import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
-  cookbook,
-  expense,
   image,
-  ingredient,
-  inventoryEntry,
-  location,
   locationImage,
-  meal,
   mealRecipe,
-  product,
   productExternalId,
   productImage,
   productUnitMappings,
-  project,
   projectDependency,
   projectImage,
-  purchase,
   purchaseImage,
-  recipe,
   recipeImage,
   recipeSection,
   recipeSectionIngredient,
-  task,
   taskDependency,
-  vendor,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findReferentialLivenessViolations } from "./detectors-integrity";
 
 /**
@@ -104,7 +93,7 @@ const mkImage = (db: Database) =>
   });
 
 const mkCookbook = (db: Database) =>
-  insertAndReturn(db, cookbook, {
+  insertWithShortcode(db, "cookbook", {
     name: uniq("Cookbook"),
     author: [],
     subjects: [],
@@ -113,40 +102,38 @@ const mkCookbook = (db: Database) =>
   });
 
 const mkRecipe = (db: Database) =>
-  insertAndReturn(db, recipe, { name: uniq("Recipe") });
+  insertWithShortcode(db, "recipe", { name: uniq("Recipe") });
 
 const mkIngredient = (db: Database) =>
-  insertAndReturn(db, ingredient, { name: uniq("Ingredient") });
+  insertWithShortcode(db, "ingredient", { name: uniq("Ingredient") });
 
 const mkMeal = (db: Database) =>
-  insertAndReturn(db, meal, { date: "2026-01-01" });
+  insertWithShortcode(db, "meal", { date: "2026-01-01" });
 
 const mkProduct = (db: Database) =>
-  insertAndReturn(db, product, {
-    shortcode: uniq("P"),
+  insertWithShortcode(db, "product", {
     name: uniq("Product"),
     manufacturer: "Test Mfr",
   });
 
 const mkLocation = (db: Database) =>
-  insertAndReturn(db, location, {
-    shortcode: uniq("L"),
+  insertWithShortcode(db, "location", {
     name: uniq("Location"),
     type: "room",
   });
 
 const mkProject = (db: Database) =>
-  insertAndReturn(db, project, { name: uniq("Project") });
+  insertWithShortcode(db, "project", { name: uniq("Project") });
 
 const mkTask = (db: Database) =>
-  insertAndReturn(db, task, { name: uniq("Task"), trade: "other" });
+  insertWithShortcode(db, "task", { name: uniq("Task"), trade: "other" });
 
 const mkVendor = (db: Database) =>
-  insertAndReturn(db, vendor, { name: uniq("Vendor") });
+  insertWithShortcode(db, "vendor", { name: uniq("Vendor") });
 
 const mkPurchase = async (db: Database) => {
   const v = await mkVendor(db);
-  return insertAndReturn(db, purchase, { vendorId: v.id });
+  return insertWithShortcode(db, "purchase", { vendorId: v.id });
 };
 
 const mkRecipeSection = async (db: Database) => {
@@ -183,13 +170,13 @@ const SOURCE_FACTORIES: Record<
   (db: Database, targetId: string) => Promise<{ id: string }>
 > = {
   "Recipe.cookbookId": (db, targetId) =>
-    insertAndReturn(db, recipe, {
+    insertWithShortcode(db, "recipe", {
       name: uniq("Recipe"),
       cookbookId: unsafeCookbookId(targetId),
     }),
 
   "Cookbook.coverImageId": (db, targetId) =>
-    insertAndReturn(db, cookbook, {
+    insertWithShortcode(db, "cookbook", {
       name: uniq("Cookbook"),
       author: [],
       subjects: [],
@@ -270,8 +257,7 @@ const SOURCE_FACTORIES: Record<
   },
 
   "Product.ingredientId": (db, targetId) =>
-    insertAndReturn(db, product, {
-      shortcode: uniq("P"),
+    insertWithShortcode(db, "product", {
       name: uniq("Product"),
       manufacturer: "Test Mfr",
       ingredientId: unsafeIngredientId(targetId),
@@ -301,7 +287,7 @@ const SOURCE_FACTORIES: Record<
 
   "InventoryEntry.productId": async (db, targetId) => {
     const l = await mkLocation(db);
-    return insertAndReturn(db, inventoryEntry, {
+    return insertWithShortcode(db, "inventory", {
       productId: unsafeProductId(targetId),
       locationId: l.id,
       amount: { value: 1, unit: "each" },
@@ -317,7 +303,7 @@ const SOURCE_FACTORIES: Record<
   },
 
   "Expense.productId": (db, targetId) =>
-    insertAndReturn(db, expense, {
+    insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
@@ -325,7 +311,7 @@ const SOURCE_FACTORIES: Record<
     }),
 
   "Task.subjectProductId": (db, targetId) =>
-    insertAndReturn(db, task, {
+    insertWithShortcode(db, "task", {
       name: uniq("Task"),
       trade: "other",
       subjectProductId: unsafeProductId(targetId),
@@ -333,7 +319,7 @@ const SOURCE_FACTORIES: Record<
 
   "InventoryEntry.locationId": async (db, targetId) => {
     const p = await mkProduct(db);
-    return insertAndReturn(db, inventoryEntry, {
+    return insertWithShortcode(db, "inventory", {
       productId: p.id,
       locationId: unsafeLocationId(targetId),
       amount: { value: 1, unit: "each" },
@@ -351,15 +337,14 @@ const SOURCE_FACTORIES: Record<
   // Unconstrained at the DB level (no `.references()` — see schema.ts), but
   // still audited: see the file-level doc comment on detectors-integrity.ts.
   "Location.parentId": (db, targetId) =>
-    insertAndReturn(db, location, {
-      shortcode: uniq("L"),
+    insertWithShortcode(db, "location", {
       name: uniq("Location"),
       type: "bin",
       parentId: unsafeLocationId(targetId),
     }),
 
   "Project.parentProjectId": (db, targetId) =>
-    insertAndReturn(db, project, {
+    insertWithShortcode(db, "project", {
       name: uniq("Project"),
       parentProjectId: unsafeProjectId(targetId),
     }),
@@ -381,14 +366,14 @@ const SOURCE_FACTORIES: Record<
   },
 
   "Task.projectId": (db, targetId) =>
-    insertAndReturn(db, task, {
+    insertWithShortcode(db, "task", {
       name: uniq("Task"),
       trade: "other",
       projectId: unsafeProjectId(targetId),
     }),
 
   "Expense.projectId": (db, targetId) =>
-    insertAndReturn(db, expense, {
+    insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
@@ -404,7 +389,7 @@ const SOURCE_FACTORIES: Record<
   },
 
   "Task.parentTaskId": (db, targetId) =>
-    insertAndReturn(db, task, {
+    insertWithShortcode(db, "task", {
       name: uniq("Task"),
       trade: "other",
       parentTaskId: unsafeTaskId(targetId),
@@ -427,10 +412,10 @@ const SOURCE_FACTORIES: Record<
   },
 
   "Purchase.vendorId": (db, targetId) =>
-    insertAndReturn(db, purchase, { vendorId: unsafeVendorId(targetId) }),
+    insertWithShortcode(db, "purchase", { vendorId: unsafeVendorId(targetId) }),
 
   "Expense.purchaseId": (db, targetId) =>
-    insertAndReturn(db, expense, {
+    insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
@@ -598,7 +583,7 @@ describe("findReferentialLivenessViolations", () => {
     const subRecipe = await mkRecipe(ctx.db);
     // The "recipe-as-ingredient" pointer row `recipeRelations.pointerIngredient`
     // describes: a live Ingredient whose recipeId names the sub-recipe.
-    await insertAndReturn(ctx.db, ingredient, {
+    await insertWithShortcode(ctx.db, "ingredient", {
       name: uniq("Sub-recipe pointer"),
       recipeId: subRecipe.id,
     });
@@ -615,25 +600,25 @@ describe("findReferentialLivenessViolations", () => {
     // mis-copied column), this would be the test most likely to catch it as a
     // false-positive violation.
     const vendorRow = await mkVendor(ctx.db);
-    const purchaseRow = await insertAndReturn(ctx.db, purchase, {
+    const purchaseRow = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendorRow.id,
     });
     const projectRow = await mkProject(ctx.db);
-    await insertAndReturn(ctx.db, expense, {
+    await insertWithShortcode(ctx.db, "expense", {
       name: "Clean expense",
       costType: "materials",
       trade: "other",
       projectId: projectRow.id,
       purchaseId: purchaseRow.id,
     });
-    await insertAndReturn(ctx.db, task, {
+    await insertWithShortcode(ctx.db, "task", {
       name: "Clean task",
       trade: "other",
       projectId: projectRow.id,
     });
 
     const cookbookRow = await mkCookbook(ctx.db);
-    const recipeRow = await insertAndReturn(ctx.db, recipe, {
+    const recipeRow = await insertWithShortcode(ctx.db, "recipe", {
       name: "Clean recipe",
       cookbookId: cookbookRow.id,
     });
@@ -648,14 +633,13 @@ describe("findReferentialLivenessViolations", () => {
       amounts: [{ value: 1, unit: "cup" }],
     });
 
-    const productRow = await insertAndReturn(ctx.db, product, {
-      shortcode: uniq("P"),
+    const productRow = await insertWithShortcode(ctx.db, "product", {
       name: uniq("Product"),
       manufacturer: "Test Mfr",
       ingredientId: ingredientRow.id,
     });
     const locationRow = await mkLocation(ctx.db);
-    await insertAndReturn(ctx.db, inventoryEntry, {
+    await insertWithShortcode(ctx.db, "inventory", {
       productId: productRow.id,
       locationId: locationRow.id,
       amount: { value: 1, unit: "each" },

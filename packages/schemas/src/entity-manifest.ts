@@ -27,8 +27,17 @@ export const entityDescriptor = z.object({
   dbTable: z.string().nullable(),
   /** Branded id type name, for display; null where ids are unbranded/external. */
   idBrand: z.string().nullable(),
-  /** Human-readable shortcode prefix (e.g. "P-"), if the entity has shortcodes. */
+  /**
+   * The entity's public-id prefix (e.g. "PRD-"). Present on every entity with a
+   * local table except `image`, whose rows are only ever addressed through the
+   * entity that owns them. Absent means "this entity has no public id".
+   */
   shortcodePrefix: z.string().optional(),
+  /**
+   * The pre-cutover single-letter prefix, where one exists. Inbound only — kept
+   * so QR labels printed before 2026-07 still resolve; nothing emits it.
+   */
+  legacyShortcodePrefix: z.string().optional(),
   /** Has a `deletedAt` soft-delete column. */
   softDelete: z.boolean(),
   /** Writes rows to the audit log (drives the audit entity union). */
@@ -133,6 +142,7 @@ export const entityManifest = {
     dbTable: "Product",
     idBrand: "ProductId",
     shortcodePrefix: SHORTCODE_PREFIX.product,
+    legacyShortcodePrefix: "P-",
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -162,6 +172,7 @@ export const entityManifest = {
     dbTable: "Recipe",
     idBrand: "RecipeId",
     shortcodePrefix: SHORTCODE_PREFIX.recipe,
+    legacyShortcodePrefix: "R-",
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -204,6 +215,7 @@ export const entityManifest = {
   ingredient: {
     dbTable: "Ingredient",
     idBrand: "IngredientId",
+    shortcodePrefix: SHORTCODE_PREFIX.ingredient,
     softDelete: true,
     auditable: true,
     hasImages: false,
@@ -225,6 +237,7 @@ export const entityManifest = {
   cookbook: {
     dbTable: "Cookbook",
     idBrand: "CookbookId",
+    shortcodePrefix: SHORTCODE_PREFIX.cookbook,
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -243,6 +256,7 @@ export const entityManifest = {
     dbTable: "Location",
     idBrand: "LocationId",
     shortcodePrefix: SHORTCODE_PREFIX.location,
+    legacyShortcodePrefix: "L-",
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -264,6 +278,7 @@ export const entityManifest = {
   inventory: {
     dbTable: "InventoryEntry",
     idBrand: "InventoryId",
+    shortcodePrefix: SHORTCODE_PREFIX.inventory,
     softDelete: true,
     auditable: true,
     hasImages: false,
@@ -285,6 +300,7 @@ export const entityManifest = {
   meal: {
     dbTable: "Meal",
     idBrand: "MealId",
+    shortcodePrefix: SHORTCODE_PREFIX.meal,
     softDelete: true,
     auditable: true,
     hasImages: false,
@@ -306,6 +322,7 @@ export const entityManifest = {
   project: {
     dbTable: "Project",
     idBrand: "ProjectId",
+    shortcodePrefix: SHORTCODE_PREFIX.project,
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -338,6 +355,7 @@ export const entityManifest = {
   task: {
     dbTable: "Task",
     idBrand: "TaskId",
+    shortcodePrefix: SHORTCODE_PREFIX.task,
     softDelete: true,
     auditable: true,
     hasImages: false,
@@ -371,6 +389,7 @@ export const entityManifest = {
   vendor: {
     dbTable: "Vendor",
     idBrand: "VendorId",
+    shortcodePrefix: SHORTCODE_PREFIX.vendor,
     softDelete: true,
     auditable: true,
     hasImages: false,
@@ -393,6 +412,7 @@ export const entityManifest = {
   purchase: {
     dbTable: "Purchase",
     idBrand: "PurchaseId",
+    shortcodePrefix: SHORTCODE_PREFIX.purchase,
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -415,6 +435,7 @@ export const entityManifest = {
   expense: {
     dbTable: "Expense",
     idBrand: "ExpenseId",
+    shortcodePrefix: SHORTCODE_PREFIX.expense,
     softDelete: true,
     auditable: true,
     hasImages: false,
@@ -515,6 +536,28 @@ export const searchableEntities = entitiesWithTrait("searchable");
 
 /** Entities with a local soft-deletable table we can count. */
 export const countableEntities = entitiesWithTrait("countable");
+
+/**
+ * Entities addressable by a public shortcode — the roster behind the shortcode
+ * resolvers, the shortcode detail routes, and every public MCP `id`. Derived
+ * from the presence of `shortcodePrefix` rather than a second hand-kept list;
+ * the drift test asserts it matches `ShortcodeType` in `@cubby/shared`.
+ */
+type EntityWithShortcode = {
+  [E in Entity]: EntityManifest[E] extends { shortcodePrefix: string }
+    ? E
+    : never;
+}[Entity];
+
+export const shortcodeEntities: readonly EntityWithShortcode[] = Object.freeze(
+  allEntities.filter(
+    (entity): entity is EntityWithShortcode =>
+      (entityManifest[entity] as EntityDescriptor).shortcodePrefix !==
+      undefined,
+  ),
+);
+
+export type ShortcodeEntity = EntityWithShortcode;
 
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];

@@ -28,7 +28,6 @@ import {
 import {
   buildPartialUpdateValues,
   getDb,
-  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -45,6 +44,7 @@ import {
   foldChargeInto,
   renameChargeOrderId,
 } from "~/server/repo/purchase";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { findOrCreateVendor } from "~/server/repo/vendor";
 import { dbExpenseToAPI, type ExpenseRow } from "./helpers";
 
@@ -359,7 +359,7 @@ export const createExpense = async (
     const purchaseId =
       data.purchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
 
-    const created = await insertAndReturn(tx, expense, {
+    const created = await insertWithShortcode(tx, "expense", {
       name: data.name,
       cost: data.cost,
       date: data.date,

@@ -41,7 +41,6 @@ import {
   assertNoDependents,
   buildPartialUpdateValues,
   getDb,
-  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   replaceDependencyEdges,
@@ -51,6 +50,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
@@ -194,7 +194,7 @@ export const createProject = async (
       await assertParentProjectExists(tx, data.parentProjectId);
     }
 
-    const created = await insertAndReturn(tx, project, {
+    const created = await insertWithShortcode(tx, "project", {
       name: data.name,
       status: data.status,
       kind: data.kind,

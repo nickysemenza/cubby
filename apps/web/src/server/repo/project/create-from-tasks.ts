@@ -15,18 +15,15 @@ import type {
 } from "@cubby/schemas/project";
 import { and, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { project, task } from "~/server/db/schema";
+import { task } from "~/server/db/schema";
 import {
   type AuditEntryInput,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import {
-  insertAndReturn,
-  notDeleted,
-  withTransaction,
-} from "~/server/repo/database-helpers";
+import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getTasksByIDs } from "~/server/repo/task";
 import { assertProjectLive, getProjectByID } from "./crud";
 
@@ -40,7 +37,7 @@ export async function createProjectFromTasks(
       await assertProjectLive(tx, input.project.parentProjectId);
     }
 
-    const created = await insertAndReturn(tx, project, {
+    const created = await insertWithShortcode(tx, "project", {
       name: input.project.name,
       status: input.project.status,
       kind: input.project.kind,

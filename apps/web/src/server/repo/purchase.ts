@@ -68,9 +68,7 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
-  findOrCreate,
   getDb,
-  insertAndReturn,
   lockAndValidateForDelete,
   nextImageSortOrder,
   notDeleted,
@@ -83,6 +81,10 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import {
+  findOrCreateWithShortcode,
+  insertWithShortcode,
+} from "~/server/repo/shortcode-utils";
 import { assertVendorLive } from "~/server/repo/vendor";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
@@ -436,7 +438,7 @@ export const findOrCreatePurchase = async (
   const orderId = input.orderId?.trim() || null;
 
   if (orderId === null) {
-    const created = await insertAndReturn(db, purchase, {
+    const created = await insertWithShortcode(db, "purchase", {
       vendorId: input.vendorId,
       orderId: null,
       date: input.date ?? null,
@@ -444,7 +446,7 @@ export const findOrCreatePurchase = async (
     return created.id;
   }
 
-  const { row } = await findOrCreate(db, purchase, {
+  const { row } = await findOrCreateWithShortcode(db, "purchase", {
     // Must match the partial-unique index exactly — it's how `findOrCreate`
     // re-finds the winner when it loses the insert race.
     where: and(
@@ -452,11 +454,11 @@ export const findOrCreatePurchase = async (
       eq(purchase.orderId, orderId),
       notDeleted(purchase),
     ),
-    values: {
+    values: () => ({
       vendorId: input.vendorId,
       orderId,
       date: input.date ?? null,
-    },
+    }),
   });
   return row.id;
 };
@@ -469,7 +471,7 @@ export const createPurchase = async (
   const id = await withTransaction(db, async (tx) => {
     // An FK proves the vendor row exists, not that it's live.
     await assertVendorLive(tx, data.vendorId);
-    const created = await insertAndReturn(tx, purchase, {
+    const created = await insertWithShortcode(tx, "purchase", {
       vendorId: data.vendorId,
       orderId: data.orderId?.trim() || null,
       date: data.date,
@@ -716,7 +718,7 @@ export const splitExpense = async (
 
     const inserted: ExpenseId[] = [];
     for (const part of parts) {
-      const row = await insertAndReturn(tx, expense, {
+      const row = await insertWithShortcode(tx, "expense", {
         name: part.name,
         cost: part.cost,
         date: original.date,

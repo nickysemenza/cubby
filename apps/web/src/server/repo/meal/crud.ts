@@ -37,6 +37,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbMealToAPI } from "./helpers";
 
 export const MEAL_DELETE_EDGE_POLICY = {
@@ -125,7 +126,7 @@ export const createMeal = async (
   actor: ActorContext,
 ): Promise<MealOut> => {
   const id = await withTransaction(db, async (tx) => {
-    const created = await insertAndReturn(tx, meal, {
+    const created = await insertWithShortcode(tx, "meal", {
       date: data.date,
       name: data.name ?? null,
       sortOrder: data.sortOrder ?? null,

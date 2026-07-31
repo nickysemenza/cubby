@@ -171,12 +171,32 @@ const softDeletedAt = () => ({
 const pkUuid = <T extends string = string>() =>
   uuid("id").primaryKey().default(sql`gen_random_uuid()`).$type<T>();
 
+/**
+ * The entity's public id (`PRD-4K7M`) — what URLs, QR labels, and MCP expose.
+ * The uuid PK above stays private to repos and internal tRPC.
+ *
+ * Deliberately NOT branded: branding shortcode columns buys little and costs
+ * friction on every insert (see the root CLAUDE.md note); the `unsafe*Shortcode`
+ * cast at the repo mapper boundary is the accepted pattern.
+ */
+const shortcodeColumn = () => text("shortcode").notNull();
+
+/**
+ * Uniqueness over the WHOLE table, soft-deleted rows included. That is the
+ * point: a code must never be reused, so a deleted row's code stays a permanent
+ * tombstone rather than becoming available again. These indexes were partial on
+ * `deletedAt IS NULL` before the 2026-07 cutover, which had already let 269
+ * codes be handed to a second entity.
+ */
+const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
+  uniqueIndex(`${tableName}_shortcode_unique`).on(column);
+
 // Recipe table
 export const recipe = pgTable(
   "Recipe",
   {
     id: pkUuid<RecipeId>(),
-    shortcode: text("shortcode"),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -201,9 +221,7 @@ export const recipe = pgTable(
     totalsComputedAt: timestamp("totalsComputedAt", { mode: "date" }),
   },
   (table) => [
-    uniqueIndex("Recipe_shortcode_unique")
-      .on(table.shortcode)
-      .where(sql`${table.deletedAt} IS NULL`),
+    shortcodeUnique("Recipe", table.shortcode),
     // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
     // Notion-synced recipes are excluded here — they're keyed by (name, book) and
     // by Notion page id respectively — so the same title can appear across a
@@ -256,6 +274,7 @@ export const cookbook = pgTable(
   "Cookbook",
   {
     id: pkUuid<CookbookId>(),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     // EPUB OPF <dc:creator> / <dc:subject>; empty arrays when the book has none.
     author: text("author").array().notNull().default(sql`'{}'::text[]`),
@@ -274,6 +293,7 @@ export const cookbook = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Cookbook", table.shortcode),
     uniqueIndex("Cookbook_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -318,6 +338,7 @@ export const ingredient = pgTable(
   "Ingredient",
   {
     id: pkUuid<IngredientId>(),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     // Base measurement kinds the user has marked "not applicable" for this
@@ -338,6 +359,7 @@ export const ingredient = pgTable(
       .references(() => recipe.id),
   },
   (table) => [
+    shortcodeUnique("Ingredient", table.shortcode),
     // Case-insensitive uniqueness: the matcher finds ingredients by lower(name)
     // (buildIngredientWhere), so the unique key must agree — otherwise "Flour"
     // and "flour" race past the matcher and both insert. The display value keeps
@@ -409,6 +431,7 @@ export const meal = pgTable(
   "Meal",
   {
     id: pkUuid<MealId>(),
+    shortcode: shortcodeColumn(),
     // Calendar day (no time/tz) — planning is day-granular. mode:"string" returns
     // a plain "YYYY-MM-DD"; a `date` read as a JS Date lands at UTC midnight and
     // misfilters by a day in negative-offset timezones. The Postgres column type
@@ -420,6 +443,7 @@ export const meal = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Meal", table.shortcode),
     // The calendar's range query (date BETWEEN from AND to) is the hot path.
     index("Meal_date_active_idx")
       .on(table.date)
@@ -458,7 +482,7 @@ export const product = pgTable(
   "Product",
   {
     id: pkUuid<ProductId>(),
-    shortcode: text("shortcode").notNull(), // Human-readable ID (P-XXXX format)
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     manufacturer: text("manufacturer").notNull(),
@@ -499,9 +523,7 @@ export const product = pgTable(
     usdaUnavailable: boolean("usdaUnavailable"),
   },
   (table) => [
-    uniqueIndex("Product_shortcode_unique")
-      .on(table.shortcode)
-      .where(sql`${table.deletedAt} IS NULL`),
+    shortcodeUnique("Product", table.shortcode),
     index("Product_category_idx").on(table.category),
     uniqueIndex("Product_name_manufacturer_key")
       .on(table.name, table.manufacturer)
@@ -576,7 +598,7 @@ export const location = pgTable(
   "Location",
   {
     id: pkUuid<LocationId>(),
-    shortcode: text("shortcode").notNull(), // Human-readable ID (L-XXXX format)
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     ...baseTimestamps(),
@@ -591,9 +613,7 @@ export const location = pgTable(
     valuation: jsonb("valuation").$type<LocationValuation | null>(),
   },
   (table) => [
-    uniqueIndex("Location_shortcode_unique")
-      .on(table.shortcode)
-      .where(sql`${table.deletedAt} IS NULL`),
+    shortcodeUnique("Location", table.shortcode),
     // Case-insensitive uniqueness, matching the ilike lookup in
     // findOrCreateLocationByName (see Ingredient_name_key for the rationale).
     uniqueIndex("Location_name_key")
@@ -677,6 +697,7 @@ export const inventoryEntry = pgTable(
   "InventoryEntry",
   {
     id: pkUuid<InventoryId>(),
+    shortcode: shortcodeColumn(),
     productId: uuid("productId")
       .notNull()
       .$type<ProductId>()
@@ -694,6 +715,7 @@ export const inventoryEntry = pgTable(
     verifiedAt: timestamp("verifiedAt", { mode: "date" }),
   },
   (table) => [
+    shortcodeUnique("InventoryEntry", table.shortcode),
     uniqueIndex("InventoryEntry_productId_locationId_key")
       .on(table.productId, table.locationId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -809,6 +831,7 @@ export const project = pgTable(
   "Project",
   {
     id: pkUuid<ProjectId>(),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     status: text("status", { enum: projectStatusValues })
       .notNull()
@@ -838,6 +861,7 @@ export const project = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Project", table.shortcode),
     uniqueIndex("Project_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -880,6 +904,7 @@ export const task = pgTable(
   "Task",
   {
     id: pkUuid<TaskId>(),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     status: text("status", { enum: taskStatusValues })
       .notNull()
@@ -915,6 +940,7 @@ export const task = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Task", table.shortcode),
     uniqueIndex("Task_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -960,6 +986,7 @@ export const vendor = pgTable(
   "Vendor",
   {
     id: pkUuid<VendorId>(),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     website: text("website"),
     notes: text("notes"),
@@ -967,6 +994,7 @@ export const vendor = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Vendor", table.shortcode),
     uniqueIndex("Vendor_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -985,6 +1013,7 @@ export const purchase = pgTable(
   "Purchase",
   {
     id: pkUuid<PurchaseId>(),
+    shortcode: shortcodeColumn(),
     vendorId: uuid("vendorId")
       .notNull()
       .$type<VendorId>()
@@ -1007,6 +1036,7 @@ export const purchase = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Purchase", table.shortcode),
     // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
     // lets the many `(vendorId, null)` charges coexist — a contractor's 11
     // progress payments are 11 rows against one vendor with no order id between
@@ -1060,6 +1090,7 @@ export const expense = pgTable(
   "Expense",
   {
     id: pkUuid<ExpenseId>(),
+    shortcode: shortcodeColumn(),
     name: text("name").notNull(),
     // See project.costEstimate — dollars need double precision, not float4.
     cost: doublePrecision("cost"),
@@ -1095,6 +1126,7 @@ export const expense = pgTable(
     ...softDeletedAt(),
   },
   (table) => [
+    shortcodeUnique("Expense", table.shortcode),
     uniqueIndex("Expense_notionPageId_key")
       .on(table.notionPageId)
       .where(sql`${table.deletedAt} IS NULL`),

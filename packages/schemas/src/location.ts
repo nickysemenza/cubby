@@ -9,7 +9,6 @@ import {
   inventoryId,
   locationId,
   locationShortcode,
-  normalizedLocationShortcode,
   productId,
   productShortcode,
 } from "./identifiers";
@@ -284,11 +283,11 @@ export const locationIdInput = z.object({
 });
 
 export const locationShortcodesInput = z.object({
-  shortcodes: z.array(normalizedLocationShortcode),
+  shortcodes: z.array(locationShortcode),
 });
 
 export const locationShortcodeInput = z.object({
-  shortcode: normalizedLocationShortcode,
+  shortcode: locationShortcode,
 });
 
 export const recentlyActiveLocationsInput = z

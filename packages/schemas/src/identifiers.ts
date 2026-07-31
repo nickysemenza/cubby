@@ -1,7 +1,16 @@
 import type {
+  CookbookShortcode,
+  ExpenseShortcode,
+  IngredientShortcode,
+  InventoryShortcode,
   LocationShortcode,
+  MealShortcode,
   ProductShortcode,
+  ProjectShortcode,
+  PurchaseShortcode,
   RecipeShortcode,
+  TaskShortcode,
+  VendorShortcode,
 } from "@cubby/shared";
 import { z } from "zod";
 
@@ -83,32 +92,48 @@ export type VendorId = z.infer<typeof vendorId>;
 export const [purchaseId, unsafePurchaseId] = brandedId("PurchaseId");
 export type PurchaseId = z.infer<typeof purchaseId>;
 
-// Shortcode schemas re-exported from shared package (single source of truth)
+// Shortcode schemas re-exported from the shared package (single source of
+// truth). Each one already trims, uppercases, validates its prefix, and brands —
+// there is deliberately no second "normalized" variant to choose between.
 export {
+  cookbookShortcode,
+  expenseShortcode,
+  ingredientShortcode,
+  inventoryShortcode,
   locationShortcode,
+  mealShortcode,
   productShortcode,
+  projectShortcode,
+  purchaseShortcode,
   recipeShortcode,
+  shortcodeSchema,
+  taskShortcode,
+  vendorShortcode,
 } from "@cubby/shared";
-import {
-  locationShortcode,
-  productShortcode,
-  recipeShortcode,
-} from "@cubby/shared";
-export type { LocationShortcode, ProductShortcode, RecipeShortcode };
+export type {
+  CookbookShortcode,
+  ExpenseShortcode,
+  IngredientShortcode,
+  InventoryShortcode,
+  LocationShortcode,
+  MealShortcode,
+  ProductShortcode,
+  ProjectShortcode,
+  PurchaseShortcode,
+  RecipeShortcode,
+  TaskShortcode,
+  VendorShortcode,
+};
 
-export const normalizedLocationShortcode = z
-  .string()
-  .transform((value) => value.trim().toUpperCase())
-  .pipe(locationShortcode);
-export const normalizedProductShortcode = z
-  .string()
-  .transform((value) => value.trim().toUpperCase())
-  .pipe(productShortcode);
-export const normalizedRecipeShortcode = z
-  .string()
-  .transform((value) => value.trim().toUpperCase())
-  .pipe(recipeShortcode);
-
+export const unsafeCookbookShortcode = makeUnsafeId<CookbookShortcode>();
+export const unsafeExpenseShortcode = makeUnsafeId<ExpenseShortcode>();
+export const unsafeIngredientShortcode = makeUnsafeId<IngredientShortcode>();
+export const unsafeInventoryShortcode = makeUnsafeId<InventoryShortcode>();
 export const unsafeLocationShortcode = makeUnsafeId<LocationShortcode>();
+export const unsafeMealShortcode = makeUnsafeId<MealShortcode>();
 export const unsafeProductShortcode = makeUnsafeId<ProductShortcode>();
+export const unsafeProjectShortcode = makeUnsafeId<ProjectShortcode>();
+export const unsafePurchaseShortcode = makeUnsafeId<PurchaseShortcode>();
 export const unsafeRecipeShortcode = makeUnsafeId<RecipeShortcode>();
+export const unsafeTaskShortcode = makeUnsafeId<TaskShortcode>();
+export const unsafeVendorShortcode = makeUnsafeId<VendorShortcode>();

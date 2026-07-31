@@ -5,7 +5,11 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
-import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type ProductId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -85,7 +89,8 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
-import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
   type ProductRetainingEdgeKey,
@@ -255,34 +260,15 @@ export const getProductUnitMappingsByProductIds = async (
 };
 
 /**
- * Find a product by its shortcode
- * Returns null if not found
- */
-const findProductByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<ProductId | null> => {
-  const prod = await getDb(db).query.product.findFirst({
-    where: and(
-      eq(product.shortcode, shortcode.toUpperCase()),
-      notDeleted(product),
-    ),
-  });
-  return prod ? prod.id : null;
-};
-
-/**
- * Get full product details by shortcode
+ * Get full product details by shortcode. Returns null if the code doesn't
+ * resolve to a live product.
  */
 export const getProductByShortcode = async (
   db: Database,
   shortcode: string,
 ) => {
-  const productId = await findProductByShortcode(db, shortcode);
-  if (!productId) {
-    return null;
-  }
-  return getProductByID(db, productId);
+  const id = await resolveLiveShortcode(db, shortcode, "product");
+  return id ? getProductByID(db, unsafeProductId(id)) : null;
 };
 
 /**
@@ -694,8 +680,6 @@ export const createProduct = async (
     : (data.category ?? null);
 
   // Generate unique shortcode
-  const shortcode = await generateUniqueProductShortcode(db);
-
   // Per-each price is the scalar `productData.price` column; a canonical
   // "1 each = $X" mapping would duplicate it (per-measure money mappings are OK).
   if (unitMappings) assertNoCanonicalPriceMapping(unitMappings);
@@ -706,10 +690,9 @@ export const createProduct = async (
   try {
     return await withTransaction(db, async (tx) => {
       // Create the product first (price flows in via ...productData)
-      const newProduct = await insertAndReturn(tx, product, {
+      const newProduct = await insertWithShortcode(tx, "product", {
         ...productData,
         category,
-        shortcode,
         ingredientId: ingredientId ?? null,
       });
 
@@ -944,11 +927,7 @@ export const quickCreateProduct = async (
   // Auto-correct category to "food" if product has food indicators
   const category = hasFoodIndicators(data) ? "food" : (data.category ?? null);
 
-  // Generate unique shortcode only if not provided
-  const shortcode =
-    data.shortcode ?? (await generateUniqueProductShortcode(db));
-
-  const newProduct = await insertAndReturn(db, product, {
+  const values = {
     name: data.name,
     manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
     upc: data.upc ?? null,
@@ -958,11 +937,20 @@ export const quickCreateProduct = async (
     ingredientId: data.ingredientId ?? null,
     price: data.price ?? null,
     category,
-    shortcode,
     // Preserve timestamps if provided (for sync restore)
     ...(data.createdAt && { createdAt: data.createdAt }),
     ...(data.updatedAt && { updatedAt: data.updatedAt }),
-  });
+  };
+
+  // An explicit `shortcode` only comes from the import/restore path, which is
+  // replaying a code that already exists; everything else mints one through
+  // `insertWithShortcode` so it gets the collision retry.
+  const newProduct = data.shortcode
+    ? await insertAndReturn(db, product, {
+        ...values,
+        shortcode: data.shortcode,
+      })
+    : await insertWithShortcode(db, "product", values);
 
   // Log audit entry
   await logAuditEntry(db, actor, {

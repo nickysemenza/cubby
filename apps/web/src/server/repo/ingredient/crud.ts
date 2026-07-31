@@ -17,14 +17,16 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
-  findOrCreate,
-  insertAndReturn,
   notDeleted,
   relations,
   unwrapDb,
   updateAndReturn,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import {
+  findOrCreateWithShortcode,
+  insertWithShortcode,
+} from "~/server/repo/shortcode-utils";
 import { buildIngredientWhere, type IngredientDeepDB } from "./internal-types";
 import { dbIngredientToAPI } from "./mappers";
 
@@ -67,7 +69,7 @@ export const createIngredient = async (
   data: z.input<typeof ingredientCreateInput>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const newIngredient = await insertAndReturn(db, ingredient, {
+  const newIngredient = await insertWithShortcode(db, "ingredient", {
     name: data.name,
     aliases: data.aliases || [],
     naKinds: data.naKinds ?? [],
@@ -118,9 +120,12 @@ export const findOrCreateIngredient = async (
   // lower(name) (partial, WHERE deletedAt IS NULL), so it agrees with the
   // case-insensitive matcher — "Flour" and "flour" collide and dedupe rather
   // than both inserting. See findOrCreate for the race it closes.
-  const { row: entry } = await findOrCreate(db, ingredient, {
+  const { row: entry } = await findOrCreateWithShortcode(db, "ingredient", {
     where: buildIngredientWhere(true, name, aliases),
-    values: { name, aliases: aliases || [] },
+    values: () => ({
+      name,
+      aliases: aliases || [],
+    }),
   });
 
   // Add new aliases, deduped CASE-INSENSITIVELY against the name and existing
@@ -174,9 +179,12 @@ export const resolveOrCreateIngredients = async (
     const name = rawName.trim();
     const key = name.toLowerCase();
     if (key.length === 0 || resolved.has(key)) continue;
-    const { row, created } = await findOrCreate(db, ingredient, {
+    const { row, created } = await findOrCreateWithShortcode(db, "ingredient", {
       where: buildIngredientWhere(true, name),
-      values: { name, aliases: [] },
+      values: () => ({
+        name,
+        aliases: [],
+      }),
     });
     resolved.set(key, { id: row.id, created });
   }

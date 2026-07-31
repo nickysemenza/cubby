@@ -8,7 +8,11 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
+import {
+  type CookbookId,
+  type RecipeId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
@@ -68,7 +72,6 @@ import {
   executeListQueryWithCount,
   getDb,
   idSetPresence,
-  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   presenceCondition,
@@ -84,7 +87,8 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
-import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 export const RECIPE_DELETE_EDGE_POLICY = {
@@ -174,23 +178,6 @@ export const getRecipesByIDs = async (
 };
 
 /**
- * Find a recipe by shortcode and return its ID.
- */
-const findRecipeByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<RecipeId | null> => {
-  const rec = await getDb(db).query.recipe.findFirst({
-    where: and(
-      eq(recipe.shortcode, shortcode.toUpperCase()),
-      notDeleted(recipe),
-    ),
-    columns: { id: true },
-  });
-  return rec ? rec.id : null;
-};
-
-/**
  * Titles of non-deleted recipes already linked to a cookbook. Used by the import
  * preview to flag recipes that a re-import would update, and by reprocess to tell
  * already-imported recipes from importable extras.
@@ -253,17 +240,15 @@ export const getCookbookRecipeIdsByTitle = async (
 };
 
 /**
- * Get a recipe by shortcode.
+ * Get a recipe by shortcode. Returns null if the code doesn't resolve to a
+ * live recipe.
  */
 export const getRecipeByShortcode = async (
   db: Database,
   shortcode: string,
 ): Promise<RecipeOut | null> => {
-  const recipeId = await findRecipeByShortcode(db, shortcode);
-  if (!recipeId) {
-    return null;
-  }
-  return getRecipeByID(db, recipeId);
+  const id = await resolveLiveShortcode(db, shortcode, "recipe");
+  return id ? getRecipeByID(db, unsafeRecipeId(id)) : null;
 };
 
 /**
@@ -531,13 +516,9 @@ const createRecipeReturningId = async (
 
   // Create the recipe in a transaction
   return await withTransaction(db, async (tx) => {
-    // Generate unique shortcode
-    const shortcode = await generateUniqueRecipeShortcode(tx);
-
     // Create the main recipe
-    const createdRecipe = await insertAndReturn(tx, recipe, {
+    const createdRecipe = await insertWithShortcode(tx, "recipe", {
       name: recipeInput.name,
-      shortcode,
       ...sourceColumns,
       yield: recipeInput.yield ?? null,
       servings: recipeInput.servings ?? null,

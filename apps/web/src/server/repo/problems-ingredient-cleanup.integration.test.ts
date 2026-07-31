@@ -19,6 +19,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "./repo.fixtures";
+import { generateUniqueShortcode } from "./shortcode-utils";
 
 describe("findUnusedIngredients", () => {
   const ctx = withTestDb();
@@ -53,7 +54,11 @@ describe("findUnusedIngredients", () => {
     );
     await getDb(ctx.db)
       .insert(ingredient)
-      .values({ name: "Recipe: sub", recipeId: recipe.id });
+      .values({
+        name: "Recipe: sub",
+        recipeId: recipe.id,
+        shortcode: await generateUniqueShortcode(ctx.db, "ingredient"),
+      });
 
     const { withProduct, withoutProduct } = await findUnusedIngredients(ctx.db);
 

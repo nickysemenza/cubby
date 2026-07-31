@@ -7,9 +7,8 @@ import { requiredName } from "./common";
 import { externalIdInput } from "./external-id";
 import { externalIdOut } from "./external-id";
 import {
-  ingredientId,
-  normalizedProductShortcode,
   type IngredientId,
+  ingredientId,
   inventoryId,
   productId,
   productShortcode,
@@ -175,11 +174,11 @@ export const productFindOrCreateByUPCInput = z.object({
 });
 
 export const productShortcodesInput = z.object({
-  shortcodes: z.array(normalizedProductShortcode),
+  shortcodes: z.array(productShortcode),
 });
 
 export const productShortcodeInput = z.object({
-  shortcode: normalizedProductShortcode,
+  shortcode: productShortcode,
 });
 
 export const productCreateManyInput = z

@@ -25,7 +25,6 @@ import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
-  insertAndReturn,
   notDeleted,
   updateAndReturn,
   withTransaction,
@@ -41,6 +40,7 @@ import {
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
 } from "~/server/repo/recipe";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const COOKBOOK_DELETE_EDGE_POLICY = {
   "Recipe.cookbookId": {
@@ -102,7 +102,7 @@ export const upsertCookbook = async (
               eq(cookbook.id, existingId),
             )
           ).id
-        : (await insertAndReturn(tx, cookbook, values)).id;
+        : (await insertWithShortcode(tx, "cookbook", values)).id;
 
       // The cover image is now associated → mark it uploaded (it was PENDING from
       // the presigned upload, like the recipe/product image flow).
