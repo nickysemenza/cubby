@@ -4,9 +4,9 @@ import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { Merge, Scale, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
+import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -145,9 +145,13 @@ export function IngredientList() {
     invalidateKeys: ingredientMutationInvalidateKeys,
   });
 
-  // Which selected ingredient to keep when merging. A ref (not state) so the
-  // bulk-action onExecute reads the latest choice without a stale closure.
-  const mergeTargetRef = useRef<string | null>(null);
+  // Rows awaiting merge confirmation — set by the bulk action's onExecute
+  // (which itself does no work; it just opens the dialog), cleared once the
+  // shared IngredientMergeDialog's onConfirm/cancel resolves.
+  const [mergeRows, setMergeRows] = useState<
+    Pick<IngredientListItem, "id" | "name">[] | null
+  >(null);
+  const [mergePending, setMergePending] = useState(false);
 
   // Count of stub ingredients (no products) to surface the enrichment entry point.
   const { data: stubData } = useQuery(
@@ -163,6 +167,7 @@ export function IngredientList() {
     mutationFn: api.ingredient.delete.mutationOptions,
     entityLabel: "Ingredient",
     invalidateKeys: ingredientMutationInvalidateKeys,
+    entity: "ingredient",
   });
 
   const getIngredientListMappings = useCallback(
@@ -264,53 +269,14 @@ export function IngredientList() {
           label: "Merge",
           icon: <Merge className="size-4" />,
           minSelection: 2,
-          requiresConfirmation: true,
-          renderConfirmation: (rows) => (
-            <MergeConfirmation
-              ingredients={rows.map((r) => r.original)}
-              targetRef={mergeTargetRef}
-            />
-          ),
+          // No built-in confirmation: `onExecute` only opens the shared
+          // IngredientMergeDialog (below) and returns `success: false` so the
+          // framework leaves the row selection alone while it's open. The
+          // dialog's own Confirm button does the actual merge via
+          // `confirmMerge`.
           onExecute: async (rows) => {
-            const ingredients = rows.map((r) => r.original);
-            const chosen = mergeTargetRef.current;
-            const targetId =
-              chosen && ingredients.some((i) => i.id === chosen)
-                ? chosen
-                : ingredients[0]?.id;
-            const target = ingredients.find((i) => i.id === targetId);
-            if (!target) return { success: false };
-            const aliasRows = ingredients.filter((i) => i.id !== target.id);
-            // The framework doesn't catch onExecute throws (no error toast) and
-            // won't reset the target ref, so own both: error-toast on failure and
-            // always clear the ref in `finally` (a stale ref would silently pick
-            // the wrong keeper on the next merge).
-            try {
-              const result = await trpcClient.ingredient.merge.mutate({
-                target: target.id,
-                aliases: aliasRows.map((a) => a.id),
-              });
-              // The bulk-action framework doesn't auto-invalidate. A merge's
-              // blast radius is wide: ingredients are deleted, products
-              // repoint, recipe totals are recomputed, and meals read those
-              // totals.
-              invalidateTRPCQueries(
-                queryClient,
-                ingredientMergeMutationInvalidateKeys,
-              );
-              toast.success(
-                savedWithBackgroundWork(
-                  result.sideEffects,
-                  `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
-                ),
-              );
-              return { success: true };
-            } catch (err) {
-              toast.error(`Merge failed: ${getErrorMessage(err)}`);
-              return { success: false };
-            } finally {
-              mergeTargetRef.current = null;
-            }
+            setMergeRows(rows.map((r) => r.original));
+            return { success: false };
           },
         },
       ],
@@ -318,6 +284,36 @@ export function IngredientList() {
     deletable: deletableConfig,
   });
   usePageCount(totalCount);
+
+  // Runs the merge the shared dialog confirmed. The bulk-action framework
+  // doesn't auto-invalidate or clear selection for a `success: false`
+  // onExecute (deliberate — see above), so both are handled here.
+  const confirmMerge = async (keepId: string, aliasIds: string[]) => {
+    const targetName =
+      mergeRows?.find((i) => i.id === keepId)?.name ?? "ingredient";
+    setMergePending(true);
+    try {
+      const result = await trpcClient.ingredient.merge.mutate({
+        target: keepId,
+        aliases: aliasIds,
+      });
+      // A merge's blast radius is wide: ingredients are deleted, products
+      // repoint, recipe totals are recomputed, and meals read those totals.
+      invalidateTRPCQueries(queryClient, ingredientMergeMutationInvalidateKeys);
+      toast.success(
+        savedWithBackgroundWork(
+          result.sideEffects,
+          `Merged into ${targetName} (${aliasIds.length} ingredient${aliasIds.length === 1 ? "" : "s"})`,
+        ),
+      );
+      table.resetRowSelection();
+      setMergeRows(null);
+    } catch (err) {
+      toast.error(`Merge failed: ${getErrorMessage(err)}`);
+    } finally {
+      setMergePending(false);
+    }
+  };
 
   const productIds = useMemo(
     () => data.flatMap((ingredient) => ingredient.product.map((p) => p.id)),
@@ -385,6 +381,15 @@ export function IngredientList() {
       />
       <PreviewSheet />
       {deleteDialog}
+      <IngredientMergeDialog
+        ingredients={mergeRows ?? []}
+        open={mergeRows != null}
+        onOpenChange={(open) => {
+          if (!open) setMergeRows(null);
+        }}
+        onConfirm={confirmMerge}
+        isPending={mergePending}
+      />
     </ProductFoodSummariesProvider>
   );
 }

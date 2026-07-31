@@ -2,17 +2,8 @@ import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
+import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
 import { Row, Stack } from "~/components/layout";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -61,7 +52,6 @@ export function ReviewQueue({
 
   const editorRef = useRef<EnrichmentEditorHandle>(null);
   const [mergeConfirm, setMergeConfirm] = useState<MergePair[] | null>(null);
-  const mergeTargetRef = useRef<string | null>(null);
   const mergeSourceRef = useRef<string | null>(null);
   const flaggedIdRef = useRef<string | null>(null);
 
@@ -154,14 +144,8 @@ export function ReviewQueue({
       { id: current.id, name: current.name },
     ]);
   };
-  const confirmMerge = () => {
-    const pair = mergeConfirm;
-    if (!pair || pair.length < 2) return;
-    const target =
-      pair.find((i) => i.id === mergeTargetRef.current) ?? pair[0]!;
-    const alias = pair.find((i) => i.id !== target.id);
-    if (!alias) return;
-    mergeMutation.mutate({ target: target.id, aliases: [alias.id] });
+  const confirmMerge = (keepId: string, aliasIds: string[]) => {
+    mergeMutation.mutate({ target: keepId, aliases: aliasIds });
     setMergeConfirm(null);
   };
 
@@ -306,33 +290,15 @@ export function ReviewQueue({
         />
       )}
 
-      <AlertDialog
+      <IngredientMergeDialog
+        ingredients={mergeConfirm ?? []}
         open={mergeConfirm != null}
         onOpenChange={(o) => {
           if (!o) setMergeConfirm(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Merge ingredients?</AlertDialogTitle>
-          </AlertDialogHeader>
-          {mergeConfirm && (
-            <MergeConfirmation
-              ingredients={mergeConfirm}
-              targetRef={mergeTargetRef}
-            />
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={mergeMutation.isPending}
-              onClick={confirmMerge}
-            >
-              Merge
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={confirmMerge}
+        isPending={mergeMutation.isPending}
+      />
     </Stack>
   );
 }

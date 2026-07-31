@@ -136,6 +136,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     mutationFn: api.product.delete.mutationOptions,
     entityLabel: "Product",
     invalidateKeys: productMutationInvalidateKeys,
+    entity: "product",
   });
 
   const getProductListMappings = useCallback(

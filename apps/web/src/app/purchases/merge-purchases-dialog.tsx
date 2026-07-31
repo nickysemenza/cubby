@@ -1,7 +1,12 @@
+import type { PreviewOperationInput } from "@cubby/schemas/entity-integrity";
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import {
+  OperationImpact,
+  useOperationPreview,
+} from "~/app/_components/impact/operation-impact";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -39,7 +44,7 @@ const CANDIDATE_PAGE_SIZE = 200;
  * a rule duplicated — and eventually drifting — in the UI.
  *
  * Not built on the shared `MergeConfirmation`: that component is
- * ingredient-specific (it fetches `ingredient.mergeImpact` for its keeper
+ * ingredient-specific (it fetches `entityIntegrity.previewOperation` for its keeper
  * ranking), and there is no purchase-side impact preview to rank by — the keeper
  * is fixed here, it's the charge you're looking at.
  */
@@ -84,6 +89,25 @@ export function MergePurchasesDialog({
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
     );
+
+  // Impact preview — fetched only while the dialog is open, always fresh for
+  // the current selection. Purchase merge has real server-enforced blockers
+  // (cross-vendor, both-sides-have-orderId) that would otherwise only surface
+  // as an error toast after the fact, so this one DOES gate confirmation on
+  // `canProceed === false` — see `useOperationPreview`'s doc comment.
+  const previewInput = useMemo<PreviewOperationInput | null>(
+    () =>
+      selected.length > 0
+        ? {
+            operation: "merge",
+            entity: "purchase",
+            keepId: purchase.id,
+            mergeIds: selected,
+          }
+        : null,
+    [purchase.id, selected],
+  );
+  const preview = useOperationPreview(previewInput, open);
 
   return (
     <Dialog
@@ -142,12 +166,25 @@ export function MergePurchasesDialog({
           the same transaction.
         </Description>
 
+        {selected.length > 0 && (
+          <OperationImpact
+            preview={preview.data}
+            isLoading={preview.isLoading}
+            isError={preview.isError}
+            onRetry={() => void preview.refetch()}
+          />
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
-            disabled={selected.length === 0 || mergeMutation.isPending}
+            disabled={
+              selected.length === 0 ||
+              mergeMutation.isPending ||
+              preview.data?.canProceed === false
+            }
             onClick={() =>
               mergeMutation.mutate({
                 keepId: purchase.id,

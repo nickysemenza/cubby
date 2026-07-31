@@ -2,6 +2,8 @@ import {
   type IntegrityCatalog,
   integrityCatalogSchema,
   type PhysicalEdge,
+  previewOperationInputSchema,
+  previewOperationSchema,
 } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
@@ -10,6 +12,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
+import { previewOperation } from "./entity-integrity-preview";
 
 /**
  * The static entity-integrity catalog: relationships and their provenance,
@@ -108,6 +111,15 @@ export function buildIntegrityCatalog(): IntegrityCatalog {
 }
 
 export const entityIntegrityRouter = createTRPCRouter({
+  /**
+   * What a delete or merge would do, without doing it. Read-only; the mutation
+   * remains authoritative and rechecks inside its transaction.
+   */
+  previewOperation: protectedProcedure
+    .input(previewOperationInputSchema)
+    .output(previewOperationSchema)
+    .query(({ ctx, input }) => previewOperation(ctx.db, input, new Date())),
+
   // Parsed on the way out: the catalog is assembled from `as const` constants,
   // so a shape error here is a compile-time-invisible drift (a policy value
   // missing `effect`, say) that would otherwise surface as a broken UI.

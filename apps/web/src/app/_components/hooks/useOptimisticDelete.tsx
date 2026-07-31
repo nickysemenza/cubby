@@ -1,9 +1,14 @@
+import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  OperationImpact,
+  useOperationPreview,
+} from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import {
   DropdownMenuItem,
@@ -26,6 +31,8 @@ interface DeletableConfig {
   entityLabel: string;
   /** Query keys to invalidate on success */
   invalidateKeys: readonly QueryKey[];
+  /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
+  entity: PreviewDeleteEntity;
 }
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
@@ -276,6 +283,22 @@ export function useOptimisticDelete<
     );
   }, [deletable, extraActions]);
 
+  // Impact preview — fetched only while the dialog is open, for the current
+  // target. See `useOperationPreview`'s doc comment for the gating rule: it
+  // never disables confirmation, except the one case handled below.
+  const previewInput = useMemo(
+    () =>
+      deletable && deleteTarget
+        ? {
+            operation: "delete" as const,
+            entity: deletable.entity,
+            ids: [deleteTarget.id],
+          }
+        : null,
+    [deletable, deleteTarget],
+  );
+  const preview = useOperationPreview(previewInput, deleteTarget !== null);
+
   // Build delete dialog element
   const deleteDialog = useMemo(
     () =>
@@ -309,17 +332,30 @@ export function useOptimisticDelete<
             }
           }}
           isPending={deletable ? deleteMutation.isPending : false}
-        />
+          blocked={preview.data?.canProceed === false}
+        >
+          <OperationImpact
+            preview={preview.data}
+            isLoading={preview.isLoading}
+            isError={preview.isError}
+            onRetry={() => void preview.refetch()}
+          />
+        </BulkActionDialog>
       ) : null,
-    // Not `deleteMutation` — react-query hands back a new result object every
-    // render, so depending on it made this memo a no-op. `mutateAsync` is
-    // bound once by the MutationObserver; `isPending` is the only field read.
+    // Not `deleteMutation`/`preview` wholesale — react-query hands back a new
+    // result object every render, so depending on either made this memo a
+    // no-op. `mutateAsync`/`refetch` are bound once by their observers; only
+    // the scalar fields are read.
     [
       deletable,
       deleteTarget,
       deleteMutation.isPending,
       deleteMutation.mutateAsync,
       emptyLabel,
+      preview.data,
+      preview.isLoading,
+      preview.isError,
+      preview.refetch,
     ],
   );
 

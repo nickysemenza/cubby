@@ -7,17 +7,8 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
-import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
+import { IngredientMergeDialog } from "~/app/_components/ingredient/ingredient-merge-dialog";
 import { Row, Stack } from "~/components/layout";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription } from "~/components/ui/empty";
@@ -93,7 +84,6 @@ export function EnrichmentWorkbench({
   const [mergeConfirm, setMergeConfirm] = useState<
     { id: string; name: string }[] | null
   >(null);
-  const mergeTargetRef = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery(
     // Pass no input when unscoped so the query key matches the plain worklist.
@@ -277,17 +267,11 @@ export function EnrichmentWorkbench({
 
   // Execute the merge the user confirmed: keeper = the chosen target, the other
   // becomes an alias (deleted, its recipe lines + products repoint to the keeper).
-  const confirmMerge = () => {
-    const pair = mergeConfirm;
-    if (!pair || pair.length < 2) return;
-    const target =
-      pair.find((i) => i.id === mergeTargetRef.current) ?? pair[0]!;
-    const alias = pair.find((i) => i.id !== target.id);
-    if (!alias) return;
-    mergeMutation.mutate({ target: target.id, aliases: [alias.id] });
+  const confirmMerge = (keepId: string, aliasIds: string[]) => {
+    mergeMutation.mutate({ target: keepId, aliases: aliasIds });
     setMergeSuggestions((prev) => {
       const next = { ...prev };
-      delete next[alias.id];
+      for (const aliasId of aliasIds) delete next[aliasId];
       return next;
     });
     setMergeConfirm(null);
@@ -585,33 +569,15 @@ export function EnrichmentWorkbench({
             </Row>
           )}
 
-          <AlertDialog
+          <IngredientMergeDialog
+            ingredients={mergeConfirm ?? []}
             open={mergeConfirm != null}
             onOpenChange={(o) => {
               if (!o) setMergeConfirm(null);
             }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Merge ingredients?</AlertDialogTitle>
-              </AlertDialogHeader>
-              {mergeConfirm && (
-                <MergeConfirmation
-                  ingredients={mergeConfirm}
-                  targetRef={mergeTargetRef}
-                />
-              )}
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={mergeMutation.isPending}
-                  onClick={confirmMerge}
-                >
-                  Merge
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            onConfirm={confirmMerge}
+            isPending={mergeMutation.isPending}
+          />
         </>
       )}
     </Stack>

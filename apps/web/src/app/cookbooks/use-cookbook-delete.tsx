@@ -1,6 +1,10 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  OperationImpact,
+  useOperationPreview,
+} from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -45,6 +49,22 @@ export function useCookbookDelete({
     error: (err) => getErrorMessage(err) || "Failed to delete cookbook",
   });
 
+  // Impact preview — fetched only while the dialog is open. Replaces the old
+  // static cascade prose (recipe/section/ingredient counts) with live counts;
+  // see `useOperationPreview`'s doc comment for the gating rule.
+  const previewInput = useMemo(
+    () =>
+      pendingDelete
+        ? {
+            operation: "delete" as const,
+            entity: "cookbook" as const,
+            ids: [pendingDelete.id],
+          }
+        : null,
+    [pendingDelete],
+  );
+  const preview = useOperationPreview(previewInput, pendingDelete !== null);
+
   const dialog = pendingDelete && (
     <BulkActionDialog
       open
@@ -56,17 +76,27 @@ export function useCookbookDelete({
       action="Delete"
       variant="destructive"
       pendingLabel="Deleting..."
-      description="Permanently deletes the cookbook, every recipe imported from it — sections and ingredients included — and its stored extraction, so re-importing means re-uploading the EPUB. Recipes used as a sub-recipe elsewhere or currently planned into a meal are deleted too, with no separate warning. This cannot be undone."
+      // The count-able cascade (recipes/sections/ingredients) now comes from
+      // the live preview below — this is only the part a count can't say.
+      description="Recipes used as a sub-recipe elsewhere or currently planned into a meal are deleted too, with no separate warning. This cannot be undone."
       onSubmit={async () => {
         await deleteMutation.mutateAsync({ cookbookId: pendingDelete.id });
       }}
       isPending={deleteMutation.isPending}
+      blocked={preview.data?.canProceed === false}
       renderItem={() =>
         pendingDelete.recipeCount === undefined
           ? `"${pendingDelete.name}" and its imported recipes`
           : `"${pendingDelete.name}" and its ${pendingDelete.recipeCount} imported recipe${pendingDelete.recipeCount === 1 ? "" : "s"}`
       }
-    />
+    >
+      <OperationImpact
+        preview={preview.data}
+        isLoading={preview.isLoading}
+        isError={preview.isError}
+        onRetry={() => void preview.refetch()}
+      />
+    </BulkActionDialog>
   );
 
   return {

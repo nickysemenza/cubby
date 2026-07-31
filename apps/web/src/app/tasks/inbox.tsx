@@ -87,6 +87,7 @@ export function TaskInbox() {
     mutationFn: api.task.delete.mutationOptions,
     entityLabel: "Task",
     invalidateKeys: taskMutationInvalidateKeys,
+    entity: "task",
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable

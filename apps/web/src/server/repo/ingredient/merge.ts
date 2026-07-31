@@ -4,7 +4,11 @@
  * surviving target before hard-deleting the absorbed rows.
  */
 
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  MergeCandidate,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
@@ -28,6 +32,13 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import {
+  countByTarget,
+  impact,
+  present,
+  sideEffect,
+} from "~/server/repo/impact";
+import { mergeImpactForIngredients } from "./search";
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
   "RecipeSectionIngredient.ingredientId": {
@@ -296,4 +307,181 @@ export const mergeIngredients = async (
       affectedRecipeIds: r.affectedRecipeIds,
     };
   });
+};
+
+/**
+ * Every alias-string a merged-away ingredient would contribute to the
+ * survivor's alias list: its own name plus its existing aliases, minus
+ * whatever the survivor (`keepId`) already carries. Not an incoming edge (it
+ * mutates the survivor's own row, not a dependent table), so it isn't in
+ * `INGREDIENT_MERGE_EDGE_POLICY` — reported as its own `changes` item instead.
+ *
+ * Approximate in one respect `resolve()` above is not: this dedupes each
+ * source against the survivor only, not against the OTHER merged-away
+ * ingredients too (resolve() folds the whole set through one `uniq()`). Two
+ * sources sharing an alias neither already has would double-count by one
+ * here. Acceptable for an advisory preview; the real merge is still the
+ * source of truth for what actually lands in the alias list.
+ */
+const foldedAliasCountsByTarget = async (
+  dbClient: ReturnType<typeof getDb>,
+  keepId: IngredientId,
+  mergeIds: IngredientId[],
+): Promise<Record<string, number>> => {
+  const survivor = await dbClient.query.ingredient.findFirst({
+    where: and(eq(ingredient.id, keepId), notDeleted(ingredient)),
+    columns: { name: true, aliases: true },
+  });
+  const existing = new Set(
+    [survivor?.name, ...(survivor?.aliases ?? [])]
+      .filter((v): v is string => !!v)
+      .map((v) => v.toLowerCase()),
+  );
+
+  const rows = await dbClient.query.ingredient.findMany({
+    where: and(inArray(ingredient.id, mergeIds), notDeleted(ingredient)),
+    columns: { id: true, name: true, aliases: true },
+  });
+
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    const contributed = uniq([row.name, ...row.aliases]).filter(
+      (n) => !existing.has(n.toLowerCase()),
+    );
+    if (contributed.length > 0) out[row.id] = contributed.length;
+  }
+  return out;
+};
+
+/**
+ * What `mergeIngredients(db, keepId, mergeIds)` would do, without doing it.
+ *
+ * Reads the SAME `INGREDIENT_MERGE_EDGE_POLICY` the mutation writes against
+ * for its two repoint edges (recipe lines, linked products) — `countByTarget`
+ * runs the identical `inArray` + live-row predicate the mutation's own
+ * `update(...).where(inArray(column, uniqueAliases))` touches. The
+ * affected-recipe recompute side effect reuses
+ * `recipeIdsUsingIngredients`, the exact function `resolve()` calls to
+ * compute `affectedRecipeIds` for the real merge, so the two can't disagree
+ * about which recipes go stale.
+ *
+ * Merging never blocks (no `block` disposition in the policy), so `blockers`
+ * is always empty.
+ *
+ * Advisory only. `mergeIngredients` still re-validates and recomputes
+ * everything inside its own transaction.
+ */
+export const previewMergeIngredients = async (
+  db: Database,
+  { mergeIds, keepId }: { mergeIds: IngredientId[]; keepId: IngredientId },
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  if (mergeIds.length === 0) {
+    return { blockers: [], changes: [], sideEffects: [] };
+  }
+  const dbClient = getDb(db);
+
+  const changes = present([
+    impact({
+      disposition:
+        INGREDIENT_MERGE_EDGE_POLICY["RecipeSectionIngredient.ingredientId"],
+      edgeKey: "RecipeSectionIngredient.ingredientId",
+      label: "recipe usages re-pointed",
+      byTargetId: await countByTarget(
+        dbClient,
+        recipeSectionIngredient,
+        recipeSectionIngredient.ingredientId,
+        mergeIds,
+      ),
+    }),
+    impact({
+      disposition: INGREDIENT_MERGE_EDGE_POLICY["Product.ingredientId"],
+      edgeKey: "Product.ingredientId",
+      label: "products moved",
+      byTargetId: await countByTarget(
+        dbClient,
+        product,
+        product.ingredientId,
+        mergeIds,
+      ),
+    }),
+    impact({
+      disposition: {
+        code: "fold-aliases",
+        effect: "move-dedupe",
+        description:
+          "The merged ingredients' names and aliases are folded into the survivor's alias list.",
+      },
+      label: "aliases folded",
+      byTargetId: await foldedAliasCountsByTarget(dbClient, keepId, mergeIds),
+    }),
+  ]);
+
+  const affectedRecipeIds = await recipeIdsUsingIngredients(dbClient, [
+    ...mergeIds,
+    keepId,
+  ]);
+  const sideEffects =
+    affectedRecipeIds.length > 0
+      ? [
+          sideEffect({
+            code: "recompute-affected-recipes",
+            label: "recipes recomputed",
+            description:
+              "Recipes using the merged ingredients — or already using the survivor — have their totals marked stale and recomputed.",
+            total: affectedRecipeIds.length,
+          }),
+        ]
+      : [];
+
+  return { blockers: [], changes, sideEffects };
+};
+
+/**
+ * Weight tiers for {@link previewMergeIngredientCandidates}, encoding the same
+ * priority `rankImpact` (`merge-confirmation.tsx`) sorts candidates by: a USDA
+ * link beats any product-count difference, a product-count difference beats
+ * any recipe-usage difference, which beats alias count. Each tier's
+ * multiplier is far larger than any realistic count in the tier below it (a
+ * personal pantry app's ingredient never carries anywhere near a thousand
+ * products or recipe usages), so summing them into one integer preserves the
+ * lexicographic order without shipping a multi-key comparator over the wire.
+ */
+const USDA_LINK_WEIGHT = 1_000_000_000;
+const PRODUCT_COUNT_WEIGHT = 1_000_000;
+const RECIPE_USAGE_WEIGHT = 1_000;
+
+/**
+ * Per-candidate ranking data for the merge picker, before a keeper is named —
+ * the mode the merge dialog needs to DEFAULT the keeper (sort descending by
+ * `weight`) and show what each row carries (`detail`).
+ *
+ * Wraps {@link mergeImpactForIngredients} (`./search`) rather than re-querying:
+ * same counts, reshaped into `MergeCandidate`. Replaces that function's role as
+ * the confirmation dialog's data source; `mergeImpactForIngredients` stays
+ * exported for its existing caller until it migrates.
+ */
+export const previewMergeIngredientCandidates = async (
+  db: Database,
+  ids: IngredientId[],
+): Promise<MergeCandidate[]> => {
+  const impacts = await mergeImpactForIngredients(db, ids);
+  return impacts.map((i) => ({
+    id: i.id,
+    name: i.name,
+    weight:
+      (i.hasUsdaLink ? USDA_LINK_WEIGHT : 0) +
+      i.productCount * PRODUCT_COUNT_WEIGHT +
+      i.recipeUsageCount * RECIPE_USAGE_WEIGHT +
+      i.aliasCount,
+    detail: [
+      { label: "USDA link", count: i.hasUsdaLink ? 1 : 0 },
+      { label: "products", count: i.productCount },
+      { label: "recipe usages", count: i.recipeUsageCount },
+      { label: "aliases", count: i.aliasCount },
+    ],
+  }));
 };

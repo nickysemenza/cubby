@@ -318,6 +318,7 @@ export function TaskList({
     mutationFn: api.task.delete.mutationOptions,
     entityLabel: "Task",
     invalidateKeys: taskMutationInvalidateKeys,
+    entity: "task",
   });
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
@@ -932,6 +933,7 @@ export function ExpenseList({
     mutationFn: api.expense.delete.mutationOptions,
     entityLabel: "Expense",
     invalidateKeys: expenseMutationInvalidateKeys,
+    entity: "expense",
   });
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<ExpenseOut>({ deletable: deletableConfig });
@@ -1230,6 +1232,7 @@ export function ProjectTable({
     mutationFn: api.project.delete.mutationOptions,
     entityLabel: "Project",
     invalidateKeys: projectMutationInvalidateKeys,
+    entity: "project",
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateProjectMutation changes every render but is functionally stable

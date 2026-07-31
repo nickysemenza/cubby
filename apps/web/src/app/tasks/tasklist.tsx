@@ -86,6 +86,7 @@ export function TaskList({
     mutationFn: api.task.delete.mutationOptions,
     entityLabel: "Task",
     invalidateKeys: taskMutationInvalidateKeys,
+    entity: "task",
   });
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").

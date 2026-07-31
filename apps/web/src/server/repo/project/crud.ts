@@ -8,7 +8,10 @@
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import type {
   ProjectCreateInput,
@@ -17,7 +20,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { countBy } from "es-toolkit";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   expense,
@@ -47,6 +50,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups, MAX_PROJECT_TREE_DEPTH } from "./subtree";
@@ -324,6 +328,40 @@ export const updateProject = async (
   return getProjectByID(db, id);
 };
 
+/** Either a checked-out transaction or a plain client — reads work the same on both. */
+type ProjectQueryClient = DrizzleClient | DrizzleTransaction;
+
+/**
+ * Live sub-projects of `ids`, keyed by `parentProjectId`. Shared by
+ * `deleteProjects`' PROJECT_HAS_CHILDREN guard and
+ * `previewDeleteProjects`' blocker count, so the two predicates can't drift.
+ */
+const fetchLiveChildProjects = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
+  dbc.query.project.findMany({
+    where: and(inArray(project.parentProjectId, ids), notDeleted(project)),
+    columns: { parentProjectId: true },
+  });
+
+/**
+ * Live tasks under `ids`. Shared by `deleteProjects`' PROJECT_HAS_TASKS guard
+ * and `previewDeleteProjects`' blocker count.
+ */
+const fetchLiveProjectTasks = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
+  dbc.query.task.findMany({
+    where: and(inArray(task.projectId, ids), notDeleted(task)),
+    columns: { projectId: true },
+  });
+
+/**
+ * Live expenses under `ids`. Shared by `deleteProjects`' PROJECT_HAS_EXPENSES
+ * guard and `previewDeleteProjects`' blocker count.
+ */
+const fetchLiveProjectExpenses = (dbc: ProjectQueryClient, ids: ProjectId[]) =>
+  dbc.query.expense.findMany({
+    where: and(inArray(expense.projectId, ids), notDeleted(expense)),
+    columns: { projectId: true },
+  });
+
 /**
  * Soft-delete projects. Guards against orphaning live tasks/expenses/child
  * projects (throws `PROJECT_HAS_TASKS` / `PROJECT_HAS_EXPENSES` /
@@ -344,10 +382,7 @@ export const deleteProjects = async (
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, project, ids, "Project");
 
-    const liveChildren = await tx.query.project.findMany({
-      where: and(inArray(project.parentProjectId, ids), notDeleted(project)),
-      columns: { parentProjectId: true },
-    });
+    const liveChildren = await fetchLiveChildProjects(tx, ids);
     await assertNoDependents({
       offendingParentIds: liveChildren.map((c) => c.parentProjectId),
       fetchNames: (failedIds) =>
@@ -360,10 +395,7 @@ export const deleteProjects = async (
         `Cannot delete ${count} project(s): ${names} still have sub-projects. Delete or reparent them first.`,
     });
 
-    const liveTasks = await tx.query.task.findMany({
-      where: and(inArray(task.projectId, ids), notDeleted(task)),
-      columns: { projectId: true },
-    });
+    const liveTasks = await fetchLiveProjectTasks(tx, ids);
     await assertNoDependents({
       offendingParentIds: liveTasks.map((t) => t.projectId),
       fetchNames: (failedIds) =>
@@ -376,10 +408,7 @@ export const deleteProjects = async (
         `Cannot delete ${count} project(s): ${names} still have tasks. Delete or reassign them first.`,
     });
 
-    const liveExpenses = await tx.query.expense.findMany({
-      where: and(inArray(expense.projectId, ids), notDeleted(expense)),
-      columns: { projectId: true },
-    });
+    const liveExpenses = await fetchLiveProjectExpenses(tx, ids);
     await assertNoDependents({
       offendingParentIds: liveExpenses.map((p) => p.projectId),
       fetchNames: (failedIds) =>
@@ -434,4 +463,113 @@ export const deleteProjects = async (
 
     await logAuditEntries(tx, actor, auditEntries);
   });
+};
+
+/**
+ * What `deleteProjects` would do to the given projects, without doing it.
+ *
+ * Reads the SAME `PROJECT_DELETE_EDGE_POLICY` and the same
+ * `fetchLiveChildProjects`/`fetchLiveProjectTasks`/`fetchLiveProjectExpenses`
+ * predicates the mutation's guards use, so the preview can't claim a delete
+ * will succeed that those guards then refuse. `ProjectDependency`'s two edges
+ * are counted with `includeDeleted: true` — it's one of the two hard-delete-
+ * only source tables in the schema (no `deletedAt` column), so the default
+ * `notDeleted` filter would throw.
+ *
+ * Advisory only. `deleteProjects` still re-runs every check inside its own
+ * transaction; nothing here is a lock or a permission.
+ */
+export const previewDeleteProjects = async (
+  db: Database,
+  ids: ProjectId[],
+): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
+  if (ids.length === 0) return { blockers: [], changes: [] };
+
+  const dbClient = getDb(db);
+
+  const [liveChildren, liveTasks, liveExpenses] = await Promise.all([
+    fetchLiveChildProjects(dbClient, ids),
+    fetchLiveProjectTasks(dbClient, ids),
+    fetchLiveProjectExpenses(dbClient, ids),
+  ]);
+
+  const childrenByTarget: Record<string, number> = {};
+  for (const { parentProjectId } of liveChildren) {
+    if (parentProjectId) {
+      childrenByTarget[parentProjectId] =
+        (childrenByTarget[parentProjectId] ?? 0) + 1;
+    }
+  }
+  const tasksByTarget: Record<string, number> = {};
+  for (const { projectId } of liveTasks) {
+    if (projectId)
+      tasksByTarget[projectId] = (tasksByTarget[projectId] ?? 0) + 1;
+  }
+  const expensesByTarget: Record<string, number> = {};
+  for (const { projectId } of liveExpenses) {
+    if (projectId)
+      expensesByTarget[projectId] = (expensesByTarget[projectId] ?? 0) + 1;
+  }
+
+  const blockers = present([
+    impact({
+      disposition: PROJECT_DELETE_EDGE_POLICY["Project.parentProjectId"],
+      edgeKey: "Project.parentProjectId",
+      label: "sub-projects",
+      byTargetId: childrenByTarget,
+    }),
+    impact({
+      disposition: PROJECT_DELETE_EDGE_POLICY["Task.projectId"],
+      edgeKey: "Task.projectId",
+      label: "tasks",
+      byTargetId: tasksByTarget,
+    }),
+    impact({
+      disposition: PROJECT_DELETE_EDGE_POLICY["Expense.projectId"],
+      edgeKey: "Expense.projectId",
+      label: "expenses",
+      byTargetId: expensesByTarget,
+    }),
+  ]);
+
+  const changes = present([
+    impact({
+      disposition: PROJECT_DELETE_EDGE_POLICY["ProjectDependency.projectId"],
+      edgeKey: "ProjectDependency.projectId",
+      label: "dependency edges (blocking others)",
+      byTargetId: await countByTarget(
+        dbClient,
+        projectDependency,
+        projectDependency.projectId,
+        ids,
+        { includeDeleted: true },
+      ),
+    }),
+    impact({
+      disposition:
+        PROJECT_DELETE_EDGE_POLICY["ProjectDependency.blockedByProjectId"],
+      edgeKey: "ProjectDependency.blockedByProjectId",
+      label: "dependency edges (blocked by others)",
+      byTargetId: await countByTarget(
+        dbClient,
+        projectDependency,
+        projectDependency.blockedByProjectId,
+        ids,
+        { includeDeleted: true },
+      ),
+    }),
+    impact({
+      disposition: PROJECT_DELETE_EDGE_POLICY["ProjectImage.projectId"],
+      edgeKey: "ProjectImage.projectId",
+      label: "images",
+      byTargetId: await countByTarget(
+        dbClient,
+        projectImage,
+        projectImage.projectId,
+        ids,
+      ),
+    }),
+  ]);
+
+  return { blockers, changes };
 };

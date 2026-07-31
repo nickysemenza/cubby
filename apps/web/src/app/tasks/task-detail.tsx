@@ -183,6 +183,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     id: task.id,
     name: task.name,
     entityLabel: "Task",
+    entity: "task",
     mutationOptions: (callbacks) => api.task.delete.mutationOptions(callbacks),
     invalidateKeys: taskMutationInvalidateKeys,
     redirectTo: "/tasks",

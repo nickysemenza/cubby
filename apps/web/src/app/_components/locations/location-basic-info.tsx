@@ -28,6 +28,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
     id: location.id,
     name: location.name,
     entityLabel: "Location",
+    entity: "location",
     mutationOptions: (callbacks) =>
       api.location.delete.mutationOptions(callbacks),
     invalidateKeys: locationMutationInvalidateKeys,

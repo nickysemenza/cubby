@@ -15,7 +15,10 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  OperationDisposition,
+} from "@cubby/schemas/entity-integrity";
 import type {
   ExpenseId,
   PurchaseId,
@@ -79,6 +82,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { assertVendorLive } from "~/server/repo/vendor";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
@@ -1001,6 +1005,45 @@ export const foldChargeInto = async (
  * the keeper when the keeper has none — that's the common shape (a hand-entered
  * charge later matched to a vendor export).
  */
+
+/** One of the two structural refusals {@link checkPurchaseMergeSet} enforces. */
+type PurchaseMergeViolation =
+  | { kind: "cross-vendor"; offendingIds: PurchaseId[] }
+  | { kind: "order-collision"; offendingIds: PurchaseId[]; orderIds: string[] };
+
+/**
+ * The two refusals `mergePurchases` enforces — computed without throwing, so
+ * `previewMergePurchases` can surface them as blockers instead of only an
+ * error toast after the mutation has already been attempted. Both call sites
+ * read the same rows and run the SAME two checks; see `mergePurchases`' own
+ * doc for why each is structural rather than stylistic.
+ */
+const checkPurchaseMergeSet = (
+  rows: Array<{ id: PurchaseId; vendorId: VendorId; orderId: string | null }>,
+  keeper: { id: PurchaseId; vendorId: VendorId },
+): PurchaseMergeViolation[] => {
+  const violations: PurchaseMergeViolation[] = [];
+
+  const crossVendor = rows.filter((r) => r.vendorId !== keeper.vendorId);
+  if (crossVendor.length > 0) {
+    violations.push({
+      kind: "cross-vendor",
+      offendingIds: crossVendor.map((r) => r.id),
+    });
+  }
+
+  const orderIdBearers = rows.filter((r) => r.orderId !== null);
+  if (orderIdBearers.length > 1) {
+    violations.push({
+      kind: "order-collision",
+      offendingIds: orderIdBearers.map((r) => r.id),
+      orderIds: orderIdBearers.map((r) => r.orderId as string),
+    });
+  }
+
+  return violations;
+};
+
 export const mergePurchases = async (
   db: Database,
   input: MergePurchasesInput,
@@ -1037,21 +1080,24 @@ export const mergePurchases = async (
       );
     }
 
-    const crossVendor = rows.filter((r) => r.vendorId !== keeper.vendorId);
-    if (crossVendor.length > 0) {
+    const violations = checkPurchaseMergeSet(rows, keeper);
+    for (const violation of violations) {
+      if (violation.kind === "cross-vendor") {
+        throw createAppError(
+          "PURCHASE_MERGE_VENDOR_MISMATCH",
+          `Cannot merge charges across vendors: ${violation.offendingIds.join(", ")} belong to a different vendor than ${keepId}.`,
+        );
+      }
       throw createAppError(
-        "PURCHASE_MERGE_VENDOR_MISMATCH",
-        `Cannot merge charges across vendors: ${crossVendor.map((r) => r.id).join(", ")} belong to a different vendor than ${keepId}.`,
+        "PURCHASE_MERGE_ORDER_COLLISION",
+        `Cannot merge charges that each carry an order id (${violation.orderIds.join(", ")}) — those are separate transactions.`,
       );
     }
 
+    // orderIdBearers is used below to decide which order id (if any) the
+    // keeper adopts — recomputed here rather than threaded through
+    // `checkPurchaseMergeSet` because that function's only job is validation.
     const orderIdBearers = rows.filter((r) => r.orderId !== null);
-    if (orderIdBearers.length > 1) {
-      throw createAppError(
-        "PURCHASE_MERGE_ORDER_COLLISION",
-        `Cannot merge charges that each carry an order id (${orderIdBearers.map((r) => r.orderId).join(", ")}) — those are separate transactions.`,
-      );
-    }
 
     // ORDER MATTERS: soft-delete the losers BEFORE the keeper adopts an order id.
     // The unique index is partial on `deletedAt IS NULL`, so while a loser is
@@ -1174,4 +1220,186 @@ export const deletePurchases = async (
       })),
     );
   });
+};
+
+/**
+ * What `deletePurchases` would do to the given charges, without doing it.
+ *
+ * Reads the SAME `PURCHASE_DELETE_EDGE_POLICY` this file's mutation
+ * implements. Both edges are non-blocking (`detach`/`soft-delete`), so this
+ * preview has only `changes` — nothing refuses a purchase delete. Neither
+ * `Purchase` nor `Vendor` is in the embedding pipeline (see `deletePurchases`'
+ * own doc), so there are no `sideEffects` to report either.
+ *
+ * Advisory only. `deletePurchases` still re-runs its own transaction; nothing
+ * here is a lock or a permission.
+ */
+export const previewDeletePurchases = async (
+  db: Database,
+  ids: PurchaseId[],
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  if (ids.length === 0) return { blockers: [], changes: [], sideEffects: [] };
+
+  const dbClient = getDb(db);
+
+  const changes = present([
+    impact({
+      disposition: PURCHASE_DELETE_EDGE_POLICY["Expense.purchaseId"],
+      edgeKey: "Expense.purchaseId",
+      label: "expenses detached",
+      byTargetId: await countByTarget(
+        dbClient,
+        expense,
+        expense.purchaseId,
+        ids,
+      ),
+    }),
+    impact({
+      disposition: PURCHASE_DELETE_EDGE_POLICY["PurchaseImage.purchaseId"],
+      edgeKey: "PurchaseImage.purchaseId",
+      label: "documents removed",
+      byTargetId: await countByTarget(
+        dbClient,
+        purchaseImage,
+        purchaseImage.purchaseId,
+        ids,
+      ),
+    }),
+  ]);
+
+  return { blockers: [], changes, sideEffects: [] };
+};
+
+/**
+ * What `mergePurchases` would do to the given charges, without doing it.
+ *
+ * Reads the SAME `checkPurchaseMergeSet` the mutation calls before it writes
+ * anything, so a cross-vendor or order-id-collision merge surfaces as a
+ * `blocker` here instead of only an error toast after the dialog's already
+ * confirmed. Reads the SAME `PURCHASE_MERGE_EDGE_POLICY` for the `changes` —
+ * `mergePurchases` folds every loser directly into `keepId` (no per-order
+ * survivor resolution like `mergeVendors`; see its own doc for why merging
+ * MORE than one order-id-bearing charge is refused outright rather than
+ * resolved), so both edges' counts are a plain `countByTarget` over the
+ * losers. Source purchases removed has no declared `Purchase` edge (nothing
+ * points a `Purchase` at another `Purchase`), so it's a `sideEffect`.
+ *
+ * Advisory only. `mergePurchases` still re-runs the same validation and
+ * recomputes its own fold set inside its own transaction; nothing here is a
+ * lock or a permission.
+ */
+export const previewMergePurchases = async (
+  db: Database,
+  input: { keepId: PurchaseId; mergeIds: PurchaseId[] },
+): Promise<{
+  blockers: ImpactItem[];
+  changes: ImpactItem[];
+  sideEffects: ImpactItem[];
+}> => {
+  const { keepId } = input;
+  const losers = input.mergeIds.filter((id) => id !== keepId);
+  if (losers.length === 0)
+    return { blockers: [], changes: [], sideEffects: [] };
+
+  const dbClient = getDb(db);
+  const rows = await dbClient.query.purchase.findMany({
+    where: and(inArray(purchase.id, [keepId, ...losers]), notDeleted(purchase)),
+    columns: { id: true, vendorId: true, orderId: true },
+  });
+
+  const keeper = rows.find((r) => r.id === keepId);
+  if (!keeper) {
+    // Mirrors the mutation's own `PURCHASE_NOT_FOUND` refusal, surfaced as a
+    // blocker rather than thrown — a preview reports, it doesn't crash.
+    return {
+      blockers: present([
+        impact({
+          disposition: {
+            code: "block-purchase-not-found",
+            effect: "block",
+            description:
+              "The keeper charge doesn't exist or has already been deleted.",
+          },
+          label: "missing keeper charge",
+          byTargetId: { [keepId]: 1 },
+        }),
+      ]),
+      changes: [],
+      sideEffects: [],
+    };
+  }
+
+  const violations = checkPurchaseMergeSet(rows, keeper);
+  const blockers = present(
+    violations.map((violation) =>
+      violation.kind === "cross-vendor"
+        ? impact({
+            disposition: {
+              code: "block-cross-vendor-merge",
+              effect: "block",
+              description:
+                "Purchases across different vendors can't be merged — a merge re-points a charge's expenses and documents, never its vendor.",
+            },
+            label: "charges belonging to a different vendor",
+            byTargetId: Object.fromEntries(
+              violation.offendingIds.map((id) => [id, 1]),
+            ),
+          })
+        : impact({
+            disposition: {
+              code: "block-order-collision-merge",
+              effect: "block",
+              description:
+                "More than one charge in this merge set carries its own order id — those are separate transactions and can't be merged.",
+            },
+            label: "charges each carrying an order id",
+            byTargetId: Object.fromEntries(
+              violation.offendingIds.map((id) => [id, 1]),
+            ),
+          }),
+    ),
+  );
+
+  const changes = present([
+    impact({
+      disposition: PURCHASE_MERGE_EDGE_POLICY["Expense.purchaseId"],
+      edgeKey: "Expense.purchaseId",
+      label: "expenses re-pointed",
+      byTargetId: await countByTarget(
+        dbClient,
+        expense,
+        expense.purchaseId,
+        losers,
+      ),
+    }),
+    impact({
+      disposition: PURCHASE_MERGE_EDGE_POLICY["PurchaseImage.purchaseId"],
+      edgeKey: "PurchaseImage.purchaseId",
+      label: "documents moved and deduplicated",
+      byTargetId: await countByTarget(
+        dbClient,
+        purchaseImage,
+        purchaseImage.purchaseId,
+        losers,
+      ),
+    }),
+  ]);
+
+  const sideEffects = present([
+    impact({
+      disposition: {
+        code: "soft-delete-source-purchase",
+        effect: "soft-delete",
+        description: "The merged-away charges are soft-deleted.",
+      },
+      label: "source purchases removed",
+      byTargetId: Object.fromEntries(losers.map((id) => [id, 1])),
+    }),
+  ]);
+
+  return { blockers, changes, sideEffects };
 };

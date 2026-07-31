@@ -6,6 +6,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { registerMcpApps } from "./apps";
 import { installMockStrippedListToolsHandler } from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
+import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
 import { registerImageTools } from "./tools/image.tools";
 import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
@@ -60,6 +61,7 @@ function registerTools(server: McpServer) {
   registerUsdaTools(server);
   registerImageTools(server);
   registerAuditTools(server);
+  registerEntityIntegrityTools(server);
   // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
   // to. Adds the `resources` capability, which is otherwise unused — cubby's
   // MCP surface is tools-only.

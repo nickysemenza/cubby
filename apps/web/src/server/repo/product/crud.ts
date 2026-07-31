@@ -4,6 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
@@ -39,6 +40,7 @@ import {
   sql,
   sum,
 } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { countBy, uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -81,6 +83,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 import {
@@ -1150,4 +1153,78 @@ export const deleteProducts = async (
 
     await logAuditEntries(tx, actor, auditEntries);
   });
+};
+
+/**
+ * What `deleteProducts` would do to the given products, without doing it.
+ *
+ * Reads the SAME `PRODUCT_DELETE_EDGE_POLICY` and the same per-edge dependent
+ * fetchers the mutation does, so the preview cannot claim a delete will succeed
+ * that the guard above then refuses — the two share one declaration of which
+ * edges block, not two hand-kept copies.
+ *
+ * Advisory only. `deleteProducts` still re-runs every check inside its own
+ * transaction; nothing here is a lock or a permission.
+ */
+export const previewDeleteProducts = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<{ blockers: ImpactItem[]; changes: ImpactItem[] }> => {
+  const dbClient = getDb(db);
+
+  const blockers: (ImpactItem | null)[] = [];
+  for (const [key, disposition] of Object.entries(PRODUCT_DELETE_EDGE_POLICY)) {
+    if (disposition.effect !== "block") continue;
+    const dependents = await PRODUCT_RETAINING_DEPENDENTS[
+      key as ProductRetainingEdgeKey
+    ](dbClient as unknown as DrizzleTransaction, ids);
+    const byTargetId: Record<string, number> = {};
+    for (const { productId } of dependents) {
+      if (productId) byTargetId[productId] = (byTargetId[productId] ?? 0) + 1;
+    }
+    blockers.push(
+      impact({
+        disposition,
+        edgeKey: key,
+        label: disposition.label,
+        byTargetId,
+      }),
+    );
+  }
+
+  // Everything the delete cascades. Each is a `soft-delete` disposition on the
+  // same policy, so adding an edge there surfaces here without a code change.
+  const cascades: Array<[string, PgTable, PgColumn, string]> = [
+    [
+      "ProductExternalId.productId",
+      productExternalId,
+      productExternalId.productId,
+      "external ids",
+    ],
+    [
+      "ProductUnitMappings.productId",
+      productUnitMappings,
+      productUnitMappings.productId,
+      "unit mappings",
+    ],
+    ["ProductImage.productId", productImage, productImage.productId, "images"],
+  ];
+
+  const changes: (ImpactItem | null)[] = [];
+  for (const [edgeKey, table, column, label] of cascades) {
+    const disposition =
+      PRODUCT_DELETE_EDGE_POLICY[
+        edgeKey as keyof typeof PRODUCT_DELETE_EDGE_POLICY
+      ];
+    changes.push(
+      impact({
+        disposition,
+        edgeKey,
+        label,
+        byTargetId: await countByTarget(dbClient, table, column, ids),
+      }),
+    );
+  }
+
+  return { blockers: present(blockers), changes: present(changes) };
 };

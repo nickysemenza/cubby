@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import type { ColumnDef, ColumnHelper, Table } from "@tanstack/react-table";
@@ -122,6 +123,8 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
     entityLabel: string;
     /** Query keys to invalidate on success */
     invalidateKeys: readonly QueryKey[];
+    /** Entity slug for the operation-impact preview fetched while the confirm dialog is open. */
+    entity: PreviewDeleteEntity;
   };
 }
 

@@ -37,6 +37,7 @@ export {
   deleteExpenses,
   getExpenseByID,
   moveExpenses,
+  previewDeleteExpenses,
   setExpensesCostType,
   setExpensesTrade,
   updateExpense,

@@ -271,10 +271,6 @@ export const ingredientMergeInput = z.object({
   dryRun: z.boolean().optional(),
 });
 
-export const ingredientMergeImpactInput = z.object({
-  ids: z.array(ingredientId).min(2),
-});
-
 /**
  * Per-candidate merge preview: how much of the "worth keeping" signal each
  * ingredient carries. Powers the keeper picker (best-keeper default + the
@@ -293,9 +289,6 @@ export const ingredientMergeCandidateImpact = z.object({
 export type IngredientMergeCandidateImpact = z.infer<
   typeof ingredientMergeCandidateImpact
 >;
-
-export const ingredientMergeImpactOut = z.array(ingredientMergeCandidateImpact);
-export type IngredientMergeImpactOut = z.infer<typeof ingredientMergeImpactOut>;
 
 export const ingredientIdInput = z.object({
   id: ingredientId,

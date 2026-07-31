@@ -2,6 +2,10 @@ import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { keyBy } from "es-toolkit";
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useAutoScroll } from "~/app/_components/hooks/use-auto-scroll";
+import {
+  OperationImpact,
+  useOperationPreview,
+} from "~/app/_components/impact/operation-impact";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
@@ -99,6 +103,24 @@ export function TaskBoard({
   // own: the optimistic delete drops the card out of `cellTasks`, so a dialog
   // owned by the card would unmount before the mutation settles.
   const [pendingDelete, setPendingDelete] = useState<TaskOut | null>(null);
+
+  // Impact preview — fetched only while the delete dialog is open. See
+  // `useOperationPreview`'s doc comment for the gating rule.
+  const deletePreviewInput = useMemo(
+    () =>
+      pendingDelete
+        ? {
+            operation: "delete" as const,
+            entity: "task" as const,
+            ids: [pendingDelete.id],
+          }
+        : null,
+    [pendingDelete],
+  );
+  const deletePreview = useOperationPreview(
+    deletePreviewInput,
+    pendingDelete !== null,
+  );
 
   const columns = useMemo(() => buildColumns(tasks, cols), [tasks, cols]);
   const lanes = useMemo(
@@ -260,7 +282,15 @@ export function TaskBoard({
             setPendingDelete(null);
           }}
           isPending={isDeleting}
-        />
+          blocked={deletePreview.data?.canProceed === false}
+        >
+          <OperationImpact
+            preview={deletePreview.data}
+            isLoading={deletePreview.isLoading}
+            isError={deletePreview.isError}
+            onRetry={() => void deletePreview.refetch()}
+          />
+        </BulkActionDialog>
       )}
     </>
   );

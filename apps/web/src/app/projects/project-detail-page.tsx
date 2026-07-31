@@ -620,6 +620,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     id: project.id,
     name: project.name,
     entityLabel: "Project",
+    entity: "project",
     mutationOptions: (callbacks) =>
       api.project.delete.mutationOptions(callbacks),
     invalidateKeys: projectMutationInvalidateKeys,
