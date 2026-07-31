@@ -466,8 +466,57 @@ single call.
   keep: `CL3050U**ID**/S/T/R` is the internal-dispenser variant, and only the absent `ID` tells you
   which unit was actually bought. Contrast a distributor like Lutz, which prints genuine
   manufacturer part numbers (`K50-102-ST-SN`, `9611-K50-SN`) that go straight into `model`.
+- **Which lines get a product — and which never do.** A `Product` is a purchasable item **or a
+  `misc:` placeholder** (`repo/product/index.ts`), so the bar is lower than "a specific SKU". Two
+  classes never get one:
+  - **A service or labor line** (`costType: "services"` — hauling, drywall, install labor,
+    delivery/freight). There is no object. `Expense.productId` is an **acquisition** edge that the
+    net-cost and owned/sold-window derivations read, so a labor line hung off a product silently
+    inflates that product's basis. Work *about* a product is `Task.subjectProductId` instead — the
+    furnace is modelled correctly today as `Bryant 801S gas furnace` (materials, productized) plus
+    `furnace replacement labor` (services, not). Zero services rows carry a product; keep it that way.
+    This is a rule, not a constraint — `costType` is an operator-assigned reporting dimension and is
+    inconsistent in places (`countertop deposit` is materials, `2nd half of countertop` is services,
+    same vendor, same slab), so don't refuse a write over it, just don't make the link.
+  - **An installment or progress payment** (`hotel payment 3/11`, `wedding planner 2 of 4`,
+    `retaining wall 2/2`). That grouping belongs to the charge and the project.
+
+  Everything else gets one, **after unbundling**. A bundle (`wall materials, strut stuff`) and an
+  aggregate credit (`lowes returns` −$77.46) are *un-split imports*, not a kind of thing — split them
+  per Phase 3 and each part takes its own product. Two shapes that look like exceptions and aren't:
+  - **A fungible bulk line stays UNLINKED** — `plywood`, `metal tubing`, `pvc fittings`. This is the
+    designed default, not an omission. `misc:` products (`isMiscProduct`,
+    `packages/shared/src/constants.ts`) are an **inventory** convenience — a heterogeneous pile on a
+    shelf, exempted from `findProductsMissingPrice` and carried as `miscNoPrice` in the location
+    valuation — and are deliberately **not** an expense-link target: hanging a $171 clamp run off a $5
+    `assorted clamps` bucket makes "net cost" mean two different things depending on the product.
+    Decided 2026-07; see *Bucket products do NOT get product links* in `docs/todos.md`. Unbundle into
+    specific SKUs where the receipt allows, and otherwise leave the row unlinked.
+  - **A sample of one identified material is that product** (`walnut wood samples` → the walnut you
+    then order); a mixed sample bag is a bucket and follows the rule above.
+  - **A subscription is one product with N recurring expenses.** `chief architect monthly` (9 rows,
+    $1,791), `cutlist optimizer` (5) and `autocad lt` (4) are the ledger's highest-frequency names and
+    are all productless, so the "how often, how much" question they exist to answer has nowhere to
+    land. Keep the *schedule* off the product — the product is the license, the payments are the
+    expenses, exactly as 11 progress payments are 11 charges.
+
+  ⚠️ **A mis-minted product is close to permanent.** Any product carrying an expense is *by
+  construction* invisible to `findOrphanedProducts` — `Expense.productId` has role `acquisition`,
+  which retains — and refuses deletion with `PRODUCT_HAS_EXPENSES`. So a duplicate you create here
+  will never appear on the Problems page and Delete won't take it; the operator has to unlink the
+  expense by hand first. Mint from a **receipt line's own key** (SKU/ASIN/part number), never from a
+  name match — `find_similar_entities` ranks, it does not verify. Where the receipt has no line
+  items, leave the row unsplit and productless rather than guessing a product into existence.
 - **`create_product` has no `model` field** — create, then `update_product` to set `model`,
   `category`, `expectedQuantity`, `tags` and `externalIds`. Budget two calls per product.
+
+  **`category` is not optional in practice.** A null category is deliberately read as *potentially
+  food* so uncategorized groceries keep their unit-coverage grading (`packages/shared/src/category-theme.ts`),
+  which means a tool left uncategorized lands in `findProductsWithoutMappings` demanding
+  weight/volume/calorie coverage it can never have. Note the enum is food, tools, tool-consumables,
+  tool-accessories, storage, hardware, electronics, household, supplies — **there is no software or
+  services slot**, so a subscription product has no clean home yet. Raise that rather than forcing it
+  into `supplies`.
 - **Tag a durable and its consumables with the same value** (`subzero-fridge`, `ews-under-sink`,
   `wolf-hood-36`); `category` distinguishes them (`household` vs `supplies`). This is how a filter
   finds its fridge when neither name shares a token. And put a maintenance task's `subjectProductId`
