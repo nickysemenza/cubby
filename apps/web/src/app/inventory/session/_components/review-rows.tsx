@@ -54,6 +54,7 @@ export function LocationReviewCard({
               entity="location"
               data={{
                 id: location.id,
+                shortcode: location.shortcode,
                 name: location.name,
                 type: location.type,
               }}

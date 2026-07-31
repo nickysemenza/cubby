@@ -3,6 +3,10 @@
  * Convert database records to API types.
  */
 
+import {
+  unsafeIngredientShortcode,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import type {
   RecipeGraphOut,
@@ -228,6 +232,7 @@ const sectionIngredientToAPI = (
       recipe: null,
       ingredient: {
         id: ingredient.id,
+        shortcode: unsafeIngredientShortcode(ingredient.shortcode),
         name: ingredient.name,
         aliases: ingredient.aliases,
         createdAt: ingredient.createdAt,
@@ -248,13 +253,17 @@ const sectionIngredientToAPI = (
  * references.
  */
 export const dbRecipeToTopLevelShape = (
-  recipeData: RecipeSelect,
+  // The cookbook join is optional: only the relation-loaded reads carry it, and
+  // a recipe read without it just renders its source badge unlinked rather than
+  // forcing every caller to join a table it doesn't otherwise need.
+  recipeData: RecipeSelect & { cookbook?: { shortcode: string } | null },
 ): RecipeTopLevel => {
   // cookbookId is the FK, not a top-level API field — pull it out of the row so it
   // isn't spread into the output, but feed it to the source codec so a book
   // recipe's `source` carries its cookbook id (for linking).
   return {
     id: recipeData.id,
+    shortcode: unsafeRecipeShortcode(recipeData.shortcode),
     name: recipeData.name,
     createdAt: recipeData.createdAt,
     updatedAt: recipeData.updatedAt,
@@ -270,6 +279,7 @@ export const dbRecipeToTopLevelShape = (
       SourceType: recipeData.SourceType,
       SourceData: recipeData.SourceData,
       cookbookId: recipeData.cookbookId,
+      cookbookShortcode: recipeData.cookbook?.shortcode ?? null,
     }),
     yield: recipeData.yield,
     servings: recipeData.servings,

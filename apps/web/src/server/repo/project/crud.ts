@@ -103,7 +103,7 @@ const fetchProjectById = (db: Database, id: ProjectId) =>
   });
 
 const projectReader = createEntityReader({
-  entityName: "project",
+  entity: "project",
   fetchById: fetchProjectById,
   fromDB: async (db, row) => {
     // Whole-tree parent/child map + this project's subtree rollup — see
@@ -123,6 +123,9 @@ export const getProjectByID = (
   db: Database,
   id: ProjectId,
 ): Promise<ProjectOut> => projectReader.getByID(db, id);
+
+export const getProjectByShortcode = (db: Database, shortcode: string) =>
+  projectReader.getByShortcode(db, shortcode);
 
 /**
  * The referenced project must exist and be live. Guards `parentProjectId`

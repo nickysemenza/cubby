@@ -121,6 +121,17 @@ export const resolveLiveJoinName = (
 ): string | null => (rel && rel.deletedAt === null ? rel.name : null);
 
 /**
+ * The public-id counterpart of {@link resolveLiveJoinName}: a joined row's
+ * shortcode, or null when the relation is absent or soft-deleted.
+ *
+ * Denormalized next to the name for the same reason the name is — a cross-link
+ * needs both a label and a destination, and shortcodes are the destination now.
+ */
+export const resolveLiveJoinShortcode = (
+  rel: { shortcode: string; deletedAt: Date | null } | null | undefined,
+): string | null => (rel && rel.deletedAt === null ? rel.shortcode : null);
+
+/**
  * Parse an inventory entry's amount field with consistent error context.
  * Consolidates the repeated pattern of parsing amount JSON columns.
  */

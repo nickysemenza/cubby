@@ -35,6 +35,7 @@ import {
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByID,
+  getInventoryEntryByShortcode,
   inventoryentryList,
   reconcileLocationSession,
   updateInventoryEntry,
@@ -69,69 +70,73 @@ const { list } = createEntityListProcedure({
   entityName: "inventory",
 });
 
-const { getByID, create, update } = createEntityCrudWithoutListProcedures({
-  schemas: {
-    createInput: inventoryCreatePayloadData,
-    updateInput: inventoryUpdatePayloadData,
-    output: inventoryWithLocationAndProductOut,
-    createOutput: inventoryWithLocationAndProductAndSideEffectsOut,
-    updateOutput: inventoryWithLocationAndProductAndSideEffectsOut,
-    idSchema: inventoryId,
-  },
-  repository: {
-    getByID: async (services, id: InventoryId) => {
-      const res = await getInventoryEntryByID(services.db, id);
-      if (res === null) {
-        throw createAppError(
-          "INVENTORY_NOT_FOUND",
-          "Inventory entry not found",
+const { getByID, getByShortcode, create, update } =
+  createEntityCrudWithoutListProcedures({
+    entityName: "inventory",
+    schemas: {
+      createInput: inventoryCreatePayloadData,
+      updateInput: inventoryUpdatePayloadData,
+      output: inventoryWithLocationAndProductOut,
+      createOutput: inventoryWithLocationAndProductAndSideEffectsOut,
+      updateOutput: inventoryWithLocationAndProductAndSideEffectsOut,
+      idSchema: inventoryId,
+    },
+    repository: {
+      getByID: async (services, id: InventoryId) => {
+        const res = await getInventoryEntryByID(services.db, id);
+        if (res === null) {
+          throw createAppError(
+            "INVENTORY_NOT_FOUND",
+            "Inventory entry not found",
+          );
+        }
+        return res;
+      },
+      getByShortcode: (services, shortcode) =>
+        getInventoryEntryByShortcode(services.db, shortcode),
+      create: async (services, data) => {
+        // Check if this is a unique product that already exists elsewhere
+        const duplicate = await checkUniqueProductDuplicate(
+          services.db,
+          data.productId,
+          data.locationId,
         );
-      }
-      return res;
-    },
-    create: async (services, data) => {
-      // Check if this is a unique product that already exists elsewhere
-      const duplicate = await checkUniqueProductDuplicate(
-        services.db,
-        data.productId,
-        data.locationId,
-      );
 
-      if (duplicate) {
-        throw createAppError(
-          "PRODUCT_ALREADY_EXISTS",
-          `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
+        if (duplicate) {
+          throw createAppError(
+            "PRODUCT_ALREADY_EXISTS",
+            `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
+          );
+        }
+
+        const created = await createInventoryEntry(
+          services.db,
+          data,
+          services.actorContext,
         );
-      }
-
-      const created = await createInventoryEntry(
-        services.db,
-        data,
-        services.actorContext,
-      );
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "created",
-        entity: { entityType: "inventory", entityId: created.id },
-        source: "inventory.create",
-      });
-      return { ...created, sideEffects: { backgroundBatches } };
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "created",
+          entity: { entityType: "inventory", entityId: created.id },
+          source: "inventory.create",
+        });
+        return { ...created, sideEffects: { backgroundBatches } };
+      },
+      update: async (services, id: InventoryId, data) => {
+        const updated = await updateInventoryEntry(
+          services.db,
+          id,
+          data,
+          services.actorContext,
+        );
+        const backgroundBatches = await runMutationSideEffects(services.db, {
+          action: "updated",
+          entity: { entityType: "inventory", entityId: id },
+          source: "inventory.update",
+        });
+        return { ...updated, sideEffects: { backgroundBatches } };
+      },
     },
-    update: async (services, id: InventoryId, data) => {
-      const updated = await updateInventoryEntry(
-        services.db,
-        id,
-        data,
-        services.actorContext,
-      );
-      const backgroundBatches = await runMutationSideEffects(services.db, {
-        action: "updated",
-        entity: { entityType: "inventory", entityId: id },
-        source: "inventory.update",
-      });
-      return { ...updated, sideEffects: { backgroundBatches } };
-    },
-  },
-});
+  });
 
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
@@ -234,11 +239,13 @@ const findDuplicates = protectedProcedure
 
     return duplicates.map((product) => ({
       id: product.id,
+      shortcode: product.shortcode,
       name: product.name,
       manufacturer: product.manufacturer,
       expectedQuantity: product.expectedQuantity,
       locations: product.inventoryEntry.map((entry) => ({
         id: entry.location.id,
+        shortcode: entry.location.shortcode,
         name: entry.location.name,
       })),
     }));
@@ -262,6 +269,7 @@ const getByLocationIds = protectedProcedure
 
 export const inventoryRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   update,
   create,

@@ -10,6 +10,7 @@ import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { imageMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
 import { EditableCell } from "../data-table/editable-cell";
@@ -51,8 +52,8 @@ export function ImageDetail({ image }: ImageDetailProps) {
   const renderEntityLink = () => {
     // Destructure to locals so the guard's narrowing survives into the match
     // closures below (property narrowing on `image` would be lost in callbacks).
-    const { entityType, entityId, entityName } = image;
-    if (!entityType || !entityId || !entityName) {
+    const { entityType, entityId, entityName, entityShortcode } = image;
+    if (!entityType || !entityId || !entityName || !entityShortcode) {
       return (
         <Description as="span" className="italic">
           Not associated with any entity
@@ -66,6 +67,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
           entity="product"
           data={{
             id: entityId,
+            shortcode: entityShortcode,
             name: entityName,
             manufacturer: "",
           }}
@@ -74,19 +76,24 @@ export function ImageDetail({ image }: ImageDetailProps) {
       .with("LOCATION", () => (
         <EntityInlineLink
           entity="location"
-          data={{ id: entityId, name: entityName, type: "room" }}
+          data={{
+            id: entityId,
+            shortcode: entityShortcode,
+            name: entityName,
+            type: "room",
+          }}
         />
       ))
       .with("RECIPE", () => (
         <EntityInlineLink
           entity="recipe"
-          data={{ id: entityId, name: entityName }}
+          data={{ id: entityId, shortcode: entityShortcode, name: entityName }}
         />
       ))
       .with("PROJECT", () => (
         <Link
-          to="/projects/$id"
-          params={{ id: entityId }}
+          to={entities.project.routes.detail}
+          params={entityDetailParams(entityShortcode)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
@@ -96,17 +103,18 @@ export function ImageDetail({ image }: ImageDetailProps) {
         // Cookbook covers are tracked by FK, not the join-table ownership this
         // view resolves, so entityId/entityName are unset and the guard above
         // returns first — this case exists only for exhaustiveness.
-        <a
-          href={`/cookbooks/${entityId}`}
+        <Link
+          to={entities.cookbook.routes.detail}
+          params={entityDetailParams(entityShortcode)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}
-        </a>
+        </Link>
       ))
       .with("PURCHASE", () => (
         <Link
-          to="/purchases/$id"
-          params={{ id: entityId }}
+          to={entities.purchase.routes.detail}
+          params={entityDetailParams(entityShortcode)}
           className="font-medium text-sm hover:underline"
         >
           {entityName}

@@ -28,6 +28,7 @@ import {
   deleteTasks,
   getTaskBoard,
   getTaskByID,
+  getTaskByShortcode,
   getTaskSummary,
   listActionableTasks,
   moveTasks,
@@ -44,6 +45,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const {
   getByID,
+  getByShortcode,
   list,
   create,
   update,
@@ -63,6 +65,8 @@ const {
   },
   repository: {
     getByID: async (services, id: TaskId) => getTaskByID(services.db, id),
+    getByShortcode: (services, shortcode) =>
+      getTaskByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       taskList(services.db, filters, sort, pagination),
     create: async (services, data) =>
@@ -222,6 +226,7 @@ const board = protectedProcedure
 
 export const taskRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   create,
   update,

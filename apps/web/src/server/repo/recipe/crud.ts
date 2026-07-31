@@ -201,10 +201,12 @@ export const getCookbookRecipeTitles = async (
 export const getCookbookRecipesForDiff = async (
   db: Database,
   cookbookId: CookbookId,
-): Promise<Array<{ title: string; id: string; sig: string }>> => {
+): Promise<
+  Array<{ title: string; id: string; shortcode: string; sig: string }>
+> => {
   const rows = await getDb(db).query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
-    columns: { id: true, name: true },
+    columns: { id: true, name: true, shortcode: true },
   });
   const recipes = await getRecipesByIDs(
     db,
@@ -214,7 +216,14 @@ export const getCookbookRecipesForDiff = async (
   return rows.flatMap((r) => {
     const full = byId.get(r.id);
     return full
-      ? [{ title: r.name, id: r.id, sig: recipeOutSignature(full) }]
+      ? [
+          {
+            title: r.name,
+            id: r.id,
+            shortcode: r.shortcode,
+            sig: recipeOutSignature(full),
+          },
+        ]
       : [];
   });
 };
@@ -508,7 +517,7 @@ const createRecipeReturningId = async (
   recipeInput: RecipeCreateInput,
   actor: ActorContext,
   provenance?: RecipeProvenance,
-): Promise<{ id: RecipeId }> => {
+): Promise<UpsertedRecipe> => {
   const sourceColumns = recipeSourceToColumns(
     provenance ?? webProvenance(recipeInput.meta?.url ?? null),
   );
@@ -549,7 +558,7 @@ const createRecipeReturningId = async (
       action: "create",
     });
 
-    return { id: createdRecipeId };
+    return { id: createdRecipeId, shortcode: createdRecipe.shortcode };
   });
 };
 
@@ -586,6 +595,12 @@ export const createRecipe = async (
  * public upserts differ only in how they identify "the same recipe" and what
  * provenance they stamp.
  */
+/**
+ * What an upsert/create hands back: the private id AND the public shortcode.
+ * The importers link the finished recipe, and a link needs the shortcode.
+ */
+export type UpsertedRecipe = { id: RecipeId; shortcode: string };
+
 const upsertRecipeMatching = async (
   input: RecipeCreateInput,
   db: Database,
@@ -596,9 +611,9 @@ const upsertRecipeMatching = async (
   // constraint violation re-throws immediately instead of taking the recovery
   // path (and a spurious re-SELECT) before re-throwing.
   constraint: string,
-): Promise<{ id: RecipeId }> => {
+): Promise<UpsertedRecipe> => {
   // Update an already-matched recipe: refresh provenance + replace sections.
-  const updateMatched = (existingId: RecipeId): Promise<{ id: RecipeId }> =>
+  const updateMatched = (existingId: RecipeId): Promise<UpsertedRecipe> =>
     withTransaction(db, async (tx) => {
       const updatedRecipe = await updateLiveAndReturn(
         tx,
@@ -627,12 +642,12 @@ const upsertRecipeMatching = async (
         existingId,
       );
       await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
-      return { id: updatedRecipe.id };
+      return { id: updatedRecipe.id, shortcode: updatedRecipe.shortcode };
     });
 
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: matchWhere,
-    columns: { id: true },
+    columns: { id: true, shortcode: true },
   });
   if (existingRecipe) {
     return updateMatched(existingRecipe.id);
@@ -650,7 +665,7 @@ const upsertRecipeMatching = async (
     async (error) => {
       const winner = await getDb(db).query.recipe.findFirst({
         where: matchWhere,
-        columns: { id: true },
+        columns: { id: true, shortcode: true },
       });
       if (!winner) throw error;
       return updateMatched(winner.id);
@@ -670,7 +685,7 @@ export const upsertRecipe = (
   input: RecipeCreateInput,
   db: Database,
   actor: ActorContext,
-): Promise<{ id: RecipeId }> =>
+): Promise<UpsertedRecipe> =>
   upsertRecipeMatching(
     input,
     db,
@@ -699,7 +714,7 @@ export const upsertCookbookRecipe = (
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
-): Promise<{ id: RecipeId }> =>
+): Promise<UpsertedRecipe> =>
   upsertRecipeMatching(
     input,
     db,
@@ -730,7 +745,7 @@ export const upsertNotionRecipe = (
   pageId: string,
   db: Database,
   actor: ActorContext,
-): Promise<{ id: RecipeId }> =>
+): Promise<UpsertedRecipe> =>
   upsertRecipeMatching(
     input,
     db,
@@ -959,7 +974,7 @@ export const deleteRecipesByCookbookTx = async (
 ): Promise<RecipeId[]> => {
   const rows = await tx.query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
-    columns: { id: true },
+    columns: { id: true, shortcode: true },
   });
   const ids = rows.map((r) => r.id);
   await deleteRecipesTx(tx, ids, actor);

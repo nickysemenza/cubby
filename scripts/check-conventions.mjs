@@ -46,6 +46,15 @@
  * (Numbering above has already drifted — see the two blocks both labelled
  * "Rule 11" — so newer checks are referenced by slug, not number.)
  *
+ * uuid-entity-href: a link to a shortcode-bearing entity's detail page built
+ *     from a uuid — either the pre-cutover `$id` route param (`/products/$id`)
+ *     or a server-side template literal (`/tasks/${row.id}`). Shortcodes are
+ *     the public id; a uuid must never reach a URL. Most call sites are caught
+ *     by the router's typed params, but two classes are NOT: stringly-typed
+ *     paths, and hrefs built as strings on the server (repo/project/attention.ts
+ *     shipped eight of these). `usda`/`images` are exempt — they are the two
+ *     detail routes that legitimately key on something other than a shortcode.
+ *
  * hand-rolled-array-overlap: `&& ${arr}` in a raw `sql` template inside
  *     server/repo/ — drizzle interpolates a JS array into raw SQL as a ROW
  *     CONSTRUCTOR (`&& ($1, $2)`), not a `text[]`, so `sql`${col} && ${arr}``
@@ -166,6 +175,42 @@ const HW_PAIR_RE =
 // the pattern regardless of which side the array is on or what's inside the
 // `sql` tag.
 const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
+
+// Detail routes whose param is a shortcode. `usda` keys on an external fdc id
+// and `images` on a uuid (image is the one entity with no public shortcode), so
+// both are absent here rather than exempted case-by-case below.
+const SHORTCODE_ROUTE_BASES = [
+  "products",
+  "recipes",
+  "locations",
+  "ingredients",
+  "inventory",
+  "meals",
+  "projects",
+  "tasks",
+  "expenses",
+  "purchases",
+  "vendors",
+  "cookbooks",
+].join("|");
+
+// `/products/$id` — the pre-cutover param name, including cookbook's old
+// `$cookbookId` spelling. After the rename the only valid param is `$shortcode`
+// (or `$shortcode_`, TanStack's "don't nest under the parent" suffix).
+const UUID_ROUTE_PARAM_RE = new RegExp(
+  `/(?:${SHORTCODE_ROUTE_BASES})/\\$(?!shortcode[_/"\`]|shortcode$)[A-Za-z]`,
+);
+
+// `/tasks/${row.id}` — a hand-built href, invisible to the router's types. An
+// interpolation that names a shortcode is the correct shape and passes.
+const UUID_TEMPLATE_HREF_RE = new RegExp(
+  `/(?:${SHORTCODE_ROUTE_BASES})/\\$\\{(?![^}]*[Ss]hortcode)[^}]*\\}`,
+);
+
+// The same bug with a VARIABLE base: `/${entities[e].basePath}/${result.id}`.
+// The literal-base regex above can't see these, and this exact shape shipped a
+// create flow that navigated to a uuid URL — caught only by an E2E ZodError.
+const UUID_BASEPATH_HREF_RE = /basePath\}\/\$\{(?![^}]*[Ss]hortcode)[^}]*\}/;
 
 // The old deleted TS costing engine. Test fixtures/helpers legitimately wrap
 // the WASM engine under this name, so exempt test + fixture files.
@@ -590,6 +635,26 @@ function scan(files) {
         });
       }
 
+      // Rule (uuid-entity-href): a detail-page link keyed on a uuid rather than
+      // the entity's shortcode. Applies everywhere, including the server —
+      // `attention.ts` builds hrefs as plain strings, which no typed router
+      // param can protect. routeTree.gen.ts is generated, so it's skipped.
+      if (
+        !isTestOrFixture(file) &&
+        !isCommentLine(line) &&
+        !file.endsWith("routeTree.gen.ts") &&
+        (UUID_ROUTE_PARAM_RE.test(line) ||
+          UUID_TEMPLATE_HREF_RE.test(line) ||
+          UUID_BASEPATH_HREF_RE.test(line))
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "uuid-entity-href",
+        });
+      }
+
       // Rule (hand-rolled-array-overlap): raw `&& ${arr}` SQL in
       // server/repo/ — the row-constructor trap. Use `arrayOverlaps` instead.
       if (
@@ -658,6 +723,8 @@ const byRule = {
     "getDb() used outside server/repo/ — the opaque Database type may only be unwrapped in the repo layer (CLAUDE.md Opaque Database Type); move the query behind a repo helper.",
   "hw-pair-shorthand":
     "Adjacent equal h-N/w-N pair — use the `size-N` shorthand (e.g. `h-4 w-4` → `size-4`) so icon sizing stays single-token (CLAUDE.md Colors / Design Tokens).",
+  "uuid-entity-href":
+    "Entity link keyed on a uuid — shortcodes are the public id, so a detail-page URL is `/products/$shortcode`, never `/products/$id` or a `/tasks/${row.id}` template. Route through `entities[e].routes.detail` + `entityDetailParams`.",
   "hand-rolled-array-overlap":
     "Hand-rolled `&& ${arr}` array overlap — drizzle interpolates a JS array into raw SQL as a row constructor (`($1,$2)`), not a `text[]`, so this silently matches nothing at every input size. Use `arrayOverlaps(col, arr)` instead.",
   "script-target-exists":

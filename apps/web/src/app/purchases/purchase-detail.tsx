@@ -120,10 +120,14 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             });
           }}
           renderValue={(value) =>
-            value && purchase.vendorName ? (
+            value && purchase.vendorName && purchase.vendorShortcode ? (
               <EntityInlineLink
                 entity="vendor"
-                data={{ id: value, name: purchase.vendorName }}
+                data={{
+                  id: value,
+                  name: purchase.vendorName,
+                  shortcode: purchase.vendorShortcode,
+                }}
                 compact
               />
             ) : (
@@ -297,15 +301,20 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const heroStats: DetailHeroStat[] = [
     {
       label: "Vendor",
-      value: purchase.vendorName ? (
-        <EntityInlineLink
-          entity="vendor"
-          data={{ id: purchase.vendorId, name: purchase.vendorName }}
-          truncate
-        />
-      ) : (
-        "—"
-      ),
+      value:
+        purchase.vendorName && purchase.vendorShortcode ? (
+          <EntityInlineLink
+            entity="vendor"
+            data={{
+              id: purchase.vendorId,
+              name: purchase.vendorName,
+              shortcode: purchase.vendorShortcode,
+            }}
+            truncate
+          />
+        ) : (
+          "—"
+        ),
     },
     { label: "Date", value: purchase.date ?? "—" },
     { label: "Lines", value: purchase.expenseCount },

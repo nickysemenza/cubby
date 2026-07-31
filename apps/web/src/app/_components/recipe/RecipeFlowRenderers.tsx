@@ -60,6 +60,10 @@ function FlowSourceContent({
     usage.type === "ingredient" ? usage.ingredient.name : usage.recipe.name;
   const id =
     usage.type === "ingredient" ? usage.ingredient.id : usage.recipe.id;
+  const shortcode =
+    usage.type === "ingredient"
+      ? usage.ingredient.shortcode
+      : usage.recipe.shortcode;
   const quantities = buildDisplayQuantities(usage, NO_GRAMS);
 
   return (
@@ -67,8 +71,8 @@ function FlowSourceContent({
       <span className="min-w-0 font-medium text-xs leading-tight">
         {usage.type === "recipe" ? (
           <Link
-            to="/recipes/$id"
-            params={{ id }}
+            to="/recipes/$shortcode"
+            params={{ shortcode: usage.recipe.shortcode }}
             search={{ view: "flow" }}
             className={dottedEntityLink}
             title={`Open ${name} flow`}
@@ -78,6 +82,7 @@ function FlowSourceContent({
         ) : (
           <EntityPreviewLink
             entity="ingredient"
+            shortcode={shortcode}
             id={id}
             className={dottedEntityLink}
           >

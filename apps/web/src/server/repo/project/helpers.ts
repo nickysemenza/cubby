@@ -1,4 +1,7 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
+import {
+  type ProjectId,
+  unsafeProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ProjectDateWindow,
   ProjectOut,
@@ -8,6 +11,7 @@ import type {
 /** Shape of a `project` row as returned by a plain (no relations) select. */
 export type ProjectRow = {
   id: ProjectOut["id"];
+  shortcode: string;
   name: string;
   status: ProjectOut["status"];
   kind: ProjectOut["kind"];
@@ -108,6 +112,7 @@ const dbProjectToAPI = ({
   blockedByIds,
   blockingIds,
   parentProjectName,
+  parentProjectShortcode,
   childProjectIds,
 }: {
   row: ProjectRow;
@@ -117,9 +122,11 @@ const dbProjectToAPI = ({
   blockedByIds: ProjectId[];
   blockingIds: ProjectId[];
   parentProjectName: string | null;
+  parentProjectShortcode: string | null;
   childProjectIds: ProjectId[];
 }): ProjectOut => ({
   id: row.id,
+  shortcode: unsafeProjectShortcode(row.shortcode),
   name: row.name,
   status: row.status,
   kind: row.kind,
@@ -127,6 +134,9 @@ const dbProjectToAPI = ({
   costEstimate: row.costEstimate,
   parentProjectId: row.parentProjectId,
   parentProjectName,
+  parentProjectShortcode: parentProjectShortcode
+    ? unsafeProjectShortcode(parentProjectShortcode)
+    : null,
   childProjectIds,
   startDate: row.startDate,
   endDate: row.endDate,
@@ -153,6 +163,7 @@ export const hydrateProjectRow = (
     subtreeRollups: Map<ProjectId, ProjectSubtreeRollup>;
     dateWindows: Map<ProjectId, ProjectDateWindow>;
     nameById: Map<ProjectId, string>;
+    shortcodeById: Map<ProjectId, string>;
     childrenByParent: Map<ProjectId, ProjectId[]>;
   },
   dependencies: {
@@ -170,6 +181,9 @@ export const hydrateProjectRow = (
     blockingIds: dependencies.blocking.get(row.id) ?? [],
     parentProjectName: row.parentProjectId
       ? (context.nameById.get(row.parentProjectId) ?? null)
+      : null,
+    parentProjectShortcode: row.parentProjectId
+      ? (context.shortcodeById.get(row.parentProjectId) ?? null)
       : null,
     childProjectIds: context.childrenByParent.get(row.id) ?? [],
   });

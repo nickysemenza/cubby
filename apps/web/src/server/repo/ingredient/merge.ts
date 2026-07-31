@@ -12,7 +12,9 @@ import type {
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
+  type IngredientShortcode,
   unsafeIngredientId,
+  unsafeIngredientShortcode,
 } from "@cubby/schemas/identifiers";
 import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -65,6 +67,7 @@ export type MergeSummary = MergeSummaryOut & { affectedRecipeIds: RecipeId[] };
 
 interface FuzzyMergeCandidate {
   id: IngredientId;
+  shortcode: IngredientShortcode;
   name: string;
   similarity: number;
 }
@@ -88,12 +91,14 @@ export const findFuzzyMergeCandidates = async (
   type Row = {
     source_id: string;
     cand_id: string;
+    cand_shortcode: string;
     cand_name: string;
     sim: number;
     has_product: boolean;
   };
   const res = await getDb(db).execute<Row>(sql`
-    SELECT s.id AS source_id, c.id AS cand_id, c.name AS cand_name,
+    SELECT s.id AS source_id, c.id AS cand_id,
+           c.shortcode AS cand_shortcode, c.name AS cand_name,
            similarity(s.name, c.name) AS sim,
            EXISTS (
              SELECT 1 FROM "Product" p
@@ -115,6 +120,7 @@ export const findFuzzyMergeCandidates = async (
     if (arr.length >= perRow) continue;
     arr.push({
       id: unsafeIngredientId(r.cand_id),
+      shortcode: unsafeIngredientShortcode(r.cand_shortcode),
       name: r.cand_name,
       similarity: Number(r.sim),
     });

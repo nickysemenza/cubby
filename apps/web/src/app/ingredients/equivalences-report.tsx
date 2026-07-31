@@ -137,7 +137,11 @@ export function EquivalencesReport() {
                     >
                       <EntityInlineLink
                         entity="ingredient"
-                        data={{ id: c.ingredientId, name: c.ingredientName }}
+                        data={{
+                          id: c.ingredientId,
+                          shortcode: c.ingredientShortcode,
+                          name: c.ingredientName,
+                        }}
                       />
                     </TableCell>
                   )}
@@ -177,7 +181,11 @@ export function EquivalencesReport() {
                         >
                           <EntityInlineLink
                             entity="recipe"
-                            data={{ id: ex.recipeId, name: ex.recipeName }}
+                            data={{
+                              id: ex.recipeId,
+                              shortcode: ex.recipeShortcode,
+                              name: ex.recipeName,
+                            }}
                             compact
                           />
                           {ex.rawLine && <span>· {ex.rawLine}</span>}

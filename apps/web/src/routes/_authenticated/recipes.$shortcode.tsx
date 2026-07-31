@@ -1,3 +1,4 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -62,13 +63,15 @@ const searchDefaults = {
   scale: undefined,
 } as const;
 
-export const Route = createFileRoute("/_authenticated/recipes/$id")({
+export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   ssr: false,
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.recipe.getByID.queryOptions({ id: params.id }),
+      context.trpc.recipe.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -85,8 +88,23 @@ export const Route = createFileRoute("/_authenticated/recipes/$id")({
   component: RecipeDetailPage,
 });
 
+/**
+ * Splits the guard from the body so every hook below can treat the recipe as
+ * loaded. The loader already threw notFound for an unknown code; this only
+ * satisfies `getByShortcode`'s nullable output, and inlining the guard would
+ * mean either a conditional hook or `?.` on a dozen call sites.
+ */
 function RecipeDetailPage() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
+  const api = useTRPC();
+  const { data: recipe } = useSuspenseQuery(
+    api.recipe.getByShortcode.queryOptions({ shortcode }),
+  );
+  if (!recipe) return null;
+  return <RecipeDetailBody recipe={recipe} />;
+}
+
+function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
   const { edit: isEditing, view, flowLayout, scale } = Route.useSearch();
   const navigate = useNavigate();
 
@@ -119,12 +137,8 @@ function RecipeDetailPage() {
   };
   const api = useTRPC();
 
-  const { data: recipe } = useSuspenseQuery(
-    api.recipe.getByID.queryOptions({ id }),
-  );
-
   const { deleteButton, deleteDialog } = useEntityDelete({
-    id,
+    id: recipe.id,
     name: recipe.name,
     entityLabel: "Recipe",
     entity: "recipe",
@@ -134,7 +148,7 @@ function RecipeDetailPage() {
     redirectTo: "/recipes",
   });
 
-  useDocumentTitle(recipe.name ? `Recipe: ${recipe.name}` : undefined);
+  useDocumentTitle(`Recipe: ${recipe.name}`);
 
   // Placard stats from the persisted totals — zero engine calls. The Data
   // view's summary card shows live SCALED totals; these are the 1× ledger

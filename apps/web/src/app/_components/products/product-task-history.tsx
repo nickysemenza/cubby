@@ -110,10 +110,16 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
                   )}
                 </TableCell>
                 <TableCell>
-                  {task.projectId && task.projectName ? (
+                  {task.projectId &&
+                  task.projectName &&
+                  task.projectShortcode ? (
                     <EntityInlineLink
                       entity="project"
-                      data={{ id: task.projectId, name: task.projectName }}
+                      data={{
+                        id: task.projectId,
+                        name: task.projectName,
+                        shortcode: task.projectShortcode,
+                      }}
                     />
                   ) : (
                     <NoneValue />

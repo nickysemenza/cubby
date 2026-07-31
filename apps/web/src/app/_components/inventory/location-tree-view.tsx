@@ -23,6 +23,8 @@ type LocationTreeNode = {
 
 type InventoryTreeNode = {
   id: string;
+  /** The entry's public id — `id` is prefixed for tree-key uniqueness. */
+  shortcode: string;
   name: string;
   nodeType: "inventory";
   amount: { value: number; unit: string };
@@ -46,6 +48,7 @@ function transformTreeData(
       showInventory && location.inventoryItems?.length
         ? location.inventoryItems.map((item) => ({
             id: `inv-${item.id}`,
+            shortcode: item.shortcode,
             name: item.productName,
             nodeType: "inventory" as const,
             amount: item.amount,
@@ -125,8 +128,8 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
     return (
       <Row style={style} ref={dragHandle} align="center">
         <Link
-          to="/inventory/$id"
-          params={{ id: data.id.replace("inv-", "") }}
+          to="/inventory/$shortcode"
+          params={{ shortcode: data.shortcode }}
           className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm hover:text-foreground"
         >
           <EntityIcon entity="inventory" size={14} className="shrink-0" />

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import { ingredientId, recipeId } from "./identifiers";
+import {
+  ingredientId,
+  ingredientShortcode,
+  recipeId,
+  recipeShortcode,
+} from "./identifiers";
 
 export const ingredientAvailabilityStatus = z.enum([
   "ok",
@@ -15,6 +20,7 @@ export type IngredientAvailabilityStatus = z.infer<
 
 export const ingredientAvailabilityOut = z.object({
   ingredientId: ingredientId.nullable(),
+  shortcode: ingredientShortcode.nullable(),
   name: z.string(),
   need: amount.nullable(),
   basisUnit: z.string().nullable(),
@@ -26,6 +32,7 @@ export type IngredientAvailability = z.infer<typeof ingredientAvailabilityOut>;
 
 export const aggregatedNeedOut = z.object({
   ingredientId: ingredientId.nullable(),
+  ingredientShortcode: ingredientShortcode.nullable(),
   name: z.string(),
   basisUnit: z.string().nullable(),
   needValue: z.number(),
@@ -39,6 +46,7 @@ export type AggregatedNeed = z.infer<typeof aggregatedNeedOut>;
 
 export const recipeAvailabilityOut = z.object({
   recipeId,
+  recipeShortcode,
   recipeName: z.string(),
   coverage: z.number(),
   totalIngredients: z.number().int(),

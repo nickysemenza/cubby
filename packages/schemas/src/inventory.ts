@@ -7,6 +7,7 @@ import { externalIdOut } from "./external-id";
 import { imageOut } from "./image";
 import {
   inventoryId,
+  inventoryShortcode,
   locationId,
   locationShortcode,
   productId,
@@ -64,6 +65,7 @@ export type InventorySortField = (typeof inventorySortableFields)[number];
 
 export const inventoryEntryFields = {
   id: inventoryId,
+  shortcode: inventoryShortcode,
   // inventory entries do not have a name, just ID
   amount: amount.describe("Quantity on hand"),
   valuation: z

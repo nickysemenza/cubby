@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
@@ -37,7 +38,10 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeId }) {
             action: {
               label: "View",
               onClick: () =>
-                void navigate({ to: "/meals/$id", params: { id: meal.id } }),
+                void navigate({
+                  to: entities.meal.routes.detail,
+                  params: entityDetailParams(meal.shortcode),
+                }),
             },
           },
         );

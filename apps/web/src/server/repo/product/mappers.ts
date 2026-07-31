@@ -1,4 +1,5 @@
 import {
+  unsafeIngredientShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -179,6 +180,7 @@ const dbProductIngredientToShape = (
   ingredientData: typeof ingredient.$inferSelect,
 ) => ({
   id: ingredientData.id,
+  shortcode: unsafeIngredientShortcode(ingredientData.shortcode),
   name: ingredientData.name,
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,

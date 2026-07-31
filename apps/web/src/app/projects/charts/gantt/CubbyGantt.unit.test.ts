@@ -5,6 +5,7 @@ import type { GanttRow } from "./gantt-model";
 const project: GanttRow = {
   kind: "project",
   id: "project-1",
+  shortcode: "PROJ-0001",
   name: "Kitchen",
   depth: 0,
   expandable: true,
@@ -24,6 +25,7 @@ const project: GanttRow = {
 const task: GanttRow = {
   kind: "task",
   id: "task-1",
+  shortcode: "TASK-0001",
   name: "Install cabinets",
   depth: 1,
   status: "not_started",

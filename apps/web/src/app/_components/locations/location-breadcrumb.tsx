@@ -17,6 +17,8 @@ import { LocationIcon } from "./location-icons";
 
 interface LocationSegment {
   id?: string;
+  /** The public id — used for the `linkable` navigation, never `id` (a uuid). */
+  shortcode?: string;
   name: string;
   type: LocationType;
 }
@@ -33,6 +35,7 @@ function locationToSegments(location: InfLocation): LocationSegment[] {
   while (current) {
     segments.unshift({
       id: current.id,
+      shortcode: current.shortcode,
       name: current.name,
       type: current.type,
     });
@@ -147,10 +150,13 @@ export function LocationBreadcrumb({
                   >
                     {content}
                   </button>
-                ) : linkable && segment.id && !isLast ? (
+                ) : linkable && segment.shortcode && !isLast ? (
                   <BreadcrumbLink
                     render={
-                      <Link to="/locations/$id" params={{ id: segment.id }} />
+                      <Link
+                        to="/locations/$shortcode"
+                        params={{ shortcode: segment.shortcode }}
+                      />
                     }
                   >
                     {content}

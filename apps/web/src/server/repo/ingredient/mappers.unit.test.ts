@@ -113,6 +113,7 @@ describe("ingredient product mappers", () => {
 
     expect(result).toEqual({
       id: INGREDIENT_ID,
+      shortcode: "ING-TEST",
       name: "Wheat flour",
       aliases: ["flour"],
       naKinds: [],
@@ -268,7 +269,8 @@ describe("ingredient product mappers", () => {
     } satisfies IngredientDeepDB);
 
     expect(result.recipe).toMatchObject({ id: RECIPE_ID, name: "Pancakes" });
-    expect(result.recipe).not.toHaveProperty("shortcode");
+    // Public id now — see the recipe mapper tests.
+    expect(result.recipe).toHaveProperty("shortcode");
     expect(result.recipe).not.toHaveProperty("totals");
     expect(result.recipeUsages[0]?.recipe).not.toHaveProperty("totals");
     expect(result).not.toHaveProperty("deletedAt");

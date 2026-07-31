@@ -36,20 +36,25 @@ import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
 function ChainNodeLink({
   node,
 }: {
-  node: { id: string; name: string; type: "task" | "project" };
+  node: {
+    id: string;
+    shortcode: string;
+    name: string;
+    type: "task" | "project";
+  };
 }) {
   return match(node.type)
     .with("task", () => (
       <EntityInlineLink
         entity="task"
-        data={{ id: node.id, name: node.name }}
+        data={{ id: node.id, shortcode: node.shortcode, name: node.name }}
         compact
       />
     ))
     .with("project", () => (
       <EntityInlineLink
         entity="project"
-        data={{ id: node.id, name: node.name }}
+        data={{ id: node.id, shortcode: node.shortcode, name: node.name }}
         compact
       />
     ))
@@ -102,7 +107,7 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
               <Row align="center" gap="xs">
                 <EntityInlineLink
                   entity="task"
-                  data={{ id: t.id, name: t.name }}
+                  data={{ id: t.id, shortcode: t.shortcode, name: t.name }}
                   truncate
                 />
                 {t.subtaskCount > 0 && (
@@ -118,10 +123,14 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
               </Badge>
             </TableCell>
             <TableCell>
-              {t.projectId && t.projectName ? (
+              {t.projectId && t.projectName && t.projectShortcode ? (
                 <EntityInlineLink
                   entity="project"
-                  data={{ id: t.projectId, name: t.projectName }}
+                  data={{
+                    id: t.projectId,
+                    shortcode: t.projectShortcode,
+                    name: t.projectName,
+                  }}
                   truncate
                 />
               ) : (
@@ -204,7 +213,11 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                 <Row gap="sm" align="center">
                   <EntityInlineLink
                     entity="task"
-                    data={{ id: bt.task.id, name: bt.task.name }}
+                    data={{
+                      id: bt.task.id,
+                      shortcode: bt.task.shortcode,
+                      name: bt.task.name,
+                    }}
                   />
                   <Badge variant={taskStatusBadgeVariant[bt.task.status]}>
                     {TASK_STATUS_LABELS[bt.task.status]}

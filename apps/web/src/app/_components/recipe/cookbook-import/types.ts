@@ -7,7 +7,7 @@ import type { z } from "zod";
 /** Result of importing a single recipe into the DB. */
 export type ImportResult =
   | { status: "importing" }
-  | { status: "done"; id: string }
+  | { status: "done"; shortcode: string }
   | { status: "error"; message: string };
 
 /**

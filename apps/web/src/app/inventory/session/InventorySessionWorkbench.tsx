@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationId, LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -33,6 +33,7 @@ import type {
 } from "./_components/types";
 import {
   findLocationInTree,
+  findLocationInTreeByShortcode,
   flattenAuditableLocations,
   getUnknownChildLocations,
 } from "./session-utils";
@@ -40,11 +41,11 @@ import { useSessionMutations } from "./useSessionMutations";
 import { useSessionProgress } from "./useSessionProgress";
 
 interface InventorySessionWorkbenchProps {
-  initialParentId?: LocationId;
+  initialParentShortcode?: LocationShortcode;
 }
 
 export function InventorySessionWorkbench({
-  initialParentId,
+  initialParentShortcode,
 }: InventorySessionWorkbenchProps) {
   const api = useTRPC();
   const navigate = useNavigate();
@@ -67,8 +68,8 @@ export function InventorySessionWorkbench({
   }, [ensureUnknown]);
 
   const parent = useMemo(
-    () => findLocationInTree(tree, initialParentId),
-    [tree, initialParentId],
+    () => findLocationInTreeByShortcode(tree, initialParentShortcode),
+    [tree, initialParentShortcode],
   );
   const sessionLocations = useMemo(
     () => (parent ? flattenAuditableLocations(parent) : []),
@@ -437,10 +438,10 @@ export function InventorySessionWorkbench({
     if (next >= 0) setCurrentIndex(next);
   };
 
-  const selectParent = (locationId: LocationId) => {
+  const selectParent = (shortcode: LocationShortcode) => {
     void navigate({
       to: "/inventory/session",
-      search: { parentId: locationId },
+      search: { parent: shortcode },
     });
   };
 
@@ -465,7 +466,7 @@ export function InventorySessionWorkbench({
     return (
       <ParentPicker
         locations={tree ?? []}
-        initialParentId={initialParentId}
+        initialParentShortcode={initialParentShortcode}
         onSelect={selectParent}
       />
     );
@@ -688,7 +689,7 @@ function SessionComplete({
   skippedCount: number;
   onStartNew: () => void;
   onRevisitSkipped: () => void;
-  onSelectLocation: (locationId: LocationId) => void;
+  onSelectLocation: (shortcode: LocationShortcode) => void;
 }) {
   const changes = summary.adjusted + summary.relocated + summary.removed;
   return (
@@ -736,8 +737,8 @@ function SessionComplete({
             <LocationScanButton
               buttonLabel="Scan another location"
               sheetDescription="Start a new spot-check at the scanned location."
-              onResolved={(locationId) => {
-                onSelectLocation(locationId);
+              onResolved={(_locationId, shortcode) => {
+                if (shortcode) onSelectLocation(shortcode);
                 return undefined;
               }}
             />

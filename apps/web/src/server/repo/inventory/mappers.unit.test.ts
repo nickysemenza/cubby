@@ -1,5 +1,6 @@
 import {
   unsafeInventoryId,
+  unsafeInventoryShortcode,
   unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductId,
@@ -146,6 +147,7 @@ describe("inventory mappers", () => {
 
     expect(result).toEqual({
       id: INVENTORY_ID,
+      shortcode: unsafeInventoryShortcode("INV-TEST"),
       amount: { value: 2, unit: "each" },
       valuation: 9,
       verifiedAt: null,

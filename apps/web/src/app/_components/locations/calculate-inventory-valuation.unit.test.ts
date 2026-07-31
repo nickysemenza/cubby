@@ -1,5 +1,6 @@
 import {
   unsafeInventoryId,
+  unsafeInventoryShortcode,
   unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductId,
@@ -27,6 +28,7 @@ function makeInventoryItem(params: {
   const now = new Date();
   return {
     id: unsafeInventoryId(params.id),
+    shortcode: unsafeInventoryShortcode("INV-2345"),
     createdAt: now,
     updatedAt: now,
     amount: { value: 1, unit: "each" },

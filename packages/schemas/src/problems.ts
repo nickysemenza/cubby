@@ -3,11 +3,17 @@ import { amount } from "./codec";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
   ingredientId,
+  ingredientShortcode,
   inventoryId,
+  inventoryShortcode,
   locationId,
+  locationShortcode,
   productId,
+  productShortcode,
   purchaseId,
+  purchaseShortcode,
   recipeId,
+  recipeShortcode,
 } from "./identifiers";
 import {
   plainDate,
@@ -26,7 +32,8 @@ export type BaseKind = z.infer<typeof baseKind>;
 // Shared field fragments — the product-summary head and the coverage shape
 // repeat across many item schemas, so declare the reusable field maps once.
 const productProblemFields = {
-  id: z.string(),
+  id: productId,
+  shortcode: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
 };
@@ -44,7 +51,8 @@ export const duplicateUniqueProductSchema = z.object({
   expectedQuantity: z.number().nullable(),
   locations: z.array(
     z.object({
-      id: z.string(),
+      id: locationId,
+      shortcode: locationShortcode,
       name: z.string(),
     }),
   ),
@@ -67,7 +75,8 @@ export const productMissingPriceSchema = z.object({
   inventoryQuantity: z.number(),
   locations: z.array(
     z.object({
-      id: z.string(),
+      id: locationId,
+      shortcode: locationShortcode,
       name: z.string(),
     }),
   ),
@@ -81,6 +90,7 @@ export const productWithoutMappingsSchema = z.object({
   // The linked ingredient (null for non-food products), so the Problems card can
   // deep-link the ingredient-enrichment workbench to this exact row.
   ingredientId: ingredientId.nullable(),
+  ingredientShortcode: ingredientShortcode.nullable(),
 });
 
 export const ingredientWithPartialCoverageSchema = z.object({
@@ -91,6 +101,7 @@ export const ingredientWithPartialCoverageSchema = z.object({
   usdaUnavailable: z.boolean(),
   // Always set here (these rows are ingredient products) — see above.
   ingredientId,
+  ingredientShortcode,
 });
 
 /**
@@ -103,6 +114,7 @@ export const ingredientWithPartialCoverageSchema = z.object({
  */
 export const ingredientWithoutProductSchema = z.object({
   id: ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string(),
   recipeCount: z.number(),
 });
@@ -113,6 +125,7 @@ export const ingredientWithoutProductSchema = z.object({
 // subset to strip (the delete removes only these, never the ingredient).
 export const ingredientWithUnusedAliasesSchema = z.object({
   id: ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string(),
   aliases: z.array(z.string()),
   unusedAliases: z.array(z.string()),
@@ -123,13 +136,17 @@ export const ingredientWithUnusedAliasesSchema = z.object({
 // delete removes those products too.
 export const unusedIngredientSchema = z.object({
   id: ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string(),
   createdAt: z.date(),
-  products: z.array(z.object({ id: z.string(), name: z.string() })),
+  products: z.array(
+    z.object({ id: productId, shortcode: productShortcode, name: z.string() }),
+  ),
 });
 
 export const emptyLocationSchema = z.object({
-  id: z.string(),
+  id: locationId,
+  shortcode: locationShortcode,
   name: z.string(),
   type: z.string(),
   createdAt: z.date(),
@@ -150,6 +167,7 @@ export const emptyLocationSchema = z.object({
  */
 export const staleLocationSchema = z.object({
   id: locationId,
+  shortcode: locationShortcode,
   name: z.string(),
   type: z.string(),
   itemCount: z.number(),
@@ -164,10 +182,19 @@ export const staleLocationSchema = z.object({
  */
 export const neverVerifiedInventorySchema = z.object({
   id: inventoryId,
+  shortcode: inventoryShortcode,
   amount,
   createdAt: z.date(),
-  product: z.object({ id: productId, name: z.string() }),
-  location: z.object({ id: locationId, name: z.string() }),
+  product: z.object({
+    id: productId,
+    shortcode: productShortcode,
+    name: z.string(),
+  }),
+  location: z.object({
+    id: locationId,
+    shortcode: locationShortcode,
+    name: z.string(),
+  }),
 });
 
 /**
@@ -177,13 +204,22 @@ export const neverVerifiedInventorySchema = z.object({
  */
 export const unknownParkedItemSchema = z.object({
   id: inventoryId,
+  shortcode: inventoryShortcode,
   amount,
   createdAt: z.date(),
-  product: z.object({ id: productId, name: z.string() }),
+  product: z.object({
+    id: productId,
+    shortcode: productShortcode,
+    name: z.string(),
+  }),
   // Always the global Unknown, but carried per row so the section can offer the
   // same recount-session deep link the other recount detectors do — draining
   // Unknown is a recount rooted there.
-  location: z.object({ id: locationId, name: z.string() }),
+  location: z.object({
+    id: locationId,
+    shortcode: locationShortcode,
+    name: z.string(),
+  }),
 });
 
 /**
@@ -212,6 +248,11 @@ const labelVariantFields = {
    * route.
    */
   sampleId: z.string(),
+  // The shortcode of that same record (product for the manufacturer variant,
+  // vendor for the vendor variant) — the section already knows which route to
+  // build, so this stays a plain string like `sampleId` rather than a single
+  // branded schema that can't be right for both callers.
+  sampleShortcode: z.string(),
 };
 
 export const labelVariantSchema = z.object(labelVariantFields);
@@ -239,6 +280,8 @@ export const duplicateVendorSchema = z.object({
   ...labelVariantFields,
   /** The vendor row a merge would KEEP — the majority spelling. */
   canonicalSampleId: z.string(),
+  /** That row's shortcode — see the `sampleShortcode` note above. */
+  canonicalSampleShortcode: z.string(),
 });
 
 export const productWithNoImagesSchema = z.object({
@@ -259,7 +302,8 @@ export const productWithIslandedMappingsSchema = z.object({
 });
 
 export const locationWithoutAiDescriptionSchema = z.object({
-  id: z.string(),
+  id: locationId,
+  shortcode: locationShortcode,
   name: z.string(),
   type: z.string(),
   imageCount: z.number(),
@@ -283,6 +327,15 @@ export const orphanedEntityEmbeddingSchema = z.object({
  */
 export const entityMissingEmbeddingSchema = z.object({
   ...searchableEntityRefFields,
+  // Deliberately NOT hoisted onto `searchableEntityRefFields` itself (that type
+  // is shared with `orphanedEntityEmbeddingSchema`, whose row points at an
+  // entity that's been soft-deleted — there is no live row to resolve a
+  // shortcode from, and inventing one would link to a 404). This half of the
+  // pair points at a LIVE entity, so it can always be resolved and is safe to
+  // link. Plain string, not a branded schema: `entityType` is one of ten
+  // different entities, so no single branded type could be right for all of
+  // them — mirrors why `entityId` above is also a plain string.
+  shortcode: z.string(),
 });
 
 // A live parent recipe whose persisted totals are marked fresh
@@ -293,14 +346,19 @@ export const entityMissingEmbeddingSchema = z.object({
 // Pure SQL (no WASM), so it rides the fast detector group.
 export const staleParentRecipeSchema = z.object({
   id: recipeId,
+  shortcode: recipeShortcode,
   name: z.string(),
 });
 
 export const staleIngredientParseSchema = z.object({
+  // A RecipeSectionIngredient row id — an internal child row, not one of the
+  // shortcode entities, so it stays a plain uuid string.
   recipeSectionIngredientId: z.string(),
   recipeId,
+  recipeShortcode,
   recipeName: z.string(),
   ingredientId,
+  ingredientShortcode,
   storedName: z.string(),
   rawLine: z.string(),
   parsedName: z.string(),
@@ -344,6 +402,7 @@ export const productWithBetterUpcDataSchema = z.object({
  */
 export const chargeNotReconcilingSchema = z.object({
   id: purchaseId,
+  shortcode: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
@@ -694,6 +753,9 @@ export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;
 export type ChargeNotReconciling = z.infer<typeof chargeNotReconcilingSchema>;
+export type EntityMissingEmbedding = z.infer<
+  typeof entityMissingEmbeddingSchema
+>;
 
 // Counts powering the Settings → Maintenance "N affected" dry-run. A focused
 // subset (the batch tools shown there), kept separate from problemsCount so it
@@ -744,9 +806,14 @@ export const cleanupOrphanedEntityEmbeddingsOut = z.object({
 });
 
 export const recipeUsageByProductInput = z.object({
-  productIds: z.array(z.string()),
+  productShortcodes: z.array(productShortcode),
 });
 
+/**
+ * Keyed by product SHORTCODE, matching the input — the caller (a problem card)
+ * only ever holds the public id, so a uuid-keyed map here would never match and
+ * the "used in N recipes" signal would silently vanish from every card.
+ */
 export const recipeUsageByProductOut = z.record(z.string(), z.number());
 
 export const deleteUnusedIngredientsInput = z.object({

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { ingredientId } from "./identifiers";
+import { ingredientId, ingredientShortcode } from "./identifiers";
 
 // How many distinct recipes use each (real) ingredient, optionally scoped to a
 // cookbook. Sub-recipe pointers (ingredient.recipeId set) are excluded upstream.
 const ingredientUsageRowSchema = z.object({
   ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string(),
   recipeCount: z.number(),
 });

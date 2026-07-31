@@ -5,6 +5,7 @@
  * recount.
  */
 
+import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   EmptyLocation,
   LocationWithoutAiDescription,
@@ -39,6 +40,7 @@ export const findEmptyLocations = async (
     .with(childLocation)
     .select({
       id: location.id,
+      shortcode: location.shortcode,
       name: location.name,
       type: location.type,
       createdAt: location.createdAt,
@@ -85,7 +87,10 @@ export const findEmptyLocations = async (
       ),
     );
 
-  return emptyLocations;
+  return emptyLocations.map((row) => ({
+    ...row,
+    shortcode: unsafeLocationShortcode(row.shortcode),
+  }));
 };
 
 /**
@@ -110,6 +115,7 @@ export const findStaleLocations = async (
   const rows = await dbClient
     .select({
       id: location.id,
+      shortcode: location.shortcode,
       name: location.name,
       type: location.type,
       lastBulkInventory: location.lastBulkInventory,
@@ -135,6 +141,7 @@ export const findStaleLocations = async (
     )
     .groupBy(
       location.id,
+      location.shortcode,
       location.name,
       location.type,
       location.lastBulkInventory,
@@ -142,7 +149,11 @@ export const findStaleLocations = async (
     // Never-recounted first, then oldest — the worst offenders lead the card.
     .orderBy(sql`${location.lastBulkInventory} asc nulls first`);
 
-  return rows.map((r) => ({ ...r, itemCount: Number(r.itemCount) }));
+  return rows.map((r) => ({
+    ...r,
+    shortcode: unsafeLocationShortcode(r.shortcode),
+    itemCount: Number(r.itemCount),
+  }));
 };
 
 // Find locations that have images but no AI description
@@ -154,6 +165,7 @@ export const findLocationsWithoutAiDescription = async (
   const results = await dbClient
     .select({
       id: location.id,
+      shortcode: location.shortcode,
       name: location.name,
       type: location.type,
       imageCount: sql<number>`count(${locationImage.id})`,
@@ -161,10 +173,11 @@ export const findLocationsWithoutAiDescription = async (
     .from(location)
     .innerJoin(locationImage, eq(locationImage.locationId, location.id))
     .where(and(notDeleted(location), isNull(location.aiDescription)))
-    .groupBy(location.id, location.name, location.type);
+    .groupBy(location.id, location.shortcode, location.name, location.type);
 
   return results.map((r) => ({
     id: r.id,
+    shortcode: unsafeLocationShortcode(r.shortcode),
     name: r.name,
     type: r.type,
     imageCount: Number(r.imageCount),

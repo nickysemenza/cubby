@@ -32,6 +32,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import {
   locationTypeNoun,
@@ -117,8 +118,8 @@ export function LocationReviewPane({
         <Row align="center" gap="sm" className="min-w-0">
           <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
             <Link
-              to="/locations/$id"
-              params={{ id: location.id }}
+              to={entities.location.routes.detail}
+              params={entityDetailParams(location.shortcode)}
               className="underline decoration-border/70 decoration-dotted underline-offset-4 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
             >
               {location.name}

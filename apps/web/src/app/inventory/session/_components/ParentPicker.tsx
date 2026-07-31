@@ -1,9 +1,10 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronRight, Search, X } from "lucide-react";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -31,12 +32,12 @@ const NO_STORED_PASSES: StoredSessionPass[] = [];
 
 export function ParentPicker({
   locations,
-  initialParentId,
+  initialParentShortcode,
   onSelect,
 }: {
   locations: InfLocation[];
-  initialParentId?: LocationId;
-  onSelect: (locationId: LocationId) => void;
+  initialParentShortcode?: LocationShortcode;
+  onSelect: (shortcode: LocationShortcode) => void;
 }) {
   const candidateIds = useMemo(
     () =>
@@ -136,7 +137,7 @@ export function ParentPicker({
 
   return (
     <Stack gap="md" className="min-w-0">
-      {initialParentId && (
+      {initialParentShortcode && (
         <Card>
           <CardContent className="p-4">
             <Description>
@@ -182,7 +183,7 @@ export function ParentPicker({
                 <Button
                   type="button"
                   className="min-h-12 shrink-0"
-                  onClick={() => onSelect(pass.location.id)}
+                  onClick={() => onSelect(pass.location.shortcode)}
                 >
                   Resume
                 </Button>
@@ -211,8 +212,14 @@ export function ParentPicker({
               <LocationScanButton
                 buttonLabel="Scan a location"
                 sheetDescription="Start a recount at the scanned location."
-                onResolved={(locationId) => {
-                  onSelect(locationId);
+                onResolved={(locationId, shortcode) => {
+                  const resolved =
+                    shortcode ?? locationsById.get(locationId)?.shortcode;
+                  if (!resolved) {
+                    toast.error("Could not resolve that location's shortcode.");
+                    return undefined;
+                  }
+                  onSelect(resolved);
                   return undefined;
                 }}
               />
@@ -254,11 +261,11 @@ export function ParentPicker({
                   key={location.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onSelect(location.id)}
+                  onClick={() => onSelect(location.shortcode)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelect(location.id);
+                      onSelect(location.shortcode);
                     }
                   }}
                   className="w-full border-[var(--border)] border-b bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted" /* tight: compact tree picker row */

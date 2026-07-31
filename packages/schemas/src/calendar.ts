@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { mealId, projectId, expenseId, taskId } from "./identifiers";
+import {
+  mealId,
+  mealShortcode,
+  projectId,
+  projectShortcode,
+  expenseId,
+  expenseShortcode,
+  taskId,
+  taskShortcode,
+} from "./identifiers";
 import {
   plainDate,
   projectKindSchema,
@@ -35,6 +44,7 @@ const calendarItemDates = {
 export const calendarMealItem = z.object({
   kind: z.literal("meal"),
   id: mealId,
+  shortcode: mealShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("move"),
@@ -48,6 +58,7 @@ export const calendarMealItem = z.object({
 export const calendarTaskItem = z.object({
   kind: z.literal("task"),
   id: taskId,
+  shortcode: taskShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("move"),
@@ -59,6 +70,7 @@ export const calendarTaskItem = z.object({
 export const calendarExpenseItem = z.object({
   kind: z.literal("expense"),
   id: expenseId,
+  shortcode: expenseShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: calendarInteraction,
@@ -72,6 +84,7 @@ export const calendarExpenseItem = z.object({
 export const calendarProjectItem = z.object({
   kind: z.literal("project"),
   id: projectId,
+  shortcode: projectShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("read-only"),

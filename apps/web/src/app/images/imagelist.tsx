@@ -124,6 +124,7 @@ export default function ImageList() {
           entityType: row.entityType,
           entityId: row.entityId,
           entityName: row.entityName,
+          entityShortcode: row.entityShortcode,
         }),
         {
           id: "entity",
@@ -133,9 +134,10 @@ export default function ImageList() {
             mobile: { slot: "meta", priority: 30 },
           },
           cell: ({ getValue }) => {
-            const { entityType, entityId, entityName } = getValue();
+            const { entityType, entityId, entityName, entityShortcode } =
+              getValue();
 
-            if (!entityType || !entityId || !entityName) {
+            if (!entityType || !entityId || !entityName || !entityShortcode) {
               return <NoneValue />;
             }
 
@@ -154,7 +156,11 @@ export default function ImageList() {
               return (
                 <EntityInlineLink
                   entity="purchase"
-                  data={{ id: entityId, orderId: entityName }}
+                  data={{
+                    id: entityId,
+                    shortcode: entityShortcode,
+                    orderId: entityName,
+                  }}
                   compact
                 />
               );
@@ -163,7 +169,11 @@ export default function ImageList() {
             return (
               <EntityInlineLink
                 entity={entity}
-                data={{ id: entityId, name: entityName }}
+                data={{
+                  id: entityId,
+                  shortcode: entityShortcode,
+                  name: entityName,
+                }}
                 compact
               />
             );

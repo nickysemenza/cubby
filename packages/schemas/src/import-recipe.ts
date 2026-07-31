@@ -145,7 +145,14 @@ export const cookbookDiffInput = z.object({
 });
 
 export const cookbookDiffOut = z.array(
-  z.object({ title: z.string(), id: z.uuid(), sig: z.string() }),
+  // `id` is the private uuid (the hover preview fetches by it); `shortcode` is
+  // the public id the "already imported" link is built from.
+  z.object({
+    title: z.string(),
+    id: z.uuid(),
+    shortcode: z.string(),
+    sig: z.string(),
+  }),
 );
 
 export const notionPreviewItem = z.object({
@@ -153,8 +160,11 @@ export const notionPreviewItem = z.object({
   name: z.string(),
   notionUrl: z.string(),
   status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
-  // The existing Cubby recipe id when already imported — drives the in-app link.
+  // The existing Cubby recipe when already imported. `existingId` is the private
+  // uuid the hover preview fetches by; `existingShortcode` is the public id the
+  // in-app link is built from.
   existingId: z.string().nullable(),
+  existingShortcode: z.string().nullable(),
   reasons: z.array(z.string()),
   // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
   // previews render with the exact same card.

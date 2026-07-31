@@ -30,8 +30,8 @@ export const IngredientProductShelf: FC<{
         return (
           <ShelfCard
             key={product.id}
-            to="/products/$id"
-            params={{ id: product.id }}
+            to="/products/$shortcode"
+            params={{ shortcode: product.shortcode }}
             image={images[0]?.url}
             extraCount={images.length - 1}
             title={product.name}

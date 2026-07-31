@@ -19,10 +19,13 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type {
-  ExpenseId,
-  PurchaseId,
-  VendorId,
+import {
+  type ExpenseId,
+  type PurchaseId,
+  unsafePurchaseId,
+  unsafePurchaseShortcode,
+  unsafeVendorShortcode,
+  type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -81,6 +84,7 @@ import {
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -161,8 +165,16 @@ const purchaseVendorName = correlated<string | null>(
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
 );
 
+// The vendor's public id, denormalized alongside its name so a charge row can
+// link to the vendor without a second query.
+const purchaseVendorShortcode = correlated<string | null>(
+  `(SELECT v."shortcode" FROM "Vendor" v
+     WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
+);
+
 const purchaseColumns = {
   id: purchase.id,
+  shortcode: purchase.shortcode,
   vendorId: purchase.vendorId,
   orderId: purchase.orderId,
   date: purchase.date,
@@ -171,12 +183,14 @@ const purchaseColumns = {
   createdAt: purchase.createdAt,
   updatedAt: purchase.updatedAt,
   vendorName: purchaseVendorName,
+  vendorShortcode: purchaseVendorShortcode,
   expenseCount: purchaseExpenseCount,
   expenseTotal: purchaseExpenseTotal,
 } as const;
 
 type PurchaseRow = {
   id: PurchaseId;
+  shortcode: string;
   vendorId: VendorId;
   orderId: string | null;
   date: string | null;
@@ -185,6 +199,7 @@ type PurchaseRow = {
   createdAt: Date;
   updatedAt: Date;
   vendorName: string | null;
+  vendorShortcode: string | null;
   expenseCount: number;
   expenseTotal: number;
 };
@@ -194,12 +209,16 @@ const dbPurchaseToAPI = (
   images: PurchaseOut["images"] = [],
 ): PurchaseOut => ({
   id: row.id,
+  shortcode: unsafePurchaseShortcode(row.shortcode),
   vendorId: row.vendorId,
   orderId: row.orderId,
   date: row.date,
   statedTotal: row.statedTotal,
   notes: row.notes,
   vendorName: row.vendorName,
+  vendorShortcode: row.vendorShortcode
+    ? unsafeVendorShortcode(row.vendorShortcode)
+    : null,
   expenseCount: Number(row.expenseCount),
   expenseTotal: Number(row.expenseTotal),
   images,
@@ -382,6 +401,18 @@ export const getPurchaseByID = async (
     throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
   }
   return dbPurchaseToAPI(row, await loadPurchaseImages(db, id));
+};
+
+/**
+ * Get full purchase details by shortcode. Returns null if the code doesn't
+ * resolve to a live purchase.
+ */
+export const getPurchaseByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<PurchaseOut | null> => {
+  const id = await resolveLiveShortcode(db, shortcode, "purchase");
+  return id ? getPurchaseByID(db, unsafePurchaseId(id)) : null;
 };
 
 /**

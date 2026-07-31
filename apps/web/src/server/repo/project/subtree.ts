@@ -37,6 +37,8 @@ import {
 
 export type ProjectParentRow = {
   id: ProjectId;
+  /** Public id — whole-tree consumers build links (attention items) from it. */
+  shortcode: string;
   name: string;
   parentProjectId: ProjectId | null;
   costEstimate: number | null;
@@ -64,6 +66,7 @@ async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
   return getDb(db)
     .select({
       id: project.id,
+      shortcode: project.shortcode,
       name: project.name,
       parentProjectId: project.parentProjectId,
       costEstimate: project.costEstimate,
@@ -294,6 +297,7 @@ export type ProjectTree = {
   allRows: ProjectParentRow[];
   childrenByParent: Map<ProjectId, ProjectId[]>;
   nameById: Map<ProjectId, string>;
+  shortcodeById: Map<ProjectId, string>;
 };
 
 /**
@@ -320,6 +324,7 @@ export async function loadProjectTree(db: Database): Promise<ProjectTree> {
     allRows,
     childrenByParent: buildChildrenMap(allRows),
     nameById: new Map(allRows.map((r) => [r.id, r.name])),
+    shortcodeById: new Map(allRows.map((r) => [r.id, r.shortcode])),
   };
 }
 

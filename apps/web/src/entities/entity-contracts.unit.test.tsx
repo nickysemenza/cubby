@@ -40,7 +40,7 @@ describe("derived entity route unions", () => {
     const create: EntityNewRoute = entities.location.routes.new;
 
     expect([detail, list, create]).toEqual([
-      "/recipes/$id",
+      "/recipes/$shortcode",
       "/projects",
       "/locations/new",
     ]);

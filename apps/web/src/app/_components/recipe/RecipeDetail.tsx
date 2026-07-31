@@ -216,9 +216,9 @@ const RecipeDetailInner: React.FC<{
         gap.source === "ingredient" && gap.missing.weight
           ? [
               {
-                ingredientId: gap.ingredientId,
+                ingredientShortcode: gap.ingredientShortcode,
                 name: gap.name,
-                productId: gap.productId,
+                productShortcode: gap.productShortcode,
               },
             ]
           : [],
@@ -277,6 +277,7 @@ const RecipeDetailInner: React.FC<{
           <RecipeTotalsCoverageButton
             gaps={totalsGaps}
             currentRecipeId={recipe.id}
+            currentRecipeShortcode={recipe.shortcode}
           />
           <RecipeScaleControl
             recipe={recipe}
@@ -292,8 +293,8 @@ const RecipeDetailInner: React.FC<{
             onValueChange={setViewMode}
           />
           <Link
-            to="/recipes/$id/export"
-            params={{ id: recipe.id }}
+            to="/recipes/$shortcode/export"
+            params={{ shortcode: recipe.shortcode }}
             search={{
               format: exportFormat,
               scale: factor === 1 ? undefined : factor,
@@ -424,7 +425,7 @@ const RecipeDetailInner: React.FC<{
             perServing={getServingBasis(scaledRecipe)}
             hideSummary
             gaps={totalsGaps}
-            recipeId={recipe.id}
+            recipeShortcode={recipe.shortcode}
           />
         </Stack>
       )}

@@ -16,7 +16,7 @@
  * is excluded before the comparison ever happens.
  */
 
-import type { PurchaseId } from "@cubby/schemas/identifiers";
+import type { PurchaseId, PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { ChargeNotReconciling } from "@cubby/schemas/problems";
 import {
   RECONCILIATION_TOLERANCE,
@@ -30,6 +30,7 @@ import { getDb } from "~/server/repo/database-helpers";
 /** What the grouped scan yields before the shared verdict is applied. */
 type ChargeSumRow = {
   id: PurchaseId;
+  shortcode: PurchaseShortcode;
   vendorName: string | null;
   orderId: string | null;
   date: string | null;
@@ -70,6 +71,7 @@ export const findChargesNotReconciling = async (
   const res = await getDb(db).execute<ChargeSumRow>(sql`
     SELECT
       p.id AS "id",
+      p."shortcode" AS "shortcode",
       v."name" AS "vendorName",
       p."orderId" AS "orderId",
       p."date"::text AS "date",
@@ -90,6 +92,7 @@ export const findChargesNotReconciling = async (
   return res.rows
     .map((row) => ({
       id: row.id,
+      shortcode: row.shortcode,
       vendorName: row.vendorName,
       orderId: row.orderId,
       date: row.date,

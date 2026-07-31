@@ -77,6 +77,7 @@ describe("task repository — listActionableTasks", () => {
         chain: [
           {
             id: blocker.id,
+            shortcode: blocker.shortcode,
             name: blocker.name,
             status: blocker.status,
             type: "task",
@@ -130,6 +131,7 @@ describe("task repository — listActionableTasks", () => {
         chain: [
           {
             id: blockerProject.id,
+            shortcode: blockerProject.shortcode,
             name: blockerProject.name,
             status: blockerProject.status,
             type: "project",
@@ -311,6 +313,7 @@ describe("task repository — listActionableTasks", () => {
         chain: [
           {
             id: blockerProject.id,
+            shortcode: blockerProject.shortcode,
             name: blockerProject.name,
             status: blockerProject.status,
             type: "project",

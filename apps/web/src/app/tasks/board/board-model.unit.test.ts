@@ -1,4 +1,8 @@
-import { unsafeProjectId, unsafeTaskId } from "@cubby/schemas/identifiers";
+import {
+  unsafeProjectId,
+  unsafeTaskId,
+  unsafeTaskShortcode,
+} from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import {
@@ -13,6 +17,19 @@ import {
 } from "./board-model";
 import type { TaskCardDragData } from "./board-types";
 
+// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
+const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+let taskShortcodeCounter = 0;
+const nextTaskShortcode = () => {
+  const n = taskShortcodeCounter++;
+  const hi =
+    SHORTCODE_ALPHABET[
+      Math.floor(n / SHORTCODE_ALPHABET.length) % SHORTCODE_ALPHABET.length
+    ];
+  const lo = SHORTCODE_ALPHABET[n % SHORTCODE_ALPHABET.length];
+  return unsafeTaskShortcode(`TSK-23${hi}${lo}`);
+};
+
 function task(params: {
   id: string;
   name?: string;
@@ -26,14 +43,18 @@ function task(params: {
 }): TaskOut {
   return {
     id: unsafeTaskId(params.id),
+    shortcode: nextTaskShortcode(),
     name: params.name ?? params.id,
     status: params.status ?? "not_started",
     projectId:
       params.projectId != null ? unsafeProjectId(params.projectId) : null,
+    projectShortcode: null,
     projectName: params.projectName ?? null,
     subjectProductId: null,
     subjectProductName: null,
+    subjectProductShortcode: null,
     parentTaskId: null,
+    parentTaskShortcode: null,
     parentTaskName: null,
     dueDate: params.dueDate ?? null,
     dueEndDate: null,

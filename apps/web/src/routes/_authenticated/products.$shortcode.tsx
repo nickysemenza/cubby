@@ -8,11 +8,13 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 
-export const Route = createFileRoute("/_authenticated/products/$id")({
+export const Route = createFileRoute("/_authenticated/products/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.product.getByID.queryOptions({ id: params.id }),
+      context.trpc.product.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -32,14 +34,18 @@ export const Route = createFileRoute("/_authenticated/products/$id")({
 });
 
 function ProductDetailPage() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
   const api = useTRPC();
   const { data: product } = useSuspenseQuery(
-    api.product.getByID.queryOptions({ id }),
+    api.product.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(product.name);
+  useDocumentTitle(product?.name);
 
   // ProductDetail renders its own <Page> shell (which owns the PageWrapper).
-  return <ProductDetail key={id} product={product} />;
+  // The loader already threw notFound for an unknown code; this guard only
+  // satisfies the nullable output type.
+  if (!product) return null;
+
+  return <ProductDetail key={shortcode} product={product} />;
 }

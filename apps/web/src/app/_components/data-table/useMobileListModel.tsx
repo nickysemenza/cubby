@@ -273,9 +273,12 @@ export function useMobileListModel<TItem>({
         }));
 
         const rowData = row.original as Record<string, unknown>;
-        const entityId = rowData.id as string | undefined;
+        // Detail routes are keyed on the PUBLIC id. A row without a shortcode
+        // (image, usda-food) simply gets no details link rather than a uuid URL
+        // that no longer resolves.
+        const shortcode = rowData.shortcode as string | undefined;
         const detailsHref =
-          basePath && entityId ? `/${basePath}/${entityId}` : undefined;
+          basePath && shortcode ? `/${basePath}/${shortcode}` : undefined;
 
         return {
           row,

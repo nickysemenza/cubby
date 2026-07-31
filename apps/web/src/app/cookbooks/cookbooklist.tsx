@@ -11,6 +11,7 @@ import {
 import { Empty, EmptyDescription, EmptyIcon } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { NoneValue } from "~/components/ui/none-value";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { useCookbookDelete } from "./use-cookbook-delete";
 
@@ -41,6 +42,7 @@ export function CookbookList() {
           {cookbooks.map(
             ({
               id,
+              shortcode,
               book,
               author,
               recipeCount,
@@ -65,8 +67,8 @@ export function CookbookList() {
                   {/* Matted cover + catalog card: real cover in a hairline mat when
                       we have one, plum "cloth binding" with the serif title when not */}
                   <Link
-                    to="/cookbooks/$cookbookId"
-                    params={{ cookbookId: id }}
+                    to={entities.cookbook.routes.detail}
+                    params={entityDetailParams(shortcode)}
                     className="block rounded-sm border border-[var(--border)] bg-card p-2 transition-colors hover:bg-muted/50"
                   >
                     {coverUrl ? (

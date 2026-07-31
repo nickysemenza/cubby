@@ -227,9 +227,17 @@ function IngredientLedger({
               // click to open it — without the two interactions colliding.
               const ref =
                 ing.type === "ingredient"
-                  ? { entity: "ingredient" as const, id: ing.ingredient.id }
+                  ? {
+                      entity: "ingredient" as const,
+                      id: ing.ingredient.id,
+                      shortcode: ing.ingredient.shortcode,
+                    }
                   : ing.type === "recipe"
-                    ? { entity: "recipe" as const, id: ing.recipe.id }
+                    ? {
+                        entity: "recipe" as const,
+                        id: ing.recipe.id,
+                        shortcode: ing.recipe.shortcode,
+                      }
                     : null;
               return (
                 <li key={ing.id} className={cn(ingredientRowGrid, "py-2")}>
@@ -258,6 +266,7 @@ function IngredientLedger({
                     {ref ? (
                       <EntityPreviewLink
                         entity={ref.entity}
+                        shortcode={ref.shortcode}
                         id={ref.id}
                         className={dottedEntityLink}
                       >

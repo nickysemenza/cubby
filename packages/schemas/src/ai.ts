@@ -2,6 +2,7 @@ import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   ingredientId,
+  ingredientShortcode,
   inventoryId,
   locationId,
   productId,
@@ -188,6 +189,7 @@ export const usdaFoodSuggestionBatchOut = z.array(
 
 export const ingredientMergeSuggestionItem = z.object({
   id: ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string().min(1),
 });
 
@@ -197,6 +199,8 @@ export const ingredientMergeSuggestionBatchInput = z.object({
 
 const ingredientMergeSuggestionRef = z.object({
   id: ingredientId,
+  // The public id, so the confirm dialog can link the suggested target.
+  shortcode: ingredientShortcode,
   name: z.string(),
 });
 

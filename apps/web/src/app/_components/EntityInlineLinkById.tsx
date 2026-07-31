@@ -53,16 +53,12 @@ export function EntityInlineLinkById({
   // biome-ignore lint/suspicious/noExplicitAny: useQuery can't narrow the union of getByID queryOptions
   const query = useQuery(queryOptions as any);
 
-  // Inventory entries don't have a getByID that returns product info
+  // Inventory entries have no getByID that returns product info, so there is
+  // no name to resolve here — and this component is handed a uuid, not the
+  // public shortcode a URL needs. Render unlinked rather than build a uuid URL;
+  // callers that can supply a shortcode should use `EntityInlineLink`.
   if (entityType === "inventory") {
-    return (
-      <a
-        href={`/inventory/${entityId}`}
-        className="font-medium text-sm hover:underline"
-      >
-        Inventory Entry
-      </a>
-    );
+    return <span className="font-medium text-sm">Inventory Entry</span>;
   }
 
   // Cookbooks are browsed by name, not id, and have no getByID — link to the

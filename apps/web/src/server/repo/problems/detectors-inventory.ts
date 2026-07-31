@@ -8,6 +8,11 @@
  * global "Unknown" bin, are both unresolved bookkeeping — not accurate stock.
  */
 
+import {
+  unsafeInventoryShortcode,
+  unsafeLocationShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   NeverVerifiedInventory,
   UnknownParkedItem,
@@ -40,11 +45,14 @@ export const findNeverVerifiedInventory = async (
   const rows = await getDb(db)
     .select({
       id: inventoryEntry.id,
+      shortcode: inventoryEntry.shortcode,
       amount: inventoryEntry.amount,
       createdAt: inventoryEntry.createdAt,
       productId: product.id,
+      productShortcode: product.shortcode,
       productName: product.name,
       locationId: location.id,
+      locationShortcode: location.shortcode,
       locationName: location.name,
     })
     .from(inventoryEntry)
@@ -61,10 +69,19 @@ export const findNeverVerifiedInventory = async (
 
   return rows.map((r) => ({
     id: r.id,
+    shortcode: unsafeInventoryShortcode(r.shortcode),
     amount: parseInventoryAmount(r.amount, r.id),
     createdAt: r.createdAt,
-    product: { id: r.productId, name: r.productName },
-    location: { id: r.locationId, name: r.locationName },
+    product: {
+      id: r.productId,
+      shortcode: unsafeProductShortcode(r.productShortcode),
+      name: r.productName,
+    },
+    location: {
+      id: r.locationId,
+      shortcode: unsafeLocationShortcode(r.locationShortcode),
+      name: r.locationName,
+    },
   }));
 };
 
@@ -79,11 +96,14 @@ export const findUnknownParkedItems = async (
   const rows = await getDb(db)
     .select({
       id: inventoryEntry.id,
+      shortcode: inventoryEntry.shortcode,
       amount: inventoryEntry.amount,
       createdAt: inventoryEntry.createdAt,
       productId: product.id,
+      productShortcode: product.shortcode,
       productName: product.name,
       locationId: location.id,
+      locationShortcode: location.shortcode,
       locationName: location.name,
     })
     .from(inventoryEntry)
@@ -97,9 +117,18 @@ export const findUnknownParkedItems = async (
 
   return rows.map((r) => ({
     id: r.id,
+    shortcode: unsafeInventoryShortcode(r.shortcode),
     amount: parseInventoryAmount(r.amount, r.id),
     createdAt: r.createdAt,
-    product: { id: r.productId, name: r.productName },
-    location: { id: r.locationId, name: r.locationName },
+    product: {
+      id: r.productId,
+      shortcode: unsafeProductShortcode(r.productShortcode),
+      name: r.productName,
+    },
+    location: {
+      id: r.locationId,
+      shortcode: unsafeLocationShortcode(r.locationShortcode),
+      name: r.locationName,
+    },
   }));
 };

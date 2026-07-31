@@ -1,4 +1,4 @@
-import { locationId } from "@cubby/schemas/identifiers";
+import { locationShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { InventorySessionWorkbench } from "~/app/inventory/session/InventorySessionWorkbench";
@@ -7,10 +7,10 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 
 const searchSchema = z.object({
-  parentId: locationId.optional().catch(undefined),
+  parent: locationShortcode.optional().catch(undefined),
 });
 
-const searchDefaults = { parentId: undefined } as const;
+const searchDefaults = { parent: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/inventory/session")({
   validateSearch: searchSchema,
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/inventory/session")({
 });
 
 function InventorySessionPage() {
-  const { parentId } = Route.useSearch();
+  const { parent } = Route.useSearch();
 
   return (
     <Page
@@ -32,7 +32,7 @@ function InventorySessionPage() {
       compact
       decoration="none"
     >
-      <InventorySessionWorkbench initialParentId={parentId} />
+      <InventorySessionWorkbench initialParentShortcode={parent} />
     </Page>
   );
 }

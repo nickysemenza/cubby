@@ -48,8 +48,18 @@ interface TaskDetailProps {
 }
 
 /** A blocked-by/blocking dependency link, name-only. */
-function TaskDependencyBadge({ id, name }: { id: string; name: string }) {
-  return <EntityInlineLink entity="task" data={{ id, name }} compact />;
+function TaskDependencyBadge({
+  id,
+  name,
+  shortcode,
+}: {
+  id: string;
+  name: string;
+  shortcode: string;
+}) {
+  return (
+    <EntityInlineLink entity="task" data={{ id, name, shortcode }} compact />
+  );
 }
 
 // Stable empty array — see CLAUDE.md's "unstable-hook-default" guard: an
@@ -124,7 +134,11 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
               />
               <EntityInlineLink
                 entity="task"
-                data={{ id: subtask.id, name: subtask.name }}
+                data={{
+                  id: subtask.id,
+                  shortcode: subtask.shortcode,
+                  name: subtask.name,
+                }}
                 compact
               />
             </Row>
@@ -212,15 +226,17 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         results
           .map((r) => r.data)
           .filter((d): d is TaskOut => d != null)
-          .map((d) => [d.id, d.name] as const),
+          .map(
+            (d) => [d.id, { name: d.name, shortcode: d.shortcode }] as const,
+          ),
       ),
     }),
   });
   const resolveDeps = (ids: TaskOut["blockedByIds"]) =>
     ids
       .map((id) => {
-        const name = depsById.get(id);
-        return name ? { id, name } : null;
+        const dep = depsById.get(id);
+        return dep ? { id, name: dep.name, shortcode: dep.shortcode } : null;
       })
       .filter((d): d is NonNullable<typeof d> => d != null);
   const blockedBy = resolveDeps(task.blockedByIds);
@@ -321,10 +337,14 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "Project",
       value:
-        task.projectId && task.projectName ? (
+        task.projectId && task.projectName && task.projectShortcode ? (
           <EntityInlineLink
             entity="project"
-            data={{ id: task.projectId, name: task.projectName }}
+            data={{
+              id: task.projectId,
+              shortcode: task.projectShortcode,
+              name: task.projectName,
+            }}
             compact
           />
         ) : undefined,
@@ -352,10 +372,17 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           }}
           SearchProvider={WithProductSearch}
           renderValue={(value) =>
-            value ? (
+            // The combobox value carries the product's uuid; the task
+            // carries its public id, denormalized alongside
+            // `subjectProductName`.
+            value && task.subjectProductShortcode ? (
               <EntityInlineLink
                 entity="product"
-                data={{ id: value.id, name: value.name }}
+                data={{
+                  id: value.id,
+                  name: value.name,
+                  shortcode: task.subjectProductShortcode,
+                }}
               />
             ) : (
               <NoneValue />
@@ -390,7 +417,20 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               SearchProvider={WithTaskSearch}
               label="task"
               excludeId={task.id}
-              renderReadChip={(item) => <TaskDependencyBadge {...item} />}
+              renderReadChip={(item) => {
+                // DependencyPicker's chip type is the generic {id,name} —
+                // resolve the public id from the same `depsById` map
+                // `blockedBy` was built from rather than widening that
+                // shared component.
+                const shortcode = depsById.get(item.id)?.shortcode;
+                return shortcode ? (
+                  <TaskDependencyBadge
+                    id={item.id}
+                    name={item.name}
+                    shortcode={shortcode}
+                  />
+                ) : null;
+              }}
             />
           </Stack>
           {blocking.length > 0 && (
@@ -430,14 +470,18 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     // A subtask surfaces its parent right in the spec-plate header (in place
     // of "Project" — a subtask inherits its project from the parent, not
     // independently, so the parent link is the more useful breadcrumb here).
-    ...(task.parentTaskId && task.parentTaskName
+    ...(task.parentTaskId && task.parentTaskName && task.parentTaskShortcode
       ? [
           {
             label: "Subtask of",
             value: (
               <EntityInlineLink
                 entity="task"
-                data={{ id: task.parentTaskId, name: task.parentTaskName }}
+                data={{
+                  id: task.parentTaskId,
+                  shortcode: task.parentTaskShortcode,
+                  name: task.parentTaskName,
+                }}
                 truncate
               />
             ),
@@ -455,10 +499,14 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "Project",
       value:
-        task.projectId && task.projectName ? (
+        task.projectId && task.projectName && task.projectShortcode ? (
           <EntityInlineLink
             entity="project"
-            data={{ id: task.projectId, name: task.projectName }}
+            data={{
+              id: task.projectId,
+              shortcode: task.projectShortcode,
+              name: task.projectName,
+            }}
             truncate
           />
         ) : (

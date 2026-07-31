@@ -39,13 +39,13 @@ import { notDeleted } from "./query";
 const withProjectAndParentTaskNameOnly = {
   with: {
     project: {
-      columns: { name: true, deletedAt: true },
+      columns: { name: true, shortcode: true, deletedAt: true },
     },
     subjectProduct: {
-      columns: { name: true, deletedAt: true },
+      columns: { name: true, shortcode: true, deletedAt: true },
     },
     parentTask: {
-      columns: { name: true, deletedAt: true },
+      columns: { name: true, shortcode: true, deletedAt: true },
     },
   },
 } as const;
@@ -66,16 +66,22 @@ const withProjectAndParentTaskNameOnly = {
 const withProjectAndProductNameOnly = {
   with: {
     project: {
-      columns: { name: true, deletedAt: true },
+      columns: { name: true, shortcode: true, deletedAt: true },
     },
     product: {
-      columns: { name: true, deletedAt: true },
+      columns: { name: true, shortcode: true, deletedAt: true },
     },
     purchase: {
-      columns: { id: true, orderId: true, vendorId: true, deletedAt: true },
+      columns: {
+        id: true,
+        shortcode: true,
+        orderId: true,
+        vendorId: true,
+        deletedAt: true,
+      },
       with: {
         vendor: {
-          columns: { name: true, deletedAt: true },
+          columns: { name: true, shortcode: true, deletedAt: true },
         },
       },
     },
@@ -236,6 +242,10 @@ export const relations = {
   recipe: {
     full: {
       with: {
+        // Shortcode only — the source badge links the book, and Cookbook is a
+        // handful of rows, so this join is far cheaper than resolving the code
+        // per recipe on the client.
+        cookbook: { columns: { shortcode: true } },
         sections: {
           where: notDeleted(recipeSection),
           orderBy: sectionOrder,
@@ -268,6 +278,7 @@ export const relations = {
     // payload and one per-recipe lateral join off the hot list query.
     list: {
       with: {
+        cookbook: { columns: { shortcode: true } },
         sections: {
           where: notDeleted(recipeSection),
           orderBy: sectionOrder,
@@ -409,6 +420,7 @@ export const relations = {
             recipe: {
               columns: {
                 id: true,
+                shortcode: true,
                 name: true,
                 servings: true,
                 yield: true,

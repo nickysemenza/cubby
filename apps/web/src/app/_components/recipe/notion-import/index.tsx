@@ -56,7 +56,13 @@ export function NotionImport() {
   );
   // Per-page outcome streamed back from importNotionSyncStream, keyed by page id.
   const { start: startNotionImport } = useBulkStream<
-    | { pageId: string; ok: true; id: string; status: "created" | "updated" }
+    | {
+        pageId: string;
+        ok: true;
+        id: string;
+        shortcode: string;
+        status: "created" | "updated";
+      }
     | { pageId: string; ok: false; error: string },
     { succeeded: number; failed: number }
   >();
@@ -107,7 +113,7 @@ export function NotionImport() {
             new Map(m).set(
               item.pageId,
               item.ok
-                ? { status: "done", id: item.id }
+                ? { status: "done", shortcode: item.shortcode }
                 : { status: "error", message: item.error },
             ),
           ),
@@ -212,6 +218,7 @@ export function NotionImport() {
                 recipe={item.recipe}
                 status={item.status}
                 existingId={item.existingId ?? undefined}
+                existingShortcode={item.existingShortcode ?? undefined}
                 reasons={item.reasons}
                 selected={selected.has(item.pageId)}
                 disabled={item.status === "needs-formatting"}

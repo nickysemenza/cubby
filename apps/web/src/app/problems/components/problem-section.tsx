@@ -31,22 +31,29 @@ import { useRecipeUsage } from "./recipe-usage-context";
 // expander reveals the rest in place.
 const INITIAL_VISIBLE = 12;
 
-// Type-safe route patterns for entity detail pages
-type RoutePattern = { to: EntityDetailRoute; params: EntityDetailParams };
+// Type-safe route patterns for entity detail pages: either a router-typed
+// `to`+`params` pair, or a fully-resolved href for rows a detector has already
+// turned into a shortcode-bearing path server-side (e.g. the household-tracker
+// rows, whose `href` is built from `row.shortcode` in project/attention.ts).
+type RoutePattern =
+  | { to: EntityDetailRoute; params: EntityDetailParams }
+  | { href: string };
 
-// Detail-route params are `$id` everywhere except cookbook (`$cookbookId`), so
-// pulling the entity id back out of a RoutePattern needs both shapes.
+// Pull the entity id back out of a RoutePattern — the default card key and the
+// recipe-usage lookup both need it. Every shortcode-bearing detail route is
+// keyed `$shortcode` uniformly now (the cookbook `$cookbookId` special case
+// died with the uuid routes), so the structured branch is a single field read.
 const routeEntityId = (route: RoutePattern): string =>
-  "id" in route.params ? route.params.id : route.params.cookbookId;
+  "href" in route ? route.href : route.params.shortcode;
 
 // Noun for the "open the full ___" tooltip, keyed by the card's detail route.
 const ROUTE_NOUN: Record<string, string> = {
-  "/products/$id": "product",
-  "/recipes/$id": "recipe",
-  "/inventory/$id": "inventory entry",
-  "/locations/$id": "location",
-  "/purchases/$id": "charge",
-  "/vendors/$id": "vendor",
+  "/products/$shortcode": "product",
+  "/recipes/$shortcode": "recipe",
+  "/inventory/$shortcode": "inventory entry",
+  "/locations/$shortcode": "location",
+  "/purchases/$shortcode": "charge",
+  "/vendors/$shortcode": "vendor",
 };
 
 // Icon can be either a LucideIcon component or an entity key
@@ -59,14 +66,21 @@ export type RenderedProblemItem = {
   /**
    * Stable React key. Defaults to `title`-`route.params.id`, which collides
    * when two cards share both (e.g. the same ingredient name twice in one
-   * recipe) — set this to a row-unique id in that case.
+   * recipe) — set this to a row-unique id in that case. Also required when
+   * `route` is absent, since the fallback has no id to key off of.
    */
   key?: string;
   title: string;
   subtitle?: string;
   badges?: ReactNode[];
   details?: ReactNode[];
-  route: RoutePattern;
+  /**
+   * Absent for a row whose target no longer exists — an orphaned-embedding
+   * row points at an entity that was already deleted, so there is nothing to
+   * link to. The card renders unlinked (no "Open" button) rather than a link
+   * that 404s.
+   */
+  route?: RoutePattern;
   editLabel?: string;
   customActions?: ReactNode;
   imageSlot?: ReactNode;
@@ -256,7 +270,9 @@ function SectionGroup<T>({
             <ProblemCard
               key={
                 rendered.key ??
-                `${rendered.title}-${routeEntityId(rendered.route)}`
+                (rendered.route
+                  ? `${rendered.title}-${routeEntityId(rendered.route)}`
+                  : rendered.title)
               }
               rendered={rendered}
             />
@@ -299,7 +315,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
   // fixing this matter" signal. Only set for ingredient-linked products.
   const recipeUsage = useRecipeUsage();
   const recipeCount =
-    route.to === "/products/$id"
+    route && "to" in route && route.to === "/products/$shortcode"
       ? recipeUsage[routeEntityId(route)]
       : undefined;
 
@@ -332,24 +348,34 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
               <TooltipContent>Quick fix — just this item</TooltipContent>
             </Tooltip>
           )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  render={<Link to={route.to} params={route.params} />}
-                  nativeButton={false}
-                />
-              }
-            >
-              <ExternalLink className="mr-1 size-3" />
-              {editLabel}
-            </TooltipTrigger>
-            <TooltipContent>
-              Open the full {ROUTE_NOUN[route.to] ?? "record"} page
-            </TooltipContent>
-          </Tooltip>
+          {route && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    render={
+                      "href" in route ? (
+                        <Link to={route.href} />
+                      ) : (
+                        <Link to={route.to} params={route.params} />
+                      )
+                    }
+                    nativeButton={false}
+                  />
+                }
+              >
+                <ExternalLink className="mr-1 size-3" />
+                {editLabel}
+              </TooltipTrigger>
+              <TooltipContent>
+                Open the full{" "}
+                {("to" in route ? ROUTE_NOUN[route.to] : undefined) ?? "record"}{" "}
+                page
+              </TooltipContent>
+            </Tooltip>
+          )}
           {customActions}
         </div>
       }

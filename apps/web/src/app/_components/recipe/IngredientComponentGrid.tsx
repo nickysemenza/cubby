@@ -78,6 +78,7 @@ export function IngredientComponentGrid({
                   <div>
                     <EntityPreviewLink
                       entity="recipe"
+                      shortcode={node.recipe.shortcode}
                       id={node.recipe.id}
                       className={dottedEntityLink}
                     >
@@ -109,6 +110,7 @@ export function IngredientComponentGrid({
               >
                 <EntityPreviewLink
                   entity="ingredient"
+                  shortcode={row.ingredientShortcode}
                   id={row.ingredientId}
                   className={dottedEntityLink}
                 >

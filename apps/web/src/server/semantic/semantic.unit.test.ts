@@ -89,6 +89,7 @@ describe("hybrid ranking", () => {
   const createdAt = new Date("2026-06-28T00:00:00Z");
   const product = (id: string, name: string) => ({
     id,
+    shortcode: `PRD-${id.toUpperCase()}`,
     entityType: "product" as const,
     name,
     subtitle: "generic",

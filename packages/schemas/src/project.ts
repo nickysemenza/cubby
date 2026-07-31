@@ -3,11 +3,16 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import {
   expenseId,
+  expenseShortcode,
   productId,
   projectId,
+  projectShortcode,
   purchaseId,
+  purchaseShortcode,
   taskId,
+  taskShortcode,
   vendorId,
+  productShortcode,
 } from "./identifiers";
 import {
   createPaginatedResponseSchema,
@@ -287,6 +292,7 @@ export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
  */
 export const projectOptionsOut = z.object({
   id: projectId,
+  shortcode: projectShortcode,
   name: z.string(),
   // Carried so a picker can rank by "was this project running on that date?"
   // without a second round trip — see rankProjectSuggestions. These are the
@@ -407,9 +413,12 @@ export type ProjectRollup = z.infer<typeof projectRollup>;
 
 export const projectOut = z.object({
   id: projectId,
+  shortcode: projectShortcode,
   ...projectFields,
   /** Null when the project has no parent, or the parent is gone/soft-deleted. */
   parentProjectName: z.string().nullable(),
+  /** Public id for the parent link — same liveness rule as `parentProjectName`. */
+  parentProjectShortcode: projectShortcode.nullable(),
   /** Live sub-project ids (direct children only). */
   childProjectIds: z.array(projectId),
   blockedByIds: z.array(projectId),
@@ -594,12 +603,16 @@ export type TaskSortField = (typeof taskSortableFields)[number];
 
 export const taskOut = z.object({
   id: taskId,
+  shortcode: taskShortcode,
   ...taskFields,
   projectName: z.string().nullable(),
+  projectShortcode: projectShortcode.nullable(),
   /** Null when there is no subject product, or it is gone/soft-deleted. */
   subjectProductName: z.string().nullable(),
+  subjectProductShortcode: productShortcode.nullable(),
   /** Null when the task has no parent, or the parent is gone/soft-deleted. */
   parentTaskName: z.string().nullable(),
+  parentTaskShortcode: taskShortcode.nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
   /** Live subtask count (incl. done ones) — 0 for a subtask itself (one level). */
@@ -659,6 +672,10 @@ export const blockedReasonSchema = z.object({
   chain: z.array(
     z.object({
       id: z.string(),
+      // Public id for the link. Deliberately a plain string (not the
+      // task/project-branded shortcode schema) — a single node type spans
+      // both entity kinds, discriminated by `type`.
+      shortcode: z.string(),
       name: z.string(),
       status: z.string(),
       type: z.enum(["task", "project"]),
@@ -669,9 +686,12 @@ export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 
 export const actionableTaskOut = z.object({
   id: taskId,
+  shortcode: taskShortcode,
   ...taskFields,
   projectName: z.string().nullable(),
+  projectShortcode: projectShortcode.nullable(),
   subjectProductName: z.string().nullable(),
+  subjectProductShortcode: productShortcode.nullable(),
   blockedByIds: z.array(taskId),
   blockingIds: z.array(taskId),
   // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
@@ -1011,6 +1031,7 @@ export type ExpenseSortField = (typeof expenseSortableFields)[number];
 
 export const expenseOut = z.object({
   id: expenseId,
+  shortcode: expenseShortcode,
   ...expenseFields,
   /**
    * The charge this line belongs to. Null for the rows with no vendor recorded —
@@ -1018,13 +1039,17 @@ export const expenseOut = z.object({
    * a charge that never happened.
    */
   purchaseId: purchaseId.nullable(),
+  /** The charge's own shortcode — null along with `purchaseId` when unattached. */
+  purchaseShortcode: purchaseShortcode.nullable(),
   /** The charge's vendor, denormalized onto the line so tables can link it. */
   vendorId: vendorId.nullable(),
   projectName: z.string().nullable(),
+  projectShortcode: projectShortcode.nullable(),
   // Null when unlinked *or* when the linked product has been soft-deleted —
   // product deletion deliberately does not block on referencing expenses
   // (unlike project deletion), so this null branch is routinely reachable.
   productName: z.string().nullable(),
+  productShortcode: productShortcode.nullable(),
   ...timestampedFields,
 });
 export type ExpenseOut = z.infer<typeof expenseOut>;
@@ -1493,7 +1518,12 @@ export const projectPortfolioAnalyticsOut = z.object({
     }),
   ),
   spendingByProject: z.array(
-    z.object({ projectId, projectName: z.string(), spend: z.number() }),
+    z.object({
+      projectId,
+      projectShortcode,
+      projectName: z.string(),
+      spend: z.number(),
+    }),
   ),
   monthlySpend: z.array(expenseMonthlyAggregate),
   plannedVsActual: z.array(
@@ -1503,6 +1533,7 @@ export const projectPortfolioAnalyticsOut = z.object({
   taskHeatmap: z.array(
     z.object({
       projectId,
+      projectShortcode,
       projectName: z.string(),
       openTaskCount: z.number().int(),
     }),

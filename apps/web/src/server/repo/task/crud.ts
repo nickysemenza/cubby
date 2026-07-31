@@ -214,7 +214,7 @@ async function assertNoLiveSubtasks(
 }
 
 const taskReader = createEntityReader({
-  entityName: "task",
+  entity: "task",
   fetchById: fetchTaskWithProject,
   fromDB: async (db, row) => {
     const [deps, subtaskCounts] = await Promise.all([
@@ -235,6 +235,9 @@ const taskReader = createEntityReader({
 
 export const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
   taskReader.getByID(db, id);
+
+export const getTaskByShortcode = (db: Database, shortcode: string) =>
+  taskReader.getByShortcode(db, shortcode);
 
 /**
  * Batch by-id read for bulk-write results (`moveTasks`/`setTasksStatus`) — the

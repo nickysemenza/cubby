@@ -7,6 +7,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { StatusText } from "~/components/ui/status-text";
+import { entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { AddToMeal } from "./add-to-meal";
 import {
@@ -89,8 +90,7 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
       className="rounded-lg border border-[var(--border)] p-4 transition-colors hover:bg-accent"
     >
       <Link
-        to="/recipes/$id"
-        params={{ id: recipe.recipeId }}
+        {...entityDetailLink("recipe", recipe.recipeShortcode)}
         className="flex flex-col gap-2"
       >
         <Row align="start" justify="between" gap="sm">

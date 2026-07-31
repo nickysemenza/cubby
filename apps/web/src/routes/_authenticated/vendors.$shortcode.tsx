@@ -8,13 +8,13 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 
-export const Route = createFileRoute("/_authenticated/vendors/$id")({
+export const Route = createFileRoute("/_authenticated/vendors/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
-    // `vendor.getByID` takes the branded id as a bare scalar (its router is
-    // hand-rolled, not crud-factory), so no `{ id }` wrapper here.
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.vendor.getByID.queryOptions(params.id),
+      context.trpc.vendor.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -32,13 +32,17 @@ export const Route = createFileRoute("/_authenticated/vendors/$id")({
 });
 
 function VendorDetailPage() {
-  const { id } = Route.useParams();
+  const { shortcode } = Route.useParams();
   const api = useTRPC();
   const { data: vendor } = useSuspenseQuery(
-    api.vendor.getByID.queryOptions(id),
+    api.vendor.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(vendor.name);
+  useDocumentTitle(vendor?.name);
 
-  return <VendorDetail key={id} vendor={vendor} />;
+  // The loader already threw notFound for an unknown code; this guard only
+  // satisfies the nullable output type.
+  if (!vendor) return null;
+
+  return <VendorDetail key={shortcode} vendor={vendor} />;
 }

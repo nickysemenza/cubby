@@ -1,5 +1,10 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeIngredientShortcode,
+  unsafeRecipeId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import {
   type HarvestRow,
@@ -50,8 +55,10 @@ const row = (
   recipe = "r1",
 ): HarvestRow => ({
   ingredientId: unsafeIngredientId(`ing-${ingredient}`),
+  ingredientShortcode: unsafeIngredientShortcode(`ING-${ingredient}`),
   ingredientName: ingredient,
   recipeId: unsafeRecipeId(`rec-${recipe}`),
+  recipeShortcode: unsafeRecipeShortcode(`RCP-${recipe}`),
   recipeName: recipe,
   rawLine: `${ingredient} line`,
   amounts,

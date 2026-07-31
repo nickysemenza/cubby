@@ -19,6 +19,7 @@ import { FilterableCombobox } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { mealMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -266,8 +267,7 @@ function RecipeRow({
       className="rounded-lg border border-[var(--border)] p-2"
     >
       <Link
-        to="/recipes/$id"
-        params={{ id: mr.recipeId }}
+        {...entityDetailLink("recipe", mr.recipe.shortcode)}
         className="flex-1 truncate font-medium text-sm hover:underline"
         title={mr.recipe.name}
       >

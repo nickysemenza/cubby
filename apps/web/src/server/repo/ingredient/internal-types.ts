@@ -7,6 +7,7 @@
  * these are re-exported from the package barrel.
  */
 
+import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import {
   type IngredientListItem,
@@ -94,6 +95,7 @@ export const dbIngredientToTopLevelShape = (
   ingredientData: IngredientSelect,
 ): IngredientOut => ({
   id: ingredientData.id,
+  shortcode: unsafeIngredientShortcode(ingredientData.shortcode),
   name: ingredientData.name,
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,

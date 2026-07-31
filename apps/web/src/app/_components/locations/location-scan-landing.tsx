@@ -61,7 +61,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
         <Row gap="sm" wrap>
           <Link
             to="/inventory/session"
-            search={{ parentId: location.id }}
+            search={{ parent: location.shortcode }}
             className={cn(
               buttonVariants({ variant: "outline", size: "default" }),
               "h-12 flex-1 text-sm",
@@ -71,8 +71,8 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
             Recount
           </Link>
           <Link
-            to="/locations/$id"
-            params={{ id: location.id }}
+            to="/locations/$shortcode"
+            params={{ shortcode: location.shortcode }}
             className={cn(
               buttonVariants({ variant: "outline", size: "default" }),
               "h-12 flex-1 text-sm",

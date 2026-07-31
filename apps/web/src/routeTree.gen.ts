@@ -37,56 +37,56 @@ import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedAccountConnectedAppsRouteImport } from './routes/_authenticated/account.connected-apps'
 import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
-import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
+import { Route as AuthenticatedCookbooksShortcodeRouteImport } from './routes/_authenticated/cookbooks.$shortcode'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses.index'
-import { Route as AuthenticatedExpensesIdRouteImport } from './routes/_authenticated/expenses.$id'
+import { Route as AuthenticatedExpensesShortcodeRouteImport } from './routes/_authenticated/expenses.$shortcode'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
 import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
-import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
+import { Route as AuthenticatedIngredientsShortcodeRouteImport } from './routes/_authenticated/ingredients.$shortcode'
 import { Route as AuthenticatedIngredientsEquivalencesRouteImport } from './routes/_authenticated/ingredients.equivalences'
 import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
 import { Route as AuthenticatedIngredientsWorkbenchRouteImport } from './routes/_authenticated/ingredients.workbench'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
-import { Route as AuthenticatedInventoryIdRouteImport } from './routes/_authenticated/inventory.$id'
+import { Route as AuthenticatedInventoryShortcodeRouteImport } from './routes/_authenticated/inventory.$shortcode'
 import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
 import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
 import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
 import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
 import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
-import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
+import { Route as AuthenticatedLocationsShortcodeRouteImport } from './routes/_authenticated/locations.$shortcode'
 import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authenticated/meals.index'
-import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
+import { Route as AuthenticatedMealsShortcodeRouteImport } from './routes/_authenticated/meals.$shortcode'
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
-import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
+import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_authenticated/products.$shortcode'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
-import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
+import { Route as AuthenticatedProjectsShortcodeRouteImport } from './routes/_authenticated/projects.$shortcode'
 import { Route as AuthenticatedPurchasesIndexRouteImport } from './routes/_authenticated/purchases.index'
-import { Route as AuthenticatedPurchasesIdRouteImport } from './routes/_authenticated/purchases.$id'
+import { Route as AuthenticatedPurchasesShortcodeRouteImport } from './routes/_authenticated/purchases.$shortcode'
 import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
-import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
+import { Route as AuthenticatedRecipesShortcodeRouteImport } from './routes/_authenticated/recipes.$shortcode'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks.index'
-import { Route as AuthenticatedTasksIdRouteImport } from './routes/_authenticated/tasks.$id'
+import { Route as AuthenticatedTasksShortcodeRouteImport } from './routes/_authenticated/tasks.$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
 import { Route as AuthenticatedVendorsIndexRouteImport } from './routes/_authenticated/vendors.index'
-import { Route as AuthenticatedVendorsIdRouteImport } from './routes/_authenticated/vendors.$id'
+import { Route as AuthenticatedVendorsShortcodeRouteImport } from './routes/_authenticated/vendors.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
 import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
-import { Route as AuthenticatedRecipesIdExportRouteImport } from './routes/_authenticated/recipes.$id_.export'
+import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './routes/_authenticated/recipes.$shortcode_.export'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 
@@ -237,10 +237,10 @@ const AuthenticatedCookbooksIndexRoute =
     path: '/cookbooks/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedCookbooksCookbookIdRoute =
-  AuthenticatedCookbooksCookbookIdRouteImport.update({
-    id: '/cookbooks/$cookbookId',
-    path: '/cookbooks/$cookbookId',
+const AuthenticatedCookbooksShortcodeRoute =
+  AuthenticatedCookbooksShortcodeRouteImport.update({
+    id: '/cookbooks/$shortcode',
+    path: '/cookbooks/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedExpensesIndexRoute =
@@ -249,11 +249,12 @@ const AuthenticatedExpensesIndexRoute =
     path: '/expenses/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedExpensesIdRoute = AuthenticatedExpensesIdRouteImport.update({
-  id: '/expenses/$id',
-  path: '/expenses/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedExpensesShortcodeRoute =
+  AuthenticatedExpensesShortcodeRouteImport.update({
+    id: '/expenses/$shortcode',
+    path: '/expenses/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedImagesIndexRoute =
   AuthenticatedImagesIndexRouteImport.update({
     id: '/images/',
@@ -271,10 +272,10 @@ const AuthenticatedIngredientsIndexRoute =
     path: '/ingredients/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedIngredientsIdRoute =
-  AuthenticatedIngredientsIdRouteImport.update({
-    id: '/ingredients/$id',
-    path: '/ingredients/$id',
+const AuthenticatedIngredientsShortcodeRoute =
+  AuthenticatedIngredientsShortcodeRouteImport.update({
+    id: '/ingredients/$shortcode',
+    path: '/ingredients/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedIngredientsEquivalencesRoute =
@@ -301,10 +302,10 @@ const AuthenticatedInventoryIndexRoute =
     path: '/inventory/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedInventoryIdRoute =
-  AuthenticatedInventoryIdRouteImport.update({
-    id: '/inventory/$id',
-    path: '/inventory/$id',
+const AuthenticatedInventoryShortcodeRoute =
+  AuthenticatedInventoryShortcodeRouteImport.update({
+    id: '/inventory/$shortcode',
+    path: '/inventory/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedInventoryBulkEditRoute =
@@ -337,10 +338,10 @@ const AuthenticatedLocationsIndexRoute =
     path: '/locations/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedLocationsIdRoute =
-  AuthenticatedLocationsIdRouteImport.update({
-    id: '/locations/$id',
-    path: '/locations/$id',
+const AuthenticatedLocationsShortcodeRoute =
+  AuthenticatedLocationsShortcodeRouteImport.update({
+    id: '/locations/$shortcode',
+    path: '/locations/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedLocationsArrangeRoute =
@@ -360,11 +361,12 @@ const AuthenticatedMealsIndexRoute = AuthenticatedMealsIndexRouteImport.update({
   path: '/meals/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedMealsIdRoute = AuthenticatedMealsIdRouteImport.update({
-  id: '/meals/$id',
-  path: '/meals/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedMealsShortcodeRoute =
+  AuthenticatedMealsShortcodeRouteImport.update({
+    id: '/meals/$shortcode',
+    path: '/meals/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedMealsShoppingListRoute =
   AuthenticatedMealsShoppingListRouteImport.update({
     id: '/meals/shopping-list',
@@ -383,11 +385,12 @@ const AuthenticatedProductsIndexRoute =
     path: '/products/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedProductsIdRoute = AuthenticatedProductsIdRouteImport.update({
-  id: '/products/$id',
-  path: '/products/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedProductsShortcodeRoute =
+  AuthenticatedProductsShortcodeRouteImport.update({
+    id: '/products/$shortcode',
+    path: '/products/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProductsNewRoute =
   AuthenticatedProductsNewRouteImport.update({
     id: '/products/new',
@@ -400,21 +403,22 @@ const AuthenticatedProjectsIndexRoute =
     path: '/projects/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
-  id: '/projects/$id',
-  path: '/projects/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedProjectsShortcodeRoute =
+  AuthenticatedProjectsShortcodeRouteImport.update({
+    id: '/projects/$shortcode',
+    path: '/projects/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedPurchasesIndexRoute =
   AuthenticatedPurchasesIndexRouteImport.update({
     id: '/purchases/',
     path: '/purchases/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedPurchasesIdRoute =
-  AuthenticatedPurchasesIdRouteImport.update({
-    id: '/purchases/$id',
-    path: '/purchases/$id',
+const AuthenticatedPurchasesShortcodeRoute =
+  AuthenticatedPurchasesShortcodeRouteImport.update({
+    id: '/purchases/$shortcode',
+    path: '/purchases/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedRecipesIndexRoute =
@@ -423,11 +427,12 @@ const AuthenticatedRecipesIndexRoute =
     path: '/recipes/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedRecipesIdRoute = AuthenticatedRecipesIdRouteImport.update({
-  id: '/recipes/$id',
-  path: '/recipes/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedRecipesShortcodeRoute =
+  AuthenticatedRecipesShortcodeRouteImport.update({
+    id: '/recipes/$shortcode',
+    path: '/recipes/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecipesCompareRoute =
   AuthenticatedRecipesCompareRouteImport.update({
     id: '/recipes/compare',
@@ -462,11 +467,12 @@ const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
   path: '/tasks/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedTasksIdRoute = AuthenticatedTasksIdRouteImport.update({
-  id: '/tasks/$id',
-  path: '/tasks/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedTasksShortcodeRoute =
+  AuthenticatedTasksShortcodeRouteImport.update({
+    id: '/tasks/$shortcode',
+    path: '/tasks/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedUsdaIndexRoute = AuthenticatedUsdaIndexRouteImport.update({
   id: '/usda/',
   path: '/usda/',
@@ -483,11 +489,12 @@ const AuthenticatedVendorsIndexRoute =
     path: '/vendors/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedVendorsIdRoute = AuthenticatedVendorsIdRouteImport.update({
-  id: '/vendors/$id',
-  path: '/vendors/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedVendorsShortcodeRoute =
+  AuthenticatedVendorsShortcodeRouteImport.update({
+    id: '/vendors/$shortcode',
+    path: '/vendors/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -515,10 +522,10 @@ const DotwellKnownOauthProtectedResourceApiMcpRoute =
     path: '/api/mcp',
     getParentRoute: () => DotwellKnownOauthProtectedResourceRoute,
   } as any)
-const AuthenticatedRecipesIdExportRoute =
-  AuthenticatedRecipesIdExportRouteImport.update({
-    id: '/recipes/$id_/export',
-    path: '/recipes/$id/export',
+const AuthenticatedRecipesShortcodeExportRoute =
+  AuthenticatedRecipesShortcodeExportRouteImport.update({
+    id: '/recipes/$shortcode_/export',
+    path: '/recipes/$shortcode/export',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedUsdaNdbCodeRoute =
@@ -561,36 +568,36 @@ export interface FileRoutesByFullPath {
   '/docs/': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
-  '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
-  '/expenses/$id': typeof AuthenticatedExpensesIdRoute
+  '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
+  '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
-  '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
+  '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
   '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
-  '/inventory/$id': typeof AuthenticatedInventoryIdRoute
+  '/inventory/$shortcode': typeof AuthenticatedInventoryShortcodeRoute
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
-  '/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/meals/$id': typeof AuthenticatedMealsIdRoute
+  '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
-  '/products/$id': typeof AuthenticatedProductsIdRoute
+  '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
-  '/projects/$id': typeof AuthenticatedProjectsIdRoute
-  '/purchases/$id': typeof AuthenticatedPurchasesIdRoute
-  '/recipes/$id': typeof AuthenticatedRecipesIdRoute
+  '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
+  '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
+  '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
-  '/tasks/$id': typeof AuthenticatedTasksIdRoute
+  '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
-  '/vendors/$id': typeof AuthenticatedVendorsIdRoute
+  '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -611,7 +618,7 @@ export interface FileRoutesByFullPath {
   '/vendors/': typeof AuthenticatedVendorsIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
-  '/recipes/$id/export': typeof AuthenticatedRecipesIdExportRoute
+  '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -641,36 +648,36 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
-  '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
-  '/expenses/$id': typeof AuthenticatedExpensesIdRoute
+  '/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
+  '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
-  '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
+  '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
   '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
-  '/inventory/$id': typeof AuthenticatedInventoryIdRoute
+  '/inventory/$shortcode': typeof AuthenticatedInventoryShortcodeRoute
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
-  '/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/meals/$id': typeof AuthenticatedMealsIdRoute
+  '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
-  '/products/$id': typeof AuthenticatedProductsIdRoute
+  '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
-  '/projects/$id': typeof AuthenticatedProjectsIdRoute
-  '/purchases/$id': typeof AuthenticatedPurchasesIdRoute
-  '/recipes/$id': typeof AuthenticatedRecipesIdRoute
+  '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
+  '/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
+  '/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
-  '/tasks/$id': typeof AuthenticatedTasksIdRoute
+  '/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
-  '/vendors/$id': typeof AuthenticatedVendorsIdRoute
+  '/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -691,7 +698,7 @@ export interface FileRoutesByTo {
   '/vendors': typeof AuthenticatedVendorsIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
-  '/recipes/$id/export': typeof AuthenticatedRecipesIdExportRoute
+  '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -724,36 +731,36 @@ export interface FileRoutesById {
   '/docs/': typeof DocsIndexRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/_authenticated/account/connected-apps': typeof AuthenticatedAccountConnectedAppsRoute
-  '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
-  '/_authenticated/expenses/$id': typeof AuthenticatedExpensesIdRoute
+  '/_authenticated/cookbooks/$shortcode': typeof AuthenticatedCookbooksShortcodeRoute
+  '/_authenticated/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
-  '/_authenticated/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
+  '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
   '/_authenticated/ingredients/new': typeof AuthenticatedIngredientsNewRoute
   '/_authenticated/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
-  '/_authenticated/inventory/$id': typeof AuthenticatedInventoryIdRoute
+  '/_authenticated/inventory/$shortcode': typeof AuthenticatedInventoryShortcodeRoute
   '/_authenticated/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/_authenticated/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/_authenticated/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
-  '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/_authenticated/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/_authenticated/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/_authenticated/meals/$id': typeof AuthenticatedMealsIdRoute
+  '/_authenticated/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
-  '/_authenticated/products/$id': typeof AuthenticatedProductsIdRoute
+  '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
-  '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
-  '/_authenticated/purchases/$id': typeof AuthenticatedPurchasesIdRoute
-  '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
+  '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
+  '/_authenticated/purchases/$shortcode': typeof AuthenticatedPurchasesShortcodeRoute
+  '/_authenticated/recipes/$shortcode': typeof AuthenticatedRecipesShortcodeRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/_authenticated/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
-  '/_authenticated/tasks/$id': typeof AuthenticatedTasksIdRoute
+  '/_authenticated/tasks/$shortcode': typeof AuthenticatedTasksShortcodeRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
-  '/_authenticated/vendors/$id': typeof AuthenticatedVendorsIdRoute
+  '/_authenticated/vendors/$shortcode': typeof AuthenticatedVendorsShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -774,7 +781,7 @@ export interface FileRoutesById {
   '/_authenticated/vendors/': typeof AuthenticatedVendorsIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
-  '/_authenticated/recipes/$id_/export': typeof AuthenticatedRecipesIdExportRoute
+  '/_authenticated/recipes/$shortcode_/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -807,36 +814,36 @@ export interface FileRouteTypes {
     | '/docs/'
     | '/account/$accountView'
     | '/account/connected-apps'
-    | '/cookbooks/$cookbookId'
-    | '/expenses/$id'
+    | '/cookbooks/$shortcode'
+    | '/expenses/$shortcode'
     | '/images/$id'
-    | '/ingredients/$id'
+    | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
     | '/ingredients/new'
     | '/ingredients/workbench'
-    | '/inventory/$id'
+    | '/inventory/$shortcode'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
     | '/inventory/new'
     | '/inventory/session'
-    | '/locations/$id'
+    | '/locations/$shortcode'
     | '/locations/arrange'
     | '/locations/new'
-    | '/meals/$id'
+    | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
-    | '/products/$id'
+    | '/products/$shortcode'
     | '/products/new'
-    | '/projects/$id'
-    | '/purchases/$id'
-    | '/recipes/$id'
+    | '/projects/$shortcode'
+    | '/purchases/$shortcode'
+    | '/recipes/$shortcode'
     | '/recipes/compare'
     | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
-    | '/tasks/$id'
+    | '/tasks/$shortcode'
     | '/usda/$id'
-    | '/vendors/$id'
+    | '/vendors/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
@@ -857,7 +864,7 @@ export interface FileRouteTypes {
     | '/vendors/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
-    | '/recipes/$id/export'
+    | '/recipes/$shortcode/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   fileRoutesByTo: FileRoutesByTo
@@ -887,36 +894,36 @@ export interface FileRouteTypes {
     | '/docs'
     | '/account/$accountView'
     | '/account/connected-apps'
-    | '/cookbooks/$cookbookId'
-    | '/expenses/$id'
+    | '/cookbooks/$shortcode'
+    | '/expenses/$shortcode'
     | '/images/$id'
-    | '/ingredients/$id'
+    | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
     | '/ingredients/new'
     | '/ingredients/workbench'
-    | '/inventory/$id'
+    | '/inventory/$shortcode'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
     | '/inventory/new'
     | '/inventory/session'
-    | '/locations/$id'
+    | '/locations/$shortcode'
     | '/locations/arrange'
     | '/locations/new'
-    | '/meals/$id'
+    | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
-    | '/products/$id'
+    | '/products/$shortcode'
     | '/products/new'
-    | '/projects/$id'
-    | '/purchases/$id'
-    | '/recipes/$id'
+    | '/projects/$shortcode'
+    | '/purchases/$shortcode'
+    | '/recipes/$shortcode'
     | '/recipes/compare'
     | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
-    | '/tasks/$id'
+    | '/tasks/$shortcode'
     | '/usda/$id'
-    | '/vendors/$id'
+    | '/vendors/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
@@ -937,7 +944,7 @@ export interface FileRouteTypes {
     | '/vendors'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
-    | '/recipes/$id/export'
+    | '/recipes/$shortcode/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   id:
@@ -969,36 +976,36 @@ export interface FileRouteTypes {
     | '/docs/'
     | '/_authenticated/account/$accountView'
     | '/_authenticated/account/connected-apps'
-    | '/_authenticated/cookbooks/$cookbookId'
-    | '/_authenticated/expenses/$id'
+    | '/_authenticated/cookbooks/$shortcode'
+    | '/_authenticated/expenses/$shortcode'
     | '/_authenticated/images/$id'
-    | '/_authenticated/ingredients/$id'
+    | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
     | '/_authenticated/ingredients/new'
     | '/_authenticated/ingredients/workbench'
-    | '/_authenticated/inventory/$id'
+    | '/_authenticated/inventory/$shortcode'
     | '/_authenticated/inventory/bulk-edit'
     | '/_authenticated/inventory/bulk-move'
     | '/_authenticated/inventory/new'
     | '/_authenticated/inventory/session'
-    | '/_authenticated/locations/$id'
+    | '/_authenticated/locations/$shortcode'
     | '/_authenticated/locations/arrange'
     | '/_authenticated/locations/new'
-    | '/_authenticated/meals/$id'
+    | '/_authenticated/meals/$shortcode'
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
-    | '/_authenticated/products/$id'
+    | '/_authenticated/products/$shortcode'
     | '/_authenticated/products/new'
-    | '/_authenticated/projects/$id'
-    | '/_authenticated/purchases/$id'
-    | '/_authenticated/recipes/$id'
+    | '/_authenticated/projects/$shortcode'
+    | '/_authenticated/purchases/$shortcode'
+    | '/_authenticated/recipes/$shortcode'
     | '/_authenticated/recipes/compare'
     | '/_authenticated/recipes/import'
     | '/_authenticated/recipes/new'
     | '/_authenticated/search/debug'
-    | '/_authenticated/tasks/$id'
+    | '/_authenticated/tasks/$shortcode'
     | '/_authenticated/usda/$id'
-    | '/_authenticated/vendors/$id'
+    | '/_authenticated/vendors/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
@@ -1019,7 +1026,7 @@ export interface FileRouteTypes {
     | '/_authenticated/vendors/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
-    | '/_authenticated/recipes/$id_/export'
+    | '/_authenticated/recipes/$shortcode_/export'
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
   fileRoutesById: FileRoutesById
@@ -1238,11 +1245,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCookbooksIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/cookbooks/$cookbookId': {
-      id: '/_authenticated/cookbooks/$cookbookId'
-      path: '/cookbooks/$cookbookId'
-      fullPath: '/cookbooks/$cookbookId'
-      preLoaderRoute: typeof AuthenticatedCookbooksCookbookIdRouteImport
+    '/_authenticated/cookbooks/$shortcode': {
+      id: '/_authenticated/cookbooks/$shortcode'
+      path: '/cookbooks/$shortcode'
+      fullPath: '/cookbooks/$shortcode'
+      preLoaderRoute: typeof AuthenticatedCookbooksShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/expenses/': {
@@ -1252,11 +1259,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/expenses/$id': {
-      id: '/_authenticated/expenses/$id'
-      path: '/expenses/$id'
-      fullPath: '/expenses/$id'
-      preLoaderRoute: typeof AuthenticatedExpensesIdRouteImport
+    '/_authenticated/expenses/$shortcode': {
+      id: '/_authenticated/expenses/$shortcode'
+      path: '/expenses/$shortcode'
+      fullPath: '/expenses/$shortcode'
+      preLoaderRoute: typeof AuthenticatedExpensesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/images/': {
@@ -1280,11 +1287,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIngredientsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/$id': {
-      id: '/_authenticated/ingredients/$id'
-      path: '/ingredients/$id'
-      fullPath: '/ingredients/$id'
-      preLoaderRoute: typeof AuthenticatedIngredientsIdRouteImport
+    '/_authenticated/ingredients/$shortcode': {
+      id: '/_authenticated/ingredients/$shortcode'
+      path: '/ingredients/$shortcode'
+      fullPath: '/ingredients/$shortcode'
+      preLoaderRoute: typeof AuthenticatedIngredientsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ingredients/equivalences': {
@@ -1315,11 +1322,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/inventory/$id': {
-      id: '/_authenticated/inventory/$id'
-      path: '/inventory/$id'
-      fullPath: '/inventory/$id'
-      preLoaderRoute: typeof AuthenticatedInventoryIdRouteImport
+    '/_authenticated/inventory/$shortcode': {
+      id: '/_authenticated/inventory/$shortcode'
+      path: '/inventory/$shortcode'
+      fullPath: '/inventory/$shortcode'
+      preLoaderRoute: typeof AuthenticatedInventoryShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory/bulk-edit': {
@@ -1357,11 +1364,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLocationsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/locations/$id': {
-      id: '/_authenticated/locations/$id'
-      path: '/locations/$id'
-      fullPath: '/locations/$id'
-      preLoaderRoute: typeof AuthenticatedLocationsIdRouteImport
+    '/_authenticated/locations/$shortcode': {
+      id: '/_authenticated/locations/$shortcode'
+      path: '/locations/$shortcode'
+      fullPath: '/locations/$shortcode'
+      preLoaderRoute: typeof AuthenticatedLocationsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/locations/arrange': {
@@ -1385,11 +1392,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMealsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/meals/$id': {
-      id: '/_authenticated/meals/$id'
-      path: '/meals/$id'
-      fullPath: '/meals/$id'
-      preLoaderRoute: typeof AuthenticatedMealsIdRouteImport
+    '/_authenticated/meals/$shortcode': {
+      id: '/_authenticated/meals/$shortcode'
+      path: '/meals/$shortcode'
+      fullPath: '/meals/$shortcode'
+      preLoaderRoute: typeof AuthenticatedMealsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/meals/shopping-list': {
@@ -1413,11 +1420,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/products/$id': {
-      id: '/_authenticated/products/$id'
-      path: '/products/$id'
-      fullPath: '/products/$id'
-      preLoaderRoute: typeof AuthenticatedProductsIdRouteImport
+    '/_authenticated/products/$shortcode': {
+      id: '/_authenticated/products/$shortcode'
+      path: '/products/$shortcode'
+      fullPath: '/products/$shortcode'
+      preLoaderRoute: typeof AuthenticatedProductsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/new': {
@@ -1434,11 +1441,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/projects/$id': {
-      id: '/_authenticated/projects/$id'
-      path: '/projects/$id'
-      fullPath: '/projects/$id'
-      preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
+    '/_authenticated/projects/$shortcode': {
+      id: '/_authenticated/projects/$shortcode'
+      path: '/projects/$shortcode'
+      fullPath: '/projects/$shortcode'
+      preLoaderRoute: typeof AuthenticatedProjectsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/purchases/': {
@@ -1448,11 +1455,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPurchasesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/purchases/$id': {
-      id: '/_authenticated/purchases/$id'
-      path: '/purchases/$id'
-      fullPath: '/purchases/$id'
-      preLoaderRoute: typeof AuthenticatedPurchasesIdRouteImport
+    '/_authenticated/purchases/$shortcode': {
+      id: '/_authenticated/purchases/$shortcode'
+      path: '/purchases/$shortcode'
+      fullPath: '/purchases/$shortcode'
+      preLoaderRoute: typeof AuthenticatedPurchasesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/recipes/': {
@@ -1462,11 +1469,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/recipes/$id': {
-      id: '/_authenticated/recipes/$id'
-      path: '/recipes/$id'
-      fullPath: '/recipes/$id'
-      preLoaderRoute: typeof AuthenticatedRecipesIdRouteImport
+    '/_authenticated/recipes/$shortcode': {
+      id: '/_authenticated/recipes/$shortcode'
+      path: '/recipes/$shortcode'
+      fullPath: '/recipes/$shortcode'
+      preLoaderRoute: typeof AuthenticatedRecipesShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/recipes/compare': {
@@ -1511,11 +1518,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/tasks/$id': {
-      id: '/_authenticated/tasks/$id'
-      path: '/tasks/$id'
-      fullPath: '/tasks/$id'
-      preLoaderRoute: typeof AuthenticatedTasksIdRouteImport
+    '/_authenticated/tasks/$shortcode': {
+      id: '/_authenticated/tasks/$shortcode'
+      path: '/tasks/$shortcode'
+      fullPath: '/tasks/$shortcode'
+      preLoaderRoute: typeof AuthenticatedTasksShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/usda/': {
@@ -1539,11 +1546,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVendorsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/vendors/$id': {
-      id: '/_authenticated/vendors/$id'
-      path: '/vendors/$id'
-      fullPath: '/vendors/$id'
-      preLoaderRoute: typeof AuthenticatedVendorsIdRouteImport
+    '/_authenticated/vendors/$shortcode': {
+      id: '/_authenticated/vendors/$shortcode'
+      path: '/vendors/$shortcode'
+      fullPath: '/vendors/$shortcode'
+      preLoaderRoute: typeof AuthenticatedVendorsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/api/auth/$': {
@@ -1581,11 +1588,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRouteImport
       parentRoute: typeof DotwellKnownOauthProtectedResourceRoute
     }
-    '/_authenticated/recipes/$id_/export': {
-      id: '/_authenticated/recipes/$id_/export'
-      path: '/recipes/$id/export'
-      fullPath: '/recipes/$id/export'
-      preLoaderRoute: typeof AuthenticatedRecipesIdExportRouteImport
+    '/_authenticated/recipes/$shortcode_/export': {
+      id: '/_authenticated/recipes/$shortcode_/export'
+      path: '/recipes/$shortcode/export'
+      fullPath: '/recipes/$shortcode/export'
+      preLoaderRoute: typeof AuthenticatedRecipesShortcodeExportRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/usda/ndb/$code': {
@@ -1621,36 +1628,36 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
   AuthenticatedAccountConnectedAppsRoute: typeof AuthenticatedAccountConnectedAppsRoute
-  AuthenticatedCookbooksCookbookIdRoute: typeof AuthenticatedCookbooksCookbookIdRoute
-  AuthenticatedExpensesIdRoute: typeof AuthenticatedExpensesIdRoute
+  AuthenticatedCookbooksShortcodeRoute: typeof AuthenticatedCookbooksShortcodeRoute
+  AuthenticatedExpensesShortcodeRoute: typeof AuthenticatedExpensesShortcodeRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
-  AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
+  AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
   AuthenticatedIngredientsNewRoute: typeof AuthenticatedIngredientsNewRoute
   AuthenticatedIngredientsWorkbenchRoute: typeof AuthenticatedIngredientsWorkbenchRoute
-  AuthenticatedInventoryIdRoute: typeof AuthenticatedInventoryIdRoute
+  AuthenticatedInventoryShortcodeRoute: typeof AuthenticatedInventoryShortcodeRoute
   AuthenticatedInventoryBulkEditRoute: typeof AuthenticatedInventoryBulkEditRoute
   AuthenticatedInventoryBulkMoveRoute: typeof AuthenticatedInventoryBulkMoveRoute
   AuthenticatedInventoryNewRoute: typeof AuthenticatedInventoryNewRoute
   AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
-  AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
+  AuthenticatedLocationsShortcodeRoute: typeof AuthenticatedLocationsShortcodeRoute
   AuthenticatedLocationsArrangeRoute: typeof AuthenticatedLocationsArrangeRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
-  AuthenticatedMealsIdRoute: typeof AuthenticatedMealsIdRoute
+  AuthenticatedMealsShortcodeRoute: typeof AuthenticatedMealsShortcodeRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
-  AuthenticatedProductsIdRoute: typeof AuthenticatedProductsIdRoute
+  AuthenticatedProductsShortcodeRoute: typeof AuthenticatedProductsShortcodeRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
-  AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
-  AuthenticatedPurchasesIdRoute: typeof AuthenticatedPurchasesIdRoute
-  AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
+  AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
+  AuthenticatedPurchasesShortcodeRoute: typeof AuthenticatedPurchasesShortcodeRoute
+  AuthenticatedRecipesShortcodeRoute: typeof AuthenticatedRecipesShortcodeRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
   AuthenticatedRecipesImportRoute: typeof AuthenticatedRecipesImportRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
-  AuthenticatedTasksIdRoute: typeof AuthenticatedTasksIdRoute
+  AuthenticatedTasksShortcodeRoute: typeof AuthenticatedTasksShortcodeRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
-  AuthenticatedVendorsIdRoute: typeof AuthenticatedVendorsIdRoute
+  AuthenticatedVendorsShortcodeRoute: typeof AuthenticatedVendorsShortcodeRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
@@ -1666,7 +1673,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
   AuthenticatedVendorsIndexRoute: typeof AuthenticatedVendorsIndexRoute
-  AuthenticatedRecipesIdExportRoute: typeof AuthenticatedRecipesIdExportRoute
+  AuthenticatedRecipesShortcodeExportRoute: typeof AuthenticatedRecipesShortcodeExportRoute
   AuthenticatedUsdaNdbCodeRoute: typeof AuthenticatedUsdaNdbCodeRoute
   AuthenticatedUsdaUpcCodeRoute: typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -1688,38 +1695,39 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
   AuthenticatedAccountConnectedAppsRoute:
     AuthenticatedAccountConnectedAppsRoute,
-  AuthenticatedCookbooksCookbookIdRoute: AuthenticatedCookbooksCookbookIdRoute,
-  AuthenticatedExpensesIdRoute: AuthenticatedExpensesIdRoute,
+  AuthenticatedCookbooksShortcodeRoute: AuthenticatedCookbooksShortcodeRoute,
+  AuthenticatedExpensesShortcodeRoute: AuthenticatedExpensesShortcodeRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
-  AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
+  AuthenticatedIngredientsShortcodeRoute:
+    AuthenticatedIngredientsShortcodeRoute,
   AuthenticatedIngredientsEquivalencesRoute:
     AuthenticatedIngredientsEquivalencesRoute,
   AuthenticatedIngredientsNewRoute: AuthenticatedIngredientsNewRoute,
   AuthenticatedIngredientsWorkbenchRoute:
     AuthenticatedIngredientsWorkbenchRoute,
-  AuthenticatedInventoryIdRoute: AuthenticatedInventoryIdRoute,
+  AuthenticatedInventoryShortcodeRoute: AuthenticatedInventoryShortcodeRoute,
   AuthenticatedInventoryBulkEditRoute: AuthenticatedInventoryBulkEditRoute,
   AuthenticatedInventoryBulkMoveRoute: AuthenticatedInventoryBulkMoveRoute,
   AuthenticatedInventoryNewRoute: AuthenticatedInventoryNewRoute,
   AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
-  AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
+  AuthenticatedLocationsShortcodeRoute: AuthenticatedLocationsShortcodeRoute,
   AuthenticatedLocationsArrangeRoute: AuthenticatedLocationsArrangeRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
-  AuthenticatedMealsIdRoute: AuthenticatedMealsIdRoute,
+  AuthenticatedMealsShortcodeRoute: AuthenticatedMealsShortcodeRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
-  AuthenticatedProductsIdRoute: AuthenticatedProductsIdRoute,
+  AuthenticatedProductsShortcodeRoute: AuthenticatedProductsShortcodeRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
-  AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
-  AuthenticatedPurchasesIdRoute: AuthenticatedPurchasesIdRoute,
-  AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
+  AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,
+  AuthenticatedPurchasesShortcodeRoute: AuthenticatedPurchasesShortcodeRoute,
+  AuthenticatedRecipesShortcodeRoute: AuthenticatedRecipesShortcodeRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
   AuthenticatedRecipesImportRoute: AuthenticatedRecipesImportRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
-  AuthenticatedTasksIdRoute: AuthenticatedTasksIdRoute,
+  AuthenticatedTasksShortcodeRoute: AuthenticatedTasksShortcodeRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
-  AuthenticatedVendorsIdRoute: AuthenticatedVendorsIdRoute,
+  AuthenticatedVendorsShortcodeRoute: AuthenticatedVendorsShortcodeRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
@@ -1735,7 +1743,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
   AuthenticatedVendorsIndexRoute: AuthenticatedVendorsIndexRoute,
-  AuthenticatedRecipesIdExportRoute: AuthenticatedRecipesIdExportRoute,
+  AuthenticatedRecipesShortcodeExportRoute:
+    AuthenticatedRecipesShortcodeExportRoute,
   AuthenticatedUsdaNdbCodeRoute: AuthenticatedUsdaNdbCodeRoute,
   AuthenticatedUsdaUpcCodeRoute: AuthenticatedUsdaUpcCodeRoute,
 }

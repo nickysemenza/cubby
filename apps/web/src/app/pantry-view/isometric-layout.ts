@@ -54,6 +54,7 @@ export interface FurniturePiece {
   name: string;
   locationType: LocationType;
   locationId: string;
+  locationShortcode: string;
   items: FurnitureItem[];
   shelfLevels: number[];
   /** Breadcrumb path from room root for tooltip display */
@@ -96,6 +97,7 @@ export interface HoverTarget {
   screenX: number;
   screenY: number;
   locationId: string;
+  locationShortcode: string;
 }
 
 // ─── Furniture Specs ────────────────────────────────────────────────────────
@@ -226,6 +228,7 @@ function collectPiecesFromSubtree(
         name: node.name,
         locationType: node.type,
         locationId: node.id,
+        locationShortcode: node.shortcode,
         items,
         shelfLevels: spec.shelfLevels,
         path,
@@ -330,6 +333,7 @@ export function buildRooms(
           name: `${container.name} (items)`,
           locationType: "table",
           locationId: container.id,
+          locationShortcode: container.shortcode,
           items: containerItems,
           shelfLevels: spec.shelfLevels,
           path: zonePath,
@@ -388,6 +392,7 @@ export function buildRooms(
           name: child.name,
           locationType: child.type,
           locationId: child.id,
+          locationShortcode: child.shortcode,
           items: childItems,
           shelfLevels: spec.shelfLevels,
           path: [rootNode.name, child.name],
@@ -418,6 +423,7 @@ export function buildRooms(
         name: `${rootNode.name} (direct)`,
         locationType: "table",
         locationId: rootNode.id,
+        locationShortcode: rootNode.shortcode,
         items: roomDirectItems,
         shelfLevels: spec.shelfLevels,
         path: [rootNode.name],
@@ -665,6 +671,7 @@ function hitTestPieces(
             screenX: 0,
             screenY: 0,
             locationId: piece.locationId,
+            locationShortcode: piece.locationShortcode,
           };
         }
         itemIdx++;
@@ -720,6 +727,7 @@ function hitTestPieces(
         screenX: 0,
         screenY: 0,
         locationId: piece.locationId,
+        locationShortcode: piece.locationShortcode,
       };
     }
   }

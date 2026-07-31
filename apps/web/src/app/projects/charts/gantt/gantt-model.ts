@@ -26,6 +26,7 @@ import { toDayIndex } from "./gantt-date";
 export interface GanttProjectRow {
   kind: "project";
   id: string;
+  shortcode: string;
   name: string;
   depth: number;
   expandable: boolean;
@@ -62,6 +63,7 @@ export interface GanttProjectRow {
 interface GanttTaskRow {
   kind: "task";
   id: string;
+  shortcode: string;
   name: string;
   depth: number;
   status: TaskStatus;
@@ -231,6 +233,7 @@ function buildProjectRow(
   return {
     kind: "project",
     id: project.id,
+    shortcode: project.shortcode,
     name: project.name,
     depth,
     expandable,
@@ -286,6 +289,7 @@ function buildTaskRow(task: TaskOut, depth: number): GanttTaskRow {
   return {
     kind: "task",
     id: task.id,
+    shortcode: task.shortcode,
     name: task.name,
     depth,
     status: task.status,

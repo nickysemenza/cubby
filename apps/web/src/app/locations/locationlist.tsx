@@ -231,7 +231,7 @@ export function LocationList() {
       <>
         <DropdownMenuItem
           render={
-            <Link to="/inventory/session" search={{ parentId: row.id }} />
+            <Link to="/inventory/session" search={{ parent: row.shortcode }} />
           }
         >
           <ScanBarcode className="mr-2 size-4" />

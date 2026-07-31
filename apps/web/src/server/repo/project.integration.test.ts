@@ -1117,6 +1117,7 @@ describe("project repository — date windows (derivation)", () => {
   it("does not hang on a cyclic parent chain — depth-capped at MAX_PROJECT_TREE_DEPTH", () => {
     const a: ProjectParentRow = {
       id: unsafeProjectId("cycle-a"),
+      shortcode: "PRJ-4K7M",
       name: "cycle a",
       parentProjectId: unsafeProjectId("cycle-b"),
       costEstimate: null,
@@ -1126,6 +1127,7 @@ describe("project repository — date windows (derivation)", () => {
     };
     const b: ProjectParentRow = {
       id: unsafeProjectId("cycle-b"),
+      shortcode: "PRJ-5N8Q",
       name: "cycle b",
       parentProjectId: unsafeProjectId("cycle-a"),
       costEstimate: null,
@@ -1458,8 +1460,8 @@ describe("project dashboard — attention detector + summary", () => {
     ]);
     expect(drift.map((d) => d.severity)).toEqual(["info", "info"]);
     expect(drift.map((d) => d.href)).toEqual([
-      `/projects/${project.id}`,
-      `/projects/${project.id}`,
+      `/projects/${project.shortcode}`,
+      `/projects/${project.shortcode}`,
     ]);
     const startItem = drift.find((d) => d.date === "2024-01-01");
     expect(startItem?.description).toBe(
@@ -2033,9 +2035,24 @@ describe("project dashboard — portfolio analytics", () => {
     // `spent` is the blended sum(cost): parent = 100 + 25 + (40 − 15) = 150,
     // child = 40 − 15 = 25, solo = 200.
     expect(analytics.spendingByProject).toEqual([
-      { projectId: solo.id, projectName: "analytics solo", spend: 200 },
-      { projectId: parent.id, projectName: "analytics parent", spend: 150 },
-      { projectId: child.id, projectName: "analytics child", spend: 25 },
+      {
+        projectId: solo.id,
+        projectShortcode: solo.shortcode,
+        projectName: "analytics solo",
+        spend: 200,
+      },
+      {
+        projectId: parent.id,
+        projectShortcode: parent.shortcode,
+        projectName: "analytics parent",
+        spend: 150,
+      },
+      {
+        projectId: child.id,
+        projectShortcode: child.shortcode,
+        projectName: "analytics child",
+        spend: 25,
+      },
     ]);
   });
 
@@ -2059,7 +2076,12 @@ describe("project dashboard — portfolio analytics", () => {
       },
     ]);
     expect(analytics.spendingByProject).toEqual([
-      { projectId: parent.id, projectName: "analytics parent", spend: 150 },
+      {
+        projectId: parent.id,
+        projectShortcode: parent.shortcode,
+        projectName: "analytics parent",
+        spend: 150,
+      },
     ]);
 
     // ...but the expense-grouped aggregates count only expenses whose OWN
@@ -2140,14 +2162,25 @@ describe("project dashboard — portfolio analytics", () => {
 
     const analytics = await projectPortfolioAnalytics(ctx.db, {});
     expect(analytics.taskHeatmap).toEqual([
-      { projectId: child.id, projectName: "analytics child", openTaskCount: 2 },
+      {
+        projectId: child.id,
+        projectShortcode: child.shortcode,
+        projectName: "analytics child",
+        openTaskCount: 2,
+      },
       // 1, not 3 — own open tasks only, and the done one doesn't count.
       {
         projectId: parent.id,
+        projectShortcode: parent.shortcode,
         projectName: "analytics parent",
         openTaskCount: 1,
       },
-      { projectId: solo.id, projectName: "analytics solo", openTaskCount: 0 },
+      {
+        projectId: solo.id,
+        projectShortcode: solo.shortcode,
+        projectName: "analytics solo",
+        openTaskCount: 0,
+      },
     ]);
   });
 });

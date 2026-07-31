@@ -5,7 +5,12 @@ const MAX_RECENTS = 6;
 
 interface RecentJump {
   entityType: SearchableEntity;
-  id: string;
+  /**
+   * The entity's PUBLIC id. Recents are a list of places to navigate to, and
+   * navigation targets are shortcodes — storing the uuid would mean rebuilding
+   * a uuid URL, which is exactly what the cutover removed.
+   */
+  shortcode: string;
   name: string;
 }
 
@@ -13,7 +18,12 @@ interface RecentJump {
 export function getRecents(): RecentJump[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(parsed) ? (parsed as RecentJump[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    // Entries written before the cutover carry a uuid `id` and no `shortcode`.
+    // They can't be navigated to, so drop them rather than render dead rows.
+    return (parsed as RecentJump[]).filter(
+      (jump) => typeof jump?.shortcode === "string",
+    );
   } catch {
     return [];
   }
@@ -21,10 +31,10 @@ export function getRecents(): RecentJump[] {
 
 export function pushRecent(jump: RecentJump): void {
   try {
-    const next = [jump, ...getRecents().filter((r) => r.id !== jump.id)].slice(
-      0,
-      MAX_RECENTS,
-    );
+    const next = [
+      jump,
+      ...getRecents().filter((r) => r.shortcode !== jump.shortcode),
+    ].slice(0, MAX_RECENTS);
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
     // Private mode etc. — recents just won't persist.

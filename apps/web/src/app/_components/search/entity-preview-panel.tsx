@@ -51,6 +51,23 @@ export function EntityPreviewPanel({
   // Get entity definition for link
   const entityDef = entities[entityType];
 
+  // usda-food/image stay keyed on `$id` (never shortcode-routed). Every other
+  // entity's `getByID` payload carries `shortcode` when the underlying schema
+  // has one; falling back to the raw `id` for the entities that don't yet
+  // (ingredient/vendor/project/task/expense/purchase/meal/cookbook/inventory)
+  // matches this panel's pre-cutover behavior rather than fabricating a link.
+  const detailLinkParams =
+    entityType === "usda-food" || entityType === "image"
+      ? { id }
+      : entityDetailParams(
+          data &&
+            typeof data === "object" &&
+            "shortcode" in data &&
+            typeof data.shortcode === "string"
+            ? data.shortcode
+            : id,
+        );
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -80,10 +97,7 @@ export function EntityPreviewPanel({
             variant="outline"
             size="sm"
             render={
-              <Link
-                to={entityDef.routes.detail}
-                params={entityDetailParams(entityType, id)}
-              />
+              <Link to={entityDef.routes.detail} params={detailLinkParams} />
             }
           >
             <ExternalLink className="mr-1 size-3" />

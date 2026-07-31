@@ -2,7 +2,7 @@ import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { id, ingredientId, recipeId } from "./identifiers";
+import { id, ingredientId, ingredientShortcode, recipeId } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
@@ -59,6 +59,7 @@ export type IngredientSortField = (typeof ingredientSortableFields)[number];
 
 export const ingredientOutFields = {
   id: ingredientId,
+  shortcode: ingredientShortcode,
   ...ingredientBaseFields,
   // Base measurement kinds the user has marked "not applicable" for this
   // ingredient (e.g. volume on a count-only item). The DB column is non-null
@@ -106,6 +107,7 @@ export const ingredientRawLinesOut = z.array(ingredientRawLineOut);
 export const ingredientMatchOut = z
   .object({
     id: z.string(),
+    shortcode: ingredientShortcode,
     name: z.string(),
     aliases: z.array(z.string()),
   })
@@ -214,6 +216,7 @@ export const enrichmentRowOut = z.object({
   mergeCandidates: z.array(
     z.object({
       id: ingredientId,
+      shortcode: ingredientShortcode,
       name: z.string(),
       // pg_trgm similarity (0-1) to this row.
       similarity: z.number(),

@@ -87,8 +87,8 @@ function LocationShelfCard({ location }: { location: InfLocation }) {
 
   return (
     <ShelfCard
-      to="/locations/$id"
-      params={{ id: location.id }}
+      to="/locations/$shortcode"
+      params={{ shortcode: location.shortcode }}
       image={location.images[0]?.url}
       extraCount={location.images.length - 1}
       title={location.name}
@@ -263,7 +263,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
         </Button>
         <Link
           to="/inventory/session"
-          search={{ parentId: location.id }}
+          search={{ parent: location.shortcode }}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <ScanBarcode className="mr-2 size-4" />

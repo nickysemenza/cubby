@@ -8,6 +8,7 @@ import {
   buildBulkMovePayloadItems,
   confirmationKey,
   findLocationInTree,
+  findLocationInTreeByShortcode,
   flattenAuditableLocations,
   flattenPickerTree,
   getDirectChildLocations,
@@ -24,7 +25,9 @@ function loc(
 ): InfLocation {
   return {
     id: unsafeLocationId(id),
-    shortcode: unsafeLocationShortcode(`L-${id.slice(0, 4).toUpperCase()}`),
+    // Fixtures share a "00000000-0000-4000-8000-..." prefix, so the shortcode
+    // must key off the varying tail, not the head, to stay unique per id.
+    shortcode: unsafeLocationShortcode(`L-${id.slice(-4).toUpperCase()}`),
     name,
     aliases: [],
     type,
@@ -110,6 +113,41 @@ describe("inventory session utils", () => {
     expect(isDescendantLocation(garage, garage.id)).toBe(true);
     expect(isDescendantLocation(garage, drawer.id)).toBe(true);
     expect(isDescendantLocation(garage, pantry.id)).toBe(false);
+  });
+
+  it("finds locations by shortcode", () => {
+    const drawer = loc(
+      "00000000-0000-4000-8000-000000000012",
+      "Drawer",
+      "drawer",
+    );
+    const cabinet = loc(
+      "00000000-0000-4000-8000-000000000011",
+      "Cabinet",
+      "cabinet",
+      [drawer],
+    );
+    const garage = loc(
+      "00000000-0000-4000-8000-000000000010",
+      "Garage",
+      "room",
+      [cabinet],
+    );
+    const pantry = loc(
+      "00000000-0000-4000-8000-000000000020",
+      "Pantry",
+      "room",
+    );
+
+    expect(
+      findLocationInTreeByShortcode([garage, pantry], drawer.shortcode)?.name,
+    ).toBe("Drawer");
+    expect(
+      findLocationInTreeByShortcode([garage, pantry], undefined),
+    ).toBeNull();
+    expect(
+      findLocationInTreeByShortcode([garage, pantry], "L-NOPE"),
+    ).toBeNull();
   });
 
   it("selects useful session roots and excludes an empty global Unknown", () => {

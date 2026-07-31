@@ -146,7 +146,7 @@ const getCookbookSourceEndpoint = protectedProcedure
 // `index` into its recipe list so each card maps to its result regardless of the
 // topo order the recipes were sent in.
 type ImportItemResult =
-  | { index: number; ok: true; id: RecipeId }
+  | { index: number; ok: true; id: RecipeId; shortcode: string }
   | { index: number; ok: false; error: string };
 type ImportSummary = { succeeded: number; failed: number };
 
@@ -193,7 +193,7 @@ const importCookbookStream = protectedProcedure
             `Recipe index ${index} is out of range for this cookbook`,
           );
         }
-        const { id } = await upsertCookbookRecipeFromCookbook(
+        const { id, shortcode } = await upsertCookbookRecipeFromCookbook(
           recipe,
           cookbookRef,
           ctx.db,
@@ -201,7 +201,7 @@ const importCookbookStream = protectedProcedure
           importCtx,
         );
         insertedIds.push(id);
-        return { index, ok: true, id };
+        return { index, ok: true, id, shortcode };
       },
       {
         // Isolate: one malformed recipe can't sink the rest of the import.
@@ -264,7 +264,11 @@ const previewNotionSync = protectedProcedure
     const existing = new Map(
       (await getNotionRecipesForDiff(ctx.db)).map((e) => [
         normalizeNotionId(e.pageId),
-        { id: e.id, sig: recipeOutSignature(e.recipe) },
+        {
+          id: e.id,
+          shortcode: e.recipe.shortcode,
+          sig: recipeOutSignature(e.recipe),
+        },
       ]),
     );
     return await Promise.all(
@@ -287,6 +291,7 @@ const previewNotionSync = protectedProcedure
           notionUrl: row.notionUrl,
           status,
           existingId: prior?.id ?? null,
+          existingShortcode: prior?.shortcode ?? null,
           reasons,
           recipe,
         };
@@ -297,7 +302,13 @@ const previewNotionSync = protectedProcedure
 // Per-page outcome streamed back during a Notion import, keyed by the page id so
 // each card maps to its result.
 type NotionItemResult =
-  | { pageId: string; ok: true; id: string; status: "created" | "updated" }
+  | {
+      pageId: string;
+      ok: true;
+      id: string;
+      shortcode: string;
+      status: "created" | "updated";
+    }
   | { pageId: string; ok: false; error: string };
 type NotionSummary = { succeeded: number; failed: number };
 
@@ -344,7 +355,7 @@ const importNotionSyncStream = protectedProcedure
           );
         }
         const existed = existing.has(normalizeNotionId(pageId));
-        const { id } = await upsertNotionRecipeFromImport(
+        const { id, shortcode } = await upsertNotionRecipeFromImport(
           recipe,
           pageId,
           row.tags,
@@ -356,6 +367,7 @@ const importNotionSyncStream = protectedProcedure
           pageId,
           ok: true,
           id,
+          shortcode,
           status: existed ? "updated" : "created",
         };
       },

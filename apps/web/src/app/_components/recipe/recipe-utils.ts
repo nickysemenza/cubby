@@ -298,15 +298,24 @@ export const getIngredientName = getRecipeIngredientName;
  */
 export const entityRefForRow = (
   row: RecipeTreeRow,
-): { entity: "recipe" | "ingredient"; id: string } | null =>
+): {
+  entity: "recipe" | "ingredient";
+  id: string;
+  shortcode: string;
+} | null =>
   match(row)
     .with({ kind: "subrecipe" }, (r) => ({
       entity: "recipe" as const,
       id: r.child.recipe.id,
+      shortcode: r.child.recipe.shortcode,
     }))
     .with({ kind: "ingredient" }, (r) =>
       r.row.type === "ingredient"
-        ? { entity: "ingredient" as const, id: r.row.ingredient.id }
+        ? {
+            entity: "ingredient" as const,
+            id: r.row.ingredient.id,
+            shortcode: r.row.ingredient.shortcode,
+          }
         : null,
     )
     .with({ kind: "stub" }, () => null)

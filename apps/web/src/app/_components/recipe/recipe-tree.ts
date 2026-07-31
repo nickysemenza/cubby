@@ -290,6 +290,7 @@ export const firstExpansionRowIds = (root: RecipeTreeNode): Set<string> => {
 /** One ingredient's full-batch shopping need across all components. */
 export type CombinedNeed = {
   ingredientId: string;
+  ingredientShortcode: string;
   name: string;
   /** Summed full-batch grams, or null when nothing weighed in. */
   grams: number | null;
@@ -329,6 +330,7 @@ export const asUsedGramsByRecipe = (
  */
 type MatrixRow = {
   ingredientId: string;
+  ingredientShortcode: string;
   name: string;
   /** componentRecipeId → full-batch grams that component contributes. */
   byComponent: Map<string, number>;
@@ -362,6 +364,7 @@ export const buildIngredientMatrix = (root: RecipeTreeNode): MatrixRow[] => {
         if (!r) {
           r = {
             ingredientId,
+            ingredientShortcode: row.row.ingredient.shortcode,
             name: row.row.ingredient.name,
             byComponent: new Map(),
             total: 0,
@@ -402,6 +405,7 @@ export const batchYieldGrams = (node: RecipeTreeNode): number | null =>
 export const fullBatchNeeds = (root: RecipeTreeNode): CombinedNeed[] =>
   buildIngredientMatrix(root).map((r) => ({
     ingredientId: r.ingredientId,
+    ingredientShortcode: r.ingredientShortcode,
     name: r.name,
     grams: r.byComponent.size > 0 ? r.total : null,
     estimated: r.estimated,

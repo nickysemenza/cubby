@@ -331,10 +331,16 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           )}
           SearchProvider={WithProjectSearch}
           renderValue={(v) =>
-            v ? (
+            // The combobox value carries the project's uuid; the expense
+            // carries its public id, denormalized alongside `projectName`.
+            v && expense.projectShortcode ? (
               <EntityInlineLink
                 entity="project"
-                data={{ id: v.id, name: v.name }}
+                data={{
+                  id: v.id,
+                  name: v.name,
+                  shortcode: expense.projectShortcode,
+                }}
               />
             ) : (
               <NoneValue />
@@ -375,10 +381,16 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           )}
           SearchProvider={WithProductSearch}
           renderValue={(v) =>
-            v ? (
+            // The combobox value carries the product's uuid; the expense
+            // carries its public id, denormalized alongside `productName`.
+            v && expense.productShortcode ? (
               <EntityInlineLink
                 entity="product"
-                data={{ id: v.id, name: v.name }}
+                data={{
+                  id: v.id,
+                  name: v.name,
+                  shortcode: expense.productShortcode,
+                }}
               />
             ) : (
               <NoneValue />
@@ -498,12 +510,12 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       }
     >
       <DetailSections sections={sections} rawData={expense} />
-      {expense.purchaseId ? (
+      {expense.purchaseId && expense.purchaseShortcode ? (
         <SplitExpenseDialog
           open={splitOpen}
           onOpenChange={setSplitOpen}
           expense={expense}
-          purchaseId={expense.purchaseId}
+          purchaseShortcode={expense.purchaseShortcode}
         />
       ) : null}
       {expense.productId ? (

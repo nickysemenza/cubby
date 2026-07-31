@@ -75,6 +75,7 @@ export function ProductTagSiblings({
                   entity="product"
                   data={{
                     id: sibling.id,
+                    shortcode: sibling.shortcode,
                     name: sibling.name,
                     manufacturer: sibling.manufacturer,
                   }}

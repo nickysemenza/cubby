@@ -155,7 +155,10 @@ export function LocationInventoryTable({
         // here points at the product or location. Same treatment as the
         // /inventory index list.
         renderDisplay: (content, row) => (
-          <Link to="/inventory/$id" params={{ id: row.id }}>
+          <Link
+            to="/inventory/$shortcode"
+            params={{ shortcode: row.shortcode }}
+          >
             {content}
           </Link>
         ),

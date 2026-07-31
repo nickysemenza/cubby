@@ -9,7 +9,11 @@
 // ---------------------------------------------------------------------------
 
 import type { Confidence } from "@cubby/schemas/ai";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type IngredientShortcode,
+  unsafeIngredientShortcode,
+} from "@cubby/schemas/identifiers";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
@@ -19,7 +23,11 @@ import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
 export interface IngredientMergeSuggestion {
-  target: { id: IngredientId; name: string } | null;
+  target: {
+    id: IngredientId;
+    shortcode: IngredientShortcode;
+    name: string;
+  } | null;
   confidence: Confidence;
   reasoning: string;
 }
@@ -52,7 +60,10 @@ export async function suggestIngredientMerge(
     env: IS_CF_WORKERS ? "prod" : "dev",
   });
 
-  const seen = new Map<string, { id: IngredientId; name: string }>();
+  const seen = new Map<
+    string,
+    { id: IngredientId; shortcode: IngredientShortcode; name: string }
+  >();
   const state: {
     selection: {
       ingredientId: string | null;
@@ -66,7 +77,12 @@ export async function suggestIngredientMerge(
   // by the search tool and the up-front pre-seed below.
   const runSearch = async (query: string): Promise<string> => {
     const rows = await searchIngredientsForMerge(db, query, source.id, 12);
-    for (const r of rows) seen.set(r.id, { id: r.id, name: r.name });
+    for (const r of rows)
+      seen.set(r.id, {
+        id: r.id,
+        shortcode: unsafeIngredientShortcode(r.shortcode),
+        name: r.name,
+      });
     if (rows.length === 0) return "No results.";
     return rows
       .map((r) => `${r.id} [${r.productCount} products]: ${r.name}`)
@@ -164,13 +180,13 @@ If one is a genuine duplicate, call select_merge_target now. Otherwise search_in
 }
 
 interface IngredientMergeBatchSuggestion extends IngredientMergeSuggestion {
-  source: { id: IngredientId; name: string };
+  source: { id: IngredientId; shortcode: IngredientShortcode; name: string };
 }
 
 /** Batch {@link suggestIngredientMerge} for the workbench's "Suggest merges". */
 export async function suggestIngredientMergeBatch(
   db: Database,
-  sources: { id: IngredientId; name: string }[],
+  sources: { id: IngredientId; shortcode: IngredientShortcode; name: string }[],
 ): Promise<IngredientMergeBatchSuggestion[]> {
   const capped = sources.slice(0, 20);
   const out: IngredientMergeBatchSuggestion[] = [];

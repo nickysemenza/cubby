@@ -32,6 +32,7 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         entity="product"
         data={{
           id: i.id,
+          shortcode: i.shortcode,
           name: i.name,
           manufacturer: i.subtitle ?? undefined,
         }}
@@ -43,6 +44,7 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         entity="location"
         data={{
           id: i.id,
+          shortcode: i.shortcode,
           name: i.name,
           type: i.typeHint ? (i.typeHint as LocationType) : undefined,
         }}
@@ -52,35 +54,40 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
     .with({ entityType: "recipe" }, (i) => (
       <EntityInlineLink
         entity="recipe"
-        data={{ id: i.id, name: i.name }}
+        data={{ id: i.id, shortcode: i.shortcode, name: i.name }}
         compact
       />
     ))
     .with({ entityType: "ingredient" }, (i) => (
       <EntityInlineLink
         entity="ingredient"
-        data={{ id: i.id, name: i.name }}
+        data={{ id: i.id, shortcode: i.shortcode, name: i.name }}
         compact
       />
     ))
     .with({ entityType: "inventory" }, (i) => (
       <EntityInlineLink
         entity="inventory"
-        data={{ id: i.id, name: i.name }}
+        data={{ id: i.id, shortcode: i.shortcode, name: i.name }}
         compact
       />
     ))
     .with({ entityType: "cookbook" }, (i) => (
       <EntityInlineLink
         entity="cookbook"
-        data={{ id: i.id, name: i.name, authors: i.authors }}
+        data={{
+          id: i.id,
+          shortcode: i.shortcode,
+          name: i.name,
+          authors: i.authors,
+        }}
         compact
       />
     ))
     .with({ entityType: "meal" }, (i) => (
       <EntityInlineLink
         entity="meal"
-        data={{ id: i.id, name: i.name, date: i.date }}
+        data={{ id: i.id, shortcode: i.shortcode, name: i.name, date: i.date }}
         compact
       />
     ))
@@ -89,6 +96,7 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         entity="project"
         data={{
           id: i.id,
+          shortcode: i.shortcode,
           name: i.name,
           status: i.status ? (i.status as ProjectStatus) : undefined,
         }}
@@ -100,6 +108,7 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         entity="task"
         data={{
           id: i.id,
+          shortcode: i.shortcode,
           name: i.name,
           status: i.status ? (i.status as TaskStatus) : undefined,
           projectName: i.projectName ?? undefined,
@@ -112,6 +121,7 @@ function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
         entity="expense"
         data={{
           id: i.id,
+          shortcode: i.shortcode,
           name: i.name,
           cost: i.cost ?? undefined,
           projectName: i.projectName ?? undefined,

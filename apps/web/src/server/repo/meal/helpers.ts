@@ -1,3 +1,7 @@
+import {
+  unsafeMealShortcode,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type { MealOut, MealRecipeOut, MealTotals } from "@cubby/schemas/meal";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
@@ -65,6 +69,7 @@ const rollupMealTotals = (recipes: MealRecipeOut[]): MealTotals => {
 /** Shape of a meal row loaded with `relations.meal.full`. */
 type MealRow = {
   id: MealOut["id"];
+  shortcode: string;
   date: string; // "YYYY-MM-DD" (date column, mode:"string")
   name: string | null;
   sortOrder: number | null;
@@ -81,6 +86,7 @@ type MealRow = {
     deletedAt: Date | null;
     recipe: {
       id: MealRecipeOut["recipeId"];
+      shortcode: string;
       name: string;
       servings: number | null;
       yield: MealRecipeOut["recipe"]["yield"];
@@ -108,6 +114,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
       recipeId: mr.recipeId,
       recipe: {
         id: mr.recipe.id,
+        shortcode: unsafeRecipeShortcode(mr.recipe.shortcode),
         name: mr.recipe.name,
         servings: mr.recipe.servings,
         yield: mr.recipe.yield,
@@ -122,6 +129,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
 
   return {
     id: row.id,
+    shortcode: unsafeMealShortcode(row.shortcode),
     date: row.date,
     name: row.name,
     sortOrder: row.sortOrder,

@@ -5,11 +5,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
-import {
-  type IngredientId,
-  type ProductId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -89,7 +85,6 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
@@ -171,7 +166,7 @@ const fetchProductById = async (
 // write path stays hand-rolled below: product create/update/delete carry
 // shortcode, image, unit-mapping, and valuation side-effects.
 const productReader = createEntityReader({
-  entityName: "product",
+  entity: "product",
   fetchById: fetchProductById,
   fromDB: (_db, row: ProductDeepDB) => dbProductToAPI(row),
   notFoundReason: "PRODUCT_NOT_FOUND",
@@ -260,21 +255,13 @@ export const getProductUnitMappingsByProductIds = async (
 };
 
 /**
- * Get full product details by shortcode. Returns null if the code doesn't
- * resolve to a live product.
- */
-export const getProductByShortcode = async (
-  db: Database,
-  shortcode: string,
-) => {
-  const id = await resolveLiveShortcode(db, shortcode, "product");
-  return id ? getProductByID(db, unsafeProductId(id)) : null;
-};
-
-/**
  * Fetch multiple products by shortcodes in a single query.
  * Returns basic product data (suitable for labels).
  */
+/** Public-id read: `null` for an unknown code or a soft-deleted row. */
+export const getProductByShortcode = (db: Database, shortcode: string) =>
+  productReader.getByShortcode(db, shortcode);
+
 export const getProductsByShortcodes = async (
   db: Database,
   shortcodes: string[],

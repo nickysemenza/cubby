@@ -1,7 +1,15 @@
-import { unsafeTaskId } from "@cubby/schemas/identifiers";
+import { unsafeTaskId, unsafeTaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import { orderProductTasks } from "./product-task-history";
+
+// Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.
+const SHORTCODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+let taskShortcodeCounter = 0;
+const nextTaskShortcode = () =>
+  unsafeTaskShortcode(
+    `TSK-234${SHORTCODE_ALPHABET[taskShortcodeCounter++ % SHORTCODE_ALPHABET.length]}`,
+  );
 
 const task = (
   name: string,
@@ -13,13 +21,17 @@ const task = (
   } = {},
 ): TaskOut => ({
   id: unsafeTaskId(crypto.randomUUID()),
+  shortcode: nextTaskShortcode(),
   name,
   status: options.status ?? "not_started",
   projectId: null,
   projectName: null,
+  projectShortcode: null,
   subjectProductId: null,
   subjectProductName: null,
+  subjectProductShortcode: null,
   parentTaskId: null,
+  parentTaskShortcode: null,
   parentTaskName: null,
   dueDate: options.dueDate ?? null,
   dueEndDate: options.dueEndDate ?? null,

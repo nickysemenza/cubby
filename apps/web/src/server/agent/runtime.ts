@@ -72,6 +72,12 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
       const location = isRecord(obj.location) ? obj.location : null;
 
       const id = typeof obj.id === "string" ? obj.id : null;
+      const shortcode =
+        typeof obj.shortcode === "string"
+          ? obj.shortcode
+          : typeof product?.shortcode === "string"
+            ? product.shortcode
+            : null;
       const name =
         typeof obj.name === "string"
           ? obj.name
@@ -93,7 +99,7 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
               ? obj.parentName
               : null;
 
-      sources.push({ entityType, id, name, detail });
+      sources.push({ entityType, id, shortcode, name, detail });
       if (sources.length >= MAX_SOURCES) return sources;
     }
   }

@@ -155,7 +155,7 @@ const recipeUsageByProduct = protectedProcedure
   .input(recipeUsageByProductInput)
   .output(recipeUsageByProductOut)
   .query(async ({ ctx, input }) => {
-    return await recipeUsageCountsByProduct(ctx.db, input.productIds);
+    return await recipeUsageCountsByProduct(ctx.db, input.productShortcodes);
   });
 
 // Delete entirely-unused ingredients (per-card or bulk). `alsoDeleteProducts`

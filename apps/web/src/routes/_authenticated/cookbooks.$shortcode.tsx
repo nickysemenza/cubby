@@ -1,4 +1,4 @@
-import { unsafeCookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookId } from "@cubby/schemas/identifiers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, RefreshCw, Trash } from "lucide-react";
@@ -13,6 +13,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
@@ -33,23 +34,17 @@ const searchSchema = z.object({
   ...entityFilterSearchFields("recipe"),
 });
 
-export const Route = createFileRoute("/_authenticated/cookbooks/$cookbookId")({
+export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
   ssr: false,
   validateSearch: searchSchema,
-  // Brand the path param at the boundary so `useParams().cookbookId` is a
-  // `CookbookId` throughout (it's compared against branded ids and passed to
-  // branded filters), instead of casting inside the component.
-  params: {
-    parse: (raw) => ({ cookbookId: unsafeCookbookId(raw.cookbookId) }),
-    stringify: (params) => ({ cookbookId: params.cookbookId }),
-  },
   component: CookbookDetailPage,
 });
 
 function CookbookDetailPage() {
-  // Cookbooks are keyed by their stable FK id (rename-safe), so the route param
-  // is the cookbook id; the display name comes from the browse-index query.
-  const cookbookId = Route.useParams().cookbookId;
+  // The URL carries the cookbook's public shortcode; the browse-index query
+  // (already cached after navigating from /cookbooks) resolves it to the row,
+  // and everything below still keys on the branded `CookbookId` off that row.
+  const { shortcode } = Route.useParams();
   const { tab } = Route.useSearch();
   const api = useTRPC();
   const navigate = useNavigate();
@@ -61,7 +56,8 @@ function CookbookDetailPage() {
   // Name + recipe count for the hero. Reuses the browse-index query, which is
   // already cached after navigating from /cookbooks; falls back gracefully.
   const { data: cookbooks } = useQuery(api.recipe.listCookbooks.queryOptions());
-  const cookbook = cookbooks?.find((c) => c.id === cookbookId);
+  const cookbook = cookbooks?.find((c) => c.shortcode === shortcode);
+  const cookbookId = cookbook?.id;
   const name = cookbook?.book ?? "Cookbook";
   const recipeCount = cookbook?.recipeCount;
   const coverUrl = cookbook?.coverUrl ?? null;
@@ -81,9 +77,11 @@ function CookbookDetailPage() {
     never,
     { reprocessed: number; importableExtras: string[] }
   >();
-  const runReprocess = () =>
+  // Takes the id rather than closing over it: this is declared above the
+  // "not resolved yet" guard below, where `cookbookId` is still optional.
+  const runReprocess = (id: CookbookId) =>
     reprocess.start(
-      () => client.recipe.reprocessCookbook.mutate({ cookbookId }),
+      () => client.recipe.reprocessCookbook.mutate({ cookbookId: id }),
       {
         successToast: ({ reprocessed, importableExtras }) => {
           const extra =
@@ -118,6 +116,24 @@ function CookbookDetailPage() {
       : []),
   ];
 
+  // The id only exists once the browse index has resolved this shortcode. It
+  // gates the body rather than the hooks above, so hook order stays stable
+  // across the loading → loaded transition.
+  if (!cookbookId) {
+    return (
+      <Page variant="list" title={name} entity="cookbook" compact>
+        {cookbooks ? (
+          <Empty>
+            <EmptyTitle>Cookbook not found</EmptyTitle>
+            <EmptyDescription>
+              No cookbook matches the code {shortcode}.
+            </EmptyDescription>
+          </Empty>
+        ) : null}
+      </Page>
+    );
+  }
+
   return (
     <Page
       variant="detail"
@@ -146,7 +162,7 @@ function CookbookDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void runReprocess()}
+            onClick={() => void runReprocess(cookbookId)}
             disabled={reprocess.running}
             title="Re-derive recipes from the stored extraction (no AI)"
           >

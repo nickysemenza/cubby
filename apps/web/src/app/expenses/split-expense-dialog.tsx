@@ -1,4 +1,4 @@
-import type { PurchaseId } from "@cubby/schemas/identifiers";
+import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
@@ -24,6 +24,7 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
+import { entityDetailLink } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -73,17 +74,18 @@ export function SplitExpenseDialog({
   open,
   onOpenChange,
   expense,
-  purchaseId,
+  purchaseShortcode,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   expense: ExpenseOut;
   /**
-   * The charge the parts get filed under. Required, not derived: `splitExpense`
-   * refuses an expense with no charge attached, so the caller gates the whole
-   * action on having one rather than surfacing that refusal as a toast.
+   * The charge the parts get filed under, as its public id. Required, not
+   * derived: `splitExpense` refuses an expense with no charge attached, so the
+   * caller gates the whole action on having one rather than surfacing that
+   * refusal as a toast. Also the post-split redirect target.
    */
-  purchaseId: PurchaseId;
+  purchaseShortcode: PurchaseShortcode;
 }) {
   const api = useTRPC();
   const navigate = useNavigate();
@@ -153,7 +155,7 @@ export function SplitExpenseDialog({
       onOpenChange(false);
       // This expense no longer exists — staying here would render a deleted row.
       // The charge is where every part now lives.
-      void navigate({ to: "/purchases/$id", params: { id: purchaseId } });
+      void navigate(entityDetailLink("purchase", purchaseShortcode));
     },
   });
 

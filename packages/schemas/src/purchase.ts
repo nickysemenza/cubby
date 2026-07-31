@@ -5,7 +5,9 @@ import {
   productId,
   projectId,
   purchaseId,
+  purchaseShortcode,
   vendorId,
+  vendorShortcode,
 } from "./identifiers";
 import {
   createPaginatedResponseSchema,
@@ -123,9 +125,11 @@ export type PurchaseSortField = (typeof purchaseSortableFields)[number];
 
 export const purchaseOut = z.object({
   id: purchaseId,
+  shortcode: purchaseShortcode,
   ...purchaseFields,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
+  vendorShortcode: vendorShortcode.nullable(),
   expenseCount: z.number().int(),
   /**
    * `SUM(cost)` over this charge's live expenses. THIS is the charge's spend;

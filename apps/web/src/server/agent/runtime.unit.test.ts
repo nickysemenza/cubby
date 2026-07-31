@@ -27,6 +27,7 @@ describe("extractSources", () => {
       {
         entityType: "inventory",
         id: "inv-1",
+        shortcode: null,
         name: "Aeropress",
         detail: "coffee shelf",
       },

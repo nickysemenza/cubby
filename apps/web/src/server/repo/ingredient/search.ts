@@ -73,11 +73,19 @@ export const searchIngredientsForMerge = async (
   query: string,
   excludeId: IngredientId,
   limit = 12,
-): Promise<{ id: IngredientId; name: string; productCount: number }[]> => {
+): Promise<
+  {
+    id: IngredientId;
+    shortcode: string;
+    name: string;
+    productCount: number;
+  }[]
+> => {
   const term = formatSearchTerm(ingredient.name, query);
   const rows = await getDb(db)
     .select({
       id: ingredient.id,
+      shortcode: ingredient.shortcode,
       name: ingredient.name,
       // ⚠️ `"Ingredient"."id"` hand-qualified, NOT an interpolated
       // `${ingredient.id}`. For a single-table `select().from(x)` Drizzle's
@@ -365,6 +373,7 @@ export const getIngredientByName = async (db: Database, name: string) => {
  */
 type IngredientNameMatch = {
   id: string;
+  shortcode: string;
   name: string;
   aliases: string[];
 };
@@ -379,7 +388,7 @@ export const getIngredientMatches = async (
 
   const rows = await getDb(db).query.ingredient.findMany({
     where: buildIngredientWhere(true, names[0]!, names.slice(1)),
-    columns: { id: true, name: true, aliases: true },
+    columns: { id: true, shortcode: true, name: true, aliases: true },
   });
 
   // Index each row by its lowercased name + aliases, then assign every requested
@@ -387,7 +396,12 @@ export const getIngredientMatches = async (
   // highlighting) can recognize a matched ingredient by any of its names.
   const byKey = new Map<string, IngredientNameMatch>();
   for (const row of rows) {
-    const match = { id: row.id, name: row.name, aliases: row.aliases };
+    const match = {
+      id: row.id,
+      shortcode: row.shortcode,
+      name: row.name,
+      aliases: row.aliases,
+    };
     for (const key of [row.name, ...row.aliases]) {
       byKey.set(key.toLowerCase(), match);
     }

@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { IngredientDetail } from "~/app/_components/ingredients/ingredient-detail";
+import { InventoryDetail } from "~/app/_components/inventory/inventory-detail";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
@@ -8,11 +8,13 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/integrations/trpc/react";
 
-export const Route = createFileRoute("/_authenticated/ingredients/$id")({
+export const Route = createFileRoute("/_authenticated/inventory/$shortcode")({
   ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
-      context.trpc.ingredient.getByID.queryOptions({ id: params.id }),
+      context.trpc.inventory.getByShortcode.queryOptions({
+        shortcode: params.shortcode,
+      }),
     );
     if (!data) throw notFound();
   },
@@ -21,29 +23,33 @@ export const Route = createFileRoute("/_authenticated/ingredients/$id")({
   notFoundComponent: () => (
     <Page
       variant="list"
-      title="Ingredient not found"
-      entity="ingredient"
+      title="Inventory item not found"
+      entity="inventory"
       compact
     >
       <Empty>
-        <EmptyTitle>Ingredient not found</EmptyTitle>
+        <EmptyTitle>Inventory item not found</EmptyTitle>
         <EmptyDescription>
-          This ingredient is no longer available.
+          This pantry item is no longer available.
         </EmptyDescription>
       </Empty>
     </Page>
   ),
-  component: IngredientDetailPage,
+  component: InventoryDetailPage,
 });
 
-function IngredientDetailPage() {
-  const { id } = Route.useParams();
+function InventoryDetailPage() {
+  const { shortcode } = Route.useParams();
   const api = useTRPC();
-  const { data: ingredient } = useSuspenseQuery(
-    api.ingredient.getByID.queryOptions({ id }),
+  const { data: inventory } = useSuspenseQuery(
+    api.inventory.getByShortcode.queryOptions({ shortcode }),
   );
 
-  useDocumentTitle(ingredient.name);
+  useDocumentTitle(inventory?.product?.name);
 
-  return <IngredientDetail key={id} ingredient={ingredient} />;
+  // The loader already threw notFound for an unknown code; this guard only
+  // satisfies the nullable output type.
+  if (!inventory) return null;
+
+  return <InventoryDetail key={shortcode} inventoryitem={inventory} />;
 }

@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { CookbookId } from "@cubby/schemas/identifiers";
-import { unsafeCookbookId } from "@cubby/schemas/identifiers";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
@@ -63,7 +62,7 @@ const entityDefinitions = {
       border: "border-l-warning",
     }),
     routes: {
-      detail: "/ingredients/$id",
+      detail: "/ingredients/$shortcode",
       list: "/ingredients",
       new: "/ingredients/new",
     },
@@ -88,7 +87,7 @@ const entityDefinitions = {
     lucideIcon: Barcode,
     color: entityColor("product", { bg: "bg-primary/10" }),
     routes: {
-      detail: "/products/$id",
+      detail: "/products/$shortcode",
       list: "/products",
       new: "/products/new",
     },
@@ -111,7 +110,7 @@ const entityDefinitions = {
     lucideIcon: ChefHat,
     color: entityColor("recipe", { bg: "bg-primary/10" }),
     routes: {
-      detail: "/recipes/$id",
+      detail: "/recipes/$shortcode",
       list: "/recipes",
       new: "/recipes/new",
     },
@@ -134,7 +133,7 @@ const entityDefinitions = {
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
     routes: {
-      detail: "/cookbooks/$cookbookId",
+      detail: "/cookbooks/$shortcode",
       list: "/cookbooks",
     },
   },
@@ -149,7 +148,7 @@ const entityDefinitions = {
       border: "border-l-slate",
     }),
     routes: {
-      detail: "/locations/$id",
+      detail: "/locations/$shortcode",
       list: "/locations",
       new: "/locations/new",
     },
@@ -171,7 +170,7 @@ const entityDefinitions = {
     lucideIcon: Package,
     color: entityColor("inventory", { bg: "bg-primary/10" }),
     routes: {
-      detail: "/inventory/$id",
+      detail: "/inventory/$shortcode",
       list: "/inventory",
       new: "/inventory/new",
     },
@@ -195,7 +194,7 @@ const entityDefinitions = {
       border: "border-l-warning",
     }),
     routes: {
-      detail: "/meals/$id",
+      detail: "/meals/$shortcode",
       list: "/meals",
     },
     detail: { commonSections: ["history"] },
@@ -221,7 +220,7 @@ const entityDefinitions = {
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
     routes: {
-      detail: "/projects/$id",
+      detail: "/projects/$shortcode",
       list: "/projects",
     },
     detail: { commonSections: ["images", "history"] },
@@ -242,7 +241,7 @@ const entityDefinitions = {
       border: "border-l-slate",
     }),
     routes: {
-      detail: "/tasks/$id",
+      detail: "/tasks/$shortcode",
       list: "/tasks",
     },
     detail: { commonSections: ["history"] },
@@ -263,7 +262,7 @@ const entityDefinitions = {
       border: "border-l-slate",
     }),
     routes: {
-      detail: "/vendors/$id",
+      detail: "/vendors/$shortcode",
       list: "/vendors",
     },
     detail: { commonSections: ["history"] },
@@ -280,7 +279,7 @@ const entityDefinitions = {
     lucideIcon: Receipt,
     color: entityColor("purchase", { bg: "bg-primary/10" }),
     routes: {
-      detail: "/purchases/$id",
+      detail: "/purchases/$shortcode",
       list: "/purchases",
     },
     // A purchase carries the charge's documents (invoices/receipts), like
@@ -301,7 +300,7 @@ const entityDefinitions = {
     lucideIcon: ReceiptText,
     color: entityColor("expense", { bg: "bg-primary/10" }),
     routes: {
-      detail: "/expenses/$id",
+      detail: "/expenses/$shortcode",
       list: "/expenses",
     },
     detail: { commonSections: ["history"] },
@@ -375,16 +374,38 @@ export const entities = entityDefinitions as typeof entityDefinitions &
   Record<Entity, EntityDefinition>;
 
 /**
- * Path params for an entity's detail route. Every detail route is keyed `$id`
- * except cookbook, whose route is `/cookbooks/$cookbookId` — so any generic
- * "link to this entity by id" surface (search results, hovercards, the manifest
- * card) must route through here instead of hard-coding `{ id }`.
+ * Path params for an entity's detail route.
+ *
+ * Every shortcode-bearing entity is keyed `$shortcode`, so this is now uniform —
+ * the cookbook `$cookbookId` special case died with the uuid routes. It stays a
+ * function rather than an inline `{ shortcode }` because it is the single place
+ * a generic "link to this entity" surface (search results, hovercards, the
+ * manifest card, table name columns) goes through, and keeping the indirection
+ * is what would make a future per-entity divergence a one-line change.
+ *
+ * `usda` and `image` are NOT routed through here — they are the two detail
+ * routes that legitimately key on something other than a shortcode.
  */
 export const entityDetailParams = (
-  entity: Entity,
-  id: string,
-): { id: string } | { cookbookId: CookbookId } =>
-  entity === "cookbook" ? { cookbookId: unsafeCookbookId(id) } : { id };
+  shortcode: string,
+): { shortcode: string } => ({
+  shortcode,
+});
+
+/**
+ * `to` + `params` for a shortcode-bearing entity's detail route, in one call.
+ *
+ * The `ShortcodeEntity` parameter is doing real work: `Entity` also covers
+ * `image` and `usda-food`, whose routes are `/images/$id` and `/usda/$id`, so a
+ * lookup widened to `Entity` produces a route union that `{ shortcode }` cannot
+ * satisfy. Narrowing here is what lets every generic "link to this entity"
+ * surface pass a shortcode without a cast.
+ */
+export const entityDetailLink = (entity: ShortcodeEntity, shortcode: string) =>
+  ({
+    to: entities[entity].routes.detail,
+    params: entityDetailParams(shortcode),
+  }) as const;
 
 /** Path-params shape accepted by any entity detail `<Link>`. */
 export type EntityDetailParams = ReturnType<typeof entityDetailParams>;

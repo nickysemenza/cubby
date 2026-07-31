@@ -1,4 +1,7 @@
-import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeInventoryShortcode,
+  unsafeLocationShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   inventoryListItemOut,
   inventoryWithLocationAndProductOut,
@@ -20,11 +23,18 @@ import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
 type InventoryEntryBaseDB = Pick<
   InventoryEntryListDB,
-  "id" | "amount" | "valuation" | "verifiedAt" | "createdAt" | "updatedAt"
+  | "id"
+  | "shortcode"
+  | "amount"
+  | "valuation"
+  | "verifiedAt"
+  | "createdAt"
+  | "updatedAt"
 >;
 
 const inventoryEntryBaseShape = (entry: InventoryEntryBaseDB) => ({
   id: entry.id,
+  shortcode: unsafeInventoryShortcode(entry.shortcode),
   amount: parseInventoryAmount(entry.amount, entry.id),
   valuation: entry.valuation,
   verifiedAt: entry.verifiedAt,

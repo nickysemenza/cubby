@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { entityDetailLink } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
@@ -375,10 +376,9 @@ function RowGroup({
                 <ChevronRight className="size-3.5" />
               )}
             </button>
-            {item.ingredientId ? (
+            {item.ingredientShortcode ? (
               <Link
-                to="/ingredients/$id"
-                params={{ id: item.ingredientId }}
+                {...entityDetailLink("ingredient", item.ingredientShortcode)}
                 title={item.name}
                 className={cn(
                   "font-medium hover:underline",
@@ -429,8 +429,7 @@ function RowGroup({
             <TableCell className="py-1" />
             <TableCell className="whitespace-normal py-1 pl-6">
               <Link
-                to="/meals/$id"
-                params={{ id: c.mealId }}
+                {...entityDetailLink("meal", c.mealShortcode)}
                 className="hover:underline"
               >
                 {c.mealName || "Meal"} · {format(parseISO(c.date), "EEE M/d")}
@@ -438,8 +437,7 @@ function RowGroup({
               <span className="ml-1">
                 — {c.scale !== 1 ? `${c.scale}× ` : ""}
                 <Link
-                  to="/recipes/$id"
-                  params={{ id: c.recipeId }}
+                  {...entityDetailLink("recipe", c.recipeShortcode)}
                   title={c.recipeName}
                   className="hover:underline"
                 >

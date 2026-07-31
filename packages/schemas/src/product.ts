@@ -9,6 +9,7 @@ import { externalIdOut } from "./external-id";
 import {
   type IngredientId,
   ingredientId,
+  ingredientShortcode,
   inventoryId,
   productId,
   productShortcode,
@@ -346,6 +347,7 @@ export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
 const productIngredientOut = z.object({
   id: ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
   naKinds: z.array(baseKind),
@@ -501,6 +503,7 @@ export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
 export const productTagSiblingsOut = z.array(
   z.object({
     id: productId,
+    shortcode: productShortcode,
     name: z.string(),
     manufacturer: z.string(),
     category: productCategory.nullable(),

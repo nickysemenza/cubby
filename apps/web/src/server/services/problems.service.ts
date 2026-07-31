@@ -15,7 +15,12 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type RecipeId,
+  unsafeIngredientShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import {
   type AllProblems,
@@ -195,8 +200,9 @@ const findProductCoverageProblems = async (
     if (!p || !effective) continue;
 
     // partialCandidates guarantees ingredientId != null; narrow for the
-    // non-nullable schema field.
-    if (p.ingredientId == null) continue;
+    // non-nullable schema fields (the joined ingredient carries the shortcode
+    // these rows link by).
+    if (p.ingredientId == null || p.ingredient == null) continue;
 
     const applicable = gradedKinds(p.ingredient?.naKinds);
     const cov = conversionCoverage(effective, applicable);
@@ -214,6 +220,7 @@ const findProductCoverageProblems = async (
 
     ingredientsWithPartialCoverage.push({
       id: p.id,
+      shortcode: unsafeProductShortcode(p.shortcode),
       name: p.name,
       manufacturer: p.manufacturer,
       coverage: { covered: [...cov.covered], applicable: [...applicable] },
@@ -221,6 +228,7 @@ const findProductCoverageProblems = async (
       hasUsdaLink: p.food != null,
       usdaUnavailable: p.usdaUnavailable ?? false,
       ingredientId: p.ingredientId,
+      ingredientShortcode: unsafeIngredientShortcode(p.ingredient.shortcode),
     });
   }
 
@@ -234,6 +242,7 @@ const findProductCoverageProblems = async (
     if (islands.length >= 2) {
       productsWithIslandedMappings.push({
         id: p.id,
+        shortcode: unsafeProductShortcode(p.shortcode),
         name: p.name,
         manufacturer: p.manufacturer,
         islandCount: islands.length,
@@ -495,7 +504,10 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
     unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
     emptyLocations: r.emptyLocations,
-    productsWithNoImages: r.productsWithNoImages,
+    productsWithNoImages: r.productsWithNoImages.map((p) => ({
+      ...p,
+      shortcode: unsafeProductShortcode(p.shortcode),
+    })),
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
@@ -579,6 +591,7 @@ const findProductsWithBetterUpcData = async (
 
     problems.push({
       id: cand.id,
+      shortcode: cand.shortcode,
       name: cand.name,
       manufacturer: cand.manufacturer,
       upc: cand.upc,

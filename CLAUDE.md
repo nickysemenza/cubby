@@ -87,7 +87,17 @@ DB id columns are branded with `.$type<XxxId>()` in `schema.ts` (PKs + FK refs t
 
 The `unsafe*Id()` / `unsafe*Shortcode()` converters are for genuine `string → brand` boundaries only: untyped external strings, synthetic ids (e.g. `"_root"`), and tests. They are **type-guarded** — passing an already-branded value is a compile error (the cast would be a no-op; brand it upstream instead). This is the lint rule (Biome has no custom-rule support at the pinned version, so the type system enforces it via `pnpm typecheck`).
 
-Don't brand shortcode columns or `Image` ids — those add insert-side friction for negligible payoff; the `unsafe*Shortcode` casts at the repo boundary are the accepted pattern there. Route path params that feed branded sinks are branded at the route via `params.parse` (see `cookbooks.$cookbookId.tsx`); tRPC `getByID` inputs accept a plain string (a branded schema's input type is `string`), so most search-param ids need no cast at all.
+Don't brand shortcode columns or `Image` ids — those add insert-side friction for negligible payoff; the `unsafe*Shortcode` casts at the repo boundary are the accepted pattern there. tRPC `getByID` inputs accept a plain string (a branded schema's input type is `string`), so most search-param ids need no cast at all.
+
+## Shortcodes are the public id; uuids are private
+
+A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD-4K7M`) is what URLs, QR labels, and MCP expose. See [README](README.md#public-identifiers--shortcodes) for the twelve-prefix registry.
+
+- **A uuid must never reach a URL or an MCP payload.** Detail routes are `/products/$shortcode`; guard-enforced by `uuid-entity-href` in `scripts/check-conventions.mjs`, which also catches server-built template hrefs the router's typed params can't see.
+- **Resolve in exactly one place** — `apps/web/src/server/repo/shortcode-resolver.ts`. Don't add a `findXByShortcode`; three of those existed and were deleted. `resolveShortcode` answers *"what does this code name"* (soft-deleted rows included, so a scan of a dead label can say so); `resolveLiveShortcode(db, code, entity)` answers *"can I still open it"* and pins the expected entity, so a `LOC-` code handed to a product lookup returns null instead of leaking a uuid.
+- **Mint via `insertWithShortcode`** (`repo/shortcode-utils.ts`), not by hand. The unique index is authoritative — it spans soft-deleted rows so a retired code is a permanent tombstone — and the helper retries on `23505` inside a SAVEPOINT. A bare `generateUniqueShortcode` + insert is only correct where the code must be materialized outside the insert (a `findOrCreate` values thunk, a caller-supplied code).
+- **Never reassign or reuse a code**, including on merge: the loser keeps its own tombstone. If a merged-away code ever needs to resolve to the survivor, that's an explicit alias table, not a reassignment.
+- Shortcode schemas (`shortcodeSchema(entity)`) must stay a **`ZodString`** — `.trim().toUpperCase().regex()` as string-level checks. Wrapping them in `.transform().pipe()` still parses, but turns them into a `ZodPipe` whose input-side JSON Schema drops the `pattern`, silently stripping the prefix hint MCP advertises to agents. Guarded by `shortcode.unit.test.ts`.
 
 ## Mobile PWA
 

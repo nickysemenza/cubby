@@ -16,7 +16,12 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { PurchaseId, VendorId } from "@cubby/schemas/identifiers";
+import {
+  type PurchaseId,
+  unsafeVendorId,
+  unsafeVendorShortcode,
+  type VendorId,
+} from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -53,6 +58,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { foldChargeInto } from "~/server/repo/purchase";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -123,6 +129,7 @@ const vendorSpend = correlated<number>(
 
 const vendorColumns = {
   id: vendor.id,
+  shortcode: vendor.shortcode,
   name: vendor.name,
   website: vendor.website,
   notes: vendor.notes,
@@ -134,6 +141,7 @@ const vendorColumns = {
 
 type VendorRow = {
   id: VendorId;
+  shortcode: string;
   name: string;
   website: string | null;
   notes: string | null;
@@ -145,6 +153,7 @@ type VendorRow = {
 
 const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   id: row.id,
+  shortcode: unsafeVendorShortcode(row.shortcode),
   name: row.name,
   website: row.website,
   notes: row.notes,
@@ -264,6 +273,18 @@ export const getVendorByID = async (
     throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
   }
   return dbVendorToAPI(row);
+};
+
+/**
+ * Get full vendor details by shortcode. Returns null if the code doesn't
+ * resolve to a live vendor.
+ */
+export const getVendorByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<VendorOut | null> => {
+  const id = await resolveLiveShortcode(db, shortcode, "vendor");
+  return id ? getVendorByID(db, unsafeVendorId(id)) : null;
 };
 
 /**

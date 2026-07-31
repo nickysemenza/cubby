@@ -286,8 +286,11 @@ test.describe("Project tracker", () => {
     expect(askIndex).toBeGreaterThan(resultIndex);
     await resultName.click();
 
-    // Lands on the real detail route (/tasks/$id), not the /tasks list.
-    await expect(page).toHaveURL(/\/tasks\/[a-f0-9-]+$/, { timeout: 10000 });
+    // Lands on the real detail route (/tasks/$shortcode), not the /tasks list.
+    await expect(page).toHaveURL(
+      /\/tasks\/TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/,
+      { timeout: 10000 },
+    );
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
       timeout: 10000,
     });
@@ -364,7 +367,7 @@ test.describe("Project tracker", () => {
     await expect(projectLink).toBeVisible({ timeout: 10000 });
     await expect(projectLink).toHaveAttribute(
       "href",
-      /^\/projects\/[a-f0-9-]+$/,
+      /^\/projects\/PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/,
     );
   });
 

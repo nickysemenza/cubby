@@ -15,10 +15,8 @@
  * Problems section; stale drains on its own via the mutation side-effects.
  */
 
-import type {
-  SearchableEntity,
-  SearchableEntityRef,
-} from "@cubby/schemas/search";
+import type { EntityMissingEmbedding } from "@cubby/schemas/problems";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import type { SQL } from "drizzle-orm";
 import { and, count, eq, exists, isNull, notExists, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -52,6 +50,10 @@ type DbClient = ReturnType<typeof getDb>;
 type EmbeddingSource = {
   table: PgTable;
   idColumn: AnyPgColumn;
+  // Every searchable entity is one of the twelve shortcode entities, so a
+  // missing-embedding row (unlike an orphaned one, whose entity may already be
+  // gone) can always be resolved to a link.
+  shortcodeColumn: AnyPgColumn;
   deletedAtColumn: AnyPgColumn;
   /**
    * Extra predicates the entity's embedding-text loader also enforces. Without
@@ -68,31 +70,37 @@ const embeddingSources = {
   product: {
     table: product,
     idColumn: product.id,
+    shortcodeColumn: product.shortcode,
     deletedAtColumn: product.deletedAt,
   },
   recipe: {
     table: recipe,
     idColumn: recipe.id,
+    shortcodeColumn: recipe.shortcode,
     deletedAtColumn: recipe.deletedAt,
   },
   ingredient: {
     table: ingredient,
     idColumn: ingredient.id,
+    shortcodeColumn: ingredient.shortcode,
     deletedAtColumn: ingredient.deletedAt,
   },
   cookbook: {
     table: cookbook,
     idColumn: cookbook.id,
+    shortcodeColumn: cookbook.shortcode,
     deletedAtColumn: cookbook.deletedAt,
   },
   location: {
     table: location,
     idColumn: location.id,
+    shortcodeColumn: location.shortcode,
     deletedAtColumn: location.deletedAt,
   },
   inventory: {
     table: inventoryEntry,
     idColumn: inventoryEntry.id,
+    shortcodeColumn: inventoryEntry.shortcode,
     deletedAtColumn: inventoryEntry.deletedAt,
     // getInventoryEmbeddingTexts INNER JOINs product + location with notDeleted
     // on both, so an entry whose product or location was soft-deleted can never
@@ -123,16 +131,28 @@ const embeddingSources = {
         ),
       ),
   },
-  meal: { table: meal, idColumn: meal.id, deletedAtColumn: meal.deletedAt },
+  meal: {
+    table: meal,
+    idColumn: meal.id,
+    shortcodeColumn: meal.shortcode,
+    deletedAtColumn: meal.deletedAt,
+  },
   project: {
     table: project,
     idColumn: project.id,
+    shortcodeColumn: project.shortcode,
     deletedAtColumn: project.deletedAt,
   },
-  task: { table: task, idColumn: task.id, deletedAtColumn: task.deletedAt },
+  task: {
+    table: task,
+    idColumn: task.id,
+    shortcodeColumn: task.shortcode,
+    deletedAtColumn: task.deletedAt,
+  },
   expense: {
     table: expense,
     idColumn: expense.id,
+    shortcodeColumn: expense.shortcode,
     deletedAtColumn: expense.deletedAt,
   },
 } satisfies Record<SearchableEntity, EmbeddingSource>;
@@ -186,20 +206,24 @@ export const findEntitiesMissingEmbeddings = async (
   db: Database,
   config: SemanticEmbeddingConfig,
   options: { limit?: number } = {},
-): Promise<SearchableEntityRef[]> => {
+): Promise<EntityMissingEmbedding[]> => {
   const limit = options.limit ?? MISSING_EMBEDDING_SAMPLE_LIMIT;
   const client = getDb(db);
-  const found: SearchableEntityRef[] = [];
+  const found: EntityMissingEmbedding[] = [];
 
   for (const [entityType, source] of sourceEntries) {
     if (found.length >= limit) break;
     const rows = await client
-      .select({ id: source.idColumn })
+      .select({ id: source.idColumn, shortcode: source.shortcodeColumn })
       .from(source.table)
       .where(missingEmbeddingWhere(client, entityType, source, config))
       .limit(limit - found.length);
     for (const row of rows) {
-      found.push({ entityType, entityId: String(row.id) });
+      found.push({
+        entityType,
+        entityId: String(row.id),
+        shortcode: String(row.shortcode),
+      });
     }
   }
 

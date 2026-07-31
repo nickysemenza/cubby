@@ -28,6 +28,7 @@ import {
   expenseList,
   expenseTradeAffinity,
   getExpenseByID,
+  getExpenseByShortcode,
   matchExpenses,
   moveExpenses,
   setExpensesCostType,
@@ -42,6 +43,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const {
   getByID,
+  getByShortcode,
   list,
   create,
   update,
@@ -63,6 +65,8 @@ const {
   },
   repository: {
     getByID: async (services, id: ExpenseId) => getExpenseByID(services.db, id),
+    getByShortcode: (services, shortcode) =>
+      getExpenseByShortcode(services.db, shortcode),
     list: async (services, filters, sort, pagination) =>
       expenseList(services.db, filters, sort, pagination),
     create: async (services, data) =>
@@ -214,6 +218,7 @@ const bulkSetCostType = protectedProcedure
 
 export const expenseRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   create,
   update,

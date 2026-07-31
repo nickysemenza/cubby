@@ -1,4 +1,3 @@
-import { unsafeLocationId } from "@cubby/schemas/identifiers";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -6,6 +5,7 @@ import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { entityDetailLink } from "~/entities/entities";
 import type { EmptyLocation } from "~/server/repo/problems";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";
@@ -72,8 +72,8 @@ export function EmptyLocationsList({
               <CardThumbnail
                 images={images}
                 alt={location.name}
-                to="/locations/$id"
-                params={{ id: location.id }}
+                to="/locations/$shortcode"
+                params={{ shortcode: location.shortcode }}
               />
             ),
             badges: [
@@ -82,10 +82,7 @@ export function EmptyLocationsList({
               </Badge>,
             ],
             details,
-            route: {
-              to: "/locations/$id" as const,
-              params: { id: location.id },
-            },
+            route: entityDetailLink("location", location.shortcode),
             editLabel: "View",
             customActions: (
               <Button size="sm" onClick={() => setAddDialogLocation(location)}>
@@ -101,7 +98,7 @@ export function EmptyLocationsList({
           onOpenChange={(open) => {
             if (!open) setAddDialogLocation(null);
           }}
-          locationId={unsafeLocationId(addDialogLocation.id)}
+          locationId={addDialogLocation.id}
           locationName={addDialogLocation.name}
           onSuccess={() => undefined}
         />

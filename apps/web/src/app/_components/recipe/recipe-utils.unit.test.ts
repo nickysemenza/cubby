@@ -1,4 +1,9 @@
-import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeIngredientShortcode,
+  unsafeRecipeId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, it } from "vitest";
 import {
@@ -28,6 +33,7 @@ it("recipe utils", () => {
             recipe: null,
             ingredient: {
               id: unsafeIngredientId("ingredient"),
+              shortcode: unsafeIngredientShortcode("ING-2345"),
               name: "flour-i",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -42,6 +48,7 @@ it("recipe utils", () => {
             ingredient: null,
             recipe: {
               id: unsafeRecipeId("sub-recipe"),
+              shortcode: unsafeRecipeShortcode("RCP-2345"),
               name: "flour-r",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -58,6 +65,7 @@ it("recipe utils", () => {
       },
     ],
     id: unsafeRecipeId("recipe"),
+    shortcode: unsafeRecipeShortcode("RCP-2346"),
     name: "",
     meta: null,
     images: [],
@@ -87,6 +95,7 @@ it("formatYield drops the bare-count 'whole' unit", () => {
 it("getServingBasis prefers servings and labels yield units", () => {
   const base = {
     id: unsafeRecipeId("r"),
+    shortcode: unsafeRecipeShortcode("RCP-2347"),
     name: "Recipe",
     meta: null,
     images: [],

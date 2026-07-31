@@ -90,14 +90,18 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
     ),
   );
 
-  // Show placeholder while loading or if no data
-  const displayProduct = product || {
-    id: productId,
-    name: `product ${productId.slice(0, 8)}${isLoading ? "..." : ""}`,
-    manufacturer: "",
-  };
+  // No real shortcode to link to until the product loads — render plain text
+  // rather than a link that would 404 (or worse, one keyed on the uuid).
+  if (!product) {
+    return (
+      <span className="text-muted-foreground">
+        product {productId.slice(0, 8)}
+        {isLoading ? "..." : ""}
+      </span>
+    );
+  }
 
-  return <EntityInlineLink entity="product" data={displayProduct} compact />;
+  return <EntityInlineLink entity="product" data={product} compact />;
 };
 
 // Source label + provenance pill, shared by the desktop cell and the mobile card.

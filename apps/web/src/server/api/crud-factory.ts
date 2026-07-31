@@ -5,7 +5,9 @@ import {
 import { IDInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { UserId } from "@cubby/schemas/identifiers";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   buildPaginatedResponse,
   createPaginatedResponseSchemaWithContext,
@@ -95,6 +97,28 @@ const createGetByIdProcedure = <T, TId extends string = string>(
         : (input.id as TId);
       return getByIdFn(ctx, id);
     });
+
+/**
+ * Fetch by PUBLIC id. Every entity detail route enters through one of these.
+ *
+ * The input schema is the entity's own `shortcodeSchema`, not a loose string, so
+ * a code with the wrong prefix (`LOC-4K7M` sent to `product.getByShortcode`) is
+ * rejected by zod at the boundary — before any query runs and before it could
+ * resolve to a uuid of the wrong type. The output is nullable because a URL is
+ * user-supplied: an unknown code is a 404 for the route to render, not a throw.
+ */
+export const createGetByShortcodeProcedure = <T>(
+  entity: ShortcodeEntity,
+  outputSchema: ZodSchema<T>,
+  getByShortcodeFn: (
+    ctx: ProtectedCrudServices,
+    shortcode: string,
+  ) => Promise<T | null>,
+) =>
+  protectedProcedure
+    .input(z.object({ shortcode: shortcodeSchema(entity) }))
+    .output(outputSchema.nullable())
+    .query(({ ctx, input }) => getByShortcodeFn(ctx, input.shortcode));
 
 // `inputSchema: S` (not `ZodSchema<TInput>`): annotating the param as
 // ZodSchema<T> erases the schema's *input* type to `unknown` (Zod 4's ZodType
@@ -217,9 +241,12 @@ export function createEntityCrudWithoutListProcedures<
   TUpdateOutput = TDetailOutput,
   TId extends string = string,
 >({
+  entityName,
   schemas,
   repository,
 }: {
+  /** Drives the prefix the public `getByShortcode` input accepts. */
+  entityName: ShortcodeEntity;
   schemas: {
     createInput: SCreate;
     updateInput: SUpdate;
@@ -235,6 +262,11 @@ export function createEntityCrudWithoutListProcedures<
   };
   repository: {
     getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
+    /** Public-id read — `null` for an unknown code, which the route 404s on. */
+    getByShortcode: (
+      ctx: ProtectedCrudServices,
+      shortcode: string,
+    ) => Promise<TDetailOutput | null>;
     create: (
       ctx: ProtectedCrudServices,
       data: z.infer<SCreate>,
@@ -257,6 +289,11 @@ export function createEntityCrudWithoutListProcedures<
       detailOutput,
       repository.getByID,
       schemas.idSchema,
+    ),
+    getByShortcode: createGetByShortcodeProcedure(
+      entityName,
+      detailOutput,
+      repository.getByShortcode,
     ),
     create: createCreateProcedure(
       schemas.createInput,
@@ -307,6 +344,11 @@ function createEntityCrudProcedures<
   };
   repository: {
     getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
+    /** Public-id read — `null` for an unknown code, which the route 404s on. */
+    getByShortcode: (
+      ctx: ProtectedCrudServices,
+      shortcode: string,
+    ) => Promise<TDetailOutput | null>;
     list: (
       ctx: ProtectedCrudServices,
       filters: TFilters,
@@ -325,8 +367,8 @@ function createEntityCrudProcedures<
       data: z.infer<SUpdate>,
     ) => Promise<TUpdateOutput>;
   };
-  /** Entity type for enhanced error messages */
-  entityName: Entity;
+  /** Drives the prefix the public `getByShortcode` input accepts. */
+  entityName: ShortcodeEntity;
 }) {
   const { list } = createEntityListProcedure<TListOutput, TFilters>({
     schemas: {
@@ -340,25 +382,29 @@ function createEntityCrudProcedures<
     entityName,
   });
 
-  const { getByID, create, update } = createEntityCrudWithoutListProcedures({
-    schemas: {
-      createInput: schemas.createInput,
-      updateInput: schemas.updateInput,
-      output: schemas.output,
-      detailOutput: schemas.detailOutput,
-      createOutput: schemas.createOutput,
-      updateOutput: schemas.updateOutput,
-      idSchema: schemas.idSchema,
-    },
-    repository: {
-      getByID: repository.getByID,
-      create: repository.create,
-      update: repository.update,
-    },
-  });
+  const { getByID, getByShortcode, create, update } =
+    createEntityCrudWithoutListProcedures({
+      entityName,
+      schemas: {
+        createInput: schemas.createInput,
+        updateInput: schemas.updateInput,
+        output: schemas.output,
+        detailOutput: schemas.detailOutput,
+        createOutput: schemas.createOutput,
+        updateOutput: schemas.updateOutput,
+        idSchema: schemas.idSchema,
+      },
+      repository: {
+        getByID: repository.getByID,
+        getByShortcode: repository.getByShortcode,
+        create: repository.create,
+        update: repository.update,
+      },
+    });
 
   return {
     getByID,
+    getByShortcode,
     list,
     create,
     update,
@@ -395,6 +441,11 @@ export function createSearchableEntityCrudProcedures<
   };
   repository: {
     getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    /** Public-id read — `null` for an unknown code, which the route 404s on. */
+    getByShortcode: (
+      ctx: ProtectedCrudServices,
+      shortcode: string,
+    ) => Promise<TOutput | null>;
     list: (
       ctx: ProtectedCrudServices,
       filters: TFilters,

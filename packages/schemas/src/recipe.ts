@@ -9,10 +9,12 @@ import { amount, positiveAmount } from "./codec";
 import { requiredName } from "./common";
 import {
   cookbookId,
+  cookbookShortcode,
   id,
   ingredientId,
-  recipeShortcode,
+  ingredientShortcode,
   recipeId,
+  recipeShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
 import {
@@ -52,6 +54,7 @@ export type RecipeSortField = (typeof recipeSortableFields)[number];
 // aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
 const sectionIngredientIngredientOut = z.object({
   id: ingredientId,
+  shortcode: ingredientShortcode,
   name: z.string(),
   ...timestampedFields,
   aliases: z.array(z.string()).optional(),
@@ -59,6 +62,9 @@ const sectionIngredientIngredientOut = z.object({
 
 const recipeTopLevelFields = {
   id: recipeId,
+  // The public id. Recipes minted shortcodes long before this was exposed, which
+  // is why /labels couldn't print recipe QRs — the code never left the DB.
+  shortcode: recipeShortcode,
   name: z.string(),
   ...timestampedFields,
   meta: recipeMeta,
@@ -199,6 +205,7 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
 // existing browse-by-name route + UI); `hasRawJson` gates the reprocess action.
 export const cookbookSummary = z.object({
   id: cookbookId,
+  shortcode: cookbookShortcode,
   book: z.string(),
   author: z.array(z.string()),
   subjects: z.array(z.string()),

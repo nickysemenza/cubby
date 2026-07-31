@@ -128,26 +128,30 @@ export const createUploadedImageRecord = async (
 type ImageWithRelations = typeof image.$inferSelect & {
   productImages: Array<{
     productId: string;
-    product: { name: string; deletedAt: Date | null };
+    product: { name: string; shortcode: string; deletedAt: Date | null };
   }>;
   locationImages: Array<{
     locationId: string;
-    location: { name: string; deletedAt: Date | null };
+    location: { name: string; shortcode: string; deletedAt: Date | null };
   }>;
   recipeImages: Array<{
     recipeId: string;
-    recipe: { name: string; deletedAt: Date | null };
+    recipe: { name: string; shortcode: string; deletedAt: Date | null };
   }>;
   projectImages: Array<{
     projectId: string;
-    project: { name: string; deletedAt: Date | null };
+    project: { name: string; shortcode: string; deletedAt: Date | null };
   }>;
   purchaseImages: Array<{
     purchaseId: string;
     // Purchase has no `name` column (see purchase-label.ts) — orderId is the
     // closest thing to a display label, and null on the ~40% of charges the
     // vendor never issued one for.
-    purchase: { orderId: string | null; deletedAt: Date | null };
+    purchase: {
+      orderId: string | null;
+      shortcode: string;
+      deletedAt: Date | null;
+    };
   }>;
 };
 
@@ -177,6 +181,7 @@ const imageWithRelationsToAPI = (
       entityType: "PRODUCT",
       entityId: productAssoc.productId,
       entityName: productAssoc.product.name,
+      entityShortcode: productAssoc.product.shortcode,
     };
   }
 
@@ -198,6 +203,7 @@ const imageWithRelationsToAPI = (
       entityType: "LOCATION",
       entityId: locationAssoc.locationId,
       entityName: locationAssoc.location.name,
+      entityShortcode: locationAssoc.location.shortcode,
     };
   }
 
@@ -219,6 +225,7 @@ const imageWithRelationsToAPI = (
       entityType: "RECIPE",
       entityId: recipeAssoc.recipeId,
       entityName: recipeAssoc.recipe.name,
+      entityShortcode: recipeAssoc.recipe.shortcode,
     };
   }
 
@@ -240,6 +247,7 @@ const imageWithRelationsToAPI = (
       entityType: "PROJECT",
       entityId: projectAssoc.projectId,
       entityName: projectAssoc.project.name,
+      entityShortcode: projectAssoc.project.shortcode,
     };
   }
 
@@ -264,6 +272,7 @@ const imageWithRelationsToAPI = (
       entityType: "PURCHASE",
       entityId: purchaseAssoc.purchaseId,
       entityName: purchaseAssoc.purchase.orderId,
+      entityShortcode: purchaseAssoc.purchase.shortcode,
     };
   }
 
@@ -281,6 +290,7 @@ const imageWithRelationsToAPI = (
     entityType: null,
     entityId: null,
     entityName: null,
+    entityShortcode: null,
   };
 };
 
@@ -290,7 +300,7 @@ const imageEntityRelations = {
     where: notDeleted(productImage),
     with: {
       product: {
-        columns: { name: true, deletedAt: true },
+        columns: { name: true, shortcode: true, deletedAt: true },
       },
     },
     columns: { productId: true },
@@ -299,7 +309,7 @@ const imageEntityRelations = {
     where: notDeleted(locationImage),
     with: {
       location: {
-        columns: { name: true, deletedAt: true },
+        columns: { name: true, shortcode: true, deletedAt: true },
       },
     },
     columns: { locationId: true },
@@ -308,7 +318,7 @@ const imageEntityRelations = {
     where: notDeleted(recipeImage),
     with: {
       recipe: {
-        columns: { name: true, deletedAt: true },
+        columns: { name: true, shortcode: true, deletedAt: true },
       },
     },
     columns: { recipeId: true },
@@ -317,7 +327,7 @@ const imageEntityRelations = {
     where: notDeleted(projectImage),
     with: {
       project: {
-        columns: { name: true, deletedAt: true },
+        columns: { name: true, shortcode: true, deletedAt: true },
       },
     },
     columns: { projectId: true },
@@ -326,7 +336,7 @@ const imageEntityRelations = {
     where: notDeleted(purchaseImage),
     with: {
       purchase: {
-        columns: { orderId: true, deletedAt: true },
+        columns: { orderId: true, shortcode: true, deletedAt: true },
       },
     },
     columns: { purchaseId: true },

@@ -111,6 +111,7 @@ const readChecks = (checks: any[] | undefined) => {
   let maxLen: number | undefined;
   let gt: number | undefined;
   let lt: number | undefined;
+  let regex: RegExp | undefined;
   for (const c of checks ?? []) {
     const d = c?._zod?.def ?? c;
     if (d.check === "number_format" && String(d.format).includes("int"))
@@ -123,9 +124,124 @@ const readChecks = (checks: any[] | undefined) => {
     }
     if (d.check === "greater_than") gt = d.value;
     if (d.check === "less_than") lt = d.value;
+    // `.regex(re)` compiles to a `string_format` check with `format: "regex"`
+    // and the source `RegExp` on `pattern` (verified against Zod 4.4.x
+    // internals — see the module header). Shortcodes and a handful of other
+    // schemas (`plainDate`, fingerprints) rely on this to generate a value
+    // that actually satisfies the constraint instead of falling back to
+    // lorem words that can never match.
+    if (d.check === "string_format" && d.format === "regex" && d.pattern) {
+      regex = d.pattern;
+    }
   }
-  return { intFmt, minLen, maxLen, gt, lt };
+  return { intFmt, minLen, maxLen, gt, lt, regex };
 };
+
+/**
+ * Expand a bracketed character class body (no leading/trailing `[`/`]`) into
+ * its member characters. Supports `a-z`-style ranges and a leading `^`
+ * negation (falls back to a generic alphanumeric set minus the excluded
+ * chars — good enough for a mock generator, not a full regex engine).
+ */
+function expandCharClass(body: string): string[] {
+  let negate = false;
+  let b = body;
+  if (b.startsWith("^")) {
+    negate = true;
+    b = b.slice(1);
+  }
+  const chars: string[] = [];
+  for (let i = 0; i < b.length; i++) {
+    if (b[i] === "\\" && b[i + 1] === "d") {
+      chars.push(..."0123456789".split(""));
+      i += 1;
+    } else if (b[i + 1] === "-" && b[i + 2] !== undefined) {
+      const start = b.charCodeAt(i);
+      const end = b.charCodeAt(i + 2);
+      for (let code = start; code <= end; code++) {
+        chars.push(String.fromCharCode(code));
+      }
+      i += 2;
+    } else {
+      const ch = b[i];
+      if (ch !== undefined) chars.push(ch);
+    }
+  }
+  if (negate) {
+    const all =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split(
+        "",
+      );
+    return all.filter((c) => !chars.includes(c));
+  }
+  return chars;
+}
+
+/**
+ * Generate a string that satisfies a (simple, anchored) regex: literal chars,
+ * `\d`, `[...]` classes (with ranges), and `{n}` / `{n,m}` / `*` / `+` / `?`
+ * quantifiers on the preceding atom. Not a general regex engine — covers the
+ * patterns actually used in `@cubby/schemas` (shortcodes, `plainDate`,
+ * hex fingerprints); an unsupported construct just gets consumed literally,
+ * which is a wrong-but-harmless value in the worst case rather than a throw.
+ */
+function genFromRegex(pattern: RegExp): string {
+  const src = pattern.source.replace(/^\^/, "").replace(/\$$/, "");
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    let atomChars: string[] | undefined;
+    let literal: string | undefined;
+    if (src[i] === "\\") {
+      const next = src[i + 1];
+      if (next === "d") atomChars = "0123456789".split("");
+      else if (next === "w")
+        atomChars =
+          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(
+            "",
+          );
+      else literal = next;
+      i += 2;
+    } else if (src[i] === "[") {
+      const end = src.indexOf("]", i);
+      atomChars = expandCharClass(src.slice(i + 1, end));
+      i = end + 1;
+    } else {
+      literal = src[i];
+      i += 1;
+    }
+
+    let count = 1;
+    if (src[i] === "{") {
+      const end = src.indexOf("}", i);
+      const [minStr, maxStr] = src.slice(i + 1, end).split(",");
+      const min = Number(minStr);
+      count =
+        maxStr === undefined
+          ? min
+          : faker.number.int({
+              min,
+              max: maxStr === "" ? min : Number(maxStr),
+            });
+      i = end + 1;
+    } else if (src[i] === "*") {
+      count = faker.number.int({ min: 0, max: 3 });
+      i += 1;
+    } else if (src[i] === "+") {
+      count = faker.number.int({ min: 1, max: 3 });
+      i += 1;
+    } else if (src[i] === "?") {
+      count = faker.number.int({ min: 0, max: 1 });
+      i += 1;
+    }
+
+    for (let n = 0; n < count; n++) {
+      if (atomChars) out += faker.helpers.arrayElement(atomChars);
+      else if (literal !== undefined) out += literal;
+    }
+  }
+  return out;
+}
 
 function genString(def: AnyDef): string {
   switch (def.format) {
@@ -146,7 +262,8 @@ function genString(def: AnyDef): string {
     case "date":
       return faker.date.recent().toISOString();
   }
-  const { minLen, maxLen } = readChecks(def.checks);
+  const { minLen, maxLen, regex } = readChecks(def.checks);
+  if (regex) return genFromRegex(regex);
   let s = faker.lorem.words(3);
   if (minLen != null && s.length < minLen) s = s.padEnd(minLen, "x");
   if (maxLen != null && s.length > maxLen) s = s.slice(0, maxLen);

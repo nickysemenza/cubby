@@ -25,6 +25,7 @@ const MAX_ALTERNATIVES = 5;
 /** A merge target offered for the current ingredient (AI pick or trigram hit). */
 export interface MergeOption {
   id: string;
+  shortcode: string;
   name: string;
   source: "ai" | "fuzzy";
   /** pg_trgm similarity 0–1 (fuzzy candidates only). */

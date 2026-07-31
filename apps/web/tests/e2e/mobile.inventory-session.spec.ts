@@ -9,12 +9,14 @@ test("phone recount keeps the common path to one tap per location", async ({
   const productName = `Phone recount item ${suffix}`;
 
   await createLocation(page, locationName);
-  const locationId = page.url().split("/").pop();
-  expect(locationId).toBeTruthy();
+  // The detail URL is the public id now, and so is the session's `parent`
+  // search param — no uuid ever reaches a URL, query string included.
+  const locationCode = page.url().split("/").pop();
+  expect(locationCode).toMatch(/^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
   await createProduct(page, productName);
   await addInventory(page, productName, locationName, 1, "each");
 
-  await page.goto(`/inventory/session?parentId=${locationId}`);
+  await page.goto(`/inventory/session?parent=${locationCode}`);
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByRole("button", { name: "Previous" })).toHaveCount(0);
