@@ -50,12 +50,17 @@ export async function createAgentToolset(
   // import would put @modelcontextprotocol/sdk + ajv + zod-to-json-schema
   // (~466 KiB) into the worker's eager chunk for every request — and defeat the
   // `await import()` that routes/api/mcp.ts already uses for the same module.
-  const [{ Client }, { InMemoryTransport }, { createMcpServer }] =
-    await Promise.all([
-      import("@modelcontextprotocol/sdk/client/index.js"),
-      import("@modelcontextprotocol/sdk/inMemory.js"),
-      import("~/server/mcp/server"),
-    ]);
+  const [
+    { Client },
+    { InMemoryTransport },
+    { createMcpClientValidator },
+    { createMcpServer },
+  ] = await Promise.all([
+    import("@modelcontextprotocol/sdk/client/index.js"),
+    import("@modelcontextprotocol/sdk/inMemory.js"),
+    import("~/server/mcp/validation"),
+    import("~/server/mcp/server"),
+  ]);
 
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -75,7 +80,10 @@ export async function createAgentToolset(
     });
 
   const server = createMcpServer();
-  const client = new Client({ name: "cubby-agent", version: "1.0.0" });
+  const client = new Client(
+    { name: "cubby-agent", version: "1.0.0" },
+    { jsonSchemaValidator: createMcpClientValidator() },
+  );
 
   await Promise.all([
     server.connect(serverTransport),

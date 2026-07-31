@@ -266,6 +266,7 @@ export function QuickInventoryAdd({
                 <WithProductSearch>
                   {({ items, onSearchChange, isLoading, onOpenChange }) => (
                     <ComboboxField
+                      entity="product"
                       form={selectForm}
                       name="product"
                       label="Add Product"

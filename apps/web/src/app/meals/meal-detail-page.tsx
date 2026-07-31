@@ -6,6 +6,7 @@ import { format, parseISO } from "date-fns";
 import { Clock, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
@@ -15,7 +16,6 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { FilterableCombobox } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
@@ -194,18 +194,19 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
           </Description>
           <WithRecipeSearch>
             {({ items, onSearchChange, isLoading, onOpenChange }) => (
-              <FilterableCombobox
-                items={items.map((r) => ({ value: r.id, label: r.name }))}
+              <EntityPicker
+                entity="recipe"
+                label="recipe"
+                items={items}
                 value={null}
                 placeholder="Search recipes…"
                 disabled={addRecipe.isPending}
                 onSearchChange={onSearchChange}
                 onOpenChange={onOpenChange}
                 isLoading={isLoading}
-                onValueChange={(recipeId) => {
-                  if (!recipeId) return;
-                  // tRPC's input type for a branded-uuid field is plain string.
-                  addRecipe.mutate({ mealId, recipeId, scale: 1 });
+                setValue={(recipe) => {
+                  if (!recipe) return;
+                  addRecipe.mutate({ mealId, recipeId: recipe.id, scale: 1 });
                 }}
               />
             )}

@@ -1,14 +1,11 @@
-import {
-  type ProjectShortcode,
-  unsafeProjectShortcode,
-} from "@cubby/schemas/identifiers";
-import { useMemo, useState } from "react";
+import type { ProjectShortcode } from "@cubby/schemas/identifiers";
+import { useState } from "react";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { FilterableCombobox } from "~/components/ui/combobox";
-
-const NO_PROJECT_VALUE = "__none__";
+import { Button } from "~/components/ui/button";
 
 interface MoveToProjectItem {
   id: string;
@@ -46,28 +43,23 @@ export function MoveToProjectDialog({
   onConfirm,
   isPending,
 }: MoveToProjectDialogProps) {
-  const { options: projectOptions } = useProjectOptions();
-  const [selected, setSelected] = useState<string | null>(null);
-
-  const comboboxItems = useMemo(
-    () =>
-      allowNoProject
-        ? [{ value: NO_PROJECT_VALUE, label: "No project" }, ...projectOptions]
-        : projectOptions,
-    [projectOptions, allowNoProject],
-  );
+  const [selected, setSelected] =
+    useState<ComboboxItem<ProjectShortcode> | null>(null);
+  const [clearRequested, setClearRequested] = useState(false);
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) setSelected(null);
+    if (!next) {
+      setSelected(null);
+      setClearRequested(false);
+    }
     onOpenChange(next);
   };
 
   const handleSubmit = async () => {
-    if (selected === null) return;
-    await onConfirm(
-      selected === NO_PROJECT_VALUE ? null : unsafeProjectShortcode(selected),
-    );
+    if (selected === null && !clearRequested) return;
+    await onConfirm(selected?.id ?? null);
     setSelected(null);
+    setClearRequested(false);
   };
 
   const count = items.length;
@@ -87,12 +79,38 @@ export function MoveToProjectDialog({
       isPending={isPending}
     >
       <FormFieldGroup label="Project">
-        <FilterableCombobox
-          items={comboboxItems}
-          value={selected}
-          onValueChange={setSelected}
-          placeholder="Select a project…"
-        />
+        <WithProjectSearch>
+          {({ items, onSearchChange, isLoading, onOpenChange }) => (
+            <EntityPicker
+              entity="project"
+              label="project"
+              items={items}
+              value={selected}
+              setValue={(item) => {
+                setSelected(item);
+                if (item) setClearRequested(false);
+              }}
+              onSearchChange={onSearchChange}
+              isLoading={isLoading}
+              onOpenChange={onOpenChange}
+              placeholder="Select a project…"
+            />
+          )}
+        </WithProjectSearch>
+        {allowNoProject && (
+          <Button
+            type="button"
+            variant={clearRequested ? "secondary" : "outline"}
+            size="sm"
+            className="mt-2"
+            onClick={() => {
+              setSelected(null);
+              setClearRequested(true);
+            }}
+          >
+            Clear project
+          </Button>
+        )}
       </FormFieldGroup>
     </BulkActionDialog>
   );

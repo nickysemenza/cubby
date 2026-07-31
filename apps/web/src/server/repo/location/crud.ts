@@ -20,7 +20,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -49,6 +49,7 @@ import {
   eqAny,
   eqAnyOrPresence,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   idSetPresence,
   lockAndValidateForDelete,
@@ -525,10 +526,18 @@ export const locationList = async (
     .where(notDeleted(inventoryEntry));
 
   // Build where conditions - always filter out deleted items
+  const pickerSearch = filters.nameFilter
+    ? or(
+        formatSearchTerm(location.name, filters.nameFilter),
+        formatSearchTerm(location.aiDescription, filters.nameFilter),
+        sql`EXISTS (SELECT 1 FROM unnest(${location.aliases}) AS alias WHERE alias ILIKE ${`%${filters.nameFilter}%`})`,
+      )
+    : undefined;
   const whereClause = buildSearchConditions(
     location,
-    [{ column: location.name, term: filters.nameFilter }],
+    [],
     [
+      pickerSearch,
       eqAny(location.type, filters.itemTypeFilter),
       parentCondition,
       idSetPresence(

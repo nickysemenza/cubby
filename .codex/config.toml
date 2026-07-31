@@ -1,6 +1,14 @@
 # Codex natively discovers AGENTS.md. Treat CLAUDE.md as the per-directory
 # fallback so work below apps/web also picks up apps/web/CLAUDE.md.
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
 project_doc_fallback_filenames = ["CLAUDE.md"]
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"
 
 [mcp_servers.cubby-localhost]
 url = "http://localhost:3000/api/mcp"

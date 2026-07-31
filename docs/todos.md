@@ -481,6 +481,64 @@ Deferred phases — each purely additive on top of v1, with its promotion trigge
   editing the URL, because only the presence column has a header control. Raised in
   the PR #421 review; a small active-filter chip would close it.
 
+#### "A product for every line item?" — asked and answered 2026-07-31
+
+**Measured before deciding** (live ledger): 1141 expenses, **1081 distinct names** — 92%
+of names occur exactly once. Only 10 names appear 3+ times, and they are subscriptions
+(`chief architect monthly` 9×, `cutlist optimizer` 5×, `autocad lt` 4×), services
+(`hauling`, `delivery charge`) and fungible categories (`plywood`, `gloves`, `plants`,
+`pvc fittings`). Of 432 products, 155 carry an expense and 44 carry more than one — but
+**38 of those 44 are the negative-expense exit pattern**, leaving **6 products genuinely
+bought twice**. So universal productization buys ~6 products of repeat-purchase signal
+for ~940 new rows. **Rejected as a blanket rule**; the sparse opt-in default stands, and
+`expense.productId`'s own schema comment already says so.
+
+What did change is *why* a line stays unlinked. Four of the classes originally listed as
+"not products" are really **un-split imports** — bundles (`wall materials, strut stuff`),
+aggregate credits (`lowes returns` −$77.46), and deposit/balance pairs — and those should
+be unbundled per the existing `splitExpense` path, each part taking its own product. That
+is not a new feature; it is Phase 3 of the purchase-import skill, now stated explicitly
+there. Two classes are genuinely never products: **service/labor lines** (no object, and
+`Expense.productId` is an `acquisition` edge whose net-cost derivation a labor line would
+inflate — work *about* a product is `Task.subjectProductId`) and **installments**
+(`hotel payment 3/11`, `retaining wall 2/2` — that grouping is the charge and the project).
+
+- [ ] **No `software` slot in `productCategoryValues`** — blocks productizing subscriptions,
+  which are the only genuinely high-frequency repeat purchases in the ledger. The enum is
+  food / tools / tool-consumables / tool-accessories / storage / hardware / electronics /
+  household / supplies. Leaving one **null** is not a workaround: a null category is
+  deliberately read as *potentially food* so uncategorized groceries keep their coverage
+  grading (`packages/shared/src/category-theme.ts`), so `autocad lt` would land in
+  `findProductsWithoutMappings` demanding weight/volume/calorie coverage forever. One enum
+  value + a theme entry. **Trigger**: wanting per-subscription lifetime spend
+  (`chief architect monthly` is $1,791 across 9 rows today and has nowhere to roll up).
+  Keep the recurrence *schedule* off `Product` — the product is the license, the payments
+  are expenses, same rule as 11 progress payments being 11 charges.
+- [ ] **`servicesWithProduct` advisory detector** — mirrors `chargesNotReconciling` in shape
+  (soft worklist, not an error list). Reports **zero** on the live ledger today, so any row
+  appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
+  constraint: `costType` is an operator-assigned *reporting* dimension and is already
+  inconsistent (`countertop deposit` is materials, `2nd half of countertop` is services —
+  same vendor, same amount, same slab), and `bulk_set_expense_cost_type` exists, so a hard
+  constraint would fail a bulk reclassify mid-transaction with an error about products.
+- [ ] **Duplicate-product detection keyed on `ProductExternalId`, never on names.** Motivating
+  hazard: a product carrying any expense is *by construction* invisible to
+  `findOrphanedProducts` (`Expense.productId` has role `acquisition`, which retains) and
+  refuses deletion with `PRODUCT_HAS_EXPENSES` — so a duplicate minted during an import can
+  neither be surfaced nor deleted. Harmless at 432 hand-curated products; not harmless if
+  import ever mints at volume. **Scope it to exact `(source, externalId)` collisions across
+  two live products** — the name-similarity approach is already recorded dead above for
+  `findDuplicateVendors` (trigram > 0.3 flagged 13 pairs, all false positives) and product
+  names are worse, not better. **Trigger**: the first auto-minting import path.
+- [ ] **Repeat-purchase rollup** — `ProductExpenseHistory` already ships per-product on the
+  detail page, so what's missing is only the cross-product view: `GROUP BY productId` with
+  a purchase count and total, sorted by frequency. Cheap. **Trigger**: enough productized
+  repeat buys to be worth ranking — 6 today, so not yet.
+
+**`PurchaseLine`'s trigger is still NOT met by this** (see the deferred phase above). Unbundling
+that *moves money* is `splitExpense`, which exists and is money-bearing; `PurchaseLine` is
+pure SKU/quantity annotation and creates no products. Don't reach for it to do this job.
+
 Two traps this design already walked into once — don't re-introduce them:
 `buildSearchConditions` **ANDs** its `searchFilters`, so vendor must never share the
 `search` term (it would mean `name ILIKE q AND vendor matches q`, and most rows have
@@ -580,6 +638,16 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 ## Architecture / engineering
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
+- [ ] **Budget-aware cursor pagination for wide MCP tool results.** MCP's native
+  opaque-cursor pagination covers discovery operations such as `tools/list`, not
+  arbitrary `tools/call` results, and `CallToolResult` carries no host context-window
+  budget. Add tool-level `cursor` / `nextCursor` fields to the shared list plumbing,
+  starting with `list_expenses`: use a stable keyset cursor so variable page sizes
+  cannot skip or duplicate rows; treat `pageSize` as an upper bound while a
+  configurable compact-JSON byte budget chooses the actual page; consume a future
+  client budget hint if MCP standardizes one, otherwise keep the conservative
+  server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
+  explicitly rather than silently restarting from page one.
 
 ### Shortcode cutover and MCP translation-layer retirement (completed)
 

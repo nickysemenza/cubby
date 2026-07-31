@@ -3,8 +3,8 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { FolderInput } from "lucide-react";
 import { useState } from "react";
 import { match } from "ts-pattern";
-import { DialogCompatibleCombobox } from "~/app/_components/combobox/combobox-dialog";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -118,7 +118,8 @@ function MoveToDialog({
       <Stack gap="md">
         <WithLocationSearch>
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
-            <DialogCompatibleCombobox
+            <EntityPicker
+              entity="location"
               label="location"
               items={items}
               onSearchChange={onSearchChange}

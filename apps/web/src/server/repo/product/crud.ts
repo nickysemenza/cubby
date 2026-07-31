@@ -525,6 +525,7 @@ export const productSearch = async (
     name !== undefined && name.trim() !== ""
       ? or(
           formatSearchTerm(product.name, name),
+          formatSearchTerm(product.notes, name),
           sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${`%${name}%`})`,
         )
       : undefined,

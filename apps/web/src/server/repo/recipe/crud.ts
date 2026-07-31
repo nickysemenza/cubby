@@ -72,6 +72,7 @@ import {
   countWhere,
   eqAnyOrPresence,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   idSetPresence,
   lockAndValidateForDelete,
@@ -382,10 +383,17 @@ export const recipeList = async (
 
   // Build where conditions - always filter out deleted items. Scope to one
   // cookbook by FK id when browsing its detail page.
+  const pickerSearch = filters.nameFilter
+    ? or(
+        formatSearchTerm(recipe.name, filters.nameFilter),
+        formatSearchTerm(recipe.notes, filters.nameFilter),
+      )
+    : undefined;
   const whereClause = buildSearchConditions(
     recipe,
-    [{ column: recipe.name, term: filters.nameFilter }],
+    [],
     [
+      pickerSearch,
       eqAnyOrPresence(
         recipe.cookbookId,
         filters.cookbookId,

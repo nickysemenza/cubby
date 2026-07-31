@@ -191,6 +191,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                           onOpenChange,
                         }) => (
                           <ComboboxField
+                            entity="ingredient"
                             form={form}
                             name={`${path}.ingredient`}
                             items={items}
@@ -219,6 +220,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                           onOpenChange,
                         }) => (
                           <ComboboxField
+                            entity="recipe"
                             form={form}
                             name={`${path}.recipe`}
                             items={items}

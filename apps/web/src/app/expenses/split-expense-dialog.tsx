@@ -5,7 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
+import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -89,7 +90,6 @@ export function SplitExpenseDialog({
 }) {
   const api = useTRPC();
   const navigate = useNavigate();
-  const { options: projectOptions } = useProjectOptions();
   const keyCounter = useRef(0);
 
   const seedParts = (): PartDraft[] => [
@@ -254,16 +254,40 @@ export function SplitExpenseDialog({
                   }}
                   className="w-40"
                 />
-                <FilterableCombobox
-                  items={projectOptions}
-                  value={part.projectId}
-                  onValueChange={(next) =>
-                    updatePart(part.key, { projectId: next })
-                  }
-                  placeholder="No project"
-                  clearable
-                  className="w-48"
-                />
+                <div className="w-48">
+                  <WithProjectSearch>
+                    {({ items, onSearchChange, isLoading, onOpenChange }) => {
+                      const selectedId = part.projectId
+                        ? unsafeProjectShortcode(part.projectId)
+                        : null;
+                      const selected = selectedId
+                        ? (items.find((item) => item.id === selectedId) ?? {
+                            id: selectedId,
+                            shortcode: selectedId,
+                            name: selectedId,
+                          })
+                        : null;
+                      return (
+                        <EntityPicker
+                          entity="project"
+                          label="project"
+                          items={items}
+                          value={selected}
+                          setValue={(item) =>
+                            updatePart(part.key, {
+                              projectId: item?.id ?? null,
+                            })
+                          }
+                          onSearchChange={onSearchChange}
+                          isLoading={isLoading}
+                          onOpenChange={onOpenChange}
+                          placeholder="No project"
+                          clearable
+                        />
+                      );
+                    }}
+                  </WithProjectSearch>
+                </div>
                 {expense.productId && (
                   <Row
                     as="label"

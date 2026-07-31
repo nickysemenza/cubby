@@ -41,13 +41,12 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByLabel("Yield Unit").fill("cookies");
 
     // Add ingredient row (the add button is labeled just "Ingredient"). The
-    // row combobox has no field label, so its aria-label and search
-    // placeholder fall back to the generic "item".
+    // row combobox has no field label, so its aria-label falls back to the
+    // generic "item".
     await page.getByRole("button", { name: "Ingredient", exact: true }).click();
     await selectComboboxItem(
       page,
       page.getByRole("combobox", { name: "item" }),
-      "Search item...",
       ingredientName,
     );
 

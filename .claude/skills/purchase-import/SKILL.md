@@ -78,6 +78,16 @@ Five consequences that bite:
   *Lutz Bath & Kitchen*, `CabinetParts` where the email header reads *CabinetParts.com*. Follow the
   roster. (`update_vendor` renaming IS safe — charges reference by id, nothing is re-keyed and no
   spend moves — but that's a deliberate roster decision, not something to do mid-import.)
+
+  **When the vendor is genuinely NEW, seed it with `create_vendor` rather than letting the write
+  mint it.** "Follow the roster" assumes a roster row exists; `list_vendors` returning zero hits is
+  the case it doesn't cover. Resolving a name through `create_expense`/`update_expense` does create
+  the vendor, but leaves `website` and `notes` **null** — a bare row that tells the next pass nothing
+  and gives the UI no link. One `create_vendor` call with `name` + `website` first, then the expense
+  write resolves onto it by exact name. Take the spelling from the sender/letterhead (`Osmo Oil`,
+  from `info@osmowoodoil.com`, website `https://osmowoodoil.com`) — you are *defining* the roster
+  spelling here, and nothing in v1 can merge a near-duplicate away later, so it is worth the extra
+  call to make it deliberate rather than incidental.
 - **A charge minted this way has NO `date`.** Resolving `vendor` + `orderId` through `update_expense`
   creates the `Purchase` with `date: null`; it does not inherit the expense's date. Every charge
   created this way in the 2026-07-31 pass came back dateless and needed a follow-up
@@ -96,18 +106,32 @@ roster, open a charge, or set a `statedTotal`:
   `create_purchase` all filter/write by vendor **id**, and since the shortcode cutover a `VEN-`
   shortcode is the only form they accept (a uuid is now a zod error, not a fallback). It also returns
   `purchaseCount` and `spend` per vendor.
-- **One id in this skill's path is still a raw uuid: `productId`.** Every other id crossing MCP is a
-  shortcode, but the expense create/update shape and its list filter (`packages/schemas/src/project.ts`
-  ~770/808/866) and `splitExpenseInput`'s `parts[].productId`
-  (`packages/schemas/src/purchase.ts:235`) all still take the branded **uuid** — note `projectId` and
-  `vendorId` sitting right beside them *are* shortcodes. So a call that links a product mixes
-  `PRJ-`/`EXP-` codes with a bare uuid — and worse, **`productId` means different things in and
-  out**: `expenseMcpOut` overrides it to a `productShortcode` (`project.ts:1357`, "same product-FK
-  swap as `taskMcpOut`"), so the `productId` you read off an expense is a `PRD-` code that the very
-  next `update_expense`/`split_expense` will reject. Don't round-trip it; carry the uuid separately.
-  The boundary test named
-  "split_expense takes its expenseId/projectId/productId by shortcode" asserts the intent but passes
-  no `productId`, so it does not actually cover this — don't read it as proof the code works.
+
+  ⚠️ **`list_vendors`' own MCP description contradicts this and is wrong.**
+  `apps/web/src/server/mcp/tools/purchase.tools.ts:106` still reads *"a uuid is the only form they
+  accept"* — precisely backwards, and on the one tool whose stated job is "start here to get a
+  `vendorId`". The schema (`^VEN-[…]{4}$`) is authoritative; trust this file over the tool text until
+  that string is fixed.
+- **`productId` is a `PRD-` shortcode on every write you make.** As of the 2026-07-31 shortcode
+  cutover, `expenseCreateShape.productId` (`packages/schemas/src/project.ts:808`),
+  `splitExpenseInput`'s `parts[].productId` (`packages/schemas/src/purchase.ts:235`) and
+  `expenseMcpOut.productId` (`project.ts:1357`) are all `productShortcode` — so the `productId` you
+  read off an expense goes straight back into the next `update_expense` / `split_expense`. Round-trip
+  it freely. *(Earlier revisions of this file said the opposite — that these took a branded uuid and
+  must not be round-tripped. That was true before the cutover and is now exactly backwards: a uuid is
+  a zod error on those fields.)*
+
+  ⚠️ **The one place still on uuid is the FILTER, and it is unreachable.**
+  `expenseFilterFields.productId` (`project.ts:866`) and `taskFilterFields.subjectProductId`
+  (`project.ts:549`) were missed by the cutover — those field blocks are standalone objects that
+  don't spread `expenseFields`/`taskFields`, so the create/output overrides skipped them. Since
+  `productMcpOut.id` (`product.ts:625`) is a `PRD-` code, **no MCP surface hands out a product uuid at
+  all**, so there is currently no value you can pass. Don't burn time trying to filter expenses or
+  tasks by product over MCP — get there via `get_product` → the product's own expenses, or fall back
+  to amount+date via `match_expenses`.
+
+  The boundary test named "split_expense takes its expenseId/projectId/productId by shortcode"
+  passes no `productId`, so it does not actually cover the split path — don't read it as proof.
 - `list_purchases` filters on `vendorId`, `orderId`, `search` (substring on order id),
   `dateFrom`/`dateTo`, `orderIdPresenceFilter` and `statedTotalPresenceFilter` — the last is the
   not-yet-reconciled worklist.
@@ -384,12 +408,20 @@ single call.
     nothing back-computes a cost from it. **`update_purchase` is how you set it** (`create_purchase`
     can carry it too) — no web-UI detour, and no reason to leave it blank on a charge you imported.
 
-    **The one real carve-out: paperwork that states no total.** An eBay order email prints an item
+    **The one real carve-out: paperwork that states no total.** Some eBay order emails print an item
     price and nothing else — no tax line, no order total — while the ledger row is tax-inclusive.
     Recording the $60.99 item price against a $66.25 row would flag that charge in
     `chargesNotReconciling` forever as a false positive. Leave `statedTotal` null when the source
     genuinely never stated one, and say so in the expense notes so the next pass doesn't "finish the
     job". `statedTotalPresenceFilter: "none"` is a worklist, not a defect list.
+
+    ⚠️ **Check the actual email before invoking this — eBay's confirmations are not uniform.** The
+    2024-01-22 Bosch 11255VSR order (`15-11083-32845`) carries a full "Order total" block: Subtotal
+    $120.00 / Shipping Free / Sales tax $10.35 / *Total charged to amex x-2002* $130.35. That is a
+    stated total and belongs on the charge. The carve-out is about what a *particular* email prints,
+    not a property of the vendor — applying it by vendor name leaves recordable totals on the floor.
+    When you do record one from an email that breaks the pattern, say so in the charge notes, or the
+    next pass will "restore" the null.
   - The PDF invoice / receipt photo now has a home: `attach_file` with
     `entityId: <the PUR- shortcode from the expense row>` and `contentType: "application/pdf"`.
     **There is no `entityType` field** — the prefix picks the entity. One `Image` can be filed
@@ -434,8 +466,57 @@ single call.
   keep: `CL3050U**ID**/S/T/R` is the internal-dispenser variant, and only the absent `ID` tells you
   which unit was actually bought. Contrast a distributor like Lutz, which prints genuine
   manufacturer part numbers (`K50-102-ST-SN`, `9611-K50-SN`) that go straight into `model`.
+- **Which lines get a product — and which never do.** A `Product` is a purchasable item **or a
+  `misc:` placeholder** (`repo/product/index.ts`), so the bar is lower than "a specific SKU". Two
+  classes never get one:
+  - **A service or labor line** (`costType: "services"` — hauling, drywall, install labor,
+    delivery/freight). There is no object. `Expense.productId` is an **acquisition** edge that the
+    net-cost and owned/sold-window derivations read, so a labor line hung off a product silently
+    inflates that product's basis. Work *about* a product is `Task.subjectProductId` instead — the
+    furnace is modelled correctly today as `Bryant 801S gas furnace` (materials, productized) plus
+    `furnace replacement labor` (services, not). Zero services rows carry a product; keep it that way.
+    This is a rule, not a constraint — `costType` is an operator-assigned reporting dimension and is
+    inconsistent in places (`countertop deposit` is materials, `2nd half of countertop` is services,
+    same vendor, same slab), so don't refuse a write over it, just don't make the link.
+  - **An installment or progress payment** (`hotel payment 3/11`, `wedding planner 2 of 4`,
+    `retaining wall 2/2`). That grouping belongs to the charge and the project.
+
+  Everything else gets one, **after unbundling**. A bundle (`wall materials, strut stuff`) and an
+  aggregate credit (`lowes returns` −$77.46) are *un-split imports*, not a kind of thing — split them
+  per Phase 3 and each part takes its own product. Two shapes that look like exceptions and aren't:
+  - **A fungible bulk line stays UNLINKED** — `plywood`, `metal tubing`, `pvc fittings`. This is the
+    designed default, not an omission. `misc:` products (`isMiscProduct`,
+    `packages/shared/src/constants.ts`) are an **inventory** convenience — a heterogeneous pile on a
+    shelf, exempted from `findProductsMissingPrice` and carried as `miscNoPrice` in the location
+    valuation — and are deliberately **not** an expense-link target: hanging a $171 clamp run off a $5
+    `assorted clamps` bucket makes "net cost" mean two different things depending on the product.
+    Decided 2026-07; see *Bucket products do NOT get product links* in `docs/todos.md`. Unbundle into
+    specific SKUs where the receipt allows, and otherwise leave the row unlinked.
+  - **A sample of one identified material is that product** (`walnut wood samples` → the walnut you
+    then order); a mixed sample bag is a bucket and follows the rule above.
+  - **A subscription is one product with N recurring expenses.** `chief architect monthly` (9 rows,
+    $1,791), `cutlist optimizer` (5) and `autocad lt` (4) are the ledger's highest-frequency names and
+    are all productless, so the "how often, how much" question they exist to answer has nowhere to
+    land. Keep the *schedule* off the product — the product is the license, the payments are the
+    expenses, exactly as 11 progress payments are 11 charges.
+
+  ⚠️ **A mis-minted product is close to permanent.** Any product carrying an expense is *by
+  construction* invisible to `findOrphanedProducts` — `Expense.productId` has role `acquisition`,
+  which retains — and refuses deletion with `PRODUCT_HAS_EXPENSES`. So a duplicate you create here
+  will never appear on the Problems page and Delete won't take it; the operator has to unlink the
+  expense by hand first. Mint from a **receipt line's own key** (SKU/ASIN/part number), never from a
+  name match — `find_similar_entities` ranks, it does not verify. Where the receipt has no line
+  items, leave the row unsplit and productless rather than guessing a product into existence.
 - **`create_product` has no `model` field** — create, then `update_product` to set `model`,
   `category`, `expectedQuantity`, `tags` and `externalIds`. Budget two calls per product.
+
+  **`category` is not optional in practice.** A null category is deliberately read as *potentially
+  food* so uncategorized groceries keep their unit-coverage grading (`packages/shared/src/category-theme.ts`),
+  which means a tool left uncategorized lands in `findProductsWithoutMappings` demanding
+  weight/volume/calorie coverage it can never have. Note the enum is food, tools, tool-consumables,
+  tool-accessories, storage, hardware, electronics, household, supplies — **there is no software or
+  services slot**, so a subscription product has no clean home yet. Raise that rather than forcing it
+  into `supplies`.
 - **Tag a durable and its consumables with the same value** (`subzero-fridge`, `ews-under-sink`,
   `wolf-hood-36`); `category` distinguishes them (`household` vs `supplies`). This is how a filter
   finds its fridge when neither name shares a token. And put a maintenance task's `subjectProductId`

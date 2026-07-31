@@ -36,7 +36,7 @@ import type {
   VendorUpdateInput,
 } from "@cubby/schemas/vendor";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { expense, purchase, purchaseImage, vendor } from "~/server/db/schema";
@@ -51,6 +51,7 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   countWhere,
+  formatSearchTerm,
   getDb,
   lockAndValidateForDelete,
   notDeleted,
@@ -170,9 +171,19 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
 });
 
 const buildVendorWhereClause = (filters: VendorFilters) =>
-  buildSearchConditions(vendor, [
-    { column: vendor.name, term: filters.search },
-  ]);
+  buildSearchConditions(
+    vendor,
+    [],
+    [
+      filters.search
+        ? or(
+            formatSearchTerm(vendor.name, filters.search),
+            formatSearchTerm(vendor.notes, filters.search),
+            formatSearchTerm(vendor.website, filters.search),
+          )
+        : undefined,
+    ],
+  );
 
 /**
  * Sorts the generic column path can't produce — the two rollups above aren't
