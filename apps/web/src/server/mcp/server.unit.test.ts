@@ -82,12 +82,27 @@ async function callTool(
  * code the test didn't declare surfaces as an "Unknown ... shortcode" error
  * exactly like a real miss would.
  */
+/**
+ * Stands in for the `shortcode` router both ways: `resolveMany` (code -> uuid,
+ * on the way in) and `lookupMany` (uuid -> code, on the way out). Entries not
+ * listed simply don't come back, so an unstubbed code surfaces as a real
+ * "unknown shortcode" miss rather than silently resolving.
+ */
 function shortcodeResolverStub(
   entries: Array<{ code: string; entity: string; id: string }>,
 ) {
   return {
     resolveMany: vi.fn(async ({ codes }: { codes: string[] }) =>
       entries.filter((e) => codes.includes(e.code)),
+    ),
+    lookupMany: vi.fn(
+      async ({ refs }: { refs: Array<{ entity: string; id: string }> }) =>
+        refs.flatMap((ref) => {
+          const hit = entries.find(
+            (e) => e.id === ref.id && e.entity === ref.entity,
+          );
+          return hit ? [{ ...ref, shortcode: hit.code }] : [];
+        }),
     ),
   };
 }
@@ -712,6 +727,11 @@ describe("listMcpToolCatalog", () => {
 
 describe("find_similar_entities pair allowlist", () => {
   const EXPENSE_A = "77777777-7777-4777-8777-777777777771";
+  const EXPENSE_A_CODE = "EXP-2222";
+  const similarShortcodeStub = () =>
+    shortcodeResolverStub([
+      { code: EXPENSE_A_CODE, entity: "expense", id: EXPENSE_A },
+    ]);
 
   it("passes an allowlisted pair through to search.similar", async () => {
     const similar = vi.fn().mockResolvedValue({
@@ -722,11 +742,12 @@ describe("find_similar_entities pair allowlist", () => {
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "expense_to_product", sourceId: EXPENSE_A, limit: 3 },
-      { search: { similar } },
+      { pair: "expense_to_product", sourceId: EXPENSE_A_CODE, limit: 3 },
+      { search: { similar }, shortcode: similarShortcodeStub() },
     );
 
     expect(result.isError).not.toBe(true);
+    // The seed crosses the boundary as a code and reaches the router as a uuid.
     expect(similar).toHaveBeenCalledWith({
       pair: "expense_to_product",
       sourceId: EXPENSE_A,
@@ -740,8 +761,9 @@ describe("find_similar_entities pair allowlist", () => {
     const result = await callTool(
       createMcpServer(),
       "find_similar_entities",
-      { pair: "expense_to_recipe", sourceId: EXPENSE_A },
-      { search: { similar } },
+      // A valid seed code, so the rejection can only be about the PAIR.
+      { pair: "expense_to_recipe", sourceId: EXPENSE_A_CODE },
+      { search: { similar }, shortcode: similarShortcodeStub() },
     );
 
     expect(result.isError).toBe(true);

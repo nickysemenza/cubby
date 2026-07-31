@@ -68,13 +68,16 @@ export function registerProductTools(server: McpServer) {
         []
       ).map(toUnitMappingInput);
       if (params.ingredientId == null && unitMappings.length === 0) {
-        const result = await caller.product.quickCreate({
+        // Return the RAW row: `registerEntityCreateTool` slims every create
+        // result itself, so slimming here too ran `slimProduct` over its own
+        // output — which has no `shortcode` left to read, yielding `id:
+        // undefined` and a schema crash on the commonest create path.
+        return await caller.product.quickCreate({
           name: params.name,
           manufacturer: params.manufacturer,
           upc: params.upc,
           price: params.price,
         });
-        return respond(result, slimProduct);
       }
       const ingredientId =
         params.ingredientId == null

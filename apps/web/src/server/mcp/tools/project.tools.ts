@@ -30,6 +30,7 @@ import {
   projectMcpListOut,
   projectOut,
   projectPortfolioAnalyticsOut,
+  projectTaskStatusBreakdown,
   projectUpdateData,
   taskBulkDueDateInput,
   taskBulkMoveInput,
@@ -154,16 +155,25 @@ const houseStatusAttentionItem = projectAttentionItemSchema
   .omit({ entityId: true })
   .extend({ entityShortcode: z.string().nullable() });
 
+/** `projectTaskStatusBreakdown`'s `projectId` also has no shortcode of its
+ * own (same gap as `costVsEstimate`'s `projectId` — see `projectBudgetRow`
+ * above); resolved via `shortcodesFor` in `get_house_status`'s handler. */
+const houseStatusTaskStatus = projectTaskStatusBreakdown
+  .omit({ projectId: true })
+  .extend({ projectShortcode: projectShortcode.nullable() });
+
 /** `project.dashboardSummary` minus `filterOptions` (UI select options only). */
 const houseStatusOut = projectDashboardSummaryOut
   .omit({
     filterOptions: true,
     projects: true,
+    taskStatusByProject: true,
     nextTasks: true,
     attention: true,
   })
   .extend({
     projects: z.array(houseStatusProject),
+    taskStatusByProject: z.array(houseStatusTaskStatus),
     nextTasks: z.array(houseStatusTask),
     attention: z.array(houseStatusAttentionItem),
   });
@@ -294,8 +304,19 @@ export function registerProjectTools(server: McpServer) {
         statusScope: [...LIVE_PROJECT_STATUSES],
         ...params,
       });
+      const taskStatusShortcodeById = await shortcodesFor(
+        caller,
+        "project",
+        result.taskStatusByProject.map((row) => row.projectId),
+      );
       return {
         ...result,
+        taskStatusByProject: result.taskStatusByProject.map(
+          ({ projectId, ...row }) => ({
+            ...row,
+            projectShortcode: taskStatusShortcodeById.get(projectId) ?? null,
+          }),
+        ),
         attention: await withAttentionShortcodes(caller, result.attention),
       };
     },

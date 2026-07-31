@@ -1,4 +1,5 @@
 export {
+  anyShortcodeSchema,
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_CHARS,
   SHORTCODE_PREFIX,

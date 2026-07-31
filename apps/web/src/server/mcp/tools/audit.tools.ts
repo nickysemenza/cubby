@@ -18,12 +18,15 @@ import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
  * `shortcodeEntities` set (every entity but `usda-food`/`image` — see
  * entity-manifest.ts), so every row is resolvable via `shortcode.lookupMany`.
  *
- * `id` (the audit-log row's own id) and `userId`/`user.id` are left as raw
- * uuids on purpose: an audit-log entry isn't itself a shortcode entity, and
- * `User` has no shortcode at all (not in the manifest's entity registry).
+ * The log row's own `id` is dropped rather than swapped: an audit-log entry
+ * isn't itself a shortcode entity (no `get_audit_entry` tool exists to
+ * address one by), and pagination here is cursor-based on `createdAt`, not
+ * this id, so nothing needs it. `userId`/`user.id` are plain `z.string()`
+ * (not `z.uuid()`) already — `User` has no shortcode at all (not in the
+ * manifest's entity registry), so those were never uuid-shaped on the wire.
  */
 const auditLogEntryMcpOut = auditLogListOut.shape.entries.element
-  .omit({ entityId: true })
+  .omit({ id: true, entityId: true })
   .extend({ entityShortcode: z.string().nullable() });
 
 const auditLogListMcpOut = auditLogListOut.omit({ entries: true }).extend({

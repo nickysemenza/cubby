@@ -1,7 +1,19 @@
-import { attachFileFields, attachFileResponse } from "@cubby/schemas/image";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
+import {
+  attachableImageEntity,
+  attachFileFields,
+  attachFileResponse,
+} from "@cubby/schemas/image";
+import { parseShortcode } from "@cubby/shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCaller, registerMcpTool, WRITE_CLOSED } from "./_shared";
+import {
+  getCaller,
+  registerMcpTool,
+  resolvePublicId,
+  WRITE_CLOSED,
+} from "./_shared";
 
 /**
  * `attachFileResponse.entityId` is the attached-to entity's raw uuid, with no
@@ -12,6 +24,15 @@ import { getCaller, registerMcpTool, WRITE_CLOSED } from "./_shared";
  * packages/schemas. `imageId` is a declared exception: images have no
  * shortcode of their own.
  */
+/** The attachable set as a non-empty tuple, for the prefix union pattern. */
+const ATTACHABLE_ENTITIES = attachableImageEntity.options as unknown as [
+  ShortcodeEntity,
+  ...ShortcodeEntity[],
+];
+
+// `entityType` is derived from the shortcode's prefix, so it is not asked for.
+const { entityType: _entityType, ...attachFileEntityless } = attachFileFields;
+
 const attachFileMcpOut = attachFileResponse
   .omit({ entityId: true })
   .extend({ entityShortcode: z.string().nullable() });
@@ -36,15 +57,39 @@ export function registerImageTools(server: McpServer) {
       "(an http(s) link to fetch) — exactly one. For base64, set `contentType` " +
       "(image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, " +
       "or application/pdf) unless a data: URI already carries it. Resolve the " +
-      "target id first via search_products / list_recipes / list_locations / " +
+      "target shortcode first via search_products / list_recipes / list_locations / " +
       "list_projects; for a charge use list_purchases / get_purchase, or read " +
       "`purchaseId` off any expense row (list_expenses / get_expense).",
-    inputSchema: attachFileFields,
+    // `entityType` is dropped on purpose: a shortcode's prefix already names
+    // the entity, so asking for both invites a mismatched pair. The handler
+    // derives the type from the code and rejects a non-attachable one.
+    inputSchema: {
+      ...attachFileEntityless,
+      entityId: anyShortcodeSchema(ATTACHABLE_ENTITIES).describe(
+        `Shortcode of the target — its prefix picks the entity (${attachableImageEntity.options.join(", ")}).`,
+      ),
+    },
     outputSchema: attachFileMcpOut,
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.image.attachFile(params);
+      const parsed = parseShortcode(params.entityId as string);
+      const attachable = attachableImageEntity.safeParse(parsed?.type);
+      if (!attachable.success) {
+        throw new Error(
+          `${params.entityId} names a ${parsed?.type ?? "unknown"}; files attach to a ${attachableImageEntity.options.join(", ")}.`,
+        );
+      }
+      const entityType = attachable.data;
+      const result = await caller.image.attachFile({
+        ...params,
+        entityType,
+        entityId: await resolvePublicId(
+          caller,
+          entityType,
+          params.entityId as string,
+        ),
+      });
       const [ref] = await caller.shortcode.lookupMany({
         refs: [{ entity: result.entityType, id: result.entityId }],
       });

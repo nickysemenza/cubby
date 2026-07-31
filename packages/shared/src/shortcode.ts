@@ -67,6 +67,30 @@ const shortcodeRegex = (type: ShortcodeType) =>
   new RegExp(`^${SHORTCODE_PREFIX[type]}${BODY_PATTERN}$`);
 
 /**
+ * A schema for a code whose entity isn't known until runtime — an MCP tool
+ * whose target type is chosen by another field (`find_similar_entities`'s
+ * `pair`) or read off the prefix itself (`attach_file`).
+ *
+ * Still a `ZodString` with a real `pattern`, just one alternating over the
+ * allowed prefixes, so the published JSON Schema keeps telling an agent which
+ * codes are legal here. A bare `z.string()` would silently drop that hint —
+ * which is exactly what the catalog's pattern test exists to catch.
+ */
+export const anyShortcodeSchema = <T extends ShortcodeType>(
+  types: readonly [T, ...T[]],
+) =>
+  z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(
+      new RegExp(
+        `^(?:${types.map((t) => SHORTCODE_PREFIX[t]).join("|")})${BODY_PATTERN}$`,
+      ),
+      `Expected one of: ${types.map((t) => `${SHORTCODE_PREFIX[t]}…`).join(", ")}`,
+    );
+
+/**
  * The one schema per entity: it normalizes, validates, brands, AND publishes a
  * useful JSON Schema. There is deliberately no second "normalized" variant.
  *

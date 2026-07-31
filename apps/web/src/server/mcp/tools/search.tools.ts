@@ -1,12 +1,21 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import { similarEntitiesMcpOut } from "@cubby/schemas/mcp";
 import {
   globalSearchInputSchema,
   searchResultItemSchema,
   similarEntitiesInputSchema,
+  similarEntityPairs,
 } from "@cubby/schemas/search";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { uniq } from "es-toolkit";
 import { z } from "zod";
-import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
+import {
+  getCaller,
+  READ_ONLY_CLOSED,
+  registerMcpTool,
+  resolvePublicId,
+} from "./_shared";
 
 /**
  * `globalSearchMcpOut`/`similarEntitiesMcpOut` publish the router's result
@@ -49,6 +58,11 @@ const similarEntitiesMcpOutLocal = z.object({
   ),
 });
 
+/** Every entity that can be a `find_similar_entities` seed, from the pair map. */
+const SIMILAR_SOURCE_ENTITIES = uniq(
+  Object.values(similarEntityPairs).map((p) => p.source),
+) as [ShortcodeEntity, ...ShortcodeEntity[]];
+
 export function registerSearchTools(server: McpServer) {
   registerMcpTool(server, {
     name: "global_search",
@@ -75,12 +89,24 @@ export function registerSearchTools(server: McpServer) {
       "Find the entities whose stored embedding is closest to one seed entity's, along an allowlisted direction: expense_to_product (which product does this expense line refer to?), product_to_product / ingredient_to_ingredient (duplicate hunting), recipe_to_recipe (related recipes). Pass the pair key plus the seed's id; returns each neighbour with its cosine `similarity`, nearest first, and echoes the resolved `source` ref. " +
       "WARNING — these scores RANK candidates, they do not VERIFY them. Nearest-neighbour always returns something, even when the correct answer is 'no match', and rank does not track correctness: in a real backfill a WRONG match (an M18 Hackzall for 'm18 angle grinder', cosine distance 0.326) scored BETTER than a CORRECT one (a TS 55 Track Saw for 'festool track saw', 0.353) — so a high score is not evidence, and a lower-ranked hit can be the right one. Never auto-apply, auto-link, or bulk-write a result. Read each candidate's name and details, confirm every match with the user, and be willing to conclude that none of them match. " +
       "Returns an empty result set when the seed has no embedding yet or embeddings are not configured — that is 'unknown', not 'nothing is similar'.",
-    inputSchema: similarEntitiesInputSchema.shape,
+    // `sourceId` is polymorphic — which entity it names is decided by `pair`,
+    // so it can't be a single `shortcodeSchema(entity)`. It takes the public
+    // code all the same, and the handler pins it to the pair's source type.
+    inputSchema: {
+      ...similarEntitiesInputSchema.shape,
+      sourceId: anyShortcodeSchema(SIMILAR_SOURCE_ENTITIES).describe(
+        "Shortcode of the seed entity; its prefix must match the pair's source type (e.g. EXP-4K7M for expense_to_product).",
+      ),
+    },
     outputSchema: similarEntitiesMcpOutLocal,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.search.similar(params);
+      const sourceEntity = similarEntityPairs[params.pair].source;
+      const result = await caller.search.similar({
+        ...params,
+        sourceId: await resolvePublicId(caller, sourceEntity, params.sourceId),
+      });
       const [sourceCode] = await caller.shortcode.lookupMany({
         refs: [
           { entity: result.source.entityType, id: result.source.entityId },

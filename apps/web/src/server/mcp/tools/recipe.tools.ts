@@ -108,22 +108,6 @@ type McpRecipeSection = z.infer<typeof mcpRecipeSectionInput>;
 const recipeShortcodeOut = z.object({ shortcode: idParam("recipe") });
 
 /**
- * `recipesUsingIngredientOut` echoes the seed `ingredientId` (a raw uuid, no
- * shortcode sibling) and each `recipes[]` row's own `id` (which DOES already
- * have a `shortcode` sibling from the previous cutover pass, on
- * `recipeWithUsagesMcpFields`). The seed needs no lookup — the handler
- * already has the shortcode it was called with, before resolving it to a
- * uuid.
- */
-const recipesUsingIngredientMcpOut = z.object({
-  ingredientShortcode: idParam("ingredient"),
-  count: recipesUsingIngredientOut.shape.count,
-  recipes: z.array(
-    recipesUsingIngredientOut.shape.recipes.element.omit({ id: true }),
-  ),
-});
-
-/**
  * Resolve every ingredient/recipe shortcode inside a recipe's `sections[]` to
  * its uuid, grouped by entity so each resolves in ONE batched call regardless
  * of how many sections/lines reference it.
@@ -228,7 +212,10 @@ export function registerRecipeTools(server: McpServer) {
     description:
       "Reverse lookup: given an ingredient ID, return every recipe that uses it.",
     inputSchema: { id: idParam("ingredient") },
-    outputSchema: recipesUsingIngredientMcpOut,
+    // `recipesUsingIngredientOut`'s `ingredientId`/`recipes[].id` are already
+    // shortcode-typed at the schema level (packages/schemas/recipe.ts), and
+    // `slimRecipe` already returns `id: shortcode` — nothing to swap here.
+    outputSchema: recipesUsingIngredientOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
@@ -236,23 +223,20 @@ export function registerRecipeTools(server: McpServer) {
         id: await resolvePublicId(caller, "ingredient", params.id),
       })) as RecipeUsage[];
       const recipes = Object.values(groupBy(usages, (u) => u.recipe.id)).map(
-        (rows) => {
-          const { id: _id, ...recipe } = slimRecipe(rows[0]!.recipe);
-          return {
-            ...recipe,
-            usages: rows.map((u) => ({
-              lineId: u.id,
-              sectionName: u.sectionName ?? null,
-              amounts: u.amounts,
-              rawLine: u.rawLine ?? null,
-              modifier: u.modifier ?? null,
-            })),
-          };
-        },
+        (rows) => ({
+          ...slimRecipe(rows[0]!.recipe),
+          usages: rows.map((u) => ({
+            lineId: u.id,
+            sectionName: u.sectionName ?? null,
+            amounts: u.amounts,
+            rawLine: u.rawLine ?? null,
+            modifier: u.modifier ?? null,
+          })),
+        }),
       );
       // `params.id` is the shortcode the tool was called with — the seed's
       // own uuid never enters this handler, so no reverse lookup is needed.
-      return { ingredientShortcode: params.id, count: recipes.length, recipes };
+      return { ingredientId: params.id, count: recipes.length, recipes };
     },
   });
 
