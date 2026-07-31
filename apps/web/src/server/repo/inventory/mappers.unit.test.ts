@@ -24,7 +24,7 @@ const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 
 const baseProduct = {
   id: PRODUCT_ID,
-  shortcode: "P-TEST",
+  shortcode: "PRD-TEST",
   name: "Flour",
   manufacturer: "Generic",
   tags: [],
@@ -44,7 +44,7 @@ const baseProduct = {
 
 const baseLocation = {
   id: LOCATION_ID,
-  shortcode: "L-TEST",
+  shortcode: "LOC-TEST",
   name: "Pantry",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -58,6 +58,7 @@ const baseLocation = {
 
 const baseInventoryEntry = {
   id: INVENTORY_ID,
+  shortcode: "INV-TEST",
   productId: PRODUCT_ID,
   amount: { value: 2, unit: "each" },
   createdAt: CREATED_AT,
@@ -152,7 +153,7 @@ describe("inventory mappers", () => {
       updatedAt: UPDATED_AT,
       location: {
         id: LOCATION_ID,
-        shortcode: unsafeLocationShortcode("L-TEST"),
+        shortcode: unsafeLocationShortcode("LOC-TEST"),
         aliases: [],
         lastBulkInventory: null,
         aiDescription: null,
@@ -165,7 +166,7 @@ describe("inventory mappers", () => {
       },
       product: {
         id: PRODUCT_ID,
-        shortcode: unsafeProductShortcode("P-TEST"),
+        shortcode: unsafeProductShortcode("PRD-TEST"),
         images: [],
         externalIds: [
           {

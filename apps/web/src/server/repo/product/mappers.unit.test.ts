@@ -41,7 +41,7 @@ const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 
 const baseProduct = {
   id: PRODUCT_ID,
-  shortcode: "P-TEST",
+  shortcode: "PRD-TEST",
   name: "Flour",
   manufacturer: "Generic",
   tags: [],
@@ -133,7 +133,7 @@ const deletedUnitMapping = {
 
 const activeLocation = {
   id: LOCATION_ID,
-  shortcode: "L-TEST",
+  shortcode: "LOC-TEST",
   name: "Pantry",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -148,7 +148,7 @@ const activeLocation = {
 const deletedLocation = {
   ...activeLocation,
   id: unsafeLocationId("c23e4567-e89b-12d3-a456-426614174000"),
-  shortcode: "L-OLD",
+  shortcode: "LOC-9WK4",
   deletedAt: DELETED_AT,
 };
 
@@ -167,7 +167,7 @@ describe("product mappers", () => {
 
     expect(result).toMatchObject({
       id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("P-TEST"),
+      shortcode: unsafeProductShortcode("PRD-TEST"),
       name: "Flour",
       manufacturer: "Generic",
       images: [
@@ -189,6 +189,7 @@ describe("product mappers", () => {
       ...baseProduct,
       ingredient: {
         id: INGREDIENT_ID,
+        shortcode: "ING-TEST",
         name: "Wheat flour",
         aliases: ["flour"],
         naKinds: [],
@@ -206,6 +207,7 @@ describe("product mappers", () => {
       inventoryEntry: [
         {
           id: INVENTORY_ID,
+          shortcode: "INV-2345",
           productId: PRODUCT_ID,
           amount: { value: 2, unit: "each" },
           createdAt: CREATED_AT,
@@ -218,6 +220,7 @@ describe("product mappers", () => {
         },
         {
           id: DELETED_LOCATION_INVENTORY_ID,
+          shortcode: "INV-3456",
           productId: PRODUCT_ID,
           amount: { value: 1, unit: "each" },
           createdAt: CREATED_AT,
@@ -253,7 +256,7 @@ describe("product mappers", () => {
           amount: { value: 2, unit: "each" },
           location: {
             id: LOCATION_ID,
-            shortcode: unsafeLocationShortcode("L-TEST"),
+            shortcode: unsafeLocationShortcode("LOC-TEST"),
             name: "Pantry",
             type: "room",
           },
@@ -294,6 +297,7 @@ describe("product mappers", () => {
       ...baseProduct,
       ingredient: {
         id: INGREDIENT_ID,
+        shortcode: "ING-TEST",
         name: "Wheat flour",
         aliases: ["flour"],
         naKinds: [],
@@ -311,6 +315,7 @@ describe("product mappers", () => {
       inventoryEntry: [
         {
           id: INVENTORY_ID,
+          shortcode: "INV-2345",
           productId: PRODUCT_ID,
           amount: { value: 2, unit: "each" },
           createdAt: CREATED_AT,
@@ -332,7 +337,7 @@ describe("product mappers", () => {
 
     expect(result).toMatchObject({
       id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("P-TEST"),
+      shortcode: unsafeProductShortcode("PRD-TEST"),
       ingredient: {
         id: INGREDIENT_ID,
         name: "Wheat flour",
@@ -352,7 +357,7 @@ describe("product mappers", () => {
           amount: { value: 2, unit: "each" },
           location: {
             id: LOCATION_ID,
-            shortcode: unsafeLocationShortcode("L-TEST"),
+            shortcode: unsafeLocationShortcode("LOC-TEST"),
             name: "Pantry",
           },
         },

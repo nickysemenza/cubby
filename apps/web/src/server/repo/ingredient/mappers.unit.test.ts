@@ -35,7 +35,7 @@ const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 
 const baseProduct = {
   id: PRODUCT_ID,
-  shortcode: "P-TEST",
+  shortcode: "PRD-TEST",
   name: "Flour",
   manufacturer: "Generic",
   tags: [],
@@ -55,6 +55,7 @@ const baseProduct = {
 
 const baseIngredient = {
   id: INGREDIENT_ID,
+  shortcode: "ING-TEST",
   name: "Wheat flour",
   aliases: ["flour"],
   naKinds: [],
@@ -66,7 +67,7 @@ const baseIngredient = {
 
 const baseRecipe = {
   id: RECIPE_ID,
-  shortcode: "R-TEST",
+  shortcode: "RCP-TEST",
   name: "Pancakes",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -189,7 +190,7 @@ describe("ingredient product mappers", () => {
 
     expect(result).toMatchObject({
       id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("P-TEST"),
+      shortcode: unsafeProductShortcode("PRD-TEST"),
       images: [{ id: IMAGE_ID }],
       externalIds: [{ id: EXTERNAL_ID }],
       unitMappings: [

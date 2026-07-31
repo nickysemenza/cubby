@@ -45,9 +45,7 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   countWhere,
-  findOrCreate,
   getDb,
-  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   updateLiveAndReturn,
@@ -55,6 +53,10 @@ import {
 } from "~/server/repo/database-helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { foldChargeInto } from "~/server/repo/purchase";
+import {
+  findOrCreateWithShortcode,
+  insertWithShortcode,
+} from "~/server/repo/shortcode-utils";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
   "Purchase.vendorId": {
@@ -309,13 +311,15 @@ export const vendorOptions = async (
  * duplicates are a merge decision, and merging is a user action.
  */
 export const findOrCreateVendor = async (
-  db: Database | Parameters<typeof findOrCreate>[0],
+  db: Database | DrizzleTransaction,
   name: string,
 ): Promise<VendorId> => {
   const trimmed = name.trim();
-  const { row } = await findOrCreate(db, vendor, {
+  const { row } = await findOrCreateWithShortcode(db, "vendor", {
     where: and(eq(vendor.name, trimmed), notDeleted(vendor)),
-    values: { name: trimmed },
+    values: () => ({
+      name: trimmed,
+    }),
   });
   return row.id;
 };
@@ -326,7 +330,7 @@ export const createVendor = async (
   actor: ActorContext,
 ): Promise<VendorOut> => {
   const id = await withTransaction(db, async (tx) => {
-    const created = await insertAndReturn(tx, vendor, {
+    const created = await insertWithShortcode(tx, "vendor", {
       name: data.name.trim(),
       website: data.website,
       notes: data.notes,

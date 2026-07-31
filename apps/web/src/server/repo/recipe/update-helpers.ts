@@ -25,12 +25,12 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   applyImageOrder,
   associatePendingImages,
-  findOrCreate,
   insertAndReturn,
   nextImageSortOrder,
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
+import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
 import { webProvenance } from "./source";
@@ -55,7 +55,7 @@ export const findOrCreateRecipeLinkIngredient = async (
   // unique index (partial, WHERE deletedAt IS NULL) backs the race and the match
   // predicate. The name lookup is deferred to the create path via the values
   // thunk. See findOrCreate for the race it closes.
-  const { row } = await findOrCreate(db, ingredient, {
+  const { row } = await findOrCreateWithShortcode(db, "ingredient", {
     where: eq(ingredient.recipeId, recipeId),
     values: async () => {
       const recipeRecord = await unwrapDb(db).query.recipe.findFirst({
@@ -68,7 +68,11 @@ export const findOrCreateRecipeLinkIngredient = async (
           `Recipe with ID ${recipeId} not found`,
         );
       }
-      return { name: `Recipe: ${recipeRecord.name}`, aliases: [], recipeId };
+      return {
+        name: `Recipe: ${recipeRecord.name}`,
+        aliases: [],
+        recipeId,
+      };
     },
   });
   return row.id;

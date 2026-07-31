@@ -162,6 +162,33 @@ The household **Project Tracker** (migrated from Notion) is its own self-contain
 
 Spend itself is three entities, `Vendor ──< Purchase ──< Expense`: a **Vendor** is the roster of places money goes (identity only), a **Purchase** is **one vendor transaction** — its `orderId`, charge date, an optional `statedTotal`, and its invoice documents — and an **Expense** is a categorized line of that charge. **All money lives on `Expense`**: every `SUM(cost)` reads it alone, and `purchase.statedTotal` is never summed into spend (it's a soft reconciliation cue, and a mismatch is often correct). A partial-unique `(vendorId, orderId)` index makes one order exactly one charge. ⚠️ `Purchase` **changed meaning** in this split — the old flat ledger row is now `Expense`; see [docs/terminology.md](docs/terminology.md#vendor-vs-purchase-vs-expense).
 
+### Public identifiers — shortcodes
+
+Every entity has two ids. The uuid primary key is **private**: repos, services, and
+internal tRPC use it and nothing else does. The **shortcode** (`PRD-4K7M`) is the
+public id — what appears in URLs, on printed QR labels, and as the `id` field over
+MCP. Codes are non-null, immutable, never reused (uniqueness spans soft-deleted
+rows, so a retired code is a permanent tombstone), and case-insensitive on input.
+
+| Entity | Prefix | | Entity | Prefix | | Entity | Prefix |
+|---|---|---|---|---|---|---|---|
+| cookbook | `CKB-` | | inventory | `INV-` | | purchase | `PUR-` |
+| expense | `EXP-` | | location | `LOC-` | | recipe | `RCP-` |
+| ingredient | `ING-` | | meal | `MEL-` | | task | `TSK-` |
+| product | `PRD-` | | project | `PRJ-` | | vendor | `VEN-` |
+
+`Image` is the one entity with no shortcode — it has no MCP surface and is only
+ever reached through the entity that owns it.
+
+The body is four characters from a 31-character alphabet (digits and uppercase
+letters minus the scan-confusable `0 O 1 I L`) — 923,521 codes per prefix.
+`P-`/`R-`/`L-` were the pre-2026-07 prefixes for product/recipe/location; they
+still resolve on input, forever, so labels printed before the cutover keep
+working. Because the swap preserved each code's body (`P-4K7M` → `PRD-4K7M`),
+that needs only a three-entry alias map, not an alias table. The registry lives
+in `packages/shared/src/shortcode.ts`; resolution goes through
+`apps/web/src/server/repo/shortcode-resolver.ts` and nowhere else.
+
 ```mermaid
 erDiagram
     Recipe ||--o{ RecipeSection : "has sections"

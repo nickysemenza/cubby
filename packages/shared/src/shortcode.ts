@@ -1,113 +1,232 @@
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
 
-/** Character set: 32 chars (no 0/O, 1/I/L for clarity) */
+/**
+ * Character set: 31 chars — the digits and uppercase letters minus the
+ * scan/OCR-confusable ones (0/O, 1/I/L). Four of them give 31^4 = 923,521
+ * codes per prefix, against a largest table of ~1,800 rows.
+ */
 export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
-const shortcodePattern = `[${SHORTCODE_CHARS}]{4}`;
+const BODY_PATTERN = `[${SHORTCODE_CHARS}]{4}`;
+const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 
 /**
- * Per-entity shortcode prefixes — the single source of truth for the "X-" stamp.
- * Everything below (the validators, the all-prefix regex, the parser map, and
- * the generators) derives from this, so a prefix is defined exactly once.
+ * Per-entity shortcode prefixes — the single source of truth for the "XXX-"
+ * stamp. Keys match the `Entity` union in `@cubby/schemas/entity` (checked by
+ * the entity-manifest drift test); everything below (the schemas, the parser,
+ * the generator) derives from this, so a prefix is defined exactly once.
+ *
+ * Three letters throughout, so a code is self-describing when spoken, typed, or
+ * pasted into an agent. `image` is deliberately absent: it has no MCP surface
+ * and is only ever reached through the entity that owns it.
  */
 export const SHORTCODE_PREFIX = {
-  location: "L-",
-  product: "P-",
-  recipe: "R-",
+  cookbook: "CKB-",
+  expense: "EXP-",
+  ingredient: "ING-",
+  inventory: "INV-",
+  location: "LOC-",
+  meal: "MEL-",
+  product: "PRD-",
+  project: "PRJ-",
+  purchase: "PUR-",
+  recipe: "RCP-",
+  task: "TSK-",
+  vendor: "VEN-",
 } as const;
 export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
 
-const prefixLetters = Object.values(SHORTCODE_PREFIX)
-  .map((p) => p.charAt(0))
-  .join("");
-const shortcodeRegex = (type: ShortcodeType) =>
-  new RegExp(`^${SHORTCODE_PREFIX[type]}${shortcodePattern}$`);
+/**
+ * The single-letter prefixes minted before the 2026-07 cutover, kept forever so
+ * physical QR labels already stuck to shelves and products keep resolving.
+ *
+ * INBOUND ONLY. Nothing emits these — `parseShortcode` rewrites a legacy code to
+ * its canonical form, which is possible precisely because the cutover preserved
+ * each code's 4-char body (`P-4K7M` became `PRD-4K7M`). That is also why no alias
+ * table is needed: the mapping is a pure prefix swap.
+ */
+export const LEGACY_SHORTCODE_PREFIX = {
+  "L-": "location",
+  "P-": "product",
+  "R-": "recipe",
+} as const satisfies Record<string, ShortcodeType>;
 
-/** Regex matching any valid shortcode (L-XXXX, P-XXXX, R-XXXX) */
-export const SHORTCODE_RE = new RegExp(
-  `^([${prefixLetters}])-${shortcodePattern}$`,
-);
-
-// Zod schemas with brand types for compile-time safety
-export const locationShortcode = z
-  .string()
-  .regex(shortcodeRegex("location"), "Invalid location shortcode")
-  .brand("LocationShortcode");
-
-export const productShortcode = z
-  .string()
-  .regex(shortcodeRegex("product"), "Invalid product shortcode")
-  .brand("ProductShortcode");
-
-export const recipeShortcode = z
-  .string()
-  .regex(shortcodeRegex("recipe"), "Invalid recipe shortcode")
-  .brand("RecipeShortcode");
-
-export type LocationShortcode = z.infer<typeof locationShortcode>;
-export type ProductShortcode = z.infer<typeof productShortcode>;
-export type RecipeShortcode = z.infer<typeof recipeShortcode>;
-
-const PREFIX_MAP: Record<string, ShortcodeType> = Object.fromEntries(
+const PREFIX_TO_TYPE = Object.fromEntries(
   (Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]).map((type) => [
-    SHORTCODE_PREFIX[type].charAt(0),
+    SHORTCODE_PREFIX[type],
     type,
   ]),
+) as Record<string, ShortcodeType | undefined>;
+
+const LEGACY_TO_TYPE: Record<string, ShortcodeType | undefined> =
+  LEGACY_SHORTCODE_PREFIX;
+
+/** Regex a canonical shortcode of `type` must match, e.g. `^PRD-[…]{4}$`. */
+const shortcodeRegex = (type: ShortcodeType) =>
+  new RegExp(`^${SHORTCODE_PREFIX[type]}${BODY_PATTERN}$`);
+
+/**
+ * The one schema per entity: it normalizes, validates, brands, AND publishes a
+ * useful JSON Schema. There is deliberately no second "normalized" variant.
+ *
+ * `.trim()`/`.toUpperCase()` are ZodString-level checks, so this stays a
+ * `ZodString` rather than becoming a `ZodPipe`. That matters: `z.toJSONSchema`
+ * renders a pipe's input side as a bare `{"type":"string"}`, which would strip
+ * the `pattern` and `description` that MCP advertises to agents — the prefix
+ * hint is most of what makes a shortcode self-explanatory over the wire. The
+ * regex is case-SENSITIVE on purpose so the advertised pattern describes the
+ * canonical form exactly; the leniency comes from `.toUpperCase()` running
+ * first. Guarded by shortcode.unit.test.ts.
+ */
+const makeShortcodeSchema = <T extends ShortcodeType, B extends string>(
+  type: T,
+  brand: B,
+) =>
+  z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(shortcodeRegex(type), `Invalid ${type} shortcode`)
+    .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7M`)
+    .brand<B>(brand);
+
+export const cookbookShortcode = makeShortcodeSchema(
+  "cookbook",
+  "CookbookShortcode",
 );
+export const expenseShortcode = makeShortcodeSchema(
+  "expense",
+  "ExpenseShortcode",
+);
+export const ingredientShortcode = makeShortcodeSchema(
+  "ingredient",
+  "IngredientShortcode",
+);
+export const inventoryShortcode = makeShortcodeSchema(
+  "inventory",
+  "InventoryShortcode",
+);
+export const locationShortcode = makeShortcodeSchema(
+  "location",
+  "LocationShortcode",
+);
+export const mealShortcode = makeShortcodeSchema("meal", "MealShortcode");
+export const productShortcode = makeShortcodeSchema(
+  "product",
+  "ProductShortcode",
+);
+export const projectShortcode = makeShortcodeSchema(
+  "project",
+  "ProjectShortcode",
+);
+export const purchaseShortcode = makeShortcodeSchema(
+  "purchase",
+  "PurchaseShortcode",
+);
+export const recipeShortcode = makeShortcodeSchema("recipe", "RecipeShortcode");
+export const taskShortcode = makeShortcodeSchema("task", "TaskShortcode");
+export const vendorShortcode = makeShortcodeSchema("vendor", "VendorShortcode");
 
-const shortcodeId = customAlphabet(SHORTCODE_CHARS, 4);
+/** Every shortcode schema, keyed by entity — the lookup behind `shortcodeSchema`. */
+const SHORTCODE_SCHEMA = {
+  cookbook: cookbookShortcode,
+  expense: expenseShortcode,
+  ingredient: ingredientShortcode,
+  inventory: inventoryShortcode,
+  location: locationShortcode,
+  meal: mealShortcode,
+  product: productShortcode,
+  project: projectShortcode,
+  purchase: purchaseShortcode,
+  recipe: recipeShortcode,
+  task: taskShortcode,
+  vendor: vendorShortcode,
+} as const satisfies Record<ShortcodeType, unknown>;
 
-/** Generate a random 4-character ID from the safe character set. */
-export function generateShortcodeId(): string {
-  return shortcodeId();
+/**
+ * The shortcode schema for an entity, preserving its exact branded type through
+ * the generic lookup. Lets a generic surface (the MCP CRUD toolset, a route
+ * param) ask for "this entity's public id schema" without a switch.
+ */
+export const shortcodeSchema = <T extends ShortcodeType>(
+  type: T,
+): (typeof SHORTCODE_SCHEMA)[T] => SHORTCODE_SCHEMA[type];
+
+export type CookbookShortcode = z.infer<typeof cookbookShortcode>;
+export type ExpenseShortcode = z.infer<typeof expenseShortcode>;
+export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
+export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
+export type LocationShortcode = z.infer<typeof locationShortcode>;
+export type MealShortcode = z.infer<typeof mealShortcode>;
+export type ProductShortcode = z.infer<typeof productShortcode>;
+export type ProjectShortcode = z.infer<typeof projectShortcode>;
+export type PurchaseShortcode = z.infer<typeof purchaseShortcode>;
+export type RecipeShortcode = z.infer<typeof recipeShortcode>;
+export type TaskShortcode = z.infer<typeof taskShortcode>;
+export type VendorShortcode = z.infer<typeof vendorShortcode>;
+
+/** Any entity's shortcode, for surfaces that hold a code before resolving it. */
+export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
+
+const shortcodeBody = customAlphabet(SHORTCODE_CHARS, 4);
+
+/**
+ * Generate a shortcode for `type`. Uniqueness is NOT checked here — the DB
+ * unique constraint is authoritative; see `generateUniqueShortcode`.
+ */
+export function generateShortcode(type: ShortcodeType): string {
+  return `${SHORTCODE_PREFIX[type]}${shortcodeBody()}`;
 }
 
-/** Generate a location shortcode (L-XXXX format). */
-export function generateLocationShortcode(): string {
-  return `${SHORTCODE_PREFIX.location}${generateShortcodeId()}`;
-}
-
-/** Generate a product shortcode (P-XXXX format). */
-export function generateProductShortcode(): string {
-  return `${SHORTCODE_PREFIX.product}${generateShortcodeId()}`;
-}
-
-/** Generate a recipe shortcode (R-XXXX format). */
-export function generateRecipeShortcode(): string {
-  return `${SHORTCODE_PREFIX.recipe}${generateShortcodeId()}`;
+export interface ParsedShortcode {
+  type: ShortcodeType;
+  /** Always the canonical form, even when `code` used a legacy prefix. */
+  shortcode: string;
+  /** Just the 4-char body ("4K7M"), shared between legacy and canonical forms. */
+  id: string;
+  /** Whether `code` arrived with a legacy single-letter prefix. */
+  legacy: boolean;
 }
 
 /**
- * Parse a shortcode to extract entity type and ID.
- * Returns both the full shortcode ("L-A3F2") and just the id part ("A3F2").
+ * Parse a shortcode into its entity type and canonical form, accepting both
+ * canonical (`PRD-4K7M`) and legacy (`P-4K7M`) prefixes, in any case, with
+ * surrounding whitespace.
+ *
+ * Splits at the first dash and looks the prefix up in a closed set rather than
+ * matching one alternation regex — unambiguous however many prefixes exist, and
+ * it can't be fooled by a prefix that happens to be a substring of another.
  */
-export function parseShortcode(
-  code: string,
-): { type: ShortcodeType; shortcode: string; id: string } | null {
+export function parseShortcode(code: string): ParsedShortcode | null {
   const normalized = code.trim().toUpperCase();
-  const match = normalized.match(SHORTCODE_RE);
-  if (!match) return null;
+  const dash = normalized.indexOf("-");
+  if (dash <= 0) return null;
 
-  const prefix = match[1];
-  const type = prefix ? PREFIX_MAP[prefix] : undefined;
+  const prefix = normalized.slice(0, dash + 1);
+  const body = normalized.slice(dash + 1);
+  if (!BODY_RE.test(body)) return null;
+
+  const legacyType = LEGACY_TO_TYPE[prefix];
+  const type = legacyType ?? PREFIX_TO_TYPE[prefix];
   if (!type) return null;
 
-  return { type, shortcode: normalized, id: normalized.slice(2) };
-}
-
-/** Check if a string is a valid shortcode format. */
-export function isValidShortcode(code: string): boolean {
-  return parseShortcode(code) !== null;
+  return {
+    type,
+    shortcode: `${SHORTCODE_PREFIX[type]}${body}`,
+    id: body,
+    legacy: legacyType !== undefined,
+  };
 }
 
 /**
  * Extract a shortcode from a raw QR code scan value.
- * Handles both raw shortcodes ("L-A3F2") and full URLs ("https://cubby.example.com/L-A3F2").
+ * Handles both raw shortcodes ("LOC-A3F2") and full URLs
+ * ("https://cubby.example.com/LOC-A3F2"), including legacy-prefixed labels.
  */
 export function extractShortcodeFromScan(
   rawValue: string,
-): { type: ShortcodeType; shortcode: string; id: string } | null {
+): ParsedShortcode | null {
   const trimmed = rawValue.trim();
 
   // Try parsing as a raw shortcode first
@@ -130,7 +249,7 @@ export function extractShortcodeFromScan(
 
 /**
  * Build the full URL for a shortcode (used in QR codes).
- * Uses the shortcode directly in the path: /L-XXXX or /P-XXXX
+ * Uses the shortcode directly in the path: /LOC-XXXX or /PRD-XXXX
  */
 export function getShortcodeUrl(shortcode: string): string {
   return `https://cubby.nickysemenza.com/${shortcode}`;

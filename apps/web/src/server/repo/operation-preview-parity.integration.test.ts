@@ -26,7 +26,7 @@ import {
   previewDeleteCookbooks,
   upsertCookbook,
 } from "./cookbook";
-import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
+import { getDb, notDeleted } from "./database-helpers";
 import {
   createExpense,
   deleteExpenses,
@@ -68,6 +68,7 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
 import { previewDeleteTasks } from "./task/crud";
 import { createVendor, deleteVendors } from "./vendor";
@@ -533,7 +534,7 @@ describe("operation preview / mutation parity", () => {
 
       // A recipe used as an ingredient IS an Ingredient row carrying
       // `recipeId` — the same shape the import path writes.
-      const pointer = await insertAndReturn(ctx.db, ingredient, {
+      const pointer = await insertWithShortcode(ctx.db, "ingredient", {
         name: "Recipe: Sub Sauce",
         recipeId: subRecipe.id,
       });

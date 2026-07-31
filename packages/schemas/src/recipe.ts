@@ -11,7 +11,7 @@ import {
   cookbookId,
   id,
   ingredientId,
-  normalizedRecipeShortcode,
+  recipeShortcode,
   recipeId,
 } from "./identifiers";
 import { imageOut } from "./image";
@@ -342,7 +342,7 @@ export const recipeUpdateInput = z.object({
 });
 
 export const recipeShortcodeInput = z.object({
-  shortcode: normalizedRecipeShortcode,
+  shortcode: recipeShortcode,
 });
 
 export const recipeIdsInput = z.object({
@@ -382,7 +382,7 @@ export const recipeMcpOut = z.object({
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
-  shortcode: normalizedRecipeShortcode.nullish(),
+  shortcode: recipeShortcode.nullish(),
 });
 export type RecipeMcpOut = z.infer<typeof recipeMcpOut>;
 
@@ -402,7 +402,7 @@ const recipeWithUsagesMcpFields = {
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
-  shortcode: normalizedRecipeShortcode.nullish(),
+  shortcode: recipeShortcode.nullish(),
   usages: z.array(recipeUsageMcpOut),
 };
 

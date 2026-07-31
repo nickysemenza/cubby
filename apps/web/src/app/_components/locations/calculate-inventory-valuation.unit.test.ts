@@ -34,13 +34,13 @@ function makeInventoryItem(params: {
     verifiedAt: null,
     location: {
       id: unsafeLocationId("loc-1"),
-      shortcode: unsafeLocationShortcode("L-TEST"),
+      shortcode: unsafeLocationShortcode("LOC-TEST"),
       name: "Test Location",
       type: "room",
     },
     product: {
       id: unsafeProductId(params.product.id),
-      shortcode: unsafeProductShortcode("P-TEST"),
+      shortcode: unsafeProductShortcode("PRD-TEST"),
       name: params.product.name,
       manufacturer: params.product.manufacturer ?? "Generic",
       category: null,

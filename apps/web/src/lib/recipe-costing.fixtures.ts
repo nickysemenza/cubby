@@ -50,7 +50,7 @@ export const makeProduct = (
   } = {},
 ): Product => ({
   id: unsafeProductId(`prod-${idStr}`),
-  shortcode: unsafeProductShortcode("P-TEST"),
+  shortcode: unsafeProductShortcode("PRD-TEST"),
   name: idStr,
   aliases: [],
   tags: [],

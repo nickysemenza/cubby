@@ -35,7 +35,7 @@ const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 
 const baseLocation = {
   id: LOCATION_ID,
-  shortcode: "L-TEST",
+  shortcode: "LOC-TEST",
   name: "Pantry",
   type: "room",
   parentId: null,
@@ -50,7 +50,7 @@ const baseLocation = {
 const parentLocation = {
   ...baseLocation,
   id: PARENT_ID,
-  shortcode: "L-2345",
+  shortcode: "LOC-2345",
   name: "Kitchen",
   deletedAt: null,
 };
@@ -58,7 +58,7 @@ const parentLocation = {
 const childLocation = {
   ...baseLocation,
   id: CHILD_ID,
-  shortcode: "L-3456",
+  shortcode: "LOC-3456",
   name: "Shelf",
   type: "shelf",
   parentId: LOCATION_ID,
@@ -68,7 +68,7 @@ const childLocation = {
 const deletedChildLocation = {
   ...childLocation,
   id: DELETED_CHILD_ID,
-  shortcode: "L-4567",
+  shortcode: "LOC-4567",
   deletedAt: DELETED_AT,
 };
 
@@ -94,7 +94,7 @@ const deletedImage = {
 
 const product = {
   id: PRODUCT_ID,
-  shortcode: "P-TEST",
+  shortcode: "PRD-TEST",
   name: "Flour",
   manufacturer: "Generic",
   tags: [],
@@ -115,7 +115,7 @@ const product = {
 const deletedProduct = {
   ...product,
   id: DELETED_PRODUCT_ID,
-  shortcode: "P-OLD",
+  shortcode: "PRD-9WK4",
   deletedAt: DELETED_AT,
 };
 
@@ -133,7 +133,7 @@ describe("location mappers", () => {
 
     expect(result).toMatchObject({
       id: LOCATION_ID,
-      shortcode: unsafeLocationShortcode("L-TEST"),
+      shortcode: unsafeLocationShortcode("LOC-TEST"),
       name: "Pantry",
       images: [{ id: IMAGE_ID, url: "https://example.com/location.jpg" }],
     });
@@ -150,6 +150,7 @@ describe("location mappers", () => {
       inventoryEntries: [
         {
           id: INVENTORY_ID,
+          shortcode: "INV-2345",
           productId: PRODUCT_ID,
           locationId: LOCATION_ID,
           amount: { value: 2, unit: "each" },
@@ -162,6 +163,7 @@ describe("location mappers", () => {
         },
         {
           id: DELETED_PRODUCT_INVENTORY_ID,
+          shortcode: "INV-3456",
           productId: DELETED_PRODUCT_ID,
           locationId: LOCATION_ID,
           amount: { value: 1, unit: "each" },
@@ -180,7 +182,7 @@ describe("location mappers", () => {
 
     expect(result.parent).toEqual({
       id: PARENT_ID,
-      shortcode: unsafeLocationShortcode("L-2345"),
+      shortcode: unsafeLocationShortcode("LOC-2345"),
       name: "Kitchen",
       type: "room",
     });
@@ -188,7 +190,7 @@ describe("location mappers", () => {
     expect(result.children).toEqual([
       {
         id: CHILD_ID,
-        shortcode: unsafeLocationShortcode("L-3456"),
+        shortcode: unsafeLocationShortcode("LOC-3456"),
         name: "Shelf",
         type: "shelf",
       },
@@ -202,7 +204,7 @@ describe("location mappers", () => {
         updatedAt: UPDATED_AT,
         product: {
           id: PRODUCT_ID,
-          shortcode: unsafeProductShortcode("P-TEST"),
+          shortcode: unsafeProductShortcode("PRD-TEST"),
           name: "Flour",
           upc: null,
           fdc_id: null,

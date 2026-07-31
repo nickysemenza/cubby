@@ -3,7 +3,7 @@
  * Find locations by various identifiers (name, shortcode).
  */
 
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationOut,
@@ -21,7 +21,8 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
-import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
@@ -72,34 +73,15 @@ export const locationParentOptions = async (
 };
 
 /**
- * Find a location by its shortcode
- * Returns null if not found (excludes soft-deleted)
- */
-const findLocationByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<LocationId | null> => {
-  const loc = await getDb(db).query.location.findFirst({
-    where: and(
-      eq(location.shortcode, shortcode.toUpperCase()),
-      notDeleted(location),
-    ),
-  });
-  return loc ? loc.id : null;
-};
-
-/**
- * Get full location details by shortcode
+ * Get full location details by shortcode. Returns null if the code doesn't
+ * resolve to a live location.
  */
 export const getLocationByShortcode = async (
   db: Database,
   shortcode: string,
 ): Promise<InfLocation | null> => {
-  const locationId = await findLocationByShortcode(db, shortcode);
-  if (!locationId) {
-    return null;
-  }
-  return getLocationById(db, locationId);
+  const id = await resolveLiveShortcode(db, shortcode, "location");
+  return id ? getLocationById(db, unsafeLocationId(id)) : null;
 };
 
 /**
@@ -148,17 +130,37 @@ export const findOrCreateLocationByName = async (
   // lower(name) = lower(value) (not ilike) so the planner can actually use that
   // functional index. The shortcode thunk only runs on the create path, so
   // existing locations don't burn a shortcode. See findOrCreate.
-  const { row, created } = await findOrCreate(db, location, {
-    where: and(
-      eq(sql`lower(${location.name})`, name.toLowerCase()),
-      notDeleted(location),
-    ),
-    values: async () => ({
+  const where = and(
+    eq(sql`lower(${location.name})`, name.toLowerCase()),
+    notDeleted(location),
+  );
+
+  // An import/restore replaying an existing shortcode must have it honoured
+  // verbatim rather than routed through the fresh-code-per-retry helper below —
+  // `findOrCreateWithShortcode` always mints its own code, which would silently
+  // drop the caller's.
+  if (options?.shortcode !== undefined) {
+    const explicitShortcode = options.shortcode;
+    const { row, created } = await findOrCreate(db, location, {
+      where,
+      values: () => ({
+        name,
+        type,
+        parentId,
+        shortcode: explicitShortcode,
+        ...(options?.createdAt && { createdAt: options.createdAt }),
+        ...(options?.updatedAt && { updatedAt: options.updatedAt }),
+      }),
+    });
+    return { locationId: row.id, created };
+  }
+
+  const { row, created } = await findOrCreateWithShortcode(db, "location", {
+    where,
+    values: () => ({
       name,
       type,
       parentId,
-      shortcode:
-        options?.shortcode ?? (await generateUniqueLocationShortcode(db)),
       ...(options?.createdAt && { createdAt: options.createdAt }),
       ...(options?.updatedAt && { updatedAt: options.updatedAt }),
     }),

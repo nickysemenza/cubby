@@ -35,7 +35,6 @@ import {
   buildSearchConditions,
   eqAny,
   getDb,
-  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -51,6 +50,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
 import type {
@@ -455,7 +455,7 @@ export const createInventoryEntry = async (
     amountValue,
   );
 
-  const created = await insertAndReturn(db, inventoryEntry, {
+  const created = await insertWithShortcode(db, "inventory", {
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,

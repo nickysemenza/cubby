@@ -51,7 +51,6 @@ import {
   executeListQueryWithCount,
   getDb,
   idSetPresence,
-  insertAndReturn,
   lockAndValidateForDelete,
   nextImageSortOrder,
   notDeleted,
@@ -67,7 +66,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
-import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
 import type {
@@ -153,14 +152,10 @@ export const createLocation = async (
     await assertParentLocationExists(db, parentIdValue);
   }
 
-  // Generate unique shortcode with collision retry
-  const shortcode = await generateUniqueLocationShortcode(db);
-
-  const newLocation = await insertAndReturn(db, location, {
+  const newLocation = await insertWithShortcode(db, "location", {
     name: data.name,
     aliases: data.aliases,
     type: data.type,
-    shortcode,
     ...(parentIdValue !== undefined && { parentId: parentIdValue }),
   });
 

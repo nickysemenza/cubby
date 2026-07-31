@@ -1,18 +1,30 @@
+import { LEGACY_SHORTCODE_PREFIX, SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { auditEntitySchema } from "./audit";
-import { entityImage, entitySchema } from "./entity";
+import { type Entity, entityImage, entitySchema } from "./entity";
 import {
   allEntities,
   auditableEntities,
   countableEntities,
   entityDescriptor,
+  type EntityDescriptor,
   entityManifest,
   entityReferences,
   imageEntities,
   searchableEntities,
+  shortcodeEntities,
 } from "./entity-manifest";
 
 const sorted = (xs: readonly string[]) => [...xs].sort();
+
+/**
+ * Widen an `as const` manifest entry to the full descriptor. Each literal entry
+ * narrows to exactly the keys it declares, so an OPTIONAL key (shortcodePrefix,
+ * legacyShortcodePrefix) doesn't exist on the type of an entry that omits it —
+ * which is precisely what these assertions need to look at.
+ */
+const descriptor = (entity: Entity): EntityDescriptor =>
+  entityManifest[entity] as EntityDescriptor;
 
 /** The image storage enum is UPPERCASE; map manifest entity names to it. */
 const IMAGE_KEY: Record<string, string> = {
@@ -162,5 +174,45 @@ describe("entity manifest", () => {
       expect(entityManifest[entity].dbTable).not.toBeNull();
     }
     expect(entityManifest["usda-food"].dbTable).toBeNull();
+  });
+
+  it("derives the shortcode contract from the shared prefix registry", () => {
+    // The manifest and `@cubby/shared`'s registry are two hand-kept lists of the
+    // same roster — one drives the resolvers and MCP ids, the other drives the
+    // parser and generators. Adding an entity to one and not the other would
+    // otherwise fail late and confusingly.
+    expect(sorted(shortcodeEntities)).toEqual(
+      sorted(Object.keys(SHORTCODE_PREFIX)),
+    );
+    for (const entity of shortcodeEntities) {
+      expect(entityManifest[entity].shortcodePrefix).toBe(
+        SHORTCODE_PREFIX[entity],
+      );
+    }
+  });
+
+  it("gives every entity with a table a shortcode, except image", () => {
+    const withTable = allEntities.filter(
+      (entity) => entityManifest[entity].dbTable !== null,
+    );
+    // `image` opts out on purpose: no MCP surface, no name, and it is only ever
+    // reached through the entity that owns it.
+    expect(sorted(withTable.filter((e) => e !== "image"))).toEqual(
+      sorted(shortcodeEntities),
+    );
+    expect(descriptor("image").shortcodePrefix).toBeUndefined();
+    expect(descriptor("usda-food").shortcodePrefix).toBeUndefined();
+  });
+
+  it("declares a legacy prefix exactly where one was ever minted", () => {
+    const declared = allEntities.filter(
+      (entity) => descriptor(entity).legacyShortcodePrefix !== undefined,
+    );
+    expect(sorted(declared)).toEqual(
+      sorted(Object.values(LEGACY_SHORTCODE_PREFIX)),
+    );
+    for (const [legacy, entity] of Object.entries(LEGACY_SHORTCODE_PREFIX)) {
+      expect(descriptor(entity).legacyShortcodePrefix).toBe(legacy);
+    }
   });
 });

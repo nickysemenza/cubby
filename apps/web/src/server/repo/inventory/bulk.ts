@@ -24,7 +24,6 @@ import {
 } from "~/server/repo/audit-log";
 import {
   buildPartialUpdateValues,
-  insertAndReturn,
   notDeleted,
   parseInventoryAmount,
   relations,
@@ -32,6 +31,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
@@ -219,7 +219,7 @@ export const bulkProcessInventoryEntries = async (
             priceMap.get(item.productId) ?? null,
           );
 
-          const created = await insertAndReturn(tx, inventoryEntry, {
+          const created = await insertWithShortcode(tx, "inventory", {
             productId: item.productId,
             locationId: locationId,
             amount: item.amount,
@@ -570,7 +570,7 @@ export const bulkMoveInventoryEntries = async (
               productPrice,
             );
 
-            const created = await insertAndReturn(tx, inventoryEntry, {
+            const created = await insertWithShortcode(tx, "inventory", {
               productId: sourceEntry.productId,
               locationId: payload.targetLocationId,
               amount: item.quantity,

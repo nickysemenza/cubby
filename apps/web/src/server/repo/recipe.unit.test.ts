@@ -26,7 +26,7 @@ const DELETED_AT = new Date("2023-01-03T00:00:00.000Z");
 
 const baseRecipe = {
   id: RECIPE_ID,
-  shortcode: "R-A3F2",
+  shortcode: "RCP-A3F2",
   name: "Test Recipe",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -45,7 +45,7 @@ const baseRecipe = {
 const subRecipe = {
   ...baseRecipe,
   id: SUB_RECIPE_ID,
-  shortcode: "R-SUB1",
+  shortcode: "RCP-SUB7",
   name: "Sub Recipe",
   SourceType: "Other" as const,
   SourceData: null,
@@ -53,6 +53,7 @@ const subRecipe = {
 
 const baseIngredient = {
   id: INGREDIENT_ID,
+  shortcode: "ING-TEST",
   name: "Flour",
   aliases: ["all-purpose flour"],
   naKinds: [],

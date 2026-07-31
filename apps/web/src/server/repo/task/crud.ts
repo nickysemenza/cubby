@@ -39,7 +39,6 @@ import {
   buildPartialUpdateValues,
   dependencyIdsFor,
   getDb,
-  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -51,6 +50,7 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { assertProjectLive } from "~/server/repo/project";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbTaskToAPI } from "./helpers";
 
 export const TASK_DELETE_EDGE_POLICY = {
@@ -294,7 +294,7 @@ export const createTask = async (
       await assertSubjectProductLive(tx, subjectProductId);
     }
 
-    const created = await insertAndReturn(tx, task, {
+    const created = await insertWithShortcode(tx, "task", {
       name: data.name,
       status: data.status,
       projectId,
