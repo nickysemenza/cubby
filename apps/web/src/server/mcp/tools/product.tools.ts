@@ -15,6 +15,7 @@ import {
   idParam,
   registerEntityCrudToolset,
   registerMcpTool,
+  resolvePublicId,
   respond,
   slimProduct,
   toUnitMappingInput,
@@ -79,7 +80,7 @@ export function registerProductTools(server: McpServer) {
     description:
       'Replace the unit mappings on a product (conversion/price edges like "8 oz = $10"). Pass the COMPLETE desired set; existing mappings not in the list are removed. Money unit is "dollar"; nutrient edges (b unit "kcal", "g protein") also work.',
     inputSchema: {
-      id: idParam("Product"),
+      id: idParam("product"),
       unitMappings: z
         .array(mcpUnitMappingInput)
         .describe(
@@ -94,7 +95,7 @@ export function registerProductTools(server: McpServer) {
         params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>
       ).map(toUnitMappingInput);
       const result = await caller.product.update({
-        id: params.id,
+        id: await resolvePublicId(caller, "product", params.id),
         data: { unitMappings },
       });
       return respond(result, slimProduct);

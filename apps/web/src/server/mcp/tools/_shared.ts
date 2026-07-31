@@ -1,4 +1,6 @@
 import { deletedCountOut } from "@cubby/schemas/common";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   type IngredientMcpOut,
   type IngredientOut,
@@ -714,9 +716,64 @@ function isSchema(value: unknown): value is z.ZodType {
   );
 }
 
-export const idParam = (label: string) => z.string().describe(`${label} ID`);
-const idsParam = (label: string) =>
-  z.array(z.string()).describe(`Array of ${label} IDs to delete`);
+/**
+ * A tool parameter naming an entity by its PUBLIC id — the shortcode.
+ *
+ * This is the one chokepoint every `get_*`/`update_*`/`delete_*` self-id flows
+ * through, so swapping it here makes ~30 tools prefix-correct at once. It is the
+ * SAME schema the UI and tRPC use — there is no MCP-specific ref type — which is
+ * what makes the advertised JSON Schema carry a real `pattern` (`^PRD-[…]{4}$`)
+ * instead of a bare string. An agent handed a wrong-entity code fails at zod
+ * parse, before the handler runs and therefore before any mutation.
+ */
+export const idParam = (entity: ShortcodeEntity) => shortcodeSchema(entity);
+
+const idsParam = (entity: ShortcodeEntity) =>
+  z
+    .array(shortcodeSchema(entity))
+    .describe(`Array of ${entity} shortcodes to delete`);
+
+/**
+ * Translate public codes to the private uuids every domain router below MCP
+ * takes. One batched call per tool invocation, not one per id.
+ *
+ * Unknown codes are named explicitly in the error: a shortcode is something a
+ * human reads off a label or an agent copies from a previous response, so "which
+ * one was wrong" is the entire useful content of the failure. The `entity` pin
+ * means a `LOC-` code handed to a product tool is reported as a mismatch rather
+ * than silently resolving to some other table's row.
+ */
+export async function resolvePublicIds(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<string[]> {
+  if (codes.length === 0) return [];
+  const resolved = await caller.shortcode.resolveMany({ codes: [...codes] });
+  const byCode = new Map(resolved.map((r) => [r.code, r]));
+  return codes.map((code) => {
+    const hit = byCode.get(code);
+    if (!hit) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+    if (hit.entity !== entity) {
+      throw new Error(
+        `${code} is a ${hit.entity} shortcode, not a ${entity} one`,
+      );
+    }
+    return hit.id;
+  });
+}
+
+export async function resolvePublicId(
+  caller: Caller,
+  entity: ShortcodeEntity,
+  code: string,
+): Promise<string> {
+  const [id] = await resolvePublicIds(caller, entity, [code]);
+  // resolvePublicIds throws on a miss, so this is unreachable; it satisfies
+  // noUncheckedIndexedAccess without hiding a genuinely-reachable undefined.
+  if (!id) throw new Error(`Unknown ${entity} shortcode: ${code}`);
+  return id;
+}
 
 interface DynamicEntityRouter {
   create(input: Record<string, unknown>): Promise<unknown>;
@@ -751,12 +808,13 @@ type GetByIdFetch = (caller: Caller, id: string) => Promise<unknown>;
 
 function getByIdHandler(
   routerName: string,
+  entity: ShortcodeEntity,
   slim: Slim = identity,
   fetch?: GetByIdFetch,
 ) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const caller = getCaller(extra);
-    const id = params.id as string;
+    const id = await resolvePublicId(caller, entity, params.id as string);
     const result = fetch
       ? await fetch(caller, id)
       : await getEntityRouter(caller, routerName).getByID({ id });
@@ -764,20 +822,26 @@ function getByIdHandler(
   };
 }
 
-function deleteHandler(routerName: string) {
+function deleteHandler(routerName: string, entity: ShortcodeEntity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const ids = params.ids as string[];
-    await getEntityRouter(getCaller(extra), routerName).delete({ ids });
+    const caller = getCaller(extra);
+    const ids = await resolvePublicIds(caller, entity, params.ids as string[]);
+    await getEntityRouter(caller, routerName).delete({ ids });
     return { deleted: ids.length };
   };
 }
 
-function updateHandler(routerName: string, slim: Slim = identity) {
+function updateHandler(
+  routerName: string,
+  entity: ShortcodeEntity,
+  slim: Slim = identity,
+) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
+    const caller = getCaller(extra);
     const { id, ...rest } = params;
     const data = omitBy(rest, (v) => v === undefined);
-    const result = await getEntityRouter(getCaller(extra), routerName).update({
-      id,
+    const result = await getEntityRouter(caller, routerName).update({
+      id: await resolvePublicId(caller, entity, id as string),
       data,
     });
     return respond(result, slim);
@@ -880,8 +944,11 @@ function pickSchemaFilters(
   return out;
 }
 
-function withIdInput(idLabel: string, dataShape: Record<string, z.ZodType>) {
-  return { id: idParam(idLabel), ...dataShape };
+function withIdInput(
+  entity: ShortcodeEntity,
+  dataShape: Record<string, z.ZodType>,
+) {
+  return { id: idParam(entity), ...dataShape };
 }
 
 type EntityListToolConfig = {
@@ -932,7 +999,7 @@ export function registerEntityGetTool(
     name: string;
     description: string;
     router: string;
-    idLabel: string;
+    entity: ShortcodeEntity;
     outputSchema: z.ZodType;
     slim?: Slim;
     annotations: ToolAnnotations;
@@ -943,10 +1010,15 @@ export function registerEntityGetTool(
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: { id: idParam(config.idLabel) },
+    inputSchema: { id: idParam(config.entity) },
     outputSchema: config.outputSchema,
     annotations: config.annotations,
-    handler: getByIdHandler(config.router, config.slim ?? identity, config.get),
+    handler: getByIdHandler(
+      config.router,
+      config.entity,
+      config.slim ?? identity,
+      config.get,
+    ),
   });
 }
 
@@ -956,17 +1028,17 @@ export function registerEntityDeleteTool(
     name: string;
     description: string;
     router: string;
-    entityLabel: string;
+    entity: ShortcodeEntity;
     annotations: ToolAnnotations;
   },
 ) {
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: { ids: idsParam(config.entityLabel) },
+    inputSchema: { ids: idsParam(config.entity) },
     outputSchema: deletedCountOut,
     annotations: config.annotations,
-    handler: deleteHandler(config.router),
+    handler: deleteHandler(config.router, config.entity),
   });
 }
 
@@ -976,6 +1048,7 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     name: string;
     description: string;
     router: string;
+    entity: ShortcodeEntity;
     inputSchema: TInput;
     outputSchema: z.ZodType;
     slim: Slim;
@@ -989,10 +1062,11 @@ function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     handler: async (params, extra) =>
-      updateHandler(config.router, config.slim)(
-        params as Record<string, unknown>,
-        extra,
-      ),
+      updateHandler(
+        config.router,
+        config.entity,
+        config.slim,
+      )(params as Record<string, unknown>, extra),
   });
 }
 
@@ -1025,12 +1099,10 @@ export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
 }
 
 type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
-  /** Singular slug — router key and get/create/update tool names (get_x, create_x, update_x). */
-  entity: string;
+  /** Singular slug — router key, shortcode prefix, and get/create/update tool names (get_x, create_x, update_x). */
+  entity: ShortcodeEntity;
   /** Plural slug — list/delete tool names (list_xs, delete_xs). */
   entityPlural?: string;
-  /** Capitalized singular label for id params (e.g. "Project"); lowercased for delete's entityLabel. */
-  idLabel?: string;
   createInput: TCreateInput;
   updateShape: Record<string, z.ZodType>;
   /** Use when the update schema already includes its id field. */
@@ -1075,7 +1147,7 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
  * Register the standard 5-tool CRUD surface (list/get/create/update/delete)
  * for one entity in a single call. Bakes in the annotation conventions shared
  * by every entity toolset (READ_ONLY_CLOSED for reads, WRITE_CLOSED for
- * create/update, WRITE_DESTRUCTIVE_CLOSED for delete) and the name/idLabel
+ * create/update, WRITE_DESTRUCTIVE_CLOSED for delete) and the name
  * derivation (`list_${plural}`, `get_${entity}`, `create_${entity}`,
  * `update_${entity}`, `delete_${plural}`).
  */
@@ -1092,9 +1164,6 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
   const detailOut = config.detailOut ?? config.out;
   const mutationOut = config.mutationOut ?? config.out;
   const entityPlural = config.entityPlural ?? `${config.entity}s`;
-  const idLabel =
-    config.idLabel ??
-    `${config.entity[0]?.toUpperCase()}${config.entity.slice(1)}`;
 
   if (enabled("list"))
     registerEntityListTool(server, {
@@ -1115,7 +1184,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       name: name("get", `get_${config.entity}`),
       description: config.descriptions.get,
       router: config.entity,
-      idLabel,
+      entity: config.entity,
       outputSchema: detailOut,
       slim:
         config.detailSlim === false
@@ -1146,10 +1215,11 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       name: name("update", `update_${config.entity}`),
       description: config.descriptions.update,
       inputSchema:
-        config.updateInput ?? withIdInput(idLabel, config.updateShape),
+        config.updateInput ?? withIdInput(config.entity, config.updateShape),
       outputSchema: mutationOut,
       slim: config.slim,
       router: config.entity,
+      entity: config.entity,
       annotations: WRITE_CLOSED,
     });
 
@@ -1164,7 +1234,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       name: name("delete", `delete_${entityPlural}`),
       description,
       router: config.entity,
-      entityLabel: idLabel.toLowerCase(),
+      entity: config.entity,
       annotations: WRITE_DESTRUCTIVE_CLOSED,
     });
   }

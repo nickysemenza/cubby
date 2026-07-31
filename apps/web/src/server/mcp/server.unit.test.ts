@@ -116,7 +116,9 @@ describe("registerEntityCrudToolset", () => {
     const detailOut = z.object({ id: z.string(), detail: z.string() });
     const mutationOut = z.object({ id: z.string(), changed: z.boolean() });
     registerEntityCrudToolset(server, {
-      entity: "widget",
+      // A real registry entity: `entity` now names the shortcode prefix, so a
+      // made-up slug can no longer stand in for one.
+      entity: "vendor",
       names: { list: "search_widgets" },
       operations: { delete: false },
       paging: { defaultPageSize: 7, maxPageSize: 9 },

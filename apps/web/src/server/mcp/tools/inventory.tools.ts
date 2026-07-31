@@ -16,6 +16,7 @@ import {
   registerEntityGetTool,
   registerEntityListTool,
   registerMcpTool,
+  resolvePublicId,
   respond,
   respondList,
   slimInventory,
@@ -39,7 +40,7 @@ export function registerInventoryTools(server: McpServer) {
     name: "get_inventory_entry",
     description: "Get a single inventory entry by ID.",
     router: "inventory",
-    idLabel: "Inventory entry",
+    entity: "inventory",
     outputSchema: inventoryMcpOut,
     slim: slimInventory,
     annotations: READ_ONLY_CLOSED,
@@ -50,8 +51,8 @@ export function registerInventoryTools(server: McpServer) {
     description:
       "Add a product to a location. Use search_products and list_locations first to get IDs.",
     inputSchema: {
-      productId: idParam("Product"),
-      locationId: idParam("Location"),
+      productId: idParam("product"),
+      locationId: idParam("location"),
       value: z.number().positive().describe("Quantity value (must be > 0)"),
       unit: z.string().describe("Unit (e.g. 'each', 'lb', 'oz', 'cup')"),
     },
@@ -60,8 +61,12 @@ export function registerInventoryTools(server: McpServer) {
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.inventory.create({
-        productId: params.productId,
-        locationId: params.locationId,
+        productId: await resolvePublicId(caller, "product", params.productId),
+        locationId: await resolvePublicId(
+          caller,
+          "location",
+          params.locationId,
+        ),
         amount: { value: params.value, unit: params.unit },
       });
       return respond(result, slimInventory);
@@ -73,15 +78,19 @@ export function registerInventoryTools(server: McpServer) {
     description:
       "Update an inventory entry's amount, product, or location. When updating amount, both value and unit must be provided together.",
     inputSchema: {
-      id: idParam("Inventory entry"),
+      id: idParam("inventory"),
       value: z
         .number()
         .positive()
         .optional()
         .describe("New quantity value, must be > 0 (requires unit)"),
       unit: z.string().optional().describe("New unit (requires value)"),
-      productId: idParam("Product").optional().describe("New product ID"),
-      locationId: idParam("Location").optional().describe("New location ID"),
+      productId: idParam("product")
+        .optional()
+        .describe("Move the entry to this product"),
+      locationId: idParam("location")
+        .optional()
+        .describe("Move the entry to this location"),
     },
     outputSchema: inventoryMcpOut,
     annotations: WRITE_CLOSED,
@@ -95,9 +104,24 @@ export function registerInventoryTools(server: McpServer) {
           "Both value and unit must be provided together when updating amount.",
         );
       }
-      if (params.productId !== undefined) data.productId = params.productId;
-      if (params.locationId !== undefined) data.locationId = params.locationId;
-      const result = await caller.inventory.update({ id: params.id, data });
+      if (params.productId !== undefined) {
+        data.productId = await resolvePublicId(
+          caller,
+          "product",
+          params.productId,
+        );
+      }
+      if (params.locationId !== undefined) {
+        data.locationId = await resolvePublicId(
+          caller,
+          "location",
+          params.locationId,
+        );
+      }
+      const result = await caller.inventory.update({
+        id: await resolvePublicId(caller, "inventory", params.id),
+        data,
+      });
       return respond(result, slimInventory);
     },
   });
@@ -106,7 +130,7 @@ export function registerInventoryTools(server: McpServer) {
     name: "delete_inventory_entries",
     description: "Soft-delete inventory entries by IDs.",
     router: "inventory",
-    entityLabel: "inventory entry",
+    entity: "inventory",
     annotations: WRITE_DESTRUCTIVE_CLOSED,
   });
 

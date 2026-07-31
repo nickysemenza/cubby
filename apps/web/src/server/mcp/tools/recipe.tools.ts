@@ -29,6 +29,7 @@ import {
   registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
+  resolvePublicId,
   slimRecipe,
   WRITE_CLOSED,
 } from "./_shared";
@@ -92,13 +93,13 @@ export function registerRecipeTools(server: McpServer) {
     name: "find_recipes_using_ingredient",
     description:
       "Reverse lookup: given an ingredient ID, return every recipe that uses it.",
-    inputSchema: { id: idParam("Ingredient") },
+    inputSchema: { id: idParam("ingredient") },
     outputSchema: recipesUsingIngredientOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       const usages = (await caller.ingredient.recipeUsages({
-        id: params.id,
+        id: await resolvePublicId(caller, "ingredient", params.id),
       })) as RecipeUsage[];
       const recipes = Object.values(groupBy(usages, (u) => u.recipe.id)).map(
         (rows) => ({
