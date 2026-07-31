@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   InventoryItemForTree,
@@ -13,7 +13,7 @@ import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeColumnProps {
   /** The location this column represents (its cards are this location's children). Null = Home / top level. */
-  locationId: LocationId | null;
+  locationId: LocationShortcode | null;
   /** Header location, or null for the Home column. */
   headerLocation: InfLocation | null;
   /** Child-location cards to render. */
@@ -21,9 +21,9 @@ interface ArrangeColumnProps {
   /** The header location's own inventory items (loose items at this location). */
   items: InventoryItemForTree[];
   /** Which child is currently opened as the next column (for active highlight). */
-  activeChildId: LocationId | null;
+  activeChildId: LocationShortcode | null;
   roots: InfLocation[];
-  onOpenChild: (id: LocationId) => void;
+  onOpenChild: (id: LocationShortcode) => void;
   /** The pinned Unknown staging column (dashed styling). */
   pinned?: boolean;
 }

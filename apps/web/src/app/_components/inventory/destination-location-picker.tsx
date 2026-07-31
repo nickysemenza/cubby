@@ -8,7 +8,7 @@
  * each caller keep its exact copy via the `messages` override.
  */
 
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useState } from "react";
 import {
@@ -78,7 +78,7 @@ export interface DestinationMessages {
 }
 
 export type ResolveDestinationResult =
-  | { ok: true; id: LocationId }
+  | { ok: true; id: LocationShortcode }
   | { ok: false; error: string };
 
 /**
@@ -89,7 +89,7 @@ export type ResolveDestinationResult =
  */
 export function resolveDestination(
   target: ComboboxItem | null | undefined,
-  sourceLocationIds: LocationId | LocationId[],
+  sourceLocationIds: LocationShortcode | LocationShortcode[],
   messages: DestinationMessages,
 ): ResolveDestinationResult {
   const id = getOptionalLocationId(target);

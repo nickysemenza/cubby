@@ -333,7 +333,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title={product.name}
       rawData={product}
       heroImages={images}
-      heroNo={product.shortcode ?? undefined}
+      heroNo={product.id ?? undefined}
       heroStamp={
         entries.length > 0
           ? { label: "In stock", tone: "green" }
@@ -354,13 +354,13 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       <CreateExpenseDialog
         open={recordSaleOpen}
         onOpenChange={setRecordSaleOpen}
-        presetProductId={product.shortcode}
+        presetProductId={product.id}
         intent="disposition"
       />
       <CreateTaskDialog
         open={createTaskOpen}
         onOpenChange={setCreateTaskOpen}
-        presetSubjectProductId={product.shortcode}
+        presetSubjectProductId={product.id}
         presetSubjectProductName={product.name}
       />
     </Page>

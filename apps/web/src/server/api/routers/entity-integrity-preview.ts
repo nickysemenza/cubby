@@ -5,7 +5,6 @@ import type {
   PreviewOperationInput,
 } from "@cubby/schemas/entity-integrity";
 import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   unsafeCookbookId,
   unsafeExpenseId,
@@ -40,7 +39,11 @@ import {
   previewMergePurchases,
 } from "~/server/repo/purchase";
 import { previewDeleteRecipes } from "~/server/repo/recipe/crud";
-import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
+import {
+  lookupShortcodes,
+  refKey,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { previewDeleteTasks } from "~/server/repo/task/crud";
 import {
   previewDeleteVendors,
@@ -68,82 +71,62 @@ type Planned = {
   candidates?: MergeCandidate[];
 };
 
-/**
- * The five cut-over entities (project, task, vendor, purchase, expense) are
- * named here by their PUBLIC shortcode, but the `preview*` planners below still
- * take the private uuid — so resolve first rather than branding the string with
- * `unsafe*Id`, which type-checks and then hands Postgres a `PRJ-…` for a uuid
- * column. An unresolvable code drops out: a preview is advisory, and the
- * mutation re-checks everything inside its own transaction anyway.
- */
-const toUuids = async (
-  db: Database,
-  codes: readonly string[],
-  entity: ShortcodeEntity,
-): Promise<string[]> => {
-  if (codes.length === 0) return [];
-  const resolved = await resolveLiveShortcodes(db, codes, entity);
-  return codes.flatMap((code) => {
-    const id = resolved.get(code);
-    return id ? [id] : [];
-  });
-};
-
 const plan = async (
   db: Database,
   input: PreviewOperationInput,
-): Promise<Planned> =>
-  match(input)
+): Promise<{ planned: Planned; publicIdByEntityId: Map<string, string> }> => {
+  const publicIds =
+    input.operation === "delete"
+      ? input.ids
+      : [...input.mergeIds, ...(input.keepId ? [input.keepId] : [])];
+  const entityIdsByPublicId =
+    input.entity === "image"
+      ? new Map(publicIds.map((id) => [id, id]))
+      : await resolveLiveShortcodes(db, publicIds, input.entity);
+  const entityIds = (ids: readonly string[]) =>
+    ids.flatMap((id) => {
+      const entityId = entityIdsByPublicId.get(id);
+      return entityId ? [entityId] : [];
+    });
+  const entityId = (id: string | undefined) =>
+    id ? (entityIdsByPublicId.get(id) ?? "") : "";
+
+  const planned = await match(input)
     .with({ operation: "delete", entity: "product" }, ({ ids }) =>
-      previewDeleteProducts(db, ids.map(unsafeProductId)),
+      previewDeleteProducts(db, entityIds(ids).map(unsafeProductId)),
     )
     .with({ operation: "delete", entity: "recipe" }, ({ ids }) =>
-      previewDeleteRecipes(db, ids.map(unsafeRecipeId)),
+      previewDeleteRecipes(db, entityIds(ids).map(unsafeRecipeId)),
     )
     .with({ operation: "delete", entity: "ingredient" }, ({ ids }) =>
-      previewDeleteIngredients(db, ids.map(unsafeIngredientId)),
+      previewDeleteIngredients(db, entityIds(ids).map(unsafeIngredientId)),
     )
     .with({ operation: "delete", entity: "cookbook" }, ({ ids }) =>
-      previewDeleteCookbooks(db, ids.map(unsafeCookbookId)),
+      previewDeleteCookbooks(db, entityIds(ids).map(unsafeCookbookId)),
     )
     .with({ operation: "delete", entity: "meal" }, ({ ids }) =>
-      previewDeleteMeals(db, ids.map(unsafeMealId)),
+      previewDeleteMeals(db, entityIds(ids).map(unsafeMealId)),
     )
     .with({ operation: "delete", entity: "location" }, ({ ids }) =>
-      previewDeleteLocations(db, ids.map(unsafeLocationId)),
+      previewDeleteLocations(db, entityIds(ids).map(unsafeLocationId)),
     )
-    .with({ operation: "delete", entity: "project" }, async ({ ids }) =>
-      previewDeleteProjects(
-        db,
-        (await toUuids(db, ids, "project")).map(unsafeProjectId),
-      ),
+    .with({ operation: "delete", entity: "project" }, ({ ids }) =>
+      previewDeleteProjects(db, entityIds(ids).map(unsafeProjectId)),
     )
-    .with({ operation: "delete", entity: "task" }, async ({ ids }) =>
-      previewDeleteTasks(
-        db,
-        (await toUuids(db, ids, "task")).map(unsafeTaskId),
-      ),
+    .with({ operation: "delete", entity: "task" }, ({ ids }) =>
+      previewDeleteTasks(db, entityIds(ids).map(unsafeTaskId)),
     )
-    .with({ operation: "delete", entity: "vendor" }, async ({ ids }) =>
-      previewDeleteVendors(
-        db,
-        (await toUuids(db, ids, "vendor")).map(unsafeVendorId),
-      ),
+    .with({ operation: "delete", entity: "vendor" }, ({ ids }) =>
+      previewDeleteVendors(db, entityIds(ids).map(unsafeVendorId)),
     )
-    .with({ operation: "delete", entity: "purchase" }, async ({ ids }) =>
-      previewDeletePurchases(
-        db,
-        (await toUuids(db, ids, "purchase")).map(unsafePurchaseId),
-      ),
+    .with({ operation: "delete", entity: "purchase" }, ({ ids }) =>
+      previewDeletePurchases(db, entityIds(ids).map(unsafePurchaseId)),
     )
-    .with({ operation: "delete", entity: "expense" }, async ({ ids }) =>
-      previewDeleteExpenses(
-        db,
-        (await toUuids(db, ids, "expense")).map(unsafeExpenseId),
-      ),
+    .with({ operation: "delete", entity: "expense" }, ({ ids }) =>
+      previewDeleteExpenses(db, entityIds(ids).map(unsafeExpenseId)),
     )
     .with({ operation: "delete", entity: "inventory" }, ({ ids }) =>
-      previewDeleteInventoryEntries(db, ids.map(unsafeInventoryId)),
+      previewDeleteInventoryEntries(db, entityIds(ids).map(unsafeInventoryId)),
     )
     .with({ operation: "delete", entity: "image" }, ({ ids }) =>
       previewDeleteImages(db, ids),
@@ -157,7 +140,7 @@ const plan = async (
         changes: [],
         candidates: await previewMergeIngredientCandidates(
           db,
-          mergeIds.map(unsafeIngredientId),
+          entityIds(mergeIds).map(unsafeIngredientId),
         ),
       }),
     )
@@ -165,40 +148,51 @@ const plan = async (
       { operation: "merge", entity: "ingredient" },
       ({ mergeIds, keepId }) =>
         previewMergeIngredients(db, {
-          mergeIds: mergeIds.map(unsafeIngredientId),
-          keepId: unsafeIngredientId(keepId ?? ""),
+          mergeIds: entityIds(mergeIds).map(unsafeIngredientId),
+          keepId: unsafeIngredientId(entityId(keepId)),
         }),
     )
-    .with(
-      { operation: "merge", entity: "vendor" },
-      async ({ mergeIds, keepId }) =>
-        previewMergeVendors(db, {
-          mergeIds: (await toUuids(db, mergeIds, "vendor")).map(unsafeVendorId),
-          keepId: unsafeVendorId(
-            (await toUuids(db, [keepId ?? ""], "vendor"))[0] ?? "",
-          ),
-        }),
+    .with({ operation: "merge", entity: "vendor" }, ({ mergeIds, keepId }) =>
+      previewMergeVendors(db, {
+        mergeIds: entityIds(mergeIds).map(unsafeVendorId),
+        keepId: unsafeVendorId(entityId(keepId)),
+      }),
     )
-    .with(
-      { operation: "merge", entity: "purchase" },
-      async ({ mergeIds, keepId }) =>
-        previewMergePurchases(db, {
-          mergeIds: (await toUuids(db, mergeIds, "purchase")).map(
-            unsafePurchaseId,
-          ),
-          keepId: unsafePurchaseId(
-            (await toUuids(db, [keepId ?? ""], "purchase"))[0] ?? "",
-          ),
-        }),
+    .with({ operation: "merge", entity: "purchase" }, ({ mergeIds, keepId }) =>
+      previewMergePurchases(db, {
+        mergeIds: entityIds(mergeIds).map(unsafePurchaseId),
+        keepId: unsafePurchaseId(entityId(keepId)),
+      }),
     )
     .exhaustive();
+
+  const publicIdByEntityId =
+    input.entity === "image"
+      ? new Map(entityIdsByPublicId.entries())
+      : await lookupShortcodes(
+          db,
+          [...entityIdsByPublicId.values()].map((id) => ({
+            entity: input.entity,
+            id,
+          })),
+        ).then(
+          (codes) =>
+            new Map(
+              [...entityIdsByPublicId.values()].flatMap((id) => {
+                const code = codes.get(refKey(input.entity, id));
+                return code ? [[id, code] as const] : [];
+              }),
+            ),
+        );
+  return { planned, publicIdByEntityId };
+};
 
 export const previewOperation = async (
   db: Database,
   input: PreviewOperationInput,
   now: Date,
 ): Promise<PreviewOperation> => {
-  const planned = await plan(db, input);
+  const { planned, publicIdByEntityId } = await plan(db, input);
   const targetCount =
     input.operation === "delete" ? input.ids.length : input.mergeIds.length;
 
@@ -214,10 +208,36 @@ export const previewOperation = async (
         : null,
     targetCount,
     canProceed: planned.blockers.length === 0,
-    blockers: planned.blockers,
-    changes: planned.changes,
-    sideEffects: planned.sideEffects ?? [],
-    ...(planned.candidates ? { candidates: planned.candidates } : {}),
+    blockers: planned.blockers.map((item) =>
+      publicImpact(item, publicIdByEntityId),
+    ),
+    changes: planned.changes.map((item) =>
+      publicImpact(item, publicIdByEntityId),
+    ),
+    sideEffects: (planned.sideEffects ?? []).map((item) =>
+      publicImpact(item, publicIdByEntityId),
+    ),
+    ...(planned.candidates
+      ? {
+          candidates: planned.candidates.flatMap((candidate) => {
+            const id = publicIdByEntityId.get(candidate.id);
+            return id ? [{ ...candidate, id }] : [];
+          }),
+        }
+      : {}),
     generatedAt: now.toISOString(),
   });
 };
+
+const publicImpact = (
+  item: ImpactItem,
+  publicIdByEntityId: ReadonlyMap<string, string>,
+): ImpactItem => ({
+  ...item,
+  byTargetId: Object.fromEntries(
+    Object.entries(item.byTargetId).flatMap(([id, count]) => {
+      const publicId = publicIdByEntityId.get(id);
+      return publicId ? [[publicId, count]] : [];
+    }),
+  ),
+});

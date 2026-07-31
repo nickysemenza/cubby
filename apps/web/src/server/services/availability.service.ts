@@ -5,7 +5,17 @@ import type {
   RecipeAvailability,
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type IngredientShortcode,
+  type ProductId,
+  type ProductShortcode,
+  type RecipeId,
+  type RecipeShortcode,
+  unsafeIngredientId,
+  unsafeProductId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
@@ -18,8 +28,46 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import type { USDAClient } from "../clients/usda";
 import { getIngredientsByIDs } from "./ingredient.service";
+
+const resolveProductIds = async (
+  db: Database,
+  shortcodes: ProductShortcode[],
+): Promise<{
+  ids: ProductId[];
+  shortcodeById: Map<ProductId, ProductShortcode>;
+}> => {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "product");
+  const ids = shortcodes.flatMap((shortcode) => {
+    const id = resolved.get(shortcode);
+    return id ? [unsafeProductId(id)] : [];
+  });
+  return {
+    ids,
+    shortcodeById: new Map(
+      shortcodes.flatMap((shortcode) => {
+        const id = resolved.get(shortcode);
+        return id ? [[unsafeProductId(id), shortcode] as const] : [];
+      }),
+    ),
+  };
+};
+
+const resolveIngredientIds = async (
+  db: Database,
+  shortcodes: IngredientShortcode[],
+): Promise<IngredientId[]> => {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "ingredient");
+  return shortcodes.flatMap((shortcode) => {
+    const id = resolved.get(shortcode);
+    return id ? [unsafeIngredientId(id)] : [];
+  });
+};
 
 // Output types live in @cubby/schemas/availability (single source of
 // truth, shared with the suggestions router's .output()).
@@ -44,7 +92,21 @@ export class AvailabilityService {
     private usdaClient: USDAClient,
   ) {}
 
-  async getRecipeAvailability(recipeId: RecipeId): Promise<RecipeAvailability> {
+  async getRecipeAvailability(
+    recipeShortcode: RecipeShortcode,
+  ): Promise<RecipeAvailability> {
+    const resolvedRecipeId = await resolveLiveShortcode(
+      this.db,
+      recipeShortcode,
+      "recipe",
+    );
+    if (!resolvedRecipeId) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        `Recipe ${recipeShortcode} not found`,
+      );
+    }
+    const recipeId = unsafeRecipeId(resolvedRecipeId);
     const recipe = await getRecipeByID(this.db, recipeId);
     if (!recipe) {
       throw createAppError("RECIPE_NOT_FOUND", `Recipe ${recipeId} not found`);
@@ -65,9 +127,9 @@ export class AvailabilityService {
     const ingredientEntries = await getIngredientsByIDs(
       this.db,
       this.usdaClient,
-      directIds,
+      await resolveIngredientIds(this.db, directIds),
     );
-    const ingMap = new Map<IngredientId, IngredientWithFoodLeanOut>(
+    const ingMap = new Map<IngredientShortcode, IngredientWithFoodLeanOut>(
       ingredientEntries.map((ing) => [ing.id, ing]),
     );
 
@@ -75,12 +137,18 @@ export class AvailabilityService {
     const productIds = uniq(
       ingredientEntries.flatMap((ing) => ing.product.map((p) => p.id)),
     );
-    const inventory = await getInventoryForProducts(this.db, productIds);
+    const resolvedProducts = await resolveProductIds(this.db, productIds);
+    const inventory = await getInventoryForProducts(
+      this.db,
+      resolvedProducts.ids,
+    );
     const inventoryByProduct = new Map<string, Amount[]>();
     for (const { productId, amount } of inventory) {
-      const list = inventoryByProduct.get(productId);
+      const publicId = resolvedProducts.shortcodeById.get(productId);
+      if (!publicId) continue;
+      const list = inventoryByProduct.get(publicId);
       if (list) list.push(amount);
-      else inventoryByProduct.set(productId, [amount]);
+      else inventoryByProduct.set(publicId, [amount]);
     }
 
     // One availability group per resolvable ingredient row. Sub-recipes and
@@ -115,7 +183,6 @@ export class AvailabilityService {
         if (si.type === "recipe") {
           return {
             ingredientId: null,
-            shortcode: null,
             name: si.recipe.name,
             need: si.amounts[0] ?? null,
             basisUnit: null,
@@ -128,7 +195,6 @@ export class AvailabilityService {
         if (!need) {
           return {
             ingredientId: si.ingredient.id,
-            shortcode: ingMap.get(si.ingredient.id)?.shortcode ?? null,
             name: si.ingredient.name,
             need: null,
             basisUnit: null,
@@ -140,7 +206,6 @@ export class AvailabilityService {
         const g = byKey.get(String(idx));
         return {
           ingredientId: si.ingredient.id,
-          shortcode: ingMap.get(si.ingredient.id)?.shortcode ?? null,
           name: si.ingredient.name,
           need,
           basisUnit: g?.basis_unit ?? need.unit,
@@ -155,8 +220,7 @@ export class AvailabilityService {
     const available = resolvable.filter((i) => i.status === "ok");
 
     return {
-      recipeId,
-      recipeShortcode: recipe.shortcode,
+      recipeId: recipe.id,
       recipeName: recipe.name,
       coverage:
         resolvable.length === 0 ? 1 : available.length / resolvable.length,
@@ -194,7 +258,7 @@ export class AvailabilityService {
 
     // Flatten to per-ingredient contributions, scaling each need by its line.
     type Contribution = {
-      ingredientId: IngredientId;
+      ingredientId: IngredientShortcode;
       name: string;
       scaledNeed: Amount;
       lineIndex: number;
@@ -233,24 +297,30 @@ export class AvailabilityService {
     const ingredientEntries = await getIngredientsByIDs(
       this.db,
       this.usdaClient,
-      distinctIngredientIds,
+      await resolveIngredientIds(this.db, distinctIngredientIds),
     );
-    const ingMap = new Map<IngredientId, IngredientWithFoodLeanOut>(
+    const ingMap = new Map<IngredientShortcode, IngredientWithFoodLeanOut>(
       ingredientEntries.map((ing) => [ing.id, ing]),
     );
     const productIds = uniq(
       ingredientEntries.flatMap((ing) => ing.product.map((p) => p.id)),
     );
-    const inventory = await getInventoryForProducts(this.db, productIds);
+    const resolvedProducts = await resolveProductIds(this.db, productIds);
+    const inventory = await getInventoryForProducts(
+      this.db,
+      resolvedProducts.ids,
+    );
     const inventoryByProduct = new Map<string, Amount[]>();
     for (const { productId, amount } of inventory) {
-      const list = inventoryByProduct.get(productId);
+      const publicId = resolvedProducts.shortcodeById.get(productId);
+      if (!publicId) continue;
+      const list = inventoryByProduct.get(publicId);
       if (list) list.push(amount);
-      else inventoryByProduct.set(productId, [amount]);
+      else inventoryByProduct.set(publicId, [amount]);
     }
 
     // Group contributions by ingredient and evaluate each once.
-    const byIngredient = new Map<IngredientId, Contribution[]>();
+    const byIngredient = new Map<IngredientShortcode, Contribution[]>();
     for (const c of contributions) {
       const list = byIngredient.get(c.ingredientId);
       if (list) list.push(c);
@@ -284,7 +354,6 @@ export class AvailabilityService {
         const g = byKey.get(ingredientId);
         return {
           ingredientId,
-          ingredientShortcode: ingMap.get(ingredientId)?.shortcode ?? null,
           name: contribs[0]?.name ?? "",
           basisUnit: g?.basis_unit ?? contribs[0]?.scaledNeed.unit ?? null,
           needValue: g?.need_value ?? 0,

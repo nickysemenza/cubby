@@ -22,7 +22,7 @@ import { hasUsdaLink } from "./workbench-editor-core";
 // (rows reviewed + LOOKAHEAD) — we never precompute far past where the user is.
 const LOOKAHEAD = 5;
 
-type MergePair = { id: string; shortcode: string; name: string };
+type MergePair = { id: string; name: string };
 
 /**
  * Keyboard-first review queue: walks a worklist one ingredient at a time. Each
@@ -116,7 +116,6 @@ export function ReviewQueue({
     if (ai) {
       out.push({
         id: ai.id,
-        shortcode: ai.shortcode,
         name: ai.name,
         source: "ai",
       });
@@ -127,7 +126,6 @@ export function ReviewQueue({
       seen.add(c.id);
       out.push({
         id: c.id,
-        shortcode: c.shortcode,
         name: c.name,
         source: "fuzzy",
         similarity: c.similarity,
@@ -146,8 +144,8 @@ export function ReviewQueue({
     mergeSourceRef.current = current.id;
     // Candidate first → the default keeper (likelier to already have a product).
     setMergeConfirm([
-      { id: target.id, shortcode: target.shortcode, name: target.name },
-      { id: current.id, shortcode: current.shortcode, name: current.name },
+      { id: target.id, name: target.name },
+      { id: current.id, name: current.name },
     ]);
   };
   const confirmMerge = (keepId: string, aliasIds: string[]) => {

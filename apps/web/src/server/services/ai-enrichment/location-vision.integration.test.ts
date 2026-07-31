@@ -7,17 +7,12 @@ import {
 import { upsertAiAnalysis } from "~/server/repo/ai-analysis";
 import { listRecentAiUsage } from "~/server/repo/ai-usage";
 import { createUploadedImageRecord } from "~/server/repo/image";
+import { getInventoryByLocationIds } from "~/server/repo/inventory";
+import { getLocationById, updateLocation } from "~/server/repo/location";
 import {
-  createInventoryEntry,
-  getInventoryByLocationIds,
-} from "~/server/repo/inventory";
-import {
-  createLocation,
-  getLocationById,
-  updateLocation,
-} from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
-import {
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -60,7 +55,7 @@ describe("approveDetectedInventoryItem", () => {
     const result = await approveDetectedInventoryItem(
       ctx.db,
       {
-        locationId: location.id,
+        locationId: location.entityId,
         item: detectedItem,
       },
       ctx.actor,
@@ -69,7 +64,9 @@ describe("approveDetectedInventoryItem", () => {
     expect(result.createdProduct).toBe(false);
     expect(result.productId).toBe(product.id);
 
-    const inventory = await getInventoryByLocationIds(ctx.db, [location.id]);
+    const inventory = await getInventoryByLocationIds(ctx.db, [
+      location.entityId,
+    ]);
     expect(inventory).toHaveLength(1);
     expect(inventory[0]?.product.id).toBe(product.id);
   });
@@ -84,7 +81,7 @@ describe("approveDetectedInventoryItem", () => {
     const result = await approveDetectedInventoryItem(
       ctx.db,
       {
-        locationId: location.id,
+        locationId: location.entityId,
         item: {
           ...detectedItem,
           name: "painters drop cloth",
@@ -97,7 +94,9 @@ describe("approveDetectedInventoryItem", () => {
     expect(result.createdProduct).toBe(true);
     expect(result.productName).toBe("painters drop cloth");
 
-    const inventory = await getInventoryByLocationIds(ctx.db, [location.id]);
+    const inventory = await getInventoryByLocationIds(ctx.db, [
+      location.entityId,
+    ]);
     expect(inventory).toHaveLength(1);
     expect(inventory[0]?.product.name).toBe("painters drop cloth");
     expect(inventory[0]?.product.category).toBe("supplies");
@@ -113,7 +112,7 @@ describe("approveDetectedInventoryItem", () => {
     await approveDetectedInventoryItem(
       ctx.db,
       {
-        locationId: location.id,
+        locationId: location.entityId,
         item: {
           ...detectedItem,
           name: "unidentified cables",
@@ -125,7 +124,9 @@ describe("approveDetectedInventoryItem", () => {
       ctx.actor,
     );
 
-    const inventory = await getInventoryByLocationIds(ctx.db, [location.id]);
+    const inventory = await getInventoryByLocationIds(ctx.db, [
+      location.entityId,
+    ]);
     expect(inventory[0]?.product.name).toBe("misc: unidentified cables");
   });
 });
@@ -165,11 +166,11 @@ describe("detectInventoryItems cached result filtering", () => {
     });
     await updateLocation(
       ctx.db,
-      location.id,
+      location.entityId,
       { pendingImageIds: [image.id] },
       ctx.actor,
     );
-    const locationWithImage = await getLocationById(ctx.db, location.id);
+    const locationWithImage = await getLocationById(ctx.db, location.entityId);
     const inputFingerprint = buildLocationAnalysisFingerprint(
       LOCATION_INVENTORY_DETECTION_FEATURE,
       {
@@ -181,7 +182,7 @@ describe("detectInventoryItems cached result filtering", () => {
       ctx.db,
       {
         entityType: "location",
-        entityId: location.id,
+        entityId: location.entityId,
         feature: LOCATION_INVENTORY_DETECTION_FEATURE,
         inputFingerprint,
       },
@@ -222,7 +223,9 @@ describe("detectInventoryItems cached result filtering", () => {
     );
 
     const batchId = "00000000-0000-4000-8000-000000000101";
-    const result = await detectInventoryItems(ctx.db, location.id, { batchId });
+    const result = await detectInventoryItems(ctx.db, location.entityId, {
+      batchId,
+    });
 
     expect(result.cache.status).toBe("hit");
     expect(result.items.map((item) => item.name)).toEqual([
@@ -235,7 +238,7 @@ describe("detectInventoryItems cached result filtering", () => {
         (row) =>
           row.feature === LOCATION_INVENTORY_DETECTION_FEATURE.feature &&
           row.cacheStatus === "hit" &&
-          row.entityId === location.id &&
+          row.entityId === location.entityId &&
           row.batchId === batchId,
       ),
     ).toBe(true);

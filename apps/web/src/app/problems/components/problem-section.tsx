@@ -34,7 +34,7 @@ const INITIAL_VISIBLE = 12;
 // Type-safe route patterns for entity detail pages: either a router-typed
 // `to`+`params` pair, or a fully-resolved href for rows a detector has already
 // turned into a shortcode-bearing path server-side (e.g. the household-tracker
-// rows, whose `href` is built from `row.shortcode` in project/attention.ts).
+// rows, whose `href` is built from `row.id` in project/attention.ts).
 type RoutePattern =
   | { to: EntityDetailRoute; params: EntityDetailParams }
   | { href: string };

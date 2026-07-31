@@ -106,9 +106,7 @@
     "apps/web/src/components/reui/**",
     "apps/web/src/components/ui/button-group.tsx",
     "apps/web/src/components/ui/context-menu.tsx",
-    "apps/web/src/hooks/use-file-upload.ts",
-    // Intentionally retained during the shortcode cutover for UUID-only read pickers.
-    "apps/web/src/app/_components/products/use-product-search.ts"
+    "apps/web/src/hooks/use-file-upload.ts"
   ],
   "ignoreDependencies": ["zod"],
   "ignoreBinaries": ["wasm-pack"],

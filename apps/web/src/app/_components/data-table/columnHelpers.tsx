@@ -2,7 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity";
 import {
   type IngredientId,
-  type LocationId,
+  type LocationShortcode,
   type ProductShortcode,
   type ProjectShortcode,
   type RecipeId,
@@ -192,11 +192,6 @@ declare module "@tanstack/react-table" {
 
 interface BaseRow {
   id: string | number;
-  // The public id. Absent on `image` rows (the one entity `createNameColumn`
-  // links that stays keyed on its uuid) and on rows from an entity whose
-  // schema hasn't grown a `shortcode` yet — `nameColumnParams` below falls
-  // back to `id` in both cases rather than mislabeling a uuid as one.
-  shortcode?: string;
   // Nullable: `meal.name` is optional (an unnamed meal is identified by its
   // date). Widened from `string` so such entities can use these factories at
   // all — see `emptyLabel` on createNameColumn.
@@ -205,18 +200,15 @@ interface BaseRow {
 }
 
 /**
- * `TableLink` params for an entity's own row — `{ id }` for `image` (the one
- * `createNameColumn` entity with no shortcode route), `{ shortcode }`
- * everywhere else. Falls back to the row's `id` when `shortcode` is absent
- * (an entity whose schema hasn't grown one yet) rather than a hard crash;
- * that fallback produces a dead link, same as before this entity gains one.
+ * `TableLink` params for an entity's own row — `{ id }` for `image` and the
+ * canonical public `{ shortcode: row.id }` route parameter everywhere else.
  */
 function nameColumnParams(
   entity: Entity,
   row: BaseRow,
 ): { id: string } | { shortcode: string } {
   if (entity === "image") return { id: String(row.id) };
-  return { shortcode: row.shortcode ?? String(row.id) };
+  return { shortcode: String(row.id) };
 }
 
 interface ImageRow extends BaseRow {
@@ -706,9 +698,14 @@ export function createInventoryEntriesColumn<
      */
     inlineEdit?: {
       /** WithLocationSearch — injected so unit tests can stub it. */
-      SearchProvider: (props: WithEntitySearchProps<LocationId>) => ReactNode;
-      onMoveEntry: (entry: TEntry, locationId: LocationId) => Promise<void>;
-      onCreateEntry: (row: T, locationId: LocationId) => Promise<void>;
+      SearchProvider: (
+        props: WithEntitySearchProps<LocationShortcode>,
+      ) => ReactNode;
+      onMoveEntry: (
+        entry: TEntry,
+        locationId: LocationShortcode,
+      ) => Promise<void>;
+      onCreateEntry: (row: T, locationId: LocationShortcode) => Promise<void>;
     };
   },
 ) {
@@ -751,9 +748,7 @@ interface ActionsColumnOptions<T> {
  * Creates a standard actions column with a dropdown menu.
  * Includes "View Details" link by default, with optional extra actions.
  */
-export function createActionsColumn<
-  T extends { id: string | number; shortcode?: string },
->(
+export function createActionsColumn<T extends { id: string | number }>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
   options?: ActionsColumnOptions<T>,
@@ -762,10 +757,7 @@ export function createActionsColumn<
     columnHelper,
     (row) => ({
       to: entities[entity].routes.detail,
-      params: nameColumnParams(entity, {
-        id: row.id,
-        shortcode: row.shortcode,
-      }),
+      params: nameColumnParams(entity, row),
     }),
     options?.extraActions,
   );
@@ -1034,7 +1026,6 @@ type SingleEntityColumnData =
       data: {
         name: string;
         id: string;
-        shortcode: string;
         manufacturer: string;
       } | null;
     }
@@ -1053,7 +1044,7 @@ type SingleEntityIdMap = {
   ingredient: IngredientId;
   product: ProductShortcode;
   recipe: RecipeId;
-  location: LocationId;
+  location: LocationShortcode;
 };
 
 // entity → async search provider + row-summary → ComboboxItem builder, for the
@@ -1068,11 +1059,11 @@ const entityPickers = {
   product: {
     SearchProvider: WithProductSearch as never,
     buildItem: ((product: {
-      shortcode: string;
+      id: string;
       name: string;
       manufacturer: string;
     }) => ({
-      id: unsafeProductShortcode(product.shortcode),
+      id: unsafeProductShortcode(product.id),
       name: `${product.name} (${product.manufacturer})`,
     })) as never,
   },
@@ -1201,14 +1192,9 @@ export function createSingleEntityInlineLinkColumn<
                 // Keep the real inline link while the display matches the row
                 // data; a transient optimistic value renders as plain text
                 // until the invalidated query restores the relation summary.
-                // ("id" in item is a type guard only — usda-food, the one
+                // (`id in item` is a type guard only — usda-food, the one
                 // id-less member, can't reach the editable branch.)
-                const currentId =
-                  item && entity === "product" && "shortcode" in item
-                    ? item.shortcode
-                    : item && "id" in item
-                      ? item.id
-                      : null;
+                const currentId = item && "id" in item ? item.id : null;
                 if (item && v.id === currentId) {
                   return (
                     <EntityInlineLink
@@ -1721,11 +1707,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink
-            entity="project"
-            data={{ id, name, shortcode: id }}
-            truncate
-          />
+          <EntityInlineLink entity="project" data={{ id, name }} truncate />
         );
       },
     },
@@ -1737,7 +1719,6 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 interface ProductRefRow {
   productId: string | null;
   productName: string | null;
-  productShortcode: string | null;
 }
 
 /** A task's product subject uses explicit field names so it cannot be confused
@@ -1745,7 +1726,6 @@ interface ProductRefRow {
 interface SubjectProductRefRow {
   subjectProductId: string | null;
   subjectProductName: string | null;
-  subjectProductShortcode: string | null;
 }
 
 /**
@@ -1773,8 +1753,8 @@ export function createProductLinkColumn<T extends ProductRefRow>(
   const cellData = entityCellData<T>(
     "product",
     (row) =>
-      row.productShortcode && row.productName
-        ? { id: row.productShortcode, name: row.productName }
+      row.productId && row.productName
+        ? { id: row.productId, name: row.productName }
         : null,
     options?.editable
       ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
@@ -1784,7 +1764,6 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     (row) => ({
       id: row.productId,
       name: row.productName,
-      shortcode: row.productShortcode,
     }),
     {
       id: "product",
@@ -1797,13 +1776,11 @@ export function createProductLinkColumn<T extends ProductRefRow>(
         cellData,
       },
       cell: (info) => {
-        const { id, name, shortcode } = info.getValue();
+        const { id, name } = info.getValue();
 
         if (options?.editable) {
           const current: ComboboxItem<ProductShortcode> | null =
-            shortcode && name
-              ? { id: unsafeProductShortcode(shortcode), name }
-              : null;
+            id && name ? { id: unsafeProductShortcode(id), name } : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -1830,13 +1807,9 @@ export function createProductLinkColumn<T extends ProductRefRow>(
           );
         }
 
-        if (!id || !name || !shortcode) return <NoneValue />;
+        if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink
-            entity="product"
-            data={{ id, name, shortcode }}
-            truncate
-          />
+          <EntityInlineLink entity="product" data={{ id, name }} truncate />
         );
       },
     },
@@ -1862,8 +1835,8 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
   const cellData = entityCellData<T>(
     "product",
     (row) =>
-      row.subjectProductShortcode && row.subjectProductName
-        ? { id: row.subjectProductShortcode, name: row.subjectProductName }
+      row.subjectProductId && row.subjectProductName
+        ? { id: row.subjectProductId, name: row.subjectProductName }
         : null,
     options?.editable
       ? (row, id) => options.editable!.onSave(unsafeProductShortcode(id), row)
@@ -1874,7 +1847,6 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     (row) => ({
       id: row.subjectProductId,
       name: row.subjectProductName,
-      shortcode: row.subjectProductShortcode,
     }),
     {
       id: "subjectProduct",
@@ -1887,13 +1859,11 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
         cellData,
       },
       cell: (info) => {
-        const { id, name, shortcode } = info.getValue();
+        const { id, name } = info.getValue();
 
         if (options?.editable) {
           const current: ComboboxItem<ProductShortcode> | null =
-            shortcode && name
-              ? { id: unsafeProductShortcode(shortcode), name }
-              : null;
+            id && name ? { id: unsafeProductShortcode(id), name } : null;
           const row = info.row.original;
           return (
             <EditableEntityCell
@@ -1920,13 +1890,9 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
           );
         }
 
-        if (!id || !name || !shortcode) return <NoneValue />;
+        if (!id || !name) return <NoneValue />;
         return (
-          <EntityInlineLink
-            entity="product"
-            data={{ id, name, shortcode }}
-            truncate
-          />
+          <EntityInlineLink entity="product" data={{ id, name }} truncate />
         );
       },
     },

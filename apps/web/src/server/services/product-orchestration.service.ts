@@ -8,7 +8,11 @@
 
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  IngredientShortcode,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import type {
   ProductCreateInput,
@@ -29,6 +33,7 @@ import {
   findProductsWithNoImages,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { importImageFromUPC } from "./image-import";
 import type { LocationValuationService } from "./location-valuation.service";
 import { runMutationSideEffects } from "./mutation-side-effects";
@@ -42,15 +47,27 @@ interface ProductWriteServices {
   locationValuation: LocationValuationService;
 }
 
+const resolveIngredientEntityId = async (
+  db: Database,
+  shortcode: IngredientShortcode,
+): Promise<IngredientId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "ingredient");
+  if (!id) throw new Error(`Ingredient ${shortcode} could not be resolved`);
+  return id as IngredientId;
+};
+
 export async function createProductWithSideEffects(
   services: ProductWriteServices & { upcLookupClient: UPCLookupClient },
   input: ProductCreateInput,
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
-  const product = await services.product.createProduct(input, actor);
+  const { output: product, entityId } = await services.product.createProduct(
+    input,
+    actor,
+  );
   const backgroundBatches = await runMutationSideEffects(services.db, {
     action: "created",
-    entity: { entityType: "product", entityId: product.id },
+    entity: { entityType: "product", entityId },
     source: "product.create",
   });
 
@@ -60,7 +77,7 @@ export async function createProductWithSideEffects(
         services.db,
         services.upcLookupClient,
         input.upc,
-        product.id,
+        entityId,
       );
     } catch (error) {
       console.error(`[product.create] Image import failed:`, error);
@@ -69,10 +86,13 @@ export async function createProductWithSideEffects(
 
   const ingredientId = product.ingredient?.id;
   const recipeBatches = ingredientId
-    ? await services.recipeCosting.recomputeForIngredient(ingredientId, {
-        source: "product.create",
-        entity: { entityType: "product", entityId: product.id },
-      })
+    ? await services.recipeCosting.recomputeForIngredient(
+        await resolveIngredientEntityId(services.db, ingredientId),
+        {
+          source: "product.create",
+          entity: { entityType: "product", entityId },
+        },
+      )
     : [];
 
   return {
@@ -93,24 +113,35 @@ export async function updateProductWithSideEffects(
     data.ingredientId !== undefined
       ? await services.product.getProductByID(id)
       : null;
-  const result = await services.product.updateProduct(id, data, actor);
+  const { output: result } = await services.product.updateProduct(
+    id,
+    data,
+    actor,
+  );
   const backgroundBatches = await runMutationSideEffects(services.db, {
     action: "updated",
     entity: { entityType: "product", entityId: id },
     source: "product.update",
   });
-  const ingredientIds = uniq(
+  const ingredientShortcodes = uniq(
     [previous?.ingredient?.id, result.ingredient?.id].filter(
       (ingredientId): ingredientId is NonNullable<typeof ingredientId> =>
         ingredientId != null,
     ),
   );
   const recipeBatches =
-    ingredientIds.length > 0
-      ? await services.recipeCosting.recomputeForIngredients(ingredientIds, {
-          source: "product.update",
-          entity: { entityType: "product", entityId: id },
-        })
+    ingredientShortcodes.length > 0
+      ? await services.recipeCosting.recomputeForIngredients(
+          await Promise.all(
+            ingredientShortcodes.map((shortcode) =>
+              resolveIngredientEntityId(services.db, shortcode),
+            ),
+          ),
+          {
+            source: "product.update",
+            entity: { entityType: "product", entityId: id },
+          },
+        )
       : [];
 
   return {
@@ -175,10 +206,13 @@ export async function applyUpcDataWithSideEffects(
   const ingredientId = result.ingredient?.id;
   const recipeBatches =
     priceChanged && ingredientId
-      ? await services.recipeCosting.recomputeForIngredient(ingredientId, {
-          source: "product.applyUpcData",
-          entity: { entityType: "product", entityId: input.id },
-        })
+      ? await services.recipeCosting.recomputeForIngredient(
+          await resolveIngredientEntityId(services.db, ingredientId),
+          {
+            source: "product.applyUpcData",
+            entity: { entityType: "product", entityId: input.id },
+          },
+        )
       : [];
   return {
     ...result,
@@ -220,9 +254,14 @@ export async function findOrCreateByUPC(
   const emitCreated = async (
     product: ProductTopLevelOut,
   ): Promise<FindOrCreateByUPCResult> => {
+    const resolved = await resolveLiveShortcode(db, product.id, "product");
+    if (!resolved) {
+      throw new Error(`Created product ${product.id} could not be resolved`);
+    }
+    const entityId = resolved as ProductId;
     await runMutationSideEffects(db, {
       action: "created",
-      entity: { entityType: "product", entityId: product.id },
+      entity: { entityType: "product", entityId },
       source: "product.findOrCreateByUPC",
     });
     return { product, created: true };
@@ -284,7 +323,22 @@ export async function findOrCreateByUPC(
         // Import image from UPC lookup if available (non-blocking)
         if (upcLookup.imageUrl) {
           try {
-            await importImageFromUPC(db, upcLookupClient, upc, newProduct.id);
+            const resolved = await resolveLiveShortcode(
+              db,
+              newProduct.id,
+              "product",
+            );
+            if (!resolved) {
+              throw new Error(
+                `Created product ${newProduct.id} could not be resolved`,
+              );
+            }
+            await importImageFromUPC(
+              db,
+              upcLookupClient,
+              upc,
+              resolved as ProductId,
+            );
           } catch (error) {
             console.error(`[findOrCreateByUPC] Image import failed:`, error);
           }

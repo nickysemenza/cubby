@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { ingredient, recipe } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
-import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
+import { deleteRecipes } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import {
   createIngredient,
@@ -18,13 +18,16 @@ import {
   resolveOrCreateIngredients,
   updateIngredient,
 } from "./ingredient";
-import { createProduct, deleteProducts } from "./product";
+import { deleteProducts } from "./product";
 import {
+  createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
   ingredientRef,
   makeImportRecipe,
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("ingredient", () => {
   const ctx = withTestDb();
@@ -176,12 +179,14 @@ describe("ingredient", () => {
     ]);
 
     expect(result[0]).toMatchObject({
-      id: allium.id,
+      id: allium.shortcode,
+      entityId: allium.id,
       matched: true,
       created: false,
     });
     expect(result[1]).toMatchObject({
-      id: allium.id,
+      id: allium.shortcode,
+      entityId: allium.id,
       matched: true,
       created: false,
     });
@@ -267,7 +272,9 @@ describe("ingredient", () => {
 
     // Structured summary: both aliases absorbed, the one recipe using "eggs"
     // moved, nothing-silently-nothing.
-    expect(summary.deletedIds).toEqual(expect.arrayContaining([b.id, c.id]));
+    expect(summary.deletedIds).toEqual(
+      expect.arrayContaining([b.shortcode, c.shortcode]),
+    );
     expect(summary.deletedIds).toHaveLength(2);
     expect(summary.recipesMoved).toEqual(1);
     expect(summary.aliasesAdded).toEqual(
@@ -362,7 +369,7 @@ describe("ingredient", () => {
     const summary = await mergeIngredients(ctx.db, a.id, [b.id], {
       dryRun: true,
     });
-    expect(summary.deletedIds).toEqual([b.id]);
+    expect(summary.deletedIds).toEqual([b.shortcode]);
     expect(summary.aliasesAdded).toContain(b.name);
 
     // No write: both ingredients still exist, target gained no aliases.
@@ -536,7 +543,7 @@ describe("ingredient", () => {
       }),
       ctx.actor,
     );
-    await deleteProducts(ctx.db, [doomed.id], ctx.actor);
+    await deleteProducts(ctx.db, [doomed.entityId], ctx.actor);
 
     const { data: hasRows } = await ingredientList(
       ctx.db,
@@ -614,7 +621,7 @@ describe("ingredient", () => {
         }),
         ctx.actor,
       );
-      await deleteRecipes(ctx.db, [doomed.id], ctx.actor);
+      await deleteRecipes(ctx.db, [doomed.entityId], ctx.actor);
 
       const has = await listWith({ recipePresenceFilter: "has" });
       expect(has.data.map((i) => i.id)).not.toContain(stranded.id);
@@ -649,9 +656,12 @@ describe("ingredient repository — transactional update", () => {
         { name: "joins-outer-tx before", aliases: [] },
         ctx.actor,
       );
+      const createdId = unsafeIngredientId(
+        (await resolveLiveShortcode(tx, created.id, "ingredient"))!,
+      );
       return updateIngredient(
         tx,
-        created.id,
+        createdId,
         { name: "joins-outer-tx after" },
         ctx.actor,
       );
@@ -659,7 +669,10 @@ describe("ingredient repository — transactional update", () => {
 
     expect(renamed.name).toBe("joins-outer-tx after");
     // And it really committed with the outer transaction.
-    expect((await getIngredientByID(ctx.db, renamed.id)).name).toBe(
+    const renamedId = unsafeIngredientId(
+      (await resolveLiveShortcode(ctx.db, renamed.id, "ingredient"))!,
+    );
+    expect((await getIngredientByID(ctx.db, renamedId)).name).toBe(
       "joins-outer-tx after",
     );
   });
@@ -671,13 +684,16 @@ describe("ingredient repository — transactional update", () => {
       { name: original, aliases: [] },
       ctx.actor,
     );
+    const createdId = unsafeIngredientId(
+      (await resolveLiveShortcode(ctx.db, created.id, "ingredient"))!,
+    );
 
     await expect(
       withTransaction(ctx.db, async (tx) => {
         // Succeeds: the UPDATE lands and the audit entry is written…
         const updated = await updateIngredient(
           tx,
-          created.id,
+          createdId,
           { name: "throw-after-update renamed" },
           ctx.actor,
         );
@@ -689,11 +705,11 @@ describe("ingredient repository — transactional update", () => {
       }),
     ).rejects.toThrow("caller failed after the update");
 
-    expect((await getIngredientByID(ctx.db, created.id)).name).toBe(original);
+    expect((await getIngredientByID(ctx.db, createdId)).name).toBe(original);
 
     const audit = await getAuditLog(ctx.db, {
       entityType: "ingredient",
-      entityId: created.id,
+      entityId: createdId,
       limit: 20,
     });
     expect(audit.entries.filter((e) => e.action === "update")).toEqual([]);

@@ -15,11 +15,11 @@ import { groupBy, median } from "es-toolkit";
 // `getMultiMeasureRecipeIngredients` select; declared here so the pure
 // aggregation has no `~/server` runtime import (testable in the node project).
 export interface HarvestRow {
-  ingredientId: IngredientId;
-  ingredientShortcode: IngredientShortcode;
+  ingredientEntityId: IngredientId;
+  ingredientId: IngredientShortcode;
   ingredientName: string;
-  recipeId: RecipeId;
-  recipeShortcode: RecipeShortcode;
+  recipeEntityId: RecipeId;
+  recipeId: RecipeShortcode;
   recipeName: string;
   rawLine: string | null;
   amounts: Amount[];
@@ -72,11 +72,10 @@ const dimInfo = (tools: UnitTools, m: Amount): DimInfo => {
 };
 
 interface FlatPair {
-  ingredientId: IngredientId;
-  ingredientShortcode: IngredientShortcode;
+  ingredientEntityId: IngredientId;
+  ingredientId: IngredientShortcode;
   ingredientName: string;
-  recipeId: RecipeId;
-  recipeShortcode: RecipeShortcode;
+  recipeId: RecipeShortcode;
   recipeName: string;
   rawLine: string | null;
   tokenA: string;
@@ -105,10 +104,14 @@ interface FlatPair {
  * otherwise the two dimension tokens sort lexicographically (volume before weight
  * ⇒ "1 cup ≈ 200 g"). `ratio` is always `unitB` per 1 `unitA`.
  */
+export type HarvestedCandidate = CandidateEquivalence & {
+  ingredientEntityId: IngredientId;
+};
+
 export const harvestEquivalences = (
   rows: HarvestRow[],
   tools: UnitTools,
-): CandidateEquivalence[] => {
+): HarvestedCandidate[] => {
   const pairs: FlatPair[] = [];
 
   for (const row of rows) {
@@ -150,11 +153,10 @@ export const harvestEquivalences = (
         if (aVal == null || bVal == null || !(aVal > 0)) continue;
 
         pairs.push({
+          ingredientEntityId: row.ingredientEntityId,
           ingredientId: row.ingredientId,
-          ingredientShortcode: row.ingredientShortcode,
           ingredientName: row.ingredientName,
           recipeId: row.recipeId,
-          recipeShortcode: row.recipeShortcode,
           recipeName: row.recipeName,
           rawLine: row.rawLine,
           tokenA: a.info.token,
@@ -174,8 +176,8 @@ export const harvestEquivalences = (
     (p) => `${p.ingredientId} ${p.tokenA} ${p.tokenB}`,
   );
 
-  const candidates: CandidateEquivalence[] = Object.values(grouped).map(
-    (group): CandidateEquivalence => {
+  const candidates: HarvestedCandidate[] = Object.values(grouped).map(
+    (group): HarvestedCandidate => {
       // group is non-empty (it's a groupBy bucket).
       const first = group[0]!;
       const ratios = group.map((p) => p.ratio);
@@ -183,15 +185,14 @@ export const harvestEquivalences = (
         .slice(0, MAX_EXAMPLES)
         .map((p) => ({
           recipeId: p.recipeId,
-          recipeShortcode: p.recipeShortcode,
           recipeName: p.recipeName,
           rawLine: p.rawLine,
           a: p.a,
           b: p.b,
         }));
       return {
+        ingredientEntityId: first.ingredientEntityId,
         ingredientId: first.ingredientId,
-        ingredientShortcode: first.ingredientShortcode,
         ingredientName: first.ingredientName,
         unitA: first.unitA,
         unitB: first.unitB,

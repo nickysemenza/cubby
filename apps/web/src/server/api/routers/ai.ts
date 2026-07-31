@@ -25,7 +25,7 @@ import {
   usdaFoodSuggestionInput,
   usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
-import { unsafeProductId } from "@cubby/schemas/identifiers";
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -35,7 +35,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
 import {
   approveDetectedInventoryItem,
@@ -101,23 +101,9 @@ export const aiRouter = createTRPCRouter({
     .input(approveDetectedInventoryItemInput)
     .output(approveDetectedInventoryItemOut)
     .mutation(async ({ ctx, input }) => {
-      const resolvedProductId = input.productId
-        ? await resolveLiveShortcode(ctx.db, input.productId, "product")
-        : null;
-      if (input.productId && !resolvedProductId) {
-        throw createAppError(
-          "PRODUCT_NOT_FOUND",
-          `Product not found: ${input.productId}`,
-        );
-      }
       return await approveDetectedInventoryItem(
         ctx.db,
-        {
-          ...input,
-          productId: resolvedProductId
-            ? unsafeProductId(resolvedProductId)
-            : null,
-        },
+        input,
         ctx.actorContext,
       );
     }),
@@ -164,7 +150,33 @@ export const aiRouter = createTRPCRouter({
     .input(ingredientMergeSuggestionBatchInput)
     .output(ingredientMergeSuggestionBatchOut)
     .mutation(async ({ ctx, input }) => {
-      return suggestIngredientMergeBatch(ctx.db, input.ingredients);
+      const resolved = await resolveLiveShortcodes(
+        ctx.db,
+        input.ingredients.map((ingredient) => ingredient.id),
+        "ingredient",
+      );
+      const result = await suggestIngredientMergeBatch(
+        ctx.db,
+        input.ingredients.map((ingredient) => {
+          const entityId = resolved.get(ingredient.id);
+          if (!entityId) {
+            throw createAppError(
+              "INGREDIENT_NOT_FOUND",
+              `Ingredient ${ingredient.id} not found`,
+            );
+          }
+          return {
+            id: unsafeIngredientId(entityId),
+            shortcode: ingredient.id,
+            name: ingredient.name,
+          };
+        }),
+      );
+      return result.map(({ source, target, ...suggestion }) => ({
+        ...suggestion,
+        source: { id: source.shortcode, name: source.name },
+        target: target ? { id: target.shortcode, name: target.name } : null,
+      }));
     }),
   // Streamed, read-only pre-compute for the enrichment review queue: one event
   // per ingredient carrying its USDA (and optional merge) proposal, so the

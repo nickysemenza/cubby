@@ -37,13 +37,13 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
 
   const fields: BasicInfoField[] = [
     // Shortcode (if assigned)
-    ...(location.shortcode
+    ...(location.id
       ? [
           {
             label: "Shortcode",
             value: (
               <Badge variant="secondary" className="font-mono">
-                {location.shortcode}
+                {location.id}
               </Badge>
             ),
           },
@@ -83,7 +83,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           <Row gap="sm" wrap>
             <Button onClick={onEdit}>Edit</Button>
             {typeSupportsQrCode(location.type) && (
-              <PrintLabelButton shortcode={location.shortcode} />
+              <PrintLabelButton shortcode={location.id} />
             )}
             {deleteButton}
           </Row>

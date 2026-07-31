@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
 interface AddInventoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  locationId: LocationId;
+  locationId: LocationShortcode;
   locationName: string;
   onSuccess: () => void;
 }

@@ -27,7 +27,8 @@ import {
 
 type IngredientTotalsGap = Extract<RecipeTotalsGap, { source: "ingredient" }>;
 
-// One product, given fixed id "prod-p" so single-product cases can assert it.
+// One product with the fixture's canonical public id so single-product cases
+// can assert the link target.
 const prod = (opts?: Parameters<typeof makeProduct>[1]): Product =>
   makeProduct("p", opts);
 
@@ -69,7 +70,7 @@ const CASES: Case[] = [
     products: [prod({ price: 2.99 })],
     expected: {
       kind: "link-usda",
-      productId: "prod-p",
+      productId: "PRD-TEST",
       missing: { weight: true },
     },
   },

@@ -172,7 +172,6 @@ export function VendorCell({
     <EntityPreviewLink
       entity="vendor"
       id={vendorId}
-      shortcode={vendorId}
       className="group/vendor-link inline-flex min-w-0 max-w-full text-foreground transition-colors hover:text-primary"
     >
       {body}

@@ -46,7 +46,6 @@ type RecipeImportCardProps = {
   status: RecipeImportStatus;
   /** The existing Cubby recipe id, when already imported — drives the link pill. */
   existingId?: string;
-  existingShortcode?: string;
   /** Why a recipe isn't importable (needs-formatting), shown under the title. */
   reasons?: string[];
   selected: boolean;
@@ -87,7 +86,6 @@ export const RecipeImportCard = memo(
   (a, b) =>
     a.status === b.status &&
     a.existingId === b.existingId &&
-    a.existingShortcode === b.existingShortcode &&
     a.selected === b.selected &&
     a.disabled === b.disabled &&
     a.result === b.result &&
@@ -104,7 +102,6 @@ function RecipeImportCardImpl({
   recipe,
   status,
   existingId,
-  existingShortcode,
   reasons,
   selected,
   disabled,
@@ -174,12 +171,11 @@ function RecipeImportCardImpl({
               </Description>
             )}
             <Badge variant={badge.variant}>{badge.label}</Badge>
-            {existingId && existingShortcode && (
+            {existingId && (
               <EntityInlineLink
                 entity="recipe"
                 data={{
                   id: existingId,
-                  shortcode: existingShortcode,
                   name: recipe.meta.title,
                 }}
                 compact
@@ -324,7 +320,7 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
     return (
       <Link
         to="/recipes/$shortcode"
-        params={{ shortcode: result.shortcode }}
+        params={{ shortcode: result.id }}
         className="flex items-center gap-1 text-positive text-sm"
       >
         <Check className="size-4" /> Imported

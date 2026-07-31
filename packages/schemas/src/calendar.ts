@@ -1,12 +1,8 @@
 import { z } from "zod";
 import {
-  mealId,
   mealShortcode,
-  projectId,
   projectShortcode,
-  expenseId,
   expenseShortcode,
-  taskId,
   taskShortcode,
 } from "./identifiers";
 import {
@@ -43,8 +39,7 @@ const calendarItemDates = {
 
 export const calendarMealItem = z.object({
   kind: z.literal("meal"),
-  id: mealId,
-  shortcode: mealShortcode,
+  id: mealShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("move"),
@@ -57,8 +52,7 @@ export const calendarMealItem = z.object({
 
 export const calendarTaskItem = z.object({
   kind: z.literal("task"),
-  id: taskId,
-  shortcode: taskShortcode,
+  id: taskShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("move"),
@@ -69,8 +63,7 @@ export const calendarTaskItem = z.object({
 
 export const calendarExpenseItem = z.object({
   kind: z.literal("expense"),
-  id: expenseId,
-  shortcode: expenseShortcode,
+  id: expenseShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: calendarInteraction,
@@ -83,8 +76,7 @@ export const calendarExpenseItem = z.object({
 
 export const calendarProjectItem = z.object({
   kind: z.literal("project"),
-  id: projectId,
-  shortcode: projectShortcode,
+  id: projectShortcode,
   title: z.string(),
   ...calendarItemDates,
   interaction: z.literal("read-only"),

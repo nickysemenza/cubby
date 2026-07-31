@@ -1,6 +1,6 @@
 import {
-  unsafeInventoryId,
-  unsafeLocationId,
+  unsafeInventoryShortcode,
+  unsafeLocationShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
@@ -30,7 +30,7 @@ function loc(
   items: InventoryItemForTree[] = [],
 ): InfLocation {
   return {
-    id: unsafeLocationId(id),
+    id: unsafeLocationShortcode(id),
     name,
     children,
     inventoryItems: items,
@@ -39,15 +39,15 @@ function loc(
 
 function item(id: string, productId: string): InventoryItemForTree {
   return {
-    id: unsafeInventoryId(id),
+    id: unsafeInventoryShortcode(id),
     amount: { value: 1, unit: "count" },
     productName: `p-${productId}`,
-    productId: unsafeLocationId(productId),
+    productId: unsafeLocationShortcode(productId),
   } as unknown as InventoryItemForTree;
 }
 
-const L = (id: string) => unsafeLocationId(id);
-const I = (id: string) => unsafeInventoryId(id);
+const L = (id: string) => unsafeLocationShortcode(id);
+const I = (id: string) => unsafeInventoryShortcode(id);
 
 // garage → [shelfA → [bin1], shelfB], kitchen → [pantry], Unknown
 function buildTree(): InfLocation[] {

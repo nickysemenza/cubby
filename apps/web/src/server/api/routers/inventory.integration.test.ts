@@ -1,15 +1,14 @@
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import {
-  NONEXISTENT_UUID,
-  seedFromCSV,
-  TEST_ACTOR,
-  withTestDb,
-} from "tooling/test-setup";
+  unsafeInventoryShortcode,
+  unsafeLocationShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
+import { seedFromCSV, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { createInventoryEntry } from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { createProduct, getProductByID } from "~/server/repo/product";
 import {
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
   listParams,
   makeLocationInput,
   makeProductInput,
@@ -45,7 +44,7 @@ describe("inventory router", () => {
 
     // Create inventory entry data
     const inventoryData = {
-      productId: product.shortcode,
+      productId: product.id,
       locationId: location.id,
       amount: {
         value: 5,
@@ -225,31 +224,31 @@ describe("inventory router", () => {
       TEST_ACTOR,
     );
 
-    const product2Id = seed.productIds.get("Product 2")!;
-    const product2Shortcode = (await getProductByID(ctx.db, product2Id))
-      .shortcode;
-    const location1Id = seed.locationIds.get("Location 1")!;
+    const product2Shortcode = seed.productIds.get("Product 2")!;
+    const location1Shortcode = seed.locationIds.get("Location 1")!;
     const location2Id = location2.id;
-    const createdEntryId = seed.inventoryIds.get("Product 1@Location 1")!;
+    const createdEntryShortcode = seed.inventoryIds.get(
+      "Product 1@Location 1",
+    )!;
 
     // Update only the product
     const updatedEntry = await caller.update({
-      id: createdEntryId,
+      id: createdEntryShortcode,
       data: {
         productId: product2Shortcode,
       },
     });
 
     // Verify only product was changed
-    expect(updatedEntry.id).toEqual(createdEntryId);
-    expect(updatedEntry.product.id).toEqual(product2Id);
-    expect(updatedEntry.location.id).toEqual(location1Id); // Unchanged
+    expect(updatedEntry.id).toEqual(createdEntryShortcode);
+    expect(updatedEntry.product.id).toEqual(product2Shortcode);
+    expect(updatedEntry.location.id).toEqual(location1Shortcode); // Unchanged
     expect(updatedEntry.amount.value).toEqual(1); // Unchanged
     expect(updatedEntry.amount.unit).toEqual("piece"); // Unchanged
 
     // Update only the location
     const updatedEntry2 = await caller.update({
-      id: createdEntryId,
+      id: createdEntryShortcode,
       data: {
         locationId: location2Id,
       },
@@ -257,7 +256,7 @@ describe("inventory router", () => {
 
     // Verify only location was changed
     expect(updatedEntry2.location.id).toEqual(location2Id);
-    expect(updatedEntry2.product.id).toEqual(product2Id); // From previous update
+    expect(updatedEntry2.product.id).toEqual(product2Shortcode); // From previous update
   });
 
   it("should perform bulk operations correctly", async () => {
@@ -281,16 +280,10 @@ describe("inventory router", () => {
     );
 
     const locationId = seed.locationIds.get("Bulk Location")!;
-    const product1Id = seed.productIds.get("Bulk Product 1")!;
-    const product2Id = seed.productIds.get("Bulk Product 2")!;
-    const product3Id = seed.productIds.get("Bulk Product 3")!;
-    const product1Shortcode = (await getProductByID(ctx.db, product1Id))
-      .shortcode;
-    const product2Shortcode = (await getProductByID(ctx.db, product2Id))
-      .shortcode;
-    const product3Shortcode = (await getProductByID(ctx.db, product3Id))
-      .shortcode;
-    const existingEntryId = seed.inventoryIds.get(
+    const product1Shortcode = seed.productIds.get("Bulk Product 1")!;
+    const product2Shortcode = seed.productIds.get("Bulk Product 2")!;
+    const product3Shortcode = seed.productIds.get("Bulk Product 3")!;
+    const existingEntryShortcode = seed.inventoryIds.get(
       "Bulk Product 1@Bulk Location",
     )!;
 
@@ -299,7 +292,7 @@ describe("inventory router", () => {
       locationId: locationId,
       items: [
         {
-          id: existingEntryId, // Update existing entry
+          id: existingEntryShortcode, // Update existing entry
           productId: product1Shortcode,
           locationId: locationId,
           amount: { value: 5, unit: "pieces" },
@@ -324,7 +317,7 @@ describe("inventory router", () => {
 
     // Find the updated entry
     const updatedEntry = bulkResult.find(
-      (entry) => entry.id === existingEntryId,
+      (entry) => entry.id === existingEntryShortcode,
     );
     expect(updatedEntry).toBeDefined();
     expect(updatedEntry?.amount.value).toEqual(5);
@@ -332,14 +325,14 @@ describe("inventory router", () => {
 
     // Find the new entries
     const newEntry1 = bulkResult.find(
-      (entry) => entry.product.id === product2Id,
+      (entry) => entry.product.id === product2Shortcode,
     );
     expect(newEntry1).toBeDefined();
     expect(newEntry1?.amount.value).toEqual(2);
     expect(newEntry1?.amount.unit).toEqual("kg");
 
     const newEntry2 = bulkResult.find(
-      (entry) => entry.product.id === product3Id,
+      (entry) => entry.product.id === product3Shortcode,
     );
     expect(newEntry2).toBeDefined();
     expect(newEntry2?.amount.value).toEqual(10);
@@ -356,7 +349,7 @@ describe("inventory router", () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Try to retrieve an inventory entry with a non-existent ID
-    const nonExistentId = NONEXISTENT_UUID;
+    const nonExistentId = unsafeInventoryShortcode("INV-ZZZZ");
 
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
       "Inventory entry not found",
@@ -594,7 +587,7 @@ describe("inventory router", () => {
   it("should handle create and update failures gracefully", async () => {
     const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    const nonExistentId = NONEXISTENT_UUID;
+    const nonExistentId = unsafeLocationShortcode("LOC-ZZZZ");
     const nonExistentProductCode = unsafeProductShortcode("PRD-ZZZZ");
 
     // Try to create inventory entry with non-existent product
@@ -654,7 +647,7 @@ describe("inventory router", () => {
 
       // Create inventory via router - should compute valuation
       const entry = await caller.create({
-        productId: product.shortcode,
+        productId: product.id,
         locationId: location.id,
         amount: { value: 5, unit: "each" },
       });

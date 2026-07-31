@@ -1,9 +1,9 @@
-import type { PreviewOperationInput } from "@cubby/schemas/entity-integrity";
 import { sortBy } from "es-toolkit";
 import { Check } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   OperationImpact,
+  type PreviewOperationDraft,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import { Row, Stack } from "~/components/layout";
@@ -24,7 +24,6 @@ import { EntityInlineLink } from "../EntityInlineLink";
 
 export interface IngredientMergePair {
   id: string;
-  shortcode: string;
   name: string;
 }
 
@@ -76,7 +75,7 @@ export function IngredientMergeDialog({
   const ids = useMemo(() => ingredients.map((i) => i.id), [ingredients]);
 
   // Phase 1: rank candidates (no keepId) to default the keeper.
-  const rankInput = useMemo<PreviewOperationInput | null>(
+  const rankInput = useMemo<PreviewOperationDraft | null>(
     () =>
       ids.length >= 2
         ? { operation: "merge", entity: "ingredient", mergeIds: ids }
@@ -120,7 +119,7 @@ export function IngredientMergeDialog({
   const aliasIds = useMemo(() => aliases.map((a) => a.id), [aliases]);
 
   // Phase 2: the real preview, once a keeper is known.
-  const previewInput = useMemo<PreviewOperationInput | null>(
+  const previewInput = useMemo<PreviewOperationDraft | null>(
     () =>
       effectiveKeepId && aliasIds.length > 0
         ? {
@@ -224,7 +223,7 @@ export function IngredientMergeDialog({
                   <EntityInlineLink
                     key={a.id}
                     entity="ingredient"
-                    data={{ name: a.name, id: a.id, shortcode: a.shortcode }}
+                    data={{ name: a.name, id: a.id }}
                   />
                 ))
               ) : (

@@ -9,13 +9,9 @@
  * `callTool` in `server.unit.test.ts`, but with a live caller instead of a
  * stub, so shortcode resolution and the underlying repos actually run).
  *
- * `apps/web/src/server/mcp/tools/**`, `server.ts`/`server.unit.test.ts`, and
- * `packages/schemas/**` are OTHER agents' concurrent work finishing the MCP
- * OUTPUT-shortcode cutover — do not edit them here. Assertions below are
- * written against the INTENDED end-state contract (see the task brief), not
- * against whatever those files happen to return mid-flight; a red assertion
- * here can mean "not landed yet" as easily as "genuine bug" — see the final
- * report for which is which.
+ * The assertions below pin the finished public contract: canonical shortcodes
+ * in both directions, with UUIDs retained only for explicitly declared child
+ * rows and external identifiers.
  */
 
 import { parseShortcode } from "@cubby/shared";
@@ -636,12 +632,19 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
 
     const listed = await callTool(
       "list_tasks",
-      { projectId: projectCode },
+      { projectId: projectCode, subjectProductId: productCode },
       caller,
     );
     expectOk(listed);
     const items = structured(listed).items as Array<Record<string, unknown>>;
     expect(items.map((i) => i.id)).toContain(taskCode);
+
+    const uuidFilter = await callTool(
+      "list_tasks",
+      { subjectProductId: "00000000-0000-4000-8000-000000000001" },
+      caller,
+    );
+    expect(uuidFilter.isError).toBe(true);
 
     const got = await callTool("get_task", { id: taskCode }, caller);
     expectOk(got);
@@ -706,12 +709,19 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
 
     const listed = await callTool(
       "list_expenses",
-      { projectId: projectCode },
+      { projectId: projectCode, productId: productCode },
       caller,
     );
     expectOk(listed);
     const items = structured(listed).items as Array<Record<string, unknown>>;
     expect(items.map((i) => i.id)).toContain(expenseCode);
+
+    const uuidFilter = await callTool(
+      "list_expenses",
+      { productId: "00000000-0000-4000-8000-000000000001" },
+      caller,
+    );
+    expect(uuidFilter.isError).toBe(true);
 
     const got = await callTool("get_expense", { id: expenseCode }, caller);
     expectOk(got);
@@ -798,10 +808,8 @@ describe("a wrong-entity shortcode prefix is rejected before any mutation", () =
 
     const result = await callTool("get_product", { id: locationCode }, caller);
     expect(result.isError).toBe(true);
-    // The `PRD-` prefix pattern rejects a `LOC-` code at the zod input-schema
-    // layer, before the handler (and thus resolvePublicId) ever runs — even
-    // stronger than a runtime mismatch check, though the generic regex error
-    // doesn't echo the offending value the way resolvePublicId's message does.
+    // The `PRD-` prefix pattern rejects a `LOC-` code at the Zod input-schema
+    // layer, before the domain handler runs.
     expect(errorText(result)).toMatch(/product shortcode/i);
   });
 
@@ -1343,59 +1351,26 @@ interface UuidFinding {
   siblings: string[];
 }
 
-/**
- * The declared exceptions from the task brief, applied structurally so a
- * newly-added tool needs no update here: image ids (`imageId`, or an `id`
- * alongside `url`/`filename`/`contentType`), `mealRecipe.id` (an `id`
- * alongside `recipeId`/`scale`), recipe section/line ids (an `id` alongside
- * `ingredients`/`instructions`, or alongside `amounts` + `ingredient`/`recipe`
- * — the discriminated-union line shape), unit-mapping ids (alongside
- * `a`/`b`/`source`), USDA `fdc_id`, and background job/batch ids.
- */
-function isDeclaredException(field: string, siblings: string[]): boolean {
-  const has = (key: string) => siblings.includes(key);
-  return (
-    field === "imageId" ||
-    field === "fdc_id" ||
-    // A recipe-section-ingredient row id under its other name (e.g.
-    // get_ingredient_raw_lines' `lineId`) — same declared category as the
-    // `id`-named forms matched below.
-    field === "lineId" ||
-    /batch/i.test(field) ||
-    (field === "id" && has("url") && has("filename") && has("contentType")) ||
-    (field === "id" && has("recipeId") && has("scale")) ||
-    (field === "id" && has("ingredients") && has("instructions")) ||
-    (field === "id" &&
-      has("amounts") &&
-      (has("ingredient") || has("recipe"))) ||
-    (field === "id" && has("a") && has("b") && has("source"))
-  );
-}
+/** Exact permanent UUID exceptions. A newly exposed UUID must be named here
+ * deliberately; field-name heuristics are intentionally not accepted. */
+const DECLARED_UUID_OUTPUT_PATHS = new Set([
+  "add_recipe_to_meal.recipes[].id",
+  "attach_file.imageId",
+  "create_meal.recipes[].id",
+  "find_recipes_using_ingredient.recipes[].usages[].lineId",
+  "get_ingredient_raw_lines.ingredients[].lines[].lineId",
+  "get_meal.recipes[].id",
+  "get_meals_by_date_range.items[].recipes[].id",
+  "get_recipe.images[].id",
+  "get_recipe.sections[].id",
+  "get_recipe.sections[].ingredients[].id",
+  "list_meals.items[].recipes[].id",
+  "remove_meal_recipe.recipes[].id",
+  "update_meal.recipes[].id",
+  "update_meal_recipe.recipes[].id",
+]);
 
-/**
- * uuids still reachable through the SEVEN entities that haven't had their `id`
- * cut over yet (product, location, recipe, ingredient, inventory, meal,
- * cookbook). Not exceptions — a backlog, tracked in docs/todos.md under
- * "Finish the shortcode cutover". Each disappears when its entity's `*Out.id`
- * becomes the shortcode; the assertion below is exact, so removing one here is
- * part of that change rather than an afterthought.
- */
-const NOT_YET_CUT_OVER = [
-  "create_product.externalIds[].id",
-  "find_cookable_recipes.recipes[].recipeId",
-  "find_duplicate_inventory.items[].id",
-  "find_duplicate_inventory.items[].locations[].id",
-  "find_product_by_upc.externalIds[].id",
-  "get_product.externalIds[].id",
-  "get_recipe.id",
-  "get_recipe.sections[].ingredients[].recipe.id",
-  "list_cookbooks.items[].id",
-  "merge_ingredients.results[].target",
-  "resolve_ingredients.results[].id",
-  "search_products.items[].externalIds[].id",
-  "update_product.externalIds[].id",
-  "update_product_unit_mappings.externalIds[].id",
-];
+const NOT_YET_CUT_OVER: string[] = [];
 
 /** Recursively walk a JSON Schema (draft-7, as advertised by `tools/list`),
  * resolving `$ref`/`$defs` and `anyOf`/`oneOf`/`allOf` branches, collecting
@@ -1489,7 +1464,7 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
         found,
       );
       violations.push(
-        ...found.filter((f) => !isDeclaredException(f.field, f.siblings)),
+        ...found.filter((f) => !DECLARED_UUID_OUTPUT_PATHS.has(f.path)),
       );
     }
 

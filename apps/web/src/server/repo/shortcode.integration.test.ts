@@ -14,10 +14,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { location, product } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { createLocation, getLocationByShortcode } from "./location";
-import { createProduct, getProductByShortcode } from "./product";
+import { getLocationByShortcode } from "./location";
+import { getProductByShortcode } from "./product";
 import { getRecipeByShortcode } from "./recipe";
-import { makeLocationInput, makeProductInput } from "./repo.fixtures";
+import {
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
+  makeLocationInput,
+  makeProductInput,
+} from "./repo.fixtures";
 import {
   lookupShortcodes,
   refKey,
@@ -67,7 +72,7 @@ describe("shortcode minting", () => {
       makeLocationInput({ name: "Pantry" }),
       ctx.actor,
     );
-    expect(parseShortcode(created.shortcode)).toMatchObject({
+    expect(parseShortcode(created.id)).toMatchObject({
       type: "location",
       legacy: false,
     });
@@ -91,12 +96,12 @@ describe("uniqueness spans soft-deleted rows", () => {
       makeLocationInput({ name: "Old Shelf" }),
       ctx.actor,
     );
-    const retired = created.shortcode;
+    const retired = created.id;
 
     await getDb(ctx.db)
       .update(location)
       .set({ deletedAt: new Date() })
-      .where(eq(location.id, created.id));
+      .where(eq(location.id, created.entityId));
 
     // The pre-check must see the tombstone. (Pinning the generator makes this
     // exact rather than probabilistic: it hands out the retired code, and
@@ -173,7 +178,7 @@ describe("insertWithShortcode", () => {
       ctx.actor,
     );
 
-    nextCode = squatter.shortcode;
+    nextCode = squatter.id;
     const { row, created } = await findOrCreateWithShortcode(
       ctx.db,
       "location",
@@ -185,7 +190,7 @@ describe("insertWithShortcode", () => {
 
     expect(created).toBe(true);
     expect(row.name).toBe("Brand New Bin");
-    expect(row.shortcode).not.toBe(squatter.shortcode);
+    expect(row.shortcode).not.toBe(squatter.id);
   });
 
   it("survives a collision inside an open transaction via its savepoint", async () => {
@@ -228,11 +233,11 @@ describe("resolution", () => {
       makeProductInput({ name: "Canned Beans" }),
       ctx.actor,
     );
-    const canonical = created.shortcode;
+    const canonical = created.id;
     const legacy = `P-${canonical.slice(SHORTCODE_PREFIX.product.length)}`;
 
     const byCanonical = await resolveShortcode(ctx.db, canonical);
-    expect(byCanonical).toEqual({ entity: "product", id: created.id });
+    expect(byCanonical).toEqual({ entity: "product", id: created.entityId });
     // The promise the cutover makes to labels already stuck to things.
     expect(await resolveShortcode(ctx.db, legacy)).toEqual(byCanonical);
     expect(await resolveShortcode(ctx.db, ` ${legacy.toLowerCase()} `)).toEqual(
@@ -260,18 +265,18 @@ describe("resolution", () => {
     );
 
     const resolved = await resolveShortcodes(ctx.db, [
-      prod.shortcode,
-      loc.shortcode,
+      prod.id,
+      loc.id,
       "PRD-2222",
       "garbage",
     ]);
-    expect(resolved.get(prod.shortcode)).toEqual({
+    expect(resolved.get(prod.id)).toEqual({
       entity: "product",
-      id: prod.id,
+      id: prod.entityId,
     });
-    expect(resolved.get(loc.shortcode)).toEqual({
+    expect(resolved.get(loc.id)).toEqual({
       entity: "location",
-      id: loc.id,
+      id: loc.entityId,
     });
     expect(resolved.size).toBe(2);
   });
@@ -289,11 +294,11 @@ describe("resolution", () => {
     );
 
     const codes = await lookupShortcodes(ctx.db, [
-      { entity: "product", id: prod.id },
-      { entity: "location", id: loc.id },
+      { entity: "product", id: prod.entityId },
+      { entity: "location", id: loc.entityId },
     ]);
-    expect(codes.get(refKey("product", prod.id))).toBe(prod.shortcode);
-    expect(codes.get(refKey("location", loc.id))).toBe(loc.shortcode);
+    expect(codes.get(refKey("product", prod.entityId))).toBe(prod.id);
+    expect(codes.get(refKey("location", loc.entityId))).toBe(loc.id);
   });
 
   it("resolveLiveShortcode pins the entity and excludes deleted rows", async () => {
@@ -308,25 +313,23 @@ describe("resolution", () => {
       ctx.actor,
     );
 
-    expect(await resolveLiveShortcode(ctx.db, prod.shortcode, "product")).toBe(
-      prod.id,
+    expect(await resolveLiveShortcode(ctx.db, prod.id, "product")).toBe(
+      prod.entityId,
     );
     // Legacy spelling resolves the same way here too.
-    const legacy = `P-${prod.shortcode.slice(SHORTCODE_PREFIX.product.length)}`;
-    expect(await resolveLiveShortcode(ctx.db, legacy, "product")).toBe(prod.id);
+    const legacy = `P-${prod.id.slice(SHORTCODE_PREFIX.product.length)}`;
+    expect(await resolveLiveShortcode(ctx.db, legacy, "product")).toBe(
+      prod.entityId,
+    );
 
     // A real, resolvable code for the WRONG entity must not leak a uuid.
-    expect(
-      await resolveLiveShortcode(ctx.db, loc.shortcode, "product"),
-    ).toBeNull();
+    expect(await resolveLiveShortcode(ctx.db, loc.id, "product")).toBeNull();
 
     await getDb(ctx.db)
       .update(product)
       .set({ deletedAt: new Date() })
-      .where(eq(product.id, prod.id));
-    expect(
-      await resolveLiveShortcode(ctx.db, prod.shortcode, "product"),
-    ).toBeNull();
+      .where(eq(product.id, prod.entityId));
+    expect(await resolveLiveShortcode(ctx.db, prod.id, "product")).toBeNull();
   });
 
   it("the public getXByShortcode wrappers return null, never throw", async () => {
@@ -344,17 +347,17 @@ describe("resolution", () => {
       ctx.actor,
     );
 
-    expect(await getProductByShortcode(ctx.db, prod.shortcode)).toMatchObject({
+    expect(await getProductByShortcode(ctx.db, prod.id)).toMatchObject({
       id: prod.id,
     });
-    expect(await getLocationByShortcode(ctx.db, loc.shortcode)).toMatchObject({
+    expect(await getLocationByShortcode(ctx.db, loc.id)).toMatchObject({
       id: loc.id,
     });
 
     // Unknown, malformed, and wrong-entity codes all resolve to null.
     expect(await getProductByShortcode(ctx.db, "PRD-2222")).toBeNull();
     expect(await getProductByShortcode(ctx.db, "not-a-code")).toBeNull();
-    expect(await getProductByShortcode(ctx.db, loc.shortcode)).toBeNull();
+    expect(await getProductByShortcode(ctx.db, loc.id)).toBeNull();
     expect(await getLocationByShortcode(ctx.db, "LOC-2222")).toBeNull();
     expect(await getRecipeByShortcode(ctx.db, "RCP-2222")).toBeNull();
   });
@@ -368,13 +371,13 @@ describe("resolution", () => {
     await getDb(ctx.db)
       .update(location)
       .set({ deletedAt: new Date() })
-      .where(eq(location.id, created.id));
+      .where(eq(location.id, created.entityId));
 
     // Deliberate: resolution answers "what does this code name", which stays
     // true after a delete. The 404 comes from the subsequent live-row fetch.
-    expect(await resolveShortcode(ctx.db, created.shortcode)).toEqual({
+    expect(await resolveShortcode(ctx.db, created.id)).toEqual({
       entity: "location",
-      id: created.id,
+      id: created.entityId,
     });
   });
 });

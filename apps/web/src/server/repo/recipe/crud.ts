@@ -11,7 +11,9 @@ import type {
 import {
   type CookbookId,
   type RecipeId,
+  type RecipeShortcode,
   unsafeRecipeId,
+  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -202,7 +204,12 @@ export const getCookbookRecipesForDiff = async (
   db: Database,
   cookbookId: CookbookId,
 ): Promise<
-  Array<{ title: string; id: string; shortcode: string; sig: string }>
+  Array<{
+    title: string;
+    id: RecipeShortcode;
+    entityId: RecipeId;
+    sig: string;
+  }>
 > => {
   const rows = await getDb(db).query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
@@ -214,13 +221,13 @@ export const getCookbookRecipesForDiff = async (
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(r.id);
+    const full = byId.get(unsafeRecipeShortcode(r.shortcode));
     return full
       ? [
           {
             title: r.name,
-            id: r.id,
-            shortcode: r.shortcode,
+            id: unsafeRecipeShortcode(r.shortcode),
+            entityId: r.id,
             sig: recipeOutSignature(full),
           },
         ]
@@ -284,7 +291,7 @@ export const getNotionRecipesForDiff = async (
 ): Promise<Array<{ id: string; pageId: string; recipe: RecipeGraphOut }>> => {
   const rows = await getDb(db).query.recipe.findMany({
     where: and(eq(recipe.SourceType, "Notion"), notDeleted(recipe)),
-    columns: { id: true, SourceData: true },
+    columns: { id: true, shortcode: true, SourceData: true },
   });
   const recipes = await getRecipesByIDs(
     db,
@@ -292,7 +299,7 @@ export const getNotionRecipesForDiff = async (
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(r.id);
+    const full = byId.get(unsafeRecipeShortcode(r.shortcode));
     return r.SourceData && full
       ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
       : [];

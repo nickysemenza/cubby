@@ -1,18 +1,18 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
-import { unsafeCookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
+import { unsafeCookbookShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Row } from "~/components/layout";
 import { useTRPC } from "~/integrations/trpc/react";
 
 interface CookbookSelectProps {
-  value: CookbookId | undefined;
-  onChange: (id: CookbookId | undefined) => void;
+  value: CookbookShortcode | undefined;
+  onChange: (id: CookbookShortcode | undefined) => void;
 }
 
 /**
  * "Cookbook" scope filter: a labeled native select over recipe.listCookbooks
  * with an "All cookbooks" empty option. Owns the query and the string →
- * CookbookId boundary cast so callers deal only in branded ids.
+ * CookbookShortcode boundary cast so callers deal only in branded ids.
  */
 export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
   const api = useTRPC();
@@ -26,7 +26,9 @@ export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
         value={value ?? ""}
         onChange={(e) =>
           onChange(
-            e.target.value ? unsafeCookbookId(e.target.value) : undefined,
+            e.target.value
+              ? unsafeCookbookShortcode(e.target.value)
+              : undefined,
           )
         }
       >

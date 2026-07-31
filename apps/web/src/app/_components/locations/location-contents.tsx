@@ -88,7 +88,7 @@ function LocationShelfCard({ location }: { location: InfLocation }) {
   return (
     <ShelfCard
       to="/locations/$shortcode"
-      params={{ shortcode: location.shortcode }}
+      params={{ shortcode: location.id }}
       image={location.images[0]?.url}
       extraCount={location.images.length - 1}
       title={location.name}
@@ -207,9 +207,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   );
 
   const handlePrintLabels = useCallback(() => {
-    const eligible = children.filter(
-      (c) => c.shortcode && typeSupportsQrCode(c.type),
-    );
+    const eligible = children.filter((c) => c.id && typeSupportsQrCode(c.type));
     const skipped = children.length - eligible.length;
 
     if (eligible.length === 0) {
@@ -223,7 +221,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
         `Skipped ${skipped} location${skipped === 1 ? "" : "s"} without QR support (rooms/areas)`,
       );
     }
-    const codes = eligible.map((c) => c.shortcode).join(",");
+    const codes = eligible.map((c) => c.id).join(",");
     void navigate({ to: "/labels", search: { codes } });
   }, [children, navigate]);
 
@@ -263,7 +261,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
         </Button>
         <Link
           to="/inventory/session"
-          search={{ parent: location.shortcode }}
+          search={{ parent: location.id }}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <ScanBarcode className="mr-2 size-4" />

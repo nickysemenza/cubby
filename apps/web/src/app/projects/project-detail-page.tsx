@@ -140,18 +140,8 @@ interface ProjectDetailPageProps {
  * to resolve these) is the lightweight `{id,name}` projection, so this can't
  * carry `ProjectPill`'s status icon/tooltip (those need a full `ProjectOut`).
  */
-function DependencyBadge({
-  id,
-  name,
-  shortcode,
-}: {
-  id: string;
-  name: string;
-  shortcode: string;
-}) {
-  return (
-    <EntityInlineLink entity="project" data={{ id, name, shortcode }} compact />
-  );
+function DependencyBadge({ id, name }: { id: string; name: string }) {
+  return <EntityInlineLink entity="project" data={{ id, name }} compact />;
 }
 
 /**
@@ -391,7 +381,6 @@ function SubProjectsList({
                     entity="project"
                     data={{
                       id: child.id,
-                      shortcode: child.id,
                       name: child.name,
                     }}
                     compact
@@ -543,18 +532,15 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // same as the old full-ProjectOut lookup did.
   const { data: projectOptions } = useQuery(api.project.options.queryOptions());
   const projectNamesById = useMemo(() => {
-    const map = new Map<string, { name: string; shortcode: string }>();
-    for (const p of projectOptions ?? [])
-      map.set(p.id, { name: p.name, shortcode: p.id });
+    const map = new Map<string, { name: string }>();
+    for (const p of projectOptions ?? []) map.set(p.id, { name: p.name });
     return map;
   }, [projectOptions]);
   const resolveDependencyNames = (ids: ProjectOut["blockedByIds"]) =>
     ids
       .map((id) => {
         const found = projectNamesById.get(id);
-        return found
-          ? { id, name: found.name, shortcode: found.shortcode }
-          : null;
+        return found ? { id, name: found.name } : null;
       })
       .filter((p): p is NonNullable<typeof p> => p != null);
   const blockedBy = resolveDependencyNames(project.blockedByIds);
@@ -777,9 +763,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
               <EntityInlineLink
                 entity="project"
                 data={{
-                  id: v,
+                  id: project.parentProjectId,
                   name: project.parentProjectName,
-                  shortcode: project.parentProjectId,
                 }}
                 compact
               />
@@ -1003,15 +988,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             excludeId={project.id}
             renderReadChip={(item) => {
               // DependencyPicker's chip type is the generic {id,name} —
-              // resolve the public id from the same options map `blockedBy`
-              // was built from rather than widening that shared component.
-              const shortcode = projectNamesById.get(item.id)?.shortcode;
-              return shortcode ? (
-                <DependencyBadge
-                  id={item.id}
-                  name={item.name}
-                  shortcode={shortcode}
-                />
+              return projectNamesById.has(item.id) ? (
+                <DependencyBadge id={item.id} name={item.name} />
               ) : null;
             }}
           />
@@ -1133,7 +1111,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 data={{
                   id: project.parentProjectId,
                   name: project.parentProjectName,
-                  shortcode: project.parentProjectId,
                 }}
                 truncate
               />

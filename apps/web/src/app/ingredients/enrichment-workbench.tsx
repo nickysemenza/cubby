@@ -76,16 +76,13 @@ export function EnrichmentWorkbench({
   // map back to rows (the hook's onSuccess doesn't see the variables).
   const createOrderRef = useRef<string[]>([]);
   const [mergeSuggestions, setMergeSuggestions] = useState<
-    Record<
-      string,
-      { targetId: string; targetShortcode: string; targetName: string }
-    >
+    Record<string, { targetId: string; targetName: string }>
   >({});
   // The ingredient pair awaiting a merge — fed to the shared MergeConfirmation,
   // which lets the user pick the keeper (the candidate is listed first, so it's
   // the default target). `mergeTargetRef` mirrors that choice for onExecute.
   const [mergeConfirm, setMergeConfirm] = useState<
-    { id: string; shortcode: string; name: string }[] | null
+    { id: string; name: string }[] | null
   >(null);
 
   const { data, isLoading, error } = useQuery(
@@ -238,22 +235,17 @@ export function EnrichmentWorkbench({
   const handleSuggestMerges = async () => {
     const ingredients = selectedRows.map((r) => ({
       id: r.id,
-      shortcode: r.shortcode,
       name: r.name,
     }));
     if (ingredients.length === 0) return;
     try {
       const results = await suggestMerges.mutateAsync({ ingredients });
-      const next: Record<
-        string,
-        { targetId: string; targetShortcode: string; targetName: string }
-      > = {};
+      const next: Record<string, { targetId: string; targetName: string }> = {};
       let matched = 0;
       for (const r of results) {
         if (r.target) {
           next[r.source.id] = {
             targetId: r.target.id,
-            targetShortcode: r.target.shortcode,
             targetName: r.target.name,
           };
           matched++;
@@ -272,8 +264,8 @@ export function EnrichmentWorkbench({
   // confirms and picks the keeper. The candidate goes first so it's the default
   // target (it's the one likelier to already have a product/enrichment).
   const requestMerge = (pair: {
-    source: { id: string; shortcode: string; name: string };
-    target: { id: string; shortcode: string; name: string };
+    source: { id: string; name: string };
+    target: { id: string; name: string };
   }) => setMergeConfirm([pair.target, pair.source]);
 
   // Execute the merge the user confirmed: keeper = the chosen target, the other

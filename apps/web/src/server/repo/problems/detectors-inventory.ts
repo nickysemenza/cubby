@@ -68,18 +68,15 @@ export const findNeverVerifiedInventory = async (
     .orderBy(asc(inventoryEntry.createdAt));
 
   return rows.map((r) => ({
-    id: r.id,
-    shortcode: unsafeInventoryShortcode(r.shortcode),
+    id: unsafeInventoryShortcode(r.shortcode),
     amount: parseInventoryAmount(r.amount, r.id),
     createdAt: r.createdAt,
     product: {
-      id: r.productId,
-      shortcode: unsafeProductShortcode(r.productShortcode),
+      id: unsafeProductShortcode(r.productShortcode),
       name: r.productName,
     },
     location: {
-      id: r.locationId,
-      shortcode: unsafeLocationShortcode(r.locationShortcode),
+      id: unsafeLocationShortcode(r.locationShortcode),
       name: r.locationName,
     },
   }));
@@ -116,18 +113,15 @@ export const findUnknownParkedItems = async (
     .orderBy(asc(inventoryEntry.createdAt));
 
   return rows.map((r) => ({
-    id: r.id,
-    shortcode: unsafeInventoryShortcode(r.shortcode),
+    id: unsafeInventoryShortcode(r.shortcode),
     amount: parseInventoryAmount(r.amount, r.id),
     createdAt: r.createdAt,
     product: {
-      id: r.productId,
-      shortcode: unsafeProductShortcode(r.productShortcode),
+      id: unsafeProductShortcode(r.productShortcode),
       name: r.productName,
     },
     location: {
-      id: r.locationId,
-      shortcode: unsafeLocationShortcode(r.locationShortcode),
+      id: unsafeLocationShortcode(r.locationShortcode),
       name: r.locationName,
     },
   }));

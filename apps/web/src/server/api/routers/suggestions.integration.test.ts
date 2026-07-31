@@ -52,7 +52,7 @@ describe("suggestions router", () => {
       value: 500,
       unit: "g",
     });
-    const recipe = await createRecipe("Pancakes", flour.id, {
+    const recipe = await createRecipe("Pancakes", flour.shortcode, {
       value: 2,
       unit: "cup",
     });
@@ -76,8 +76,14 @@ describe("suggestions router", () => {
       value: 10,
       unit: "g",
     });
-    await createRecipe("Ready Recipe", flour.id, { value: 2, unit: "cup" });
-    await createRecipe("Short Recipe", sugar.id, { value: 2, unit: "cup" });
+    await createRecipe("Ready Recipe", flour.shortcode, {
+      value: 2,
+      unit: "cup",
+    });
+    await createRecipe("Short Recipe", sugar.shortcode, {
+      value: 2,
+      unit: "cup",
+    });
 
     const all = await suggestionsCaller.getMakeable({});
     expect(all.recipes).toHaveLength(2);
@@ -99,7 +105,7 @@ describe("suggestions router", () => {
       value: 500,
       unit: "g",
     });
-    const sub = await createRecipe("Sub Recipe", flour.id, {
+    const sub = await createRecipe("Sub Recipe", flour.shortcode, {
       value: 2,
       unit: "cup",
     });
@@ -135,7 +141,7 @@ describe("suggestions router", () => {
             ingredients: [
               {
                 type: "ingredient" as const,
-                ingredientId: flour.id,
+                ingredientId: flour.shortcode,
                 recipeId: null,
                 amounts: [{ value: 1, unit: "cup" }],
               },

@@ -19,14 +19,14 @@ import {
   getEmbeddingTextsForEntityTypes,
 } from "./entity-embedding";
 import { createExpense } from "./expense";
-import { createIngredient } from "./ingredient";
-import { createInventoryEntry } from "./inventory";
-import { createLocation } from "./location";
-import { createMeal } from "./meal";
-import { createProduct } from "./product";
 import { createProject } from "./project";
-import { createRecipe } from "./recipe";
 import {
+  createIngredientFixture as createIngredient,
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createMealFixture as createMeal,
+  createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
@@ -109,13 +109,13 @@ describe("searchable entity loader maps", () => {
       ctx.actor,
     );
     const ids = {
-      product: product.id,
-      recipe: recipe.id,
-      ingredient: ingredient.id,
-      cookbook: cookbook.id,
-      location: location.id,
-      inventory: inventory.id,
-      meal: meal.id,
+      product: product.entityId,
+      recipe: recipe.entityId,
+      ingredient: ingredient.entityId,
+      cookbook: cookbook.entityId,
+      location: location.entityId,
+      inventory: inventory.entityId,
+      meal: meal.entityId,
       project: projectUuid,
       task: taskUuid,
       expense: expenseUuid,

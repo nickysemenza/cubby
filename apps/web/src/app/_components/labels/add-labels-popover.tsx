@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -62,9 +62,9 @@ export function AddLabelsPopover({
   }
 
   function handleAddSingle(location: {
+    id: LocationShortcode;
     name: string;
     type: LocationType;
-    shortcode: string;
   }) {
     if (!typeSupportsQrCode(location.type)) {
       toast.warning(
@@ -72,24 +72,25 @@ export function AddLabelsPopover({
       );
       return;
     }
-    if (!location.shortcode) {
+    if (!location.id) {
       toast.warning(`${location.name} has no shortcode`);
       return;
     }
-    mergeCodes([location.shortcode]);
+    mergeCodes([location.id]);
     toast.success(`Added ${location.name}`);
   }
 
-  async function handleAddChildren(location: { id: LocationId; name: string }) {
+  async function handleAddChildren(location: {
+    id: LocationShortcode;
+    name: string;
+  }) {
     const full = await queryClient.fetchQuery(
       api.location.getByID.queryOptions({
         id: location.id,
       }),
     );
     const children = full.children ?? [];
-    const eligible = children.filter(
-      (c) => c.shortcode && typeSupportsQrCode(c.type),
-    );
+    const eligible = children.filter((c) => typeSupportsQrCode(c.type));
 
     if (eligible.length === 0) {
       toast.warning(
@@ -99,7 +100,7 @@ export function AddLabelsPopover({
     }
 
     const skipped = children.length - eligible.length;
-    mergeCodes(eligible.map((c) => c.shortcode));
+    mergeCodes(eligible.map((c) => c.id));
     toast.success(
       `Added ${eligible.length} label${eligible.length !== 1 ? "s" : ""} from ${location.name}` +
         (skipped > 0 ? ` (skipped ${skipped} without QR support)` : ""),
@@ -149,7 +150,7 @@ export function AddLabelsPopover({
                 />
                 <span className="min-w-0 flex-1 truncate">{loc.name}</span>
                 <div className="flex shrink-0 gap-1">
-                  {typeSupportsQrCode(loc.type) && loc.shortcode && (
+                  {typeSupportsQrCode(loc.type) && loc.id && (
                     <button
                       type="button"
                       className="rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted" /* tight */

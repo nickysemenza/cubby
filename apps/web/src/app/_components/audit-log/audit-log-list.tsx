@@ -88,7 +88,7 @@ export function AuditLogList({
       <Timeline mode="chronological">
         {entries.map((entry, index) => (
           <AuditLogEntryComponent
-            key={entry.id}
+            key={`${entry.entityType}:${entry.entityId}:${entry.action}:${entry.createdAt.toISOString()}`}
             entry={entry}
             step={index + 1}
             showEntityLink={showEntityLink}

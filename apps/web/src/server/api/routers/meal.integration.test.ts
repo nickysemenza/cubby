@@ -40,7 +40,7 @@ describe("mealRouter", () => {
 
   it("plans recipes onto a day and lists them by date range", async () => {
     const flour = await findOrCreateIngredient(ctx.db, "flour");
-    const recipe = await createRecipe("Pancakes", flour.id, {
+    const recipe = await createRecipe("Pancakes", flour.shortcode, {
       value: 2,
       unit: "cup",
     });
@@ -74,7 +74,7 @@ describe("mealRouter", () => {
 
   it("cascade-soft-deletes a meal and its planned recipes", async () => {
     const flour = await findOrCreateIngredient(ctx.db, "flour");
-    const recipe = await createRecipe("Pancakes", flour.id, {
+    const recipe = await createRecipe("Pancakes", flour.shortcode, {
       value: 1,
       unit: "cup",
     });
@@ -96,11 +96,11 @@ describe("mealRouter", () => {
   it("shopping list sums needs across meals but counts inventory ONCE", async () => {
     // 500 g flour on hand. Two recipes, each using flour, in two meals.
     const flour = await seedFlourWithStock({ value: 500, unit: "g" });
-    const recipeA = await createRecipe("A", flour.id, {
+    const recipeA = await createRecipe("A", flour.shortcode, {
       value: 2,
       unit: "cup",
     }); // 240 g
-    const recipeB = await createRecipe("B", flour.id, {
+    const recipeB = await createRecipe("B", flour.shortcode, {
       value: 1,
       unit: "cup",
     }); // 120 g
@@ -149,11 +149,11 @@ describe("mealRouter", () => {
 
   it("shopping list reports a shortfall when inventory is insufficient", async () => {
     const flour = await seedFlourWithStock({ value: 300, unit: "g" });
-    const recipeA = await createRecipe("A", flour.id, {
+    const recipeA = await createRecipe("A", flour.shortcode, {
       value: 2,
       unit: "cup",
     }); // 240 g
-    const recipeB = await createRecipe("B", flour.id, {
+    const recipeB = await createRecipe("B", flour.shortcode, {
       value: 2,
       unit: "cup",
     }); // 240 g

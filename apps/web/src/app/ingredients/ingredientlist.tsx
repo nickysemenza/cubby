@@ -149,7 +149,7 @@ export function IngredientList() {
   // (which itself does no work; it just opens the dialog), cleared once the
   // shared IngredientMergeDialog's onConfirm/cancel resolves.
   const [mergeRows, setMergeRows] = useState<
-    Pick<IngredientListItem, "id" | "shortcode" | "name">[] | null
+    Pick<IngredientListItem, "id" | "name">[] | null
   >(null);
   const [mergePending, setMergePending] = useState(false);
 

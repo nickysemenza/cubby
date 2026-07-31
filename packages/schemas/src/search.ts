@@ -1,15 +1,36 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import { searchableEntities } from "./entity-manifest";
+import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
+import {
+  anyShortcodeSchema,
+  cookbookShortcode,
+  expenseShortcode,
+  ingredientShortcode,
+  inventoryShortcode,
+  locationShortcode,
+  mealShortcode,
+  productShortcode,
+  projectShortcode,
+  recipeShortcode,
+  taskShortcode,
+} from "./identifiers";
 
 export { searchableEntities } from "./entity-manifest";
 
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
 
+const searchableEntityTypes = searchableEntities as unknown as [
+  ShortcodeEntity,
+  ...ShortcodeEntity[],
+];
+export const searchableEntityIdSchema = anyShortcodeSchema(
+  searchableEntityTypes,
+);
+
 export const searchableEntityRefFields = {
   entityType: searchableEntitySchema,
-  entityId: z.string(),
+  entityId: searchableEntityIdSchema,
 };
 
 export const searchableEntityRefSchema = z.object(searchableEntityRefFields);
@@ -66,7 +87,9 @@ export const similarEntitiesInputSchema = z.object({
   pair: similarEntityPairSchema.describe(
     "Which direction to search: <sourceType>_to_<targetType>",
   ),
-  sourceId: z.uuid().describe("ID of the seed entity (the pair's source type)"),
+  sourceId: searchableEntityIdSchema.describe(
+    "Shortcode of the seed entity (the pair's source type)",
+  ),
   limit: z.number().min(1).max(25).default(5),
 });
 export type SimilarEntitiesInput = z.infer<typeof similarEntitiesInputSchema>;
@@ -81,13 +104,6 @@ export const searchMatchKindSchema = z.enum([
 export type SearchMatchKind = z.infer<typeof searchMatchKindSchema>;
 
 const searchResultBaseFields = {
-  id: z.string(),
-  /**
-   * The entity's public id. Present alongside `id` because a search result is
-   * both a thing to NAVIGATE to (shortcode) and a row the client may need to
-   * key or de-dupe internally (uuid) — every search surface links via this.
-   */
-  shortcode: z.string(),
   name: z.string(),
   subtitle: z.string().nullable(),
   typeHint: z.string().nullable(),
@@ -102,6 +118,7 @@ const searchResultBaseFields = {
 // Per-entity result schemas
 const productResult = z.object({
   ...searchResultBaseFields,
+  id: productShortcode,
   entityType: z.literal("product"),
   price: z.number().nullable(),
   stockCount: z.number().nullable(),
@@ -109,6 +126,7 @@ const productResult = z.object({
 
 const locationResult = z.object({
   ...searchResultBaseFields,
+  id: locationShortcode,
   entityType: z.literal("location"),
   itemCount: z.number().nullable(),
   childCount: z.number().nullable(),
@@ -116,24 +134,28 @@ const locationResult = z.object({
 
 const inventoryResult = z.object({
   ...searchResultBaseFields,
+  id: inventoryShortcode,
   entityType: z.literal("inventory"),
   amount: amount.nullable(),
 });
 
 const recipeResult = z.object({
   ...searchResultBaseFields,
+  id: recipeShortcode,
   entityType: z.literal("recipe"),
   ingredientCount: z.number().nullable(),
 });
 
 const ingredientResult = z.object({
   ...searchResultBaseFields,
+  id: ingredientShortcode,
   entityType: z.literal("ingredient"),
   recipeCount: z.number().nullable(),
 });
 
 const cookbookResult = z.object({
   ...searchResultBaseFields,
+  id: cookbookShortcode,
   entityType: z.literal("cookbook"),
   /** Recipes actually imported from the book (live rows). */
   recipeCount: z.number().nullable(),
@@ -142,6 +164,7 @@ const cookbookResult = z.object({
 
 const mealResult = z.object({
   ...searchResultBaseFields,
+  id: mealShortcode,
   entityType: z.literal("meal"),
   /** Calendar day, "YYYY-MM-DD" (the Meal.date column is day-granular). */
   date: z.string().nullable(),
@@ -150,6 +173,7 @@ const mealResult = z.object({
 
 const projectResult = z.object({
   ...searchResultBaseFields,
+  id: projectShortcode,
   entityType: z.literal("project"),
   status: z.string().nullable(),
   spent: z.number().nullable(),
@@ -157,6 +181,7 @@ const projectResult = z.object({
 
 const taskResult = z.object({
   ...searchResultBaseFields,
+  id: taskShortcode,
   entityType: z.literal("task"),
   status: z.string().nullable(),
   projectName: z.string().nullable(),
@@ -164,6 +189,7 @@ const taskResult = z.object({
 
 const expenseResult = z.object({
   ...searchResultBaseFields,
+  id: expenseShortcode,
   entityType: z.literal("expense"),
   cost: z.number().nullable(),
   projectName: z.string().nullable(),

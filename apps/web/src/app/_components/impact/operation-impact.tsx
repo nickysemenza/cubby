@@ -1,8 +1,10 @@
 import type {
   ImpactItem,
+  PreviewDeleteEntity,
+  PreviewMergeEntity,
   PreviewOperation,
-  PreviewOperationInput,
 } from "@cubby/schemas/entity-integrity";
+import { previewOperationInputSchema } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Ban, Loader2, RotateCw } from "lucide-react";
 import { Row, Stack } from "~/components/layout";
@@ -34,16 +36,36 @@ import { useTRPC } from "~/integrations/trpc/react";
  */
 
 /** Fetch a preview for `input`, only while `enabled` (i.e. the dialog is open). */
+export type PreviewOperationDraft =
+  | {
+      operation: "delete";
+      entity: PreviewDeleteEntity;
+      ids: string[];
+    }
+  | {
+      operation: "merge";
+      entity: PreviewMergeEntity;
+      keepId?: string;
+      mergeIds: string[];
+    };
+
+const DISABLED_PREVIEW_INPUT = previewOperationInputSchema.parse({
+  operation: "delete",
+  entity: "product",
+  ids: ["PRD-2222"],
+});
+
 export function useOperationPreview(
-  input: PreviewOperationInput | null,
+  input: PreviewOperationDraft | null,
   enabled: boolean,
 ) {
   const api = useTRPC();
+  const parsedInput = input ? previewOperationInputSchema.parse(input) : null;
   return useQuery({
     ...api.entityIntegrity.previewOperation.queryOptions(
-      input ?? { operation: "delete", entity: "product", ids: ["_"] },
+      parsedInput ?? DISABLED_PREVIEW_INPUT,
     ),
-    enabled: enabled && input !== null,
+    enabled: enabled && parsedInput !== null,
     // Always fresh for the ids at hand: a preview describes current state, and
     // a cached one from a minute ago can be wrong about what is still there.
     staleTime: 0,

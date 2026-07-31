@@ -34,7 +34,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
       entity="location"
       title={location.name}
       eyebrow="Scanned"
-      heroNo={location.shortcode ?? undefined}
+      heroNo={location.id ?? undefined}
       rawData={location}
       heroImages={location.images}
     >
@@ -61,7 +61,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
         <Row gap="sm" wrap>
           <Link
             to="/inventory/session"
-            search={{ parent: location.shortcode }}
+            search={{ parent: location.id }}
             className={cn(
               buttonVariants({ variant: "outline", size: "default" }),
               "h-12 flex-1 text-sm",
@@ -72,7 +72,7 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
           </Link>
           <Link
             to="/locations/$shortcode"
-            params={{ shortcode: location.shortcode }}
+            params={{ shortcode: location.id }}
             className={cn(
               buttonVariants({ variant: "outline", size: "default" }),
               "h-12 flex-1 text-sm",

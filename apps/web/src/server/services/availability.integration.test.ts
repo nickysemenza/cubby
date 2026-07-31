@@ -37,7 +37,10 @@ describe("AvailabilityService.getRecipeAvailability", () => {
 
   it("reports ok when inventory covers the recipe (across a unit conversion)", async () => {
     const flour = await seedFlourWithStock({ value: 500, unit: "g" }); // ~4.17 cups
-    const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
+    const recipe = await createFlourRecipe(flour.shortcode, {
+      value: 2,
+      unit: "cup",
+    });
 
     const result = await ctx().services.availability.getRecipeAvailability(
       recipe.id,
@@ -55,7 +58,10 @@ describe("AvailabilityService.getRecipeAvailability", () => {
 
   it("reports short when inventory is insufficient", async () => {
     const flour = await seedFlourWithStock({ value: 100, unit: "g" }); // ~0.83 cups
-    const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
+    const recipe = await createFlourRecipe(flour.shortcode, {
+      value: 2,
+      unit: "cup",
+    });
 
     const result = await ctx().services.availability.getRecipeAvailability(
       recipe.id,
@@ -68,7 +74,10 @@ describe("AvailabilityService.getRecipeAvailability", () => {
 
   it("reports missing when nothing is on hand", async () => {
     const flour = await findOrCreateIngredient(tdb.db, "flour");
-    const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
+    const recipe = await createFlourRecipe(flour.shortcode, {
+      value: 2,
+      unit: "cup",
+    });
 
     const result = await ctx().services.availability.getRecipeAvailability(
       recipe.id,
@@ -82,7 +91,10 @@ describe("AvailabilityService.getRecipeAvailability", () => {
   it("reports unconvertible when units can't be reconciled", async () => {
     // On hand in "widget", but the only mapping is cup<->g: no path to "cup".
     const flour = await seedFlourWithStock({ value: 3, unit: "widget" });
-    const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
+    const recipe = await createFlourRecipe(flour.shortcode, {
+      value: 2,
+      unit: "cup",
+    });
 
     const result = await ctx().services.availability.getRecipeAvailability(
       recipe.id,

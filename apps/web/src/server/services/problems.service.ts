@@ -18,6 +18,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
   type RecipeId,
+  unsafeIngredientId,
   unsafeIngredientShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -98,6 +99,7 @@ import {
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { computeAttentionItems } from "~/server/repo/project";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
@@ -190,7 +192,13 @@ const findProductCoverageProblems = async (
   );
   const enrichedById = new Map(enriched.map((p) => [p.id, p]));
   const effectiveById = new Map(
-    enriched.map((p) => [p.id, synthesizeEffectiveMappings(p)]),
+    enriched.map((p) => [
+      p.id,
+      synthesizeEffectiveMappings({
+        ...p,
+        id: unsafeProductShortcode(p.shortcode),
+      }),
+    ]),
   );
 
   const ingredientsWithPartialCoverage: IngredientWithPartialCoverage[] = [];
@@ -219,16 +227,14 @@ const findProductCoverageProblems = async (
       effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit));
 
     ingredientsWithPartialCoverage.push({
-      id: p.id,
-      shortcode: unsafeProductShortcode(p.shortcode),
+      id: unsafeProductShortcode(p.shortcode),
       name: p.name,
       manufacturer: p.manufacturer,
       coverage: { covered: [...cov.covered], applicable: [...applicable] },
       hasPrice,
       hasUsdaLink: p.food != null,
       usdaUnavailable: p.usdaUnavailable ?? false,
-      ingredientId: p.ingredientId,
-      ingredientShortcode: unsafeIngredientShortcode(p.ingredient.shortcode),
+      ingredientId: unsafeIngredientShortcode(p.ingredient.shortcode),
     });
   }
 
@@ -241,8 +247,7 @@ const findProductCoverageProblems = async (
     const islands = wasm.detect_unit_mapping_islands(effective);
     if (islands.length >= 2) {
       productsWithIslandedMappings.push({
-        id: p.id,
-        shortcode: unsafeProductShortcode(p.shortcode),
+        id: unsafeProductShortcode(p.shortcode),
         name: p.name,
         manufacturer: p.manufacturer,
         islandCount: islands.length,
@@ -320,7 +325,7 @@ export async function* reparseStaleIngredientParses(
 
   await applyReparsedStaleLines(db, writes);
 
-  const recipesAffected = uniq(stale.map((s) => s.recipeId));
+  const recipesAffected = uniq(stale.map((s) => s.recipeEntityId));
   yield { done: stale.length, total: stale.length };
   return { updated: stale.length, recipesAffected };
 }
@@ -434,9 +439,24 @@ export async function* pruneAllUnusedAliases(
     return { pruned: 0 };
   }
   yield { done: 0, total: rows.length };
+  const resolved = await resolveLiveShortcodes(
+    db,
+    rows.map((row) => row.id),
+    "ingredient",
+  );
   const { pruned } = await pruneUnusedAliases(
     db,
-    rows.map((r) => ({ ingredientId: r.id, remove: r.unusedAliases })),
+    rows.flatMap((row) => {
+      const entityId = resolved.get(row.id);
+      return entityId
+        ? [
+            {
+              ingredientId: unsafeIngredientId(entityId),
+              remove: row.unusedAliases,
+            },
+          ]
+        : [];
+    }),
   );
   yield { done: rows.length, total: rows.length };
   return { pruned };
@@ -506,7 +526,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages.map((p) => ({
       ...p,
-      shortcode: unsafeProductShortcode(p.shortcode),
+      id: unsafeProductShortcode(p.shortcode),
     })),
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
@@ -590,8 +610,7 @@ const findProductsWithBetterUpcData = async (
     }
 
     problems.push({
-      id: cand.id,
-      shortcode: cand.shortcode,
+      id: cand.shortcode,
       name: cand.name,
       manufacturer: cand.manufacturer,
       upc: cand.upc,

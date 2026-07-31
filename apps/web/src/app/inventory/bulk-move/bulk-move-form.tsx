@@ -13,7 +13,7 @@
  * @see MoveInventoryDialog - Lightweight modal for quick moves
  */
 
-import { unsafeInventoryId } from "@cubby/schemas/identifiers";
+import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
 import type {
   BulkMoveItem,
   inventoryListItemOut,
@@ -253,7 +253,7 @@ export default function BulkMoveForm({
 
     try {
       const items: BulkMoveItem[] = selectedItems.map((item) => ({
-        inventoryEntryId: unsafeInventoryId(item.inventoryEntryId),
+        inventoryEntryId: unsafeInventoryShortcode(item.inventoryEntryId),
         quantity: {
           value: item.moveQuantity,
           unit: item.unit,

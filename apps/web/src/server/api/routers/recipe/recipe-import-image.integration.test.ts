@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,7 @@ vi.mock("~/server/utils/s3", async (importActual) => ({
 
 import { setCfEnv } from "~/server/cf-env";
 import { makeImportRecipe } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTestCaller } from "../../trpc";
 import { recipeRouter } from "../recipe";
 
@@ -49,7 +50,7 @@ describe("recipe.insertImport persists the scraped image", () => {
   });
 
   // Read back through the router, the way the recipe page does.
-  const attachedImages = async (recipeId: RecipeId) =>
+  const attachedImages = async (recipeId: RecipeShortcode) =>
     (await createTestCaller(recipeRouter, ctx.db).getByID({ id: recipeId }))
       .images;
 
@@ -57,10 +58,11 @@ describe("recipe.insertImport persists the scraped image", () => {
     const caller = createTestCaller(recipeRouter, ctx.db);
 
     const { id } = await caller.insertImport(imported);
+    const entityId = await resolveLiveShortcode(ctx.db, id, "recipe");
 
     expect(fetchAndStoreImage).toHaveBeenCalledWith(
       "https://recipes.example/hero.jpg",
-      `recipe-${id}`,
+      `recipe-${entityId}`,
     );
     expect(await attachedImages(id)).toMatchObject([
       { url: "https://images.example/imports/hero.jpg", status: "UPLOADED" },

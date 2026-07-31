@@ -12,7 +12,7 @@ const CreateInventoryItem: FC = () => {
 
   const { error, isPending, handleCreate, handleCancel } = useEntityCreateMode<
     z.infer<typeof inventoryCreatePayloadData>,
-    { id: string; shortcode: string }
+    { id: string }
   >("inventory", api.inventory.create.mutationOptions(), {
     onSuccess: invalidateInventory,
   });

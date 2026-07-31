@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -121,7 +121,7 @@ export function LocationValidateForm({
       const shortcode = parsed.shortcode;
 
       // Skip if this is the parent location itself
-      if (parentLocation?.shortcode === shortcode) {
+      if (parentLocation?.id === shortcode) {
         toast.info("That's the parent location itself");
         return;
       }
@@ -157,17 +157,17 @@ export function LocationValidateForm({
 
   // Reconciliation data
   const childShortcodes = useMemo(
-    () => new Set(children.map((c) => c.shortcode as string)),
+    () => new Set(children.map((c) => c.id as string)),
     [children],
   );
 
   const confirmed = useMemo(
-    () => children.filter((c) => scannedLocations.has(c.shortcode as string)),
+    () => children.filter((c) => scannedLocations.has(c.id as string)),
     [children, scannedLocations],
   );
 
   const missing = useMemo(
-    () => children.filter((c) => !scannedLocations.has(c.shortcode as string)),
+    () => children.filter((c) => !scannedLocations.has(c.id as string)),
     [children, scannedLocations],
   );
 
@@ -196,7 +196,7 @@ export function LocationValidateForm({
   );
 
   const handleConfirmHere = useCallback(
-    async (locationId: LocationId) => {
+    async (locationId: LocationShortcode) => {
       if (!parentLocationId) return;
       try {
         await updateMutation.mutateAsync({
@@ -212,7 +212,7 @@ export function LocationValidateForm({
   );
 
   const handleReassign = useCallback(
-    async (locationId: LocationId, newParentId: string) => {
+    async (locationId: LocationShortcode, newParentId: string) => {
       try {
         await updateMutation.mutateAsync({
           id: locationId,
@@ -260,9 +260,7 @@ export function LocationValidateForm({
                   >
                     <LocationIcon type={child.type} size={14} />
                     <span>{child.name}</span>
-                    <span className="text-xs opacity-60">
-                      {child.shortcode}
-                    </span>
+                    <span className="text-xs opacity-60">{child.id}</span>
                     <LocationTypeLabel type={child.type} />
                   </div>
                 ))}
@@ -306,7 +304,7 @@ export function LocationValidateForm({
           </h4>
           <div className="space-y-1">
             {children.map((child) => {
-              const isScanned = scannedLocations.has(child.shortcode as string);
+              const isScanned = scannedLocations.has(child.id as string);
               return (
                 <div
                   key={child.id}
@@ -321,7 +319,7 @@ export function LocationValidateForm({
                   )}
                   <LocationIcon type={child.type} size={14} />
                   <span>{child.name}</span>
-                  <span className="text-xs opacity-60">{child.shortcode}</span>
+                  <span className="text-xs opacity-60">{child.id}</span>
                 </div>
               );
             })}
@@ -390,7 +388,7 @@ export function LocationValidateForm({
                   <LocationIcon type={child.type} size={14} />
                   <span>{child.name}</span>
                   <span className="text-muted-foreground text-xs">
-                    {child.shortcode}
+                    {child.id}
                   </span>
                 </div>
               ))}
@@ -487,7 +485,10 @@ function MissingLocationRow({
   isPending,
 }: {
   location: InfLocation;
-  onReassign: (locationId: LocationId, newParentId: string) => Promise<void>;
+  onReassign: (
+    locationId: LocationShortcode,
+    newParentId: string,
+  ) => Promise<void>;
   isPending: boolean;
 }) {
   const [showReassign, setShowReassign] = useState(false);
@@ -510,9 +511,7 @@ function MissingLocationRow({
         <div className="flex items-center gap-2">
           <LocationIcon type={location.type} size={14} />
           <span>{location.name}</span>
-          <span className="text-muted-foreground text-xs">
-            {location.shortcode}
-          </span>
+          <span className="text-muted-foreground text-xs">{location.id}</span>
         </div>
         <Button
           variant="outline"

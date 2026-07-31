@@ -124,9 +124,8 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
               <EntityInlineLink
                 entity="vendor"
                 data={{
-                  id: value,
+                  id: purchase.vendorId,
                   name: purchase.vendorName,
-                  shortcode: purchase.vendorId,
                 }}
                 compact
               />
@@ -308,7 +307,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             data={{
               id: purchase.vendorId,
               name: purchase.vendorName,
-              shortcode: purchase.vendorId,
             }}
             truncate
           />

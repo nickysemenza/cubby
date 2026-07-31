@@ -353,7 +353,7 @@ export const RecipeCompareGrid: React.FC<{
                   </div>
                   <Link
                     to="/recipes/$shortcode"
-                    params={{ shortcode: c.recipe.shortcode }}
+                    params={{ shortcode: c.recipe.id }}
                     className="line-clamp-2 min-h-[2.5em] font-medium leading-tight hover:underline"
                   >
                     {c.recipe.name}

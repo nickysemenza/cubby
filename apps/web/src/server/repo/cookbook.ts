@@ -15,6 +15,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
+  type CookbookShortcode,
   type RecipeId,
   unsafeCookbookShortcode,
 } from "@cubby/schemas/identifiers";
@@ -79,7 +80,7 @@ export const upsertCookbook = async (
   db: Database,
   input: CookbookUpsertInput,
   actor: ActorContext,
-): Promise<{ id: CookbookId }> => {
+): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> => {
   const values = {
     name: input.name,
     rawJson: input.rawJson,
@@ -95,18 +96,19 @@ export const upsertCookbook = async (
 
   // Insert (existingId === null) or update one cookbook row, then associate the
   // cover image and log the audit entry — all in one transaction.
-  const commit = (existingId: CookbookId | null): Promise<{ id: CookbookId }> =>
+  const commit = (
+    existingId: CookbookId | null,
+  ): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> =>
     withTransaction(db, async (tx) => {
-      const id = existingId
-        ? (
-            await updateAndReturn(
-              tx,
-              cookbook,
-              values,
-              eq(cookbook.id, existingId),
-            )
-          ).id
-        : (await insertWithShortcode(tx, "cookbook", values)).id;
+      const row = existingId
+        ? await updateAndReturn(
+            tx,
+            cookbook,
+            values,
+            eq(cookbook.id, existingId),
+          )
+        : await insertWithShortcode(tx, "cookbook", values);
+      const id = row.id;
 
       // The cover image is now associated → mark it uploaded (it was PENDING from
       // the presigned upload, like the recipe/product image flow).
@@ -122,7 +124,10 @@ export const upsertCookbook = async (
         entityId: id,
         action: existingId ? "update" : "create",
       });
-      return { id };
+      return {
+        output: { id: unsafeCookbookShortcode(row.shortcode) },
+        entityId: id,
+      };
     });
 
   const existing = await getDb(db).query.cookbook.findFirst({
@@ -196,8 +201,7 @@ export const listCookbooks = async (
     .orderBy(cookbook.name);
   return rows.map((r) => ({
     ...r,
-    id: r.id,
-    shortcode: unsafeCookbookShortcode(r.shortcode),
+    id: unsafeCookbookShortcode(r.shortcode),
     coverUrl: r.coverUrl ?? null,
   }));
 };

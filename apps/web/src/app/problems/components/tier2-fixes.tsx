@@ -1,9 +1,9 @@
-import type { PreviewOperationInput } from "@cubby/schemas/entity-integrity";
 import type { DuplicateVendor } from "@cubby/schemas/problems";
 import { useMemo } from "react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import {
   OperationImpact,
+  type PreviewOperationDraft,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import { Stack } from "~/components/layout";
@@ -99,7 +99,7 @@ export function DuplicateVendorMergeFix({
   // Impact preview — this card only exists while expanded, so there's no
   // separate "open" state to gate on; fetch as soon as it mounts. See
   // `useOperationPreview`'s doc comment for the gating rule.
-  const previewInput = useMemo<PreviewOperationInput>(
+  const previewInput = useMemo<PreviewOperationDraft>(
     () => ({
       operation: "merge",
       entity: "vendor",

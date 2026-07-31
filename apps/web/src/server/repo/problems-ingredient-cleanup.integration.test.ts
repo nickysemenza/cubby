@@ -7,14 +7,14 @@ import { deleteUnusedIngredients } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { upsertImportRecipe } from "./import-recipe-convert";
 import { findOrCreateIngredient } from "./ingredient";
-import { createInventoryEntry } from "./inventory";
-import { createLocation } from "./location";
 import {
   findIngredientsWithUnusedAliases,
   findUnusedIngredients,
 } from "./problems";
-import { createProduct } from "./product";
 import {
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
   makeImportRecipe,
   makeLocationInput,
   makeProductInput,
@@ -136,7 +136,6 @@ describe("deleteUnusedIngredients", () => {
       makeLocationInput({ name: "Pantry" }),
       ctx.actor,
     );
-    if (!location) throw new Error("location not created");
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Stocked", ingredientId: ing.id }),
@@ -211,7 +210,7 @@ describe("deleteUnusedIngredients", () => {
       ctx.actor,
     );
     await seedEmbedding("ingredient", ing.id);
-    await seedEmbedding("product", product.id);
+    await seedEmbedding("product", product.entityId);
 
     const result = await deleteUnusedIngredients(
       ctx.db,
@@ -225,7 +224,7 @@ describe("deleteUnusedIngredients", () => {
       (await liveEmbedding("ingredient", ing.id))?.deletedAt,
     ).not.toBeNull();
     expect(
-      (await liveEmbedding("product", product.id))?.deletedAt,
+      (await liveEmbedding("product", product.entityId))?.deletedAt,
     ).not.toBeNull();
   });
 });

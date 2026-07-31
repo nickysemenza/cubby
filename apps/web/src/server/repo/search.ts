@@ -67,6 +67,7 @@ const idIn = (column: AnyColumn, ids: string[]): SQL =>
   )})`;
 
 type SearchClient = ReturnType<typeof getDb>;
+export type InternalSearchResult = SearchResultItem & { entityId: string };
 
 interface EntitySearchQuery {
   lexicalCondition: (query: string) => SQL | undefined;
@@ -75,7 +76,7 @@ interface EntitySearchQuery {
     client: SearchClient,
     condition: SQL | undefined,
     limit: number,
-  ) => Promise<SearchResultItem[]>;
+  ) => Promise<InternalSearchResult[]>;
 }
 
 const imageUrl = (
@@ -106,8 +107,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: product.id,
-          shortcode: product.shortcode,
+          entityId: product.id,
+          id: product.shortcode,
           name: product.name,
           subtitle: product.manufacturer,
           entityType: sql<"product">`'product'`.as("entityType"),
@@ -122,7 +123,9 @@ const searchQueries = {
         })
         .from(product)
         .where(and(notDeleted(product), condition))
-        .limit(limit) as Promise<ProductSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (ProductSearchResult & { entityId: string })[]
+      >,
   },
   recipe: {
     lexicalCondition: (query) => formatSearchTerm(recipe.name, query),
@@ -130,8 +133,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: recipe.id,
-          shortcode: recipe.shortcode,
+          entityId: recipe.id,
+          id: recipe.shortcode,
           name: recipe.name,
           subtitle: sql<string | null>`null`.as("subtitle"),
           entityType: sql<"recipe">`'recipe'`.as("entityType"),
@@ -146,7 +149,9 @@ const searchQueries = {
         })
         .from(recipe)
         .where(and(notDeleted(recipe), condition))
-        .limit(limit) as Promise<RecipeSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (RecipeSearchResult & { entityId: string })[]
+      >,
   },
   ingredient: {
     lexicalCondition: (query) =>
@@ -158,8 +163,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: ingredient.id,
-          shortcode: ingredient.shortcode,
+          entityId: ingredient.id,
+          id: ingredient.shortcode,
           name: ingredient.name,
           subtitle: sql<string | null>`null`.as("subtitle"),
           entityType: sql<"ingredient">`'ingredient'`.as("entityType"),
@@ -174,7 +179,9 @@ const searchQueries = {
         .where(
           and(notDeleted(ingredient), isNull(ingredient.recipeId), condition),
         )
-        .limit(limit) as Promise<IngredientSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (IngredientSearchResult & { entityId: string })[]
+      >,
   },
   cookbook: {
     // Author/subjects are text[] (OPF metadata), so they match through the same
@@ -189,8 +196,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: cookbook.id,
-          shortcode: cookbook.shortcode,
+          entityId: cookbook.id,
+          id: cookbook.shortcode,
           name: cookbook.name,
           // Authors read as the byline; empty array ⇒ no subtitle.
           subtitle: sql<
@@ -217,7 +224,9 @@ const searchQueries = {
         })
         .from(cookbook)
         .where(and(notDeleted(cookbook), condition))
-        .limit(limit) as Promise<CookbookSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (CookbookSearchResult & { entityId: string })[]
+      >,
   },
   location: {
     lexicalCondition: (query) =>
@@ -229,8 +238,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: location.id,
-          shortcode: location.shortcode,
+          entityId: location.id,
+          id: location.shortcode,
           name: location.name,
           subtitle: location.type,
           entityType: sql<"location">`'location'`.as("entityType"),
@@ -248,7 +257,9 @@ const searchQueries = {
         })
         .from(location)
         .where(and(notDeleted(location), condition))
-        .limit(limit) as Promise<LocationSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (LocationSearchResult & { entityId: string })[]
+      >,
   },
   inventory: {
     lexicalCondition: (query) =>
@@ -262,8 +273,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: inventoryEntry.id,
-          shortcode: inventoryEntry.shortcode,
+          entityId: inventoryEntry.id,
+          id: inventoryEntry.shortcode,
           name: product.name,
           subtitle: location.name,
           entityType: sql<"inventory">`'inventory'`.as("entityType"),
@@ -283,7 +294,9 @@ const searchQueries = {
             condition,
           ),
         )
-        .limit(limit) as Promise<InventorySearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (InventorySearchResult & { entityId: string })[]
+      >,
   },
   meal: {
     // A meal is often unnamed, so the date string and the planned recipes'
@@ -305,8 +318,8 @@ const searchQueries = {
         .select({
           // Meal.name is nullable; the date is the fallback display name (it is
           // how the calendar labels an unnamed meal).
-          id: meal.id,
-          shortcode: meal.shortcode,
+          entityId: meal.id,
+          id: meal.shortcode,
           name: sql<string>`COALESCE(NULLIF(${meal.name}, ''), ${meal.date}::text)`.as(
             "name",
           ),
@@ -327,7 +340,9 @@ const searchQueries = {
         })
         .from(meal)
         .where(and(notDeleted(meal), condition))
-        .limit(limit) as Promise<MealSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (MealSearchResult & { entityId: string })[]
+      >,
   },
   project: {
     lexicalCondition: (query) =>
@@ -339,8 +354,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: project.id,
-          shortcode: project.shortcode,
+          entityId: project.id,
+          id: project.shortcode,
           name: project.name,
           subtitle: project.kind,
           entityType: sql<"project">`'project'`.as("entityType"),
@@ -362,7 +377,9 @@ const searchQueries = {
         })
         .from(project)
         .where(and(notDeleted(project), condition))
-        .limit(limit) as Promise<ProjectSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (ProjectSearchResult & { entityId: string })[]
+      >,
   },
   task: {
     lexicalCondition: (query) =>
@@ -375,8 +392,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: task.id,
-          shortcode: task.shortcode,
+          entityId: task.id,
+          id: task.shortcode,
           name: task.name,
           subtitle: project.name,
           entityType: sql<"task">`'task'`.as("entityType"),
@@ -398,7 +415,9 @@ const searchQueries = {
           and(eq(task.subjectProductId, product.id), notDeleted(product)),
         )
         .where(and(notDeleted(task), condition))
-        .limit(limit) as Promise<TaskSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (TaskSearchResult & { entityId: string })[]
+      >,
   },
   expense: {
     lexicalCondition: (query) =>
@@ -422,8 +441,8 @@ const searchQueries = {
     load: (client, condition, limit) =>
       client
         .select({
-          id: expense.id,
-          shortcode: expense.shortcode,
+          entityId: expense.id,
+          id: expense.shortcode,
           name: expense.name,
           subtitle: project.name,
           entityType: sql<"expense">`'expense'`.as("entityType"),
@@ -439,7 +458,9 @@ const searchQueries = {
           and(eq(expense.projectId, project.id), notDeleted(project)),
         )
         .where(and(notDeleted(expense), condition))
-        .limit(limit) as Promise<ExpenseSearchResult[]>,
+        .limit(limit) as unknown as Promise<
+        (ExpenseSearchResult & { entityId: string })[]
+      >,
   },
 } satisfies Record<SearchableEntity, EntitySearchQuery>;
 
@@ -449,7 +470,7 @@ export async function globalSearch(
   query: string,
   limitPerType = 5,
   entityTypes: readonly SearchableEntity[] = searchableEntities,
-): Promise<SearchResultItem[]> {
+): Promise<InternalSearchResult[]> {
   const client = getDb(db);
   const resultGroups = await Promise.all(
     entityTypes.map((entityType) => {
@@ -473,7 +494,7 @@ interface SearchEntityRef {
 export async function hydrateSearchResultsByRefs(
   db: Database,
   refs: SearchEntityRef[],
-): Promise<SearchResultItem[]> {
+): Promise<InternalSearchResult[]> {
   const client = getDb(db);
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const ref of refs) {
@@ -494,7 +515,7 @@ export async function hydrateSearchResultsByRefs(
   const byKey = new Map(
     resultGroups
       .flat()
-      .map((item) => [`${item.entityType}:${item.id}`, item] as const),
+      .map((item) => [`${item.entityType}:${item.entityId}`, item] as const),
   );
   return refs.flatMap((ref) => {
     const item = byKey.get(`${ref.entityType}:${ref.entityId}`);

@@ -1,6 +1,6 @@
 import { fdcId, type NutrientKey } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { cookbookId, cookbookShortcode } from "./identifiers";
+import { cookbookShortcode } from "./identifiers";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = [
@@ -199,9 +199,7 @@ export const recipeSource = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("book"),
     book: z.string().min(1),
-    cookbookId: cookbookId.nullable(),
-    /** The cookbook's public id, so the source badge can link it. */
-    cookbookShortcode: cookbookShortcode.nullable(),
+    cookbookId: cookbookShortcode.nullable(),
   }),
   z.object({ type: z.literal("website"), url: z.url() }),
   // Notion-synced: `pageId` is the stable idempotency key (stored in SourceData);

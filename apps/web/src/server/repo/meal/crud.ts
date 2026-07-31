@@ -3,7 +3,12 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
+import {
+  type MealId,
+  type MealRecipeId,
+  type RecipeId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
@@ -37,8 +42,14 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbMealToAPI } from "./helpers";
+
+type MealMutationResult = { output: MealOut; entityId: MealId };
 
 export const MEAL_DELETE_EDGE_POLICY = {
   "MealRecipe.mealId": {
@@ -123,11 +134,11 @@ export const mealList = async (
   return { data: rows.map(dbMealToAPI), count };
 };
 
-export const createMeal = async (
+export const createMealWithEntityId = async (
   db: Database,
   data: MealCreateInput,
   actor: ActorContext,
-): Promise<MealOut> => {
+): Promise<MealMutationResult> => {
   const id = await withTransaction(db, async (tx) => {
     const created = await insertWithShortcode(tx, "meal", {
       date: data.date,
@@ -135,10 +146,26 @@ export const createMeal = async (
       sortOrder: data.sortOrder ?? null,
     });
     if (data.recipes?.length) {
+      const resolved = await resolveLiveShortcodes(
+        tx,
+        data.recipes.map((recipe) => recipe.recipeId),
+        "recipe",
+      );
+      const recipes: Array<MealRecipeInput & { entityId: RecipeId }> = [];
+      for (const recipe of data.recipes) {
+        const recipeId = resolved.get(recipe.recipeId);
+        if (!recipeId) {
+          throw createAppError(
+            "RECIPE_NOT_FOUND",
+            `Recipe ${recipe.recipeId} not found`,
+          );
+        }
+        recipes.push({ ...recipe, entityId: unsafeRecipeId(recipeId) });
+      }
       await tx.insert(mealRecipe).values(
-        data.recipes.map((r) => ({
+        recipes.map((r) => ({
           mealId: created.id,
-          recipeId: r.recipeId,
+          recipeId: r.entityId,
           scale: r.scale,
           sortOrder: r.sortOrder ?? null,
         })),
@@ -151,8 +178,14 @@ export const createMeal = async (
     });
     return created.id;
   });
-  return requireMeal(db, id);
+  return { output: await requireMeal(db, id), entityId: id };
 };
+
+export const createMeal = async (
+  db: Database,
+  data: MealCreateInput,
+  actor: ActorContext,
+): Promise<MealOut> => (await createMealWithEntityId(db, data, actor)).output;
 
 export const updateMeal = async (
   db: Database,
@@ -227,9 +260,16 @@ export const addRecipeToMeal = async (
   actor: ActorContext,
 ): Promise<MealOut> => {
   await withTransaction(db, async (tx) => {
+    const recipeId = await resolveLiveShortcode(tx, input.recipeId, "recipe");
+    if (!recipeId) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        `Recipe ${input.recipeId} not found`,
+      );
+    }
     await insertAndReturn(tx, mealRecipe, {
       mealId,
-      recipeId: input.recipeId,
+      recipeId: unsafeRecipeId(recipeId),
       scale: input.scale,
       sortOrder: input.sortOrder ?? null,
     });
@@ -260,7 +300,7 @@ const getMealIdForRecipe = async (
   return row.mealId;
 };
 
-export const updateMealRecipe = async (
+const updateMealRecipe = async (
   db: Database,
   id: MealRecipeId,
   data: { scale?: number; sortOrder?: number | null },
@@ -286,7 +326,18 @@ export const updateMealRecipe = async (
   return requireMeal(db, mealId);
 };
 
-export const removeMealRecipe = async (
+export const updateMealRecipeWithEntityId = async (
+  db: Database,
+  id: MealRecipeId,
+  data: { scale?: number; sortOrder?: number | null },
+  actor: ActorContext,
+): Promise<MealMutationResult> => {
+  const output = await updateMealRecipe(db, id, data, actor);
+  const mealId = await getMealIdForRecipe(db, id);
+  return { output, entityId: mealId };
+};
+
+const removeMealRecipe = async (
   db: Database,
   id: MealRecipeId,
   actor: ActorContext,
@@ -304,6 +355,16 @@ export const removeMealRecipe = async (
     });
   });
   return requireMeal(db, mealId);
+};
+
+export const removeMealRecipeWithEntityId = async (
+  db: Database,
+  id: MealRecipeId,
+  actor: ActorContext,
+): Promise<MealMutationResult> => {
+  const mealId = await getMealIdForRecipe(db, id);
+  const output = await removeMealRecipe(db, id, actor);
+  return { output, entityId: mealId };
 };
 
 /**

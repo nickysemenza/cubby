@@ -1,4 +1,4 @@
-import type { MealId } from "@cubby/schemas/identifiers";
+import type { MealShortcode } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -25,7 +25,7 @@ import { mealMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
-export function MealDetailPage({ mealId }: { mealId: MealId }) {
+export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const api = useTRPC();
   const invalidate = useInvalidateMeals();
 
@@ -267,7 +267,7 @@ function RecipeRow({
       className="rounded-lg border border-[var(--border)] p-2"
     >
       <Link
-        {...entityDetailLink("recipe", mr.recipe.shortcode)}
+        {...entityDetailLink("recipe", mr.recipe.id)}
         className="flex-1 truncate font-medium text-sm hover:underline"
         title={mr.recipe.name}
       >

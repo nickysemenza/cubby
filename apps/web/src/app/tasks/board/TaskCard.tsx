@@ -265,7 +265,6 @@ export function TaskCard({
                 truncate
                 data={{
                   id: task.projectId,
-                  shortcode: task.projectId,
                   name: task.projectName ?? "",
                 }}
               />

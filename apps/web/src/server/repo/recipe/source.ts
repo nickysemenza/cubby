@@ -1,6 +1,5 @@
 import {
   type CookbookId,
-  unsafeCookbookId,
   unsafeCookbookShortcode,
 } from "@cubby/schemas/identifiers";
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
@@ -64,7 +63,6 @@ function notionUrlFromId(pageId: string): string {
 export function recipeSourceFromDb({
   SourceType,
   SourceData,
-  cookbookId,
   cookbookShortcode,
 }: SourceColumns): RecipeSource {
   // `P.string.minLength(1)` preserves the original `&& SourceData` truthiness
@@ -76,8 +74,7 @@ export function recipeSourceFromDb({
         ({ SourceData }) => ({
           type: "book" as const,
           book: SourceData,
-          cookbookId: cookbookId ? unsafeCookbookId(cookbookId) : null,
-          cookbookShortcode: cookbookShortcode
+          cookbookId: cookbookShortcode
             ? unsafeCookbookShortcode(cookbookShortcode)
             : null,
         }),

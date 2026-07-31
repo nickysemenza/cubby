@@ -14,6 +14,14 @@ import {
   equivalenceReportSchema,
 } from "@cubby/schemas/equivalences";
 import {
+  type CookbookId,
+  type CookbookShortcode,
+  type RecipeId,
+  type RecipeShortcode,
+  unsafeCookbookId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
+import {
   type IngredientCooccurrence,
   ingredientCooccurrenceSchema,
 } from "@cubby/schemas/ingredient-cooccurrence";
@@ -38,14 +46,41 @@ import { streamProgress } from "~/lib/bulk-progress";
 import { harvestEquivalences } from "~/lib/harvest-equivalences";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
+import { createAppError } from "~/server/errors/app-error";
 import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
 import {
   getIngredientCooccurrence,
   getIngredientUsage,
   getRecipeDependencyGraph,
 } from "~/server/repo/recipe";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getIngredientsByIDs } from "~/server/services/ingredient.service";
 import { protectedProcedure } from "../../trpc";
+
+const resolveRecipeId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: RecipeShortcode,
+): Promise<RecipeId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "recipe");
+  if (!id)
+    throw createAppError("RECIPE_NOT_FOUND", `Recipe ${shortcode} not found`);
+  return unsafeRecipeId(id);
+};
+
+const resolveCookbookId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: CookbookShortcode | undefined,
+): Promise<CookbookId | undefined> => {
+  if (!shortcode) return undefined;
+  const id = await resolveLiveShortcode(db, shortcode, "cookbook");
+  if (!id) {
+    throw createAppError(
+      "COOKBOOK_NOT_FOUND",
+      `Cookbook ${shortcode} not found`,
+    );
+  }
+  return unsafeCookbookId(id);
+};
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
   .input(recipeCooccurrenceInput)
@@ -58,14 +93,20 @@ const getDependencyGraphEndpoint = protectedProcedure
   .input(recipeCookbookScopeInput)
   .output(recipeDependencyGraphSchema)
   .query(async ({ ctx, input }): Promise<RecipeDependencyGraph> => {
-    return await getRecipeDependencyGraph(ctx.db, input?.cookbookId);
+    return await getRecipeDependencyGraph(
+      ctx.db,
+      await resolveCookbookId(ctx.db, input?.cookbookId),
+    );
   });
 
 const getIngredientUsageEndpoint = protectedProcedure
   .input(recipeCookbookScopeInput)
   .output(ingredientUsageSchema)
   .query(async ({ ctx, input }): Promise<IngredientUsage> => {
-    return await getIngredientUsage(ctx.db, input?.cookbookId);
+    return await getIngredientUsage(
+      ctx.db,
+      await resolveCookbookId(ctx.db, input?.cookbookId),
+    );
   });
 
 // One-shot backfill: recompute every recipe's totals regardless of stale state.
@@ -128,7 +169,9 @@ const recomputeOne = protectedProcedure
   .input(recipeIdInput)
   .output(recipeRecomputeAllOut)
   .mutation(async ({ ctx, input }) => {
-    const processed = await ctx.services.recipeCosting.recompute([input.id]);
+    const processed = await ctx.services.recipeCosting.recompute([
+      await resolveRecipeId(ctx.db, input.id),
+    ]);
     return { processed };
   });
 
@@ -149,7 +192,9 @@ const explainCosting = protectedProcedure
   .input(recipeIdInput)
   .output(recipeCostingExplain)
   .query(async ({ ctx, input }) => {
-    return await ctx.services.recipeCosting.explainRecipe(input.id);
+    return await ctx.services.recipeCosting.explainRecipe(
+      await resolveRecipeId(ctx.db, input.id),
+    );
   });
 
 // Re-express a value in another unit of the SAME kind (oz→g, tbsp→cup):
@@ -190,10 +235,13 @@ const harvestEquivalencesEndpoint = protectedProcedure
 
     // Assemble each candidate ingredient's existing conversion graph (its
     // products' stored mappings + USDA portions/serving/nutrition + price).
+    const candidateIngredientIds = uniq(
+      candidates.map((c) => c.ingredientEntityId),
+    );
     const ingredients = await getIngredientsByIDs(
       ctx.db,
       ctx.usdaClient,
-      uniq(candidates.map((c) => c.ingredientId)),
+      candidateIngredientIds,
     );
     const mappingsById = new Map(
       ingredients.map((ing) => [ing.id, getIngredientMappings(ing)]),

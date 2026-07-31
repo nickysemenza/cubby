@@ -199,6 +199,11 @@ export const buildExpenseWhereClause = async (
     filters.purchaseId ? [filters.purchaseId] : [],
     "purchase",
   );
+  const productUuids = await toUuids(
+    db,
+    filters.productId ? [filters.productId] : [],
+    "product",
+  );
 
   // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
   // filters and ANDing them with each other and with the name search is the
@@ -216,7 +221,7 @@ export const buildExpenseWhereClause = async (
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),
       projectCondition,
-      eqAny(expense.productId, filters.productId),
+      eqAny(expense.productId, productUuids),
       // "linked" means productId IS NOT NULL — this deliberately includes
       // expenses whose product was later soft-deleted (those read back with
       // productId still set and productName null; see dbExpenseToAPI). The

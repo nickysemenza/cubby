@@ -10,6 +10,7 @@ import {
 } from "~/server/repo/background-jobs";
 import { createLocation } from "~/server/repo/location";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 describe("background job persistence", () => {
   const ctx = withTestDb();
@@ -83,6 +84,12 @@ describe("background job persistence", () => {
       makeLocationInput({ name: "Empty bin" }),
       ctx.actor,
     );
+    const locationEntityId = await resolveLiveShortcode(
+      ctx.db,
+      location.id,
+      "location",
+    );
+    expect(locationEntityId).not.toBeNull();
 
     const { batchId } = await dispatchBackgroundJobs(ctx.db, {
       kind: "location-ai.inventory.refresh",
@@ -90,8 +97,8 @@ describe("background job persistence", () => {
       jobs: [
         {
           kind: "location-ai.inventory.refresh",
-          dedupeKey: `test:location-ai:inventory:${location.id}`,
-          payload: { locationId: location.id },
+          dedupeKey: `test:location-ai:inventory:${locationEntityId}`,
+          payload: { locationId: locationEntityId! },
         },
       ],
     });

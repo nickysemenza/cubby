@@ -48,18 +48,8 @@ interface TaskDetailProps {
 }
 
 /** A blocked-by/blocking dependency link, name-only. */
-function TaskDependencyBadge({
-  id,
-  name,
-  shortcode,
-}: {
-  id: string;
-  name: string;
-  shortcode: string;
-}) {
-  return (
-    <EntityInlineLink entity="task" data={{ id, name, shortcode }} compact />
-  );
+function TaskDependencyBadge({ id, name }: { id: string; name: string }) {
+  return <EntityInlineLink entity="task" data={{ id, name }} compact />;
 }
 
 // Stable empty array — see CLAUDE.md's "unstable-hook-default" guard: an
@@ -136,7 +126,6 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
                 entity="task"
                 data={{
                   id: subtask.id,
-                  shortcode: subtask.id,
                   name: subtask.name,
                 }}
                 compact
@@ -226,7 +215,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         results
           .map((r) => r.data)
           .filter((d): d is TaskOut => d != null)
-          .map((d) => [d.id, { name: d.name, shortcode: d.id }] as const),
+          .map((d) => [d.id, { name: d.name }] as const),
       ),
     }),
   });
@@ -234,7 +223,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     ids
       .map((id) => {
         const dep = depsById.get(id);
-        return dep ? { id, name: dep.name, shortcode: dep.shortcode } : null;
+        return dep ? { id, name: dep.name } : null;
       })
       .filter((d): d is NonNullable<typeof d> => d != null);
   const blockedBy = resolveDeps(task.blockedByIds);
@@ -340,7 +329,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             entity="project"
             data={{
               id: task.projectId,
-              shortcode: task.projectId,
               name: task.projectName,
             }}
             compact
@@ -352,9 +340,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       value: (
         <EditableEntityCell<ProductShortcode>
           value={
-            task.subjectProductShortcode && task.subjectProductName
+            task.subjectProductId && task.subjectProductName
               ? {
-                  id: task.subjectProductShortcode,
+                  id: task.subjectProductId,
                   name: task.subjectProductName,
                 }
               : null
@@ -372,13 +360,12 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           renderValue={(value) =>
             value &&
             task.subjectProductId &&
-            value.id === task.subjectProductShortcode ? (
+            value.id === task.subjectProductId ? (
               <EntityInlineLink
                 entity="product"
                 data={{
                   id: task.subjectProductId,
                   name: value.name,
-                  shortcode: value.id,
                 }}
               />
             ) : value ? (
@@ -417,17 +404,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               label="task"
               excludeId={task.id}
               renderReadChip={(item) => {
-                // DependencyPicker's chip type is the generic {id,name} —
-                // resolve the public id from the same `depsById` map
-                // `blockedBy` was built from rather than widening that
-                // shared component.
-                const shortcode = depsById.get(item.id)?.shortcode;
-                return shortcode ? (
-                  <TaskDependencyBadge
-                    id={item.id}
-                    name={item.name}
-                    shortcode={shortcode}
-                  />
+                return depsById.has(item.id) ? (
+                  <TaskDependencyBadge id={item.id} name={item.name} />
                 ) : null;
               }}
             />
@@ -478,7 +456,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
                 entity="task"
                 data={{
                   id: task.parentTaskId,
-                  shortcode: task.parentTaskId,
                   name: task.parentTaskName,
                 }}
                 truncate
@@ -503,7 +480,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             entity="project"
             data={{
               id: task.projectId,
-              shortcode: task.projectId,
               name: task.projectName,
             }}
             truncate
@@ -547,7 +523,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         presetName={task.name}
         presetProjectId={task.projectId}
         presetTrade={task.trade}
-        presetSubjectProductId={task.subjectProductShortcode}
+        presetSubjectProductId={task.subjectProductId}
         presetSubjectProductName={task.subjectProductName}
       />
       {deleteDialog}

@@ -1,9 +1,9 @@
 import type {
-  IngredientId,
-  LocationId,
+  IngredientShortcode,
+  LocationShortcode,
   ProductShortcode,
   ProjectShortcode,
-  RecipeId,
+  RecipeShortcode,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
@@ -64,7 +64,7 @@ export interface WithEntitySearchProps<TId extends string = string> {
 
 export function WithIngredientSearch({
   children,
-}: WithEntitySearchProps<IngredientId>) {
+}: WithEntitySearchProps<IngredientShortcode>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -75,7 +75,7 @@ export function WithIngredientSearch({
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog<IngredientId>();
+  } = useEntitySearchWithDialog<IngredientShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   const { data, isLoading } = useQuery({
@@ -127,7 +127,7 @@ export function WithIngredientSearch({
 
 export function WithLocationSearch({
   children,
-}: WithEntitySearchProps<LocationId>) {
+}: WithEntitySearchProps<LocationShortcode>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -138,7 +138,7 @@ export function WithLocationSearch({
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog<LocationId>();
+  } = useEntitySearchWithDialog<LocationShortcode>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   const { data, isLoading } = useQuery({
@@ -225,7 +225,7 @@ export function WithProductSearch({
     invalidateKeys: productMutationInvalidateKeys,
     onSuccess: (newProduct) =>
       resolveWithEntity({
-        id: newProduct.shortcode,
+        id: newProduct.id,
         name: `${newProduct.name} (${newProduct.manufacturer})`,
       }),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
@@ -253,7 +253,7 @@ export function WithProductSearch({
       {children({
         items:
           data?.items.map((product) => ({
-            id: product.shortcode,
+            id: product.id,
             name: `${product.name} (${product.manufacturer})`,
           })) ?? [],
         onSearchChange,
@@ -267,7 +267,7 @@ export function WithProductSearch({
 
 export function WithRecipeSearch({
   children,
-}: WithEntitySearchProps<RecipeId>) {
+}: WithEntitySearchProps<RecipeShortcode>) {
   const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);

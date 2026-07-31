@@ -1,5 +1,6 @@
 import {
   unsafeInventoryId,
+  unsafeInventoryShortcode,
   unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductId,
@@ -132,8 +133,7 @@ describe("location mappers", () => {
     });
 
     expect(result).toMatchObject({
-      id: LOCATION_ID,
-      shortcode: unsafeLocationShortcode("LOC-TEST"),
+      id: unsafeLocationShortcode("LOC-TEST"),
       name: "Pantry",
       images: [{ id: IMAGE_ID, url: "https://example.com/location.jpg" }],
     });
@@ -181,30 +181,27 @@ describe("location mappers", () => {
     const result = dbLocationToListAPI(row);
 
     expect(result.parent).toEqual({
-      id: PARENT_ID,
-      shortcode: unsafeLocationShortcode("LOC-2345"),
+      id: unsafeLocationShortcode("LOC-2345"),
       name: "Kitchen",
       type: "room",
     });
     expect(locationListRefOut.parse(result.parent)).toEqual(result.parent);
     expect(result.children).toEqual([
       {
-        id: CHILD_ID,
-        shortcode: unsafeLocationShortcode("LOC-3456"),
+        id: unsafeLocationShortcode("LOC-3456"),
         name: "Shelf",
         type: "shelf",
       },
     ]);
     expect(result.inventoryEntries).toEqual([
       {
-        id: INVENTORY_ID,
+        id: unsafeInventoryShortcode("INV-2345"),
         amount: { value: 2, unit: "each" },
         valuation: 9,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         product: {
-          id: PRODUCT_ID,
-          shortcode: unsafeProductShortcode("PRD-TEST"),
+          id: unsafeProductShortcode("PRD-TEST"),
           name: "Flour",
           upc: null,
           fdc_id: null,

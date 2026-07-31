@@ -277,7 +277,7 @@ const RecipeDetailInner: React.FC<{
           <RecipeTotalsCoverageButton
             gaps={totalsGaps}
             currentRecipeId={recipe.id}
-            currentRecipeShortcode={recipe.shortcode}
+            currentRecipeShortcode={recipe.id}
           />
           <RecipeScaleControl
             recipe={recipe}
@@ -294,7 +294,7 @@ const RecipeDetailInner: React.FC<{
           />
           <Link
             to="/recipes/$shortcode/export"
-            params={{ shortcode: recipe.shortcode }}
+            params={{ shortcode: recipe.id }}
             search={{
               format: exportFormat,
               scale: factor === 1 ? undefined : factor,
@@ -425,7 +425,7 @@ const RecipeDetailInner: React.FC<{
             perServing={getServingBasis(scaledRecipe)}
             hideSummary
             gaps={totalsGaps}
-            recipeShortcode={recipe.shortcode}
+            recipeShortcode={recipe.id}
           />
         </Stack>
       )}

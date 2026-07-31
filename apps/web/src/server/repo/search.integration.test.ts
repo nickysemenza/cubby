@@ -1,16 +1,23 @@
+import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import {
   expenseCreateInput,
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
+import { globalSearchOut } from "@cubby/schemas/search";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
 import { createExpense } from "~/server/repo/expense";
-import { createMeal, deleteMeals } from "~/server/repo/meal";
+import {
+  createMeal,
+  createMealWithEntityId,
+  deleteMeals,
+} from "~/server/repo/meal";
 import { createProject } from "~/server/repo/project";
 import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask } from "~/server/repo/task";
 import { makeRecipeInput } from "./repo.fixtures";
 import { globalSearch, hydrateSearchResultsByRefs } from "./search";
@@ -65,7 +72,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Garage Rewire Manifest");
     const hit = results.find(
-      (r) => r.entityType === "project" && r.shortcode === project.id,
+      (r) => r.entityType === "project" && r.id === project.id,
     );
     expect(hit).toBeDefined();
     expect(hit?.entityType).toBe("project");
@@ -75,6 +82,11 @@ describe("globalSearch: tracker entities", () => {
       expect(hit.subtitle).toBe("renovation");
       expect(hit.typeHint).toBe("in_progress");
     }
+    const publicHit = globalSearchOut
+      .parse(results)
+      .find((row) => row.entityType === "project" && row.id === project.id);
+    expect(publicHit).not.toHaveProperty("entityId");
+    expect(publicHit).not.toHaveProperty("shortcode");
   });
 
   it("finds a project by notes text", async () => {
@@ -91,9 +103,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "manifest-notes-fence");
     expect(
-      results.some(
-        (r) => r.entityType === "project" && r.shortcode === project.id,
-      ),
+      results.some((r) => r.entityType === "project" && r.id === project.id),
     ).toBe(true);
   });
 
@@ -120,7 +130,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Manifest Sand The Deck");
     const hit = results.find(
-      (r) => r.entityType === "task" && r.shortcode === task.id,
+      (r) => r.entityType === "task" && r.id === task.id,
     );
     expect(hit).toBeDefined();
     if (hit?.entityType === "task") {
@@ -145,7 +155,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "plumbing");
     expect(
-      results.some((r) => r.entityType === "task" && r.shortcode === task.id),
+      results.some((r) => r.entityType === "task" && r.id === task.id),
     ).toBe(true);
   });
 
@@ -171,7 +181,7 @@ describe("globalSearch: tracker entities", () => {
 
     const results = await globalSearch(ctx.db, "Manifest Cordless Drill");
     const hit = results.find(
-      (r) => r.entityType === "expense" && r.shortcode === expense.id,
+      (r) => r.entityType === "expense" && r.id === expense.id,
     );
     expect(hit).toBeDefined();
     if (hit?.entityType === "expense") {
@@ -206,7 +216,7 @@ describe("globalSearch: tracker entities", () => {
     const tradeResults = await globalSearch(ctx.db, "electrical");
     expect(
       tradeResults.some(
-        (r) => r.entityType === "expense" && r.shortcode === byTrade.id,
+        (r) => r.entityType === "expense" && r.id === byTrade.id,
       ),
     ).toBe(true);
 
@@ -216,7 +226,7 @@ describe("globalSearch: tracker entities", () => {
     );
     expect(
       notesResults.some(
-        (r) => r.entityType === "expense" && r.shortcode === byNotes.id,
+        (r) => r.entityType === "expense" && r.id === byNotes.id,
       ),
     ).toBe(true);
   });
@@ -228,7 +238,7 @@ describe("globalSearch: cookbook and meal", () => {
   const ctx = withTestDb();
 
   it("finds a cookbook by title, author, and subject", async () => {
-    const cookbook = await upsertCookbook(
+    const { output: cookbook } = await upsertCookbook(
       ctx.db,
       {
         name: "Manifest Book Of Braises",
@@ -263,7 +273,7 @@ describe("globalSearch: cookbook and meal", () => {
   });
 
   it("excludes a soft-deleted cookbook", async () => {
-    const cookbook = await upsertCookbook(
+    const { output: cookbook, entityId: cookbookUuid } = await upsertCookbook(
       ctx.db,
       {
         name: "Manifest Deleted Cookbook",
@@ -272,7 +282,7 @@ describe("globalSearch: cookbook and meal", () => {
       },
       ctx.actor,
     );
-    await deleteCookbook(ctx.db, cookbook.id, ctx.actor);
+    await deleteCookbook(ctx.db, cookbookUuid, ctx.actor);
 
     const results = await globalSearch(ctx.db, "Manifest Deleted Cookbook");
     expect(
@@ -343,7 +353,13 @@ describe("globalSearch: cookbook and meal", () => {
 
     // Deleting a recipe soft-deletes the recipe but leaves its MealRecipe rows,
     // so recipeCount must join Recipe rather than count the join table alone.
-    await deleteRecipes(ctx.db, [drop.id], ctx.actor);
+    const dropEntityId = await resolveLiveShortcode(ctx.db, drop.id, "recipe");
+    expect(dropEntityId).not.toBeNull();
+    await deleteRecipes(
+      ctx.db,
+      [unsafeRecipeId(dropEntityId as string)],
+      ctx.actor,
+    );
 
     const results = await globalSearch(ctx.db, "Manifest Shrinking Supper");
     const hit = results.find(
@@ -370,12 +386,13 @@ describe("globalSearch: cookbook and meal", () => {
   });
 
   it("excludes a soft-deleted meal", async () => {
-    const meal = await createMeal(
-      ctx.db,
-      { date: "2026-05-05", name: "Manifest Deleted Meal" },
-      ctx.actor,
-    );
-    await deleteMeals(ctx.db, [meal.id], ctx.actor);
+    const { output: meal, entityId: mealEntityId } =
+      await createMealWithEntityId(
+        ctx.db,
+        { date: "2026-05-05", name: "Manifest Deleted Meal" },
+        ctx.actor,
+      );
+    await deleteMeals(ctx.db, [mealEntityId], ctx.actor);
 
     const results = await globalSearch(ctx.db, "Manifest Deleted Meal");
     expect(
@@ -397,14 +414,14 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
       }),
       ctx.actor,
     );
-    const { entityId: taskUuid } = await createTask(
+    const { output: task, entityId: taskUuid } = await createTask(
       ctx.db,
       mock(taskCreateInput, {
         overrides: { name: "Hydrate Ref Task", projectId: project.id },
       }),
       ctx.actor,
     );
-    const { entityId: expenseUuid } = await createExpense(
+    const { output: expense, entityId: expenseUuid } = await createExpense(
       ctx.db,
       mock(expenseCreateInput, {
         overrides: { name: "Hydrate Ref Expense", projectId: project.id },
@@ -423,7 +440,8 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
       "project",
       "task",
     ]);
-    expect(results.map((r) => r.id)).toEqual([
+    expect(results.map((r) => r.id)).toEqual([expense.id, project.id, task.id]);
+    expect(results.map((r) => r.entityId)).toEqual([
       expenseUuid,
       projectUuid,
       taskUuid,

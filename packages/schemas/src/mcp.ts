@@ -66,15 +66,11 @@ import {
   recipeIdOut,
   recipeMcpListOut,
   recipeMcpOut,
+  recipeOut,
   recipeRecomputeMcpOut,
   recipeTagsListOut,
   recipesUsingIngredientOut,
   type RecipeMcpOut,
-  mcpSectionIngredientRefFields,
-  recipeSectionFields,
-  recipeOutFields,
-  recipeTopLevelFields,
-  sectionLineFields,
 } from "./recipe";
 import {
   globalSearchInputSchema,
@@ -215,39 +211,7 @@ export const recipeAvailabilityMcpOut = z.object({
 
 export const scrapeRecipeMcpOut = importRecipeSchema;
 
-/**
- * `get_recipe`'s detail shape. Same as `recipeOut` except each section line's
- * `ingredient` names its ingredient by PUBLIC id — the shared shape carries the
- * uuid (the UI's hover preview fetches by it) plus a `shortcode` alongside, and
- * MCP publishes only the latter, as `id`, so an agent can feed it straight into
- * an ingredient tool.
- */
-const mcpSectionIngredient = z.discriminatedUnion("type", [
-  z.object({
-    ...sectionLineFields,
-    type: z.literal("ingredient"),
-    recipe: z.null(),
-    ingredient: z.object(mcpSectionIngredientRefFields),
-  }),
-  z.object({
-    ...sectionLineFields,
-    type: z.literal("recipe"),
-    recipe: z.object(recipeTopLevelFields),
-    ingredient: z.null(),
-  }),
-]);
-
-export const recipeDetailMcpOut = z.object({
-  ...recipeOutFields,
-  // The only difference from `recipeOut`: each line names its ingredient by
-  // public id.
-  sections: z.array(
-    z.object({
-      ...recipeSectionFields,
-      ingredients: z.array(mcpSectionIngredient),
-    }),
-  ),
-});
+export const recipeDetailMcpOut = recipeOut;
 
 export const recipeCostingExplainMcpOut = recipeCostingExplain;
 

@@ -677,33 +677,27 @@ function CalendarItemLink({ item }: { item: CalendarItem }) {
 
   if (item.kind === "meal") {
     return (
-      <Link {...entityDetailLink("meal", item.shortcode)} className={className}>
+      <Link {...entityDetailLink("meal", item.id)} className={className}>
         {content}
       </Link>
     );
   }
   if (item.kind === "task") {
     return (
-      <Link {...entityDetailLink("task", item.shortcode)} className={className}>
+      <Link {...entityDetailLink("task", item.id)} className={className}>
         {content}
       </Link>
     );
   }
   if (item.kind === "expense") {
     return (
-      <Link
-        {...entityDetailLink("expense", item.shortcode)}
-        className={className}
-      >
+      <Link {...entityDetailLink("expense", item.id)} className={className}>
         {content}
       </Link>
     );
   }
   return (
-    <Link
-      {...entityDetailLink("project", item.shortcode)}
-      className={className}
-    >
+    <Link {...entityDetailLink("project", item.id)} className={className}>
       {content}
     </Link>
   );

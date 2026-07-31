@@ -27,7 +27,7 @@ interface UseUpcLookupOptions {
  * ```tsx
  * const { lookupUpc, isPending } = useUpcLookup({
  *   onSuccess: (product) => {
- *     form.setValue('product', buildProductComboboxItem(product));
+ *     form.setValue('product', { id: product.id, name: product.name });
  *   },
  * });
  *

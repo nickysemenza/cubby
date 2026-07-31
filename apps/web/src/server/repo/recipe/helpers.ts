@@ -102,7 +102,7 @@ export const appearsInRecipesRefsForIngredientSql = (
   ingredientRef: string,
 ): string =>
   `(SELECT coalesce(jsonb_agg(rec ORDER BY rec->>'name'), '[]'::jsonb) FROM (` +
-  `SELECT DISTINCT jsonb_build_object('id', r."id", 'name', r."name") AS rec ` +
+  `SELECT DISTINCT jsonb_build_object('id', r."shortcode", 'name', r."name") AS rec ` +
   `FROM "RecipeSectionIngredient" rsi ` +
   `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
   `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
@@ -231,8 +231,7 @@ const sectionIngredientToAPI = (
       type: "ingredient",
       recipe: null,
       ingredient: {
-        id: ingredient.id,
-        shortcode: unsafeIngredientShortcode(ingredient.shortcode),
+        id: unsafeIngredientShortcode(ingredient.shortcode),
         name: ingredient.name,
         aliases: ingredient.aliases,
         createdAt: ingredient.createdAt,
@@ -262,8 +261,7 @@ export const dbRecipeToTopLevelShape = (
   // isn't spread into the output, but feed it to the source codec so a book
   // recipe's `source` carries its cookbook id (for linking).
   return {
-    id: recipeData.id,
-    shortcode: unsafeRecipeShortcode(recipeData.shortcode),
+    id: unsafeRecipeShortcode(recipeData.shortcode),
     name: recipeData.name,
     createdAt: recipeData.createdAt,
     updatedAt: recipeData.updatedAt,

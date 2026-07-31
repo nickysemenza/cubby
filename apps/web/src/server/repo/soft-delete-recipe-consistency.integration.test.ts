@@ -1,4 +1,4 @@
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,13 +11,17 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "./database-helpers";
 import {
-  createIngredient,
   deleteIngredients,
   getIngredientByID,
   ingredientList,
 } from "./ingredient";
-import { createRecipe, deleteRecipes } from "./recipe";
-import { ingredientRef, makeRecipeInput } from "./repo.fixtures";
+import { deleteRecipes } from "./recipe";
+import {
+  createIngredientFixture as createIngredient,
+  createRecipeFixture as createRecipe,
+  ingredientRef,
+  makeRecipeInput,
+} from "./repo.fixtures";
 import { globalSearch } from "./search";
 
 // Invariant: a soft-deleted recipe must vanish from EVERY "appears in N recipes"
@@ -32,7 +36,7 @@ import { globalSearch } from "./search";
 // global-search recipe count (which uses the same helper).
 const appearsInRecipesFromList = async (
   db: Database,
-  ingredientId: IngredientId,
+  ingredientId: IngredientShortcode,
 ) => {
   const { data } = await ingredientList(
     db,
@@ -45,7 +49,7 @@ const appearsInRecipesFromList = async (
 
 const searchRecipeCount = async (
   db: Database,
-  ingredientId: IngredientId,
+  ingredientId: IngredientShortcode,
   query: string,
 ) => {
   const results = await globalSearch(db, query);
@@ -64,7 +68,8 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       { name: "Soledad pepper", aliases: [] },
       ctx.actor,
     );
-    const ingredientId = ing.id as IngredientId;
+    const ingredientId = ing.entityId;
+    const ingredientCode = ing.id;
 
     const created = await createRecipe(
       ctx.db,
@@ -75,7 +80,7 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
             name: "Main",
             instructions: [{ instruction: "Simmer" }],
             ingredients: [
-              ingredientRef(ingredientId, {
+              ingredientRef(ingredientCode, {
                 amounts: [{ value: 1, unit: "cup" }],
               }),
             ],
@@ -89,14 +94,14 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(
       (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(1);
-    expect(await appearsInRecipesFromList(ctx.db, ingredientId)).toHaveLength(
+    expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       1,
     );
     expect(
-      await searchRecipeCount(ctx.db, ingredientId, "Soledad pepper"),
+      await searchRecipeCount(ctx.db, ingredientCode, "Soledad pepper"),
     ).toBe(1);
 
-    await deleteRecipes(ctx.db, [created.id as RecipeId], ctx.actor);
+    await deleteRecipes(ctx.db, [created.entityId], ctx.actor);
 
     // After soft-deleting the only recipe, every surface reads zero.
     expect(
@@ -105,11 +110,11 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(
       (await getIngredientByID(ctx.db, ingredientId)).recipeUsages,
     ).toHaveLength(0);
-    expect(await appearsInRecipesFromList(ctx.db, ingredientId)).toHaveLength(
+    expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       0,
     );
     expect(
-      await searchRecipeCount(ctx.db, ingredientId, "Soledad pepper"),
+      await searchRecipeCount(ctx.db, ingredientCode, "Soledad pepper"),
     ).toBe(0);
 
     // Data invariant: no live section/usage row may reference the dead recipe.
@@ -117,7 +122,10 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       .select({ id: recipeSection.id })
       .from(recipeSection)
       .where(
-        and(eq(recipeSection.recipeId, created.id), notDeleted(recipeSection)),
+        and(
+          eq(recipeSection.recipeId, created.entityId),
+          notDeleted(recipeSection),
+        ),
       );
     expect(liveSections).toHaveLength(0);
 
@@ -130,7 +138,7 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       )
       .where(
         and(
-          eq(recipeSection.recipeId, created.id),
+          eq(recipeSection.recipeId, created.entityId),
           notDeleted(recipeSectionIngredient),
         ),
       );
@@ -147,7 +155,8 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       { name: "Orphan oregano", aliases: [] },
       ctx.actor,
     );
-    const ingredientId = ing.id as IngredientId;
+    const ingredientId = ing.entityId;
+    const ingredientCode = ing.id;
 
     const created = await createRecipe(
       ctx.db,
@@ -158,7 +167,7 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
             name: "Main",
             instructions: [{ instruction: "Mix" }],
             ingredients: [
-              ingredientRef(ingredientId, {
+              ingredientRef(ingredientCode, {
                 amounts: [{ value: 1, unit: "cup" }],
               }),
             ],
@@ -172,16 +181,16 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     await getDb(ctx.db)
       .update(recipe)
       .set({ deletedAt: new Date() })
-      .where(eq(recipe.id, created.id));
+      .where(eq(recipe.id, created.entityId));
 
     expect(
       (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(0);
-    expect(await appearsInRecipesFromList(ctx.db, ingredientId)).toHaveLength(
+    expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
       0,
     );
     expect(
-      await searchRecipeCount(ctx.db, ingredientId, "Orphan oregano"),
+      await searchRecipeCount(ctx.db, ingredientCode, "Orphan oregano"),
     ).toBe(0);
   });
 });
@@ -198,7 +207,8 @@ describe("ingredient delete guard agrees with the live recipe count", () => {
       { name: "Orphan tarragon", aliases: [] },
       ctx.actor,
     );
-    const ingredientId = ing.id as IngredientId;
+    const ingredientId = ing.entityId;
+    const ingredientCode = ing.id;
 
     const created = await createRecipe(
       ctx.db,
@@ -209,7 +219,7 @@ describe("ingredient delete guard agrees with the live recipe count", () => {
             name: "Main",
             instructions: [{ instruction: "Mix" }],
             ingredients: [
-              ingredientRef(ingredientId, {
+              ingredientRef(ingredientCode, {
                 amounts: [{ value: 1, unit: "cup" }],
               }),
             ],
@@ -223,7 +233,7 @@ describe("ingredient delete guard agrees with the live recipe count", () => {
     await getDb(ctx.db)
       .update(recipe)
       .set({ deletedAt: new Date() })
-      .where(eq(recipe.id, created.id));
+      .where(eq(recipe.id, created.entityId));
 
     await expect(
       deleteIngredients(ctx.db, [ingredientId], ctx.actor),
@@ -243,7 +253,8 @@ describe("ingredient delete guard agrees with the live recipe count", () => {
       { name: "Live thyme", aliases: [] },
       ctx.actor,
     );
-    const ingredientId = ing.id as IngredientId;
+    const ingredientId = ing.entityId;
+    const ingredientCode = ing.id;
 
     await createRecipe(
       ctx.db,
@@ -254,7 +265,7 @@ describe("ingredient delete guard agrees with the live recipe count", () => {
             name: "Main",
             instructions: [{ instruction: "Mix" }],
             ingredients: [
-              ingredientRef(ingredientId, {
+              ingredientRef(ingredientCode, {
                 amounts: [{ value: 1, unit: "cup" }],
               }),
             ],

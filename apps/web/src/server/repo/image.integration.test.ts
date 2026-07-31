@@ -109,7 +109,7 @@ describe("image repository", () => {
   // regression covers).
   it("a PENDING image referenced only by a live cookbook's coverImageId survives the pending cull", async () => {
     const pending = await makePendingImage();
-    const { id: cookbookId } = await upsertCookbook(
+    const { entityId: cookbookId } = await upsertCookbook(
       ctx.db,
       { name: "Cover Test Book", rawJson: [], sourceLabel: "Cover Test Book" },
       ctx.actor,
@@ -136,7 +136,7 @@ describe("image repository", () => {
   // Cookbook_coverImageId_fkey.
   it("a PENDING image referenced by a SOFT-DELETED cookbook's coverImageId also survives the pending cull", async () => {
     const pending = await makePendingImage();
-    const { id: cookbookId } = await upsertCookbook(
+    const { entityId: cookbookId } = await upsertCookbook(
       ctx.db,
       {
         name: "Deleted Cover Test Book",
@@ -274,7 +274,7 @@ describe("image repository — purchase (charge) documents", () => {
 
     const found = await getImageById(ctx.db, uploaded.id);
     expect(found.entityType).toEqual("PURCHASE");
-    expect(found.entityId).toEqual(charge.uuid);
+    expect(found.entityId).toEqual(charge.id);
     expect(found.entityName).toEqual("PO-2002");
   });
 });

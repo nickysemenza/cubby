@@ -14,11 +14,12 @@ import {
   upsertEntityEmbedding,
 } from "~/server/repo/entity-embedding";
 import { createExpense } from "~/server/repo/expense";
-import { createInventoryEntry } from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { createProduct, deleteProducts } from "~/server/repo/product";
+import { deleteProducts } from "~/server/repo/product";
 import { createProject, updateProject } from "~/server/repo/project";
 import {
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -62,7 +63,7 @@ describe("mutation side effects integration", () => {
       mock(taskCreateInput, {
         overrides: {
           name: "Maintain manifest tarp",
-          subjectProductId: product.shortcode,
+          subjectProductId: product.id,
         },
       }),
       ctx.actor,
@@ -70,7 +71,7 @@ describe("mutation side effects integration", () => {
 
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "product", entityId: product.id },
+      entity: { entityType: "product", entityId: product.entityId },
       source: "test.product.update",
     });
 
@@ -91,10 +92,10 @@ describe("mutation side effects integration", () => {
     expect(jobs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          payload: { entityType: "product", entityId: product.id },
+          payload: { entityType: "product", entityId: product.entityId },
         }),
         expect.objectContaining({
-          payload: { entityType: "inventory", entityId: inventory.id },
+          payload: { entityType: "inventory", entityId: inventory.entityId },
         }),
         expect.objectContaining({
           payload: { entityType: "task", entityId: taskId },
@@ -181,7 +182,7 @@ describe("mutation side effects integration", () => {
 
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "location", entityId: location.id },
+      entity: { entityType: "location", entityId: location.entityId },
       source: "test.location.update",
       locationImagesChanged: true,
     });
@@ -213,7 +214,7 @@ describe("mutation side effects integration", () => {
     // fingerprint includes the name, so it would otherwise be a paid cache miss.
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "location", entityId: location.id },
+      entity: { entityType: "location", entityId: location.entityId },
       source: "test.location.rename",
     });
 
@@ -260,7 +261,10 @@ describe("mutation side effects integration", () => {
       ctx.db,
       entries.map((entry) => ({
         action: "updated" as const,
-        entity: { entityType: "inventory" as const, entityId: entry.id },
+        entity: {
+          entityType: "inventory" as const,
+          entityId: entry.entityId,
+        },
         source: "test.inventory.bulk",
       })),
     );
@@ -306,7 +310,10 @@ describe("mutation side effects integration", () => {
       ctx.db,
       entries.map((entry) => ({
         action: "created" as const,
-        entity: { entityType: "inventory" as const, entityId: entry.id },
+        entity: {
+          entityType: "inventory" as const,
+          entityId: entry.entityId,
+        },
         source: "test.embedding.bulk",
       })),
     );
@@ -331,7 +338,7 @@ describe("mutation side effects integration", () => {
         entries.map((entry) =>
           expect.objectContaining({
             entityType: "inventory",
-            entityId: entry.id,
+            entityId: entry.entityId,
           }),
         ),
       ),
@@ -347,7 +354,7 @@ describe("mutation side effects integration", () => {
     const config = getSemanticEmbeddingConfig();
     await upsertEntityEmbedding(ctx.db, {
       entityType: "product",
-      entityId: product.id,
+      entityId: product.entityId,
       embeddingText: "product: Manifest deleted embedding",
       config,
       embedding: Array.from({ length: config.dimensions }, () => 0),
@@ -356,11 +363,11 @@ describe("mutation side effects integration", () => {
     // Embedding cleanup lives in the repo delete cascade (not the mutation
     // side-effect), so it covers EVERY delete caller — including direct repo
     // deletes that skip runMutationSideEffects.
-    await deleteProducts(ctx.db, [product.id], ctx.actor);
+    await deleteProducts(ctx.db, [product.entityId], ctx.actor);
 
     const deletedAt = await getEntityEmbeddingDeletedAtForRef(ctx.db, {
       entityType: "product",
-      entityId: product.id,
+      entityId: product.entityId,
     });
     expect(deletedAt).toBeInstanceOf(Date);
   });

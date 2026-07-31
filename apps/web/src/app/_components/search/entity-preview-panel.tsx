@@ -52,19 +52,17 @@ export function EntityPreviewPanel({
   const entityDef = entities[entityType];
 
   // usda-food/image stay keyed on `$id` (never shortcode-routed). Every other
-  // entity's `getByID` payload carries `shortcode` when the underlying schema
-  // has one; falling back to the raw `id` for the entities that don't yet
-  // (ingredient/vendor/project/task/expense/purchase/meal/cookbook/inventory)
-  // matches this panel's pre-cutover behavior rather than fabricating a link.
+  // Public entity payloads carry their shortcode in `id`; fall back to the
+  // requested id when a specialized payload does not expose an id field.
   const detailLinkParams =
     entityType === "usda-food" || entityType === "image"
       ? { id }
       : entityDetailParams(
           data &&
             typeof data === "object" &&
-            "shortcode" in data &&
-            typeof data.shortcode === "string"
-            ? data.shortcode
+            "id" in data &&
+            typeof data.id === "string"
+            ? data.id
             : id,
         );
 

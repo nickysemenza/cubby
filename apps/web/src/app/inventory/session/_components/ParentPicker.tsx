@@ -183,7 +183,7 @@ export function ParentPicker({
                 <Button
                   type="button"
                   className="min-h-12 shrink-0"
-                  onClick={() => onSelect(pass.location.shortcode)}
+                  onClick={() => onSelect(pass.location.id)}
                 >
                   Resume
                 </Button>
@@ -214,7 +214,7 @@ export function ParentPicker({
                 sheetDescription="Start a recount at the scanned location."
                 onResolved={(locationId, shortcode) => {
                   const resolved =
-                    shortcode ?? locationsById.get(locationId)?.shortcode;
+                    shortcode ?? locationsById.get(locationId)?.id;
                   if (!resolved) {
                     toast.error("Could not resolve that location's shortcode.");
                     return undefined;
@@ -261,11 +261,11 @@ export function ParentPicker({
                   key={location.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onSelect(location.shortcode)}
+                  onClick={() => onSelect(location.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelect(location.shortcode);
+                      onSelect(location.id);
                     }
                   }}
                   className="w-full border-[var(--border)] border-b bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted" /* tight: compact tree picker row */

@@ -30,7 +30,7 @@ import { registerUsdaTools } from "./tools/usda.tools";
 
 export const MCP_SERVER_INSTRUCTIONS = `Cubby MCP — personal pantry, recipe, and meal-planning API.
 
-Ids are public shortcodes, not uuids. Every id you receive back from a tool and every id field you fill in is a short prefixed code (e.g. PRD-4K7M) — the uuid primary key behind it never crosses this API. The prefix names the entity, so a code is self-describing:
+Entity ids are public shortcodes, not uuids. Every top-level entity id you receive back from a tool and every entity relationship id you fill in is a short prefixed code (e.g. PRD-4K7M) — the uuid primary key behind it never crosses this API. The prefix names the entity, so a code is self-describing:
 - PRD- product
 - RCP- recipe
 - ING- ingredient
@@ -45,7 +45,7 @@ Ids are public shortcodes, not uuids. Every id you receive back from a tool and 
 - CKB- cookbook
 A code with the wrong prefix for the field it's passed to (a LOC- code where a tool wants a product) is rejected by input validation before the tool runs, so a mismatched or unresolvable code never reaches a write.
 
-Declared exceptions — these stay raw uuids because no shortcode exists for them: the mealRecipe \`id\` inside a meal's recipes[] (update_meal_recipe / remove_meal_recipe take THIS, not the recipe's own shortcode), a recipe section-ingredient's line \`id\`, image ids (attach_file's response, update_purchase's removeImageIds/imageOrder), and USDA's \`fdc_id\` (an external USDA identifier, not a cubby entity).
+Declared exceptions — these stay raw uuids because no public entity shortcode exists for them: image ids; the mealRecipe \`id\` inside a meal's recipes[]; recipe section and section-line ids; unit-mapping ids; background job/batch ids; and orphan/liveness diagnostics whose row may no longer resolve. USDA \`fdc_id\` is also retained as an external USDA identifier rather than a Cubby id.
 
 Workflow tips:
 - Turn a name into an id with list_*/search_*/get_* (or global_search across every indexed entity at once) before writing — you get a shortcode back, ready to pass straight into the next call.

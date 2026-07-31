@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { ShortcodeEntity } from "./entity-manifest";
+import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
 import { id } from "./identifiers";
 
@@ -149,6 +151,14 @@ export const attachableImageEntity = z.enum([
 ]);
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
+const attachableImageEntities = attachableImageEntity.options as unknown as [
+  ShortcodeEntity,
+  ...ShortcodeEntity[],
+];
+export const attachableImageEntityId = anyShortcodeSchema(
+  attachableImageEntities,
+);
+
 // Field map (not a z.object) so the MCP tool can consume `.shape` directly; the
 // cross-field "exactly one of url/data" rule — which JSON Schema can't express —
 // lives in `mcpAttachFileInput`'s refine (used by the tRPC procedure).
@@ -156,7 +166,7 @@ export const attachFileFields = {
   entityType: attachableImageEntity.describe(
     "Target entity type to attach the file to",
   ),
-  entityId: id.describe("ID of the target entity"),
+  entityId: attachableImageEntityId.describe("Shortcode of the target entity"),
   url: z
     .url()
     .optional()
@@ -195,7 +205,7 @@ export const attachFileResponse = z.object({
   contentType: z.string(),
   kind: z.enum(["image", "document"]),
   entityType: attachableImageEntity,
-  entityId: id,
+  entityId: attachableImageEntityId,
 });
 export type AttachFileResponse = z.infer<typeof attachFileResponse>;
 
@@ -246,9 +256,8 @@ export const imageWithEntitySchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
   entityType: entityImage.nullable(),
-  entityId: id.nullable(),
+  entityId: attachableImageEntityId.nullable(),
   entityName: z.string().nullable(),
-  entityShortcode: z.string().nullable(),
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;

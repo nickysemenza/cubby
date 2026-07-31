@@ -376,9 +376,9 @@ function RowGroup({
                 <ChevronRight className="size-3.5" />
               )}
             </button>
-            {item.ingredientShortcode ? (
+            {item.ingredientId ? (
               <Link
-                {...entityDetailLink("ingredient", item.ingredientShortcode)}
+                {...entityDetailLink("ingredient", item.ingredientId)}
                 title={item.name}
                 className={cn(
                   "font-medium hover:underline",
@@ -429,7 +429,7 @@ function RowGroup({
             <TableCell className="py-1" />
             <TableCell className="whitespace-normal py-1 pl-6">
               <Link
-                {...entityDetailLink("meal", c.mealShortcode)}
+                {...entityDetailLink("meal", c.mealId)}
                 className="hover:underline"
               >
                 {c.mealName || "Meal"} · {format(parseISO(c.date), "EEE M/d")}
@@ -437,7 +437,7 @@ function RowGroup({
               <span className="ml-1">
                 — {c.scale !== 1 ? `${c.scale}× ` : ""}
                 <Link
-                  {...entityDetailLink("recipe", c.recipeShortcode)}
+                  {...entityDetailLink("recipe", c.recipeId)}
                   title={c.recipeName}
                   className="hover:underline"
                 >

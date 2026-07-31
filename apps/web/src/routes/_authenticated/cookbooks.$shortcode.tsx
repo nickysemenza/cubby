@@ -1,4 +1,4 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, RefreshCw, Trash } from "lucide-react";
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
 function CookbookDetailPage() {
   // The URL carries the cookbook's public shortcode; the browse-index query
   // (already cached after navigating from /cookbooks) resolves it to the row,
-  // and everything below still keys on the branded `CookbookId` off that row.
+  // and everything below keys on the canonical shortcode id off that row.
   const { shortcode } = Route.useParams();
   const { tab } = Route.useSearch();
   const api = useTRPC();
@@ -56,7 +56,7 @@ function CookbookDetailPage() {
   // Name + recipe count for the hero. Reuses the browse-index query, which is
   // already cached after navigating from /cookbooks; falls back gracefully.
   const { data: cookbooks } = useQuery(api.recipe.listCookbooks.queryOptions());
-  const cookbook = cookbooks?.find((c) => c.shortcode === shortcode);
+  const cookbook = cookbooks?.find((c) => c.id === shortcode);
   const cookbookId = cookbook?.id;
   const name = cookbook?.book ?? "Cookbook";
   const recipeCount = cookbook?.recipeCount;
@@ -79,7 +79,7 @@ function CookbookDetailPage() {
   >();
   // Takes the id rather than closing over it: this is declared above the
   // "not resolved yet" guard below, where `cookbookId` is still optional.
-  const runReprocess = (id: CookbookId) =>
+  const runReprocess = (id: CookbookShortcode) =>
     reprocess.start(
       () => client.recipe.reprocessCookbook.mutate({ cookbookId: id }),
       {

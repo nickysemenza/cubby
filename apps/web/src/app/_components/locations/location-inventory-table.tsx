@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
@@ -40,14 +40,14 @@ type InventoryItem = z.infer<typeof inventoryListItemOut>;
  * one React Query cache entry. They diverge once the user sorts or pages,
  * which is correct: the table is then showing something else.
  */
-export const locationInventoryListInput = (locationId: LocationId) => ({
+export const locationInventoryListInput = (locationId: LocationShortcode) => ({
   sort: [{ orderBy: "createdAt", direction: "desc" as const }],
   pagination: { pageIndex: 0, pageSize: 100 },
   filters: { locationIdFilter: locationId },
 });
 
 interface LocationInventoryTableProps {
-  locationId: LocationId;
+  locationId: LocationShortcode;
   /** Shelf/table switch — owned by the parent (LocationContents) toolbar. */
   view: ShelfView;
 }
@@ -155,10 +155,7 @@ export function LocationInventoryTable({
         // here points at the product or location. Same treatment as the
         // /inventory index list.
         renderDisplay: (content, row) => (
-          <Link
-            to="/inventory/$shortcode"
-            params={{ shortcode: row.shortcode }}
-          >
+          <Link to="/inventory/$shortcode" params={{ shortcode: row.id }}>
             {content}
           </Link>
         ),

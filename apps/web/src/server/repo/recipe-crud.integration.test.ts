@@ -1,4 +1,3 @@
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { and, desc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -12,11 +11,8 @@ import {
 } from "~/server/db/schema";
 import { upsertCookbook } from "./cookbook";
 import { getDb, notDeleted } from "./database-helpers";
-import { createIngredient } from "./ingredient";
-import { createMeal, deleteMeals, getMealByID } from "./meal";
-import { createProduct } from "./product";
+import { deleteMeals, getMealByID } from "./meal";
 import {
-  createRecipe,
   deleteRecipes,
   getRecipeByID,
   recipeList,
@@ -27,6 +23,10 @@ import {
 } from "./recipe";
 import type { RecipeFilters } from "./recipe/internal-types";
 import {
+  createIngredientFixture as createIngredient,
+  createMealFixture as createMeal,
+  createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
   ingredientRef,
   makeProductInput,
   makeRecipeInput,
@@ -39,14 +39,14 @@ import {
 
 describe("recipe crud repo", () => {
   const ctx = withTestDb();
-  let flourId: IngredientId;
+  let flourCode: IngredientShortcode;
   beforeEach(async () => {
     const flour = await createIngredient(
       ctx.db,
       { name: "Flour", aliases: [] },
       ctx.actor,
     );
-    flourId = flour.id;
+    flourCode = flour.id;
   });
 
   const recipeWith = (name: string, ingredientId: string) =>
@@ -71,20 +71,23 @@ describe("recipe crud repo", () => {
 
   describe("deleteRecipes", () => {
     it("soft-deletes the recipe and cascades to its sections and ingredients", async () => {
-      const recipe = await recipeWith("Doomed", flourId);
+      const recipe = await recipeWith("Doomed", flourCode);
       const sectionId = recipe.sections[0]!.id;
 
-      await deleteRecipes(ctx.db, [recipe.id as RecipeId], ctx.actor);
+      await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
       // Excluded from reads.
-      expect(await getRecipeByID(ctx.db, recipe.id as RecipeId)).toBeNull();
+      expect(await getRecipeByID(ctx.db, recipe.entityId)).toBeNull();
 
       // Section + ingredient rows still exist but are soft-deleted (excluded by notDeleted).
       const liveSections = await getDb(ctx.db)
         .select({ id: recipeSection.id })
         .from(recipeSection)
         .where(
-          and(eq(recipeSection.recipeId, recipe.id), notDeleted(recipeSection)),
+          and(
+            eq(recipeSection.recipeId, recipe.entityId),
+            notDeleted(recipeSection),
+          ),
         );
       expect(liveSections).toHaveLength(0);
 
@@ -101,14 +104,17 @@ describe("recipe crud repo", () => {
     });
 
     it("writes a delete audit row with cascade counts", async () => {
-      const recipe = await recipeWith("Audited", flourId);
-      await deleteRecipes(ctx.db, [recipe.id as RecipeId], ctx.actor);
+      const recipe = await recipeWith("Audited", flourCode);
+      await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
       const [entry] = await getDb(ctx.db)
         .select()
         .from(auditLog)
         .where(
-          and(eq(auditLog.entityId, recipe.id), eq(auditLog.action, "delete")),
+          and(
+            eq(auditLog.entityId, recipe.entityId),
+            eq(auditLog.action, "delete"),
+          ),
         )
         .limit(1);
 
@@ -133,7 +139,7 @@ describe("recipe crud repo", () => {
         ctx.db,
         makeProductInput({
           name: "Meal Flour Product",
-          ingredientId: flourId,
+          ingredientId: flourCode,
           unitMappings: [
             {
               a: { value: 1, unit: "lb" },
@@ -152,7 +158,9 @@ describe("recipe crud repo", () => {
             {
               instructions: [{ instruction: "Mix" }],
               ingredients: [
-                ingredientRef(flourId, { amounts: [{ value: 1, unit: "lb" }] }),
+                ingredientRef(flourCode, {
+                  amounts: [{ value: 1, unit: "lb" }],
+                }),
               ],
             },
           ],
@@ -164,7 +172,7 @@ describe("recipe crud repo", () => {
       // nutrition data).
       await createTestTRPCContext(ctx.db, {
         auth: { userId: ctx.actor.userId },
-      }).services.recipeCosting.recompute([recipe.id as RecipeId]);
+      }).services.recipeCosting.recompute([recipe.entityId]);
 
       const planned = await createMeal(
         ctx.db,
@@ -186,20 +194,20 @@ describe("recipe crud repo", () => {
       const [linkBefore] = await getDb(ctx.db)
         .select({ deletedAt: mealRecipe.deletedAt })
         .from(mealRecipe)
-        .where(eq(mealRecipe.mealId, planned.id));
+        .where(eq(mealRecipe.mealId, planned.entityId));
       expect(linkBefore?.deletedAt).toBeNull();
 
-      await deleteRecipes(ctx.db, [recipe.id as RecipeId], ctx.actor);
+      await deleteRecipes(ctx.db, [recipe.entityId], ctx.actor);
 
       // 1. The MealRecipe row itself is soft-deleted, not left dangling.
       const [linkAfter] = await getDb(ctx.db)
         .select({ deletedAt: mealRecipe.deletedAt })
         .from(mealRecipe)
-        .where(eq(mealRecipe.mealId, planned.id));
+        .where(eq(mealRecipe.mealId, planned.entityId));
       expect(linkAfter?.deletedAt).not.toBeNull();
 
       // 2. Reading the meal no longer lists the deleted recipe.
-      const after = await getMealByID(ctx.db, planned.id);
+      const after = await getMealByID(ctx.db, planned.entityId);
       expect(after?.recipes).toHaveLength(0);
 
       // 3. Its cost/calorie contribution is dropped from the rollup entirely
@@ -218,7 +226,10 @@ describe("recipe crud repo", () => {
         .select()
         .from(auditLog)
         .where(
-          and(eq(auditLog.entityId, recipe.id), eq(auditLog.action, "delete")),
+          and(
+            eq(auditLog.entityId, recipe.entityId),
+            eq(auditLog.action, "delete"),
+          ),
         )
         .limit(1);
       expect(entry?.changes?.cascadedMealRecipes).toEqual({ from: 1, to: 0 });
@@ -297,7 +308,7 @@ describe("recipe crud repo", () => {
     });
 
     it("upsertRecipe (web) does not collide with a same-named cookbook recipe", async () => {
-      const { id: cookbookId } = await upsertCookbook(
+      const { entityId: cookbookId } = await upsertCookbook(
         ctx.db,
         { name: "Book A", rawJson: [], sourceLabel: "Book A" },
         ctx.actor,
@@ -334,11 +345,11 @@ describe("recipe crud repo", () => {
         { name: "Sugar", aliases: [] },
         ctx.actor,
       );
-      const recipe = await recipeWith("Editable", flourId);
+      const recipe = await recipeWith("Editable", flourCode);
 
       await updateRecipe(
         ctx.db,
-        recipe.id as RecipeId,
+        recipe.entityId,
         {
           sections: [
             {
@@ -355,7 +366,7 @@ describe("recipe crud repo", () => {
         ctx.actor,
       );
 
-      const full = await getRecipeByID(ctx.db, recipe.id as RecipeId);
+      const full = await getRecipeByID(ctx.db, recipe.entityId);
       const ingredients = full!.sections.flatMap((s) => s.ingredients);
       const names = ingredients.flatMap((i) =>
         i.type === "ingredient" ? [i.ingredient.name] : [],
@@ -365,10 +376,10 @@ describe("recipe crud repo", () => {
     });
 
     it("writes an audit diff when the name changes", async () => {
-      const recipe = await recipeWith("Old Name", flourId);
+      const recipe = await recipeWith("Old Name", flourCode);
       await updateRecipe(
         ctx.db,
-        recipe.id as RecipeId,
+        recipe.entityId,
         { name: "New Name" },
         ctx.actor,
       );
@@ -377,7 +388,10 @@ describe("recipe crud repo", () => {
         .select()
         .from(auditLog)
         .where(
-          and(eq(auditLog.entityId, recipe.id), eq(auditLog.action, "update")),
+          and(
+            eq(auditLog.entityId, recipe.entityId),
+            eq(auditLog.action, "update"),
+          ),
         )
         .orderBy(desc(auditLog.createdAt))
         .limit(1);
@@ -489,7 +503,7 @@ describe("recipe crud repo", () => {
           },
           ctx.actor,
         );
-        await deleteMeals(ctx.db, [doomed.id], ctx.actor);
+        await deleteMeals(ctx.db, [doomed.entityId], ctx.actor);
 
         expect(await listNames({ mealPresenceFilter: "has" })).toEqual([]);
         expect(await listNames({ mealPresenceFilter: "none" })).toEqual([
@@ -499,3 +513,5 @@ describe("recipe crud repo", () => {
     });
   });
 });
+
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";

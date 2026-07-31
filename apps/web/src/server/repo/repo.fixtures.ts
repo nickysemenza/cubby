@@ -1,10 +1,21 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type IngredientShortcode,
+  unsafeIngredientId,
+  unsafeIngredientShortcode,
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeMealId,
+  unsafeProductId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import {
   type LocationCreateInput,
   locationCreateInput,
 } from "@cubby/schemas/location";
+import type { MealCreateInput } from "@cubby/schemas/meal";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
@@ -13,7 +24,10 @@ import type { Database } from "~/server/db";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
+import { createMeal } from "./meal";
 import { createProduct } from "./product";
+import { createRecipe } from "./recipe";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 
 // Shared fixture builders for the repo integration tests. Each factory states
 // the irrelevant scaffolding fields once so a test only spells out the values
@@ -27,23 +41,158 @@ type RecipeIngredientInput = NonNullable<
   RecipeCreateInput["sections"][number]["ingredients"]
 >[number];
 
-/** A product create input with sensible defaults; override what the test cares about. */
-export const makeProductInput = (
-  overrides: Partial<ProductCreateInput> = {},
-): ProductCreateInput => ({
-  name: "Test Product",
-  aliases: [],
-  tags: [],
-  manufacturer: "Test Manufacturer",
-  model: "TEST-123",
-  upc: null,
-  fdc_id: null,
-  expectedQuantity: null,
-  ingredientId: null,
-  unitMappings: [],
-  externalIds: [],
-  ...overrides,
-});
+type ProductFixtureInput<
+  Ingredient extends IngredientId | IngredientShortcode | null | undefined,
+> = Omit<ProductCreateInput, "ingredientId"> & {
+  ingredientId: Ingredient extends undefined ? null : Ingredient;
+};
+
+/**
+ * A product create input with sensible defaults; override what the test cares
+ * about. The ingredient brand is preserved so the same test-only builder can
+ * seed the UUID-only repo boundary or exercise the shortcode-only router.
+ */
+export const makeProductInput = <
+  Ingredient extends
+    | IngredientId
+    | IngredientShortcode
+    | null
+    | undefined = undefined,
+>(
+  overrides: Omit<Partial<ProductCreateInput>, "ingredientId"> & {
+    ingredientId?: Ingredient;
+  } = {},
+): ProductFixtureInput<Ingredient> =>
+  ({
+    name: "Test Product",
+    aliases: [],
+    tags: [],
+    manufacturer: "Test Manufacturer",
+    model: "TEST-123",
+    upc: null,
+    fdc_id: null,
+    expectedQuantity: null,
+    ingredientId: null,
+    unitMappings: [],
+    externalIds: [],
+    ...overrides,
+  }) as ProductFixtureInput<Ingredient>;
+
+/**
+ * Create a product for a repo integration test while retaining both sides of
+ * the boundary. Public assertions use `id`; UUID-only repo writes use
+ * `entityId`. A public ingredient id is resolved here so callers never cast a
+ * shortcode into a FK brand.
+ */
+export const createProductFixture = async (
+  db: Database,
+  data: Omit<ProductCreateInput, "ingredientId"> & {
+    ingredientId?: string | null;
+  },
+  actor: ActorContext,
+) => {
+  const rawIngredientId = data.ingredientId ?? null;
+  const resolvedIngredientId = rawIngredientId?.startsWith("ING-")
+    ? await resolveLiveShortcode(db, rawIngredientId, "ingredient")
+    : rawIngredientId;
+  if (rawIngredientId && !resolvedIngredientId) {
+    throw new Error(`fixture: ingredient ${rawIngredientId} not found`);
+  }
+  const output = await createProduct(
+    db,
+    {
+      ...data,
+      ingredientId: resolvedIngredientId
+        ? unsafeIngredientId(resolvedIngredientId)
+        : null,
+    },
+    actor,
+  );
+  const resolvedProductId = await resolveLiveShortcode(
+    db,
+    output.id,
+    "product",
+  );
+  if (!resolvedProductId) throw new Error("fixture: created product not found");
+  return { ...output, entityId: unsafeProductId(resolvedProductId) };
+};
+
+/** Public ingredient output plus its private UUID for repo-only writes. */
+export const createIngredientFixture = async (
+  db: Database,
+  data: Parameters<typeof createIngredient>[1],
+  actor: ActorContext,
+) => {
+  const output = await createIngredient(db, data, actor);
+  const resolvedIngredientId = await resolveLiveShortcode(
+    db,
+    output.id,
+    "ingredient",
+  );
+  if (!resolvedIngredientId) throw new Error("fixture: ingredient not found");
+  return { ...output, entityId: unsafeIngredientId(resolvedIngredientId) };
+};
+
+/** Public location output plus the UUID needed by repo-only fixture writes. */
+export const createLocationFixture = async (
+  db: Database,
+  data: LocationCreateInput,
+  actor: ActorContext,
+) => {
+  const output = await createLocation(db, data, actor);
+  if (!output) throw new Error("fixture: location not created");
+  const resolvedLocationId = await resolveLiveShortcode(
+    db,
+    output.id,
+    "location",
+  );
+  if (!resolvedLocationId)
+    throw new Error("fixture: created location not found");
+  return { ...output, entityId: unsafeLocationId(resolvedLocationId) };
+};
+
+/**
+ * Create inventory from canonical public product/location ids and retain the
+ * private row id for direct repo reads and reconciliation fixtures.
+ */
+export const createInventoryFixture = async (
+  db: Database,
+  data: {
+    productId: string;
+    locationId: string;
+    amount: Amount;
+    verifiedAt?: Date | null;
+  },
+  actor: ActorContext,
+) => {
+  const [rawProductId, rawLocationId] = await Promise.all([
+    data.productId.startsWith("PRD-")
+      ? resolveLiveShortcode(db, data.productId, "product")
+      : Promise.resolve(data.productId),
+    data.locationId.startsWith("LOC-")
+      ? resolveLiveShortcode(db, data.locationId, "location")
+      : Promise.resolve(data.locationId),
+  ]);
+  if (!rawProductId || !rawLocationId) {
+    throw new Error("fixture: product/location not found");
+  }
+  const output = await createInventoryEntry(
+    db,
+    {
+      ...data,
+      productId: unsafeProductId(rawProductId),
+      locationId: unsafeLocationId(rawLocationId),
+    },
+    actor,
+  );
+  const resolvedInventoryId = await resolveLiveShortcode(
+    db,
+    output.id,
+    "inventory",
+  );
+  if (!resolvedInventoryId) throw new Error("fixture: inventory not found");
+  return { ...output, entityId: unsafeInventoryId(resolvedInventoryId) };
+};
 
 /** An expense create input; every link (project/product/purchase) defaults to
  * unset so a test spells out only the relation it's asserting on. Passing
@@ -111,7 +260,7 @@ export const ingredientRef = (
   opts: { amounts?: Amount[]; modifier?: string; rawLine?: string } = {},
 ): RecipeIngredientInput => ({
   type: "ingredient" as const,
-  ingredientId: unsafeIngredientId(id),
+  ingredientId: unsafeIngredientShortcode(id),
   recipeId: null,
   amounts: opts.amounts ?? [{ value: 1, unit: "cup" }],
   ...(opts.modifier !== undefined ? { modifier: opts.modifier } : {}),
@@ -134,6 +283,30 @@ export const makeRecipeInput = (
   // tags-absent input rather than an explicit null.
   ...("tags" in opts ? { tags: opts.tags } : {}),
 });
+
+/** Public recipe graph plus its private UUID for repo/service test calls. */
+export const createRecipeFixture = async (
+  db: Database,
+  input: RecipeCreateInput,
+  actor: ActorContext,
+) => {
+  const output = await createRecipe(db, input, actor);
+  const resolvedRecipeId = await resolveLiveShortcode(db, output.id, "recipe");
+  if (!resolvedRecipeId) throw new Error("fixture: created recipe not found");
+  return { ...output, entityId: unsafeRecipeId(resolvedRecipeId) };
+};
+
+/** Public meal output plus its private UUID for repo-only writes. */
+export const createMealFixture = async (
+  db: Database,
+  input: MealCreateInput,
+  actor: ActorContext,
+) => {
+  const output = await createMeal(db, input, actor);
+  const resolvedMealId = await resolveLiveShortcode(db, output.id, "meal");
+  if (!resolvedMealId) throw new Error("fixture: created meal not found");
+  return { ...output, entityId: unsafeMealId(resolvedMealId) };
+};
 
 /** A raw ImportRecipe (the parser's shape; lines parsed server-side on import). */
 export const makeImportRecipe = (
@@ -195,19 +368,31 @@ export const seedIngredientWithStock = async (
     actor,
   );
   if (!location) throw new Error("seed: location not created");
+  const productInput = makeProductInput({
+    name: `Test ${opts.name}`,
+    manufacturer: "test",
+    ingredientId: unsafeIngredientShortcode(ingredient.shortcode),
+    unitMappings: [CUP_TO_GRAM],
+  });
   const product = await createProduct(
     db,
-    makeProductInput({
-      name: `Test ${opts.name}`,
-      manufacturer: "test",
-      ingredientId: ingredient.id,
-      unitMappings: [CUP_TO_GRAM],
-    }),
+    { ...productInput, ingredientId: ingredient.id },
     actor,
   );
+  const [productId, locationId] = await Promise.all([
+    resolveLiveShortcode(db, product.id, "product"),
+    resolveLiveShortcode(db, location.id, "location"),
+  ]);
+  if (!productId || !locationId) {
+    throw new Error("seed: created product/location could not be resolved");
+  }
   await createInventoryEntry(
     db,
-    { productId: product.id, locationId: location.id, amount: opts.onHand },
+    {
+      productId: unsafeProductId(productId),
+      locationId: unsafeLocationId(locationId),
+      amount: opts.onHand,
+    },
     actor,
   );
   return ingredient;

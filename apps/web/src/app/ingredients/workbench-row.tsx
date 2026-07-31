@@ -77,12 +77,11 @@ export function WorkbenchRow({
   suggestion: Suggestion | null;
   mergeSuggestion: {
     targetId: string;
-    targetShortcode: string;
     targetName: string;
   } | null;
   onRequestMerge: (pair: {
-    source: { id: string; shortcode: string; name: string };
-    target: { id: string; shortcode: string; name: string };
+    source: { id: string; name: string };
+    target: { id: string; name: string };
   }) => void;
   /** Start expanded (deep-link focus from the Problems page). */
   defaultOpen?: boolean;
@@ -147,12 +146,10 @@ export function WorkbenchRow({
                 onRequestMerge({
                   source: {
                     id: row.id,
-                    shortcode: row.shortcode,
                     name: row.name,
                   },
                   target: {
                     id: mergeSuggestion.targetId,
-                    shortcode: mergeSuggestion.targetShortcode,
                     name: mergeSuggestion.targetName,
                   },
                 })
@@ -171,12 +168,10 @@ export function WorkbenchRow({
                     onRequestMerge({
                       source: {
                         id: row.id,
-                        shortcode: row.shortcode,
                         name: row.name,
                       },
                       target: {
                         id: cand.id,
-                        shortcode: cand.shortcode,
                         name: cand.name,
                       },
                     });

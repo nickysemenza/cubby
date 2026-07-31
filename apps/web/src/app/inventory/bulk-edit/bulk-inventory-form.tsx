@@ -1,4 +1,4 @@
-import { unsafeInventoryId } from "@cubby/schemas/identifiers";
+import { unsafeInventoryShortcode } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -155,7 +155,7 @@ export default function BulkInventoryForm({
     const existingItems: z.infer<typeof inventoryItemSchema>[] =
       inventoryItemsData.items.map((item) => ({
         product: {
-          id: item.product.shortcode,
+          id: item.product.id,
           name: `${item.product.name} (${item.product.manufacturer})`,
         },
         amount: item.amount,
@@ -194,7 +194,7 @@ export default function BulkInventoryForm({
       const product = await lookupUpc(barcode);
       if (product) {
         form.setValue(`items.${index}.product`, {
-          id: product.shortcode,
+          id: product.id,
           name: `${product.name} (${product.manufacturer})`,
         });
         toast.success(`Found: ${product.name}`);
@@ -245,7 +245,7 @@ export default function BulkInventoryForm({
         (item) => {
           const res: InventoryBulkOperationItem = {
             locationId,
-            ...(item.id && { id: unsafeInventoryId(item.id) }),
+            ...(item.id && { id: unsafeInventoryShortcode(item.id) }),
             productId: getProductShortcode(item.product),
             amount: item.amount,
           };

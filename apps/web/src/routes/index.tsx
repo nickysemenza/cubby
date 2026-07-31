@@ -1,4 +1,4 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ListChecks, MapPin, PieChart, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -166,7 +166,7 @@ function Home() {
 }
 
 function IngredientUsageSection() {
-  const [cookbookId, setCookbookId] = useState<CookbookId | undefined>();
+  const [cookbookId, setCookbookId] = useState<CookbookShortcode | undefined>();
 
   return (
     <Stack>

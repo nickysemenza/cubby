@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
@@ -23,7 +23,7 @@ import { useInvalidateMeals } from "./use-meal-mutations";
  * "Add to Meal ▾" — plans the current recipe onto a day. Creates a new meal on
  * the chosen date containing this recipe at 1×. Lives on the recipe detail page.
  */
-export function AddToMeal({ recipeId }: { recipeId: RecipeId }) {
+export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const api = useTRPC();
   const navigate = useNavigate();
   const invalidate = useInvalidateMeals();
@@ -40,7 +40,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeId }) {
               onClick: () =>
                 void navigate({
                   to: entities.meal.routes.detail,
-                  params: entityDetailParams(meal.shortcode),
+                  params: entityDetailParams(meal.id),
                 }),
             },
           },

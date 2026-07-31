@@ -8,7 +8,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationCreateInput,
@@ -66,6 +66,10 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
@@ -114,70 +118,48 @@ const findLocationsWithLiveInventory = (
     columns: { locationId: true },
   });
 
-// Verify a proposed parent location actually exists and isn't soft-deleted.
-// Without this, a dangling parentId silently inserts: wouldCreateParentCycle
-// walks off the end of a non-existent chain and reports "no cycle", orphaning
-// the row in the tree.
-const assertParentLocationExists = async (
-  db: Database | DrizzleTransaction,
-  parentId: LocationId,
-): Promise<void> => {
-  const parent = await unwrapDb(db).query.location.findFirst({
-    where: and(eq(location.id, parentId), notDeleted(location)),
-    columns: { id: true },
-  });
-  if (!parent) {
-    throw createAppError(
-      "REFERENCED_RECORD_MISSING",
-      "Cannot set parent: the specified parent location does not exist",
-    );
-  }
-};
-
 // Create a new location
 export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
   actor: ActorContext,
 ) => {
-  // Create the location
-  // Explicitly handle empty string, undefined, and falsy values for parentId
-  // Using undefined to completely omit the field from the insert when there's no parent
-  // This ensures Drizzle sends SQL NULL rather than an empty string
-  const parentIdValue =
-    data.parentId && data.parentId.trim() !== "" ? data.parentId : undefined;
+  return await withTransaction(db, async (tx) => {
+    const resolvedParent = data.parentId
+      ? await resolveLiveShortcode(tx, data.parentId, "location")
+      : null;
+    if (data.parentId && !resolvedParent) {
+      throw createAppError(
+        "REFERENCED_RECORD_MISSING",
+        "Cannot set parent: the specified parent location does not exist",
+      );
+    }
+    const parentId = resolvedParent ? unsafeLocationId(resolvedParent) : null;
+    const newLocation = await insertWithShortcode(tx, "location", {
+      name: data.name,
+      aliases: data.aliases,
+      type: data.type,
+      parentId,
+    });
 
-  // Reject a parentId that doesn't reference a real, non-deleted location.
-  if (parentIdValue !== undefined) {
-    await assertParentLocationExists(db, parentIdValue);
-  }
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      await associatePendingImages(
+        tx,
+        locationImage,
+        "locationId",
+        newLocation.id,
+        data.pendingImageIds,
+      );
+    }
 
-  const newLocation = await insertWithShortcode(db, "location", {
-    name: data.name,
-    aliases: data.aliases,
-    type: data.type,
-    ...(parentIdValue !== undefined && { parentId: parentIdValue }),
+    await logAuditEntry(tx, actor, {
+      entityType: "location",
+      entityId: newLocation.id,
+      action: "create",
+    });
+
+    return getLocationById(tx, newLocation.id);
   });
-
-  // Associate images if provided
-  if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-    await associatePendingImages(
-      getDb(db),
-      locationImage,
-      "locationId",
-      newLocation.id,
-      data.pendingImageIds,
-    );
-  }
-
-  // Log audit entry
-  await logAuditEntry(db, actor, {
-    entityType: "location",
-    entityId: newLocation.id,
-    action: "create",
-  });
-
-  return getLocationById(db, newLocation.id);
 };
 
 /**
@@ -235,33 +217,45 @@ export const updateLocation = async (
   id: LocationId,
   data: LocationUpdateInput["data"],
   actor: ActorContext,
+  options?: { resolvedParentId?: LocationId | null },
 ) => {
-  // Check if the new parent would create a circular reference (includes self-parent check)
-  if (data.parentId) {
-    // Reject a dangling parentId before the cycle walk (which would otherwise
-    // treat a missing parent as a valid top-of-chain and accept it).
-    await assertParentLocationExists(db, data.parentId);
-    const wouldCycle = await wouldCreateParentCycle(db, id, data.parentId);
-    if (wouldCycle) {
-      throw createAppError(
-        "LOCATION_CYCLE_DETECTED",
-        "Cannot set parent: would create a circular reference",
-      );
-    }
-  }
-
-  // Fetch current state for audit logging
-  const before = await unwrapDb(db).query.location.findFirst({
-    where: and(eq(location.id, id), notDeleted(location)),
-  });
-
   const runUpdate = async (tx: DrizzleTransaction) => {
+    let parentId: LocationId | null | undefined;
+    if (data.parentId !== undefined) {
+      if (options && "resolvedParentId" in options) {
+        parentId = options.resolvedParentId;
+      } else if (data.parentId === null) {
+        parentId = null;
+      } else {
+        const resolved = await resolveLiveShortcode(
+          tx,
+          data.parentId,
+          "location",
+        );
+        if (!resolved) {
+          throw createAppError(
+            "REFERENCED_RECORD_MISSING",
+            "Cannot set parent: the specified parent location does not exist",
+          );
+        }
+        parentId = unsafeLocationId(resolved);
+        if (await wouldCreateParentCycle(tx, id, parentId)) {
+          throw createAppError(
+            "LOCATION_CYCLE_DETECTED",
+            "Cannot set parent: would create a circular reference",
+          );
+        }
+      }
+    }
+    const before = await tx.query.location.findFirst({
+      where: and(eq(location.id, id), notDeleted(location)),
+    });
     // Build update values using helper to filter undefined
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       aliases: data.aliases,
       type: data.type,
-      parentId: data.parentId,
+      parentId,
     });
 
     // Update the location (updateAndReturn handles empty values gracefully)
@@ -496,6 +490,26 @@ export const locationList = async (
   pagination: PaginationParams,
   groupBy?: string,
 ) => {
+  const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
+  const resolvedParents = await resolveLiveShortcodes(
+    db,
+    parentCodes,
+    "location",
+  );
+  const parentIds = parentCodes.flatMap((code) => {
+    const id = resolvedParents.get(code);
+    return id ? [unsafeLocationId(id)] : [];
+  });
+  const parentCondition =
+    parentCodes.length > 0 && parentIds.length === 0
+      ? filters.parentPresenceFilter
+        ? eqAnyOrPresence(location.parentId, [], filters.parentPresenceFilter)
+        : sql`false`
+      : eqAnyOrPresence(
+          location.parentId,
+          parentIds,
+          filters.parentPresenceFilter,
+        );
   // Uncorrelated subquery of location ids holding live inventory. Inner-joins
   // Product (notDeleted) because dbLocationToListAPI drops inventory entries
   // whose product is soft-deleted — without that join, a shelf holding only
@@ -516,11 +530,7 @@ export const locationList = async (
     [{ column: location.name, term: filters.nameFilter }],
     [
       eqAny(location.type, filters.itemTypeFilter),
-      eqAnyOrPresence(
-        location.parentId,
-        filters.parentId,
-        filters.parentPresenceFilter,
-      ),
+      parentCondition,
       idSetPresence(
         location.id,
         filters.inventoryPresenceFilter,

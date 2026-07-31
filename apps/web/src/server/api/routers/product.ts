@@ -10,7 +10,9 @@ import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
   type IngredientId,
   type ProductId,
+  type ProductShortcode,
   productId,
+  productShortcode,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -41,6 +43,7 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
+import { createAppError } from "~/server/errors/app-error";
 import {
   deleteProducts,
   getCategoryDistribution,
@@ -52,7 +55,10 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import {
   runMutationSideEffects,
@@ -79,6 +85,31 @@ import {
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+async function resolveProductId(
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: ProductShortcode,
+): Promise<ProductId> {
+  const id = await resolveLiveShortcode(db, shortcode, "product");
+  if (!id) {
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${shortcode} not found`);
+  }
+  return unsafeProductId(id);
+}
+
+async function resolveProductIds(
+  db: Parameters<typeof resolveLiveShortcodes>[0],
+  shortcodes: ProductShortcode[],
+): Promise<ProductId[]> {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "product");
+  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
+  if (missing) {
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
+  }
+  return shortcodes.map((shortcode) =>
+    unsafeProductId(resolved.get(shortcode)!),
+  );
+}
 
 // Product lists are lean DB rows. Detail/create/update are enriched with USDA
 // food and recipe usages, so the list contract is split from the detail one.
@@ -119,10 +150,11 @@ const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
     // wiping fdc_id / unitMappings). See productUpdateData.
     updateInput: productUpdateData,
     output: productWithFoodOut,
-    idSchema: productId,
+    idSchema: productShortcode,
   },
   repository: {
-    getByID: async (services, id: ProductId) => {
+    getByID: async (services, shortcode: ProductShortcode) => {
+      const id = await resolveProductId(services.db, shortcode);
       return await getProductWithFood(services.db, services.usdaClient, id);
     },
     // Resolves the shortcode itself rather than reusing a plain repo-level
@@ -141,21 +173,24 @@ const { getByID, getByShortcode } = createEntityCrudWithoutListProcedures({
         : null;
     },
     create: async (services, data) => {
-      return await createProductWithFood(
+      const result = await createProductWithFood(
         services.db,
         services.usdaClient,
         data,
         services.actorContext,
       );
+      return result.output;
     },
-    update: async (services, id: ProductId, data) => {
-      return await updateProductWithFood(
+    update: async (services, shortcode: ProductShortcode, data) => {
+      const id = await resolveProductId(services.db, shortcode);
+      const result = await updateProductWithFood(
         services.db,
         services.usdaClient,
         id,
         data,
         services.actorContext,
       );
+      return result.output;
     },
   },
 });
@@ -206,11 +241,12 @@ const { list: search } = createEntityListProcedure({
       );
       const semanticIds = semantic
         .filter((candidate) => candidate.similarity >= 0.75)
-        .map((candidate) => productId.parse(candidate.item.id))
-        .filter((id) => !lexical.data.some((item) => item.id === id));
-      const semanticItems = await getProductPickerItemsByIds(
-        services.db,
-        semanticIds,
+        .map((candidate) => productId.parse(candidate.item.id));
+      const semanticItems = (
+        await getProductPickerItemsByIds(services.db, semanticIds)
+      ).filter(
+        (item) =>
+          !lexical.data.some((lexicalItem) => lexicalItem.id === item.id),
       );
 
       return {
@@ -253,6 +289,7 @@ const update = protectedProcedure
   .input(productUpdateInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.id);
     return await updateProductWithSideEffects(
       {
         db: ctx.db,
@@ -260,7 +297,7 @@ const update = protectedProcedure
         recipeCosting: ctx.services.recipeCosting,
         locationValuation: ctx.services.locationValuation,
       },
-      input.id,
+      id,
       input.data,
       ctx.actorContext,
     );
@@ -276,6 +313,7 @@ const applyUpcData = protectedProcedure
   .input(productApplyUpcInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.id);
     return await applyUpcDataWithSideEffects(
       {
         db: ctx.db,
@@ -284,7 +322,7 @@ const applyUpcData = protectedProcedure
         locationValuation: ctx.services.locationValuation,
         upcLookupClient: ctx.upcLookupClient,
       },
-      input,
+      { ...input, id },
       ctx.actorContext,
     );
   });
@@ -319,9 +357,10 @@ const quickCreate = protectedProcedure
       },
       ctx.actorContext,
     );
+    const entityId = await resolveProductId(ctx.db, product.id);
     await runMutationSideEffects(ctx.db, {
       action: "created",
-      entity: { entityType: "product", entityId: product.id },
+      entity: { entityType: "product", entityId },
       source: "product.quickCreate",
     });
     return product;
@@ -384,10 +423,13 @@ const tagOptions = protectedProcedure
  * one section reads, and so it re-fetches on its own when tags change.
  */
 const tagSiblings = protectedProcedure
-  .input(productId)
+  .input(productShortcode)
   .output(productTagSiblingsOut)
   .query(async ({ ctx, input }) => {
-    return await getProductsSharingTags(ctx.db, input);
+    return await getProductsSharingTags(
+      ctx.db,
+      await resolveProductId(ctx.db, input),
+    );
   });
 
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
@@ -415,7 +457,7 @@ const createMany = protectedProcedure
     yield* streamItems<(typeof input)[number], never, CreateManyResult>(
       input,
       async (item) => {
-        const product = await createProductWithFood(
+        const { output: product, entityId } = await createProductWithFood(
           ctx.db,
           ctx.usdaClient,
           item,
@@ -423,10 +465,17 @@ const createMany = protectedProcedure
         );
         await runMutationSideEffects(ctx.db, {
           action: "created",
-          entity: { entityType: "product", entityId: product.id },
+          entity: { entityType: "product", entityId },
           source: "product.createMany",
         });
-        if (product.ingredient?.id) ingredientIds.push(product.ingredient.id);
+        if (product.ingredient?.id) {
+          const ingredientId = await resolveLiveShortcode(
+            ctx.db,
+            product.ingredient.id,
+            "ingredient",
+          );
+          if (ingredientId) ingredientIds.push(ingredientId as IngredientId);
+        }
       },
       {
         onError: (item, index, error) => {
@@ -461,7 +510,8 @@ const markUsdaUnavailableMany = protectedProcedure
   .mutation(async function* ({ ctx, input }) {
     yield* streamItems<(typeof input.ids)[number], never, { updated: number }>(
       input.ids,
-      async (id) => {
+      async (shortcode) => {
+        const id = await resolveProductId(ctx.db, shortcode);
         await updateProductWithFood(
           ctx.db,
           ctx.usdaClient,
@@ -479,17 +529,21 @@ const markUsdaUnavailableMany = protectedProcedure
     );
   });
 
-const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
-  await deleteProducts(services.db, ids, services.actorContext);
-  return await runMutationSideEffectsForEntities(
-    services.db,
-    ids.map((id) => ({
-      action: "deleted" as const,
-      entity: { entityType: "product" as const, entityId: id },
-      source: "product.delete",
-    })),
-  );
-}, productId);
+const deleteItem = createDeleteProcedure<ProductShortcode>(
+  async (services, shortcodes) => {
+    const ids = await resolveProductIds(services.db, shortcodes);
+    await deleteProducts(services.db, ids, services.actorContext);
+    return await runMutationSideEffectsForEntities(
+      services.db,
+      ids.map((id) => ({
+        action: "deleted" as const,
+        entity: { entityType: "product" as const, entityId: id },
+        source: "product.delete",
+      })),
+    );
+  },
+  productShortcode,
+);
 
 export const productRouter = createTRPCRouter({
   getByID,

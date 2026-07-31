@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { ReactNode } from "react";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 
@@ -11,15 +11,16 @@ interface CreateModeProps<TResult> {
 }
 
 interface EntityCreateWrapperProps<TResult extends { id: string }> {
-  entity: Entity;
+  entity: ShortcodeEntity;
   mutationOptions: object;
   children: (props: CreateModeProps<TResult>) => ReactNode;
 }
 
-export function EntityCreateWrapper<
-  TData,
-  TResult extends { id: string; shortcode: string },
->({ entity, mutationOptions, children }: EntityCreateWrapperProps<TResult>) {
+export function EntityCreateWrapper<TData, TResult extends { id: string }>({
+  entity,
+  mutationOptions,
+  children,
+}: EntityCreateWrapperProps<TResult>) {
   const { error, isPending, handleCreate, handleCreateAsync, handleCancel } =
     useEntityCreateMode<TData, TResult>(entity, mutationOptions);
 

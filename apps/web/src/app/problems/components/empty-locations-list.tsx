@@ -73,7 +73,7 @@ export function EmptyLocationsList({
                 images={images}
                 alt={location.name}
                 to="/locations/$shortcode"
-                params={{ shortcode: location.shortcode }}
+                params={{ shortcode: location.id }}
               />
             ),
             badges: [
@@ -82,7 +82,7 @@ export function EmptyLocationsList({
               </Badge>,
             ],
             details,
-            route: entityDetailLink("location", location.shortcode),
+            route: entityDetailLink("location", location.id),
             editLabel: "View",
             customActions: (
               <Button size="sm" onClick={() => setAddDialogLocation(location)}>

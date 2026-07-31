@@ -1,4 +1,7 @@
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientShortcode,
+  RecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   RecipeOut,
   SectionIngredient,
@@ -18,8 +21,8 @@ export const getRecipeIngredientName = (
 
 export const collectSubRecipeIds = (
   recipes: readonly RecipeGraphRecipe[],
-): RecipeId[] => {
-  const ids = new Set<RecipeId>();
+): RecipeShortcode[] => {
+  const ids = new Set<RecipeShortcode>();
   for (const recipe of recipes) {
     for (const section of recipe.sections) {
       for (const ingredient of section.ingredients) {
@@ -32,8 +35,8 @@ export const collectSubRecipeIds = (
 
 export const collectIngredientIds = (
   recipes: readonly RecipeGraphRecipe[],
-): IngredientId[] => {
-  const ids = new Set<IngredientId>();
+): IngredientShortcode[] => {
+  const ids = new Set<IngredientShortcode>();
   for (const recipe of recipes) {
     for (const section of recipe.sections) {
       for (const ingredient of section.ingredients) {

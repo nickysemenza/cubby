@@ -3,9 +3,8 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   ingredientId,
   ingredientShortcode,
-  inventoryId,
+  inventoryShortcode,
   locationId,
-  productId,
   productShortcode,
 } from "./identifiers";
 import { locationType } from "./location";
@@ -103,8 +102,7 @@ export const detectedInventoryItemSchema = z.object(
 export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
 
 export const detectedProductMatchSchema = z.object({
-  id: productId,
-  shortcode: productShortcode,
+  id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
   category: productCategory.nullable(),
@@ -140,8 +138,8 @@ export const approveDetectedInventoryItemInput = z.object({
 });
 
 export const approveDetectedInventoryItemOut = z.object({
-  inventoryId,
-  productId,
+  inventoryId: inventoryShortcode,
+  productId: productShortcode,
   productName: z.string(),
   createdProduct: z.boolean(),
   sideEffects: mutationSideEffectsSchema,
@@ -190,8 +188,7 @@ export const usdaFoodSuggestionBatchOut = z.array(
 );
 
 export const ingredientMergeSuggestionItem = z.object({
-  id: ingredientId,
-  shortcode: ingredientShortcode,
+  id: ingredientShortcode,
   name: z.string().min(1),
 });
 
@@ -200,9 +197,7 @@ export const ingredientMergeSuggestionBatchInput = z.object({
 });
 
 const ingredientMergeSuggestionRef = z.object({
-  id: ingredientId,
-  // The public id, so the confirm dialog can link the suggested target.
-  shortcode: ingredientShortcode,
+  id: ingredientShortcode,
   name: z.string(),
 });
 

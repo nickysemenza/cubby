@@ -16,9 +16,9 @@ describe("extractSources", () => {
       record("list_inventory", {
         items: [
           {
-            id: "inv-1",
-            product: { id: "p-1", name: "Aeropress" },
-            location: { id: "l-1", name: "coffee shelf" },
+            id: "INV-2ABC",
+            product: { id: "PRD-2ABC", name: "Aeropress" },
+            location: { id: "LOC-2ABC", name: "coffee shelf" },
           },
         ],
       }),
@@ -26,8 +26,7 @@ describe("extractSources", () => {
     expect(sources).toEqual([
       {
         entityType: "inventory",
-        id: "inv-1",
-        shortcode: null,
+        id: "INV-2ABC",
         name: "Aeropress",
         detail: "coffee shelf",
       },
@@ -37,12 +36,12 @@ describe("extractSources", () => {
   it("maps product search results with manufacturer as detail", () => {
     const sources = extractSources([
       record("search_products", {
-        items: [{ id: "p-1", name: "Welder", manufacturer: "Everlast" }],
+        items: [{ id: "PRD-2ABC", name: "Welder", manufacturer: "Everlast" }],
       }),
     ]);
     expect(sources[0]).toMatchObject({
       entityType: "product",
-      id: "p-1",
+      id: "PRD-2ABC",
       name: "Welder",
       detail: "Everlast",
     });
@@ -50,8 +49,10 @@ describe("extractSources", () => {
 
   it("dedupes the same entity seen across tools", () => {
     const sources = extractSources([
-      record("search_products", { items: [{ id: "p-1", name: "Welder" }] }),
-      record("get_product", { id: "p-1", name: "Welder" }),
+      record("search_products", {
+        items: [{ id: "PRD-2ABC", name: "Welder" }],
+      }),
+      record("get_product", { id: "PRD-2ABC", name: "Welder" }),
     ]);
     expect(sources).toHaveLength(1);
   });

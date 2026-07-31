@@ -1,4 +1,4 @@
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -28,7 +28,7 @@ export function IngredientUsagePanel({
   cookbookId,
   limit,
 }: {
-  cookbookId?: CookbookId;
+  cookbookId?: CookbookShortcode;
   /** Compact mode: cap the chart to `limit` bars, skip the table. */
   limit?: number;
 }) {
@@ -118,7 +118,7 @@ function UsageTable({
               <TableCell className="whitespace-normal">
                 <Link
                   to="/ingredients/$shortcode"
-                  params={{ shortcode: row.shortcode }}
+                  params={{ shortcode: row.ingredientId }}
                   className="hover:underline"
                 >
                   {row.name}

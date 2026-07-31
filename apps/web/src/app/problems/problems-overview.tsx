@@ -91,7 +91,7 @@ export function ProblemsOverview() {
               ...problems.productsWithIslandedMappings,
               ...problems.productsWithNoImages,
               ...problems.productsWithBetterUpcData,
-            ].map((p) => p.shortcode),
+            ].map((p) => p.id),
           )
         : [],
     [problems],

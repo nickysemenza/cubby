@@ -67,7 +67,7 @@ export function SpendingByProject({
         enableGridX
         enableGridY={false}
         onClick={(bar) => {
-          const shortcode = bar.data.shortcode;
+          const shortcode = bar.data.id;
           if (shortcode) navigate(entityDetailLink("project", shortcode));
         }}
         tooltip={({ indexValue, value }) => (

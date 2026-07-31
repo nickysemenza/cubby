@@ -38,7 +38,7 @@ export const findParentRecipesWithDeletedSubRecipes = async (
   db: Database,
 ): Promise<StaleParentRecipe[]> => {
   const res = await getDb(db).execute<StaleParentRecipe>(sql`
-    SELECT DISTINCT parent.id AS id, parent.shortcode AS shortcode, parent.name AS name
+    SELECT DISTINCT parent.shortcode AS id, parent.name AS name
     FROM ${recipe} parent
     INNER JOIN ${recipeSection} rs
       ON rs."recipeId" = parent.id AND rs."deletedAt" IS NULL

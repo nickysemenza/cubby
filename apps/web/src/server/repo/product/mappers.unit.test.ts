@@ -1,6 +1,8 @@
 import {
   unsafeIngredientId,
+  unsafeIngredientShortcode,
   unsafeInventoryId,
+  unsafeInventoryShortcode,
   unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductId,
@@ -166,8 +168,7 @@ describe("product mappers", () => {
     });
 
     expect(result).toMatchObject({
-      id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("PRD-TEST"),
+      id: unsafeProductShortcode("PRD-TEST"),
       name: "Flour",
       manufacturer: "Generic",
       images: [
@@ -237,26 +238,28 @@ describe("product mappers", () => {
     const result = dbProductToListAPI(row);
 
     expect(result).toMatchObject({
-      id: PRODUCT_ID,
+      id: unsafeProductShortcode("PRD-TEST"),
       ingredient: {
-        id: INGREDIENT_ID,
+        id: unsafeIngredientShortcode("ING-TEST"),
         name: "Wheat flour",
       },
       unitMappings: [
         {
           id: UNIT_MAPPING_ID,
-          sourceMetadata: { type: "product", productId: PRODUCT_ID },
+          sourceMetadata: {
+            type: "product",
+            productId: unsafeProductShortcode("PRD-TEST"),
+          },
         },
       ],
       externalIds: [{ id: EXTERNAL_ID }],
       images: [{ id: IMAGE_ID }],
       inventoryEntry: [
         {
-          id: INVENTORY_ID,
+          id: unsafeInventoryShortcode("INV-2345"),
           amount: { value: 2, unit: "each" },
           location: {
-            id: LOCATION_ID,
-            shortcode: unsafeLocationShortcode("LOC-TEST"),
+            id: unsafeLocationShortcode("LOC-TEST"),
             name: "Pantry",
             type: "room",
           },
@@ -336,28 +339,29 @@ describe("product mappers", () => {
     const result = dbProductToAPI(row);
 
     expect(result).toMatchObject({
-      id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("PRD-TEST"),
+      id: unsafeProductShortcode("PRD-TEST"),
       ingredient: {
-        id: INGREDIENT_ID,
+        id: unsafeIngredientShortcode("ING-TEST"),
         name: "Wheat flour",
         aliases: ["flour"],
       },
       unitMappings: [
         {
           id: UNIT_MAPPING_ID,
-          sourceMetadata: { type: "product", productId: PRODUCT_ID },
+          sourceMetadata: {
+            type: "product",
+            productId: unsafeProductShortcode("PRD-TEST"),
+          },
         },
       ],
       externalIds: [{ id: EXTERNAL_ID }],
       images: [{ id: IMAGE_ID }],
       inventoryEntry: [
         {
-          id: INVENTORY_ID,
+          id: unsafeInventoryShortcode("INV-2345"),
           amount: { value: 2, unit: "each" },
           location: {
-            id: LOCATION_ID,
-            shortcode: unsafeLocationShortcode("LOC-TEST"),
+            id: unsafeLocationShortcode("LOC-TEST"),
             name: "Pantry",
           },
         },

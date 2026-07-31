@@ -10,12 +10,12 @@ import { VizTooltip } from "./viz-overlay";
 interface CostNode {
   name: string;
   /** The ingredient's public id — null for a sub-recipe row (nothing to link). */
-  shortcode: string | null;
+  ingredientId: string | null;
   // Unique identity per rendered cell: the recipeSectionIngredient row id.
-  // `id` above is the ingredient id, which is NOT unique here — the same
+  // `ingredientId` is NOT unique here — the same
   // ingredient can legitimately appear in multiple sections (or twice in one),
-  // so keying cells by it produced React "duplicate key" warnings. `id` is kept
-  // for the ingredient link; `rowKey` is the stable per-row React key.
+  // so keying cells by it produced React "duplicate key" warnings. The public
+  // id is kept for the ingredient link; `rowKey` is the stable per-row key.
   rowKey: string;
   value: number; // Cost in dollars
   percentage: number;
@@ -50,8 +50,7 @@ export default function RecipeCostTreemap({
             ? ing.recipe.name
             : "Unknown";
 
-      const shortcode =
-        ing.type === "ingredient" ? ing.ingredient.shortcode : null;
+      const ingredientId = ing.type === "ingredient" ? ing.ingredient.id : null;
       // ing.id is the recipeSectionIngredient row id — unique per rendered cell.
       const rowKey = ing.id;
 
@@ -60,7 +59,7 @@ export default function RecipeCostTreemap({
         const cost = priceResult.value.value;
         pricedItems.push({
           name,
-          shortcode,
+          ingredientId,
           rowKey,
           value: cost,
           percentage: totalCost > 0 ? (cost / totalCost) * 100 : 0,
@@ -69,7 +68,7 @@ export default function RecipeCostTreemap({
       } else {
         unpricedItems.push({
           name,
-          shortcode,
+          ingredientId,
           rowKey,
           value: 1, // Placeholder value for layout
           percentage: 0,
@@ -239,10 +238,10 @@ function Treemap({ data }: TreemapProps) {
                             : "var(--muted-foreground)",
                       }}
                     >
-                      {node.data.shortcode ? (
+                      {node.data.ingredientId ? (
                         <Link
                           to="/ingredients/$shortcode"
-                          params={{ shortcode: node.data.shortcode }}
+                          params={{ shortcode: node.data.ingredientId }}
                           className="hover:underline"
                           style={{ pointerEvents: "auto" }}
                         >

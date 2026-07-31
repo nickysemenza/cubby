@@ -1,9 +1,12 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { type LocationId, locationId } from "@cubby/schemas/identifiers";
+import {
+  type LocationShortcode,
+  locationShortcode,
+} from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 
 export interface SessionLocation {
-  id: LocationId;
+  id: LocationShortcode;
   name: string;
   type: LocationType;
   shortcode: string;
@@ -154,7 +157,7 @@ export function flattenAuditableLocations(
       id: node.id,
       name: node.name,
       type: node.type,
-      shortcode: node.shortcode,
+      shortcode: node.id,
       lastBulkInventory: node.lastBulkInventory,
       aiDescription: node.aiDescription,
       imageCount: node.images?.length ?? 0,
@@ -196,9 +199,7 @@ export function findLocationInTreeByShortcode(
   shortcode: string | undefined,
 ): InfLocation | null {
   if (!tree || !shortcode) return null;
-  return (
-    flattenAllLocations(tree).find((loc) => loc.shortcode === shortcode) ?? null
-  );
+  return flattenAllLocations(tree).find((loc) => loc.id === shortcode) ?? null;
 }
 
 export function isDescendantLocation(
@@ -220,7 +221,9 @@ export function buildBulkMovePayloadItems<
   }));
 }
 
-export function parseLocationIdFromInput(raw: string): LocationId | null {
+export function parseLocationIdFromInput(
+  raw: string,
+): LocationShortcode | null {
   const trimmed = raw.trim();
   const candidates = [trimmed];
 
@@ -233,7 +236,7 @@ export function parseLocationIdFromInput(raw: string): LocationId | null {
   }
 
   for (const candidate of candidates) {
-    const parsed = locationId.safeParse(candidate);
+    const parsed = locationShortcode.safeParse(candidate);
     if (parsed.success) return parsed.data;
   }
 

@@ -1,4 +1,10 @@
-import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import {
+  type InventoryId,
+  type LocationId,
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -15,6 +21,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 // Guards for the audit-session commit: reconcileLocationSession applies the
 // complete staged diff atomically, rejects stale/partial snapshots, and stamps
@@ -24,23 +31,49 @@ describe("reconcileLocationSession", () => {
   const ctx = withTestDb();
   const amount = { value: 1, unit: "each" };
 
-  const seedEntry = async (locationName: string) => {
-    const loc = await createLocation(
+  const requireResolvedId = async (
+    shortcode: string,
+    entity: "inventory" | "location" | "product",
+  ) => {
+    const entityId = await resolveLiveShortcode(ctx.db, shortcode, entity);
+    if (!entityId) throw new Error(`Failed to resolve ${entity} ${shortcode}`);
+    return entityId;
+  };
+
+  const createTestLocation = async (name: string) => {
+    const output = await createLocation(
       ctx.db,
-      makeLocationInput({ name: locationName }),
+      makeLocationInput({ name }),
       TEST_ACTOR,
     );
+    return {
+      output,
+      entityId: unsafeLocationId(
+        await requireResolvedId(output.id, "location"),
+      ),
+    };
+  };
+
+  const seedEntry = async (locationName: string) => {
+    const { output: loc, entityId: locEntityId } =
+      await createTestLocation(locationName);
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: `Bolt ${locationName}` }),
       TEST_ACTOR,
     );
+    const productEntityId = unsafeProductId(
+      await requireResolvedId(product.id, "product"),
+    );
     const entry = await createInventoryEntry(
       ctx.db,
-      { productId: product.id, locationId: loc.id, amount },
+      { productId: productEntityId, locationId: locEntityId, amount },
       TEST_ACTOR,
     );
-    return { loc, entry };
+    const entryEntityId = unsafeInventoryId(
+      await requireResolvedId(entry.id, "inventory"),
+    );
+    return { loc, locEntityId, entry, entryEntityId };
   };
 
   const readEntry = (id: InventoryId) =>
@@ -53,16 +86,16 @@ describe("reconcileLocationSession", () => {
     });
 
   it("verify stamps verifiedAt + lastBulkInventory, no delete, no recompute", async () => {
-    const { loc, entry } = await seedEntry("Shelf");
-    expect((await readEntry(entry.id))?.verifiedAt).toBeNull();
+    const { locEntityId, entry, entryEntityId } = await seedEntry("Shelf");
+    expect((await readEntry(entryEntityId))?.verifiedAt).toBeNull();
 
     const { items, recomputeNeeded } = await reconcileLocationSession(
       ctx.db,
       {
-        locationId: loc.id,
-        expectedInventoryEntryIds: [entry.id],
+        locationId: locEntityId,
+        expectedInventoryEntryIds: [entryEntityId],
         snapshotUpdatedAt: entry.updatedAt,
-        resolutions: [{ kind: "verify", inventoryEntryId: entry.id }],
+        resolutions: [{ kind: "verify", inventoryEntryId: entryEntityId }],
       },
       TEST_ACTOR,
     );
@@ -70,24 +103,24 @@ describe("reconcileLocationSession", () => {
     expect(items[0]?.verifiedAt).not.toBeNull();
     expect(recomputeNeeded).toBe(false); // pure verify never recomputes
 
-    const after = await readEntry(entry.id);
+    const after = await readEntry(entryEntityId);
     expect(after?.verifiedAt).not.toBeNull();
     expect(after?.deletedAt).toBeNull();
-    expect((await readLocation(loc.id))?.lastBulkInventory).not.toBeNull();
+    expect((await readLocation(locEntityId))?.lastBulkInventory).not.toBeNull();
   });
 
   it("adjust updates amount + verifiedAt and flags recompute", async () => {
-    const { loc, entry } = await seedEntry("Adjust");
+    const { locEntityId, entry, entryEntityId } = await seedEntry("Adjust");
     const { recomputeNeeded } = await reconcileLocationSession(
       ctx.db,
       {
-        locationId: loc.id,
-        expectedInventoryEntryIds: [entry.id],
+        locationId: locEntityId,
+        expectedInventoryEntryIds: [entryEntityId],
         snapshotUpdatedAt: entry.updatedAt,
         resolutions: [
           {
             kind: "adjust",
-            inventoryEntryId: entry.id,
+            inventoryEntryId: entryEntityId,
             amount: { value: 5, unit: "each" },
           },
         ],
@@ -96,48 +129,47 @@ describe("reconcileLocationSession", () => {
     );
     expect(recomputeNeeded).toBe(true);
 
-    const after = await readEntry(entry.id);
+    const after = await readEntry(entryEntityId);
     expect(after?.amount).toEqual({ value: 5, unit: "each" });
     expect(after?.verifiedAt).not.toBeNull();
   });
 
   it("remove soft-deletes (row retained with deletedAt) and flags recompute", async () => {
-    const { loc, entry } = await seedEntry("Remove");
+    const { locEntityId, entry, entryEntityId } = await seedEntry("Remove");
     const { recomputeNeeded, removedIds } = await reconcileLocationSession(
       ctx.db,
       {
-        locationId: loc.id,
-        expectedInventoryEntryIds: [entry.id],
+        locationId: locEntityId,
+        expectedInventoryEntryIds: [entryEntityId],
         snapshotUpdatedAt: entry.updatedAt,
-        resolutions: [{ kind: "remove", inventoryEntryId: entry.id }],
+        resolutions: [{ kind: "remove", inventoryEntryId: entryEntityId }],
       },
       TEST_ACTOR,
     );
     expect(recomputeNeeded).toBe(true);
-    expect(removedIds).toEqual([entry.id]); // reported for delete side-effects
+    expect(removedIds).toEqual([entryEntityId]); // reported for delete side-effects
 
-    const after = await readEntry(entry.id);
+    const after = await readEntry(entryEntityId);
     expect(after).toBeDefined(); // soft delete: row kept
     expect(after?.deletedAt).not.toBeNull();
   });
 
   it("an actually empty location can still be completed", async () => {
-    const loc = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Empty walk" }),
-      TEST_ACTOR,
-    );
+    const { entityId: locationEntityId } =
+      await createTestLocation("Empty walk");
     await reconcileLocationSession(
       ctx.db,
       {
-        locationId: loc.id,
+        locationId: locationEntityId,
         expectedInventoryEntryIds: [],
         snapshotUpdatedAt: null,
         resolutions: [],
       },
       TEST_ACTOR,
     );
-    expect((await readLocation(loc.id))?.lastBulkInventory).not.toBeNull();
+    expect(
+      (await readLocation(locationEntityId))?.lastBulkInventory,
+    ).not.toBeNull();
   });
 
   it("rejects a partial or foreign resolution set", async () => {
@@ -147,39 +179,40 @@ describe("reconcileLocationSession", () => {
       reconcileLocationSession(
         ctx.db,
         {
-          locationId: b.loc.id,
-          expectedInventoryEntryIds: [b.entry.id],
+          locationId: b.locEntityId,
+          expectedInventoryEntryIds: [b.entryEntityId],
           snapshotUpdatedAt: b.entry.updatedAt,
-          resolutions: [{ kind: "remove", inventoryEntryId: a.entry.id }],
+          resolutions: [{ kind: "remove", inventoryEntryId: a.entryEntityId }],
         },
         TEST_ACTOR,
       ),
     ).rejects.toThrow("changed during the recount");
-    const stranger = await readEntry(a.entry.id);
+    const stranger = await readEntry(a.entryEntityId);
     expect(stranger?.deletedAt).toBeNull();
     expect(stranger?.verifiedAt).toBeNull();
-    expect((await readLocation(b.loc.id))?.lastBulkInventory).toBeNull();
+    expect((await readLocation(b.locEntityId))?.lastBulkInventory).toBeNull();
   });
 
   it("relocates atomically and stamps only the audited source", async () => {
-    const { loc: source, entry } = await seedEntry("Relocate source");
-    const target = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Relocate target" }),
-      TEST_ACTOR,
-    );
+    const {
+      locEntityId: sourceEntityId,
+      entry,
+      entryEntityId,
+    } = await seedEntry("Relocate source");
+    const { output: target, entityId: targetEntityId } =
+      await createTestLocation("Relocate target");
 
     const { items, recomputeNeeded } = await reconcileLocationSession(
       ctx.db,
       {
-        locationId: source.id,
-        expectedInventoryEntryIds: [entry.id],
+        locationId: sourceEntityId,
+        expectedInventoryEntryIds: [entryEntityId],
         snapshotUpdatedAt: entry.updatedAt,
         resolutions: [
           {
             kind: "relocate",
-            inventoryEntryId: entry.id,
-            targetLocationId: target.id,
+            inventoryEntryId: entryEntityId,
+            targetLocationId: targetEntityId,
           },
         ],
       },
@@ -188,47 +221,46 @@ describe("reconcileLocationSession", () => {
 
     expect(recomputeNeeded).toBe(true);
     expect(items[0]?.location.id).toBe(target.id);
-    expect((await readLocation(source.id))?.lastBulkInventory).not.toBeNull();
-    expect((await readLocation(target.id))?.lastBulkInventory).toBeNull();
+    expect(
+      (await readLocation(sourceEntityId))?.lastBulkInventory,
+    ).not.toBeNull();
+    expect((await readLocation(targetEntityId))?.lastBulkInventory).toBeNull();
   });
 
   it("rejects when a row changed after the client snapshot", async () => {
-    const { loc, entry } = await seedEntry("Stale recount");
+    const { locEntityId, entryEntityId } = await seedEntry("Stale recount");
     const snapshotUpdatedAt = new Date(0);
     await expect(
       reconcileLocationSession(
         ctx.db,
         {
-          locationId: loc.id,
-          expectedInventoryEntryIds: [entry.id],
+          locationId: locEntityId,
+          expectedInventoryEntryIds: [entryEntityId],
           snapshotUpdatedAt,
-          resolutions: [{ kind: "verify", inventoryEntryId: entry.id }],
+          resolutions: [{ kind: "verify", inventoryEntryId: entryEntityId }],
         },
         TEST_ACTOR,
       ),
     ).rejects.toThrow("changed during the recount");
-    expect((await readLocation(loc.id))?.lastBulkInventory).toBeNull();
+    expect((await readLocation(locEntityId))?.lastBulkInventory).toBeNull();
   });
 
   it("a move no longer stamps lastBulkInventory", async () => {
-    const { loc: source, entry } = await seedEntry("Source");
-    const target = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Target" }),
-      TEST_ACTOR,
-    );
+    const { locEntityId: sourceEntityId, entryEntityId } =
+      await seedEntry("Source");
+    const { entityId: targetEntityId } = await createTestLocation("Target");
 
     await bulkMoveInventoryEntries(
       ctx.db,
       {
-        sourceLocationId: source.id,
-        targetLocationId: target.id,
-        items: [{ inventoryEntryId: entry.id, quantity: amount }],
+        sourceLocationId: sourceEntityId,
+        targetLocationId: targetEntityId,
+        items: [{ inventoryEntryId: entryEntityId, quantity: amount }],
       },
       TEST_ACTOR,
     );
 
-    expect((await readLocation(source.id))?.lastBulkInventory).toBeNull();
-    expect((await readLocation(target.id))?.lastBulkInventory).toBeNull();
+    expect((await readLocation(sourceEntityId))?.lastBulkInventory).toBeNull();
+    expect((await readLocation(targetEntityId))?.lastBulkInventory).toBeNull();
   });
 });

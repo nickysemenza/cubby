@@ -1,9 +1,10 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { AuditEntityType, AuditLogListOut } from "@cubby/schemas/audit";
 import type { ActorContext, AuditSource } from "@cubby/schemas/context";
 import { and, desc, eq, gte, lt, lte, type SQL } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
+import { lookupShortcodes, refKey } from "~/server/repo/shortcode-resolver";
 
 // Action types for audit entries
 type AuditAction = "create" | "update" | "delete";
@@ -165,7 +166,7 @@ export async function getAuditLog(
     limit: number;
     cursor?: string; // ISO date string for cursor-based pagination
   },
-): Promise<{ entries: AuditLogRow[]; nextCursor?: string }> {
+): Promise<AuditLogListOut> {
   const conditions: SQL[] = [];
 
   if (params.entityType) {
@@ -227,5 +228,19 @@ export async function getAuditLog(
     ? returnEntries[returnEntries.length - 1]?.createdAt.toISOString()
     : undefined;
 
-  return { entries: returnEntries, nextCursor };
+  const shortcodeByRef = await lookupShortcodes(
+    db,
+    returnEntries.map((entry) => ({
+      entity: entry.entityType,
+      id: entry.entityId,
+    })),
+  );
+
+  return {
+    entries: returnEntries.map(({ id: _id, entityId, ...entry }) => ({
+      ...entry,
+      entityId: shortcodeByRef.get(refKey(entry.entityType, entityId)) ?? null,
+    })),
+    nextCursor,
+  };
 }

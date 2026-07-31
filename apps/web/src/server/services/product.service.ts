@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  ProductId,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ProductCreateInput,
   ProductSummariesInput,
@@ -10,6 +14,7 @@ import type {
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import type { USDAClient } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
@@ -21,19 +26,28 @@ import {
   getProductUnitMappingsByProductIds,
   updateProduct as updateProductRepo,
 } from "../repo/product";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "../repo/shortcode-resolver";
 import { batchEnrichWithFood } from "./usda-helpers";
+
+export type ProductWriteResult = {
+  output: ProductWithFoodOut;
+  entityId: ProductId;
+};
 
 export type ProductWriteActions = {
   getProductByID(id: ProductId): Promise<ProductWithFoodOut>;
   createProduct(
     data: ProductCreateInput,
     actor: ActorContext,
-  ): Promise<ProductWithFoodOut>;
+  ): Promise<ProductWriteResult>;
   updateProduct(
     id: ProductId,
     data: ProductUpdateInput["data"],
     actor: ActorContext,
-  ): Promise<ProductWithFoodOut>;
+  ): Promise<ProductWriteResult>;
 };
 
 export const getProductWithFood = async (
@@ -48,8 +62,11 @@ export const getProductWithFood = async (
   const food = lookupParam ? await usdaClient.findFood(lookupParam) : null;
 
   // Recipes the product appears in, resolved through its linked ingredient.
-  const { recipeUsages } = product.ingredient
-    ? await getRecipeUsagesForIngredient(db, product.ingredient.id)
+  const ingredientEntityId = product.ingredient
+    ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
+    : null;
+  const { recipeUsages } = ingredientEntityId
+    ? await getRecipeUsagesForIngredient(db, ingredientEntityId as IngredientId)
     : { recipeUsages: [] };
 
   return {
@@ -87,26 +104,65 @@ const getProductFoodSummaries = async (
 export const getProductSummaries = async (
   db: Database,
   usdaClient: USDAClient,
-  ids: ProductId[],
+  shortcodes: ProductShortcode[],
   include: ProductSummariesInput["include"],
 ): Promise<ProductSummariesOut> => {
+  const resolved = await resolveLiveShortcodes(db, shortcodes, "product");
+  const missing = shortcodes.find((shortcode) => !resolved.has(shortcode));
+  if (missing) {
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
+  }
+  const ids = shortcodes.map(
+    (shortcode) => resolved.get(shortcode) as ProductId,
+  );
+  const shortcodeById = new Map(
+    shortcodes.map((shortcode) => [
+      resolved.get(shortcode) as ProductId,
+      shortcode,
+    ]),
+  );
+  const rekey = <T>(record: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(
+      Object.entries(record).flatMap(([id, value]) => {
+        const shortcode = shortcodeById.get(id as ProductId);
+        return shortcode ? [[shortcode, value]] : [];
+      }),
+    );
   const requested = new Set(include);
   const summaries: ProductSummariesOut = {};
 
   await Promise.all([
     requested.has("food")
       ? getProductFoodSummaries(db, usdaClient, ids).then((food) => {
-          summaries.food = food;
+          summaries.food = rekey(food);
         })
       : undefined,
     requested.has("images")
       ? getProductImagesByProductIds(db, ids).then((images) => {
-          summaries.images = images;
+          summaries.images = rekey(images);
         })
       : undefined,
     requested.has("unitMappings")
       ? getProductUnitMappingsByProductIds(db, ids).then((unitMappings) => {
-          summaries.unitMappings = unitMappings;
+          summaries.unitMappings = Object.fromEntries(
+            Object.entries(unitMappings).flatMap(([id, mappings]) => {
+              const shortcode = shortcodeById.get(id as ProductId);
+              return shortcode
+                ? [
+                    [
+                      shortcode,
+                      mappings.map((mapping) => ({
+                        ...mapping,
+                        sourceMetadata: {
+                          type: "product" as const,
+                          productId: shortcode,
+                        },
+                      })),
+                    ],
+                  ]
+                : [];
+            }),
+          );
         })
       : undefined,
   ]);
@@ -119,12 +175,35 @@ export const createProductWithFood = async (
   usdaClient: USDAClient,
   data: ProductCreateInput,
   actor: ActorContext,
-): Promise<ProductWithFoodOut> => {
-  const product = await createProductRepo(db, data, actor);
+): Promise<ProductWriteResult> => {
+  const ingredientEntityId = data.ingredientId
+    ? await resolveLiveShortcode(db, data.ingredientId, "ingredient")
+    : null;
+  if (data.ingredientId && !ingredientEntityId) {
+    throw createAppError(
+      "INGREDIENT_NOT_FOUND",
+      `Ingredient ${data.ingredientId} not found`,
+    );
+  }
+  const product = await createProductRepo(
+    db,
+    {
+      ...data,
+      ingredientId: ingredientEntityId as IngredientId | null,
+    },
+    actor,
+  );
   // Dependent recipes are recomputed eagerly at the router (the single `create`
   // proc per product, `createMany` once over the deduped union) — covers UI +
   // MCP. No mark-stale; there is no drain anymore.
-  return await getProductWithFood(db, usdaClient, product.id);
+  const entityId = await resolveLiveShortcode(db, product.id, "product");
+  if (!entityId) {
+    throw new Error(`Created product ${product.id} could not be resolved`);
+  }
+  return {
+    output: await getProductWithFood(db, usdaClient, entityId as ProductId),
+    entityId: entityId as ProductId,
+  };
 };
 
 export const updateProductWithFood = async (
@@ -133,12 +212,32 @@ export const updateProductWithFood = async (
   id: ProductId,
   data: ProductUpdateInput["data"],
   actor: ActorContext,
-): Promise<ProductWithFoodOut> => {
-  await updateProductRepo(db, id, data, actor);
+): Promise<ProductWriteResult> => {
+  const ingredientEntityId = data.ingredientId
+    ? await resolveLiveShortcode(db, data.ingredientId, "ingredient")
+    : data.ingredientId;
+  if (data.ingredientId && !ingredientEntityId) {
+    throw createAppError(
+      "INGREDIENT_NOT_FOUND",
+      `Ingredient ${data.ingredientId} not found`,
+    );
+  }
+  await updateProductRepo(
+    db,
+    id,
+    {
+      ...data,
+      ingredientId: ingredientEntityId as IngredientId | null | undefined,
+    },
+    actor,
+  );
   // Eager recompute of dependent recipes (and inventory valuations) happens at
   // the router layer (covers UI + MCP callers) — see the product router's
   // update proc.
-  return await getProductWithFood(db, usdaClient, id);
+  return {
+    output: await getProductWithFood(db, usdaClient, id),
+    entityId: id,
+  };
 };
 
 export const createProductWriteActions = (

@@ -1,8 +1,10 @@
 import {
   unsafeIngredientId,
+  unsafeIngredientShortcode,
   unsafeProductId,
   unsafeProductShortcode,
   unsafeRecipeId,
+  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   ingredientOut,
@@ -112,8 +114,7 @@ describe("ingredient product mappers", () => {
     const result = dbIngredientToTopLevelShape(baseIngredient);
 
     expect(result).toEqual({
-      id: INGREDIENT_ID,
-      shortcode: "ING-TEST",
+      id: unsafeIngredientShortcode("ING-TEST"),
       name: "Wheat flour",
       aliases: ["flour"],
       naKinds: [],
@@ -190,14 +191,16 @@ describe("ingredient product mappers", () => {
     const result = firstResult(mapIngredientProducts(rows));
 
     expect(result).toMatchObject({
-      id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("PRD-TEST"),
+      id: unsafeProductShortcode("PRD-TEST"),
       images: [{ id: IMAGE_ID }],
       externalIds: [{ id: EXTERNAL_ID }],
       unitMappings: [
         {
           id: UNIT_MAPPING_ID,
-          sourceMetadata: { type: "product", productId: PRODUCT_ID },
+          sourceMetadata: {
+            type: "product",
+            productId: unsafeProductShortcode("PRD-TEST"),
+          },
         },
       ],
     });
@@ -220,7 +223,7 @@ describe("ingredient product mappers", () => {
     );
 
     expect(result).toMatchObject({
-      id: PRODUCT_ID,
+      id: unsafeProductShortcode("PRD-TEST"),
       images: [],
       externalIds: [],
       unitMappings: [{ id: UNIT_MAPPING_ID }],
@@ -268,9 +271,11 @@ describe("ingredient product mappers", () => {
       ],
     } satisfies IngredientDeepDB);
 
-    expect(result.recipe).toMatchObject({ id: RECIPE_ID, name: "Pancakes" });
-    // Public id now — see the recipe mapper tests.
-    expect(result.recipe).toHaveProperty("shortcode");
+    expect(result.recipe).toMatchObject({
+      id: unsafeRecipeShortcode("RCP-TEST"),
+      name: "Pancakes",
+    });
+    expect(result.recipe).not.toHaveProperty("shortcode");
     expect(result.recipe).not.toHaveProperty("totals");
     expect(result.recipeUsages[0]?.recipe).not.toHaveProperty("totals");
     expect(result).not.toHaveProperty("deletedAt");

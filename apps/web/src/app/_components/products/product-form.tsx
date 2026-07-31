@@ -1,5 +1,5 @@
 import { externalIdInput } from "@cubby/schemas/external-id";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
   type ProductCreateInput,
@@ -282,7 +282,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       );
 
       // Check for ingredient changes
-      const ingredientId = detectComboboxIdChange<IngredientId>(
+      const ingredientId = detectComboboxIdChange<IngredientShortcode>(
         product.ingredient ? product.ingredient.id : null,
         values.ingredient,
       );
@@ -358,7 +358,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               imageHandlers={imageState}
               existingImages={existingImages}
               existingDocuments={existingDocuments}
-              documentFolder={product?.shortcode ?? undefined}
+              documentFolder={product?.id ?? undefined}
               pendingImages={imageState.pendingImages}
             />
           </Stack>

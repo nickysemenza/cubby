@@ -95,7 +95,6 @@ export async function getCalendarRange(
     items.push({
       kind: "meal",
       id: meal.id,
-      shortcode: meal.shortcode,
       title: meal.name || "Meal",
       startDate: meal.date,
       endDateExclusive: shiftPlainDate(meal.date, 1),
@@ -115,8 +114,7 @@ export async function getCalendarRange(
     if (!startDate || !endDate) continue;
     items.push({
       kind: "task",
-      id: row.id,
-      shortcode: unsafeTaskShortcode(row.shortcode),
+      id: unsafeTaskShortcode(row.shortcode),
       title: value.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),
@@ -132,8 +130,7 @@ export async function getCalendarRange(
     if (!value.date) continue;
     items.push({
       kind: "expense",
-      id: row.id,
-      shortcode: unsafeExpenseShortcode(row.shortcode),
+      id: unsafeExpenseShortcode(row.shortcode),
       title: value.name,
       startDate: value.date,
       endDateExclusive: shiftPlainDate(value.date, 1),
@@ -164,8 +161,7 @@ export async function getCalendarRange(
     }
     items.push({
       kind: "project",
-      id: row.id,
-      shortcode: unsafeProjectShortcode(row.shortcode),
+      id: unsafeProjectShortcode(row.shortcode),
       title: row.name,
       startDate,
       endDateExclusive: shiftPlainDate(endDate, 1),

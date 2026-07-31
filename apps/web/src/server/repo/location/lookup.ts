@@ -3,7 +3,11 @@
  * Find locations by various identifiers (name, shortcode).
  */
 
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import {
+  type LocationId,
+  unsafeLocationId,
+  unsafeLocationShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationOut,
@@ -50,8 +54,8 @@ export const locationParentOptions = async (
   db: Database,
 ): Promise<LocationParentOptionsOut[]> => {
   const dbClient = getDb(db);
-  return dbClient
-    .select({ id: location.id, name: location.name })
+  const rows = await dbClient
+    .select({ shortcode: location.shortcode, name: location.name })
     .from(location)
     .where(
       and(
@@ -70,6 +74,10 @@ export const locationParentOptions = async (
       ),
     )
     .orderBy(asc(location.name));
+  return rows.map((row) => ({
+    id: unsafeLocationShortcode(row.shortcode),
+    name: row.name,
+  }));
 };
 
 /**

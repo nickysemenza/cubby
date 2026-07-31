@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
   type LocationCreateInput,
@@ -117,7 +117,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       );
 
       // Check if parent has changed (combobox requires special handling)
-      const parentIdChange = detectComboboxIdChange<LocationId>(
+      const parentIdChange = detectComboboxIdChange<LocationShortcode>(
         location.parent?.id,
         values.parent,
       );

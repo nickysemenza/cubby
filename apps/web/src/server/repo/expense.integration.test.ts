@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseShortcode,
+  unsafeProductId,
   unsafeProjectShortcode,
   unsafePurchaseId,
   unsafePurchaseShortcode,
@@ -52,7 +53,10 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
-import { resolveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveShortcode,
+} from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
 
 /**
@@ -1703,7 +1707,7 @@ describe("expense repository — product bridge", () => {
         trade: "millwork",
         costType: "tools",
         name: "miter saw",
-        productId: product.shortcode,
+        productId: product.id,
         vendor: "Home Depot",
         cost: 180,
       }),
@@ -1741,7 +1745,7 @@ describe("expense repository — product bridge", () => {
         trade: "flooring",
         costType: "tools",
         name: "tile saw",
-        productId: product.shortcode,
+        productId: product.id,
         cost: 180,
       }),
       ctx.actor,
@@ -1752,7 +1756,7 @@ describe("expense repository — product bridge", () => {
         trade: "flooring",
         costType: "tools",
         name: "sold tile saw",
-        productId: product.shortcode,
+        productId: product.id,
         cost: -150,
       }),
       ctx.actor,
@@ -1802,13 +1806,25 @@ describe("expense repository — product bridge", () => {
         trade: "other",
         costType: "tools",
         name: "doomed drill",
-        productId: bridgeDoomedDrill.shortcode,
+        productId: bridgeDoomedDrill.id,
       }),
       ctx.actor,
     );
 
     await expect(
-      deleteProducts(ctx.db, [bridgeDoomedDrill.id], ctx.actor),
+      deleteProducts(
+        ctx.db,
+        [
+          unsafeProductId(
+            (await resolveLiveShortcode(
+              ctx.db,
+              bridgeDoomedDrill.id,
+              "product",
+            ))!,
+          ),
+        ],
+        ctx.actor,
+      ),
     ).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
       cause: { reason: "PRODUCT_HAS_EXPENSES" },
@@ -2050,7 +2066,7 @@ describe("expense repository — productPresenceFilter", () => {
         trade: "other",
         costType: "tools",
         name: "linked expense",
-        productId: product.shortcode,
+        productId: product.id,
       }),
       ctx.actor,
     );
@@ -2086,7 +2102,7 @@ describe("expense repository — productPresenceFilter", () => {
         trade: "other",
         costType: "tools",
         name: "linked sander expense",
-        productId: product.shortcode,
+        productId: product.id,
       }),
       ctx.actor,
     );
@@ -2113,8 +2129,9 @@ describe("expense repository — productPresenceFilter", () => {
   it('"has" still counts an expense whose linked product was later soft-deleted', async () => {
     // This is the documented semantic decision (buildExpenseWhereClause,
     // repo/expense/lookup.ts): "linked" means productId IS NOT NULL, which
-    // deliberately includes rows whose product was soft-deleted afterward —
-    // those read back with productId set and productName null.
+    // deliberately includes rows whose product was soft-deleted afterward.
+    // The public relation degrades to null because a dead target has no live
+    // shortcode to expose, while the private FK still drives the filter.
     //
     // The state is written directly (mirrors location.integration.test.ts's
     // "a shelf holding only a soft-deleted product counts as empty") because
@@ -2134,7 +2151,7 @@ describe("expense repository — productPresenceFilter", () => {
         trade: "other",
         costType: "tools",
         name: "doomed router expense",
-        productId: doomedRouter.shortcode,
+        productId: doomedRouter.id,
       }),
       ctx.actor,
     );
@@ -2142,7 +2159,14 @@ describe("expense repository — productPresenceFilter", () => {
     await getDb(ctx.db)
       .update(product)
       .set({ deletedAt: new Date() })
-      .where(eq(product.id, doomedRouter.id));
+      .where(
+        eq(
+          product.id,
+          unsafeProductId(
+            (await resolveLiveShortcode(ctx.db, doomedRouter.id, "product"))!,
+          ),
+        ),
+      );
 
     const hasFiltered = await expenseList(
       ctx.db,
@@ -2152,7 +2176,7 @@ describe("expense repository — productPresenceFilter", () => {
     );
     expect(hasFiltered.data.map((p) => p.id)).toContain(expense.id);
     const stillLinked = hasFiltered.data.find((p) => p.id === expense.id);
-    expect(stillLinked?.productId).toBe(doomedRouter.id);
+    expect(stillLinked?.productId).toBeNull();
     expect(stillLinked?.productName).toBeNull();
 
     const noneFiltered = await expenseList(

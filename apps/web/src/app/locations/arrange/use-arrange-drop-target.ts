@@ -1,5 +1,5 @@
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
@@ -8,7 +8,7 @@ import type { ArrangeDropData } from "./arrange-types";
 interface ArrangeDropTargetOptions<T extends HTMLElement> {
   ref: RefObject<T | null>;
   roots: InfLocation[];
-  locationId: LocationId | null;
+  locationId: LocationShortcode | null;
   onDragEnter?: () => void;
   onDragLeave?: () => void;
   onDrop?: () => void;

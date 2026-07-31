@@ -17,7 +17,7 @@ interface NetworkLink extends d3Force.SimulationLinkDatum<NetworkNode> {
   source: string | NetworkNode;
   target: string | NetworkNode;
   weight: number;
-  recipes: Array<{ id: string; shortcode: string; name: string }>;
+  recipes: Array<{ id: string; name: string }>;
 }
 
 export default function IngredientNetwork() {
@@ -361,7 +361,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               <Link
                 key={recipe.id}
                 to="/recipes/$shortcode"
-                params={{ shortcode: recipe.shortcode }}
+                params={{ shortcode: recipe.id }}
                 className="block text-primary text-xs hover:underline"
               >
                 {recipe.name}
@@ -377,7 +377,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
           <div className="font-medium">
             <Link
               to="/ingredients/$shortcode"
-              params={{ shortcode: hoveredNode.shortcode }}
+              params={{ shortcode: hoveredNode.id }}
               className="hover:underline"
               style={{ pointerEvents: "auto" }}
             >

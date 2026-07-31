@@ -413,9 +413,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           <Package className="mr-2 size-4" />
           Add to Inventory
         </DropdownMenuItem>
-        {row.shortcode && (
+        {row.id && (
           <DropdownMenuItem
-            render={<Link to="/labels" search={{ codes: row.shortcode }} />}
+            render={<Link to="/labels" search={{ codes: row.id }} />}
           >
             <Printer className="mr-2 size-4" />
             Print Label

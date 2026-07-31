@@ -115,7 +115,6 @@ function task(params: {
     projectName: null,
     subjectProductId: null,
     subjectProductName: null,
-    subjectProductShortcode: null,
     parentTaskName: null,
     blockedByIds: [],
     blockingIds: [],

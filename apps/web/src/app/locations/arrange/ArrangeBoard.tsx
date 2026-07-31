@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, Home } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,15 +15,15 @@ interface ArrangeBoardProps {
 }
 
 interface ColumnModel {
-  locationId: LocationId | null;
+  locationId: LocationShortcode | null;
   headerLocation: InfLocation | null;
   nodes: InfLocation[];
   items: InfLocation["inventoryItems"];
-  activeChildId: LocationId | null;
+  activeChildId: LocationShortcode | null;
 }
 
 export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
-  const [columnPath, setColumnPath] = useState<LocationId[]>([]);
+  const [columnPath, setColumnPath] = useState<LocationShortcode[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   useAutoScroll(scrollRef);
 
@@ -35,7 +35,7 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
   // Drop any path segment that no longer resolves (e.g. after a move relocated
   // a location out from under an open column).
   const validPath = useMemo(() => {
-    const out: LocationId[] = [];
+    const out: LocationShortcode[] = [];
     for (const id of columnPath) {
       if (findNode(roots, id)) out.push(id);
       else break;
@@ -69,7 +69,7 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
     return cols;
   }, [rootsMain, roots, validPath]);
 
-  const openChildAt = (columnIndex: number, childId: LocationId) => {
+  const openChildAt = (columnIndex: number, childId: LocationShortcode) => {
     setColumnPath([...validPath.slice(0, columnIndex), childId]);
   };
 
@@ -130,7 +130,7 @@ export function ArrangeBoard({ roots, depth, unknownRoot }: ArrangeBoardProps) {
 
 interface BoardBreadcrumbProps {
   roots: InfLocation[];
-  path: LocationId[];
+  path: LocationShortcode[];
   /** Jump to a path prefix of the given length (0 = Home). */
   onJump: (prefixLength: number) => void;
 }
@@ -165,7 +165,7 @@ function BoardBreadcrumb({ roots, path, onJump }: BoardBreadcrumbProps) {
 
 interface BreadcrumbCrumbProps {
   roots: InfLocation[];
-  locationId: LocationId | null;
+  locationId: LocationShortcode | null;
   label: string;
   icon?: React.ReactNode;
   onClick: () => void;

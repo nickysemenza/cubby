@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
-import { cookbookId, recipeId } from "./identifiers";
+import { cookbookShortcode, recipeShortcode } from "./identifiers";
 import { cookbookSummary } from "./recipe";
 
 // The raw "import recipe" carrier: a recipe from any import source (EPUB cookbook
@@ -109,7 +109,7 @@ export const parseRecipeHtmlInput = z.object({
 });
 
 export const recipeImportIdOut = z.object({
-  id: recipeId,
+  id: recipeShortcode,
 });
 
 export const upsertCookbookInput = z.object({
@@ -122,21 +122,21 @@ export const upsertCookbookInput = z.object({
 });
 
 export const cookbookIdOut = z.object({
-  id: cookbookId,
+  id: cookbookShortcode,
 });
 
 export const cookbookIdInput = z.object({
-  cookbookId,
+  cookbookId: cookbookShortcode,
 });
 
 export const cookbookSourceOut = z.object({
-  id: cookbookId,
+  id: cookbookShortcode,
   name: z.string(),
   recipes: importRecipesSchema,
 });
 
 export const importCookbookStreamInput = z.object({
-  cookbookId,
+  cookbookId: cookbookShortcode,
   indices: z.array(z.number().int().nonnegative()).min(1),
 });
 
@@ -145,12 +145,9 @@ export const cookbookDiffInput = z.object({
 });
 
 export const cookbookDiffOut = z.array(
-  // `id` is the private uuid (the hover preview fetches by it); `shortcode` is
-  // the public id the "already imported" link is built from.
   z.object({
     title: z.string(),
-    id: z.uuid(),
-    shortcode: z.string(),
+    id: recipeShortcode,
     sig: z.string(),
   }),
 );
@@ -160,11 +157,7 @@ export const notionPreviewItem = z.object({
   name: z.string(),
   notionUrl: z.string(),
   status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
-  // The existing Cubby recipe when already imported. `existingId` is the private
-  // uuid the hover preview fetches by; `existingShortcode` is the public id the
-  // in-app link is built from.
-  existingId: z.string().nullable(),
-  existingShortcode: z.string().nullable(),
+  existingId: recipeShortcode.nullable(),
   reasons: z.array(z.string()),
   // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
   // previews render with the exact same card.

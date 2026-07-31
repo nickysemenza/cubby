@@ -60,7 +60,6 @@ export function NotionImport() {
         pageId: string;
         ok: true;
         id: string;
-        shortcode: string;
         status: "created" | "updated";
       }
     | { pageId: string; ok: false; error: string },
@@ -113,7 +112,7 @@ export function NotionImport() {
             new Map(m).set(
               item.pageId,
               item.ok
-                ? { status: "done", shortcode: item.shortcode }
+                ? { status: "done", id: item.id }
                 : { status: "error", message: item.error },
             ),
           ),
@@ -218,7 +217,6 @@ export function NotionImport() {
                 recipe={item.recipe}
                 status={item.status}
                 existingId={item.existingId ?? undefined}
-                existingShortcode={item.existingShortcode ?? undefined}
                 reasons={item.reasons}
                 selected={selected.has(item.pageId)}
                 disabled={item.status === "needs-formatting"}

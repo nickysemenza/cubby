@@ -1,5 +1,8 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  LocationShortcode,
+} from "@cubby/schemas/identifiers";
 
 /**
  * pragmatic-drag-and-drop payloads for the arrange surface. Both the Board and
@@ -10,16 +13,16 @@ import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
 
 export type LocationDragData = {
   arrangeDrag: "location";
-  locationId: LocationId;
+  locationId: LocationShortcode;
   /** Current parent id, or null for a top-level location. Lets us skip no-ops. */
-  parentId: LocationId | null;
+  parentId: LocationShortcode | null;
 };
 
 export type ItemDragData = {
   arrangeDrag: "item";
-  inventoryEntryId: InventoryId;
+  inventoryEntryId: InventoryShortcode;
   amount: Amount;
-  sourceLocationId: LocationId;
+  sourceLocationId: LocationShortcode;
 };
 
 export type ArrangeDragData = LocationDragData | ItemDragData;
@@ -27,7 +30,7 @@ export type ArrangeDragData = LocationDragData | ItemDragData;
 /** A location drop target. `locationId: null` is the "Home" (top-level) target. */
 export type ArrangeDropData = {
   arrangeTarget: true;
-  locationId: LocationId | null;
+  locationId: LocationShortcode | null;
 };
 
 export function asDragData(

@@ -230,13 +230,11 @@ function IngredientLedger({
                   ? {
                       entity: "ingredient" as const,
                       id: ing.ingredient.id,
-                      shortcode: ing.ingredient.shortcode,
                     }
                   : ing.type === "recipe"
                     ? {
                         entity: "recipe" as const,
                         id: ing.recipe.id,
-                        shortcode: ing.recipe.shortcode,
                       }
                     : null;
               return (
@@ -266,7 +264,6 @@ function IngredientLedger({
                     {ref ? (
                       <EntityPreviewLink
                         entity={ref.entity}
-                        shortcode={ref.shortcode}
                         id={ref.id}
                         className={dottedEntityLink}
                       >

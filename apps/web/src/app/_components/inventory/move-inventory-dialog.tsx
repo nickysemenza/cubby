@@ -12,7 +12,7 @@
  * @see /inventory/bulk-move - Full page bulk move workflow
  */
 
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   BulkMoveItem,
   inventoryListItemOut,
@@ -37,7 +37,7 @@ interface MoveInventoryDialogProps {
   onOpenChange: (open: boolean) => void;
   items: InventoryItem[];
   /** When omitted, derived from items[0].location.id */
-  sourceLocationId?: LocationId;
+  sourceLocationId?: LocationShortcode;
   onSuccess: () => void;
 }
 
@@ -63,7 +63,7 @@ export function MoveInventoryDialog({
   const handleSubmit = async () => {
     const values = form.getValues();
 
-    const sourceGroups = new Map<LocationId, InventoryItem[]>();
+    const sourceGroups = new Map<LocationShortcode, InventoryItem[]>();
     for (const item of items) {
       const sourceLocationId = sourceLocationIdProp ?? item.location.id;
       if (!sourceLocationId) {

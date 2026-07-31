@@ -146,16 +146,14 @@ describe("inventory mappers", () => {
     const result = dbInventoryEntryToAPI(row);
 
     expect(result).toEqual({
-      id: INVENTORY_ID,
-      shortcode: unsafeInventoryShortcode("INV-TEST"),
+      id: unsafeInventoryShortcode("INV-TEST"),
       amount: { value: 2, unit: "each" },
       valuation: 9,
       verifiedAt: null,
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
       location: {
-        id: LOCATION_ID,
-        shortcode: unsafeLocationShortcode("LOC-TEST"),
+        id: unsafeLocationShortcode("LOC-TEST"),
         aliases: [],
         lastBulkInventory: null,
         aiDescription: null,
@@ -167,8 +165,7 @@ describe("inventory mappers", () => {
         updatedAt: UPDATED_AT,
       },
       product: {
-        id: PRODUCT_ID,
-        shortcode: unsafeProductShortcode("PRD-TEST"),
+        id: unsafeProductShortcode("PRD-TEST"),
         images: [],
         externalIds: [
           {
@@ -202,7 +199,7 @@ describe("inventory mappers", () => {
             updatedAt: UPDATED_AT,
             sourceMetadata: {
               type: "product",
-              productId: PRODUCT_ID,
+              productId: unsafeProductShortcode("PRD-TEST"),
             },
           },
         ],

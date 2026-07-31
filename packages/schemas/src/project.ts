@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
+import type { ShortcodeEntity } from "./entity-manifest";
 import {
+  anyShortcodeSchema,
   expenseShortcode,
-  productId,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -430,7 +431,7 @@ const taskFields = {
   status: taskStatusSchema,
   projectId: projectShortcode.nullable(),
   /** The optional product/item this task acts on. */
-  subjectProductId: productId.nullable(),
+  subjectProductId: productShortcode.nullable(),
   // One level of checklist subtasks — a subtask's own parentTaskId must be
   // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
   // an all-done checklist never auto-completes it.
@@ -546,7 +547,7 @@ export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 export const taskFilterFields = {
   status: oneOrMany(taskStatusSchema).optional(),
   projectId: oneOrMany(projectShortcode).optional(),
-  subjectProductId: oneOrMany(productId).optional(),
+  subjectProductId: oneOrMany(productShortcode).optional(),
   trade: oneOrMany(tradeSchema).optional(),
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
@@ -599,7 +600,6 @@ export const taskOut = z.object({
   projectName: z.string().nullable(),
   /** Null when there is no subject product, or it is gone/soft-deleted. */
   subjectProductName: z.string().nullable(),
-  subjectProductShortcode: productShortcode.nullable(),
   /** Null when the task has no parent, or the parent is gone/soft-deleted. */
   parentTaskName: z.string().nullable(),
   blockedByIds: z.array(taskShortcode),
@@ -677,7 +677,6 @@ export const actionableTaskOut = z.object({
   ...taskFields,
   projectName: z.string().nullable(),
   subjectProductName: z.string().nullable(),
-  subjectProductShortcode: productShortcode.nullable(),
   blockedByIds: z.array(taskShortcode),
   blockingIds: z.array(taskShortcode),
   // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
@@ -767,7 +766,7 @@ const expenseFields = {
   notes: z.string().nullable(),
   future: z.boolean().describe("Planned/not-yet-made expense"),
   projectId: projectShortcode.nullable(),
-  productId: productId
+  productId: productShortcode
     .nullable()
     .describe(
       "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
@@ -863,7 +862,7 @@ export const expenseFilterFields = {
    * OR-with-`projectId` semantics documented there.
    */
   projectPresenceFilter: presenceFilter,
-  productId: productId.optional(),
+  productId: productShortcode.optional(),
   productPresenceFilter: presenceFilter,
   /**
    * Vendor **ids**, resolved through `expense.purchaseId → Purchase.vendorId`.
@@ -1033,7 +1032,6 @@ export const expenseOut = z.object({
   // product deletion deliberately does not block on referencing expenses
   // (unlike project deletion), so this null branch is routinely reachable.
   productName: z.string().nullable(),
-  productShortcode: productShortcode.nullable(),
   ...timestampedFields,
 });
 export type ExpenseOut = z.infer<typeof expenseOut>;
@@ -1326,42 +1324,9 @@ export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 // ---------------------------------------------------------------------------
 
 export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
-/**
- * MCP views of task/expense. Identical to the tRPC shapes except the product
- * FK, which carries product's public code rather than its uuid — product is not
- * cut over yet, so the swap happens here instead of on the shared shape the UI
- * uses. Delete these once product's own `id` is its shortcode.
- */
-export const taskMcpOut = z.object({
-  id: taskShortcode,
-  ...taskFields,
-  projectName: z.string().nullable(),
-  subjectProductName: z.string().nullable(),
-  // The product FK by PUBLIC id (product isn't cut over, so `taskFields`
-  // still types it as a uuid).
-  subjectProductId: productShortcode.nullable(),
-  parentTaskName: z.string().nullable(),
-  blockedByIds: z.array(taskShortcode),
-  blockingIds: z.array(taskShortcode),
-  subtaskCount: z.number().int(),
-  doneSubtaskCount: z.number().int(),
-  ...timestampedFields,
-});
-
-export const expenseMcpOut = z.object({
-  id: expenseShortcode,
-  ...expenseFields,
-  purchaseId: purchaseShortcode.nullable(),
-  vendorId: vendorShortcode.nullable(),
-  projectName: z.string().nullable(),
-  productName: z.string().nullable(),
-  // Same product-FK swap as `taskMcpOut`.
-  productId: productShortcode.nullable(),
-  ...timestampedFields,
-});
-
-export const taskMcpListOut = createPaginatedResponseSchema(taskMcpOut);
-export const expenseMcpListOut = createPaginatedResponseSchema(expenseMcpOut);
+/** MCP aliases retained for the deliberately lean tool catalog imports. */
+export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
+export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
 
 // ---------------------------------------------------------------------------
 // Project dashboard: bounded Overview summary + on-demand portfolio
@@ -1449,7 +1414,10 @@ export const projectAttentionItemSchema = z.object({
   severity: z.enum(["info", "warning", "critical"]),
   description: z.string(),
   entityType: z.enum(["project", "task", "expense"]),
-  entityId: z.string(),
+  entityId: anyShortcodeSchema(["project", "task", "expense"] satisfies [
+    ShortcodeEntity,
+    ...ShortcodeEntity[],
+  ]),
   date: plainDate.nullable(),
   amount: z.number().nullable(),
   href: z.string().describe("Direct link to the corrective view"),

@@ -1,5 +1,8 @@
 import type { WFoodInput, WUnitMapping } from "@cubby/recipebridge";
-import { type ProductId, unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  type ProductShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   type FoodSummary,
@@ -53,7 +56,7 @@ const toUnitMapping = (m: ReadonlyDeep<WUnitMapping>): UnitMapping => ({
     m.sourceMetadata?.type === "product"
       ? {
           type: "product",
-          productId: unsafeProductId(m.sourceMetadata.productId),
+          productId: unsafeProductShortcode(m.sourceMetadata.productId),
         }
       : m.sourceMetadata?.type === "food"
         ? { type: "food", fdcId: m.sourceMetadata.fdcId }
@@ -71,7 +74,7 @@ export const getAllUnitMappingsFromProduct = (product: {
   // All fields are required (not optional) on purpose: omitting one would
   // silently drop a synthesized edge — e.g. a missing `price` computes "no
   // cost" with no error. Required params make that a compile error instead.
-  id: ProductId;
+  id: ProductShortcode;
   // Stored mappings are only forwarded to WASM, which treats `sourceMetadata`
   // as optional — so accept the metadata-less shape (`WUnitMapping`) too. This
   // lets server callers pass raw DB rows (a/b/source) without synthesizing the
@@ -96,7 +99,7 @@ export const getAllUnitMappingsFromProduct = (product: {
 export const getIngredientMappings = <
   T extends {
     product: Array<{
-      id: ProductId;
+      id: ProductShortcode;
       unitMappings: UnitMapping[];
       food: FoodSummary | null;
       price: number | null;

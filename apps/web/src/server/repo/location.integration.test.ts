@@ -1,3 +1,4 @@
+import { unsafeLocationId, unsafeProductId } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,6 +12,7 @@ import {
 } from "./location";
 import { createProduct } from "./product";
 import { makeLocationInput, makeProductInput } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("findOrCreateLocationByName", () => {
   const ctx = withTestDb();
@@ -144,8 +146,12 @@ describe("locationList parentPresenceFilter", () => {
       await createInventoryEntry(
         ctx.db,
         {
-          productId: p.id,
-          locationId: stocked.id,
+          productId: unsafeProductId(
+            (await resolveLiveShortcode(ctx.db, p.id, "product"))!,
+          ),
+          locationId: unsafeLocationId(
+            (await resolveLiveShortcode(ctx.db, stocked.id, "location"))!,
+          ),
           amount: { value: 1, unit: "each" },
         },
         ctx.actor,
@@ -187,8 +193,12 @@ describe("locationList parentPresenceFilter", () => {
       await createInventoryEntry(
         ctx.db,
         {
-          productId: doomed.id,
-          locationId: shelf.id,
+          productId: unsafeProductId(
+            (await resolveLiveShortcode(ctx.db, doomed.id, "product"))!,
+          ),
+          locationId: unsafeLocationId(
+            (await resolveLiveShortcode(ctx.db, shelf.id, "location"))!,
+          ),
           amount: { value: 1, unit: "each" },
         },
         ctx.actor,
@@ -196,7 +206,14 @@ describe("locationList parentPresenceFilter", () => {
       await getDb(ctx.db)
         .update(product)
         .set({ deletedAt: new Date() })
-        .where(eq(product.id, doomed.id));
+        .where(
+          eq(
+            product.id,
+            unsafeProductId(
+              (await resolveLiveShortcode(ctx.db, doomed.id, "product"))!,
+            ),
+          ),
+        );
 
       const none = await listWith({ inventoryPresenceFilter: "none" });
       const row = none.data.find((l) => l.id === shelf.id);

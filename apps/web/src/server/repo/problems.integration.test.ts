@@ -1,9 +1,8 @@
-import {
-  type LocationId,
-  type ProductId,
-  type ProjectShortcode,
-  type PurchaseShortcode,
-  unsafeVendorShortcode,
+import type {
+  LocationId,
+  ProductId,
+  ProjectShortcode,
+  PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
@@ -43,14 +42,17 @@ import {
 import { getDb } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient, getIngredientByName } from "./ingredient";
-import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
-import { createLocation, ensureGlobalUnknownLocation } from "./location";
+import { deleteInventoryEntries } from "./inventory";
+import { ensureGlobalUnknownLocation } from "./location";
 import { findStaleIngredientParses } from "./problems";
-import { createProduct, deleteProducts } from "./product";
+import { deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
 import { updatePurchase } from "./purchase";
-import { createRecipe } from "./recipe";
 import {
+  createInventoryFixture as createInventoryEntry,
+  createLocationFixture as createLocation,
+  createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
   ingredientRef,
   makeExpenseInput,
   makeLocationInput,
@@ -200,7 +202,7 @@ describe("problems repo", () => {
 
       const result = await drainGen(reparseStaleIngredientParses(ctx.db));
       expect(result.updated).toBeGreaterThanOrEqual(1);
-      expect(result.recipesAffected).toContain(recipe.id);
+      expect(result.recipesAffected).toContain(recipe.entityId);
 
       // The drift is gone, and a second run finds nothing.
       const staleIngredientParses = await findStaleIngredientParses(ctx.db);
@@ -281,7 +283,7 @@ describe("problems repo", () => {
         false,
       );
 
-      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+      await deleteInventoryEntries(ctx.db, [entry.entityId], ctx.actor);
 
       const after = await findAllProblems(
         ctx.db,
@@ -314,7 +316,7 @@ describe("problems repo", () => {
           trade: "other",
           costType: "tools",
           name: "orphan-guard expense",
-          productId: bought.shortcode,
+          productId: bought.id,
         }),
         ctx.actor,
       );
@@ -351,7 +353,7 @@ describe("problems repo", () => {
         taskCreateInput.parse({
           name: "Replace furnace filter",
           trade: "mechanical",
-          subjectProductId: maintained.shortcode,
+          subjectProductId: maintained.id,
         }),
         ctx.actor,
       );
@@ -450,7 +452,7 @@ describe("problems repo", () => {
       ).toBe(false);
 
       // Soft-deleting the only entry un-stocks it, so it drops out of both.
-      await deleteInventoryEntries(ctx.db, [unpricedEntry.id], ctx.actor);
+      await deleteInventoryEntries(ctx.db, [unpricedEntry.entityId], ctx.actor);
       const after = await findFastProblems(ctx.db);
       expect(after.productsMissingPrice.some((p) => p.id === unpriced.id)).toBe(
         false,
@@ -638,8 +640,8 @@ describe("problems repo", () => {
       await getDb(ctx.db)
         .update(product)
         .set({ manufacturer: UNSPECIFIED_MANUFACTURER, price: 5 })
-        .where(eq(product.id, noManu.id));
-      await attachImage(noManu.id);
+        .where(eq(product.id, noManu.entityId));
+      await attachImage(noManu.entityId);
 
       // (b) Has manufacturer + image, but no price → only the price gap.
       const noPrice = await createProduct(
@@ -647,7 +649,7 @@ describe("problems repo", () => {
         makeProductInput({ name: "No Price", upc: UPC_PRICE }),
         ctx.actor,
       );
-      await attachImage(noPrice.id);
+      await attachImage(noPrice.entityId);
 
       // (c) Has manufacturer + price, but no image → only the image gap.
       const noImage = await createProduct(
@@ -658,7 +660,7 @@ describe("problems repo", () => {
       await getDb(ctx.db)
         .update(product)
         .set({ price: 9 })
-        .where(eq(product.id, noImage.id));
+        .where(eq(product.id, noImage.entityId));
 
       // (d) Fully populated → not a candidate, must never be looked up.
       const full = await createProduct(
@@ -669,8 +671,8 @@ describe("problems repo", () => {
       await getDb(ctx.db)
         .update(product)
         .set({ price: 3 })
-        .where(eq(product.id, full.id));
-      await attachImage(full.id);
+        .where(eq(product.id, full.entityId));
+      await attachImage(full.entityId);
 
       // (e) Misc product with a manufacturer gap → excluded regardless.
       const misc = await createProduct(
@@ -681,8 +683,8 @@ describe("problems repo", () => {
       await getDb(ctx.db)
         .update(product)
         .set({ manufacturer: UNSPECIFIED_MANUFACTURER, price: 1 })
-        .where(eq(product.id, misc.id));
-      await attachImage(misc.id);
+        .where(eq(product.id, misc.entityId));
+      await attachImage(misc.entityId);
 
       const { client, calls } = fakeUpcClient({
         [UPC_MANU]: upcResponse(UPC_MANU, { brand: "Acme" }),
@@ -734,7 +736,7 @@ describe("problems repo", () => {
         makeProductInput({ name: "Still No Price", upc: UPC_PRICE }),
         ctx.actor,
       );
-      await attachImage(noPrice.id);
+      await attachImage(noPrice.entityId);
 
       const { client } = fakeUpcClient({
         [UPC_PRICE]: upcResponse(UPC_PRICE), // all-null payload
@@ -765,8 +767,8 @@ describe("problems repo", () => {
       await getDb(ctx.db)
         .update(product)
         .set({ price: 9 })
-        .where(eq(product.id, pdfOnly.id));
-      await attachPdf(pdfOnly.id);
+        .where(eq(product.id, pdfOnly.entityId));
+      await attachPdf(pdfOnly.entityId);
 
       const { client } = fakeUpcClient({
         [UPC_IMAGE]: upcResponse(UPC_IMAGE, {
@@ -1010,8 +1012,8 @@ describe("problems service — recount staleness", () => {
     const never = await seedStocked("Never-recounted shelf");
     const long = await seedStocked("Long-ago shelf");
     const fresh = await seedStocked("Freshly-recounted shelf");
-    await setLastRecount(long.loc.id, daysAgo(90));
-    await setLastRecount(fresh.loc.id, daysAgo(3));
+    await setLastRecount(long.loc.entityId, daysAgo(90));
+    await setLastRecount(fresh.loc.entityId, daysAgo(3));
 
     const { staleLocations } = await findFastProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
@@ -1031,7 +1033,7 @@ describe("problems service — recount staleness", () => {
       ctx.actor,
     );
     const emptied = await seedStocked("Emptied bin");
-    await deleteInventoryEntries(ctx.db, [emptied.entry.id], ctx.actor);
+    await deleteInventoryEntries(ctx.db, [emptied.entry.entityId], ctx.actor);
 
     const { staleLocations } = await findFastProblems(ctx.db);
     const ids = staleLocations.map((l) => l.id);
@@ -1047,8 +1049,8 @@ describe("problems service — recount staleness", () => {
     await getDb(ctx.db)
       .update(inventoryEntry)
       .set({ verifiedAt: new Date() })
-      .where(eq(inventoryEntry.id, verified.entry.id));
-    await deleteInventoryEntries(ctx.db, [removed.entry.id], ctx.actor);
+      .where(eq(inventoryEntry.id, verified.entry.entityId));
+    await deleteInventoryEntries(ctx.db, [removed.entry.entityId], ctx.actor);
 
     const { neverVerifiedInventory } = await findFastProblems(ctx.db);
     const ids = neverVerifiedInventory.map((i) => i.id);
@@ -1090,7 +1092,7 @@ describe("problems service — recount staleness", () => {
     });
 
     // Filing it away (here: soft-deleting the parked row) clears the problem.
-    await deleteInventoryEntries(ctx.db, [parked.id], ctx.actor);
+    await deleteInventoryEntries(ctx.db, [parked.entityId], ctx.actor);
     const after = await findFastProblems(ctx.db);
     expect(after.unknownParkedItems.map((i) => i.id)).not.toContain(parked.id);
   });
@@ -1189,12 +1191,11 @@ describe("problems — brand-label spelling variants", () => {
     createProduct(ctx.db, makeProductInput({ name, manufacturer }), ctx.actor);
 
   it("flags the minority spelling of a manufacturer, pointing at the majority", async () => {
-    const drill = await seedProduct("Ryobi drill", "Ryobi");
-    const saw = await seedProduct("Ryobi saw", "Ryobi");
+    await seedProduct("Ryobi drill", "Ryobi");
+    await seedProduct("Ryobi saw", "Ryobi");
     const odd = await seedProduct("Ryobi sander", "RYOBI");
 
     const { manufacturerSpellingVariants } = await findFastProblems(ctx.db);
-    const canonicalProduct = drill.id < saw.id ? drill : saw;
     expect(manufacturerSpellingVariants).toEqual([
       {
         value: "RYOBI",
@@ -1202,15 +1203,6 @@ describe("problems — brand-label spelling variants", () => {
         canonical: "Ryobi",
         canonicalCount: 2,
         sampleId: odd.id,
-        sampleShortcode: odd.shortcode,
-        // Shared with the vendor detector, which needs an id for the spelling it
-        // MERGES INTO. Only that caller reads it (a manufacturer is a string, so
-        // its fix is a rename, not a merge) and `problemsFastSchema` strips it
-        // from this key on the wire — but the SQL selects it for both, so it is
-        // pinned here too. `min(id::text)` over the canonical spelling's two
-        // products, derived rather than hardcoded since uuids decide which.
-        canonicalSampleId: canonicalProduct.id,
-        canonicalSampleShortcode: canonicalProduct.shortcode,
       },
     ]);
   });
@@ -1248,7 +1240,7 @@ describe("problems — brand-label spelling variants", () => {
     const before = await findFastProblems(ctx.db);
     expect(before.manufacturerSpellingVariants).toHaveLength(1);
 
-    await deleteProducts(ctx.db, [odd.id], ctx.actor);
+    await deleteProducts(ctx.db, [odd.entityId], ctx.actor);
 
     const after = await findFastProblems(ctx.db);
     expect(after.manufacturerSpellingVariants).toEqual([]);
@@ -1280,9 +1272,7 @@ describe("problems — duplicate vendors", () => {
 
   // Idempotent by contract (vendor.integration.test pins it), so this reads an
   // existing roster row's internal uuid rather than creating anything.
-  // `sampleId`/`canonicalSampleId` on the detector row are that same internal
-  // uuid (`id::text` in the SQL) — the shortcode lives in the separate
-  // `sampleShortcode`/`canonicalSampleShortcode` fields.
+  // The detector rows expose these entities by their canonical public ids.
   const vendorUuidOf = (name: string) => findOrCreateVendor(ctx.db, name);
 
   it("pairs two spellings of one vendor, keeping the one with more charges", async () => {
@@ -1304,10 +1294,8 @@ describe("problems — duplicate vendors", () => {
         count: 1,
         canonical: "Amazon",
         canonicalCount: 2,
-        sampleId: sampleUuid,
-        sampleShortcode: sample.id,
-        canonicalSampleId: canonicalUuid,
-        canonicalSampleShortcode: canonicalSample.id,
+        sampleId: sample.id,
+        canonicalSampleId: canonicalSample.id,
       },
     ]);
     // A duplicate roster row is wrong and drivable to zero, so unlike the
@@ -1336,11 +1324,9 @@ describe("problems — duplicate vendors", () => {
   });
 
   it("clears once merged with the two ids the row carries", async () => {
-    // The row's own `canonicalSampleShortcode`/`sampleShortcode` are exactly
+    // The row's own `canonicalSampleId`/`sampleId` are exactly
     // what the Problems card hands `mergeVendors` (which now speaks
     // shortcodes) — this pins that they're the right way round.
-    // `canonicalSampleId`/`sampleId` stay the internal uuid, asserted
-    // separately below.
     await seedCharge("Lowes", "LW-1");
     await seedCharge("Lowes", "LW-2");
     await seedCharge("Lowe's", "LW-3");
@@ -1354,8 +1340,8 @@ describe("problems — duplicate vendors", () => {
     const keeper = await mergeVendors(
       ctx.db,
       {
-        keepId: unsafeVendorShortcode(row.canonicalSampleShortcode),
-        mergeIds: [unsafeVendorShortcode(row.sampleShortcode)],
+        keepId: row.canonicalSampleId,
+        mergeIds: [row.sampleId],
       },
       ctx.actor,
     );
@@ -1435,18 +1421,15 @@ describe("problems — charges not reconciling", () => {
 
     const { chargesNotReconciling } = await findFastProblems(ctx.db);
 
-    // `chargeNotReconcilingSchema.id` is the internal uuid; `shortcode` is the
-    // public code `bigCharge.id`/`smallCharge.id` (PurchaseOut.id) carry.
+    // The detector's id is the canonical public purchase id.
     // Ordered by the size of the discrepancy: $200 before $15.
-    expect(chargesNotReconciling.map((c) => c.shortcode)).toEqual([
+    expect(chargesNotReconciling.map((c) => c.id)).toEqual([
       bigCharge.id,
       smallCharge.id,
     ]);
-    expect(chargesNotReconciling.map((c) => c.shortcode)).not.toContain(
-      okCharge.id,
-    );
+    expect(chargesNotReconciling.map((c) => c.id)).not.toContain(okCharge.id);
     expect(chargesNotReconciling[1]).toMatchObject({
-      shortcode: smallCharge.id,
+      id: smallCharge.id,
       vendorName: "Reconcile Depot",
       orderId: "RD-SMALL",
       statedTotal: 100,
@@ -1493,7 +1476,7 @@ describe("problems — charges not reconciling", () => {
     const after = await findFastProblems(ctx.db);
     expect(after.chargesNotReconciling).toMatchObject([
       {
-        shortcode: charge.id,
+        id: charge.id,
         statedTotal: 100,
         expenseTotal: 60,
         expenseCount: 1,

@@ -7,7 +7,10 @@
  * these are re-exported from the package barrel.
  */
 
-import { unsafeIngredientShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientShortcode,
+  unsafeProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import {
   type IngredientListItem,
@@ -78,7 +81,7 @@ export const mapIngredientProducts = (
     const baseProduct = dbProductToTopLevelAPI(prod);
     return {
       ...baseProduct,
-      unitMappings: mapProductUnitMappings(prod.id, prod.unitMappings),
+      unitMappings: mapProductUnitMappings(baseProduct.id, prod.unitMappings),
     };
   });
 
@@ -94,8 +97,7 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
 export const dbIngredientToTopLevelShape = (
   ingredientData: IngredientSelect,
 ): IngredientOut => ({
-  id: ingredientData.id,
-  shortcode: unsafeIngredientShortcode(ingredientData.shortcode),
+  id: unsafeIngredientShortcode(ingredientData.shortcode),
   name: ingredientData.name,
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,
@@ -137,7 +139,10 @@ export const mapIngredientProductsLean = (
     const baseProduct = dbProductToTopLevelShape(prod);
     return {
       ...baseProduct,
-      unitMappings: mapProductUnitMappings(prod.id, prod.unitMappings),
+      unitMappings: mapProductUnitMappings(
+        unsafeProductShortcode(prod.shortcode),
+        prod.unitMappings,
+      ),
     };
   });
 

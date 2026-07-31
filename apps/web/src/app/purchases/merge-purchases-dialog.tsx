@@ -1,10 +1,10 @@
-import type { PreviewOperationInput } from "@cubby/schemas/entity-integrity";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
   OperationImpact,
+  type PreviewOperationDraft,
   useOperationPreview,
 } from "~/app/_components/impact/operation-impact";
 import { Row, Stack } from "~/components/layout";
@@ -95,7 +95,7 @@ export function MergePurchasesDialog({
   // (cross-vendor, both-sides-have-orderId) that would otherwise only surface
   // as an error toast after the fact, so this one DOES gate confirmation on
   // `canProceed === false` — see `useOperationPreview`'s doc comment.
-  const previewInput = useMemo<PreviewOperationInput | null>(
+  const previewInput = useMemo<PreviewOperationDraft | null>(
     () =>
       selected.length > 0
         ? {

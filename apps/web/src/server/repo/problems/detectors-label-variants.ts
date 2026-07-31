@@ -27,6 +27,10 @@
  * which needs `fuzzystrmatch`.
  */
 
+import {
+  unsafeProductShortcode,
+  unsafeVendorShortcode,
+} from "@cubby/schemas/identifiers";
 import type { DuplicateVendor, LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQL, type SQLWrapper, sql } from "drizzle-orm";
@@ -52,6 +56,15 @@ const canonicalKey = (value: SQLWrapper) => sql`
       regexp_replace(lower(btrim(${value})), '^the\\s+', ''),
       '(\\.com|,?\\s+(inc|llc|co)\\.?)$', ''),
     '[^a-z0-9]', '', 'g')`;
+
+type SpellingVariantRow = {
+  value: string;
+  count: number;
+  sampleId: string;
+  canonical: string;
+  canonicalCount: number;
+  canonicalSampleId: string;
+};
 
 /**
  * Groups of spellings that share a canonical key, as one row per NON-canonical
@@ -91,16 +104,12 @@ const findSpellingVariants = async (
     /** Aggregate over one spelling's rows — see the `weight` note above. */
     weight = sql`count(*)`,
   }: { extraWhere?: SQL; weight?: SQL } = {},
-): Promise<DuplicateVendor[]> => {
-  const res = await getDb(db).execute<DuplicateVendor>(sql`
+): Promise<SpellingVariantRow[]> => {
+  const res = await getDb(db).execute<SpellingVariantRow>(sql`
     WITH spellings AS (
       SELECT ${column} AS value,
              ${weight}::int AS count,
-             -- Same row as the old min(id::text) (ascending-first == min), but
-             -- paired via array position with its shortcode so the two always
-             -- name the same record.
-             (array_agg(id::text ORDER BY id::text))[1] AS "sampleId",
-             (array_agg(shortcode ORDER BY id::text))[1] AS "sampleShortcode",
+             (array_agg(shortcode ORDER BY id::text))[1] AS "sampleId",
              ${canonicalKey(column)} AS key
       FROM ${table}
       WHERE "deletedAt" IS NULL
@@ -118,14 +127,13 @@ const findSpellingVariants = async (
       SELECT s.*,
              first_value(s.value) OVER w AS canonical,
              first_value(s.count) OVER w AS "canonicalCount",
-             first_value(s."sampleId") OVER w AS "canonicalSampleId",
-             first_value(s."sampleShortcode") OVER w AS "canonicalSampleShortcode"
+             first_value(s."sampleId") OVER w AS "canonicalSampleId"
       FROM spellings s
       INNER JOIN drifted d ON d.key = s.key
       WINDOW w AS (PARTITION BY s.key ORDER BY s.count DESC, s.value ASC)
     )
-    SELECT value, count, "sampleId", "sampleShortcode", canonical,
-           "canonicalCount", "canonicalSampleId", "canonicalSampleShortcode"
+    SELECT value, count, "sampleId", canonical,
+           "canonicalCount", "canonicalSampleId"
     FROM ranked
     WHERE value <> canonical
     ORDER BY "canonicalCount" DESC, count DESC, value ASC
@@ -154,7 +162,12 @@ export const findManufacturerSpellingVariants = (
 ): Promise<LabelVariant[]> =>
   findSpellingVariants(db, product, product.manufacturer, {
     extraWhere: sql`${canonicalKey(product.manufacturer)} <> ${canonicalKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
-  });
+  }).then((rows) =>
+    rows.map(({ canonicalSampleId: _canonicalSampleId, ...row }) => ({
+      ...row,
+      sampleId: unsafeProductShortcode(row.sampleId),
+    })),
+  );
 
 /**
  * Vendors on the roster whose names normalize to the same thing — `Amazon` /
@@ -197,4 +210,10 @@ export const findDuplicateVendors = (
       WHERE ${purchase.vendorId} = ${vendor.id}
         AND ${purchase.deletedAt} IS NULL
     ))`,
-  });
+  }).then((rows) =>
+    rows.map((row) => ({
+      ...row,
+      sampleId: unsafeVendorShortcode(row.sampleId),
+      canonicalSampleId: unsafeVendorShortcode(row.canonicalSampleId),
+    })),
+  );

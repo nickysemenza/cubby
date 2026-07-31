@@ -1,5 +1,19 @@
 import { z } from "zod";
 import { entitySchema } from "./entity";
+import {
+  cookbookShortcode,
+  expenseShortcode,
+  ingredientShortcode,
+  inventoryShortcode,
+  locationShortcode,
+  mealShortcode,
+  productShortcode,
+  projectShortcode,
+  purchaseShortcode,
+  recipeShortcode,
+  taskShortcode,
+  vendorShortcode,
+} from "./identifiers";
 
 /**
  * Serializable shapes for the entity-integrity system.
@@ -295,24 +309,27 @@ export const previewMergeEntitySchema = z.enum([
 ]);
 export type PreviewMergeEntity = z.infer<typeof previewMergeEntitySchema>;
 
-export const previewOperationInputSchema = z.discriminatedUnion("operation", [
+const previewDeleteInput = <const E extends PreviewDeleteEntity>(
+  entity: E,
+  idSchema: z.ZodType<string, string>,
+) =>
   z.object({
     operation: z.literal("delete"),
-    entity: previewDeleteEntitySchema,
-    ids: z.array(z.string()).min(1).max(200),
-  }),
+    entity: z.literal(entity),
+    ids: z.array(idSchema).min(1).max(200),
+  });
+
+const previewMergeInput = <const E extends PreviewMergeEntity>(
+  entity: E,
+  idSchema: z.ZodType<string, string>,
+) =>
   z
     .object({
       operation: z.literal("merge"),
-      entity: previewMergeEntitySchema,
-      /**
-       * Optional on purpose. The merge dialogs need per-candidate impact in
-       * order to CHOOSE a keeper (that is what `rankImpact` does), which they
-       * cannot do if naming the keeper is a precondition. Omit it for the
-       * ranking pass; supply it once the user has picked, for the real preview.
-       */
-      keepId: z.string().optional(),
-      mergeIds: z.array(z.string()).min(1).max(200),
+      entity: z.literal(entity),
+      /** Omit for candidate ranking; supply it for the final preview. */
+      keepId: idSchema.optional(),
+      mergeIds: z.array(idSchema).min(1).max(200),
     })
     .refine((v) => new Set(v.mergeIds).size === v.mergeIds.length, {
       message: "mergeIds must be distinct",
@@ -321,7 +338,26 @@ export const previewOperationInputSchema = z.discriminatedUnion("operation", [
     .refine((v) => !v.keepId || !v.mergeIds.includes(v.keepId), {
       message: "keepId cannot also appear in mergeIds",
       path: ["keepId"],
-    }),
+    });
+
+export const previewOperationInputSchema = z.union([
+  previewDeleteInput("product", productShortcode),
+  previewDeleteInput("recipe", recipeShortcode),
+  previewDeleteInput("ingredient", ingredientShortcode),
+  previewDeleteInput("cookbook", cookbookShortcode),
+  previewDeleteInput("meal", mealShortcode),
+  previewDeleteInput("location", locationShortcode),
+  previewDeleteInput("project", projectShortcode),
+  previewDeleteInput("task", taskShortcode),
+  previewDeleteInput("vendor", vendorShortcode),
+  previewDeleteInput("purchase", purchaseShortcode),
+  previewDeleteInput("expense", expenseShortcode),
+  previewDeleteInput("inventory", inventoryShortcode),
+  // Image has no shortcode and is the intentional hard-delete UUID exception.
+  previewDeleteInput("image", z.uuid()),
+  previewMergeInput("ingredient", ingredientShortcode),
+  previewMergeInput("vendor", vendorShortcode),
+  previewMergeInput("purchase", purchaseShortcode),
 ]);
 export type PreviewOperationInput = z.infer<typeof previewOperationInputSchema>;
 
@@ -365,10 +401,10 @@ export const referentialLivenessViolationSchema = z.object({
   role: edgeRoleSchema,
   /** The entity whose row was soft-deleted while still referenced. */
   targetEntity: entitySchema,
-  targetId: z.string(),
+  targetId: z.uuid(),
   /** The pgTable holding the dangling reference. */
   sourceTable: z.string().min(1),
-  sourceId: z.string(),
+  sourceId: z.uuid(),
   description: z.string().min(1),
 });
 export type ReferentialLivenessViolation = z.infer<

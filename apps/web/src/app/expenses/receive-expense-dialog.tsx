@@ -10,7 +10,10 @@
  * decision, rather than by turning createInventoryEntry into a silent upsert.
  */
 
-import type { InventoryId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { type FC, useMemo } from "react";
@@ -47,7 +50,7 @@ type ReceiveValues = z.infer<typeof formSchema>;
 interface ReceiveExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  productId: ProductId;
+  productId: ProductShortcode;
   expenseName: string;
 }
 
@@ -80,7 +83,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
     () =>
       product
         ? {
-            id: product.shortcode,
+            id: product.id,
             name: `${product.name} (${product.manufacturer})`,
           }
         : null,
@@ -102,7 +105,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
     : undefined;
 
   const applyUpdate = async (
-    id: InventoryId,
+    id: InventoryShortcode,
     data: Parameters<typeof updateInventory.mutateAsync>[0]["data"],
   ) => {
     await updateInventory.mutateAsync({ id, data });

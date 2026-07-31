@@ -1,4 +1,9 @@
-import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeIngredientShortcode,
+  unsafeRecipeId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   recipeGraphOut,
   recipeListItemOut,
@@ -155,8 +160,7 @@ describe("recipe repository helpers", () => {
       const result = dbRecipeToAPIShallow(baseRecipe);
 
       expect(result).toEqual({
-        id: RECIPE_ID,
-        shortcode: "RCP-A3F2",
+        id: "RCP-A3F2",
         name: "Test Recipe",
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
@@ -173,7 +177,7 @@ describe("recipe repository helpers", () => {
           url: "https://example.com/recipe",
         },
       });
-      expect(result.shortcode).toBe("RCP-A3F2");
+      expect(result.id).toBe("RCP-A3F2");
       expect(result).not.toHaveProperty("deletedAt");
       expect(result).not.toHaveProperty("totalsComputedAt");
       expect(result).not.toHaveProperty("SourceType");
@@ -189,7 +193,7 @@ describe("recipe repository helpers", () => {
       });
 
       expect(result).toMatchObject({
-        id: RECIPE_ID,
+        id: unsafeRecipeShortcode("RCP-A3F2"),
         name: "Test Recipe",
         meta: { url: null },
         source: { type: "other" },
@@ -202,7 +206,7 @@ describe("recipe repository helpers", () => {
     const result = dbRecipeToAPI(fullRecipeRow);
 
     expect(result).toMatchObject({
-      id: RECIPE_ID,
+      id: unsafeRecipeShortcode("RCP-A3F2"),
       name: "Test Recipe",
       images: [{ id: IMAGE_ID, url: "https://example.com/recipe.jpg" }],
       sections: [
@@ -216,7 +220,7 @@ describe("recipe repository helpers", () => {
               type: "ingredient",
               recipe: null,
               ingredient: {
-                id: INGREDIENT_ID,
+                id: unsafeIngredientShortcode("ING-TEST"),
                 name: "Flour",
                 aliases: ["all-purpose flour"],
               },
@@ -226,7 +230,7 @@ describe("recipe repository helpers", () => {
               type: "recipe",
               ingredient: null,
               recipe: {
-                id: SUB_RECIPE_ID,
+                id: unsafeRecipeShortcode("RCP-SUB7"),
                 name: "Sub Recipe",
               },
             },
@@ -234,10 +238,7 @@ describe("recipe repository helpers", () => {
         },
       ],
     });
-    // `shortcode` is deliberately PRESENT — it became the recipe's public id in
-    // the 2026-07 cutover, and the detail route/labels read it. Only the truly
-    // DB-only columns stay out of the API shape.
-    expect(result.shortcode).toBe("RCP-A3F2");
+    expect(result.id).toBe("RCP-A3F2");
     expect(result).not.toHaveProperty("deletedAt");
     expect(result).not.toHaveProperty("SourceType");
     expect(result.images).toHaveLength(1);
@@ -295,7 +296,7 @@ describe("recipe repository helpers", () => {
     expect(appearsInRecipes).toHaveLength(1);
     expect(recipeUsages[0]?.recipe).not.toHaveProperty("totals");
     expect(appearsInRecipes[0]).not.toHaveProperty("totals");
-    expect(recipeUsages[0]?.recipe.shortcode).toBeDefined();
+    expect(recipeUsages[0]?.recipe.id).toBeDefined();
     expect(recipeUsageOut.parse(recipeUsages[0])).toEqual(recipeUsages[0]);
   });
 });

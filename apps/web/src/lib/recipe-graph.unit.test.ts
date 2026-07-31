@@ -1,6 +1,5 @@
 import {
-  unsafeIngredientId,
-  unsafeRecipeId,
+  unsafeIngredientShortcode,
   unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
@@ -13,8 +12,7 @@ import {
 
 const recipe = (): RecipeOut =>
   ({
-    id: unsafeRecipeId("r-root"),
-    shortcode: unsafeRecipeShortcode("RCP-4444"),
+    id: unsafeRecipeShortcode("RCP-4444"),
     source: null,
     name: "Root",
     meta: null,
@@ -33,7 +31,7 @@ const recipe = (): RecipeOut =>
             id: "row-1",
             type: "ingredient",
             ingredient: {
-              id: unsafeIngredientId("i-1"),
+              id: unsafeIngredientShortcode("ING-4444"),
               name: "Flour",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -47,7 +45,7 @@ const recipe = (): RecipeOut =>
             id: "row-2",
             type: "ingredient",
             ingredient: {
-              id: unsafeIngredientId("i-1"),
+              id: unsafeIngredientShortcode("ING-4444"),
               name: "Flour again",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -62,8 +60,7 @@ const recipe = (): RecipeOut =>
             type: "recipe",
             ingredient: null,
             recipe: {
-              id: unsafeRecipeId("r-child"),
-              shortcode: unsafeRecipeShortcode("RCP-5555"),
+              id: unsafeRecipeShortcode("RCP-5555"),
               name: "Sauce",
               meta: null,
               createdAt: new Date(),
@@ -81,11 +78,13 @@ const recipe = (): RecipeOut =>
 describe("recipe graph helpers", () => {
   it("collects unique ingredient and sub-recipe ids", () => {
     const r = recipe();
-    expect(collectIngredientIds([r])).toEqual(["i-1"]);
-    expect(collectSubRecipeIds([r])).toEqual(["r-child"]);
+    expect(collectIngredientIds([r])).toEqual(["ING-4444"]);
+    expect(collectSubRecipeIds([r])).toEqual(["RCP-5555"]);
   });
 
   it("builds the existing costing data signature", () => {
-    expect(recipeLinkSignature([recipe()])).toBe("r-root:i-1-i-1-rr-child");
+    expect(recipeLinkSignature([recipe()])).toBe(
+      "RCP-4444:ING-4444-ING-4444-rRCP-5555",
+    );
   });
 });

@@ -1,4 +1,4 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { ChevronRight, Network } from "lucide-react";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
@@ -68,7 +68,7 @@ export function UnitCoveragePanel({
    * and only product-detail passes it.
    */
   servingAlias?: {
-    productId: ProductId;
+    productId: ProductShortcode;
     storedMappings: UnitMappingInput[];
   };
 }) {

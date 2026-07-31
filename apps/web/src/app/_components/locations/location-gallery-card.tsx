@@ -14,7 +14,6 @@ import { LocationIcon } from "./location-icons";
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 type ProductPreview = {
   id: string;
-  shortcode: string;
   name: string;
   totalAmount: string;
 };
@@ -55,7 +54,6 @@ export const LocationGalleryCard = function LocationGalleryCard({
       }
       productMap.set(item.product.id, {
         id: item.product.id,
-        shortcode: item.product.shortcode,
         name: item.product.name,
         totalAmount: `${item.amount.value} ${item.amount.unit}`,
       });
@@ -107,7 +105,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
               />
               <Link
                 to="/locations/$shortcode"
-                params={{ shortcode: location.shortcode }}
+                params={{ shortcode: location.id }}
                 className="min-w-0 truncate font-medium text-xs hover:text-primary hover:underline"
                 title={location.name}
               >
@@ -150,7 +148,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
                 <ProductPreviewImage product={product} />
                 <Link
                   to="/products/$shortcode"
-                  params={{ shortcode: product.shortcode }}
+                  params={{ shortcode: product.id }}
                   className="line-clamp-2 flex-1 text-2xs leading-tight hover:text-primary"
                   title={product.name}
                 >
@@ -185,7 +183,7 @@ function ProductPreviewImage({ product }: { product: ProductPreview }) {
         src={image.url}
         alt={product.name}
         to="/products/$shortcode"
-        params={{ shortcode: product.shortcode }}
+        params={{ shortcode: product.id }}
         size={32}
         previewSize={200}
       />
@@ -195,7 +193,7 @@ function ProductPreviewImage({ product }: { product: ProductPreview }) {
   return (
     <Link
       to="/products/$shortcode"
-      params={{ shortcode: product.shortcode }}
+      params={{ shortcode: product.id }}
       className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
     >
       <EntityIcon

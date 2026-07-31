@@ -154,6 +154,10 @@ export const taskList = async (
   const parentTaskUuid = filters.parentTaskId
     ? await resolveShortcode(db, filters.parentTaskId)
     : null;
+  const subjectProductIds = await toUuids(
+    db,
+    filters.subjectProductId ? [filters.subjectProductId].flat() : [],
+  );
   const subjectProductNameMatches = filters.search
     ? dbClient
         .select({ id: product.id })
@@ -186,7 +190,7 @@ export const taskList = async (
       projectCondition,
       eqAnyOrPresence(
         task.subjectProductId,
-        filters.subjectProductId,
+        subjectProductIds,
         filters.subjectProductPresenceFilter,
       ),
       eqAny(task.trade, filters.trade),

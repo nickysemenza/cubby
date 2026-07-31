@@ -8,7 +8,14 @@
  * in `../recipe.ts`, so client procedure paths are unchanged.
  */
 
-import { type RecipeId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  type CookbookId,
+  type CookbookShortcode,
+  type RecipeId,
+  type RecipeShortcode,
+  unsafeCookbookId,
+  unsafeRecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   chunkRequestInput,
   chunkResponseOut,
@@ -61,6 +68,7 @@ import {
   getNotionRecipesForDiff,
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { importRecipeImageFromUrl } from "~/server/services/image-import";
 import {
   runMutationSideEffects,
@@ -76,6 +84,20 @@ import {
   scrapeToImportRecipe,
 } from "~/server/utils/scraper";
 import { protectedProcedure } from "../../trpc";
+
+const resolveCookbookEntityId = async (
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  shortcode: CookbookShortcode,
+): Promise<CookbookId> => {
+  const id = await resolveLiveShortcode(db, shortcode, "cookbook");
+  if (!id) {
+    throw createAppError(
+      "COOKBOOK_NOT_FOUND",
+      `Cookbook ${shortcode} not found`,
+    );
+  }
+  return unsafeCookbookId(id);
+};
 
 const scrape = protectedProcedure
   .input(scrapeRecipeInput)
@@ -110,7 +132,7 @@ const insertImport = protectedProcedure
       entity: { entityType: "recipe", entityId: result.id },
       source: "recipe.import",
     });
-    return result;
+    return { id: unsafeRecipeShortcode(result.shortcode) };
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
 // of an import (before any recipe insert) so the FK target exists and the raw JSON
@@ -129,10 +151,10 @@ const upsertCookbookEndpoint = protectedProcedure
     // both branches (the refresh is idempotent and hash-skipped either way).
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "cookbook", entityId: result.id },
+      entity: { entityType: "cookbook", entityId: result.entityId },
       source: "cookbook.upsert",
     });
-    return result;
+    return result.output;
   });
 // Hand back a cookbook's stored extraction so the importer can re-open it for
 // selective re-import (no LLM, no EPUB). See the import flow's "from stored source".
@@ -140,13 +162,17 @@ const getCookbookSourceEndpoint = protectedProcedure
   .input(cookbookIdInput)
   .output(cookbookSourceOut)
   .query(async ({ ctx, input }) => {
-    return await getCookbookSource(ctx.db, input.cookbookId);
+    const source = await getCookbookSource(
+      ctx.db,
+      await resolveCookbookEntityId(ctx.db, input.cookbookId),
+    );
+    return { ...source, id: input.cookbookId };
   });
 // Per-recipe outcome streamed back during a cookbook import, keyed by the client's
 // `index` into its recipe list so each card maps to its result regardless of the
 // topo order the recipes were sent in.
 type ImportItemResult =
-  | { index: number; ok: true; id: RecipeId; shortcode: string }
+  | { index: number; ok: true; id: RecipeShortcode }
   | { index: number; ok: false; error: string };
 type ImportSummary = { succeeded: number; failed: number };
 
@@ -168,14 +194,15 @@ const importCookbookStream = protectedProcedure
   }): AsyncGenerator<BulkProgressEvent<ImportItemResult, ImportSummary>> {
     const actor = { ...ctx.actorContext, source: "epub_import" as const };
     // Recipes live in the cookbook's stored extraction; indices address it directly.
-    const { name, recipes } = await getCookbookSource(ctx.db, input.cookbookId);
-    const cookbookRef = { id: input.cookbookId, name };
+    const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
+    const { name, recipes } = await getCookbookSource(ctx.db, cookbookId);
+    const cookbookRef = { id: cookbookId, name };
     // One shared context for the whole loop: a running (title → id) map (seeded
     // from the book, appended per commit) so forward refs resolve in-memory, and
     // an ingredient id cache so a repeated ingredient resolves once. Eliminates
     // the per-recipe title re-read + cross-recipe ingredient re-resolution.
     const importCtx: CookbookImportContext = {
-      titleToId: await getCookbookRecipeIdsByTitle(ctx.db, input.cookbookId),
+      titleToId: await getCookbookRecipeIdsByTitle(ctx.db, cookbookId),
       ingredientIdByName: new Map(),
     };
     const insertedIds: RecipeId[] = [];
@@ -201,7 +228,7 @@ const importCookbookStream = protectedProcedure
           importCtx,
         );
         insertedIds.push(id);
-        return { index, ok: true, id, shortcode };
+        return { index, ok: true, id: unsafeRecipeShortcode(shortcode) };
       },
       {
         // Isolate: one malformed recipe can't sink the rest of the import.
@@ -265,8 +292,7 @@ const previewNotionSync = protectedProcedure
       (await getNotionRecipesForDiff(ctx.db)).map((e) => [
         normalizeNotionId(e.pageId),
         {
-          id: e.id,
-          shortcode: e.recipe.shortcode,
+          id: e.recipe.id,
           sig: recipeOutSignature(e.recipe),
         },
       ]),
@@ -291,7 +317,6 @@ const previewNotionSync = protectedProcedure
           notionUrl: row.notionUrl,
           status,
           existingId: prior?.id ?? null,
-          existingShortcode: prior?.shortcode ?? null,
           reasons,
           recipe,
         };
@@ -305,8 +330,7 @@ type NotionItemResult =
   | {
       pageId: string;
       ok: true;
-      id: string;
-      shortcode: string;
+      id: RecipeShortcode;
       status: "created" | "updated";
     }
   | { pageId: string; ok: false; error: string };
@@ -366,8 +390,7 @@ const importNotionSyncStream = protectedProcedure
         return {
           pageId,
           ok: true,
-          id,
-          shortcode,
+          id: unsafeRecipeShortcode(shortcode),
           status: existed ? "updated" : "created",
         };
       },
@@ -414,9 +437,10 @@ const deleteCookbookEndpoint = protectedProcedure
   .input(cookbookIdInput)
   .output(deleteCookbookOut)
   .mutation(async ({ ctx, input }) => {
-    const recipeIds = (
-      await getCookbookRecipesForDiff(ctx.db, input.cookbookId)
-    ).map((row) => unsafeRecipeId(row.id));
+    const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
+    const recipeIds = (await getCookbookRecipesForDiff(ctx.db, cookbookId)).map(
+      (row) => row.entityId,
+    );
     // Same removal-path invariant as crud.ts's deleteItem: a deleted recipe's
     // cost is baked into every parent's persisted totals, and nothing else
     // marks parents stale on delete — resolve parents while the link rows are
@@ -428,7 +452,7 @@ const deleteCookbookEndpoint = protectedProcedure
     );
     const { deletedRecipeIds } = await deleteCookbook(
       ctx.db,
-      input.cookbookId,
+      cookbookId,
       ctx.actorContext,
     );
     await runMutationSideEffectsForEntities(
@@ -455,8 +479,9 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
   .input(cookbookIdInput)
   // A mutation (it re-derives + writes recipes); streams progress like a query.
   .mutation(async function* ({ ctx, input }) {
+    const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
     yield* streamProgress(
-      reprocessCookbookStream(ctx.db, input.cookbookId, ctx.actorContext),
+      reprocessCookbookStream(ctx.db, cookbookId, ctx.actorContext),
       async ({ recipeIds, reprocessed, importableExtras }) => {
         await ctx.services.recipeCosting.dispatchRecompute(recipeIds, {
           source: "recipe.reprocessCookbook",

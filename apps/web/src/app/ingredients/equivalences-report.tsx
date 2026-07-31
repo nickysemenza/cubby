@@ -139,7 +139,6 @@ export function EquivalencesReport() {
                         entity="ingredient"
                         data={{
                           id: c.ingredientId,
-                          shortcode: c.ingredientShortcode,
                           name: c.ingredientName,
                         }}
                       />
@@ -183,7 +182,6 @@ export function EquivalencesReport() {
                             entity="recipe"
                             data={{
                               id: ex.recipeId,
-                              shortcode: ex.recipeShortcode,
                               name: ex.recipeName,
                             }}
                             compact

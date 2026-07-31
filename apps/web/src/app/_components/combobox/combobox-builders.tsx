@@ -1,32 +1,19 @@
 import type {
-  IngredientId,
-  LocationId,
-  ProductId,
+  IngredientShortcode,
+  LocationShortcode,
   ProjectShortcode,
-  RecipeId,
+  RecipeShortcode,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 
-// Builders take minimal structural shapes (not the full *Out types) so both
-// picker results and list-row relation summaries pass without casts.
-/** @lintignore Retained during the shortcode cutover for UUID-only product reads. */
-export const buildProductComboboxItem = (product: {
-  id: ProductId;
-  name: string;
-  manufacturer: string;
-}): ComboboxItem<ProductId> => ({
-  id: product.id,
-  name: `${product.name} (${product.manufacturer})`,
-});
-
 export const buildLocationComboboxItem = (location: {
-  id: LocationId;
+  id: LocationShortcode;
   name: string;
   type: LocationType;
-}): ComboboxItem<LocationId> => ({
+}): ComboboxItem<LocationShortcode> => ({
   id: location.id,
   name: `${location.name} (${location.type})`,
   icon: (
@@ -39,19 +26,19 @@ export const buildLocationComboboxItem = (location: {
 });
 
 export const buildIngredientComboboxItem = (ingredient: {
-  id: IngredientId;
+  id: IngredientShortcode;
   name: string;
   aliases?: string[] | null;
-}): ComboboxItem<IngredientId> => ({
+}): ComboboxItem<IngredientShortcode> => ({
   id: ingredient.id,
   name: ingredient.name,
   aliases: ingredient.aliases ?? [],
 });
 
 export const buildRecipeComboboxItem = (recipe: {
-  id: RecipeId;
+  id: RecipeShortcode;
   name: string;
-}): ComboboxItem<RecipeId> => ({
+}): ComboboxItem<RecipeShortcode> => ({
   id: recipe.id,
   name: recipe.name,
 });
