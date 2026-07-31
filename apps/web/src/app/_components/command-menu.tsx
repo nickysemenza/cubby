@@ -1,16 +1,17 @@
 import type { AgentResult } from "@cubby/schemas/agent";
 import { searchableEntities } from "@cubby/schemas/entity-manifest";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
-import { parseShortcode, type ShortcodeType } from "@cubby/shared";
+import {
+  type ParsedShortcode,
+  parseShortcode,
+  type ShortcodeType,
+} from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   ArrowLeft,
-  BookOpen,
   Equal,
-  MapPin,
-  Package,
   Search,
   Settings,
   Sparkles,
@@ -37,6 +38,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import { AgentAnswer, AgentSourceContent } from "./agent/AgentAnswer";
+import { parsePastedShortcode } from "./command-menu/pasted-shortcode";
 import { quickActions } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
 import { parseCommandSearchScope } from "./command-menu/search-scope";
@@ -154,24 +156,28 @@ export function GlobalCommandMenu({
           ? recipeQuery.data
           : null;
 
-  const goToShortcode = () => {
-    if (!parsedShortcode) return;
+  const navigateToShortcode = (target: ParsedShortcode, name?: string) => {
     // Recents needs a name, so it only gets an entry once the preview query has
     // landed — navigation itself never waits on it. `entityType` is narrowed to
     // the SEARCHABLE entities: vendor and purchase have shortcodes but aren't in
     // that union, and they have no preview query here either.
-    if (shortcodeResult && isSearchableEntity(parsedShortcode.type)) {
+    if (name && isSearchableEntity(target.type)) {
       pushRecent({
-        entityType: parsedShortcode.type,
-        id: parsedShortcode.shortcode,
-        name: shortcodeResult.name,
+        entityType: target.type,
+        id: target.shortcode,
+        name,
       });
     }
     navigate({
-      to: entities[parsedShortcode.type].routes.detail,
-      params: entityDetailParams(parsedShortcode.shortcode),
+      to: entities[target.type].routes.detail,
+      params: entityDetailParams(target.shortcode),
     });
     setOpen(false);
+  };
+
+  const goToShortcode = () => {
+    if (!parsedShortcode) return;
+    navigateToShortcode(parsedShortcode, shortcodeResult?.name);
   };
 
   // The ⌘K hotkey is owned by the app shell (__root.tsx) so the shortcut works
@@ -257,6 +263,19 @@ export function GlobalCommandMenu({
     setSearch(value);
   };
 
+  const handleSearchPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const target = parsePastedShortcode({
+      currentValue: event.currentTarget.value,
+      pastedText: event.clipboardData.getData("text/plain"),
+      selectionStart: event.currentTarget.selectionStart,
+      selectionEnd: event.currentTarget.selectionEnd,
+    });
+    if (!target) return;
+
+    event.preventDefault();
+    navigateToShortcode(target);
+  };
+
   const clearSearchScope = () => {
     setSearchScope(null);
     searchInputRef.current?.focus();
@@ -278,6 +297,7 @@ export function GlobalCommandMenu({
         }
         value={search}
         onValueChange={handleSearchChange}
+        onPaste={handleSearchPaste}
         onKeyDown={(event) => {
           if (event.key === "Backspace" && search.length === 0 && searchScope) {
             event.preventDefault();
@@ -354,7 +374,7 @@ export function GlobalCommandMenu({
             )}
 
             {/* Empty state */}
-            {isEmpty && !isLoading && !shortcodeResult && (
+            {isEmpty && !isLoading && !parsedShortcode && (
               <div
                 role="status"
                 className="py-6 text-center text-muted-foreground text-xs/relaxed"
@@ -374,23 +394,25 @@ export function GlobalCommandMenu({
               </div>
             )}
 
-            {/* Shortcode result - appears at top when typing a valid shortcode */}
-            {parsedShortcode && shortcodeResult && (
-              <CommandGroup heading="Shortcode">
+            {/* A structurally valid shortcode can always navigate directly: the
+                prefix identifies its route, whose loader owns the live-row 404. */}
+            {parsedShortcode && (
+              <CommandGroup heading="Go to">
                 <CommandItem
                   onSelect={goToShortcode}
                   className="flex items-center gap-2"
                 >
-                  {parsedShortcode.type === "location" ? (
-                    <MapPin className="size-4" />
-                  ) : parsedShortcode.type === "product" ? (
-                    <Package className="size-4" />
-                  ) : (
-                    <BookOpen className="size-4" />
-                  )}
-                  <span>{shortcodeResult.name}</span>
+                  <EntityIcon
+                    entity={parsedShortcode.type}
+                    className="size-4"
+                  />
+                  <span>
+                    Go to{" "}
+                    {shortcodeResult?.name ??
+                      entities[parsedShortcode.type].label}
+                  </span>
                   <span className="ml-auto font-mono text-muted-foreground text-xs">
-                    {search.toUpperCase()}
+                    {parsedShortcode.shortcode}
                   </span>
                 </CommandItem>
               </CommandGroup>
@@ -588,8 +610,7 @@ export function GlobalCommandMenu({
                   </CommandItem>
                 </CommandGroup>
                 <div className="px-2 pt-2 pb-1 text-muted-foreground text-xs">
-                  Tip: type a shortcode (P-, L-, R-…) to jump straight to an
-                  item.
+                  Tip: paste a shortcode (PRD-, LOC-, RCP-…) to jump instantly.
                 </div>
               </>
             )}
