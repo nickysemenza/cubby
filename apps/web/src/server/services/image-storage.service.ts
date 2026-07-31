@@ -70,6 +70,27 @@ const initiatePendingUpload = async (
   };
 };
 
+// Allocate readable document keys consistently for every upload path. When a
+// folder is supplied, it is the owning entity's public shortcode. The image
+// table is authoritative for collisions and includes soft-deleted rows, whose
+// R2 objects may still exist.
+const allocateDocumentKey = async (
+  db: Database,
+  filename: string,
+  folder?: string,
+): Promise<string> => {
+  let key = generateDocumentKey(filename, folder);
+  if (await getImageByKey(db, key)) {
+    const dot = filename.lastIndexOf(".");
+    const deduped =
+      dot > 0
+        ? `${filename.slice(0, dot)}-${Date.now()}${filename.slice(dot)}`
+        : `${filename}-${Date.now()}`;
+    key = generateDocumentKey(deduped, folder);
+  }
+  return key;
+};
+
 export const initiateImageUploadWithoutEntity = async (
   db: Database,
   input: InitiateUploadWithoutEntityInput,
@@ -81,19 +102,7 @@ export const initiateDocumentUpload = async (
   db: Database,
   input: InitiateDocumentUploadInput,
 ) => {
-  // Document keys preserve the original filename, so a re-upload of the same
-  // name in the same folder would silently overwrite the R2 object (which a
-  // soft-deleted row may still reference). Fall back to a timestamped key on
-  // collision — getImageByKey deliberately includes soft-deleted rows.
-  let key = generateDocumentKey(input.filename, input.folder);
-  if (await getImageByKey(db, key)) {
-    const dot = input.filename.lastIndexOf(".");
-    const deduped =
-      dot > 0
-        ? `${input.filename.slice(0, dot)}-${Date.now()}${input.filename.slice(dot)}`
-        : `${input.filename}-${Date.now()}`;
-    key = generateDocumentKey(deduped, input.folder);
-  }
+  const key = await allocateDocumentKey(db, input.filename, input.folder);
   return initiatePendingUpload(db, input, key);
 };
 
@@ -278,7 +287,7 @@ export const attachFileToEntity = async (
   const filename =
     input.filename ?? sourceFilename ?? `attachment.${extension}`;
   const key = isDocument
-    ? generateDocumentKey(filename)
+    ? await allocateDocumentKey(db, filename, input.entityId)
     : generateImageKey(filename);
 
   await uploadToS3({ key, body: bytes, contentType });

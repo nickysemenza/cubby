@@ -94,7 +94,7 @@ export const generateImageKey = (filename: string): string => {
  * filename is preserved (no timestamp) so the public URL stays readable, and
  * an optional folder (the owning entity's shortcode) namespaces the object:
  * `{prefix}/documents/P-0123/blender-manual.pdf`. Collisions are handled by
- * the caller (initiateDocumentUpload) via a DB key lookup.
+ * the shared service allocator via a DB key lookup.
  */
 export const generateDocumentKey = (
   filename: string,

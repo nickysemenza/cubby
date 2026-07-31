@@ -1698,11 +1698,7 @@ describe("purchase repository — documents", () => {
     expect(result.entityId).toBe(charge.id);
     expect(isDocumentFile({ contentType: result.contentType })).toBe(true);
 
-    // The R2 object lands under the documents/ prefix (not images/). NB:
-    // `attachFileToEntity` calls `generateDocumentKey(filename)` with NO folder,
-    // so there is no purchase-scoped folder segment on this path — the
-    // `folder` argument is only supplied by the browser's two-phase
-    // `initiateDocumentUpload` flow.
+    // MCP and browser uploads share the same purchase-scoped key allocator.
     const [row] = await getDb(ctx.db)
       .select({
         key: image.key,
@@ -1711,8 +1707,7 @@ describe("purchase repository — documents", () => {
       })
       .from(image)
       .where(eq(image.id, result.imageId));
-    expect(row?.key).toContain("/documents/");
-    expect(row?.key).toContain("metal-invoice.pdf");
+    expect(row?.key).toContain(`/documents/${charge.id}/metal-invoice.pdf`);
     expect(row?.contentType).toBe("application/pdf");
     expect(row?.status).toBe("UPLOADED");
 
@@ -1776,7 +1771,7 @@ describe("purchase repository — documents", () => {
     );
   });
 
-  it("the browser's two-phase document upload files the object under a purchase-scoped folder", async () => {
+  it("the browser's two-phase document upload uses the same purchase-scoped folder", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Folder Vendor");
     const { output: charge } = await createPurchase(
       ctx.db,
@@ -1784,9 +1779,6 @@ describe("purchase repository — documents", () => {
       ctx.actor,
     );
 
-    // `folder` is the only way a document key gets a per-entity segment (see
-    // `generateDocumentKey`) — `attachFileToEntity` above never passes one, so
-    // the purchase-scoped layout lives on THIS path.
     const initiated = await initiateDocumentUpload(ctx.db, {
       filename: "flow-form-invoice.pdf",
       contentType: "application/pdf",

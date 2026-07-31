@@ -140,6 +140,7 @@ describe("attachFileToEntity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertAttachableEntityExists.mockResolvedValue(undefined);
+    mocks.getImageByKey.mockResolvedValue(null);
     mocks.uploadToS3.mockResolvedValue(undefined);
     mocks.deleteS3Object.mockResolvedValue(undefined);
     mocks.createAndAssociateUploadedImage.mockResolvedValue({ id: "img-99" });
@@ -195,7 +196,32 @@ describe("attachFileToEntity", () => {
 
     expect(result.kind).toBe("document");
     expect(mocks.uploadToS3).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "cubby/documents/permit.pdf" }),
+      expect.objectContaining({
+        key: "cubby/documents/PRD-TEST/permit.pdf",
+      }),
+    );
+  });
+
+  it("uses the UI collision fallback within the entity folder", async () => {
+    mocks.getImageByKey.mockResolvedValueOnce({
+      id: "existing",
+      url: "https://images.example/x",
+      key: "cubby/documents/PRD-TEST/permit.pdf",
+    });
+
+    await attachFileToEntity({} as never, {
+      ...base,
+      data: Buffer.from("%PDF-1.4 fake").toString("base64"),
+      contentType: "application/pdf",
+      filename: "permit.pdf",
+    });
+
+    expect(mocks.uploadToS3).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: expect.stringMatching(
+          /^cubby\/documents\/PRD-TEST\/permit-\d+\.pdf$/,
+        ),
+      }),
     );
   });
 
