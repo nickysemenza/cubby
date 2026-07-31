@@ -750,11 +750,17 @@ export function expenseVendorColumn(
     asPurchase?: boolean;
   },
 ) {
-  const cellData = textCellData<ExpenseOut>(
-    "text",
-    (row) => row.vendor,
-    (row, value) => save(value, row),
-  );
+  const cellData = {
+    ...textCellData<ExpenseOut>(
+      "text",
+      (row) => row.vendor,
+      (row, value) => save(value, row),
+    ),
+    applyClear: async (row: ExpenseOut) => {
+      await save(null, row);
+      return null;
+    },
+  };
 
   return helper.accessor((row) => row.vendor, {
     id: "vendor",

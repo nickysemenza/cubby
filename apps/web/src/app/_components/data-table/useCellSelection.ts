@@ -3,6 +3,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { getErrorMessage } from "~/lib/error-utils";
+import { resolveCellClearTarget } from "./cell-clear";
 import { flashElement } from "./cell-clipboard";
 import {
   bufferMatches,
@@ -173,6 +174,7 @@ export function useCellSelection<TItem>({
   // first pointer/key interaction — needed by the document paste listener, which
   // has no event target of its own.
   const containerElRef = React.useRef<HTMLElement | null>(null);
+  const clearPendingRef = React.useRef(false);
   // Firefox paste fallback timer id, shared so the document paste handler can
   // synchronously cancel it (the double-paste guard).
   const fallbackPasteTimerRef = React.useRef<number | null>(null);
@@ -504,6 +506,32 @@ export function useCellSelection<TItem>({
     [buildColumnCellData, flashCoords],
   );
 
+  const doClear = React.useCallback(
+    (container: HTMLElement): boolean => {
+      const target = resolveCellClearTarget({
+        selection: selectionRef.current,
+        rows: rowsRef.current.map((row) => row.original),
+        columnCellData: buildColumnCellData(),
+      });
+      if (!target) return false;
+      // Key repeat must not enqueue duplicate writes/audit entries while the
+      // first clear is still settling. It is still a handled key so Backspace
+      // never falls through to browser navigation.
+      if (clearPendingRef.current) return true;
+
+      clearPendingRef.current = true;
+      void target
+        .apply()
+        .then(() => flashCoords(container, [target.coord], "pasted"))
+        .catch((error) => toast.error(getErrorMessage(error)))
+        .finally(() => {
+          clearPendingRef.current = false;
+        });
+      return true;
+    },
+    [buildColumnCellData, flashCoords],
+  );
+
   // Primary paste transport: a document-level listener, live only while a
   // selection exists. Chrome/Safari dispatch `paste` to the focused container.
   React.useEffect(() => {
@@ -552,6 +580,11 @@ export function useCellSelection<TItem>({
       // has no target) and the flash queries can reach the cells.
       containerElRef.current = e.currentTarget;
       const isMod = e.metaKey || e.ctrlKey;
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (doClear(e.currentTarget)) e.preventDefault();
+        return;
+      }
 
       if (isMod && (e.key === "c" || e.key === "C")) {
         if (!selectionRef.current) return;
@@ -642,6 +675,7 @@ export function useCellSelection<TItem>({
       openEditorAt,
       doCopy,
       doPaste,
+      doClear,
     ],
   );
 
