@@ -185,6 +185,19 @@ export type IncomingEdgeKey<E extends Entity> =
   keyof (typeof INCOMING_EDGES)[E];
 
 /**
+ * A value for every incoming edge of `E` — the general form. Any map that must
+ * stay exhaustive over an entity's edges uses this: stable per-edge semantics
+ * (`ENTITY_EDGE_SEMANTICS`), an operation's dispositions
+ * ({@link IncomingEdgePolicy}), or a per-edge SQL builder
+ * (`PRODUCT_RETAINING_NOT_EXISTS`). Adding an edge above is a compile error in
+ * every one of them until it's handled.
+ */
+export type IncomingEdgeMap<E extends Entity, Value> = Record<
+  IncomingEdgeKey<E>,
+  Value
+>;
+
+/**
  * An operation-specific decision for every incoming edge of `E`.
  *
  * Keep the disposition type local to the operation: deleting a purchase
@@ -192,7 +205,7 @@ export type IncomingEdgeKey<E extends Entity> =
  * alias supplies exhaustiveness without pretending the edge has one global
  * behavior.
  */
-export type IncomingEdgePolicy<E extends Entity, Disposition> = Record<
-  IncomingEdgeKey<E>,
+export type IncomingEdgePolicy<E extends Entity, Disposition> = IncomingEdgeMap<
+  E,
   Disposition
 >;

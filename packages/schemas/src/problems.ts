@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { amount } from "./codec";
+import { referentialLivenessViolationSchema } from "./entity-integrity";
 import {
   ingredientId,
   inventoryId,
@@ -383,6 +384,11 @@ const problemsFastShape = {
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
   chargesNotReconciling: z.array(chargeNotReconcilingSchema),
+  // A live row still pointing at a soft-deleted target — see
+  // `findReferentialLivenessViolations`. DB-only and cheap (one UNION ALL over
+  // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
+  // cost group: the expense is I/O, not the CPU the other groups isolate.
+  referentialLivenessViolations: z.array(referentialLivenessViolationSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -503,6 +509,13 @@ export const PROBLEM_CLASS = {
   // and unlike `chargesNotReconciling` a reported row is never legitimately
   // correct as it stands.
   duplicateVendors: "defect",
+  // A dangling reference is unambiguously wrong and converges to zero — it can
+  // only appear when a removal path forgets to detach, re-point, or cascade.
+  // Production sat at zero when this detector landed, so any row is a real
+  // regression rather than a backlog to work through. No auto-fix is offered:
+  // clearing the FK and deleting the source row are both plausible and not
+  // interchangeable, and picking wrong destroys data with no restore path.
+  referentialLivenessViolations: "defect",
   ingredientsWithPartialCoverage: "defect",
   productsWithIslandedMappings: "defect",
   productsWithBetterUpcData: "defect",

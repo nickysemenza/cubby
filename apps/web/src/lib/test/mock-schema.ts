@@ -73,6 +73,22 @@ const mockHint = (s: z.ZodType): string | undefined => {
   return typeof m === "string" ? m : undefined;
 };
 
+/**
+ * Read a `{ mockValue }` literal off a schema's metadata, if present.
+ *
+ * The escape hatch for constraints this generator cannot synthesize a passing
+ * value for — chiefly `.regex()`, where nothing type-driven can know the
+ * pattern (`faker.helpers.fromRegExp` is not a substitute: it emits escape
+ * sequences literally, so `\.` becomes a backslash and the result fails the
+ * very pattern it was built from). A schema that pins a shape by regex declares
+ * one known-good example and the round-trip test passes honestly, instead of
+ * the regex being dropped just to keep the generator happy.
+ *
+ * Stays a plain literal, never a faker path, so `@cubby/schemas` remains
+ * faker-free (see the header note).
+ */
+const mockValueHint = (s: z.ZodType): unknown => s.meta?.()?.mockValue;
+
 /** Resolve a faker dot-path like "food.ingredient" and call it (preserving `this`). */
 function callFakerPath(path: string): unknown {
   const parts = path.split(".");
@@ -152,6 +168,11 @@ function gen(
   depth: number,
   fillOptionals: boolean,
 ): unknown {
+  // An explicit literal wins over everything — it exists precisely because the
+  // type-driven path cannot satisfy the schema's own constraints.
+  const literal = mockValueHint(schema);
+  if (literal !== undefined) return literal;
+
   // An explicit faker hint wins over type-driven generation.
   const hint = mockHint(schema);
   if (hint) {

@@ -1,0 +1,207 @@
+import { z } from "zod";
+import { entitySchema } from "./entity";
+
+/**
+ * Serializable shapes for the entity-integrity system.
+ *
+ * This module holds *shapes only* — no Drizzle, no column objects. The
+ * instances that key off `INCOMING_EDGES` (edge semantics, operation policies)
+ * live server-side in `apps/web/src/server/db`, so they keep the compile-time
+ * key exhaustiveness `IncomingEdgeMap` provides; the client receives them as
+ * data through the `entityIntegrity.catalog` procedure.
+ *
+ * Constants elsewhere are written `as const satisfies <inferred type>` and
+ * `.parse()`d in drift tests. Nothing here parses on client import.
+ */
+
+/**
+ * `${pgTable name}.${column name}` — e.g. `"PurchaseImage.imageId"`. The same
+ * identifier `INCOMING_EDGES` keys on, but validated as a string rather than
+ * derived from a Drizzle column, so it can cross the wire.
+ */
+export const edgeKeySchema = z
+  .string()
+  .regex(
+    /^[A-Z][A-Za-z0-9_]*\.[a-z][A-Za-z0-9_]*$/,
+    "expected `Table.column`, e.g. `PurchaseImage.imageId`",
+  )
+  // The test fixture generator can't synthesize a string matching a regex, so
+  // hand it one real edge key. See `mockValueHint` in lib/test/mock-schema.ts.
+  .meta({ mockValue: "PurchaseImage.imageId" });
+export type EdgeKey = z.infer<typeof edgeKeySchema>;
+
+/**
+ * What an incoming edge *means*, independent of what any one operation does
+ * about it. Stable: a role never encodes delete/merge behavior (that's an
+ * `OperationDisposition`), so the same edge can block one operation and be
+ * re-pointed by another without its role changing.
+ */
+export const edgeRoleSchema = z.enum([
+  /** A dependent entity the target owns outright; deleting the target deletes it. */
+  "owned-child",
+  /** A join row linking two independently-owned entities. */
+  "association",
+  /** A structural part the target is made of, meaningless on its own. */
+  "composition",
+  /** Authored annotation. Says nothing about whether the target was ever real or owned. */
+  "metadata",
+  /** Evidence the target was actually acquired — inventory, spend. */
+  "acquisition",
+  /** Durable work history referencing the target. */
+  "history",
+  /** A parent/child pointer within the target's own tree. */
+  "hierarchy",
+  /** A blocks/blocked-by pointer between two rows of the same table. */
+  "dependency",
+  /** What is physically held inside the target. */
+  "contents",
+  /** An attached photo or document. */
+  "media",
+  /** A money row rolled up under the target. */
+  "ledger",
+  /** A vendor charge recorded against the target. */
+  "transaction",
+  /** A pointer to the target from another entity's own record. */
+  "reference",
+  /** The target being consumed or cited by something else. */
+  "usage",
+]);
+export type EdgeRole = z.infer<typeof edgeRoleSchema>;
+
+/**
+ * Whether a live source row is allowed to point at a soft-deleted target.
+ *
+ * Nearly every edge is `must-target-live` — that's the invariant the
+ * referential-liveness auditor checks. An `allow-target-deleted` edge must say
+ * why, because it opts a real FK out of that audit permanently.
+ */
+export const edgeLivenessSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("must-target-live") }),
+  z.object({
+    kind: z.literal("allow-target-deleted"),
+    reason: z.string().min(1),
+  }),
+]);
+export type EdgeLiveness = z.infer<typeof edgeLivenessSchema>;
+
+export const edgeSemanticsSchema = z.object({
+  role: edgeRoleSchema,
+  /** Short noun phrase naming the source rows — e.g. "inventory entries". */
+  label: z.string().min(1),
+  /** One sentence: what this edge represents in the domain. */
+  description: z.string().min(1),
+  liveness: edgeLivenessSchema,
+});
+export type EdgeSemantics = z.infer<typeof edgeSemanticsSchema>;
+
+/**
+ * The normalized shape of what an operation does to one incoming edge. `code`
+ * is the operation's own stable disposition slug (`"block-live-inventory"`),
+ * preserved verbatim so the existing per-repo vocabulary survives; `effect` is
+ * the small closed set the UI and impact previews reason over.
+ */
+export const operationEffectSchema = z.enum([
+  "block",
+  "soft-delete",
+  "hard-delete",
+  "detach",
+  "repoint",
+  "move-dedupe",
+  "preserve",
+]);
+export type OperationEffect = z.infer<typeof operationEffectSchema>;
+
+export const operationDispositionSchema = z.object({
+  code: z.string().min(1),
+  effect: operationEffectSchema,
+  description: z.string().min(1),
+});
+export type OperationDisposition = z.infer<typeof operationDispositionSchema>;
+
+/**
+ * One hop along a relationship's FK path. `outgoing` walks the FK from the
+ * table that holds the column toward the table it points at; `incoming` walks
+ * it backwards, from the pointed-at table to the holder. A path mixes both:
+ * recipe → recipe runs `RecipeSection.recipeId` incoming, then
+ * `RecipeSectionIngredient.sectionId` incoming, then
+ * `RecipeSectionIngredient.ingredientId` outgoing, then `Ingredient.recipeId`
+ * outgoing.
+ */
+export const relationshipPathStepSchema = z.object({
+  edge: edgeKeySchema,
+  direction: z.enum(["outgoing", "incoming"]),
+});
+export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
+
+/**
+ * How a declared logical relationship is actually realized in storage.
+ *
+ * - `local-path` — one or more real FK hops. Verified end-to-end against
+ *   Drizzle metadata: every step must be a real FK, the steps must chain, and
+ *   the last one must land on the declared target's table.
+ * - `unconstrained` — a real relationship the app walks, with no DB-level FK
+ *   to verify (`Location.parentId`). Names the edge, which must itself be
+ *   marked `unconstrained` in `INCOMING_EDGES`.
+ * - `external` — a link to a system with no local table. Names the source
+ *   columns that carry it.
+ */
+export const relationshipProvenanceSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("local-path"),
+    steps: z.array(relationshipPathStepSchema).min(1),
+  }),
+  z.object({
+    kind: z.literal("unconstrained"),
+    edge: edgeKeySchema,
+  }),
+  z.object({
+    kind: z.literal("external"),
+    system: z.string().min(1),
+    /** Every column that can carry the link, in resolution order. */
+    sourceColumns: z.array(edgeKeySchema).min(1),
+  }),
+]);
+export type RelationshipProvenance = z.infer<
+  typeof relationshipProvenanceSchema
+>;
+
+export const entityRelationshipSchema = z.object({
+  /** Stable, unique within the source entity — e.g. `"sub-recipes"`. */
+  key: z.string().min(1),
+  label: z.string().min(1),
+  target: entitySchema,
+  provenance: relationshipProvenanceSchema,
+});
+export type EntityRelationship = z.infer<typeof entityRelationshipSchema>;
+
+/** What removal paths an entity supports, for the lifecycle registry and UI. */
+export const entityLifecycleSchema = z.object({
+  delete: z
+    .object({
+      mode: z.enum(["soft", "hard"]),
+      /** Whether the delete accepts more than one id at a time. */
+      bulk: z.boolean(),
+    })
+    .nullable(),
+  merge: z.boolean(),
+});
+export type EntityLifecycle = z.infer<typeof entityLifecycleSchema>;
+
+/**
+ * One live source row pointing at a soft-deleted target, on an edge whose
+ * liveness rule is `must-target-live`.
+ */
+export const referentialLivenessViolationSchema = z.object({
+  edgeKey: edgeKeySchema,
+  role: edgeRoleSchema,
+  /** The entity whose row was soft-deleted while still referenced. */
+  targetEntity: entitySchema,
+  targetId: z.string(),
+  /** The pgTable holding the dangling reference. */
+  sourceTable: z.string().min(1),
+  sourceId: z.string(),
+  description: z.string().min(1),
+});
+export type ReferentialLivenessViolation = z.infer<
+  typeof referentialLivenessViolationSchema
+>;

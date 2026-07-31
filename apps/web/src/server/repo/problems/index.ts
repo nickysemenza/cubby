@@ -32,6 +32,9 @@
  *                                            two `Vendor` roster rows)
  *   EMBEDDING   → `detectors-embedding.ts`  (live entities with no embedding row
  *                                            — invisible to semantic search)
+ *   INTEGRITY   → `detectors-integrity.ts`  (live rows pointing at soft-deleted
+ *                                            targets — the schema-wide audit of
+ *                                            the incoming-edge liveness rules)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
  *
  * Every problem item type is the canonical Zod-derived shape from
@@ -55,6 +58,8 @@ export {
   findUnusedIngredients,
   pruneUnusedAliases,
 } from "./detectors-ingredient";
+// Schema-wide referential-liveness audit
+export { findReferentialLivenessViolations } from "./detectors-integrity";
 // Inventory-centric detectors (recount staleness)
 export {
   findNeverVerifiedInventory,

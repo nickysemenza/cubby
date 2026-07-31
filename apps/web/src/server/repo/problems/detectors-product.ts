@@ -47,6 +47,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
+  isRetainingEdgeKey,
   PRODUCT_EDGE_ROLES,
   type ProductRetainingEdgeKey,
 } from "~/server/repo/product/edge-roles";
@@ -204,13 +205,18 @@ export const findOrphanedProducts = async (
       and(
         notDeleted(product),
         isNull(product.ingredientId),
-        ...Object.entries(PRODUCT_EDGE_ROLES)
-          .filter(([, role]) => role.kind !== "metadata")
-          .map(([key]) =>
-            PRODUCT_RETAINING_NOT_EXISTS[key as ProductRetainingEdgeKey](
-              dbClient,
-            ),
-          ),
+        // Allowlist, not `!== "metadata"`: the roles are shared vocabulary now,
+        // so excluding one role would silently promote every *other* new role
+        // (e.g. `media`, which `ProductImage.productId` carries) into a
+        // retaining edge and stop this detector reporting any product with a
+        // photo. See `isRetainingEdgeKey`'s file doc.
+        ...(
+          Object.keys(PRODUCT_EDGE_ROLES) as Array<
+            keyof typeof PRODUCT_EDGE_ROLES
+          >
+        )
+          .filter(isRetainingEdgeKey)
+          .map((key) => PRODUCT_RETAINING_NOT_EXISTS[key](dbClient)),
       ),
     );
 

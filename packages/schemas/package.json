@@ -10,6 +10,7 @@
     "./import-recipe": "./src/import-recipe.ts",
     "./entity": "./src/entity.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
+    "./entity-integrity": "./src/entity-integrity.ts",
     "./identifiers": "./src/identifiers.ts",
     "./common": "./src/common.ts",
     "./pagination": "./src/pagination.ts",

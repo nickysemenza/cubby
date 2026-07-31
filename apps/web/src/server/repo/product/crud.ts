@@ -83,7 +83,10 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
-import { PRODUCT_EDGE_ROLES, type ProductRetainingEdgeKey } from "./edge-roles";
+import {
+  PRODUCT_DELETE_EDGE_POLICY,
+  type ProductRetainingEdgeKey,
+} from "./edge-roles";
 import {
   dbProductToAPI,
   dbProductToListAPI,
@@ -1048,8 +1051,14 @@ export const deleteProducts = async (
     // resolveLiveJoinName — but that was reversed: the ledger's net cost and
     // owned/sold window are derived from these rows, and a nameless product
     // silently corrupts that derivation with no restore path.
-    for (const [key, role] of Object.entries(PRODUCT_EDGE_ROLES)) {
-      if (role.kind === "metadata") continue;
+    for (const [key, disposition] of Object.entries(
+      PRODUCT_DELETE_EDGE_POLICY,
+    )) {
+      // Drive off the delete policy's own `block` effect rather than excluding
+      // a role: the roles are shared vocabulary, so a negative filter would
+      // silently promote any newly-introduced role (e.g. the `media` role
+      // `ProductImage.productId` now carries) into a delete blocker.
+      if (disposition.effect !== "block") continue;
       const fetchDependents =
         PRODUCT_RETAINING_DEPENDENTS[key as ProductRetainingEdgeKey];
       const dependents = await fetchDependents(tx, ids);
@@ -1060,9 +1069,9 @@ export const deleteProducts = async (
             where: inArray(product.id, failedIds),
             columns: { name: true },
           }),
-        reason: role.reason,
+        reason: disposition.reason,
         message: (count, names) =>
-          `Cannot delete ${count} product(s): ${names} have ${role.label}. Remove them first.`,
+          `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
       });
     }
 
