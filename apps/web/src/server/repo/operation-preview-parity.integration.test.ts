@@ -14,8 +14,10 @@ import { previewOperation } from "~/server/api/routers/entity-integrity-preview"
 import {
   entityEmbedding,
   expense,
+  ingredient,
   mealRecipe,
   productImage,
+  recipe,
   recipeSection,
   task,
 } from "~/server/db/schema";
@@ -24,7 +26,7 @@ import {
   previewDeleteCookbooks,
   upsertCookbook,
 } from "./cookbook";
-import { getDb, notDeleted } from "./database-helpers";
+import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import {
   createExpense,
   deleteExpenses,
@@ -501,6 +503,90 @@ describe("operation preview / mutation parity", () => {
   // preview's prediction.
   // ---------------------------------------------------------------------
   describe("count parity", () => {
+    /**
+     * The sub-recipe path, which nothing else in this file reaches.
+     *
+     * `Ingredient.recipeId` is the ONE edge in the whole schema marked
+     * `allow-target-deleted`: deleting a recipe deliberately leaves the
+     * recipe-as-ingredient pointer behind so parent recipes can still resolve
+     * the tombstone and recompute. That makes it the one delete whose most
+     * important consequences are side effects rather than cascades — a
+     * preserved pointer and a parent recompute — and both were previously
+     * unexercised, so the two `if (total > 0)` branches that emit them never
+     * ran under test.
+     *
+     * Asserted here as parity, not just presence: the pointer the preview says
+     * it will preserve must still be live after the mutation, and the parent it
+     * names must be the recipe that actually uses the sub-recipe.
+     */
+    it("recipe delete: reports the preserved sub-recipe pointer and the parent recompute", async () => {
+      const subRecipe = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Sub Sauce",
+          sections: [
+            { name: "Main", instructions: [{ instruction: "Simmer" }] },
+          ],
+        }),
+        ctx.actor,
+      );
+
+      // A recipe used as an ingredient IS an Ingredient row carrying
+      // `recipeId` — the same shape the import path writes.
+      const pointer = await insertAndReturn(ctx.db, ingredient, {
+        name: "Recipe: Sub Sauce",
+        recipeId: subRecipe.id,
+      });
+
+      const parent = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Parent Dish",
+          sections: [
+            {
+              name: "Main",
+              instructions: [{ instruction: "Combine" }],
+              ingredients: [ingredientRef(pointer.id)],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+
+      const preview = await previewDeleteRecipes(ctx.db, [subRecipe.id]);
+
+      const preserved = preview.sideEffects.find(
+        (s) => s.code === "preserve-sub-recipe-pointer",
+      );
+      expect(preserved?.total).toBe(1);
+      expect(preserved?.byTargetId[subRecipe.id]).toBe(1);
+      // `preserve` — not a delete of any kind. The whole point of the exemption.
+      expect(preserved?.effect).toBe("preserve");
+
+      const recompute = preview.sideEffects.find(
+        (s) => s.code === "recompute-parent-recipes",
+      );
+      expect(recompute?.total).toBe(1);
+      expect(recompute?.byTargetId[subRecipe.id]).toBe(1);
+
+      await deleteRecipes(ctx.db, [subRecipe.id], ctx.actor);
+
+      // Parity: the pointer the preview promised to preserve is still live,
+      // now dangling at a soft-deleted recipe exactly as intended.
+      const survivingPointer = await getDb(ctx.db).query.ingredient.findFirst({
+        where: and(eq(ingredient.id, pointer.id), notDeleted(ingredient)),
+        columns: { id: true, recipeId: true },
+      });
+      expect(survivingPointer?.recipeId).toBe(subRecipe.id);
+
+      // …and the parent it named is still live, holding that line.
+      const survivingParent = await getDb(ctx.db).query.recipe.findFirst({
+        where: and(eq(recipe.id, parent.id), notDeleted(recipe)),
+        columns: { id: true },
+      });
+      expect(survivingParent?.id).toBe(parent.id);
+    });
+
     it("recipe delete: predicted section + meal-link cascades match what actually gets soft-deleted", async () => {
       const ingredient = await createIngredient(
         ctx.db,
