@@ -154,16 +154,14 @@ export function EntityIntegrityTab() {
 /**
  * A dense hairline row — the repeated unit of the detail panel's lists.
  *
- * The sub-scale vertical padding lives here, once, rather than as a density
- * marker scattered across every list that needs it (see the Spacing note in
- * apps/web/CLAUDE.md: encapsulate density in a component rather than repeating
- * the escape hatch).
+ * The sub-scale vertical padding lives here, once, instead of a density-escape
+ * comment repeated on every list that needs it. See the Spacing note in
+ * apps/web/CLAUDE.md: encapsulate density in a component rather than scattering
+ * the escape hatch.
  */
 function HairlineRow({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="border-[var(--border)] border-b py-1.5 last:border-b-0" /* tight */
-    >
+    <div className="border-[var(--border)] border-b py-1 last:border-b-0">
       {children}
     </div>
   );
@@ -172,9 +170,7 @@ function HairlineRow({ children }: { children: ReactNode }) {
 /** One step of an FK path (column plus direction) — a dense inline token. */
 function PathStepChip({ children }: { children: ReactNode }) {
   return (
-    <span
-      className="border border-[var(--border)] px-1 py-0.5 font-mono text-2xs" /* tight */
-    >
+    <span className="border border-[var(--border)] px-1 py-0 font-mono text-2xs">
       {children}
     </span>
   );
@@ -370,16 +366,7 @@ function EntityDetailPanel({
             "No local table"
           )}
           {row.lifecycle.delete
-            ? `;
-· $
-{
-  row.lifecycle.delete.mode;
-}
-delete$;
-{
-  row.lifecycle.delete.bulk ? " · bulk" : " · single";
-}
-`
+            ? ` · ${row.lifecycle.delete.mode} delete${row.lifecycle.delete.bulk ? " · bulk" : " · single"}`
             : " · not deletable"}
           {row.lifecycle.merge ? " · mergeable" : ""}
         </CardDescription>
@@ -392,16 +379,7 @@ delete$;
               <Stack gap="tight">
                 {violations.map((v) => (
                   <ViolationRow
-                    key={`;
-$;
-{
-  v.edgeKey;
-}
--$;
-{
-  v.sourceId;
-}
-`}
+                    key={`${v.edgeKey}-${v.sourceId}`}
                     violation={v}
                   />
                 ))}
