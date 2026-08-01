@@ -173,6 +173,7 @@ describe("attachFileToEntity", () => {
       expect.objectContaining({ contentType: "image/png", size: 70 }),
       "product",
       "prod-1",
+      undefined,
     );
   });
 

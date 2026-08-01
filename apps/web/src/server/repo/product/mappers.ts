@@ -47,6 +47,7 @@ type ProductImageRow =
 type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   images?: ProductImageRow[] | null;
   externalIds?: Array<typeof productExternalId.$inferSelect> | null;
+  dataQuality?: ProductTopLevelOut["dataQuality"];
 };
 
 export const mapProductExternalIds = (
@@ -98,6 +99,11 @@ export const dbProductToTopLevelShape = (
   category: productData.category,
   price: productData.price,
   usdaUnavailable: productData.usdaUnavailable,
+  dataQuality: productData.dataQuality ?? {
+    status: "complete",
+    gaps: [],
+    exceptions: productData.dataExceptions ?? [],
+  },
   images: mapImages(productData.images),
   externalIds: mapProductExternalIds(productData.externalIds),
   createdAt: productData.createdAt,
@@ -242,6 +248,7 @@ export const dbProductToListAPI = (
  */
 export const dbProductToAPI = (
   productData: ProductDeepDB,
+  dataQuality: ProductTopLevelOut["dataQuality"],
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
 
@@ -259,6 +266,7 @@ export const dbProductToAPI = (
     category: productData.category,
     price: productData.price,
     usdaUnavailable: productData.usdaUnavailable,
+    dataQuality,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,
     ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,

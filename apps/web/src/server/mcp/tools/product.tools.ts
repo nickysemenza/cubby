@@ -1,6 +1,7 @@
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
+  productExternalIdCollisionsOut,
   productFilterFields,
   productMcpListOut,
   productMcpOut,
@@ -13,6 +14,7 @@ import { z } from "zod";
 import {
   getCaller,
   idParam,
+  READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerMcpTool,
   respond,
@@ -33,8 +35,8 @@ export function registerProductTools(server: McpServer) {
     slim: slimProduct,
     sort: { orderBy: "name" },
     descriptions: {
-      list: "Search products by name, manufacturer, UPC, model, or category.",
-      get: "Get a product by ID.",
+      list: "Search products by name, manufacturer, UPC, model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id.",
+      get: "Get a product by ID, including manufacturer model, external identifiers, and computed dataQuality.",
       create:
         'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
       update:
@@ -70,6 +72,21 @@ export function registerProductTools(server: McpServer) {
       });
       return result;
     },
+  });
+
+  registerMcpTool(server, {
+    name: "find_product_external_id_collisions",
+    description:
+      "Advisory exact-collision query for live Products sharing the same (source, externalId). This does not write or enforce uniqueness; inspect each collision before deciding whether it is a duplicate or a legitimate shared identifier.",
+    inputSchema: {
+      source: z
+        .union([z.string().min(1), z.array(z.string().min(1))])
+        .optional(),
+    },
+    outputSchema: productExternalIdCollisionsOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: (params, extra) =>
+      getCaller(extra).product.externalIdCollisions(params),
   });
 
   registerMcpTool(server, {

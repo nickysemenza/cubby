@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
@@ -395,6 +396,59 @@ describe("createMcpServer registration", () => {
 });
 
 describe("listMcpToolCatalog", () => {
+  it("keeps the purchase-import skill aligned with the completeness catalog", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    for (const name of [
+      "set_data_exception",
+      "clear_data_exception",
+      "reclassify_purchase_document",
+      "find_product_external_id_collisions",
+    ]) {
+      expect(byName.has(name), `${name} missing from catalog`).toBe(true);
+    }
+
+    const purchaseFilters = byName.get("list_purchases")?.inputSchema as {
+      properties?: Record<string, unknown>;
+    };
+    expect(purchaseFilters.properties).toHaveProperty("dataStatus");
+    expect(purchaseFilters.properties).toHaveProperty("dataGap");
+    const productFilters = byName.get("search_products")?.inputSchema as {
+      properties?: Record<string, unknown>;
+    };
+    expect(productFilters.properties).toHaveProperty("modelPresenceFilter");
+    expect(productFilters.properties).toHaveProperty("externalIdSource");
+    expect(productFilters.properties).toHaveProperty(
+      "externalIdPresenceFilter",
+    );
+    const attachFile = byName.get("attach_file");
+    expect(attachFile).toBeDefined();
+    expect(
+      (
+        attachFile!.inputSchema as {
+          properties?: Record<string, unknown>;
+        }
+      ).properties,
+    ).toHaveProperty("documentKind");
+
+    const skill = readFileSync(
+      new URL(
+        "../../../../../.claude/skills/purchase-import/SKILL.md",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    for (const name of [
+      "set_data_exception",
+      "clear_data_exception",
+      "reclassify_purchase_document",
+      "find_product_external_id_collisions",
+      "unrecorded_purchase_candidate",
+    ]) {
+      expect(skill).toContain(name);
+    }
+  });
+
   it("advertises canonical purchase and expense terminology", async () => {
     const { tools } = await listMcpToolCatalog();
     const listPurchases = tools.find((tool) => tool.name === "list_purchases");
@@ -557,6 +611,7 @@ describe("listMcpToolCatalog", () => {
       "update_location.removeImageIds",
       "update_purchase.imageOrder",
       "update_purchase.removeImageIds",
+      "reclassify_purchase_document.imageId",
       "update_recipe.sections[].id",
       "update_recipe.sections[].ingredients[].id",
       "update_recipe.sections[].instructions[].id",

@@ -8,6 +8,26 @@ description: Reconcile vendor orders, receipts, and financial statements against
 Goal: link export lines to `Expense` rows, correct costs, book refunds, capture identifiers.
 This file is weighted toward **failure modes** — the happy path is easy, the traps are what cost hours.
 
+## Begin with the computed completeness queue
+
+Start an existing-data audit with `list_purchases({ dataStatus: "needs_data" })`; narrow with
+`dataGap` when useful. Every Purchase and Product MCP response carries a live `dataQuality` summary:
+`status`, exact `gaps`, and explicit `exceptions`. Completeness is computed on every read, never
+stored as a flag. Adding evidence, enriching a field, or recording a legitimate exception removes
+the corresponding gap immediately.
+
+Purchase gaps cover date, order id, stated total, primary document, empty/unpriced Expenses,
+paperwork mismatch, and settlement source-reference coverage. Product manufacturer/category/model,
+Amazon ASIN, and exact external-id collision gaps roll up into every linked Purchase while retaining
+the Product's `PRD-` shortcode as `targetId`. Use
+`search_products({ dataStatus: "needs_data" })` for the Product-only queue.
+
+`set_data_exception` records negative knowledge for one applicable check and requires a substantive
+note; it replaces an existing exception for that check. `clear_data_exception` removes exactly that
+acknowledgement. Exceptions are for facts that were not issued, are unavailable/not applicable,
+have insufficient detail, or for an expected mismatch — never a shortcut around searching sources
+that are still available.
+
 ## Financial settlement workflow
 
 Vendor documents control Purchase identity, literal `statedTotal`, and Expense
@@ -159,13 +179,15 @@ roster, open a purchase, or set a `statedTotal`:
   The boundary test named "split_expense takes its expenseId/projectId/productId by shortcode"
   passes no `productId`, so it does not actually cover the split path — don't read it as proof.
 - `list_purchases` filters on `vendorId`, `orderId`, `search` (substring on order id),
-  `dateFrom`/`dateTo`, `orderIdPresenceFilter` and `statedTotalPresenceFilter` — the last is the
-  not-yet-reconciled worklist.
+  `dateFrom`/`dateTo`, `orderIdPresenceFilter`, `statedTotalPresenceFilter`, `dataStatus`, and
+  `dataGap`. Prefer the computed queue over reconstructing completeness from individual presence
+  filters.
 - **Delete is deliberately withheld for both.** Deleting a vendor refuses while live purchases point at
   it; deleting a purchase nulls `purchaseId` on real money. Those stay UI-only.
-- `attach_file` files the invoice — it takes the purchase's **`PUR-` shortcode as `entityId`** and
-  **no `entityType`** (the prefix names the entity; asking for both invited a mismatched pair, so the
-  field was deliberately dropped). See the size trap in Phase 4 before trying to attach a PDF.
+- `attach_file` files Purchase evidence — it takes the purchase's **`PUR-` shortcode as `entityId`**,
+  **no `entityType`**, and a required `documentKind`. Use `reclassify_purchase_document` when an
+  existing attachment was classified incorrectly. See the size trap in Phase 4 before trying to
+  attach a PDF.
 
 ## Ground rules
 
@@ -174,7 +196,9 @@ roster, open a purchase, or set a `statedTotal`:
   (Two were invented in the 2026-07 Amazon pass; both wrong.)
 - **Propose before writing.** Show matches with evidence — model/SKU, price delta, date delta — and
   get per-batch approval. Similarity ranks, it does not verify.
-- **Verify writes against the DB**, not the MCP response. `update_product` does not echo `model`.
+- **Verify writes against the DB**, not only the mutation response. Product MCP responses now
+  include `model`, external ids, and computed `dataQuality`, so the verification read should show
+  the gap disappearing.
 
 ## Phase 1 — decide how far to trust the export
 
@@ -238,6 +262,22 @@ credits positive**.
 `Purchase_History_*.csv`, and `Facebook marketplace order history.pdf`. Check for a seller report
 before doing any Gmail sweep for disposals: it is one grep versus twenty subagent minutes, and it
 carries real numbers.
+
+### Sweep outward to discover Purchases that do not exist
+
+An inward Cubby query cannot find a missing entity. Establish the coverage window for each Gmail
+search, receipt folder, PDF set, or vendor export, then extract vendor, order/receipt id, order date,
+literal total, and available line labels/prices. Check cancellations and refund sources before
+matching. Send the batch through `match_expenses` with vendor, orderId, date, signed amount, and
+label, then classify each source record as an exact Purchase match, strong Expense candidate,
+possible aggregate/split match, or `unrecorded_purchase_candidate`.
+
+A zero-match result is only a candidate. Before proposing creation, repeat exact vendor+order-id and
+amount+date checks, inspect plausible aggregate names and split siblings, inspect refund/return
+exports, exclude cancelled and zero-dollar records, and confirm the Project from both its date
+window and semantic fit. State the source coverage window and evidence in every proposal. Never
+create automatically. Unlinked FinancialTransactions are secondary discovery signals and never
+create or alter Expenses.
 
 ## Phase 2 — match, strongest key first
 
@@ -470,9 +510,15 @@ single call.
     When you do record one from an email that breaks the pattern, say so in the purchase notes, or the
     next pass will "restore" the null.
   - The PDF invoice / receipt photo now has a home: `attach_file` with
-    `entityId: <the PUR- shortcode from the expense row>` and `contentType: "application/pdf"`.
+    `entityId: <the PUR- shortcode from the expense row>`, `contentType: "application/pdf"`, and the
+    evidence's `documentKind`.
     **There is no `entityType` field** — the prefix picks the entity. One `Image` can be filed
     against several purchases (a statement covering both).
+
+    Primary evidence is exactly `order_confirmation`, `sales_order`, `invoice`, or `receipt`.
+    `payment_receipt`, `credit_memo`, `return_authorization`, `quote`, `estimate`, `contract`,
+    `statement`, `specification`, and `other` remain useful evidence but do not satisfy the
+    `primary_document` check.
 
     ⚠️ **You probably cannot do this from the main loop.** `data` wants base64, and a perfectly
     ordinary one-page receipt blows the context: a 71KB PDF is **94,684 base64 characters**, which
@@ -482,7 +528,8 @@ single call.
     bytes straight into `attach_file` without them landing in the conversation, or ask the operator
     to drag the file onto the purchase in the UI. `url` is the only cheap path, and only when the file
     is already on a public http(s) URL — do not upload a private receipt somewhere to manufacture one.
-    Filing the document is optional; the ledger reconciles without it, so **never hold up the numbers
+    Filing the document is optional for financial reconciliation, but required for computed
+    completeness unless `primary_document` is explicitly excepted. **Never hold up verified numbers
     on an attachment.**
 - Per-purchase queries are one row each now — no reconstructing groups from `(vendor, orderId)` strings,
   and **no SQL**:
@@ -503,6 +550,12 @@ single call.
   never a new column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces
   the whole set**, so read-then-merge. Partial unique index on `(productId, source)` = one id per
   source.
+
+  Product MCP outputs include `model`. Use `modelPresenceFilter: "none"` for the missing-model
+  worklist. `externalIdSource` plus `externalIdPresenceFilter` exposes source-specific identity gaps;
+  for example `{ externalIdSource: "amazon", externalIdPresenceFilter: "none" }` finds Products
+  without an Amazon external id. `find_product_external_id_collisions` reports exact active
+  `(source, externalId)` collisions as an advisory query; inspect them before changing identity.
 
   **Some vendors print ONLY their own code, and it encodes the real model.** Ferguson never shows a
   manufacturer model number — its order confirmation and its bid both list `WGR366`, `SCL3050USTR`,
@@ -560,10 +613,8 @@ single call.
   **`category` is not optional in practice.** A null category is deliberately read as *potentially
   food* so uncategorized groceries keep their unit-coverage grading (`packages/shared/src/category-theme.ts`),
   which means a tool left uncategorized lands in `findProductsWithoutMappings` demanding
-  weight/volume/calorie coverage it can never have. Note the enum is food, tools, tool-consumables,
-  tool-accessories, storage, hardware, electronics, household, supplies — **there is no software or
-  services slot**, so a subscription product has no clean home yet. Raise that rather than forcing it
-  into `supplies`.
+  weight/volume/calorie coverage it can never have. The taxonomy includes `software` for licenses and
+  subscriptions; services/labor still do not become Products.
 - **Tag a durable and its consumables with the same value** (`subzero-fridge`, `ews-under-sink`,
   `wolf-hood-36`); `category` distinguishes them (`household` vs `supplies`). This is how a filter
   finds its fridge when neither name shares a token. And put a maintenance task's `subjectProductId`
@@ -737,6 +788,11 @@ Run these checks in order:
    exists; `mismatch` is the advisory investigation worklist. Use
    `purchaseFinancialSettlementMismatches` for the global worklist. Never alter Expenses merely to
    clear this status.
+   Separately, computed completeness requires at least one linked `posted`, non-void
+   FinancialTransaction with a nonempty `sourceRefs` entry. Pending, expected, void, and
+   reference-free entries do not satisfy `settlement_reference`. Cash/check, inaccessible historical
+   statements, and aggregated transactions may be acknowledged with a well-supported
+   `settlement_reference` exception.
 2. **Purchase paperwork vs. Expenses** — retain `purchasesNotReconciling` as a separate advisory
    evidence check. A refund can legitimately make the literal vendor `statedTotal` differ from
    current Expense spend; do not rewrite the stated total to hide that fact.

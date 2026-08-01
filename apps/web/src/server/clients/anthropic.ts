@@ -92,6 +92,7 @@ export const CATEGORY_DESCRIPTIONS = {
     "Fasteners and fittings: screws, nails, bolts, nuts, washers, hinges, brackets",
   electronics:
     "Electronic devices and components: raspberry pi, arduino, cables, monitors, adapters, sensors",
+  software: "Software licenses, applications, and subscriptions",
   household:
     "Home items: furniture, cookware, appliances, decor, cleaning equipment, linens",
   supplies:

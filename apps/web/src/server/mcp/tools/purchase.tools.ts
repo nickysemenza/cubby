@@ -43,6 +43,7 @@ import {
   purchaseListResponse,
   purchaseOut,
   purchaseUpdateData,
+  reclassifyPurchaseDocumentInput,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
@@ -126,14 +127,24 @@ export function registerPurchaseTools(server: McpServer) {
     get: (caller, id) => caller.purchase.getByID(unsafePurchaseId(id)),
     operations: { delete: false },
     descriptions: {
-      list: "List vendor purchases. A `purchase` is one vendor order, receipt, or deliberately separate purchase event, NOT an Expense or card charge. Each row returns vendor identity, order/date fields, Expense totals (the spend), the literal vendor `statedTotal`, documents, and a `financialReconciliation` settlement summary. Retrieve individual settlement rows with list_financial_transactions filtered by purchaseId. Existing filters cover vendor/order/date, Expense health and totals, paperwork reconciliation, and documents. Sorted newest purchase first.",
-      get: "Get one vendor purchase by id. A `purchase` is a vendor order/receipt event, NOT an Expense or card charge. Returns vendor/order identity, literal `statedTotal`, Expense totals (the spend), documents, and `financialReconciliation` totals/counts/status. Read Expenses with list_expenses and settlement evidence with list_financial_transactions, both filtered by this PUR- shortcode.",
+      list: "List vendor purchases. A `purchase` is one vendor order, receipt, or deliberately separate purchase event, NOT an Expense or card charge. Each row returns vendor identity, order/date fields, Expense totals (the spend), the literal vendor `statedTotal`, classified documents, financial reconciliation, and computed dataQuality. Start a completeness audit with dataStatus=needs_data; narrow with dataGap (one or several Purchase/Product checks). Product gaps roll up with the PRD- targetId. Retrieve settlement rows with list_financial_transactions filtered by purchaseId. Sorted newest purchase first.",
+      get: "Get one vendor purchase by id. A `purchase` is a vendor order/receipt event, NOT an Expense or card charge. Returns vendor/order identity, literal `statedTotal`, Expense totals (the spend), classified documents, financial reconciliation, and computed dataQuality including linked Product gaps. Read Expenses with list_expenses and settlement evidence with list_financial_transactions, both filtered by this PUR- shortcode.",
       create:
         "Create one vendor order, receipt, or deliberately separate purchase event. This books no money: Expenses carry spend, FinancialTransactions carry settlement evidence, and `statedTotal` is always the literal vendor-printed total. `vendorId` is a VEN- shortcode; orderId, vendor date, notes, and statedTotal are optional.",
       update:
         "Update vendor-side purchase identity and paperwork. Nothing here changes spend or settlement: correct spend with update_expense and settlement evidence with update_financial_transaction. `statedTotal` must remain the literal vendor-printed total and is never summed. Also writable: vendorId, orderId, vendor date, notes, and document ordering/removal.",
     },
     create: (caller, params) => caller.purchase.create(params),
+  });
+
+  registerRouterTool(server, {
+    name: "reclassify_purchase_document",
+    description:
+      "Reclassify one existing attachment on a Purchase. Primary evidence is exactly order_confirmation, sales_order, invoice, or receipt; payment receipts, credits, returns, quotes, estimates, contracts, statements, specifications, and other files remain useful but do not satisfy primary_document completeness. Returns the Purchase with freshly computed dataQuality.",
+    inputSchema: reclassifyPurchaseDocumentInput.shape,
+    outputSchema: purchaseOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => caller.purchase.reclassifyDocument(params),
   });
 
   registerRouterTool(server, {

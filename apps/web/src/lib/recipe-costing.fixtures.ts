@@ -63,6 +63,7 @@ export const makeProduct = (
   usdaUnavailable: null,
   images: [],
   externalIds: [],
+  dataQuality: { status: "complete", gaps: [], exceptions: [] },
   food:
     opts.food ??
     (opts.nutrientsPer100

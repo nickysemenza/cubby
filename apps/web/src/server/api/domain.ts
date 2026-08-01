@@ -4,6 +4,7 @@ import { auditLogRouter } from "./routers/audit-log";
 import { backgroundJobsRouter } from "./routers/background-jobs";
 import { calendarRouter } from "./routers/calendar";
 import { dashboardRouter } from "./routers/dashboard";
+import { dataQualityRouter } from "./routers/data-quality";
 import { entityIntegrityRouter } from "./routers/entity-integrity";
 import { expenseRouter } from "./routers/expense";
 import { financialAccountRouter } from "./routers/financial-account";
@@ -33,6 +34,7 @@ export const domainRouterRecord = {
   backgroundJobs: backgroundJobsRouter,
   calendar: calendarRouter,
   dashboard: dashboardRouter,
+  dataQuality: dataQualityRouter,
   recipe: recipeRouter,
   ingredient: ingredientRouter,
   location: locationRouter,

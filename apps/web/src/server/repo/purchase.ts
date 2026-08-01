@@ -45,6 +45,7 @@ import type {
   PurchaseFilters,
   PurchaseOut,
   PurchaseUpdateInput,
+  ReclassifyPurchaseDocumentInput,
   SplitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
@@ -78,6 +79,11 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import {
+  loadPurchaseDataQualities,
+  purchaseDataGapCondition,
+  purchaseNeedsDataCondition,
+} from "~/server/repo/data-quality";
 import {
   applyImageOrder,
   associatePendingImages,
@@ -231,6 +237,7 @@ const purchaseColumns = {
   date: purchase.date,
   statedTotal: purchase.statedTotal,
   notes: purchase.notes,
+  dataExceptions: purchase.dataExceptions,
   createdAt: purchase.createdAt,
   updatedAt: purchase.updatedAt,
   vendorName: purchaseVendorName,
@@ -248,6 +255,7 @@ type PurchaseRow = {
   date: string | null;
   statedTotal: number | null;
   notes: string | null;
+  dataExceptions: PurchaseOut["dataQuality"]["exceptions"];
   createdAt: Date;
   updatedAt: Date;
   vendorName: string | null;
@@ -262,6 +270,11 @@ const dbPurchaseToAPI = (
   row: PurchaseRow,
   images: PurchaseOut["images"] = [],
   financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
+  dataQuality: PurchaseOut["dataQuality"] = {
+    status: "complete",
+    gaps: [],
+    exceptions: row.dataExceptions,
+  },
 ): PurchaseOut => ({
   id: unsafePurchaseShortcode(row.shortcode),
   vendorId: unsafeVendorShortcode(row.vendorShortcode),
@@ -279,6 +292,7 @@ const dbPurchaseToAPI = (
     unpricedExpenseCount: row.unpricedExpenseCount,
     ...financial,
   }),
+  dataQuality,
   images,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -302,6 +316,7 @@ const loadPurchaseImages = async (
       filename: image.filename,
       contentType: image.contentType,
       key: image.key,
+      documentKind: purchaseImage.documentKind,
     })
     .from(purchaseImage)
     .innerJoin(image, eq(purchaseImage.imageId, image.id))
@@ -440,6 +455,14 @@ const buildPurchaseWhereClause = (
       expenseStatusCondition(filters.expenseStatus),
       reconciliationCondition(filters.reconciliation),
       documentPresenceCondition(filters.documentPresenceFilter),
+      filters.dataStatus === "needs_data"
+        ? purchaseNeedsDataCondition()
+        : filters.dataStatus === "complete"
+          ? sql`NOT ${purchaseNeedsDataCondition()}`
+          : undefined,
+      filters.dataGap
+        ? or(...[filters.dataGap].flat().map(purchaseDataGapCondition))
+        : undefined,
       filters.expenseTotalMin !== undefined
         ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`
         : undefined,
@@ -494,14 +517,25 @@ export const purchaseList = async (
       .offset(skip),
     countWhere(db, purchase, whereClause),
   ]);
-  const financialByPurchase = await loadPurchaseFinancialAggregates(
-    db,
-    rows.map((row) => row.id),
-  );
+  const [financialByPurchase, dataQualities] = await Promise.all([
+    loadPurchaseFinancialAggregates(
+      db,
+      rows.map((row) => row.id),
+    ),
+    loadPurchaseDataQualities(
+      db,
+      rows.map((row) => row.id),
+    ),
+  ]);
 
   return {
     data: rows.map((row) =>
-      dbPurchaseToAPI(row, [], financialByPurchase.get(row.id)),
+      dbPurchaseToAPI(
+        row,
+        [],
+        financialByPurchase.get(row.id),
+        dataQualities.get(row.id),
+      ),
     ),
     count,
   };
@@ -511,7 +545,7 @@ export const getPurchaseByID = async (
   db: Database,
   id: PurchaseId,
 ): Promise<PurchaseOut> => {
-  const [rows, images, financialByPurchase] = await Promise.all([
+  const [rows, images, financialByPurchase, dataQualities] = await Promise.all([
     getDb(db)
       .select(purchaseColumns)
       .from(purchase)
@@ -519,12 +553,18 @@ export const getPurchaseByID = async (
       .limit(1),
     loadPurchaseImages(db, id),
     loadPurchaseFinancialAggregates(db, [id]),
+    loadPurchaseDataQualities(db, [id]),
   ]);
   const [row] = rows;
   if (!row) {
     throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
   }
-  return dbPurchaseToAPI(row, images, financialByPurchase.get(id));
+  return dbPurchaseToAPI(
+    row,
+    images,
+    financialByPurchase.get(id),
+    dataQualities.get(id),
+  );
 };
 
 export type PurchaseLinkIdentity = Pick<
@@ -576,6 +616,53 @@ export const getPurchaseByShortcode = async (
 ): Promise<PurchaseOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "purchase");
   return id ? getPurchaseByID(db, unsafePurchaseId(id)) : null;
+};
+
+export const reclassifyPurchaseDocument = async (
+  db: Database,
+  input: ReclassifyPurchaseDocumentInput,
+  actor: ActorContext,
+): Promise<PurchaseOut> => {
+  const resolved = await resolveLiveShortcode(db, input.purchaseId, "purchase");
+  if (!resolved) {
+    throw createAppError(
+      "PURCHASE_NOT_FOUND",
+      `Purchase not found: ${input.purchaseId}`,
+    );
+  }
+  const id = unsafePurchaseId(resolved);
+  await withTransaction(db, async (tx) => {
+    const before = await tx.query.purchaseImage.findFirst({
+      where: and(
+        eq(purchaseImage.purchaseId, id),
+        eq(purchaseImage.imageId, input.imageId),
+        notDeleted(purchaseImage),
+      ),
+    });
+    if (!before) {
+      throw createAppError(
+        "IMAGE_NOT_FOUND",
+        `Attachment ${input.imageId} is not filed against ${input.purchaseId}.`,
+      );
+    }
+    if (before.documentKind === input.documentKind) return;
+    await tx
+      .update(purchaseImage)
+      .set({ documentKind: input.documentKind, updatedAt: new Date() })
+      .where(eq(purchaseImage.id, before.id));
+    await logAuditEntry(tx, actor, {
+      entityType: "purchase",
+      entityId: id,
+      action: "update",
+      changes: {
+        documentKind: {
+          from: before.documentKind,
+          to: input.documentKind,
+        },
+      },
+    });
+  });
+  return getPurchaseByID(db, id);
 };
 
 /**

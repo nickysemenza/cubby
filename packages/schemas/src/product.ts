@@ -2,6 +2,11 @@ import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  dataQuality,
+  dataQualityStatus,
+  productDataCheck,
+} from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { externalIdInput } from "./external-id";
@@ -202,6 +207,11 @@ export const productFilterFields = {
     .describe(
       "Filter by model number — a tool's real identity when the name is generic.",
     ),
+  modelPresenceFilter: presenceFilter,
+  externalIdSource: oneOrMany(z.string().min(1)).optional(),
+  externalIdPresenceFilter: presenceFilter,
+  dataStatus: dataQualityStatus.optional(),
+  dataGap: oneOrMany(productDataCheck).optional(),
   categoryFilter: oneOrMany(productCategory)
     .optional()
     .describe("Filter by category"),
@@ -320,6 +330,7 @@ const productTopLevelFields = {
   externalIds: z.array(externalIdOut),
   price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
   usdaUnavailable: z.boolean().nullable(),
+  dataQuality,
   ...timestampedFields,
 };
 
@@ -626,6 +637,7 @@ export const productMcpOut = z.object({
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
+  model: z.string().nullable(),
   upc: upc.nullable(),
   category: productCategory.nullable(),
   tags: z.array(z.string()),
@@ -647,7 +659,18 @@ export const productMcpOut = z.object({
   usdaFdcId: z.number().nullable(),
   ingredientId: ingredientShortcode.nullable(),
   unitMappings: z.array(mcpUnitMappingOut),
+  dataQuality,
 });
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
 
 export const productMcpListOut = createPaginatedResponseSchema(productMcpOut);
+
+export const productExternalIdCollisionsOut = z.object({
+  items: z.array(
+    z.object({
+      source: z.string(),
+      externalId: z.string(),
+      products: z.array(z.object({ id: productShortcode, name: z.string() })),
+    }),
+  ),
+});

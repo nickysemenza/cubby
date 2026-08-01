@@ -4,6 +4,7 @@ import {
   type ProductCategory,
 } from "@cubby/shared";
 import {
+  AppWindow,
   Archive,
   Bolt,
   Cpu,
@@ -29,6 +30,7 @@ const categoryIcons: Record<ProductCategory, LucideIcon> = {
   storage: Archive,
   hardware: Bolt,
   electronics: Cpu,
+  software: AppWindow,
   household: Sofa,
   supplies: Sparkles,
 };
