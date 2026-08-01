@@ -143,7 +143,8 @@ sw.addEventListener("fetch", (event) => {
           PRECACHE_URL_SET,
         )
       ) {
-        await cache.put(request, response.clone());
+        // Best-effort heal: a quota failure must not fail an asset that fetched fine.
+        await cache.put(request, response.clone()).catch(() => {});
       }
       return response;
     })(),
