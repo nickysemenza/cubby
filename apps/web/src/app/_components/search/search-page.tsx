@@ -100,15 +100,13 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const handleTypeChange = useCallback(
     (nextType: SearchType) => {
       // No `replace` here: a filter change is a deliberate action, so it should
-      // push history (Back undoes the filter). Still skip the view transition —
-      // the mobile slide on a same-page param change is noise.
+      // push history (Back undoes the filter).
       navigate({
         to: "/search",
         search: {
           q: query || undefined,
           type: nextType === "all" ? undefined : nextType,
         },
-        viewTransition: false,
       });
     },
     [navigate, query],
@@ -146,10 +144,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
 
-  // Sync URL query param with input. `viewTransition: false` + `replace`: a
-  // per-keystroke search-param update must not replay the mobile page-slide
-  // transition (defaultViewTransition is on globally for real navigations) or
-  // push a history entry per character. Real navigations keep the slide.
+  // Sync URL query param with input. `replace` avoids pushing a history entry
+  // for every character.
   const handleSearchChange = (value: string) => {
     navigate({
       to: "/search",
@@ -157,7 +153,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
         q: value || undefined,
         type: type === "all" ? undefined : type,
       },
-      viewTransition: false,
       replace: true,
     });
   };
