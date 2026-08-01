@@ -173,7 +173,7 @@ describe("computed purchase and product data quality", () => {
     expect(complete.data.map((item) => item.id)).toContain(seeded.output.id);
   });
 
-  it("rolls Product gaps into Purchases and filters exact worklists", async () => {
+  it("reports related Product gaps separately and filters exact worklists", async () => {
     const seeded = await seedPurchase();
     const product = await createProductFixture(
       ctx.db,
@@ -198,25 +198,23 @@ describe("computed purchase and product data quality", () => {
       await loadPurchaseDataQualities(ctx.db, [seeded.entityId])
     ).get(seeded.entityId)!;
     expect(
-      purchaseQuality.gaps
+      purchaseQuality.relatedGaps
         .filter((gap) => gap.targetType === "product")
         .map((gap) => [gap.check, gap.targetId]),
     ).toEqual([
       ["product_manufacturer", product.id],
       ["product_category", product.id],
-      ["product_model", product.id],
     ]);
 
     const deepProduct = await getProductByID(ctx.db, product.entityId);
     expect(deepProduct.dataQuality.gaps.map((gap) => gap.check)).toEqual([
       "product_manufacturer",
       "product_category",
-      "product_model",
     ]);
 
     const products = await productList(
       ctx.db,
-      { dataGap: "product_model", modelPresenceFilter: "none" },
+      { dataGap: "product_category" },
       [{ orderBy: "name", direction: "asc" }],
       page,
     );
@@ -224,7 +222,7 @@ describe("computed purchase and product data quality", () => {
 
     const purchases = await purchaseList(
       ctx.db,
-      { dataGap: "product_model" },
+      { dataGap: "product_category" },
       [{ orderBy: "date", direction: "desc" }],
       page,
     );
@@ -343,11 +341,46 @@ describe("computed purchase and product data quality", () => {
     ).rejects.toThrow("does not apply to purchase");
   });
 
-  it("targets exceptions and rolls distinct linked Product exceptions into a Purchase", async () => {
-    const seeded = await seedPurchase();
+  it("marks an exception stale when child evidence changes", async () => {
+    const seeded = await seedPurchase("Stale Evidence Supply");
+    const document = await attachDocument(seeded.entityId);
+    const excepted = await setDataException(
+      ctx.db,
+      {
+        entityId: seeded.output.id,
+        check: "primary_document",
+        reason: "unavailable",
+        note: "No primary paperwork was available at review time.",
+      },
+      ctx.actor,
+    );
+    expect(excepted.exceptions[0]?.state).toBe("active");
+
+    await reclassifyPurchaseDocument(
+      ctx.db,
+      {
+        purchaseId: seeded.output.id,
+        imageId: document.imageId,
+        documentKind: "receipt",
+      },
+      ctx.actor,
+    );
+    const refreshed = (
+      await loadPurchaseDataQualities(ctx.db, [seeded.entityId])
+    ).get(seeded.entityId)!;
+    expect(refreshed.gaps.map((gap) => gap.check)).not.toContain(
+      "primary_document",
+    );
+    expect(refreshed.exceptions).toEqual([
+      expect.objectContaining({ check: "primary_document", state: "stale" }),
+    ]);
+  });
+
+  it("targets exceptions and reports distinct linked Product exceptions separately", async () => {
+    const seeded = await seedPurchase("Amazon");
     const product = await createProductFixture(
       ctx.db,
-      makeProductInput({ category: "tools", model: null }),
+      makeProductInput({ category: "tools" }),
       ctx.actor,
     );
     await createExpense(
@@ -375,15 +408,15 @@ describe("computed purchase and product data quality", () => {
       ctx.db,
       {
         entityId: product.id,
-        check: "product_model",
+        check: "amazon_asin",
         reason: "unavailable",
-        note: "The manufacturer does not publish a model number.",
+        note: "The historical listing cannot be recovered.",
       },
       ctx.actor,
     );
     expect(productQuality.exceptions).toEqual([
       expect.objectContaining({
-        check: "product_model",
+        check: "amazon_asin",
         targetType: "product",
         targetId: product.id,
       }),
@@ -399,50 +432,50 @@ describe("computed purchase and product data quality", () => {
       },
       ctx.actor,
     );
-    expect(purchaseQuality.exceptions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          check: "primary_document",
-          targetType: "purchase",
-          targetId: seeded.output.id,
-        }),
-        expect.objectContaining({
-          check: "product_model",
-          targetType: "product",
-          targetId: product.id,
-        }),
-      ]),
-    );
+    expect(purchaseQuality.exceptions).toEqual([
+      expect.objectContaining({
+        check: "primary_document",
+        targetType: "purchase",
+        targetId: seeded.output.id,
+      }),
+    ]);
+    expect(purchaseQuality.relatedExceptions).toEqual([
+      expect.objectContaining({
+        check: "amazon_asin",
+        targetType: "product",
+        targetId: product.id,
+      }),
+    ]);
     expect(
-      purchaseQuality.exceptions.filter(
+      purchaseQuality.relatedExceptions.filter(
         (exception) =>
           exception.targetType === "product" &&
           exception.targetId === product.id &&
-          exception.check === "product_model",
+          exception.check === "amazon_asin",
       ),
     ).toHaveLength(1);
 
     await clearDataException(
       ctx.db,
-      { entityId: product.id, check: "product_model" },
+      { entityId: product.id, check: "amazon_asin" },
       ctx.actor,
     );
     const restored = (
       await loadPurchaseDataQualities(ctx.db, [seeded.entityId])
     ).get(seeded.entityId)!;
-    expect(restored.exceptions).not.toEqual(
+    expect(restored.relatedExceptions).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          check: "product_model",
+          check: "amazon_asin",
           targetType: "product",
           targetId: product.id,
         }),
       ]),
     );
-    expect(restored.gaps).toEqual(
+    expect(restored.relatedGaps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          check: "product_model",
+          check: "amazon_asin",
           targetType: "product",
           targetId: product.id,
         }),
@@ -450,7 +483,7 @@ describe("computed purchase and product data quality", () => {
     );
   });
 
-  it("applies Amazon ASIN coverage only to Amazon-linked products and reports exact collisions", async () => {
+  it("applies Amazon ASIN coverage only to Amazon-linked products and rejects duplicate identifiers", async () => {
     const amazon = await seedPurchase("Amazon");
     const local = await seedPurchase("Local Hardware");
     const amazonProduct = await createProductFixture(
@@ -520,39 +553,36 @@ describe("computed purchase and product data quality", () => {
       localProduct.id,
     ]);
 
-    for (const [index, productId] of [
-      amazonProduct.entityId,
-      localProduct.entityId,
-    ].entries()) {
-      await insertAndReturn(ctx.db, productExternalId, {
-        productId,
-        source: index === 0 ? "Catalog" : "catalog",
-        kind: "catalog_number",
-        externalId: "SHARED-1",
-        url: null,
-      });
-    }
-    const scopedQuality = (
-      await loadProductDataQualities(ctx.db, [amazonProduct.entityId])
-    ).get(amazonProduct.entityId)!;
-    expect(scopedQuality.gaps.map((gap) => gap.check)).toContain(
-      "duplicate_external_id",
-    );
+    await insertAndReturn(ctx.db, productExternalId, {
+      productId: amazonProduct.entityId,
+      source: "catalog",
+      kind: "catalog_number",
+      externalId: "SHARED-1",
+      url: null,
+    });
+    await expect(
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Conflicting catalog product",
+          externalIds: [
+            {
+              source: "catalog",
+              kind: "catalog_number",
+              externalId: "SHARED-1",
+              url: null,
+            },
+          ],
+        }),
+        ctx.actor,
+      ),
+    ).rejects.toThrow("already belongs");
     const collisions = await findProductExternalIdCollisions(ctx.db);
-    expect(collisions.items).toEqual([
-      expect.objectContaining({
-        source: "catalog",
-        externalId: "SHARED-1",
-        products: expect.arrayContaining([
-          expect.objectContaining({ id: amazonProduct.id }),
-          expect.objectContaining({ id: localProduct.id }),
-        ]),
-      }),
-    ]);
+    expect(collisions.items).toEqual([]);
     const sourceWide = await findProductExternalIdCollisions(ctx.db, {
       source: "CATALOG",
     });
-    expect(sourceWide.items).toEqual(collisions.items);
+    expect(sourceWide.items).toEqual([]);
     const exact = await findProductExternalIdCollisions(ctx.db, {
       identifiers: [
         { source: "catalog", kind: "catalog_number", externalId: "SHARED-1" },
@@ -560,7 +590,7 @@ describe("computed purchase and product data quality", () => {
       ],
     });
     expect(exact.results.map((result) => result.status)).toEqual([
-      "collision",
+      "unique",
       "missing",
     ]);
   });

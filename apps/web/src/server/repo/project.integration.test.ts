@@ -203,6 +203,7 @@ describe("project repository", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "test expense made",
@@ -215,6 +216,7 @@ describe("project repository", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "test expense future",
@@ -444,6 +446,7 @@ describe("project repository", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "test expense blocking delete",
@@ -682,6 +685,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "grandparent expense",
@@ -693,6 +697,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "parent expense",
@@ -704,6 +709,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "leaf expense",
@@ -854,6 +860,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "invariant actual",
@@ -865,6 +872,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "invariant committed",
@@ -968,6 +976,7 @@ describe("project repository — sub-projects (parentProjectId)", () => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade: "other",
           costType: "materials",
           name,
@@ -1292,6 +1301,7 @@ describe("project dashboard — attention detector + summary", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "spend with no estimate",
@@ -1313,6 +1323,7 @@ describe("project dashboard — attention detector + summary", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "spend with estimate",
@@ -1589,6 +1600,7 @@ describe("project dashboard — attention detector + summary", () => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade: "other",
           costType: "materials",
           name,
@@ -1836,7 +1848,7 @@ describe("project dashboard — summary scope filters", () => {
     expect(toOnly.hiddenByDate.projects).toBe(1);
   });
 
-  it("hiddenByDate counts scoped and inbox rows that lack a date, but not rows outside the scope", async () => {
+  it("hiddenByDate only counts missing dates, so required Expense dates never contribute", async () => {
     const scoped = await mkProject({
       name: "hidden scoped",
       kind: "renovation",
@@ -1870,9 +1882,9 @@ describe("project dashboard — summary scope filters", () => {
     }
 
     for (const [name, projectId, date] of [
-      ["hidden scoped expense", scoped.id, null],
-      ["hidden inbox expense", null, null],
-      ["hidden other kind expense", otherKind.id, null],
+      ["hidden scoped expense", scoped.id, "2024-12-31"],
+      ["hidden inbox expense", null, "2024-12-31"],
+      ["hidden other kind expense", otherKind.id, "2024-12-31"],
       ["hidden dated expense", scoped.id, "2025-03-15"],
     ] as const) {
       await createExpense(
@@ -1894,13 +1906,12 @@ describe("project dashboard — summary scope filters", () => {
       dateTo: "2025-12-31",
     });
     expect(scopedNames(summary)).toEqual(["hidden scoped"]);
-    // projects: the undated renovation project. tasks/expenses: the scoped
-    // row + the inbox row. The garden project's rows are NOT counted — they
-    // are hidden by the kind filter, not by the date window.
+    // Projects and Tasks can still be undated. Expense dates are required, so
+    // an out-of-window Expense is excluded normally rather than counted here.
     expect(summary.hiddenByDate).toEqual({
       projects: 1,
       tasks: 2,
-      expenses: 2,
+      expenses: 0,
     });
 
     // Nothing is "hidden by date" when no window is set.

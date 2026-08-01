@@ -22,7 +22,14 @@ describe("productMcpOut", () => {
       usdaFdcId: null,
       ingredientId: null,
       unitMappings: [],
-      dataQuality: { status: "complete", gaps: [], exceptions: [] },
+      dataQuality: {
+        status: "complete",
+        facets: [],
+        gaps: [],
+        exceptions: [],
+        relatedGaps: [],
+        relatedExceptions: [],
+      },
     });
 
     expect(parsed).toMatchObject({

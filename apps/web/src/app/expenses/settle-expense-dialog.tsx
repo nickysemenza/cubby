@@ -42,7 +42,7 @@ const settleExpenseSchema = z.object({
     .number()
     .nullable()
     .refine((v): boolean => v !== null, "Final cost is required"),
-  date: plainDate.nullable(),
+  date: plainDate,
   projectId: z.string().nullable(),
   costType: costTypeSchema,
   trade: tradeSchema,

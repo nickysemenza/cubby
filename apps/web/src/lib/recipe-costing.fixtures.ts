@@ -63,7 +63,18 @@ export const makeProduct = (
   usdaUnavailable: null,
   images: [],
   externalIds: [],
-  dataQuality: { status: "complete", gaps: [], exceptions: [] },
+  dataQuality: {
+    status: "complete",
+    facets: [
+      { name: "identity", status: "complete", gaps: [] },
+      { name: "provenance", status: "complete", gaps: [] },
+      { name: "integrity", status: "complete", gaps: [] },
+    ],
+    gaps: [],
+    exceptions: [],
+    relatedGaps: [],
+    relatedExceptions: [],
+  },
   food:
     opts.food ??
     (opts.nutrientsPer100

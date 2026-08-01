@@ -198,7 +198,11 @@ describe("image repository — purchase (charge) documents", () => {
     // back alongside the public row — no second lookup needed.
     const { output: charge, entityId } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: vendor.id, orderId }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: vendor.id,
+        orderId,
+      }),
       ctx.actor,
     );
     return { ...charge, uuid: entityId };

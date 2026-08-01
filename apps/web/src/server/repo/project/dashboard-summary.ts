@@ -254,17 +254,9 @@ export async function projectDashboardSummary(
           ),
         )
       : Promise.resolve(0),
-    dateFilterActive
-      ? countWhere(
-          db,
-          expense,
-          and(
-            notDeleted(expense),
-            scopedOrInbox(expense.projectId),
-            isNull(expense.date),
-          ),
-        )
-      : Promise.resolve(0),
+    // Expense.date is required; only Projects and Tasks can be hidden solely
+    // because their date is missing.
+    Promise.resolve(0),
     computeAttentionItems(db, { preloaded: subtreeLoad, projectIds: ids }),
   ]);
 

@@ -322,7 +322,10 @@ describe("operation preview / mutation parity", () => {
       );
       const { output: purchase } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+        }),
         ctx.actor,
       );
 
@@ -369,12 +372,18 @@ describe("operation preview / mutation parity", () => {
       );
       const { output: keeper } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendorA.id }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendorA.id,
+        }),
         ctx.actor,
       );
       const { output: otherVendorCharge } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendorB.id }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendorB.id,
+        }),
         ctx.actor,
       );
 
@@ -406,7 +415,10 @@ describe("operation preview / mutation parity", () => {
       // The converse: a same-vendor charge merges cleanly.
       const { output: sameVendorCharge } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendorA.id }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendorA.id,
+        }),
         ctx.actor,
       );
       const unblocked = await previewOperation(
@@ -438,12 +450,20 @@ describe("operation preview / mutation parity", () => {
       );
       const { output: keeper } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id, orderId: "ORD-A" }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+          orderId: "ORD-A",
+        }),
         ctx.actor,
       );
       const { output: otherOrderCharge } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id, orderId: "ORD-B" }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+          orderId: "ORD-B",
+        }),
         ctx.actor,
       );
 
@@ -477,7 +497,11 @@ describe("operation preview / mutation parity", () => {
       // is the collision).
       const { output: noOrderCharge } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id, orderId: null }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+          orderId: null,
+        }),
         ctx.actor,
       );
       const unblocked = await previewOperation(
@@ -725,7 +749,10 @@ describe("operation preview / mutation parity", () => {
       );
       const { output: purchase, entityId: purchaseUuid } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+        }),
         ctx.actor,
       );
       const { entityId: lineUuid } = await createExpense(

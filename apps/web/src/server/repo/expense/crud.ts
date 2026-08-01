@@ -41,6 +41,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -315,6 +316,12 @@ const resolveCharge = async (
   }
 
   const vendorId = await findOrCreateVendor(tx, vendorName);
+  if (!data.date) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A dated Expense is required to create its Purchase.",
+    );
+  }
   const target = await findOrCreatePurchase(tx, {
     vendorId,
     orderId:
@@ -388,6 +395,10 @@ export const updateExpense = async (
       );
     }
     const id = unsafeExpenseId(resolvedId);
+    const beforeQualityTargets = await tx.query.expense.findFirst({
+      where: and(eq(expense.id, id), notDeleted(expense)),
+      columns: { productId: true, purchaseId: true },
+    });
 
     const resolvedProjectId =
       projectId === undefined
@@ -425,20 +436,40 @@ export const updateExpense = async (
     };
 
     if (!needsResolve) {
-      return {
-        output: await expenseCrud.update(
-          tx,
-          id,
-          {
-            ...rest,
-            ...(explicitPurchaseId !== undefined
-              ? { purchaseId: explicitPurchaseId }
-              : {}),
-          },
-          actor,
-        ),
-        entityId: id,
-      };
+      const output = await expenseCrud.update(
+        tx,
+        id,
+        {
+          ...rest,
+          ...(explicitPurchaseId !== undefined
+            ? { purchaseId: explicitPurchaseId }
+            : {}),
+        },
+        actor,
+      );
+      if (
+        data.cost !== undefined ||
+        data.productId !== undefined ||
+        data.purchaseId !== undefined
+      ) {
+        await touchDataQualityTargets(tx, {
+          productIds: [
+            beforeQualityTargets?.productId,
+            resolvedProductId,
+          ].filter(
+            (value): value is ProductId =>
+              value !== null && value !== undefined,
+          ),
+          purchaseIds: [
+            beforeQualityTargets?.purchaseId,
+            explicitPurchaseId,
+          ].filter(
+            (value): value is PurchaseId =>
+              value !== null && value !== undefined,
+          ),
+        });
+      }
+      return { output, entityId: id };
     }
 
     // The row's CURRENT charge, so an unchanged `{vendor}` write doesn't mint a
@@ -496,18 +527,24 @@ export const updateExpense = async (
       },
     );
 
-    return {
-      output: await expenseCrud.update(
-        tx,
-        id,
-        {
-          ...rest,
-          ...(resolved === undefined ? {} : { purchaseId: resolved }),
-        },
-        actor,
+    const output = await expenseCrud.update(
+      tx,
+      id,
+      {
+        ...rest,
+        ...(resolved === undefined ? {} : { purchaseId: resolved }),
+      },
+      actor,
+    );
+    await touchDataQualityTargets(tx, {
+      productIds: [beforeQualityTargets?.productId, resolvedProductId].filter(
+        (value): value is ProductId => value !== null && value !== undefined,
       ),
-      entityId: id,
-    };
+      purchaseIds: [beforeQualityTargets?.purchaseId, resolved].filter(
+        (value): value is PurchaseId => value !== null && value !== undefined,
+      ),
+    });
+    return { output, entityId: id };
   });
 };
 
@@ -572,6 +609,10 @@ export const createExpense = async (
       entityType: "expense",
       entityId: created.id,
       action: "create",
+    });
+    await touchDataQualityTargets(tx, {
+      productIds: productId ? [productId] : [],
+      purchaseIds: purchaseId ? [purchaseId] : [],
     });
     return created.id;
   });
@@ -734,6 +775,11 @@ export const deleteExpenses = async (
     const ids = await resolveLiveExpenseIds(tx, shortcodes);
     await lockAndValidateForDelete(tx, expense, ids, "Expense");
 
+    const qualityTargets = await tx.query.expense.findMany({
+      where: and(inArray(expense.id, ids), notDeleted(expense)),
+      columns: { productId: true, purchaseId: true },
+    });
+
     const now = new Date();
     await tx
       .update(expense)
@@ -742,6 +788,15 @@ export const deleteExpenses = async (
 
     // Removal-path invariant: every delete path cleans up its embeddings in-tx.
     await softDeleteEntityEmbeddingsTx(tx, "expense", ids);
+
+    await touchDataQualityTargets(tx, {
+      productIds: qualityTargets
+        .map((row) => row.productId)
+        .filter((value): value is ProductId => value !== null),
+      purchaseIds: qualityTargets
+        .map((row) => row.purchaseId)
+        .filter((value): value is PurchaseId => value !== null),
+    });
 
     await logAuditEntries(
       tx,

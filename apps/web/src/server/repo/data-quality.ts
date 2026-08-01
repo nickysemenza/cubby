@@ -3,15 +3,20 @@ import {
   type ClearDataExceptionInput,
   type DataCheck,
   type DataException,
+  type DataExceptionReason,
   type DataQuality,
   type DataQualityException,
+  type DataQualityFacetName,
   type DataQualityGap,
+  dataCheckFacet,
+  isDefectDataCheck,
   type ProductDataCheck,
   type PurchaseDataCheck,
   productDataCheck,
   purchaseDataCheck,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
+import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import {
   unsafeProductId,
@@ -27,11 +32,13 @@ import {
 import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { groupBy, uniq, uniqBy } from "es-toolkit";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
+  financialAccount,
   financialTransaction,
   image,
+  inventoryEntry,
   product,
   productExternalId,
   purchase,
@@ -49,6 +56,63 @@ import {
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 const AMAZON_SOURCE = "amazon";
+const MODEL_REQUIRED_CATEGORIES = [
+  "tools",
+  "electronics",
+  "storage",
+  "household",
+] as const;
+const PURCHASE_FACETS = [
+  "identity",
+  "paperwork",
+  "ledger",
+  "settlement",
+] as const satisfies readonly DataQualityFacetName[];
+const PRODUCT_FACETS = [
+  "identity",
+  "provenance",
+  "integrity",
+] as const satisfies readonly DataQualityFacetName[];
+
+/**
+ * Exceptions snapshot the facts that justified them. Evidence also lives on
+ * child rows, so child mutations advance the owning target's clock and make
+ * an old exception visibly stale.
+ */
+export const touchDataQualityTargets = async (
+  tx: DrizzleTransaction,
+  targets: {
+    productIds?: readonly ProductId[];
+    purchaseIds?: readonly PurchaseId[];
+  },
+  at = new Date(),
+): Promise<void> => {
+  const productIds = uniq(targets.productIds ?? []);
+  const purchaseIds = uniq(targets.purchaseIds ?? []);
+  if (productIds.length > 0) {
+    await tx
+      .update(product)
+      .set({ updatedAt: at })
+      .where(and(inArray(product.id, productIds), notDeleted(product)));
+  }
+  if (purchaseIds.length > 0) {
+    await tx
+      .update(purchase)
+      .set({ updatedAt: at })
+      .where(and(inArray(purchase.id, purchaseIds), notDeleted(purchase)));
+  }
+};
+
+const EXCEPTION_REASONS: Partial<
+  Record<DataCheck, readonly DataExceptionReason[]>
+> = {
+  order_id: ["not_issued", "unavailable"],
+  stated_total: ["not_issued", "unavailable"],
+  primary_document: ["not_issued", "unavailable"],
+  settlement_reference: ["not_applicable", "insufficient_detail"],
+  paperwork_mismatch: ["expected_mismatch"],
+  amazon_asin: ["unavailable", "insufficient_detail"],
+};
 
 const externalIdCollisionKey = (value: {
   source: string;
@@ -57,15 +121,28 @@ const externalIdCollisionKey = (value: {
 }) =>
   `${value.source.trim().toLowerCase()}\u0000${value.kind}\u0000${value.externalId}`;
 
-const hasException = (
+const activeException = (
   column: typeof product.dataExceptions | typeof purchase.dataExceptions,
+  updatedAt: typeof product.updatedAt | typeof purchase.updatedAt,
   check: DataCheck,
-): SQL => sql`${column} @> ${JSON.stringify([{ check }])}::jsonb`;
+): SQL => sql`EXISTS (
+  SELECT 1 FROM jsonb_array_elements(${column}) dq_exception
+  WHERE dq_exception->>'check' = ${check}
+    AND dq_exception->>'fingerprint' = ${check} || ':' || floor(extract(epoch FROM ${updatedAt}) * 1000)::bigint::text
+)`;
 
 const productHasExpenses = sql`EXISTS (
   SELECT 1 FROM "Expense" dq_e
   WHERE dq_e."productId" = ${product.id} AND dq_e."deletedAt" IS NULL
 )`;
+
+const productHasInventory = sql`EXISTS (
+  SELECT 1 FROM "InventoryEntry" dq_inventory
+  WHERE dq_inventory."productId" = ${product.id}
+    AND dq_inventory."deletedAt" IS NULL
+)`;
+
+const productHasQualityScope = sql`(${productHasExpenses} OR ${productHasInventory})`;
 
 const productHasAmazonPurchase = sql`EXISTS (
   SELECT 1
@@ -81,14 +158,15 @@ const productHasAmazonId = sql`EXISTS (
   SELECT 1 FROM "ProductExternalId" dq_asin
   WHERE dq_asin."productId" = ${product.id}
     AND dq_asin."deletedAt" IS NULL
-    AND lower(dq_asin."source") = ${AMAZON_SOURCE}
+    AND dq_asin."source" = ${AMAZON_SOURCE}
+    AND dq_asin."kind" = 'asin'
 )`;
 
 const productHasExternalIdCollision = sql`EXISTS (
   SELECT 1
   FROM "ProductExternalId" dq_mine
   JOIN "ProductExternalId" dq_other
-    ON lower(dq_other."source") = lower(dq_mine."source")
+    ON dq_other."source" = dq_mine."source"
    AND dq_other."kind" = dq_mine."kind"
    AND dq_other."externalId" = dq_mine."externalId"
    AND dq_other."productId" <> dq_mine."productId"
@@ -107,21 +185,42 @@ export const productDataGapCondition = (check: ProductDataCheck): SQL => {
       : check === "product_category"
         ? sql`${product.category} IS NULL`
         : check === "product_model"
-          ? sql`(${product.model} IS NULL OR trim(${product.model}) = '')`
+          ? sql`${product.category} IN (${sql.join(
+              MODEL_REQUIRED_CATEGORIES.map((category) => sql`${category}`),
+              sql`, `,
+            )}) AND (${product.model} IS NULL OR trim(${product.model}) = '')`
           : check === "amazon_asin"
             ? sql`${productHasAmazonPurchase} AND NOT ${productHasAmazonId}`
             : productHasExternalIdCollision;
-  return sql`${productHasExpenses} AND ${missing} AND NOT ${hasException(product.dataExceptions, check)}`;
+  return sql`${productHasQualityScope} AND ${missing} AND NOT ${activeException(product.dataExceptions, product.updatedAt, check)}`;
 };
 
-export const productNeedsDataCondition = (): SQL =>
+const productMissingDataCondition = (): SQL =>
   sql`(${sql.join(
-    productDataCheck.options.map((check) => productDataGapCondition(check)),
+    productDataCheck.options
+      .filter((check) => !isDefectDataCheck(check))
+      .map((check) => productDataGapCondition(check)),
     sql` OR `,
   )})`;
 
+export const productDefectCondition = (): SQL =>
+  productDataGapCondition("duplicate_external_id");
+
+export const productNeedsDataCondition = (): SQL =>
+  sql`${productMissingDataCondition()} AND NOT ${productDefectCondition()}`;
+
+export const productAnyDataGapCondition = (): SQL =>
+  sql`${productMissingDataCondition()} OR ${productDefectCondition()}`;
+
+const activeExceptionRaw = (alias: string, check: DataCheck) =>
+  `EXISTS (
+    SELECT 1 FROM jsonb_array_elements(${alias}."dataExceptions") dq_exception
+    WHERE dq_exception->>'check' = '${check}'
+      AND dq_exception->>'fingerprint' = '${check}:' || floor(extract(epoch FROM ${alias}."updatedAt") * 1000)::bigint::text
+  )`;
+
 const jsonExceptionAbsentRaw = (alias: string, check: DataCheck) =>
-  `NOT ${alias}."dataExceptions" @> '${JSON.stringify([{ check }]).replaceAll("'", "''")}'::jsonb`;
+  `NOT ${activeExceptionRaw(alias, check)}`;
 
 const purchaseProductGapRaw = (check: ProductDataCheck): string => {
   const exceptionAbsent = jsonExceptionAbsentRaw("dq_pr", check);
@@ -138,7 +237,8 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
       : check === "product_category"
         ? `AND dq_pr."category" IS NULL`
         : check === "product_model"
-          ? `AND (dq_pr."model" IS NULL OR trim(dq_pr."model") = '')`
+          ? `AND dq_pr."category" IN (${MODEL_REQUIRED_CATEGORIES.map((category) => `'${category}'`).join(", ")})
+               AND (dq_pr."model" IS NULL OR trim(dq_pr."model") = '')`
           : check === "amazon_asin"
             ? `AND EXISTS (
                  SELECT 1 FROM "Expense" dq_ae
@@ -150,12 +250,14 @@ const purchaseProductGapRaw = (check: ProductDataCheck): string => {
                AND NOT EXISTS (
                  SELECT 1 FROM "ProductExternalId" dq_asin
                  WHERE dq_asin."productId" = dq_pr."id" AND dq_asin."deletedAt" IS NULL
-                   AND lower(dq_asin."source") = 'amazon'
+                   AND dq_asin."source" = 'amazon'
+                   AND dq_asin."kind" = 'asin'
                )`
             : `AND EXISTS (
                  SELECT 1 FROM "ProductExternalId" dq_mine
                  JOIN "ProductExternalId" dq_other
                    ON dq_other."source" = dq_mine."source"
+                  AND dq_other."kind" = dq_mine."kind"
                   AND dq_other."externalId" = dq_mine."externalId"
                   AND dq_other."productId" <> dq_mine."productId"
                   AND dq_other."deletedAt" IS NULL
@@ -224,10 +326,16 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
   }
   return `(NOT EXISTS (
     SELECT 1 FROM "FinancialTransaction" dq_ft
+    JOIN "FinancialAccount" dq_fa
+      ON dq_fa."id" = dq_ft."accountId" AND dq_fa."deletedAt" IS NULL
     WHERE dq_ft."purchaseId" = "Purchase"."id"
       AND dq_ft."deletedAt" IS NULL
       AND dq_ft."status" = 'posted'
-      AND jsonb_array_length(dq_ft."sourceRefs") > 0
+      AND dq_ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND (
+        jsonb_array_length(dq_ft."sourceRefs") > 0
+        OR dq_fa."identity"->>'kind' = 'cash'
+      )
   ) AND ${exceptionAbsent})`;
 };
 
@@ -238,37 +346,69 @@ export const purchaseDataGapCondition = (check: DataCheck): SQL =>
       : purchaseProductGapRaw(check as ProductDataCheck),
   );
 
-export const purchaseNeedsDataCondition = (): SQL =>
+const purchaseMissingDataCondition = (): SQL =>
   sql.raw(
-    `(${[...purchaseDataCheck.options, ...productDataCheck.options]
-      .map((check) =>
-        purchaseDataCheck.safeParse(check).success
-          ? purchaseGapRaw(check as PurchaseDataCheck)
-          : purchaseProductGapRaw(check as ProductDataCheck),
-      )
+    `(${purchaseDataCheck.options
+      .filter((check) => !isDefectDataCheck(check))
+      .map((check) => purchaseGapRaw(check))
       .join(" OR ")})`,
   );
 
-const complete = (
-  gaps: DataQualityGap[],
-  exceptions: DataQualityException[],
-): DataQuality => ({
-  status: gaps.length === 0 ? "complete" : "needs_data",
-  gaps,
-  exceptions,
-});
+export const purchaseDefectCondition = (): SQL =>
+  sql.raw(purchaseGapRaw("paperwork_mismatch"));
 
-const hasStoredException = (
-  exceptions: DataException[],
-  check: DataCheck,
-): boolean => exceptions.some((exception) => exception.check === check);
+export const purchaseNeedsDataCondition = (): SQL =>
+  sql`${purchaseMissingDataCondition()} AND NOT ${purchaseDefectCondition()}`;
 
-const targetExceptions = (
-  exceptions: DataException[],
+export const purchaseAnyDataGapCondition = (): SQL =>
+  sql`${purchaseMissingDataCondition()} OR ${purchaseDefectCondition()}`;
+
+type FingerprintedGap = DataQualityGap & { fingerprint: string };
+
+const evidenceFingerprint = (check: DataCheck, updatedAt: Date): string =>
+  `${check}:${updatedAt.getTime()}`;
+
+const qualityStatus = (gaps: DataQualityGap[]): DataQuality["status"] =>
+  gaps.some((gap) => gap.kind === "defect")
+    ? "defect"
+    : gaps.length > 0
+      ? "needs_data"
+      : "complete";
+
+const evaluateTargetQuality = (
+  rawGaps: FingerprintedGap[],
+  storedExceptions: DataException[],
   targetType: "purchase" | "product",
   targetId: string,
-): DataQualityException[] =>
-  exceptions.map((exception) => ({ ...exception, targetType, targetId }));
+  facetOrder: readonly DataQualityFacetName[],
+): Omit<DataQuality, "relatedGaps" | "relatedExceptions"> => {
+  const rawByCheck = new Map(rawGaps.map((gap) => [gap.check, gap]));
+  const exceptions: DataQualityException[] = storedExceptions.map(
+    ({ fingerprint, ...exception }) => ({
+      ...exception,
+      targetType,
+      targetId,
+      state:
+        fingerprint !== undefined &&
+        rawByCheck.get(exception.check)?.fingerprint === fingerprint
+          ? "active"
+          : "stale",
+    }),
+  );
+  const activeChecks = new Set(
+    exceptions
+      .filter((exception) => exception.state === "active")
+      .map((exception) => exception.check),
+  );
+  const gaps = rawGaps
+    .filter((gap) => !activeChecks.has(gap.check))
+    .map(({ fingerprint: _fingerprint, ...gap }) => gap);
+  const facets = facetOrder.map((name) => {
+    const facetGaps = gaps.filter((gap) => gap.facet === name);
+    return { name, status: qualityStatus(facetGaps), gaps: facetGaps };
+  });
+  return { status: qualityStatus(gaps), facets, gaps, exceptions };
+};
 
 const uniqueTargetExceptions = (
   exceptions: DataQualityException[],
@@ -285,67 +425,82 @@ export const loadProductDataQualities = async (
 ): Promise<Map<ProductId, DataQuality>> => {
   const uniqueIds = uniq(ids);
   if (uniqueIds.length === 0) return new Map();
-  const [products, linkedExpenses, amazonExpenses, productExternalIds] =
-    await Promise.all([
-      getDb(db)
-        .select({
-          id: product.id,
-          shortcode: product.shortcode,
-          manufacturer: product.manufacturer,
-          category: product.category,
-          model: product.model,
-          dataExceptions: product.dataExceptions,
-        })
-        .from(product)
-        .where(and(inArray(product.id, uniqueIds), notDeleted(product))),
-      getDb(db)
-        .selectDistinct({ productId: expense.productId })
-        .from(expense)
-        .where(
-          and(
-            inArray(expense.productId, uniqueIds),
-            isNotNull(expense.productId),
-            notDeleted(expense),
-          ),
+  const [
+    products,
+    linkedInventory,
+    linkedExpenses,
+    amazonExpenses,
+    productExternalIds,
+  ] = await Promise.all([
+    getDb(db)
+      .select({
+        id: product.id,
+        shortcode: product.shortcode,
+        manufacturer: product.manufacturer,
+        category: product.category,
+        model: product.model,
+        dataExceptions: product.dataExceptions,
+        updatedAt: product.updatedAt,
+      })
+      .from(product)
+      .where(and(inArray(product.id, uniqueIds), notDeleted(product))),
+    getDb(db)
+      .selectDistinct({ productId: inventoryEntry.productId })
+      .from(inventoryEntry)
+      .where(
+        and(
+          inArray(inventoryEntry.productId, uniqueIds),
+          notDeleted(inventoryEntry),
         ),
-      getDb(db)
-        .selectDistinct({ productId: expense.productId })
-        .from(expense)
-        .innerJoin(
-          purchase,
-          and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-        )
-        .innerJoin(
-          vendor,
-          and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
-        )
-        .where(
-          and(
-            inArray(expense.productId, uniqueIds),
-            isNotNull(expense.productId),
-            notDeleted(expense),
-            sql`lower(${vendor.name}) LIKE 'amazon%'`,
-          ),
+      ),
+    getDb(db)
+      .selectDistinct({ productId: expense.productId })
+      .from(expense)
+      .where(
+        and(
+          inArray(expense.productId, uniqueIds),
+          isNotNull(expense.productId),
+          notDeleted(expense),
         ),
-      getDb(db)
-        .select({
-          productId: productExternalId.productId,
-          source: productExternalId.source,
-          kind: productExternalId.kind,
-          externalId: productExternalId.externalId,
-        })
-        .from(productExternalId)
-        .innerJoin(
-          product,
-          and(eq(product.id, productExternalId.productId), notDeleted(product)),
-        )
-        .where(
-          and(
-            inArray(productExternalId.productId, uniqueIds),
-            notDeleted(productExternalId),
-          ),
+      ),
+    getDb(db)
+      .selectDistinct({ productId: expense.productId })
+      .from(expense)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
+      .innerJoin(
+        vendor,
+        and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
+      )
+      .where(
+        and(
+          inArray(expense.productId, uniqueIds),
+          isNotNull(expense.productId),
+          notDeleted(expense),
+          sql`lower(${vendor.name}) LIKE 'amazon%'`,
         ),
-    ]);
+      ),
+    getDb(db)
+      .select({
+        productId: productExternalId.productId,
+        source: productExternalId.source,
+        kind: productExternalId.kind,
+        externalId: productExternalId.externalId,
+      })
+      .from(productExternalId)
+      .innerJoin(
+        product,
+        and(eq(product.id, productExternalId.productId), notDeleted(product)),
+      )
+      .where(
+        and(
+          inArray(productExternalId.productId, uniqueIds),
+          notDeleted(productExternalId),
+        ),
+      ),
+  ]);
 
   const externalIdPairs = uniqBy(productExternalIds, externalIdCollisionKey);
   const activeExternalIdOwners =
@@ -372,10 +527,7 @@ export const loadProductDataQualities = async (
               or(
                 ...externalIdPairs.map((row) =>
                   and(
-                    eq(
-                      sql<string>`lower(${productExternalId.source})`,
-                      row.source.trim().toLowerCase(),
-                    ),
+                    eq(productExternalId.source, row.source),
                     eq(productExternalId.kind, row.kind),
                     eq(productExternalId.externalId, row.externalId),
                   ),
@@ -387,6 +539,7 @@ export const loadProductDataQualities = async (
   const expenseLinked = new Set(
     linkedExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
+  const inventoryLinked = new Set(linkedInventory.map((row) => row.productId));
   const amazonLinked = new Set(
     amazonExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
@@ -401,14 +554,20 @@ export const loadProductDataQualities = async (
   const result = new Map<ProductId, DataQuality>();
 
   for (const row of products) {
-    const gaps: DataQualityGap[] = [];
+    const gaps: FingerprintedGap[] = [];
     const targetId = unsafeProductShortcode(row.shortcode);
     const add = (check: ProductDataCheck, message: string) => {
-      if (!hasStoredException(row.dataExceptions, check)) {
-        gaps.push({ check, targetType: "product", targetId, message });
-      }
+      gaps.push({
+        check,
+        facet: dataCheckFacet[check],
+        kind: isDefectDataCheck(check) ? "defect" : "missing",
+        targetType: "product",
+        targetId,
+        message,
+        fingerprint: evidenceFingerprint(check, row.updatedAt),
+      });
     };
-    if (expenseLinked.has(row.id)) {
+    if (expenseLinked.has(row.id) || inventoryLinked.has(row.id)) {
       if (
         row.manufacturer.trim() === "" ||
         row.manufacturer.trim().toLowerCase() ===
@@ -419,14 +578,22 @@ export const loadProductDataQualities = async (
       if (row.category === null) {
         add("product_category", "Product category is not recorded.");
       }
-      if (row.model === null || row.model.trim() === "") {
+      if (
+        row.category !== null &&
+        MODEL_REQUIRED_CATEGORIES.includes(
+          row.category as (typeof MODEL_REQUIRED_CATEGORIES)[number],
+        ) &&
+        (row.model === null || row.model.trim() === "")
+      ) {
         add("product_model", "Manufacturer model is not recorded.");
       }
       const externalIds = externalIdsByProduct[row.id] ?? [];
       if (
         amazonLinked.has(row.id) &&
         !externalIds.some(
-          (externalId) => externalId.source.toLowerCase() === AMAZON_SOURCE,
+          (externalId) =>
+            externalId.source.toLowerCase() === AMAZON_SOURCE &&
+            externalId.kind === "asin",
         )
       ) {
         add("amazon_asin", "Amazon-linked product has no Amazon ASIN.");
@@ -444,17 +611,17 @@ export const loadProductDataQualities = async (
         );
       }
     }
-    result.set(
-      row.id,
-      complete(
+    result.set(row.id, {
+      ...evaluateTargetQuality(
         gaps,
-        targetExceptions(
-          row.dataExceptions,
-          "product",
-          unsafeProductShortcode(row.shortcode),
-        ),
+        row.dataExceptions,
+        "product",
+        targetId,
+        PRODUCT_FACETS,
       ),
-    );
+      relatedGaps: [],
+      relatedExceptions: [],
+    });
   }
   return result;
 };
@@ -475,6 +642,7 @@ export const loadPurchaseDataQualities = async (
           orderId: purchase.orderId,
           statedTotal: purchase.statedTotal,
           dataExceptions: purchase.dataExceptions,
+          updatedAt: purchase.updatedAt,
         })
         .from(purchase)
         .where(and(inArray(purchase.id, uniqueIds), notDeleted(purchase))),
@@ -509,7 +677,14 @@ export const loadPurchaseDataQualities = async (
           purchaseId: financialTransaction.purchaseId,
           hasSettlementReference: sql<boolean>`bool_or(
             ${financialTransaction.status} = 'posted'
-            AND jsonb_array_length(${financialTransaction.sourceRefs}) > 0
+            AND ${financialTransaction.kind} IN (${sql.join(
+              purchaseSettlementKinds.map((kind) => sql`${kind}`),
+              sql`, `,
+            )})
+            AND (
+              jsonb_array_length(${financialTransaction.sourceRefs}) > 0
+              OR ${financialAccount.identity}->>'kind' = 'cash'
+            )
           )`,
           postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (
             WHERE ${financialTransaction.status} = 'posted'
@@ -517,6 +692,13 @@ export const loadPurchaseDataQualities = async (
           ), 0)::double precision`,
         })
         .from(financialTransaction)
+        .innerJoin(
+          financialAccount,
+          and(
+            eq(financialAccount.id, financialTransaction.accountId),
+            notDeleted(financialAccount),
+          ),
+        )
         .where(
           and(
             inArray(financialTransaction.purchaseId, uniqueIds),
@@ -547,12 +729,18 @@ export const loadPurchaseDataQualities = async (
 
   for (const row of purchases) {
     const purchaseExpenses = expensesByPurchase[row.id] ?? [];
-    const gaps: DataQualityGap[] = [];
+    const gaps: FingerprintedGap[] = [];
     const targetId = unsafePurchaseShortcode(row.shortcode);
     const add = (check: PurchaseDataCheck, message: string) => {
-      if (!hasStoredException(row.dataExceptions, check)) {
-        gaps.push({ check, targetType: "purchase", targetId, message });
-      }
+      gaps.push({
+        check,
+        facet: dataCheckFacet[check],
+        kind: isDefectDataCheck(check) ? "defect" : "missing",
+        targetType: "purchase",
+        targetId,
+        message,
+        fingerprint: evidenceFingerprint(check, row.updatedAt),
+      });
     };
     if (row.date === null)
       add("purchase_date", "Purchase date is not recorded.");
@@ -604,32 +792,33 @@ export const loadPurchaseDataQualities = async (
     if (!settlementCovered.has(row.id)) {
       add(
         "settlement_reference",
-        "No posted, non-void FinancialTransaction with a source reference is linked.",
+        "No posted qualifying FinancialTransaction with external or cash-account evidence is linked.",
       );
     }
     const seenProducts = new Set<ProductId>();
-    const rolledProductExceptions: DataQualityException[] = [];
+    const relatedGaps: DataQualityGap[] = [];
+    const relatedExceptions: DataQualityException[] = [];
     for (const item of purchaseExpenses) {
       if (!item.productId || seenProducts.has(item.productId)) continue;
       seenProducts.add(item.productId);
       const productQuality = productQualities.get(item.productId);
-      gaps.push(...(productQuality?.gaps ?? []));
-      rolledProductExceptions.push(...(productQuality?.exceptions ?? []));
+      relatedGaps.push(...(productQuality?.gaps ?? []));
+      relatedExceptions.push(...(productQuality?.exceptions ?? []));
     }
-    result.set(
-      row.id,
-      complete(
+    result.set(row.id, {
+      ...evaluateTargetQuality(
         gaps,
-        uniqueTargetExceptions([
-          ...targetExceptions(
-            row.dataExceptions,
-            "purchase",
-            unsafePurchaseShortcode(row.shortcode),
-          ),
-          ...rolledProductExceptions,
-        ]),
+        row.dataExceptions,
+        "purchase",
+        targetId,
+        PURCHASE_FACETS,
       ),
-    );
+      relatedGaps: uniqBy(
+        relatedGaps,
+        (gap) => `${gap.targetId}\u0000${gap.check}`,
+      ),
+      relatedExceptions: uniqueTargetExceptions(relatedExceptions),
+    });
   }
   return result;
 };
@@ -663,6 +852,15 @@ const mutateException = async (
     );
   }
   assertCheckApplies(parsed.type, input.check);
+  if ("reason" in input) {
+    const allowed = EXCEPTION_REASONS[input.check];
+    if (!allowed?.includes(input.reason)) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `${input.reason} is not allowed for ${input.check}.`,
+      );
+    }
+  }
   const resolved = await resolveLiveShortcode(db, input.entityId, parsed.type);
   if (!resolved) {
     throw createAppError(
@@ -672,11 +870,14 @@ const mutateException = async (
   }
 
   await withTransaction(db, async (tx) => {
-    const current =
+    const currentRow =
       parsed.type === "purchase"
         ? ((
             await tx
-              .select({ dataExceptions: purchase.dataExceptions })
+              .select({
+                dataExceptions: purchase.dataExceptions,
+                updatedAt: purchase.updatedAt,
+              })
               .from(purchase)
               .where(
                 and(
@@ -685,10 +886,13 @@ const mutateException = async (
                 ),
               )
               .limit(1)
-          )[0]?.dataExceptions ?? [])
+          )[0] ?? null)
         : ((
             await tx
-              .select({ dataExceptions: product.dataExceptions })
+              .select({
+                dataExceptions: product.dataExceptions,
+                updatedAt: product.updatedAt,
+              })
               .from(product)
               .where(
                 and(
@@ -697,8 +901,72 @@ const mutateException = async (
                 ),
               )
               .limit(1)
-          )[0]?.dataExceptions ?? []);
-    const retained = current.filter((item) => item.check !== input.check);
+          )[0] ?? null);
+    if (!currentRow) {
+      throw createAppError(
+        parsed.type === "purchase" ? "PURCHASE_NOT_FOUND" : "PRODUCT_NOT_FOUND",
+        `${parsed.type} not found: ${input.entityId}`,
+      );
+    }
+    const current = currentRow.dataExceptions;
+    if ("reason" in input) {
+      const currentlyActive = current.some(
+        (item) =>
+          item.check === input.check &&
+          item.fingerprint ===
+            evidenceFingerprint(input.check, currentRow.updatedAt),
+      );
+      const applies = currentlyActive
+        ? true
+        : parsed.type === "purchase"
+          ? Boolean(
+              (
+                await tx
+                  .select({ value: purchaseDataGapCondition(input.check) })
+                  .from(purchase)
+                  .where(
+                    and(
+                      eq(purchase.id, unsafePurchaseId(resolved)),
+                      notDeleted(purchase),
+                    ),
+                  )
+                  .limit(1)
+              )[0]?.value,
+            )
+          : Boolean(
+              (
+                await tx
+                  .select({
+                    value: productDataGapCondition(
+                      input.check as ProductDataCheck,
+                    ),
+                  })
+                  .from(product)
+                  .where(
+                    and(
+                      eq(product.id, unsafeProductId(resolved)),
+                      notDeleted(product),
+                    ),
+                  )
+                  .limit(1)
+              )[0]?.value,
+            );
+      if (!applies) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${input.check} is not an active ${parsed.type} data gap.`,
+        );
+      }
+    }
+    const now = new Date();
+    const retained = current
+      .filter((item) => item.check !== input.check)
+      .map((item) =>
+        item.fingerprint ===
+        evidenceFingerprint(item.check, currentRow.updatedAt)
+          ? { ...item, fingerprint: evidenceFingerprint(item.check, now) }
+          : item,
+      );
     const next =
       "reason" in input
         ? [
@@ -707,6 +975,7 @@ const mutateException = async (
               check: input.check,
               reason: input.reason,
               note: input.note.trim(),
+              fingerprint: evidenceFingerprint(input.check, now),
             },
           ]
         : retained;
@@ -714,14 +983,14 @@ const mutateException = async (
       await updateLiveAndReturn(
         tx,
         purchase,
-        { dataExceptions: next },
+        { dataExceptions: next, updatedAt: now },
         unsafePurchaseId(resolved),
       );
     } else {
       await updateLiveAndReturn(
         tx,
         product,
-        { dataExceptions: next },
+        { dataExceptions: next, updatedAt: now },
         unsafeProductId(resolved),
       );
     }
@@ -796,15 +1065,12 @@ export const findProductExternalIdCollisions = async (
       and(
         notDeleted(productExternalId),
         selected && selected.length > 0
-          ? inArray(sql<string>`lower(${productExternalId.source})`, selected)
+          ? inArray(productExternalId.source, selected)
           : identifiers && identifiers.length > 0
             ? or(
                 ...identifiers.map((identifier) =>
                   and(
-                    eq(
-                      sql<string>`lower(${productExternalId.source})`,
-                      identifier.source,
-                    ),
+                    eq(productExternalId.source, identifier.source),
                     eq(productExternalId.kind, identifier.kind),
                     eq(productExternalId.externalId, identifier.externalId),
                   ),

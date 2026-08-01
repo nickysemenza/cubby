@@ -108,4 +108,26 @@ describe("financial transaction contracts", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("enforces cent precision and purchase-settlement semantics", () => {
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        amount: 60.561,
+      }).success,
+    ).toBe(false);
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        kind: "refund",
+        amount: 9.07,
+      }).success,
+    ).toBe(false);
+    expect(
+      financialTransactionCreateInput.safeParse({
+        ...transaction,
+        kind: "fee",
+      }).success,
+    ).toBe(false);
+  });
 });

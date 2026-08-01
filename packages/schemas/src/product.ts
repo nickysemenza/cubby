@@ -10,7 +10,13 @@ import {
 } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { externalIdInput, externalIdKind, externalIdOut } from "./external-id";
+import {
+  externalIdInputs,
+  externalIdKind,
+  externalIdOut,
+  externalIdSource,
+  externalIdValues,
+} from "./external-id";
 import {
   ingredientShortcode,
   inventoryShortcode,
@@ -126,7 +132,7 @@ const productCreateShape = {
     .nullable()
     .optional()
     .describe(
-      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention expense.cost uses.",
+      "Current chosen per-each costing/replacement price ($), not historical spend. 0 means genuinely free; null means no current price is recorded.",
     ),
   unitMappings: z
     .array(unitMappingInput)
@@ -134,7 +140,7 @@ const productCreateShape = {
     .describe(
       'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
     ),
-  externalIds: z.array(externalIdInput).default([]),
+  externalIds: externalIdInputs.default([]),
   usdaUnavailable: z
     .boolean()
     .nullable()
@@ -215,7 +221,7 @@ export const productFilterFields = {
       "Filter by model number — a tool's real identity when the name is generic.",
     ),
   modelPresenceFilter: presenceFilter,
-  externalIdSource: oneOrMany(z.string().min(1)).optional(),
+  externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
   dataGap: oneOrMany(productDataCheck).optional(),
@@ -336,7 +342,7 @@ const productTopLevelFields = {
     .describe("product category for filtering"),
   images: z.array(imageOut),
   externalIds: z.array(externalIdOut),
-  price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
+  price: z.number().nullable(), // Current chosen per-each costing/replacement price; the 1 each -> $X costing edge is synthesized from this at compute time.
   usdaUnavailable: z.boolean().nullable(),
   dataQuality,
   ...timestampedFields,
@@ -577,7 +583,7 @@ export const mcpProductCreateInput = z.object({
     .nullable()
     .optional()
     .describe(
-      "price per each ($), source of truth. 0 is meaningful and distinct from null: it asserts the item is genuinely free (bundled accessories, freebies), whereas null means nobody has priced it yet — the same convention expense.cost uses.",
+      "Current chosen per-each costing/replacement price ($), not historical spend. 0 means genuinely free; null means no current price is recorded.",
     ),
   unitMappings: z
     .array(mcpUnitMappingInput)
@@ -612,15 +618,7 @@ export const mcpProductUpdateInput = z.object({
     ),
   // Same reason as aliases — hand-written shape, so this has to be listed to be
   // writable. Omitting it leaves existing rows untouched (see productUpdateData).
-  externalIds: z
-    .array(
-      z.object({
-        source: z.string().min(1),
-        kind: externalIdKind,
-        externalId: z.string().min(1),
-        url: z.string().url().nullish(),
-      }),
-    )
+  externalIds: externalIdValues
     .optional()
     .describe(
       "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. One id per (product, source, kind).",
@@ -668,7 +666,7 @@ const productMcpFields = {
   usdaUnavailable: z.boolean().nullable(),
   externalIds: z.array(
     z.object({
-      source: z.string().min(1),
+      source: externalIdSource,
       kind: externalIdKind,
       externalId: z.string().min(1),
       url: z.string().url().nullish(),
@@ -740,11 +738,11 @@ export const productExternalIdCollisionsOut = z.object({
 
 export const productExternalIdCollisionInput = z
   .object({
-    source: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+    source: z.union([externalIdSource, z.array(externalIdSource)]).optional(),
     identifiers: z
       .array(
         z.object({
-          source: z.string().min(1),
+          source: externalIdSource,
           kind: externalIdKind,
           externalId: z.string().min(1),
         }),
@@ -768,7 +766,7 @@ export const patchProductExternalIdsInput = z
     upsert: z
       .array(
         z.object({
-          source: z.string().min(1),
+          source: externalIdSource,
           kind: externalIdKind,
           externalId: z.string().min(1),
           url: z.string().url().nullish(),
@@ -776,7 +774,7 @@ export const patchProductExternalIdsInput = z
       )
       .default([]),
     remove: z
-      .array(z.object({ source: z.string().min(1), kind: externalIdKind }))
+      .array(z.object({ source: externalIdSource, kind: externalIdKind }))
       .default([]),
   })
   .superRefine((value, ctx) => {

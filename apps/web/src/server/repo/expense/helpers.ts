@@ -36,7 +36,7 @@ export type ExpenseRow = {
   shortcode: string;
   name: string;
   cost: number | null;
-  date: string | null;
+  date: string;
   costType: ExpenseOut["costType"];
   trade: ExpenseOut["trade"];
   url: string | null;
@@ -53,7 +53,7 @@ export type ExpenseRow = {
     id: PurchaseId;
     shortcode: string;
     orderId: string | null;
-    date: string | null;
+    date: string;
     vendorId: VendorId;
     deletedAt: Date | null;
     vendor: { name: string; shortcode: string; deletedAt: Date | null } | null;

@@ -1,4 +1,5 @@
 import type { DataException } from "@cubby/schemas/data-quality";
+import { canonicalExternalIdUrl } from "@cubby/schemas/external-id";
 import {
   unsafeIngredientShortcode,
   unsafeInventoryShortcode,
@@ -56,16 +57,19 @@ export const mapProductExternalIds = (
 ) =>
   (externalIds ?? [])
     .filter((externalId) => externalId.deletedAt === null)
-    .map((externalId) => ({
-      id: externalId.id,
-      source: externalId.source,
-      kind: (externalId.kind ??
-        "legacy_unspecified") as import("@cubby/schemas/external-id").ExternalIdKind,
-      externalId: externalId.externalId,
-      url: externalId.url,
-      createdAt: externalId.createdAt,
-      updatedAt: externalId.updatedAt,
-    }));
+    .map((externalId) => {
+      const kind = (externalId.kind ??
+        "legacy_unspecified") as import("@cubby/schemas/external-id").ExternalIdKind;
+      return {
+        id: externalId.id,
+        source: externalId.source,
+        kind,
+        externalId: externalId.externalId,
+        url: canonicalExternalIdUrl({ ...externalId, kind }),
+        createdAt: externalId.createdAt,
+        updatedAt: externalId.updatedAt,
+      };
+    });
 
 export const mapProductUnitMappings = (
   productId: ProductTopLevelOut["id"],
@@ -104,14 +108,22 @@ export const dbProductToTopLevelShape = (
   usdaUnavailable: productData.usdaUnavailable,
   dataQuality: productData.dataQuality ?? {
     status: "complete",
+    facets: [
+      { name: "identity", status: "complete", gaps: [] },
+      { name: "provenance", status: "complete", gaps: [] },
+      { name: "integrity", status: "complete", gaps: [] },
+    ],
     gaps: [],
     exceptions: (productData.dataExceptions ?? []).map(
-      (exception: DataException) => ({
+      ({ fingerprint: _fingerprint, ...exception }: DataException) => ({
         ...exception,
         targetType: "product" as const,
         targetId: unsafeProductShortcode(productData.shortcode),
+        state: "stale" as const,
       }),
     ),
+    relatedGaps: [],
+    relatedExceptions: [],
   },
   images: mapImages(productData.images),
   externalIds: mapProductExternalIds(productData.externalIds),

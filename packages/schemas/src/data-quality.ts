@@ -39,7 +39,11 @@ const dataExceptionFields = {
   reason: dataExceptionReason,
   note: z.string().trim().min(1),
 };
-export const dataException = z.object(dataExceptionFields);
+export const dataException = z.object({
+  ...dataExceptionFields,
+  /** Server-computed evidence signature. Missing only on legacy rows. */
+  fingerprint: z.string().min(1).optional(),
+});
 export type DataException = z.infer<typeof dataException>;
 
 // Stored exceptions remain target-free because their owning row supplies the
@@ -48,24 +52,76 @@ export const dataQualityException = z.object({
   ...dataExceptionFields,
   targetType: z.enum(["purchase", "product"]),
   targetId: z.string(),
+  state: z.enum(["active", "stale"]),
 });
 export type DataQualityException = z.infer<typeof dataQualityException>;
 
-export const dataQualityStatus = z.enum(["complete", "needs_data"]);
+export const dataQualityStatus = z.enum(["complete", "needs_data", "defect"]);
 export type DataQualityStatus = z.infer<typeof dataQualityStatus>;
+
+export const dataQualityFacetName = z.enum([
+  "identity",
+  "paperwork",
+  "ledger",
+  "settlement",
+  "provenance",
+  "integrity",
+]);
+export type DataQualityFacetName = z.infer<typeof dataQualityFacetName>;
+
+export const dataQualityGapKind = z.enum(["missing", "defect"]);
+export type DataQualityGapKind = z.infer<typeof dataQualityGapKind>;
+
+export const dataCheckFacet: Record<DataCheck, DataQualityFacetName> = {
+  purchase_date: "identity",
+  order_id: "paperwork",
+  stated_total: "paperwork",
+  primary_document: "paperwork",
+  empty_expenses: "ledger",
+  unpriced_expense: "ledger",
+  paperwork_mismatch: "paperwork",
+  settlement_reference: "settlement",
+  product_manufacturer: "identity",
+  product_category: "identity",
+  product_model: "identity",
+  amazon_asin: "provenance",
+  duplicate_external_id: "integrity",
+};
+
+export const defectDataChecks = [
+  "paperwork_mismatch",
+  "duplicate_external_id",
+] as const satisfies readonly DataCheck[];
+
+export const isDefectDataCheck = (
+  check: DataCheck,
+): check is (typeof defectDataChecks)[number] =>
+  defectDataChecks.includes(check as (typeof defectDataChecks)[number]);
 
 export const dataQualityGap = z.object({
   check: dataCheck,
+  facet: dataQualityFacetName,
+  kind: dataQualityGapKind,
   targetType: z.enum(["purchase", "product"]),
   targetId: z.string(),
   message: z.string(),
 });
 export type DataQualityGap = z.infer<typeof dataQualityGap>;
 
-export const dataQuality = z.object({
+export const dataQualityFacet = z.object({
+  name: dataQualityFacetName,
   status: dataQualityStatus,
   gaps: z.array(dataQualityGap),
+});
+export type DataQualityFacet = z.infer<typeof dataQualityFacet>;
+
+export const dataQuality = z.object({
+  status: dataQualityStatus,
+  facets: z.array(dataQualityFacet),
+  gaps: z.array(dataQualityGap),
   exceptions: z.array(dataQualityException),
+  relatedGaps: z.array(dataQualityGap),
+  relatedExceptions: z.array(dataQualityException),
 });
 export type DataQuality = z.infer<typeof dataQuality>;
 
