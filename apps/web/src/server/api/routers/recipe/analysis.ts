@@ -55,7 +55,7 @@ import {
 } from "~/server/repo/recipe";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { getIngredientsByIDs } from "~/server/services/ingredient.service";
-import { protectedProcedure } from "../../trpc";
+import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveRecipeId = async (
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -84,14 +84,14 @@ const resolveCookbookId = async (
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
   .input(recipeCooccurrenceInput)
-  .output(ingredientCooccurrenceSchema)
+  .output(strictOutput(ingredientCooccurrenceSchema))
   .query(async ({ ctx, input }): Promise<IngredientCooccurrence> => {
     return await getIngredientCooccurrence(ctx.db, input?.minEdgeWeight ?? 2);
   });
 
 const getDependencyGraphEndpoint = protectedProcedure
   .input(recipeCookbookScopeInput)
-  .output(recipeDependencyGraphSchema)
+  .output(strictOutput(recipeDependencyGraphSchema))
   .query(async ({ ctx, input }): Promise<RecipeDependencyGraph> => {
     return await getRecipeDependencyGraph(
       ctx.db,
@@ -101,7 +101,7 @@ const getDependencyGraphEndpoint = protectedProcedure
 
 const getIngredientUsageEndpoint = protectedProcedure
   .input(recipeCookbookScopeInput)
-  .output(ingredientUsageSchema)
+  .output(strictOutput(ingredientUsageSchema))
   .query(async ({ ctx, input }): Promise<IngredientUsage> => {
     return await getIngredientUsage(
       ctx.db,
@@ -113,7 +113,7 @@ const getIngredientUsageEndpoint = protectedProcedure
 // Admin/recovery (e.g. after the USDA backend was down during a drain). Kept
 // non-streaming for the MCP tool, which wants the plain `{processed}` result.
 const recomputeAll = protectedProcedure
-  .output(recipeRecomputeAllOut)
+  .output(strictOutput(recipeRecomputeAllOut))
   .mutation(async ({ ctx }) => {
     return await ctx.services.recipeCosting.recomputeAll();
   });
@@ -167,7 +167,7 @@ const recomputeStaleDurable = protectedProcedure.mutation(async function* ({
 // request path and returns immediately (cascades to parents via `recompute`).
 const recomputeOne = protectedProcedure
   .input(recipeIdInput)
-  .output(recipeRecomputeAllOut)
+  .output(strictOutput(recipeRecomputeAllOut))
   .mutation(async ({ ctx, input }) => {
     const processed = await ctx.services.recipeCosting.recompute([
       await resolveRecipeId(ctx.db, input.id),
@@ -179,7 +179,7 @@ const recomputeOne = protectedProcedure
 // change vs persisted, without writing. Read-only but ~as costly as recomputeAll
 // (full engine pass), so the UI triggers it on demand, not on load.
 const dryRunRecomputeTotals = protectedProcedure
-  .output(recipeDryRunRecomputeTotalsOut)
+  .output(strictOutput(recipeDryRunRecomputeTotalsOut))
   .query(async ({ ctx }) => {
     return await ctx.services.recipeCosting.dryRunRecomputeTotals();
   });
@@ -190,7 +190,7 @@ const dryRunRecomputeTotals = protectedProcedure
 // drift. Read-only — never stamps; consumed by the debug card + MCP tool.
 const explainCosting = protectedProcedure
   .input(recipeIdInput)
-  .output(recipeCostingExplain)
+  .output(strictOutput(recipeCostingExplain))
   .query(async ({ ctx, input }) => {
     return await ctx.services.recipeCosting.explainRecipe(
       await resolveRecipeId(ctx.db, input.id),
@@ -224,7 +224,7 @@ const convertWithinKind = (
 // those add nothing (the costing engine already converts them). Read-only report
 // material, NOT part of the eager Problems aggregation, so it runs only on demand.
 const harvestEquivalencesEndpoint = protectedProcedure
-  .output(equivalenceReportSchema)
+  .output(strictOutput(equivalenceReportSchema))
   .query(async ({ ctx }): Promise<EquivalenceReport> => {
     const rows = await getMultiMeasureRecipeIngredients(ctx.db);
     const candidates = harvestEquivalences(rows, {

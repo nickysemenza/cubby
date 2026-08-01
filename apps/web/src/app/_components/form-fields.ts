@@ -13,8 +13,10 @@ import type {
   RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  unsafeIngredientShortcode,
   unsafeLocationShortcode,
   unsafeProductShortcode,
+  unsafeRecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -95,24 +97,24 @@ export function getOptionalLocationId(
 }
 
 /**
- * Extracts an optional IngredientId from a nullable ingredient combobox field.
+ * Extracts an optional IngredientShortcode from an ingredient combobox field.
  * Returns undefined if the combobox is empty or has an empty id.
  */
 export function getOptionalIngredientId(
   item: ComboboxItem | null | undefined,
 ): IngredientShortcode | undefined {
   if (!item?.id) return undefined;
-  return item.id as IngredientShortcode;
+  return unsafeIngredientShortcode(item.id);
 }
 
 /**
- * Extracts an optional RecipeId from a nullable recipe combobox field.
+ * Extracts an optional RecipeShortcode from a nullable recipe combobox field.
  * Returns undefined if the combobox is empty.
  */
 export function getOptionalRecipeId(
   item: ComboboxItem | null | undefined,
 ): RecipeShortcode | undefined {
-  return item?.id as RecipeShortcode | undefined;
+  return item?.id ? unsafeRecipeShortcode(item.id) : undefined;
 }
 
 /**

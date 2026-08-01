@@ -5,9 +5,8 @@ import { useTRPC } from "~/integrations/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/meals/$shortcode")({
   ssr: false,
-  // No `params.parse` branding any more: the path param is a shortcode, and
-  // shortcode values are deliberately unbranded (see CLAUDE.md). The `MealId`
-  // the page needs comes off the loaded meal, already branded by its column.
+  // The raw route param is validated by the query input schema; the loaded
+  // meal then carries the branded public MealShortcode used by the page.
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
       context.trpc.meal.getByShortcode.queryOptions({

@@ -35,7 +35,7 @@ import {
   createEntityListProcedure,
   createGetByShortcodeProcedure,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const { list } = createEntityListProcedure({
   schemas: {
@@ -55,7 +55,7 @@ const { list } = createEntityListProcedure({
 
 const getByID = protectedProcedure
   .input(vendorShortcode)
-  .output(vendorOut)
+  .output(strictOutput(vendorOut))
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "vendor");
     if (!id) {
@@ -75,12 +75,12 @@ const getByShortcode = createGetByShortcodeProcedure(
  * combobox. Cheap options query, same shape as `project.options`.
  */
 const options = protectedProcedure
-  .output(vendorOptionsOut)
+  .output(strictOutput(vendorOptionsOut))
   .query(({ ctx }) => vendorOptions(ctx.db));
 
 const create = protectedProcedure
   .input(vendorCreateInput)
-  .output(vendorOut)
+  .output(strictOutput(vendorOut))
   .mutation(
     async ({ ctx, input }) =>
       (await createVendor(ctx.db, input, ctx.actorContext)).output,
@@ -88,7 +88,7 @@ const create = protectedProcedure
 
 const update = protectedProcedure
   .input(vendorUpdateInput)
-  .output(vendorOut)
+  .output(strictOutput(vendorOut))
   .mutation(
     async ({ ctx, input }) =>
       (await updateVendor(ctx.db, input, ctx.actorContext)).output,
@@ -102,7 +102,7 @@ const update = protectedProcedure
  */
 const merge = protectedProcedure
   .input(mergeVendorsInput)
-  .output(vendorOut)
+  .output(strictOutput(vendorOut))
   .mutation(({ ctx, input }) => mergeVendors(ctx.db, input, ctx.actorContext));
 
 const deleteItem = protectedProcedure

@@ -2,10 +2,10 @@ import type { Amount } from "@cubby/schemas/codec";
 import {
   type InventoryShortcode,
   type LocationShortcode,
-  type ProductId,
+  type ProductShortcode,
   unsafeInventoryShortcode,
   unsafeLocationShortcode,
-  unsafeProductId,
+  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import {
@@ -88,11 +88,14 @@ interface TestEntry {
 }
 
 interface TestRow {
-  id: ProductId;
+  id: ProductShortcode;
   name: string;
 }
 
-const ROW: TestRow = { id: unsafeProductId("prod-1"), name: "Flour" };
+const ROW: TestRow = {
+  id: unsafeProductShortcode("PRD-2345"),
+  name: "Flour",
+};
 
 const getRelatedEntity = (entry: TestEntry) => entry.location;
 

@@ -55,7 +55,7 @@ import {
 import { vendorOptions as loadVendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
@@ -132,7 +132,7 @@ async function expenseEntityIds(
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
 const chartData = protectedProcedure
   .input(expenseFiltersSchema)
-  .output(z.array(expenseOut))
+  .output(strictOutput(z.array(expenseOut)))
   .query(async ({ ctx, input }) => {
     const { data } = await expenseList(
       ctx.db,
@@ -151,7 +151,7 @@ const chartData = protectedProcedure
  */
 const analytics = protectedProcedure
   .input(expenseFiltersSchema)
-  .output(expenseAnalyticsOut)
+  .output(strictOutput(expenseAnalyticsOut))
   .query(({ ctx, input }) => expenseAnalytics(ctx.db, input));
 
 /**
@@ -161,7 +161,7 @@ const analytics = protectedProcedure
  * `repo/vendor.ts`'s query, which is the single source of truth.
  */
 const vendorOptions = protectedProcedure
-  .output(vendorOptionsOut)
+  .output(strictOutput(vendorOptionsOut))
   .query(({ ctx }) => loadVendorOptions(ctx.db));
 
 /**
@@ -176,18 +176,20 @@ const vendorOptions = protectedProcedure
 const chargeContext = protectedProcedure
   .input(expenseShortcode)
   .output(
-    z
-      .object({
-        purchase: z.object({
-          id: purchaseShortcode,
-          orderId: z.string().nullable(),
-          date: plainDate.nullable(),
-          vendorId: vendorShortcode,
-          vendorName: z.string().nullable(),
-        }),
-        siblings: z.array(expenseOut),
-      })
-      .nullable(),
+    strictOutput(
+      z
+        .object({
+          purchase: z.object({
+            id: purchaseShortcode,
+            orderId: z.string().nullable(),
+            date: plainDate.nullable(),
+            vendorId: vendorShortcode,
+            vendorName: z.string().nullable(),
+          }),
+          siblings: z.array(expenseOut),
+        })
+        .nullable(),
+    ),
   )
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "expense");
@@ -220,7 +222,7 @@ const chargeContext = protectedProcedure
  * client-side for many expenses — see rankProjectSuggestions.
  */
 const tradeAffinity = protectedProcedure
-  .output(z.array(expenseTradeAffinityOut))
+  .output(strictOutput(z.array(expenseTradeAffinityOut)))
   .query(({ ctx }) => expenseTradeAffinity(ctx.db));
 
 /**
@@ -232,7 +234,7 @@ const tradeAffinity = protectedProcedure
  */
 const match = protectedProcedure
   .input(expenseMatchInput)
-  .output(expenseMatchOut)
+  .output(strictOutput(expenseMatchOut))
   .query(({ ctx, input }) => matchExpenses(ctx.db, input));
 
 // Bulk "move to project" — projectId: null moves every listed expense to the
@@ -242,7 +244,7 @@ const match = protectedProcedure
 // dispatch.
 const bulkMove = protectedProcedure
   .input(expenseBulkMoveInput)
-  .output(expenseListAndSideEffectsOut)
+  .output(strictOutput(expenseListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await moveExpenses(ctx.db, input, ctx.actorContext);
     const ids = await expenseEntityIds(
@@ -263,7 +265,7 @@ const bulkMove = protectedProcedure
 // Bulk trade write, same wave-wide side-effect shape as bulkMove above.
 const bulkSetTrade = protectedProcedure
   .input(expenseBulkTradeInput)
-  .output(expenseListAndSideEffectsOut)
+  .output(strictOutput(expenseListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await setExpensesTrade(ctx.db, input, ctx.actorContext);
     const ids = await expenseEntityIds(
@@ -284,7 +286,7 @@ const bulkSetTrade = protectedProcedure
 // Bulk cost-type write, same shape as bulkSetTrade.
 const bulkSetCostType = protectedProcedure
   .input(expenseBulkCostTypeInput)
-  .output(expenseListAndSideEffectsOut)
+  .output(strictOutput(expenseListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await setExpensesCostType(ctx.db, input, ctx.actorContext);
     const ids = await expenseEntityIds(

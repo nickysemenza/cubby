@@ -1886,7 +1886,7 @@ describe("registerMcpTool non-object output schemas", () => {
     z.object({ type: z.string(), items: z.array(z.unknown()) }),
   ]);
 
-  const serverWithUnionTool = (payload: unknown) => {
+  const serverWithUnionTool = (payload: z.infer<typeof unionOut>) => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
     registerMcpTool(server, {
       name: "union_out",
@@ -1918,7 +1918,7 @@ describe("registerMcpTool non-object output schemas", () => {
     // The permissive object handed to the SDK must not become the real check:
     // structuredSuccess parses the union itself, so a bad payload still errors.
     const result = (await callTool(
-      serverWithUnionTool({ total: "not-a-number" }),
+      serverWithUnionTool({ total: "not-a-number" } as never),
       "union_out",
       {},
       {},

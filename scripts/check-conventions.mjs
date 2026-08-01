@@ -61,6 +61,11 @@
  *     silently matches nothing at every input size. Use `arrayOverlaps(col,
  *     arr)` instead (see CLAUDE.md / dashboard-shared.ts).
  *
+ * strict-router-output: explicit tRPC router output schemas must be wrapped in
+ *     `strictOutput(...)`. tRPC otherwise checks the resolver against the Zod
+ *     schema's input type; shortcode brands exist only in its parsed output, so
+ *     a UUID brand is still assignable to the accepted plain string.
+ *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
 
@@ -176,6 +181,10 @@ const HW_PAIR_RE =
 // `sql` tag.
 const HAND_ROLLED_ARRAY_OVERLAP_RE = /&&\s*\$\{/;
 
+// An explicit router output without the parsed-output type narrowing. The empty
+// `.output()` spelling in prose is excluded so comments do not false-positive.
+const LOOSE_ROUTER_OUTPUT_RE = /\.output\((?!\s*(?:\)|strictOutput\())/g;
+
 // Detail routes whose param is a shortcode. `usda` keys on an external fdc id
 // and `images` on a uuid (image is the one entity with no public shortcode), so
 // both are absent here rather than exempted case-by-case below.
@@ -289,6 +298,12 @@ function isPaginationHelperFile(path) {
 
 function isCrudFactoryFile(path) {
   return relative(repoRoot, path) === "apps/web/src/server/api/crud-factory.ts";
+}
+
+function isRouterFile(path) {
+  return relative(repoRoot, path).startsWith(
+    "apps/web/src/server/api/routers/",
+  );
 }
 
 // Rule 10: legacy services with no test yet. This list may only SHRINK (a
@@ -433,6 +448,20 @@ function scan(files) {
           line,
           snippet: match[0].replaceAll(/\s+/g, " ").slice(0, 120),
           rule: "unstable-hook-default",
+        });
+      }
+    }
+
+    // Explicit router outputs must type-check resolvers against z.output, not
+    // z.input (whose plain strings also accept branded private UUIDs).
+    if (isRouterFile(file) && !isTestOrFixture(file)) {
+      for (const match of content.matchAll(LOOSE_ROUTER_OUTPUT_RE)) {
+        const line = content.slice(0, match.index).split("\n").length;
+        violations.push({
+          file,
+          line,
+          snippet: lines[line - 1]?.trim() ?? ".output(",
+          rule: "strict-router-output",
         });
       }
     }
@@ -727,6 +756,8 @@ const byRule = {
     "Entity link keyed on a uuid — shortcodes are the public id, so a detail-page URL is `/products/$shortcode`, never `/products/$id` or a `/tasks/${row.id}` template. Route through `entities[e].routes.detail` + `entityDetailParams`.",
   "hand-rolled-array-overlap":
     "Hand-rolled `&& ${arr}` array overlap — drizzle interpolates a JS array into raw SQL as a row constructor (`($1,$2)`), not a `text[]`, so this silently matches nothing at every input size. Use `arrayOverlaps(col, arr)` instead.",
+  "strict-router-output":
+    "Loose tRPC output typing — wrap explicit router schemas in `strictOutput(...)` so resolvers are checked against parsed/brand-preserving z.output rather than permissive z.input.",
   "script-target-exists":
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
   "unstable-hook-default":
