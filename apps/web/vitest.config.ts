@@ -1,10 +1,18 @@
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig } from "vitest/config";
 
+const gitCommit = execSync("git rev-parse --short HEAD", {
+  encoding: "utf-8",
+}).trim();
+
 export default defineConfig({
+  define: {
+    __GIT_COMMIT__: JSON.stringify(gitCommit),
+  },
   // https://github.com/Menci/vite-plugin-wasm#usage
   plugins: [wasm(), topLevelAwait()],
   resolve: {
