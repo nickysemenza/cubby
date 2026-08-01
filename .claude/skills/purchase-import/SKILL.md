@@ -529,12 +529,14 @@ single call.
     `statement`, `specification`, and `other` remain useful evidence but do not satisfy the
     `primary_document` check.
 
-    **Upload directly from the orchestrator.** Read and base64-encode the local PDF inside an
-    execution context, then pass that value directly to `attach_file` from the same context. The
-    base64 payload stays out of the conversation and does not need a subagent. Do not read, page, or
-    reassemble base64 through the conversation. If this execution-context path is unavailable or
-    fails, ask the operator to drag the file onto the purchase in the UI. An existing public http(s)
-    URL is also acceptable, but do not upload a private receipt elsewhere merely to manufacture one.
+    **Upload directly from a capable orchestrator.** When the runtime can invoke `attach_file` from
+    code or a nested tool call inside the same execution context, without the model emitting `data`,
+    read and base64-encode the local PDF there and pass the value directly to `attach_file`. The
+    payload then stays out of the conversation and does not need a subagent. A plain model-issued MCP
+    call is not this path: it materializes the base64 in context. Do not read, page, or reassemble
+    base64 through the conversation. If execution-context upload is unavailable or fails, ask the
+    operator to drag the file onto the purchase in the UI. An existing public http(s) URL is also
+    acceptable, but do not upload a private receipt elsewhere merely to manufacture one.
 
     **Normal receipt default: inspect once, attach once, read back once, and stop.** Extract text
     first and render only pages where layout affects interpretation or extraction is ambiguous. Call
