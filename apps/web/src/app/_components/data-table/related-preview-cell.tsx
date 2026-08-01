@@ -17,11 +17,11 @@ export function RelatedPreviewCell({
   if (!group || group.totalCount === 0) return <NoneValue />;
   const overflow = group.totalCount - group.items.length;
   return (
-    <span className="flex min-w-0 items-center gap-1.5 overflow-hidden text-sm">
+    <span className="flex min-w-0 items-center gap-1 overflow-hidden text-sm">
       {group.items.map((item, index) => (
         <span
           key={`${item.entity}:${item.id}`}
-          className="flex min-w-0 items-center gap-1.5"
+          className="flex min-w-0 items-center gap-1"
         >
           {index > 0 && <span className="text-muted-foreground">·</span>}
           <TableLink
