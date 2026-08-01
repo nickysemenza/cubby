@@ -17,6 +17,7 @@ import {
   listFinancialAccounts,
   updateFinancialAccount,
 } from "./financial-account";
+import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
   deleteFinancialTransactions,
@@ -125,6 +126,169 @@ describe("financial repositories — critical invariants", () => {
     expect(rejected).toMatchObject({
       reason: {
         cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
+      },
+    });
+  });
+
+  it("previews client-parsed Monarch snapshots idempotently without writing", async () => {
+    const createdAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Monarch Visa", [
+          {
+            source: "monarch",
+            alias: "Citi Double Cash (...1702)",
+            externalAccountId: null,
+          },
+        ]),
+        ctx.actor,
+      )
+    ).output;
+    const row = {
+      key: "row-1",
+      source: "monarch" as const,
+      account: "Citi Double Cash (...1702)",
+      date: "2026-07-31",
+      amount: -54.29,
+      merchant: "Amazon",
+      originalStatement: "AMZN Mktp",
+      category: "Shopping",
+      notes: null,
+    };
+    const first = await previewFinancialStatementImport(ctx.db, {
+      rows: [row],
+    });
+    expect(first.rows[0]).toMatchObject({
+      status: "ready_to_create",
+      accountId: createdAccount.id,
+      provisionalAccount: null,
+      proposed: { amount: 54.29, kind: "purchase", status: "posted" },
+    });
+    expect(first.rows[0]?.existingTransactionIds).toEqual([]);
+
+    const proposed = first.rows[0]!.proposed;
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: createdAccount.id,
+        purchaseId: null,
+        kind: proposed.kind,
+        status: proposed.status,
+        amount: proposed.amount,
+        transactionDate: proposed.transactionDate,
+        postedDate: proposed.postedDate,
+        merchant: proposed.merchant,
+        rawDescription: proposed.rawDescription,
+        sourceCategory: proposed.sourceCategory,
+        sourceRefs: [proposed.sourceRef],
+        notes: proposed.notes,
+      }),
+      ctx.actor,
+    );
+
+    const laterExport = await previewFinancialStatementImport(ctx.db, {
+      rows: [{ ...row, merchant: "Amazon.com", category: "Other" }],
+    });
+    expect(laterExport.rows[0]?.status).toBe("already_recorded");
+
+    const changedIdentity = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "corrected-statement",
+          originalStatement: "AMZN MKTP CORRECTED",
+        },
+      ],
+    });
+    expect(changedIdentity.rows[0]).toMatchObject({
+      status: "possible_existing",
+    });
+
+    const manualEvidence = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: createdAccount.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 12.34,
+          postedDate: "2026-07-30",
+          rawDescription: "MANUAL STATEMENT LINE",
+        }),
+        ctx.actor,
+      )
+    ).output;
+    const possibleExisting = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "possible-existing",
+          date: "2026-07-30",
+          amount: -12.34,
+          originalStatement: "MANUAL STATEMENT LINE",
+        },
+      ],
+    });
+    expect(possibleExisting.rows[0]).toMatchObject({
+      status: "possible_existing",
+      existingTransactionIds: [manualEvidence.id],
+    });
+
+    const identityAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        financialAccountCreateInput.parse({
+          name: "Identity-only Visa",
+          identity: {
+            kind: "credit_card",
+            issuer: null,
+            network: "visa",
+            last4: "9999",
+          },
+        }),
+        ctx.actor,
+      )
+    ).output;
+    const identityResolved = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "identity-only-account",
+          account: "Unmapped Visa (...9999)",
+          originalStatement: "IDENTITY-ONLY LINE",
+        },
+      ],
+    });
+    expect(identityResolved.rows[0]).toMatchObject({
+      status: "ready_to_create",
+      accountId: identityAccount.id,
+    });
+
+    const duplicates = await previewFinancialStatementImport(ctx.db, {
+      rows: [row, { ...row, key: "row-2" }],
+    });
+    expect(duplicates.rows.map((item) => item.status)).toEqual([
+      "indistinguishable_duplicate",
+      "indistinguishable_duplicate",
+    ]);
+
+    const unresolved = await previewFinancialStatementImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "unknown-account",
+          account: "Unmapped Visa (...9998)",
+          originalStatement: "OTHER MERCHANT",
+        },
+      ],
+    });
+    expect(unresolved.rows[0]).toMatchObject({
+      status: "unresolved_account",
+      accountId: null,
+      provisionalAccount: {
+        name: "Unmapped Visa (...9998)",
+        provisional: true,
+        identity: { kind: "credit_card", network: "visa", last4: "9998" },
       },
     });
   });

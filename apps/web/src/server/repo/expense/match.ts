@@ -60,6 +60,7 @@ import type {
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+import { getPurchaseByShortcode } from "~/server/repo/purchase";
 
 /**
  * Raw shape of one candidate row off the wire.
@@ -80,6 +81,7 @@ type MatchRow = {
   orderId: string | null;
   projectName: string | null;
   productName: string | null;
+  purchaseShortcode: string | null;
   matchedOn: "order_id" | "amount_date";
   vendorMatch: boolean | null;
   dayDelta: number | null;
@@ -211,6 +213,7 @@ export const matchExpenses = async (
         e."future"      AS "future",
         e."notes"       AS "notes",
         p."orderId"     AS "orderId",
+        p."shortcode"    AS "purchaseShortcode",
         v."name"        AS "vendorName",
         pr."name"       AS "projectName",
         pd."name"       AS "productName"
@@ -339,6 +342,7 @@ export const matchExpenses = async (
       "orderId",
       "projectName",
       "productName",
+      "purchaseShortcode",
       CASE WHEN "arm" = 0 THEN 'order_id' ELSE 'amount_date' END AS "matchedOn",
       "vendorMatchRaw"                      AS "vendorMatch",
       "dayDeltaRaw"::int                    AS "dayDelta",
@@ -351,6 +355,25 @@ export const matchExpenses = async (
 
   const byKey = new Map<string, ExpenseMatchCandidate[]>();
   const rowByKey = new Map(rows.map((row) => [row.key, row]));
+  const purchaseCodes = [
+    ...new Set(
+      res.rows.flatMap((row) =>
+        row.purchaseShortcode ? [row.purchaseShortcode] : [],
+      ),
+    ),
+  ];
+  const purchases = new Map(
+    (
+      await Promise.all(
+        purchaseCodes.map(
+          async (code) =>
+            [code, await getPurchaseByShortcode(db, code)] as const,
+        ),
+      )
+    ).flatMap(([code, purchase]) =>
+      purchase ? [[code, purchase] as const] : [],
+    ),
+  );
 
   for (const raw of res.rows) {
     const inputRow = rowByKey.get(raw.key);
@@ -375,6 +398,22 @@ export const matchExpenses = async (
       orderId: raw.orderId,
       projectName: raw.projectName,
       productName: raw.productName,
+      purchase: raw.purchaseShortcode
+        ? (() => {
+            const purchase = purchases.get(raw.purchaseShortcode);
+            return purchase
+              ? {
+                  id: purchase.id,
+                  vendorName: purchase.vendorName,
+                  orderId: purchase.orderId,
+                  expenseCount: purchase.expenseCount,
+                  expenseTotal: purchase.expenseTotal,
+                  statedTotal: purchase.statedTotal,
+                  financialReconciliation: purchase.financialReconciliation,
+                }
+              : null;
+          })()
+        : null,
       matchedOn: raw.matchedOn,
       vendorMatch: raw.vendorMatch,
       dayDelta: raw.dayDelta === null ? null : Number(raw.dayDelta),

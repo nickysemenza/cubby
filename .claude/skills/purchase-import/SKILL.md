@@ -68,6 +68,30 @@ billing is several charge Transactions on one order; split tender links two
 accounts to one Purchase; a store-credit refund is a negative stored-value
 Transaction on the original Purchase.
 
+### Monarch CSV snapshots are MCP-client work
+
+**Never give Cubby a CSV path, upload, or file contents.** The MCP client parses
+the export locally and sends normalized rows to
+`preview_financial_statement_import` in batches of at most 200. That tool is
+read-only: it normalizes Monarch's signs, derives a stable `monarch` source
+reference from account/date/amount/original statement, resolves an account only
+when the evidence is unambiguous, and returns a decision per row.
+
+- `already_recorded` is a no-op on a later full-history export.
+- `ready_to_create` may be submitted, after approval, through
+  `create_financial_transaction` using the returned proposed fields and account.
+- `possible_existing`, `unresolved_account`, and
+  `indistinguishable_duplicate` require review; never create them by guesswork.
+  An unresolved row includes a non-persisted provisional-account suggestion;
+  create that account separately through ordinary CRUD only when approved.
+- Export filename, timestamp, cleaned merchant, category, tags, and notes are
+  intentionally outside the fingerprint, so routine export changes do not make
+  duplicate settlement evidence.
+
+The source reference is import evidence on the FinancialTransaction, not a new
+Monarch-to-Cubby entity link. The preview never creates Accounts, Transactions,
+Purchases, or Purchase links.
+
 ## ⚠️ `Purchase` changed meaning — read this before your first write
 
 The flat ledger was split into three entities:
@@ -350,7 +374,9 @@ differ.)
 
 **`match_expenses` is the tool for this whole phase.** Pass up to 200 export lines at once, each with
 your own `key`, a `date`, a **signed** `amount`, and — whenever the line has them — `orderId`,
-`label` and `vendor`. It returns ranked candidates per key and never writes anything.
+`label` and `vendor`. It returns ranked candidates per key and never writes anything. A candidate
+already filed to a Purchase also returns its order-level sibling totals, stated total, and financial
+reconciliation, so inspect that context before creating an aggregate or duplicate row.
 
 It exists because the sweep is not expressible as a search, and every hand-rolled version of it has
 gone wrong in the same few ways. Those traps are now encoded in the tool, but you still have to read

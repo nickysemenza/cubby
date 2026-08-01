@@ -1,4 +1,6 @@
 import {
+  financialStatementImportPreviewInput,
+  financialStatementImportPreviewOut,
   financialTransactionCreateInput,
   financialTransactionFiltersSchema,
   financialTransactionOut,
@@ -9,6 +11,7 @@ import {
   financialTransactionShortcode,
   unsafeFinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
+import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import {
   createFinancialTransaction,
   deleteFinancialTransactions,
@@ -17,7 +20,7 @@ import {
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
 import { createNonSearchableEntityCrudProcedures } from "../crud-factory";
-import { createTRPCRouter } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const procedures = createNonSearchableEntityCrudProcedures({
   schemas: {
@@ -70,4 +73,13 @@ const procedures = createNonSearchableEntityCrudProcedures({
   entityName: "financialTransaction",
 });
 
-export const financialTransactionRouter = createTRPCRouter(procedures);
+/** Client-parsed Monarch rows only: this is a read-only reconciliation preview. */
+const previewStatementImport = protectedProcedure
+  .input(financialStatementImportPreviewInput)
+  .output(strictOutput(financialStatementImportPreviewOut))
+  .query(({ ctx, input }) => previewFinancialStatementImport(ctx.db, input));
+
+export const financialTransactionRouter = createTRPCRouter({
+  ...procedures,
+  previewStatementImport,
+});

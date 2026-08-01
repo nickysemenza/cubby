@@ -3072,6 +3072,12 @@ describe("expense repository — matchExpenses", () => {
       matchedOn: "order_id",
       orderId: "1121197219",
       vendorName: "Matcher B&H",
+      purchase: {
+        orderId: "1121197219",
+        vendorName: "Matcher B&H",
+        expenseCount: 1,
+        expenseTotal: 203.36,
+      },
     });
     // 151 days apart and $103 off — well outside both windows, found anyway.
     expect(candidates[0]?.dayDelta).toBe(-147);
