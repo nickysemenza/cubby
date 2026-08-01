@@ -13,16 +13,11 @@
 //!   recomputes. Only cycle-free computations are cached: a result produced
 //!   under a fired cycle guard depends on the visited set, not just the id.
 //!
-//! Known limitation — multiple *priced* products on one ingredient (dormant):
-//! all of an ingredient's products are merged into one graph (see `Engine::new`),
-//! which is load-bearing — products complete each other's edges. The hazard is
-//! only the synthesized `1 each = $price` edge: with ≥2 priced products their
-//! `each → dollar` edges collide and conversion picks one arbitrarily. Intended
-//! fix (NOT implemented): keep one shared conversion graph per ingredient from
-//! all *non-price* edges, then resolve price *per priced product* (amount → `each`
-//! on the shared graph, × that product's $/each) and take the **cheapest**; keep
-//! weight/nutrition single-valued on the shared graph. Do *not* isolate whole
-//! graphs per product — that breaks the cross-product completion.
+//! - Products complete each other's non-price conversion, food, and nutrition
+//!   edges in one graph. Price is intentionally resolved after that shared graph
+//!   converts an amount to `each`: when several linked products are priced, the
+//!   cheapest valid product price wins deterministically. Do not isolate whole
+//!   graphs per product — that breaks cross-product completion.
 
 use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -40,7 +35,8 @@ use super::types::{
     WRowMissing, WRowPaths, WRowResult,
 };
 use crate::WConversionStep;
-use crate::reconcile::{canonical_amount, convert_with_fallback, finite, product_mapping_pairs};
+use crate::food_mappings::product_non_price_mapping_pairs;
+use crate::reconcile::{canonical_amount, convert_with_fallback, finite};
 
 /// One recipe row paired with its resolved usage and the consumption plan that
 /// usage implies. Built up front (before the two resolution passes) so each
@@ -232,24 +228,53 @@ struct Target {
     kind: MeasureKind,
 }
 
-/// Per-ingredient context: mapping pairs synthesized once (stored rows + food
-/// edges + price edge), petgraph built lazily once and reused across the own
-/// trio, the estimate trio, and explain paths — replacing the TS LRU.
+/// Per-ingredient context: non-price mapping pairs synthesized once, plus the
+/// linked product prices. The graph stays shared so products can complete each
+/// other's conversion/food edges; price is selected deterministically after the
+/// shared graph resolves the row to `each`.
 struct IngredientCtx {
     pairs: Vec<(Measure, Measure)>,
+    prices: Vec<f64>,
     graph: OnceCell<MeasureGraph>,
 }
 
 impl IngredientCtx {
-    fn new(pairs: Vec<(Measure, Measure)>) -> Self {
+    fn new(pairs: Vec<(Measure, Measure)>, prices: Vec<f64>) -> Self {
         Self {
             pairs,
+            prices,
             graph: OnceCell::new(),
         }
     }
 
     fn graph(&self) -> &MeasureGraph {
         self.graph.get_or_init(|| make_graph(&self.pairs))
+    }
+
+    /// Resolve the written amount through the shared non-price graph, then
+    /// select the cheapest linked product with a valid scalar price. Ranges are
+    /// preserved by scaling both bounds.
+    fn cheapest_price(&self, amounts: &[Measure]) -> Option<Measure> {
+        let each = convert_with_fallback(
+            amounts,
+            self.graph(),
+            MeasureKind::Other("each".to_string()),
+        )?;
+        self.prices
+            .iter()
+            .copied()
+            .filter(|price| price.is_finite())
+            .filter_map(|price| {
+                let value = each.value() * price;
+                value.is_finite().then(|| {
+                    let upper = each.upper_value().map(|bound| bound * price);
+                    match upper {
+                        Some(bound) if bound > value => Measure::with_range("dollar", value, bound),
+                        _ => Measure::new("dollar", value),
+                    }
+                })
+            })
+            .min_by(|left, right| left.value().total_cmp(&right.value()))
     }
 }
 
@@ -284,48 +309,30 @@ pub(crate) struct Engine<'a> {
     sub_totals: RefCell<HashMap<String, SubTotals>>,
 }
 
-/// Ingredient ids carrying ≥2 *priced* products. Their synthesized
-/// `1 each = $price` edges collide on the shared `each` node (the
-/// multi-priced-product hazard in the module doc), so the costed price is picked
-/// arbitrarily. Dormant today — surfaced as a warn tripwire so a future
-/// violation is visible rather than silently mis-costing.
-fn multi_priced_ingredients(input: &WCostingInput) -> Vec<&str> {
-    input
-        .ingredients
-        .iter()
-        .filter(|i| i.products.iter().filter(|p| p.price.is_some()).count() > 1)
-        .map(|i| i.id.as_str())
-        .collect()
-}
-
 impl<'a> Engine<'a> {
     pub fn new(input: &'a WCostingInput) -> Self {
-        for id in multi_priced_ingredients(input) {
-            tracing::warn!(
-                ingredient_id = id,
-                "multiple priced products on one ingredient: their `each → dollar` \
-                 edges collide on the shared `each` node, so the costed price is \
-                 arbitrary (multi-priced-product hazard)"
-            );
-        }
         Self {
             recipes: input.recipes.iter().map(|r| (r.id.as_str(), r)).collect(),
             ingredients: input
                 .ingredients
                 .iter()
                 .map(|i| {
-                    // Merge ALL products' mappings into one graph. This is
+                    // Merge every product's non-price mappings into one graph. This is
                     // intentional and load-bearing: products complete each other
                     // (e.g. branded "Pete & Gerry's" eggs has no mappings and
                     // reaches its price only via the generic shell's
                     // `large → whole → each` bridge; branded olive oil supplies
                     // price+package but its nutrition comes from the shell's USDA
-                    // food). The flip side is the price-collision hazard noted in
-                    // the module doc — multiple priced products on one ingredient
-                    // collide on the shared `each` node → arbitrary pick. Dormant
-                    // today (no ingredient has 2+ priced products).
-                    let pairs = i.products.iter().flat_map(product_mapping_pairs).collect();
-                    (i.id.as_str(), IngredientCtx::new(pairs))
+                    // food). Synthetic price edges stay out so several priced
+                    // products can be compared deterministically after `each`
+                    // resolves through this shared graph.
+                    let pairs = i
+                        .products
+                        .iter()
+                        .flat_map(product_non_price_mapping_pairs)
+                        .collect();
+                    let prices = i.products.iter().filter_map(|p| p.price).collect();
+                    (i.id.as_str(), IngredientCtx::new(pairs, prices))
                 })
                 .collect(),
             targets: input
@@ -341,7 +348,7 @@ impl<'a> Engine<'a> {
                     },
                 })
                 .collect(),
-            empty_ctx: IngredientCtx::new(Vec::new()),
+            empty_ctx: IngredientCtx::new(Vec::new(), Vec::new()),
             sub_totals: RefCell::new(HashMap::new()),
         }
     }
@@ -360,7 +367,7 @@ impl<'a> Engine<'a> {
     /// `conv_amount_all` + `measuresFromMappings` reshaping, inline. kcal rides
     /// the dedicated Calories conversion and is appended last (TS insertion
     /// order); per-target failures simply drop that nutrient.
-    fn measures(&self, amounts: &[Measure], graph: &MeasureGraph) -> Trio {
+    fn measures(&self, amounts: &[Measure], graph: &MeasureGraph, price: Option<Measure>) -> Trio {
         // Resolve every measure from ONE canonical amount, so a row's weight,
         // cost, and nutrients share a single basis (a row is one physical
         // quantity). Prefer a mass amount — the stated weight, resolved exactly
@@ -368,7 +375,7 @@ impl<'a> Engine<'a> {
         // density. Only fall back to another amount for a measure the canonical
         // one genuinely can't reach.
         let conv = |kind: MeasureKind| convert_with_fallback(amounts, graph, kind);
-        let money = conv(MeasureKind::Money);
+        let money = price.or_else(|| conv(MeasureKind::Money));
         let weight = conv(MeasureKind::Weight);
         let calories = conv(MeasureKind::Calories);
 
@@ -427,7 +434,7 @@ impl<'a> Engine<'a> {
         let (trio, propagated) = match row.kind {
             WRowKind::Recipe => match self.sub_recipe_pairs(&row.target_id, visited, taint) {
                 Some(sub) => (
-                    self.measures(&measures, &make_graph(&sub.pairs)),
+                    self.measures(&measures, &make_graph(&sub.pairs), None),
                     sub.missing,
                 ),
                 None => (
@@ -439,10 +446,13 @@ impl<'a> Engine<'a> {
                     },
                 ),
             },
-            WRowKind::Ingredient => (
-                self.measures(&measures, self.ctx_for(&row.target_id).graph()),
-                WRowMissing::default(),
-            ),
+            WRowKind::Ingredient => {
+                let ctx = self.ctx_for(&row.target_id);
+                (
+                    self.measures(&measures, ctx.graph(), ctx.cheapest_price(&measures)),
+                    WRowMissing::default(),
+                )
+            }
         };
         let direct = trio_missing(&trio);
         TrioWithMissing {
@@ -551,10 +561,9 @@ impl<'a> Engine<'a> {
         if row.kind != WRowKind::Ingredient || !grams.is_finite() || grams <= 0.0 {
             return Trio::all_err("no basis for estimate");
         }
-        self.measures(
-            &[Measure::new("g", grams)],
-            self.ctx_for(&row.target_id).graph(),
-        )
+        let amounts = [Measure::new("g", grams)];
+        let ctx = self.ctx_for(&row.target_id);
+        self.measures(&amounts, ctx.graph(), ctx.cheapest_price(&amounts))
     }
 
     /// Resolve a row's three measures per its plan. Returns the resolved trio
@@ -941,38 +950,16 @@ mod tests {
         }
     }
 
-    /// The multi-priced-product tripwire fires only when an ingredient carries
-    /// ≥2 *priced* products (the `each → dollar` collision); one priced product
-    /// (with any number of unpriced ones) is fine.
     #[test]
-    fn multi_priced_tripwire_flags_only_collisions() {
-        let input = input_with(vec![
-            // 2 priced products → collision.
-            WCostingIngredient {
-                id: "collide".to_string(),
-                products: vec![product("a", Some(1.0)), product("b", Some(2.0))],
-            },
-            // 1 priced + 1 unpriced → no collision.
-            WCostingIngredient {
-                id: "fine".to_string(),
-                products: vec![product("c", Some(1.0)), product("d", None)],
-            },
-        ]);
-        assert_eq!(multi_priced_ingredients(&input), vec!["collide"]);
-    }
-
-    /// `Engine::new` runs the tripwire warn path for a colliding ingredient
-    /// without panicking (exercises the `tracing::warn!` branch, and confirms the
-    /// dormant multi-priced-product hazard is non-fatal — engine construction
-    /// still succeeds).
-    #[test]
-    fn engine_new_warns_but_succeeds_on_collision() {
+    fn multi_priced_ingredients_select_the_cheapest_price() {
         let input = input_with(vec![WCostingIngredient {
-            id: "collide".to_string(),
-            products: vec![product("a", Some(1.0)), product("b", Some(2.0))],
+            id: "ingredient".to_string(),
+            products: vec![product("premium", Some(5.0)), product("value", Some(2.0))],
         }]);
         let engine = Engine::new(&input);
-        // The colliding ingredient is still merged into one graph context.
-        assert!(engine.ingredients.contains_key("collide"));
+        let ctx = engine.ctx_for("ingredient");
+        let amounts = [Measure::new("each", 3.0)];
+        let price = ctx.cheapest_price(&amounts).expect("priced each amount");
+        assert_eq!(price.value(), 6.0);
     }
 }

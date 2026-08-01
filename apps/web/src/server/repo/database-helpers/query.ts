@@ -262,6 +262,24 @@ export const eqAny = <TColumn extends AnyColumn>(
 };
 
 /**
+ * Equality against an optional set for a SQL expression rather than a table
+ * column, such as a `jsonb_array_elements` field. This avoids binding a JS
+ * array as one scalar parameter to PostgreSQL's `ANY`, while preserving the
+ * optional-filter convention: an absent or empty set adds no constraint.
+ */
+export const matchesStringValues = (
+  expression: SQL,
+  values: string[] | undefined,
+): SQL => {
+  if (!values || values.length === 0) return sql`TRUE`;
+  if (values.length === 1) return sql`${expression} = ${values[0]}`;
+  return sql`${expression} IN (${sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  )})`;
+};
+
+/**
  * One nullable column's presence sentinel as a condition — the server half of
  * a picklist's `(none)` / `Has X` options (see `presenceFilter` in
  * `@cubby/schemas/pagination`). `undefined` presence adds no condition.

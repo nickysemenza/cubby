@@ -39,6 +39,7 @@ export {
   idSetPresence,
   isNotDeleted,
   lockAndValidateForDelete,
+  matchesStringValues,
   notDeleted,
   presenceCondition,
 } from "./query";

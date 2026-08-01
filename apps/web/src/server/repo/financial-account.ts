@@ -39,6 +39,7 @@ import {
   executeListQueryWithCount,
   getDb,
   lockAndValidateForDelete,
+  matchesStringValues,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -111,8 +112,8 @@ const aliasCondition = (
     SELECT 1 FROM jsonb_array_elements(CASE
       WHEN jsonb_typeof("FinancialAccount"."sourceAliases") = 'array'
       THEN "FinancialAccount"."sourceAliases" ELSE '[]'::jsonb END) alias
-    WHERE ${sources ? sql`alias->>'source' = ANY(${sources})` : sql`TRUE`}
-      AND ${externalAccountIds ? sql`alias->>'externalAccountId' = ANY(${externalAccountIds})` : sql`TRUE`}
+    WHERE ${matchesStringValues(sql`alias->>'source'`, sources)}
+      AND ${matchesStringValues(sql`alias->>'externalAccountId'`, externalAccountIds)}
   )`;
 };
 

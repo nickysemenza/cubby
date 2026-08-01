@@ -78,6 +78,44 @@ describe("USDAClient surfaces fetch failures", () => {
   });
 });
 
+describe("USDAClient getFood cache", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("awaits and handles a cache write failure without failing the USDA response", async () => {
+    const cachePut = vi.fn().mockRejectedValue(new Error("cache unavailable"));
+    vi.stubGlobal("caches", {
+      default: {
+        match: vi.fn().mockResolvedValue(undefined),
+        put: cachePut,
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ brandedFoodInfo: null }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      ),
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const client = new USDAClient("http://localhost:8787");
+    await expect(client.getBrandedFoodByID(123)).resolves.toBeNull();
+
+    expect(cachePut).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("Cache write failed"),
+      expect.any(Error),
+    );
+  });
+});
+
 describe("USDAClient.findFoodsBatch request-scoped memo", () => {
   afterEach(() => {
     vi.restoreAllMocks();

@@ -57,6 +57,7 @@ import { runMutationSideEffects } from "~/server/services/mutation-side-effects"
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 
 const MAX_ANALYSIS_IMAGES = 5;
+const DETECTED_ITEM_MATCH_BATCH_SIZE = 3;
 const SEMANTIC_PRODUCT_MATCH_THRESHOLD = 0.86;
 const LOCATION_NO_IMAGES_MESSAGE = "Location has no images to analyze";
 
@@ -296,76 +297,97 @@ async function matchDetectedItems(
     (entry) => entry.product.name,
   );
 
-  const suggestions: DetectedItem[] = [];
-  for (const item of items) {
+  const unmatchedItems = items.flatMap((item) => {
     const productName = itemProductName(item);
-    if (existingNames.has(normalizedProductName(productName))) continue;
     if (
+      existingNames.has(normalizedProductName(productName)) ||
       existingInventoryNames.some((existingName) =>
         isDetectedItemCoveredByInventoryName(productName, existingName),
       )
     ) {
-      continue;
+      return [];
     }
+    return [{ item, productName }];
+  });
 
-    const exactMatched = await findProductByNameFuzzyManufacturer(
-      db,
-      productName,
-      item.manufacturer,
+  const suggestions: DetectedItem[] = [];
+  // Product matching makes database and semantic-search calls. Preserve source
+  // ordering while issuing a small, bounded window instead of serial N+1 work.
+  for (
+    let index = 0;
+    index < unmatchedItems.length;
+    index += DETECTED_ITEM_MATCH_BATCH_SIZE
+  ) {
+    const batch = unmatchedItems.slice(
+      index,
+      index + DETECTED_ITEM_MATCH_BATCH_SIZE,
     );
-    const exactMatchedId = exactMatched
-      ? await resolveLiveShortcode(db, exactMatched.id, "product")
-      : null;
-    let matched: DetectedProductMatch | null =
-      exactMatched && exactMatchedId
-        ? {
-            id: unsafeProductId(exactMatchedId),
-            shortcode: exactMatched.id,
-            name: exactMatched.name,
-            manufacturer: exactMatched.manufacturer,
-            category: exactMatched.category,
-          }
-        : null;
-    if (!matched) {
-      const [semanticMatch] = await semanticProductCandidatesBestEffort(
-        db,
-        productName,
-      );
-      const semanticEntityId =
-        semanticMatch?.item.entityType === "product"
-          ? await resolveLiveShortcode(db, semanticMatch.item.id, "product")
+    const matchedItems = await Promise.all(
+      batch.map(async ({ item, productName }): Promise<DetectedItem | null> => {
+        const exactMatched = await findProductByNameFuzzyManufacturer(
+          db,
+          productName,
+          item.manufacturer,
+        );
+        const exactMatchedId = exactMatched
+          ? await resolveLiveShortcode(db, exactMatched.id, "product")
           : null;
-      if (
-        semanticMatch &&
-        semanticEntityId &&
-        semanticMatch.similarity >= SEMANTIC_PRODUCT_MATCH_THRESHOLD &&
-        semanticMatch.item.entityType === "product" &&
-        !existingProductIds.has(semanticMatch.item.id)
-      ) {
-        matched = {
-          id: unsafeProductId(semanticEntityId),
-          shortcode: semanticMatch.item.id,
-          name: semanticMatch.item.name,
-          manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
-          category:
-            productCategory.safeParse(semanticMatch.item.typeHint).data ?? null,
-        };
-      }
-    }
-    if (matched && existingProductIds.has(matched.id)) continue;
-
-    suggestions.push({
-      ...item,
-      name: productName,
-      matchedProduct: matched
-        ? {
-            id: matched.shortcode,
-            name: matched.name,
-            manufacturer: matched.manufacturer,
-            category: matched.category,
+        let matched: DetectedProductMatch | null =
+          exactMatched && exactMatchedId
+            ? {
+                id: unsafeProductId(exactMatchedId),
+                shortcode: exactMatched.id,
+                name: exactMatched.name,
+                manufacturer: exactMatched.manufacturer,
+                category: exactMatched.category,
+              }
+            : null;
+        if (!matched) {
+          const [semanticMatch] = await semanticProductCandidatesBestEffort(
+            db,
+            productName,
+          );
+          const semanticEntityId =
+            semanticMatch?.item.entityType === "product"
+              ? await resolveLiveShortcode(db, semanticMatch.item.id, "product")
+              : null;
+          if (
+            semanticMatch &&
+            semanticEntityId &&
+            semanticMatch.similarity >= SEMANTIC_PRODUCT_MATCH_THRESHOLD &&
+            semanticMatch.item.entityType === "product" &&
+            !existingProductIds.has(semanticMatch.item.id)
+          ) {
+            matched = {
+              id: unsafeProductId(semanticEntityId),
+              shortcode: semanticMatch.item.id,
+              name: semanticMatch.item.name,
+              manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
+              category:
+                productCategory.safeParse(semanticMatch.item.typeHint).data ??
+                null,
+            };
           }
-        : null,
-    });
+        }
+        if (matched && existingProductIds.has(matched.id)) return null;
+
+        return {
+          ...item,
+          name: productName,
+          matchedProduct: matched
+            ? {
+                id: matched.shortcode,
+                name: matched.name,
+                manufacturer: matched.manufacturer,
+                category: matched.category,
+              }
+            : null,
+        };
+      }),
+    );
+    suggestions.push(
+      ...matchedItems.filter((item): item is DetectedItem => item !== null),
+    );
   }
   return suggestions;
 }

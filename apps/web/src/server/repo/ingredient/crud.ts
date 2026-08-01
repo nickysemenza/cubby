@@ -182,11 +182,42 @@ export const resolveOrCreateIngredients = async (
     string,
     { id: IngredientId; shortcode: IngredientShortcode; created: boolean }
   >();
+  const requested = new Set<string>();
 
+  const uniqueNames: string[] = [];
   for (const rawName of names) {
     const name = rawName.trim();
     const key = name.toLowerCase();
-    if (key.length === 0 || resolved.has(key)) continue;
+    if (key.length === 0 || requested.has(key)) continue;
+    // Reserve the key before the lookup so casing variants coalesce.
+    requested.add(key);
+    uniqueNames.push(name);
+  }
+
+  if (uniqueNames.length > 0) {
+    // Fetch all already-existing name/alias matches at once. The previous loop
+    // paid a find-or-create SELECT for every input, including cookbook-sized
+    // requests that were overwhelmingly existing ingredients.
+    const existing = await unwrapDb(db).query.ingredient.findMany({
+      where: buildIngredientWhere(true, uniqueNames[0]!, uniqueNames.slice(1)),
+      columns: { id: true, shortcode: true, name: true, aliases: true },
+    });
+    for (const row of existing) {
+      const entry = {
+        id: row.id,
+        shortcode: unsafeIngredientShortcode(row.shortcode),
+        created: false,
+      };
+      for (const matchName of [row.name, ...row.aliases]) {
+        const key = matchName.toLowerCase();
+        if (requested.has(key)) resolved.set(key, entry);
+      }
+    }
+  }
+
+  for (const name of uniqueNames) {
+    const key = name.toLowerCase();
+    if (resolved.get(key)) continue;
     const { row, created } = await findOrCreateWithShortcode(db, "ingredient", {
       where: buildIngredientWhere(true, name),
       values: () => ({

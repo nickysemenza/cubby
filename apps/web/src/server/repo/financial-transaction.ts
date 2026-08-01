@@ -53,6 +53,8 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  lockAndValidateForDelete,
+  matchesStringValues,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -135,8 +137,8 @@ const refsCondition = (
     SELECT 1 FROM jsonb_array_elements(CASE
       WHEN jsonb_typeof("FinancialTransaction"."sourceRefs") = 'array'
       THEN "FinancialTransaction"."sourceRefs" ELSE '[]'::jsonb END) ref
-    WHERE ${sources ? sql`ref->>'source' = ANY(${sources})` : sql`TRUE`}
-      AND ${externalIds ? sql`ref->>'externalId' = ANY(${externalIds})` : sql`TRUE`}
+    WHERE ${matchesStringValues(sql`ref->>'source'`, sources)}
+      AND ${matchesStringValues(sql`ref->>'externalId'`, externalIds)}
   )`;
 };
 
@@ -489,6 +491,12 @@ export async function deleteFinancialTransactions(
     }),
   );
   await withTransaction(db, async (tx) => {
+    await lockAndValidateForDelete(
+      tx,
+      financialTransaction,
+      ids,
+      "FinancialTransaction",
+    );
     await tx
       .update(financialTransaction)
       .set({ deletedAt: new Date() })

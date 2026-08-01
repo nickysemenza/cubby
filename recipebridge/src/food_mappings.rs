@@ -227,10 +227,11 @@ pub fn mappings_from_food(food: &WFoodInput) -> Vec<WUnitMapping> {
 /// `product.price` column (source of truth), projected into the graph at
 /// compute time — same read-time synthesis as the USDA edges.
 ///
-/// The shared `each` anchor is the collision point for the multi-priced-product
-/// hazard documented on `engine.rs` (`Engine::new`): every product's price edge
-/// lands on the same `each` node, so two priced products on one ingredient yield
-/// two `each → dollar` edges the conversion picks between arbitrarily.
+/// The shared `each` anchor is used when the public product-mappings export
+/// presents one product's price alongside its unit mappings. The costing engine
+/// deliberately keeps these synthetic edges out of its shared ingredient graph:
+/// an ingredient can have several priced products, and costing selects the
+/// cheapest product only after resolving the ingredient amount to `each`.
 fn price_mapping(price: Option<f64>, product_id: &str) -> Option<WUnitMapping> {
     let price = price?;
     Some(WUnitMapping {
@@ -278,6 +279,24 @@ pub(crate) fn product_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Me
         .iter()
         .chain(food.iter())
         .chain(price.iter())
+        .map(WUnitMapping::to_pair)
+        .collect()
+}
+
+/// One product's non-price conversion edges. Costing merges these across every
+/// product linked to an ingredient so products can complete each other's unit,
+/// food, and nutrition mappings without letting several synthetic price edges
+/// collide on the shared `each` node.
+pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Measure)> {
+    let food = product
+        .food
+        .as_ref()
+        .map(mappings_from_food)
+        .unwrap_or_default();
+    product
+        .unit_mappings
+        .iter()
+        .chain(food.iter())
         .map(WUnitMapping::to_pair)
         .collect()
 }
