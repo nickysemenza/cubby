@@ -194,6 +194,8 @@ export const financialReconciliationSummary = z.object({
   outstandingTransactionCount: z.number().int().nonnegative(),
   postedTotal: z.number().finite(),
   projectedTotal: z.number().finite(),
+  /** Posted refund evidence only; negative under the settlement sign convention. */
+  postedRefundTotal: z.number().finite(),
   delta: z.number().finite().nullable(),
 });
 export type FinancialReconciliationSummary = z.infer<

@@ -62,7 +62,8 @@ const PROBLEM_LABELS: Record<
   projectsWithDateDrift: (n) => pl(n, "date window drift"),
   // Advisory, so it's filtered out of the tooltip at render like the coverage
   // keys — the phrase exists only to keep this Record exhaustive.
-  purchasesNotReconciling: (n) => `${n} not matching a stated total`,
+  purchasesNotReconciling: (n) =>
+    `${n} stated total${n === 1 ? "" : "s"} need review`,
   purchaseFinancialSettlementMismatches: (n) => `${n} settlement mismatch`,
   duplicateFinancialTransactionSourceRefs: (n) =>
     `${n} duplicate transaction reference`,

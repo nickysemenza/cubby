@@ -8,6 +8,7 @@ export interface FinancialReconciliationInput {
   outstandingTransactionCount: number;
   postedTotal: number;
   projectedTotal: number;
+  postedRefundTotal: number;
 }
 
 const cents = (value: number) => Math.round(value * 100);
@@ -26,6 +27,7 @@ export function calculateFinancialReconciliation(
   const outstandingTransactionCount = Number(input.outstandingTransactionCount);
   const postedTotal = Number(input.postedTotal);
   const projectedTotal = Number(input.projectedTotal);
+  const postedRefundTotal = Number(input.postedRefundTotal);
   const comparable =
     Number(input.unpricedExpenseCount) === 0 && transactionCount > 0;
   const comparisonTotal =
@@ -47,6 +49,7 @@ export function calculateFinancialReconciliation(
     outstandingTransactionCount,
     postedTotal,
     projectedTotal,
+    postedRefundTotal,
     delta,
   };
 }

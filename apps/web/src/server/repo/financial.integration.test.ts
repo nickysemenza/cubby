@@ -653,8 +653,79 @@ describe("financial repositories — critical invariants", () => {
       status: "pending",
       postedTotal: 60.56,
       projectedTotal: 51.49,
+      postedRefundTotal: 0,
       outstandingTransactionCount: 1,
     });
+
+    const adjusted = await makePurchaseWithExpense(
+      "status-refund-adjusted",
+      199.26,
+    );
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: a.id,
+        purchaseId: adjusted.purchase.id,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-01-03",
+        amount: 326.36,
+      }),
+      ctx.actor,
+    );
+    for (const [postedDate, amount] of [
+      ["2026-01-04", -100],
+      ["2026-01-05", -27.1],
+    ] as const) {
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: a.id,
+          purchaseId: adjusted.purchase.id,
+          kind: "refund",
+          status: "posted",
+          postedDate,
+          amount,
+        }),
+        ctx.actor,
+      );
+    }
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: a.id,
+        purchaseId: adjusted.purchase.id,
+        kind: "refund",
+        status: "void",
+        amount: -999,
+      }),
+      ctx.actor,
+    );
+    const deletedRefund = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: a.id,
+          purchaseId: adjusted.purchase.id,
+          kind: "refund",
+          status: "posted",
+          postedDate: "2026-01-06",
+          amount: -999,
+        }),
+        ctx.actor,
+      )
+    ).output;
+    await deleteFinancialTransactions(ctx.db, [deletedRefund.id], ctx.actor);
+    const adjustedReconciliation = (
+      await getPurchaseByID(ctx.db, adjusted.uuid)
+    ).financialReconciliation;
+    expect(adjustedReconciliation).toMatchObject({
+      status: "match",
+      postedRefundTotal: -127.1,
+      transactionCount: 3,
+    });
+    expect(adjustedReconciliation.postedTotal).toBeCloseTo(199.26);
+    expect(adjustedReconciliation.projectedTotal).toBeCloseTo(199.26);
 
     const mismatch = await makePurchaseWithExpense("status-mismatch", 10);
     await createFinancialTransaction(

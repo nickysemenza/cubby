@@ -1,5 +1,4 @@
 import type { PurchaseOut } from "@cubby/schemas/purchase";
-import { reconcilePurchase } from "@cubby/schemas/purchase";
 import {
   Clock,
   FileText,
@@ -39,9 +38,9 @@ import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
 import { PurchaseExpensesTable } from "./purchase-expenses-table";
 import {
+  purchaseReconciliationStatus,
   ReconciliationBadge,
   ReconciliationNote,
-  reconciliationDelta,
 } from "./purchase-reconciliation";
 
 /**
@@ -83,8 +82,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       "The purchase and its documents go; its expenses stay in the ledger, unattached to any purchase.",
   });
 
-  const status = reconcilePurchase(purchase);
-  const delta = reconciliationDelta(purchase);
+  const status = purchaseReconciliationStatus(purchase);
 
   const fields: BasicInfoField[] = [
     {
@@ -267,11 +265,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             className="border-[var(--border)] border-t pt-2"
           >
             <ReconciliationBadge purchase={purchase} />
-            {delta !== null && delta !== 0 && (
-              <span className="font-mono text-sm tabular-nums">
-                {formatCurrency(delta)}
-              </span>
-            )}
           </Row>
           <ReconciliationNote status={status} />
         </Stack>
@@ -345,15 +338,16 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       entity="purchase"
       title={purchaseLabel(purchase)}
       rawData={purchase}
-      // Never a "red"/error tone: a purchase whose lines disagree with its stated
-      // total is frequently correct (a partial refund), so the strongest signal
-      // this page gives is the warning-toned badge in the Reconciliation card.
+      // Never a "red"/error tone: posted refunds produce a neutral status, while
+      // an unexplained difference stays an advisory warning rather than a blocker.
       heroStamp={
         status === "unknown"
           ? undefined
           : status === "match"
             ? { label: "Reconciles", tone: "green" }
-            : { label: "Check total", tone: "ink" }
+            : status === "refund_adjusted"
+              ? { label: "Refund-adjusted", tone: "ink" }
+              : { label: "Needs review", tone: "ink" }
       }
       heroStats={heroStats}
       actions={

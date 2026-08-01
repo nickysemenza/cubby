@@ -375,11 +375,9 @@ export const productWithBetterUpcDataSchema = z.object({
  *
  * **Advisory, not a defect** — hence its non-defect `PROBLEM_CLASS`. `Purchase.
  * statedTotal` is what the paperwork claimed and is never summed into spend
- * (spend is `SUM(expense.cost)` = `expenseTotal` below), so a disagreement is a
- * cue to look, not a fault: a partial refund reduces an Expense without changing
- * what the Purchase paperwork originally stated. Nothing offers to "fix" one of
- * these because the only mechanical fix would be back-computing a cost from
- * `statedTotal`, which is forbidden.
+ * (spend is `SUM(expense.cost)` = `expenseTotal` below). Differences exactly
+ * explained by posted refunds are classified `refund_adjusted` and excluded;
+ * the remaining disagreement is a cue to look, not a mechanically fixable fault.
  *
  * `statedTotal` is non-nullable here: a purchase with none recorded reconciles as
  * `"unknown"` and can't mismatch, so it never becomes a row. The delta is
@@ -397,6 +395,9 @@ export const purchaseNotReconcilingSchema = z.object({
   /** `SUM(cost)` over the purchase's live expenses — its real spend. */
   expenseTotal: z.number(),
   expenseCount: z.number().int(),
+  unpricedExpenseCount: z.number().int(),
+  /** Posted refund evidence used to distinguish explained differences. */
+  postedRefundTotal: z.number(),
 });
 
 export const purchaseFinancialSettlementMismatchSchema = z.object({
@@ -410,6 +411,7 @@ export const purchaseFinancialSettlementMismatchSchema = z.object({
     outstandingTransactionCount: z.number().int(),
     postedTotal: z.number(),
     projectedTotal: z.number(),
+    postedRefundTotal: z.number(),
     delta: z.number(),
   }),
 });

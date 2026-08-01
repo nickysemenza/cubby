@@ -12,6 +12,7 @@ const base: FinancialReconciliationInput = {
   outstandingTransactionCount: 0,
   postedTotal: 10,
   projectedTotal: 10,
+  postedRefundTotal: 0,
 };
 
 describe("calculateFinancialReconciliation", () => {
