@@ -1,5 +1,5 @@
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
@@ -131,7 +131,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   const fdcValue = form.watch("fdc_id" as Path<TFieldValues>) as number | null;
   const upcValue = form.watch("upc" as Path<TFieldValues>) as string | null;
   const ingredientValue = form.watch("ingredient" as Path<TFieldValues>) as {
-    id?: IngredientId;
+    id?: IngredientShortcode;
   } | null;
 
   const isMisc = isMiscProduct(nameValue);

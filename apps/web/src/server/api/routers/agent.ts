@@ -1,7 +1,7 @@
 import { agentAskInputSchema, agentResultSchema } from "@cubby/schemas/agent";
 import { runAgent, runAgentStream } from "~/server/agent/runtime";
 import { domainRouter } from "../domain";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 export const agentRouter = createTRPCRouter({
   /**
@@ -10,7 +10,7 @@ export const agentRouter = createTRPCRouter({
    */
   ask: protectedProcedure
     .input(agentAskInputSchema)
-    .output(agentResultSchema)
+    .output(strictOutput(agentResultSchema))
     .mutation(async ({ ctx, input }) => {
       const caller = domainRouter.createCaller(ctx);
       return runAgent(caller, ctx.db, input.query);

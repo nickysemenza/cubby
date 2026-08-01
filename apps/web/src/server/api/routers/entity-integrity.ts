@@ -8,7 +8,11 @@ import {
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  strictOutput,
+} from "~/server/api/trpc";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
@@ -117,13 +121,13 @@ export const entityIntegrityRouter = createTRPCRouter({
    */
   previewOperation: protectedProcedure
     .input(previewOperationInputSchema)
-    .output(previewOperationSchema)
+    .output(strictOutput(previewOperationSchema))
     .query(({ ctx, input }) => previewOperation(ctx.db, input, new Date())),
 
   // Parsed on the way out: the catalog is assembled from `as const` constants,
   // so a shape error here is a compile-time-invisible drift (a policy value
   // missing `effect`, say) that would otherwise surface as a broken UI.
   catalog: protectedProcedure
-    .output(integrityCatalogSchema)
+    .output(strictOutput(integrityCatalogSchema))
     .query(() => buildIntegrityCatalog()),
 });

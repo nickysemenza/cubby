@@ -13,7 +13,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC, type TRPCRouterRecord } from "@trpc/server";
 import { flatten } from "flat";
 import superjson from "superjson";
-import { ZodError } from "zod";
+import { ZodError, type ZodType, type z } from "zod";
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -350,6 +350,22 @@ const publicProcedure = t.procedure
   .use(tracingMiddleWare);
 
 export const protectedProcedure = publicProcedure.use(isAuthed);
+
+/**
+ * Make tRPC type-check a resolver against a Zod output's PARSED type.
+ *
+ * tRPC normally checks a resolver against `z.input<TSchema>`, because output
+ * parsers may transform a resolver's raw value. That is too permissive for our
+ * public entity schemas: shortcode brands exist only in `z.output<TSchema>`,
+ * while `z.input<TSchema>` is a plain string and therefore also accepts a
+ * branded UUID such as `ProductId`. Runtime parsing still catches the wrong
+ * prefix, but only after the request has run.
+ *
+ * Use this on explicit router `.output(...)` declarations. It is a type-only
+ * narrowing; the original schema object and runtime parsing are unchanged.
+ */
+export const strictOutput = <TSchema extends ZodType>(schema: TSchema) =>
+  schema as ZodType<z.output<TSchema>, z.output<TSchema>>;
 
 /**
  * Helper to create a minimal auth object for testing

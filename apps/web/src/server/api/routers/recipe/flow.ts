@@ -11,7 +11,7 @@ import {
   generateRecipeFlow,
   getRecipeFlowState,
 } from "~/server/services/recipe-flow/recipe-flow.service";
-import { protectedProcedure } from "../../trpc";
+import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveRecipeEntityId = async (
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -26,7 +26,7 @@ const resolveRecipeEntityId = async (
 
 const getFlow = protectedProcedure
   .input(recipeFlowGetInputSchema)
-  .output(recipeFlowStateSchema)
+  .output(strictOutput(recipeFlowStateSchema))
   .query(async ({ ctx, input }) => {
     return await getRecipeFlowState(
       ctx.db,
@@ -36,7 +36,7 @@ const getFlow = protectedProcedure
 
 const generateFlow = protectedProcedure
   .input(recipeFlowGenerateInputSchema)
-  .output(recipeFlowArtifactSchema)
+  .output(strictOutput(recipeFlowArtifactSchema))
   .mutation(async ({ ctx, input }) => {
     return await generateRecipeFlow(ctx.db, {
       ...input,

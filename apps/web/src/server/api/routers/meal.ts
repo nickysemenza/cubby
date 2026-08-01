@@ -48,7 +48,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
@@ -140,12 +140,12 @@ const refreshMealEmbedding = (
 
 const getByDateRange = protectedProcedure
   .input(mealDateRange)
-  .output(mealListOut)
+  .output(strictOutput(mealListOut))
   .query(({ ctx, input }) => getMealsByDateRange(ctx.db, input.from, input.to));
 
 const addRecipe = protectedProcedure
   .input(mealAddRecipeInput)
-  .output(mealOut)
+  .output(strictOutput(mealOut))
   .mutation(async ({ ctx, input }) => {
     const mealId = await resolveMealEntityId(ctx.db, input.mealId);
     const updated = await addRecipeToMeal(
@@ -164,7 +164,7 @@ const addRecipe = protectedProcedure
 
 const updateRecipe = protectedProcedure
   .input(mealUpdateRecipeInput)
-  .output(mealOut)
+  .output(strictOutput(mealOut))
   // Scale/order only — the meal's embedding text doesn't include either, so no
   // embedding refresh here (unlike add/remove, which change the recipe set).
   .mutation(async ({ ctx, input }) => {
@@ -179,7 +179,7 @@ const updateRecipe = protectedProcedure
 
 const removeRecipe = protectedProcedure
   .input(mealRecipeIdInput)
-  .output(mealOut)
+  .output(strictOutput(mealOut))
   .mutation(async ({ ctx, input }) => {
     const { output, entityId } = await removeMealRecipeWithEntityId(
       ctx.db,
@@ -192,7 +192,7 @@ const removeRecipe = protectedProcedure
 
 const getShoppingList = protectedProcedure
   .input(mealDateRange)
-  .output(shoppingListOut)
+  .output(strictOutput(shoppingListOut))
   .query(async ({ ctx, input }) => {
     const meals = await getMealsByDateRange(ctx.db, input.from, input.to);
 

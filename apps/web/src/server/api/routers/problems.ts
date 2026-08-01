@@ -34,7 +34,7 @@ import {
   pruneAllUnusedAliases,
   reparseStaleIngredientParses,
 } from "~/server/services/problems.service";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 // The Problems surfaces (page, navbar badge, homepage card) all load these four
 // cost-grouped procedures and assemble the combined result client-side — each
@@ -48,40 +48,40 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Group: DB-only detectors (cheap).
 const getFast = protectedProcedure
-  .output(problemsFastSchema)
+  .output(strictOutput(problemsFastSchema))
   .query(async ({ ctx }) => findFastProblems(ctx.db));
 
 // Group: USDA-coverage (one shared product scan + enrichment).
 // No `.input()` — takes no argument; the `input={"json":null,...}` superjson
 // payload seen in request logs is just the absent (undefined) arg, not a bug.
 const getCoverage = protectedProcedure
-  .output(problemsCoverageSchema)
+  .output(strictOutput(problemsCoverageSchema))
   .query(async ({ ctx }) => findCoverageProblems(ctx.db, ctx.usdaClient));
 
 // Group: better-UPC network detector.
 const getUpc = protectedProcedure
-  .output(problemsUpcSchema)
+  .output(strictOutput(problemsUpcSchema))
   .query(async ({ ctx }) => findUpcProblems(ctx.db, ctx.upcLookupClient));
 
 // Group: household-tracker attention rules (projects/tasks/expenses). Cheap
 // aggregate SQL, but its own group so it runs concurrently with — rather than
 // serialized behind — the fast group's pinned single connection.
 const getTracker = protectedProcedure
-  .output(problemsTrackerSchema)
+  .output(strictOutput(problemsTrackerSchema))
   .query(async ({ ctx }) => findTrackerProblems(ctx.db));
 
 // Population denominators for the Problems page's coverage meters. Cheap
 // count(*)s, and page-only — so unlike the four groups above it stays on the
 // BATCHED link (it is absent from PROBLEMS_HOT_PATH_PROCEDURES on purpose).
 const getCoverageTotals = protectedProcedure
-  .output(coverageTotalsSchema)
+  .output(strictOutput(coverageTotalsSchema))
   .query(async ({ ctx }) => findCoverageTotals(ctx.db));
 
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
 // of detectors (no USDA/UPC network); badge/count consumers instead derive
 // counts client-side from the five cost-grouped queries via countProblems.
 const getMaintenanceCounts = protectedProcedure
-  .output(maintenanceCountsSchema)
+  .output(strictOutput(maintenanceCountsSchema))
   .query(async ({ ctx }) => {
     return await findMaintenanceCounts(ctx.db);
   });
@@ -107,7 +107,7 @@ const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
 // folds the right alias onto the surviving ingredient, a re-parse re-points every
 // line whose `rawLine` now resolves (via alias match) to the correct ingredient.
 const reparseStaleSync = protectedProcedure
-  .output(reparseStaleSyncOut)
+  .output(strictOutput(reparseStaleSyncOut))
   .mutation(async ({ ctx }) => {
     const gen = reparseStaleIngredientParses(ctx.db);
     let result: { updated: number; recipesAffected: RecipeId[] } = {
@@ -133,13 +133,13 @@ const reparseStaleSync = protectedProcedure
 // On-demand dry run behind the Settings → Maintenance "Re-parse recipe lines"
 // button (the WASM sweep is too expensive for an always-on count).
 const dryRunReparseProc = protectedProcedure
-  .output(dryRunReparseOut)
+  .output(strictOutput(dryRunReparseOut))
   .query(async ({ ctx }) => dryRunReparse(ctx.db));
 
 // On-demand dry run behind the Settings → Maintenance "Prune unused aliases"
 // button.
 const dryRunPruneAliasesProc = protectedProcedure
-  .output(dryRunPruneAliasesOut)
+  .output(strictOutput(dryRunPruneAliasesOut))
   .query(async ({ ctx }) => dryRunPruneAliases(ctx.db));
 
 // Fix-all for unused aliases: detect + strip every ingredient's unused aliases in
@@ -155,7 +155,7 @@ const pruneAllUnusedAliasesStream = protectedProcedure.mutation(
 // ingredient-linked products are returned; absence ⇒ no ingredient link.
 const recipeUsageByProduct = protectedProcedure
   .input(recipeUsageByProductInput)
-  .output(recipeUsageByProductOut)
+  .output(strictOutput(recipeUsageByProductOut))
   .query(async ({ ctx, input }) => {
     return await recipeUsageCountsByProduct(ctx.db, input.productShortcodes);
   });
@@ -166,7 +166,7 @@ const recipeUsageByProduct = protectedProcedure
 // are returned per ingredient rather than aborting the batch.
 const deleteUnused = protectedProcedure
   .input(deleteUnusedIngredientsInput)
-  .output(deleteUnusedIngredientsOut)
+  .output(strictOutput(deleteUnusedIngredientsOut))
   .mutation(async ({ ctx, input }) => {
     const resolved = await resolveLiveShortcodes(
       ctx.db,
@@ -206,7 +206,7 @@ const deleteUnused = protectedProcedure
 
 const cleanupOrphanedEmbeddings = protectedProcedure
   .input(cleanupOrphanedEntityEmbeddingsInput)
-  .output(cleanupOrphanedEntityEmbeddingsOut)
+  .output(strictOutput(cleanupOrphanedEntityEmbeddingsOut))
   .mutation(async ({ ctx, input }) => {
     return await cleanupOrphanedEntityEmbeddings(ctx.db, input?.ids);
   });

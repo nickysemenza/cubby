@@ -50,7 +50,7 @@ import {
 } from "~/server/repo/task";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
@@ -119,7 +119,7 @@ async function taskEntityIds(
  * unpaginated — see repo/task/actionable.ts for the semantics/ordering.
  */
 const listActionable = protectedProcedure
-  .output(actionableTasksOut)
+  .output(strictOutput(actionableTasksOut))
   .query(({ ctx }) => listActionableTasks(ctx.db));
 
 /**
@@ -130,7 +130,7 @@ const listActionable = protectedProcedure
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
 const chartData = protectedProcedure
   .input(taskFiltersSchema)
-  .output(z.array(taskOut))
+  .output(strictOutput(z.array(taskOut)))
   .query(async ({ ctx, input }) => {
     const { data } = await taskList(
       ctx.db,
@@ -147,7 +147,7 @@ const chartData = protectedProcedure
 // embedding refresh for every moved task batches into a single dispatch.
 const bulkMove = protectedProcedure
   .input(taskBulkMoveInput)
-  .output(taskListAndSideEffectsOut)
+  .output(strictOutput(taskListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await moveTasks(ctx.db, input, ctx.actorContext);
     const ids = await taskEntityIds(
@@ -168,7 +168,7 @@ const bulkMove = protectedProcedure
 // Bulk status write, same shape as bulkMove above.
 const bulkSetStatus = protectedProcedure
   .input(taskBulkStatusInput)
-  .output(taskListAndSideEffectsOut)
+  .output(strictOutput(taskListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksStatus(ctx.db, input, ctx.actorContext);
     const ids = await taskEntityIds(
@@ -189,7 +189,7 @@ const bulkSetStatus = protectedProcedure
 // Bulk trade write, same shape as bulkSetStatus above.
 const bulkSetTrade = protectedProcedure
   .input(taskBulkTradeInput)
-  .output(taskListAndSideEffectsOut)
+  .output(strictOutput(taskListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksTrade(ctx.db, input, ctx.actorContext);
     const ids = await taskEntityIds(
@@ -210,7 +210,7 @@ const bulkSetTrade = protectedProcedure
 // Bulk due-date write, same shape as bulkSetTrade above.
 const bulkSetDueDate = protectedProcedure
   .input(taskBulkDueDateInput)
-  .output(taskListAndSideEffectsOut)
+  .output(strictOutput(taskListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await setTasksDueDate(ctx.db, input, ctx.actorContext);
     const ids = await taskEntityIds(
@@ -235,7 +235,7 @@ const bulkSetDueDate = protectedProcedure
 // change embedding text — not for every re-ranked row.
 const bulkReorder = protectedProcedure
   .input(taskBulkReorderInput)
-  .output(taskListAndSideEffectsOut)
+  .output(strictOutput(taskListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const items = await reorderTasks(ctx.db, input, ctx.actorContext);
     const movedIds = input.move ? [input.move.id] : [];
@@ -258,7 +258,7 @@ const bulkReorder = protectedProcedure
  * SQL/reuse per count.
  */
 const summary = protectedProcedure
-  .output(taskSummaryOut)
+  .output(strictOutput(taskSummaryOut))
   .query(({ ctx }) => getTaskSummary(ctx.db));
 
 /**
@@ -269,7 +269,7 @@ const summary = protectedProcedure
  */
 const board = protectedProcedure
   .input(taskBoardInput)
-  .output(taskBoardOut)
+  .output(strictOutput(taskBoardOut))
   .query(({ ctx, input }) => getTaskBoard(ctx.db, input));
 
 export const taskRouter = createTRPCRouter({

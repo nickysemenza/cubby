@@ -12,7 +12,6 @@ import { requiredName } from "./common";
 import { externalIdInput } from "./external-id";
 import { externalIdOut } from "./external-id";
 import {
-  type IngredientId,
   ingredientShortcode,
   inventoryShortcode,
   productShortcode,
@@ -64,7 +63,9 @@ export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
  */
 export const hasFoodIndicators = (product: {
   fdc_id?: number | null;
-  ingredientId?: IngredientId | null;
+  // This presence-only predicate is shared by the public shortcode form and
+  // the private UUID repo boundary, so it deliberately accepts either shape.
+  ingredientId?: string | null;
 }): boolean =>
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
