@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { VENDOR_LOGO_BY_ID } from "~/lib/vendor-logos.generated";
+import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
 import { VendorCell, VendorMark } from "./vendor-cell";
 
 vi.mock("~/app/_components/EntityPreviewLink", () => ({
@@ -23,12 +23,21 @@ vi.mock("~/app/_components/EntityPreviewLink", () => ({
 // Driven off a live manifest entry, not a hardcoded id, so these survive a
 // re-seed that drops or renumbers vendors — any entry works, this just needs
 // one to exist.
-const [SEEDED_ID] = Object.entries(VENDOR_LOGO_BY_ID)[0] ?? [];
+const [SEEDED_ID] = Object.entries(VENDOR_LOGO_BY_SHORTCODE)[0] ?? [];
 if (!SEEDED_ID) {
   throw new Error(
-    "VENDOR_LOGO_BY_ID is empty — vendor-cell.unit.test.tsx needs at least one seeded entry to test the vendorId-resolved path against.",
+    "VENDOR_LOGO_BY_SHORTCODE is empty — vendor-cell.unit.test.tsx needs at least one seeded entry.",
   );
 }
+const idForSlug = (slug: string): string => {
+  const entry = Object.entries(VENDOR_LOGO_BY_SHORTCODE).find(
+    ([, value]) => value === slug,
+  );
+  if (!entry) throw new Error(`Missing seeded test logo: ${slug}`);
+  return entry[0];
+};
+const EBAY_ID = idForSlug("ebay");
+const HOME_DEPOT_ID = idForSlug("home-depot");
 // Deliberately a name that slugs to nothing in the manifest, so any logo that
 // renders for it can only have come from `vendorId` resolution, never from
 // the name-derived fallback — that's what isolates the id-first behavior.
@@ -60,8 +69,17 @@ describe("VendorCell", () => {
     );
   });
 
+  it("does not guess a logo from a name without a manifest shortcode", () => {
+    render(<VendorMark vendor="eBay" />);
+
+    expect(document.querySelector("img")).toBeNull();
+    expect(screen.getByText("EB")).toBeTruthy();
+  });
+
   it("re-attempts the logo after a failure when the vendor changes", () => {
-    const { rerender } = render(<VendorCell vendor="eBay" />);
+    const { rerender } = render(
+      <VendorCell vendor="eBay" vendorId={EBAY_ID} />,
+    );
     expect(screen.getByRole("presentation", { hidden: true })).toBeTruthy();
 
     // eBay's logo 404s (dead bucket entry, manifest drift, dropped connection).
@@ -71,17 +89,19 @@ describe("VendorCell", () => {
 
     // Correcting the vendor must not inherit the previous one's failure — a
     // bare `failed` boolean pinned every subsequent vendor to its monogram.
-    rerender(<VendorCell vendor="Home Depot" />);
+    rerender(<VendorCell vendor="Home Depot" vendorId={HOME_DEPOT_ID} />);
     expect(document.querySelector("img")).toBeTruthy();
     expect(screen.queryByText("HD")).toBeNull();
   });
 
   it("keeps the failure attached to the vendor that actually failed", () => {
-    const { rerender } = render(<VendorCell vendor="eBay" />);
+    const { rerender } = render(
+      <VendorCell vendor="eBay" vendorId={EBAY_ID} />,
+    );
     fireEvent.error(document.querySelector("img") as HTMLImageElement);
 
-    rerender(<VendorCell vendor="Home Depot" />);
-    rerender(<VendorCell vendor="eBay" />);
+    rerender(<VendorCell vendor="Home Depot" vendorId={HOME_DEPOT_ID} />);
+    rerender(<VendorCell vendor="eBay" vendorId={EBAY_ID} />);
     expect(screen.getByText("EB")).toBeTruthy();
   });
 
@@ -89,7 +109,7 @@ describe("VendorCell", () => {
     // `compactOnMobile` hides the name below `sm`, where the only other element
     // is a decorative `alt=""` image. Hiding it with `display: none` would leave
     // the cell with no accessible name at all, so it must stay in the tree.
-    render(<VendorCell vendor="eBay" compactOnMobile />);
+    render(<VendorCell vendor="eBay" vendorId={EBAY_ID} compactOnMobile />);
     const name = screen.getByText("eBay");
     expect(name.className).toContain("sr-only");
     expect(name.className).not.toContain("max-sm:hidden");
@@ -98,9 +118,8 @@ describe("VendorCell", () => {
 
 /**
  * The `vendorId` prop's whole reason to exist: a vendor rename must not
- * demote its logo to a monogram just because the NAME-derived slug no longer
- * matches. These fail on `main`, where `VendorCell`/`VendorMark` have no
- * `vendorId` prop and can only ever slug the (possibly stale) name.
+ * demote its logo to a monogram just because the display name no longer matches
+ * the stored asset slug.
  */
 describe("VendorCell / VendorMark with vendorId", () => {
   it("resolves the logo by id even when the name matches no slug (rename-doesn't-demote)", () => {
@@ -117,11 +136,7 @@ describe("VendorCell / VendorMark with vendorId", () => {
     fireEvent.error(document.querySelector("img") as HTMLImageElement);
     expect(document.querySelector("img")).toBeNull();
 
-    // Re-rendering with the SAME vendor/id must not retry the broken request.
-    // If `failedSlug` were keyed on `vendorSlug(vendor)` (the name-derived
-    // slug — which for a renamed vendor differs from the id-resolved slug
-    // that actually failed above), this guard would never match its own
-    // failure and the <img> would come back every render.
+    // Re-rendering with the same vendor/id must not retry the broken request.
     rerender(<VendorMark vendor={RENAMED_VENDOR} vendorId={SEEDED_ID} />);
     expect(document.querySelector("img")).toBeNull();
   });

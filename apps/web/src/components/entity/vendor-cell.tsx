@@ -8,19 +8,21 @@ import {
 } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 import { VENDOR_LOGO_PREFIX, vendorMonogram } from "~/lib/vendor-logo";
-import { vendorLogoSlug } from "~/lib/vendor-logo-lookup";
-import { VENDOR_LOGO_SLUGS } from "~/lib/vendor-logos.generated";
+import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
 
 /** Rendered edge in CSS px. `size-4` — an inline glyph, not a card icon. */
 const MARK_PX = 16;
 
 /**
  * Whether this vendor has a logo, so callers can lay out around its absence.
- * `vendorId` is optional and, when given, resolved id-first — see
- * `vendorLogoSlug` for why that's rename-proof where the name-only slug isn't.
+ * A persisted shortcode is required: the manifest is the authoritative record
+ * that the corresponding R2 object exists.
  */
-const hasVendorLogo = (vendor: string, vendorId?: string | null): boolean =>
-  VENDOR_LOGO_SLUGS.has(vendorLogoSlug(vendor, vendorId));
+const vendorLogoSlug = (vendorId?: string | null): string | null =>
+  vendorId ? (VENDOR_LOGO_BY_SHORTCODE[vendorId] ?? null) : null;
+
+const hasVendorLogo = (vendorId?: string | null): boolean =>
+  vendorLogoSlug(vendorId) !== null;
 
 /**
  * A vendor's brand mark: its logo when we have one in R2, otherwise a monogram
@@ -40,10 +42,8 @@ export function VendorMark({
 }: {
   vendor: string;
   /**
-   * Rename-proof lookup key — see `vendorLogoSlug`. Optional so `VendorMark`
-   * still works anywhere only a name is in hand; every call site that has an
-   * id should pass it, since the id-resolved slug is never worse than the
-   * name-derived one.
+   * Rename-proof lookup key. Without a persisted id, the mark deliberately
+   * stays a monogram instead of guessing that a same-slug asset exists.
    */
   vendorId?: string | null;
   className?: string;
@@ -55,20 +55,15 @@ export function VendorMark({
   // the state to the slug it describes self-corrects on every change, with no
   // effect and no extra render pass.
   //
-  // Keyed on the RESOLVED slug (id-first), not a name-only recomputation: for a
-  // renamed vendor those two differ, and keying on the name-slug would mean a
-  // failed id-resolved `<img>` never matches its own guard — it retries the
-  // broken request on every render and the monogram fallback becomes
-  // unreachable.
   const [failedSlug, setFailedSlug] = useState<string | null>(null);
-  const slug = vendorLogoSlug(vendor, vendorId);
+  const slug = vendorLogoSlug(vendorId);
 
   const shared = cn("size-4 shrink-0", className);
 
   // The `failedSlug` half covers the offline PWA and a manifest that has drifted
   // ahead of the bucket; the manifest lookup is what keeps the common logo-less
   // vendor from costing a failed request in the first place.
-  if (!VENDOR_LOGO_SLUGS.has(slug) || failedSlug === slug) {
+  if (!slug || failedSlug === slug) {
     return (
       <span
         aria-hidden
@@ -137,7 +132,7 @@ export function VendorCell({
   vendorId?: string | null;
   compactOnMobile?: boolean;
 }) {
-  const logo = hasVendorLogo(vendor, vendorId);
+  const logo = hasVendorLogo(vendorId);
   const body = (
     <Row gap="sm" align="center" className="min-w-0">
       {(!compactOnMobile || logo) && (

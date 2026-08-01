@@ -24,6 +24,7 @@ import {
   Network,
   ScanBarcode,
   Sparkles,
+  Store,
   Unlink,
   Wrench,
 } from "lucide-react";
@@ -971,6 +972,38 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           <DuplicateVendorMergeFix variant={v} close={close} />
         ),
       },
+    }),
+  }),
+  section({
+    id: "vendor-mini-logos",
+    label: "Vendor logos",
+    select: (p) => p.vendorsWithoutLogos,
+    coverage: {
+      meter: {
+        total: (t) => t.vendorsWithPurchases,
+        doneLabel: "with a mini logo",
+      },
+    },
+    icon: Store,
+    title: "Active vendors without a mini logo",
+    description:
+      "Optional brand marks for vendors that appear in the purchase and expense ledgers. Fill or correct the vendor website, then rerun the vendor-logo seeder; vendors without a suitable logo keep their monogram.",
+    emptyMessage: "Every active vendor has a seeded mini logo.",
+    renderItem: (vendor) => ({
+      title: vendor.name,
+      subtitle: vendor.website ?? "No website recorded",
+      badges: [
+        <Badge key="purchases" variant="secondary">
+          {vendor.purchaseCount}{" "}
+          {vendor.purchaseCount === 1 ? "purchase" : "purchases"}
+        </Badge>,
+        <Badge key="expenses" variant="outline">
+          {vendor.expenseRowCount}{" "}
+          {vendor.expenseRowCount === 1 ? "expense line" : "expense lines"}
+        </Badge>,
+      ],
+      route: entityDetailLink("vendor", vendor.id),
+      editLabel: "Open vendor",
     }),
   }),
   section({

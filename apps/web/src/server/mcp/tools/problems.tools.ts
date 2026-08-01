@@ -22,7 +22,7 @@ export function registerProblemsTools(server: McpServer) {
   registerMcpTool(server, {
     name: "list_problems",
     description:
-      "List data-quality problems across products, inventory, locations, and recipes, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses).",
+      "List data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses).",
     inputSchema: {
       countsOnly: z
         .boolean()

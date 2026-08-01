@@ -1,16 +1,6 @@
-// Vendor brand-logo identity: the pure string → asset-key mapping shared by the
-// render path (`VendorMark`, via `~/lib/vendor-logo-lookup`) and the seeding
-// script (`scripts/seed-vendor-logos.ts`).
-//
-// The asset KEY on disk (R2's `vendors/<slug>.png`) is still derived from the
-// vendor's NAME — that part never changed. What changed is the manifest that
-// maps a vendor to that key: `vendor-logos.generated.ts` now keys by
-// `Vendor.id`, not by a freshly computed name-slug, so renaming a vendor no
-// longer orphans its uploaded logo (see `vendor-logo-lookup.ts`'s
-// `vendorLogoSlug`). This module stays the single, alias-free place both sides
-// derive a NAME's slug identically — the seeder still needs it to know which
-// R2 object to write, and the lookup still needs it as the fallback for a
-// vendor id that predates the last seed run.
+// Pure vendor-logo helpers shared by the render path and seeding script. The
+// generated manifest owns vendor identity; the name-derived slug below is only
+// used when a vendor receives its first logo.
 
 /**
  * R2 key prefix for vendor logos. Deliberately outside `R2_KEY_PREFIX`
@@ -47,4 +37,15 @@ export function vendorMonogram(vendor: string): string {
   if (!first) return "?";
   if (!second) return first.slice(0, 2).toUpperCase();
   return `${first[0]}${second[0]}`.toUpperCase();
+}
+
+/**
+ * Return a row's persisted vendor id only while its rendered name still matches.
+ * Inline edits optimistically update the name before the server row refetches;
+ * withholding the stale id avoids showing and linking the previous vendor.
+ */
+export function persistedVendorId<
+  T extends { vendor: string | null; vendorId: string | null },
+>(displayedName: string, row: T): string | null {
+  return displayedName === row.vendor ? row.vendorId : null;
 }

@@ -110,7 +110,7 @@ import {
 } from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
-import { persistedVendorId } from "~/lib/vendor-logo-lookup";
+import { persistedVendorId } from "~/lib/vendor-logo";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
