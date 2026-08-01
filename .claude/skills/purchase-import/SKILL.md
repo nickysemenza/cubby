@@ -19,12 +19,16 @@ the corresponding gap immediately.
 Purchase gaps cover date, order id, stated total, primary document, empty/unpriced Expenses,
 paperwork mismatch, and settlement source-reference coverage. Product manufacturer/category/model,
 Amazon ASIN, and exact external-id collision gaps roll up into every linked Purchase while retaining
-the Product's `PRD-` shortcode as `targetId`. Use
+the Product's `targetType: "product"` and `PRD-` shortcode as `targetId`. Purchase-owned
+exceptions use `targetType: "purchase"` and the Purchase's `PUR-` shortcode. Deduplicate and
+act on exceptions by `(targetType, targetId, check)`, because several linked Products may expose
+the same check. Use
 `search_products({ dataStatus: "needs_data" })` for the Product-only queue.
 
 `set_data_exception` records negative knowledge for one applicable check and requires a substantive
-note; it replaces an existing exception for that check. `clear_data_exception` removes exactly that
-acknowledgement. Exceptions are for facts that were not issued, are unavailable/not applicable,
+note; it replaces an existing exception for that check on the targeted entity and returns that
+target's output. `clear_data_exception` removes exactly that targeted acknowledgement and also
+returns the targeted output. Exceptions are for facts that were not issued, are unavailable/not applicable,
 have insufficient detail, or for an expected mismatch — never a shortcut around searching sources
 that are still available.
 
@@ -204,7 +208,8 @@ roster, open a purchase, or set a `statedTotal`:
 
 When a purchase source reveals a product UPC/EAN/GTIN, manufacturer model,
 Amazon ASIN, retailer SKU, or canonical product URL, capture it on the product
-using the existing `model`, `upc`, and read-merge-write `externalIds` rules in
+using the existing `model` and `upc` fields plus the typed
+`patch_product_external_ids` workflow in
 Phase 4. After the financial import is reconciled, invoke `$product-enrichment`
 to find one verified cover image and fill other exact-variant metadata. Product
 research must not delay or block expense, purchase, or settlement reconciliation.
@@ -555,16 +560,23 @@ single call.
   - **The Expenses of one Purchase** are `list_expenses` filtered by that purchase's `purchaseId` — the exact
     scope, needing no `vendorId`/`orderId` cross-reference.
 - Canonical product link: `https://www.amazon.com/dp/<ASIN>`.
-- Vendor identifiers for a *product* go in **`ProductExternalId`** (`source`/`externalId`/`url`) —
-  never a new column, never `Product.model` (that's manufacturer identity). `externalIds` **replaces
-  the whole set**, so read-then-merge. Partial unique index on `(productId, source)` = one id per
-  source.
+- Vendor identifiers for a *product* go in **`ProductExternalId`**
+  (`source`/`kind`/`externalId`/`url`) — never a new column, never `Product.model` (that's
+  manufacturer identity). Use `patch_product_external_ids` to upsert or explicitly remove only the
+  named `(source, kind)` slots; preserve everything else. `update_product.externalIds` remains a
+  whole-set replacement for compatibility. New sources are normalized to trimmed lowercase while
+  `externalId` remains case-sensitive. Existing `legacy_unspecified` rows stay that way unless the
+  evidence explicitly establishes a typed replacement.
 
   Product MCP outputs include `model`. Use `modelPresenceFilter: "none"` for the missing-model
   worklist. `externalIdSource` plus `externalIdPresenceFilter` exposes source-specific identity gaps;
   for example `{ externalIdSource: "amazon", externalIdPresenceFilter: "none" }` finds Products
-  without an Amazon external id. `find_product_external_id_collisions` reports exact active
-  `(source, externalId)` collisions as an advisory query; inspect them before changing identity.
+  without an Amazon external id. Before writing identifiers, call
+  `find_product_external_id_collisions` with 1–100 exact
+  `identifiers: [{ source, kind, externalId }]`. Read each ordered `missing`, `unique`, or
+  `collision` result and its live Product owners; deleted owners never count. Do not combine
+  `source` and `identifiers` in one call. Source-only and unfiltered calls remain broad advisory
+  audits, with collision-only `items`.
 
   **Some vendors print ONLY their own code, and it encodes the real model.** Ferguson never shows a
   manufacturer model number — its order confirmation and its bid both list `WGR366`, `SCL3050USTR`,

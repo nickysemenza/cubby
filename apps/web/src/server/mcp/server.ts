@@ -56,20 +56,26 @@ Workflow tips:
 - Turn a name into an id with list_*/search_*/get_* (or global_search across every indexed entity at once) before writing — you get a shortcode back, ready to pass straight into the next call.
 - Ingredients: batch-resolve names with resolve_ingredients instead of one search+create per name.
 - Meals: the \`id\` inside a meal's recipes[] is the mealRecipe id — use THAT (not recipeId) for update_meal_recipe / remove_meal_recipe.
-- Products: usdaFdcId reflects either an explicit fdc_id or a UPC-resolved USDA link.
+- Products: usdaFdcId reflects either an explicit fdc_id or a UPC-resolved USDA link. Use search_products sort="identity_strength" for enrichment worklists, patch_product_external_ids for slot-safe typed identifier changes, and exact (source, kind, externalId) collision checks before adding identity. get_product is the detailed media read; verify_product_images is the explicit R2 integrity check.
 - Recipes: prefer create_recipe_from_text for pasted prep sheets; use create_recipe when you already have ingredient ids.
 - Problems: list_problems countsOnly=true for cheap triage; reparse_stale_parses recovers mis-merged ingredient lines.
 - Projects: list_projects/list_tasks/list_expenses are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
 - Ledger shape: \`Vendor ──< Purchase ──< Expense\`. ALL money lives on \`expense\` — list_expenses/create_expense are the spend ledger. A \`purchase\` is one vendor order, receipt, or deliberately separate purchase event (it is not a card charge), and its \`statedTotal\` is always the literal vendor-printed total and is never summed into spend.
 - Reconciling a vendor export against the ledger: match_expenses (read-only, ranks candidates for the whole batch) → update_expense to set vendor/orderId on what you confirm, or split_expense when one ledger row aggregates several export lines. Never write from a match without confirming it — and run match_expenses BEFORE create_expense, since the row you are about to add usually already exists under a different name.
 - Reconciling a purchase against its paperwork: update_purchase records \`statedTotal\`; list_problems type="purchasesNotReconciling" is the worklist of purchases whose expenses don't add up to it (a soft flag, often legitimately mismatched after a partial refund).
-- Purchase completeness: start with list_purchases dataStatus="needs_data" and optionally dataGap. Purchase and Product outputs carry computed dataQuality; linked Product gaps roll up into Purchases. Use set_data_exception only for source-backed negative knowledge, and require documentKind when attach_file targets a Purchase.
+- Purchase completeness: start with list_purchases dataStatus="needs_data" and optionally dataGap. Purchase and Product outputs carry computed dataQuality; linked Product gaps and exceptions roll up into Purchases with targetType/targetId so mutations can address the owning entity. Use set_data_exception only for source-backed negative knowledge, and require documentKind when attach_file targets a Purchase.
+- Safe attachment: provide a deterministic idempotencyKey for retries and the freshly read expectedImageCount for Product gallery writes. A mismatch is a precondition failure and associates nothing. MIME/signature conflicts are rejected; verify_product_images backfills and checks stored Product files without making ordinary get_product reads contact R2.
 - Financial settlement is separate evidence: FinancialTransaction amounts never enter spend. A Purchase is the vendor order/receipt; it may have several FTX- rows (installments, refunds, split tender). Use list_financial_transactions with purchaseId to inspect those rows.
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
 // Re-exported for the unit test, which exercises the slim projections directly.
-export { slimMeal, slimProduct, slimUsdaFood } from "./tools/_shared";
+export {
+  slimMeal,
+  slimProduct,
+  slimProductDetail,
+  slimUsdaFood,
+} from "./tools/_shared";
 
 function registerTools(server: McpServer) {
   registerInventoryTools(server);
