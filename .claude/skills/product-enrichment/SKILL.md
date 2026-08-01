@@ -1,6 +1,6 @@
 ---
 name: product-enrichment
-description: Enrich Cubby products with verified cover images, UPC/EAN/GTIN barcodes, manufacturer models, Amazon ASINs, retailer identifiers, names, categories, manufacturers, and current prices. Use when the user wants to fill missing product images or details, burn down the stocked-product image backlog, research products from model numbers or external IDs, or correct product metadata from authoritative product pages.
+description: Enrich Cubby products with verified cover images, UPC/EAN/GTIN barcodes, manufacturer models, Amazon ASINs, retailer identifiers, names, categories, manufacturers, and current prices. Use when the user wants to fill missing product images or details, burn down the stocked-product image backlog, enrich specific Products created or identified during purchase import, research products from model numbers or external IDs, or correct product metadata from authoritative product pages.
 ---
 
 # Enrich Cubby products
@@ -10,6 +10,14 @@ MCP tools. Keep the work interactive: there is no enrichment queue or separate
 evidence table, so return a source-backed batch report when finished.
 
 ## Build the worklist
+
+When the caller or purchase-import handoff supplies specific `PRD-` shortcodes,
+use those Products as the worklist regardless of inventory presence. Enrichment
+does not decide whether a receipt line deserves a Product and never mints one;
+the import workflow owns that promotion decision. A Product does not need to be
+received into inventory before enrichment.
+
+For a general stocked-product backlog sweep:
 
 1. Call `search_products` with:
    - `inventoryPresenceFilter: "has"`

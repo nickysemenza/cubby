@@ -1,6 +1,6 @@
 ---
 name: purchase-import
-description: Reconcile vendor orders, receipts, and financial statements against Cubby's Expenses, Purchases, FinancialAccounts, and FinancialTransactions. Use when the user supplies order exports, receipts, statement rows, or vendor account dumps and wants source coverage checked, rows deduplicated, spend lines matched, settlement evidence recorded, refunds handled, or financial reconciliation verified.
+description: Reconcile vendor orders, receipts, and financial statements against Cubby's Expenses, Purchases, FinancialAccounts, and FinancialTransactions. Use when the user supplies order exports, receipts, statement rows, or vendor account dumps and wants source coverage checked, rows deduplicated, spend lines matched, household or grocery receipt lines captured and selectively promoted to Products, settlement evidence recorded, refunds handled, or financial reconciliation verified.
 ---
 
 # Importing a vendor purchase export
@@ -631,6 +631,12 @@ single call.
   keep: `CL3050U**ID**/S/T/R` is the internal-dispenser variant, and only the absent `ID` tells you
   which unit was actually bought. Contrast a distributor like Lutz, which prints genuine
   manufacturer part numbers (`K50-102-ST-SN`, `9611-K50-SN`) that go straight into `model`.
+- **Receipt extraction and Product promotion are separate decisions.** Extract every visible line
+  needed to understand and reconcile the source, but do not create a Product merely because a line
+  exists. Cubby has no `PurchaseLine` entity yet: a line that does not become an Expense is source
+  evidence only, with aggregate itemization summarized in Purchase notes when it would help a later
+  pass. Never create a Product or an Expense solely to preserve raw receipt text. If `PurchaseLine`
+  is added later, it remains annotation; spend still comes only from `Expense.cost`.
 - **Which Expenses get a product — and which never do.** A `Product` is a purchasable item **or a
   `misc:` placeholder** (`repo/product/index.ts`), so the bar is lower than "a specific SKU". Two
   classes never get one:
@@ -646,9 +652,30 @@ single call.
   - **An installment or progress payment** (`hotel payment 3/11`, `wedding planner 2 of 4`,
     `retaining wall 2/2`). That grouping belongs to the purchase and the project.
 
-  Everything else gets one, **after unbundling**. A bundle (`wall materials, strut stuff`) and an
-  aggregate credit (`lowes returns` −$77.46) are *un-split imports*, not a kind of thing — split them
-  per Phase 3 and each part takes its own product. Two shapes that look like exceptions and aren't:
+  For project-material and durable-goods imports, an identified good gets one **after unbundling**.
+  A bundle (`wall materials, strut stuff`) and an aggregate credit (`lowes returns` −$77.46) are
+  *un-split imports*, not a kind of thing — split them per Phase 3 and each identified part takes its
+  own product.
+
+  For food and household consumables, promote selectively. Reuse or propose a Product when the
+  exact, repeatable item enables pantry/recipe linkage, nutrition, explicit inventory/restock, or
+  useful repeat-price history — staples, paper towels, detergent, batteries, and filters are common
+  candidates. An ambiguous receipt abbreviation, one-off prepared food, or item with no intended
+  Cubby behavior may remain an unlinked Expense. Resolve identity only from an exact UPC/GTIN,
+  ASIN, manufacturer model, or the receipt line's own retailer identifier; name and embedding
+  similarity are suggestions, never identity. Apply the exact external-ID collision workflow above:
+  reuse the unique owner, propose a new Product only when the identifier is missing, and stop for
+  manual resolution on a collision. Product creation or Expense linking never changes inventory;
+  receiving remains a separate explicit operator action.
+
+  **Expense granularity follows trustworthy cost evidence, not extraction granularity.** Give a
+  promoted Product its own Expense when the source provides a reliable extended line cost, including
+  any defensible allocation of tax, discounts, or fees. Otherwise keep the truthful coarser Expense
+  unlinked and summarize its source lines in Purchase notes. Never invent per-product costs, split an
+  aggregate merely to preserve receipt text, or require every extracted line to enter the spend
+  ledger.
+
+  Two project-material shapes that look like exceptions and aren't:
   - **A receipt-identified commodity material is a Product.** Lumber, plywood, sheet goods, tubing,
     and fittings do not need a consumer brand to be productized when the receipt gives a stable,
     repeatable specification. Dimensions, grade, treatment, finish, profile, and similar purchasing
@@ -793,10 +820,16 @@ single call.
   reconciliation look clean, and never net a refund into this field. Record the original charge and
   refund as separate FinancialTransactions; their projected or posted total reconciles against the
   live Expenses while the Purchase preserves what the vendor document actually printed.
-- Only add an expense when the **project is known** — date inside a project's window *and* a semantic
-  fit. Check project windows first; a project's last activity date tells you if it's live.
-- Non-tool/household items stay out of the project ledger unless the operator says otherwise. Ask
-  per item; never bulk-add books, clothing, or consumables.
+- **Capture verified spend even when project attribution is unknown.** Create the truthful Purchase
+  and Expense lines with `projectId: null`, then assign or bulk-move Expenses later when the project
+  is known. Never delay Purchase, Expense, document, or settlement capture solely because project
+  attribution is unresolved. A Purchase itself has no project; its Expense lines are assigned
+  independently, and `split_expense` handles one coarse line that later proves to span projects.
+- Before assigning an Expense to a project, require both a semantic fit and a date inside that
+  project's effective window. Non-tool/household items stay out of **project rollups** unless the
+  operator says otherwise; ordinary household spend may remain permanently projectless. Never
+  bulk-assign books, clothing, or consumables to a project merely because their Purchase date falls
+  inside its window.
 - **A sale or refund carries the same `projectId` as the expense it offsets — but ONLY if its date
   falls inside that project's window.** The project's true cost is net of what the tool later sold
   for, so attach it where you can. The constraint is that **`Project` dates are DERIVED** (see
