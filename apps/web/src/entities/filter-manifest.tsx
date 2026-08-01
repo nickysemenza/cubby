@@ -71,6 +71,183 @@ const filterTypeForKind = (
   kind === "text" ? "text" : isMultiFilterKind(kind) ? "multiselect" : "select";
 
 const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
+  financialAccount: [
+    {
+      columnId: "name",
+      field: "search",
+      urlKey: "q",
+      kind: "text",
+      placeholder: "Search accounts...",
+    },
+    {
+      columnId: "identity",
+      field: "identityKind",
+      kind: "multiselect",
+      placeholder: "Filter by account type...",
+      options: [
+        { value: "credit_card", label: "Credit card" },
+        { value: "bank_account", label: "Bank account" },
+        { value: "stored_value", label: "Stored value" },
+        { value: "cash", label: "Cash" },
+        { value: "other", label: "Other" },
+      ],
+    },
+    {
+      columnId: "provisional",
+      kind: "boolean",
+      placeholder: "Filter by status...",
+      options: [
+        { value: "false", label: "Known" },
+        { value: "true", label: "Provisional" },
+      ],
+    },
+    {
+      columnId: "aliases",
+      field: "sourceAliasPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter aliases...",
+      options: presenceFilterOptions("aliases"),
+    },
+    {
+      columnId: "last4",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Filter by last four digits...",
+    },
+    {
+      columnId: "source",
+      urlOnly: true,
+      kind: "multiselect",
+      placeholder: "Filter by source...",
+    },
+    {
+      columnId: "externalAccountId",
+      urlOnly: true,
+      kind: "multiselect",
+      placeholder: "Filter by external account id...",
+    },
+  ],
+
+  financialTransaction: [
+    {
+      columnId: "transaction",
+      field: "search",
+      urlKey: "q",
+      kind: "text",
+      placeholder: "Search transactions...",
+    },
+    {
+      columnId: "kind",
+      kind: "multiselect",
+      placeholder: "Filter by kind...",
+      options: [
+        { value: "purchase", label: "Purchase" },
+        { value: "refund", label: "Refund" },
+        { value: "account_transfer", label: "Account transfer" },
+        { value: "credit_card_payment", label: "Credit card payment" },
+        { value: "fee", label: "Fee" },
+        { value: "interest", label: "Interest" },
+        { value: "income", label: "Income" },
+        { value: "adjustment", label: "Adjustment" },
+        { value: "other", label: "Other" },
+      ],
+    },
+    {
+      columnId: "status",
+      kind: "multiselect",
+      placeholder: "Filter by status...",
+      options: [
+        { value: "expected", label: "Expected" },
+        { value: "pending", label: "Pending" },
+        { value: "posted", label: "Posted" },
+        { value: "void", label: "Void" },
+      ],
+    },
+    {
+      columnId: "postedDate",
+      kind: "range",
+      placeholder: "Filter by posted date...",
+      options: dateRangeOptions,
+      expand: (preset) => {
+        const { dateFrom, dateTo } = resolveDateRange(preset);
+        return { postedDateFrom: dateFrom, postedDateTo: dateTo };
+      },
+    },
+    {
+      columnId: "accountId",
+      urlOnly: true,
+      kind: "multiselect",
+      placeholder: "Filter by account...",
+    },
+    {
+      columnId: "purchaseId",
+      urlOnly: true,
+      kind: "multiselect",
+      placeholder: "Filter by purchase...",
+    },
+    {
+      columnId: "purchasePresence",
+      field: "purchasePresenceFilter",
+      urlOnly: true,
+      kind: "presence",
+      placeholder: "Filter purchase links...",
+    },
+    {
+      columnId: "source",
+      urlOnly: true,
+      kind: "multiselect",
+      placeholder: "Filter by source...",
+    },
+    {
+      columnId: "externalId",
+      urlOnly: true,
+      kind: "multiselect",
+      placeholder: "Filter by external id...",
+    },
+    {
+      columnId: "merchant",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Filter by merchant...",
+    },
+    {
+      columnId: "amountMin",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Minimum amount...",
+    },
+    {
+      columnId: "amountMax",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Maximum amount...",
+    },
+    {
+      columnId: "transactionDateFrom",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Transaction date from...",
+    },
+    {
+      columnId: "transactionDateTo",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Transaction date to...",
+    },
+    {
+      columnId: "postedDateFrom",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Posted date from...",
+    },
+    {
+      columnId: "postedDateTo",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Posted date to...",
+    },
+  ],
+
   expense: [
     {
       columnId: "name",

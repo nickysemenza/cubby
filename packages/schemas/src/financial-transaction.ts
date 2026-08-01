@@ -126,7 +126,7 @@ export const financialTransactionFilterFields = {
   search: z.string().optional(),
   accountId: oneOrMany(financialAccountShortcode).optional(),
   purchaseId: oneOrMany(purchaseShortcode).optional(),
-  purchasePresence: presenceFilter,
+  purchasePresenceFilter: presenceFilter,
   kind: oneOrMany(financialTransactionKind).optional(),
   status: oneOrMany(financialTransactionStatus).optional(),
   source: oneOrMany(z.string().min(1)).optional(),

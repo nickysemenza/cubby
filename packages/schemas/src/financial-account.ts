@@ -124,7 +124,7 @@ export const financialAccountFilterFields = {
     .optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalAccountId: oneOrMany(z.string().min(1)).optional(),
-  sourceAliasPresence: presenceFilter,
+  sourceAliasPresenceFilter: presenceFilter,
 };
 export const financialAccountFiltersSchema = z.object(
   financialAccountFilterFields,

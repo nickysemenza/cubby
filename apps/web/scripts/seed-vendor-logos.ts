@@ -6,7 +6,7 @@
  * vendor's `website` and re-running is how a new logo gets adopted. (It used to
  * read a hand-curated name → domain map, `scripts/vendor-domains.ts`, which
  * keyed off exact free-text vendor names; the `Vendor` table removed the need
- * for it and `vendor-split-migration.ts websites` seeded the column from it.)
+ * for it and the completed vendor normalization migration seeded the column.)
  *
  * Why R2 and not `public/`: the bucket already sits behind a Cloudflare zone with
  * Image Transformations enabled (see `src/lib/image-url.ts`), so a single stored

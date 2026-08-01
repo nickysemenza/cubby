@@ -3,9 +3,10 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 // Meal planning calendar (week view).
 import { MealCalendarPage } from "~/app/meals/calendar-page";
-import { MealActions } from "~/app/meals/meal-actions";
+import { CreateMealDialog } from "~/app/meals/create-meal-dialog";
 import {
   mealCalendarSearchDefaults,
   mealCalendarSearchSchema,
@@ -25,7 +26,12 @@ function MealsIndexRoute() {
   const routeView = view ?? "calendar";
 
   return (
-    <Page variant="list" title="Meals" fullWidth actions={<MealActions />}>
+    <Page
+      variant="list"
+      title="Meals"
+      fullWidth
+      actions={<CreateDialogAction Dialog={CreateMealDialog} />}
+    >
       <MealCalendarPage
         view={routeView}
         week={week}

@@ -141,6 +141,7 @@ export const productMutationInvalidateKeys = [
   // Task rows embed their subject product's display name. A product rename
   // must not leave the task list/detail cache showing the old name.
   queryKeys.task.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const productRecipeMutationInvalidateKeys = [
@@ -157,16 +158,19 @@ export const productValuationMutationInvalidateKeys = [
   queryKeys.location.all,
   // Recipe cost inputs changed → refresh meal cost/calorie rollups.
   queryKeys.meal.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const productLookupMutationInvalidateKeys = [
   queryKeys.product.all,
   queryKeys.problems.all,
   queryKeys.search.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const locationMutationInvalidateKeys = [
   queryKeys.location.list,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 // Covers the detail query too — the list-only key (imagelist.tsx's
@@ -174,14 +178,17 @@ export const locationMutationInvalidateKeys = [
 export const imageMutationInvalidateKeys = [
   queryKeys.image.list,
   queryKeys.image.getByID,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const ingredientMutationInvalidateKeys = [
   queryKeys.ingredient.list,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const ingredientAllMutationInvalidateKeys = [
   queryKeys.ingredient.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const ingredientProductMutationInvalidateKeys = [
@@ -215,17 +222,20 @@ export const unusedIngredientCleanupInvalidateKeys = [
 
 export const recipeMutationInvalidateKeys = [
   queryKeys.recipe.list,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const recipeCookbookMutationInvalidateKeys = [
   queryKeys.recipe.list,
   queryKeys.recipe.listCookbooks,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const recipeAllMutationInvalidateKeys = [
   queryKeys.recipe.all,
   // Recipe totals changed → refresh meal cost/calorie rollups.
   queryKeys.meal.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const problemsMutationInvalidateKeys = [
@@ -235,6 +245,7 @@ export const problemsMutationInvalidateKeys = [
 export const mealMutationInvalidateKeys = [
   queryKeys.meal.all,
   queryKeys.calendar.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 // Task/expense mutations also invalidate `project.all`: the dashboard and
@@ -275,6 +286,7 @@ export const expenseMutationInvalidateKeys = [
 export const vendorMutationInvalidateKeys = [
   queryKeys.vendor.all,
   queryKeys.purchase.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 // Purchase mutations move MONEY-bearing rows around (`link` re-parents expenses,
@@ -293,6 +305,7 @@ export const purchaseMutationInvalidateKeys = [
 export const financialAccountMutationInvalidateKeys = [
   queryKeys.financialAccount.all,
   queryKeys.financialTransaction.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export const financialTransactionMutationInvalidateKeys = [
@@ -300,6 +313,7 @@ export const financialTransactionMutationInvalidateKeys = [
   queryKeys.financialAccount.all,
   queryKeys.purchase.all,
   queryKeys.problems.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {

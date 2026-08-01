@@ -1,5 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
+import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
@@ -326,7 +328,11 @@ const entityDefinitions = {
       list: "/financial-accounts",
     },
     detail: { commonSections: ["history"] },
-    list: { defaultSort: "name", standardColumns: [], sortableFields: [] },
+    list: {
+      defaultSort: "name",
+      standardColumns: [],
+      sortableFields: financialAccountSortableFields,
+    },
   },
   financialTransaction: {
     label: "Financial Transaction",
@@ -340,9 +346,9 @@ const entityDefinitions = {
     },
     detail: { commonSections: ["history"] },
     list: {
-      defaultSort: "postedDate",
+      defaultSort: "transactionDate",
       standardColumns: [],
-      sortableFields: [],
+      sortableFields: financialTransactionSortableFields,
     },
   },
   "usda-food": {

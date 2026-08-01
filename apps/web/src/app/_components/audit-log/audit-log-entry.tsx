@@ -21,8 +21,8 @@ import { EntityIcon, entities } from "~/entities/entities";
 import type { RouterOutputs } from "~/integrations/trpc/react";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
-import { EntityInlineLinkById } from "../EntityInlineLinkById";
 import { HoverableTimestamp } from "../HoverableTimestamp";
+import { AuditEntityLink } from "./audit-entity-link";
 
 function formatChangeValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "(empty)";
@@ -84,7 +84,7 @@ export function AuditLogEntryComponent({
           <Row align="center" justify="between" gap="sm" className="min-h-7">
             <Row align="center" gap="sm" className="min-w-0">
               {showEntityLink && entry.entityId ? (
-                <EntityInlineLinkById
+                <AuditEntityLink
                   entityType={entry.entityType}
                   entityId={entry.entityId}
                   compact
@@ -153,7 +153,7 @@ export function AuditLogEntryComponent({
             <div className="min-w-0 flex-1">
               <Row align="center" gap="sm" wrap>
                 {showEntityLink && entry.entityId ? (
-                  <EntityInlineLinkById
+                  <AuditEntityLink
                     entityType={entry.entityType}
                     entityId={entry.entityId}
                     compact

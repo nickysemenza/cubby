@@ -34,6 +34,59 @@ import type { WithEntitySearchProps } from "./with-search-hook";
  */
 export type VendorName = string;
 
+/** Shared vendor query orchestration for name- and shortcode-valued pickers. */
+function useVendorSearchRows() {
+  const api = useTRPC();
+  const { searchQuery, onSearchChange } = useEntitySearch();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode = parsedCode?.type === "vendor" ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+
+  const { data, isLoading } = useQuery({
+    ...api.vendor.options.queryOptions(),
+    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
+  });
+  const { data: searchData, isLoading: isSearchLoading } = useQuery({
+    ...api.vendor.list.queryOptions({
+      filters: { search: searchQuery },
+      pagination,
+    }),
+    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
+  });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    api.vendor.getByShortcode.queryOptions(
+      { shortcode: exactCode ?? "VEN-2222" },
+      { enabled: exactCode != null },
+    ),
+  );
+
+  const rows = useMemo(
+    () =>
+      searchingByCode
+        ? exactItem
+          ? [exactItem]
+          : []
+        : searchQuery.trim()
+          ? (searchData?.items ?? [])
+          : (data ?? []),
+    [data, exactItem, searchData, searchQuery, searchingByCode],
+  );
+
+  return {
+    api,
+    rows,
+    searchQuery,
+    onSearchChange,
+    onOpenChange,
+    isLoading: exactCode
+      ? isExactLoading
+      : searchQuery.trim()
+        ? isSearchLoading
+        : isLoading,
+  };
+}
+
 /**
  * Vendor roster picker. Opening with a blank query uses the compact popularity-
  * ordered options list; typed queries use the server search so notes and sites
@@ -53,31 +106,8 @@ export type VendorName = string;
 export function WithVendorSearch({
   children,
 }: WithEntitySearchProps<VendorName>) {
-  const api = useTRPC();
-  const { searchQuery, onSearchChange } = useEntitySearch();
-  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
-
-  const parsedCode = parseShortcode(searchQuery);
-  const exactCode = parsedCode?.type === "vendor" ? parsedCode.shortcode : null;
-  const searchingByCode = parsedCode != null;
-
-  const { data, isLoading } = useQuery({
-    ...api.vendor.options.queryOptions(),
-    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
-  });
-  const { data: searchData, isLoading: isSearchLoading } = useQuery({
-    ...api.vendor.list.queryOptions({
-      filters: { search: searchQuery },
-      pagination,
-    }),
-    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
-  });
-  const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.vendor.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "VEN-2222" },
-      { enabled: exactCode != null },
-    ),
-  );
+  const { rows, onSearchChange, onOpenChange, isLoading } =
+    useVendorSearchRows();
 
   const items = useMemo<ComboboxItem<VendorName>[]>(() => {
     // Destructuring the real `id` here while the item's own `id` stays the
@@ -85,12 +115,8 @@ export function WithVendorSearch({
     // combobox item's identity is deliberately the name; `id` is consumed only
     // by the icon, to resolve a rename-proof logo via `VendorMark`'s
     // `vendorId` prop.
-    if (searchingByCode) {
-      return exactItem ? [buildVendorNameComboboxItem(exactItem)] : [];
-    }
-    const roster = searchQuery.trim() ? searchData?.items : data;
-    return roster?.map(buildVendorNameComboboxItem) ?? [];
-  }, [data, exactItem, searchData, searchQuery, searchingByCode]);
+    return rows.map(buildVendorNameComboboxItem);
+  }, [rows]);
 
   // No server round trip: the item's id/name IS the typed vendor name, and the
   // roster row is created by the save that follows. Trimmed so a stray space
@@ -108,11 +134,7 @@ export function WithVendorSearch({
       {children({
         items,
         onSearchChange,
-        isLoading: exactCode
-          ? isExactLoading
-          : searchQuery.trim()
-            ? isSearchLoading
-            : isLoading,
+        isLoading,
         onCreateNew,
         onOpenChange,
       })}
@@ -124,41 +146,12 @@ export function WithVendorSearch({
 export function WithVendorShortcodeSearch({
   children,
 }: WithEntitySearchProps<VendorShortcode>) {
-  const api = useTRPC();
-  const { searchQuery, onSearchChange } = useEntitySearch();
-  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
-  const parsedCode = parseShortcode(searchQuery);
-  const exactCode = parsedCode?.type === "vendor" ? parsedCode.shortcode : null;
-  const searchingByCode = parsedCode != null;
-
-  const { data, isLoading } = useQuery({
-    ...api.vendor.options.queryOptions(),
-    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
-  });
-  const { data: searchData, isLoading: isSearchLoading } = useQuery({
-    ...api.vendor.list.queryOptions({
-      filters: { search: searchQuery },
-      pagination,
-    }),
-    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
-  });
-  const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    api.vendor.getByShortcode.queryOptions(
-      { shortcode: exactCode ?? "VEN-2222" },
-      { enabled: exactCode != null },
-    ),
-  );
+  const { api, rows, onSearchChange, onOpenChange, isLoading } =
+    useVendorSearchRows();
 
   const items = useMemo<ComboboxItem<VendorShortcode>[]>(() => {
-    const rows = searchingByCode
-      ? exactItem
-        ? [exactItem]
-        : []
-      : searchQuery.trim()
-        ? (searchData?.items ?? [])
-        : (data ?? []);
     return rows.map(buildVendorShortcodeComboboxItem);
-  }, [data, exactItem, searchData, searchQuery, searchingByCode]);
+  }, [rows]);
 
   const createMutation = useActionMutation({
     mutationFn: api.vendor.create.mutationOptions,
@@ -183,11 +176,7 @@ export function WithVendorShortcodeSearch({
       {children({
         items,
         onSearchChange,
-        isLoading: exactCode
-          ? isExactLoading
-          : searchQuery.trim()
-            ? isSearchLoading
-            : isLoading,
+        isLoading,
         onCreateNew,
         onOpenChange,
       })}

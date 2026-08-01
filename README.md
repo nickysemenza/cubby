@@ -406,7 +406,7 @@ Better-Auth via `better-auth/tanstack-start`. Routed UI by `@daveyplate/better-a
 | [apps/web/src/routes/auth.$authView.tsx](apps/web/src/routes/auth.$authView.tsx) | Auth UI (sign-in/up) |
 | [apps/web/src/routes/_authenticated/account.$accountView.tsx](apps/web/src/routes/_authenticated/account.$accountView.tsx) | Account UI |
 | [apps/web/src/routes/oauth.consent.tsx](apps/web/src/routes/oauth.consent.tsx) | OAuth consent screen |
-| [apps/web/src/routes/.well-known/](apps/web/src/routes/.well-known/) | OAuth/OIDC discovery documents |
+| [OAuth/OIDC discovery routes](apps/web/src/routes/%5B.%5Dwell-known.oauth-authorization-server.ts) | OAuth/OIDC discovery documents |
 
 Visit <http://localhost:3000/api/auth/session> while running the app to inspect the current session, and <http://localhost:3000/api/auth/reference> (dev only) for the Scalar reference of every auth endpoint.
 

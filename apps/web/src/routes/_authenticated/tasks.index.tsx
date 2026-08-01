@@ -6,12 +6,12 @@ import {
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
 import { TaskInbox } from "~/app/tasks/inbox";
 import { NextTasks } from "~/app/tasks/next-tasks";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
-import { TaskActions } from "~/app/tasks/task-actions";
 import { TaskList } from "~/app/tasks/tasklist";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -103,7 +103,7 @@ function TasksPage() {
       fullWidth={view !== "board"}
       // Header-level "New task" so it's reachable from every view (Next/Board
       // have no list toolbar of their own to hang it off).
-      actions={<TaskActions />}
+      actions={<CreateDialogAction Dialog={CreateTaskDialog} />}
     >
       <Stack gap="md">
         <TasksStatsStrip />
