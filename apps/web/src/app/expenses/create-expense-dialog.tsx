@@ -37,7 +37,7 @@ const today = () => format(new Date(), "yyyy-MM-dd");
 const quickAddExpenseSchema = z.object({
   name: z.string().min(1, "Name is required"),
   cost: z.number().nullable(),
-  date: plainDate.nullable(),
+  date: plainDate,
   projectId: z.string().nullable(),
   costType: costTypeSchema,
   trade: tradeSchema,
@@ -164,31 +164,7 @@ export function CreateExpenseDialog({
                   <Row align="center" gap="sm">
                     <Switch
                       checked={futureField.value}
-                      onCheckedChange={(checked) => {
-                        futureField.onChange(checked);
-                        // Untouched-and-still-today's-default date flips with
-                        // the toggle: Planned clears it (no expected date
-                        // yet), Actual re-defaults it to today. A date the
-                        // user has actually edited (`dirtyFields.date`) is
-                        // left alone either way. `shouldDirty: false` on
-                        // these programmatic writes keeps `dirtyFields.date`
-                        // reserved for genuine user edits.
-                        const dateTouched = Boolean(
-                          form.formState.dirtyFields.date,
-                        );
-                        const currentDate = form.getValues("date");
-                        if (checked) {
-                          if (!dateTouched && currentDate === today()) {
-                            form.setValue("date", null, {
-                              shouldDirty: false,
-                            });
-                          }
-                        } else if (currentDate === null) {
-                          form.setValue("date", today(), {
-                            shouldDirty: false,
-                          });
-                        }
-                      }}
+                      onCheckedChange={futureField.onChange}
                     />
                     <span className="text-muted-foreground text-sm">
                       {futureField.value ? "Not bought yet" : "Already bought"}

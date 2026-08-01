@@ -67,6 +67,7 @@ export function PurchaseExpensesTable({
         { signedTone: true },
       ),
       expenseDateColumn(helper, async (date, row) => {
+        if (date === null) return;
         await update.mutateAsync({ id: row.id, data: { date } });
       }),
       expenseCostTypeColumn(helper, async (costType, row) => {

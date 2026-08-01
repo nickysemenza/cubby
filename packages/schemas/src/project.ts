@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { wholeCentAmount } from "./money";
 import {
   expenseRelatedFilterFields,
   projectRelatedFilterFields,
@@ -37,6 +38,7 @@ import {
 export const plainDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+  .meta({ mockValue: "2024-01-15" })
   .describe('Calendar day as "YYYY-MM-DD"');
 
 /**
@@ -765,8 +767,8 @@ export type TaskBoardOut = z.infer<typeof taskBoardOut>;
 
 const expenseFields = {
   name: z.string().min(1),
-  cost: z.number().nullable().describe("Dollars"),
-  date: plainDate.nullable(),
+  cost: wholeCentAmount.nullable().describe("Dollars"),
+  date: plainDate,
   costType: costTypeSchema,
   trade: tradeSchema,
   url: z.string().nullable(),
@@ -805,8 +807,8 @@ const expenseCreateShape = {
    * this wins — an explicit id is never a guess.
    */
   purchaseId: purchaseShortcode.nullable().default(null),
-  cost: z.number().nullable().default(null),
-  date: plainDate.nullable().default(null),
+  cost: wholeCentAmount.nullable().default(null),
+  date: plainDate,
   url: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
   future: z.boolean().default(false),
@@ -1260,7 +1262,7 @@ export const expenseMatchCandidate = z.object({
   expenseId: expenseShortcode,
   name: z.string(),
   cost: z.number().nullable(),
-  date: plainDate.nullable(),
+  date: plainDate,
   /** Planned spend. Included, never filtered — an export line often IS one. */
   future: z.boolean(),
   notes: z.string().nullable(),

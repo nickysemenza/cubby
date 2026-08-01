@@ -139,6 +139,7 @@ describe("financial repositories — critical invariants", () => {
       await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({
+          date: "2024-01-15",
           vendorId: previewVendor.id,
           orderId: "PREVIEW-1",
         }),
@@ -152,6 +153,7 @@ describe("financial repositories — critical invariants", () => {
           await createExpense(
             ctx.db,
             expenseCreateInput.parse({
+              date: "2024-01-15",
               name: `preview line ${index}`,
               trade: "other",
               costType: "materials",
@@ -305,6 +307,7 @@ describe("financial repositories — critical invariants", () => {
       await createPurchase(
         ctx.db,
         purchaseCreateInput.parse({
+          date: "2024-01-15",
           vendorId: (await getVendorByID(ctx.db, vendorId)).id,
           orderId: "finance-1",
         }),
@@ -491,20 +494,29 @@ describe("financial repositories — critical invariants", () => {
     const p1 = (
       await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id, orderId: null }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+          orderId: null,
+        }),
         ctx.actor,
       )
     ).output;
     const p2 = (
       await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: vendor.id, orderId: "settle-2" }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: vendor.id,
+          orderId: "settle-2",
+        }),
         ctx.actor,
       )
     ).output;
     const expense = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         name: "settlement line",
         trade: "other",
         costType: "materials",
@@ -572,13 +584,18 @@ describe("financial repositories — critical invariants", () => {
       const purchase = (
         await createPurchase(
           ctx.db,
-          purchaseCreateInput.parse({ vendorId: vendor.id, orderId }),
+          purchaseCreateInput.parse({
+            date: "2024-01-15",
+            vendorId: vendor.id,
+            orderId,
+          }),
           ctx.actor,
         )
       ).output;
       const line = await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           name: `line ${orderId}`,
           trade: "other",
           costType: "materials",

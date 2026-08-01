@@ -169,6 +169,7 @@ export function ExpenseList() {
       expenseDateColumn(
         columnHelper,
         async (date, expense) => {
+          if (date === null) return;
           await updateExpenseMutation.mutateAsync({
             id: expense.id,
             data: { date },

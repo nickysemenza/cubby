@@ -220,13 +220,21 @@ describe("vendor repository — roster CRUD and list filters", () => {
 
     const { output: quietCharge } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: quiet, orderId: "Q-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: quiet,
+        orderId: "Q-1",
+      }),
       ctx.actor,
     );
     for (const orderId of ["B-1", "B-2"]) {
       await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId: busy, orderId }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId: busy,
+          orderId,
+        }),
         ctx.actor,
       );
     }
@@ -268,6 +276,7 @@ describe("vendor repository — spend rollup", () => {
     const { output: charge } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        date: "2024-01-15",
         vendorId: vendorShortcode,
         orderId: "SPEND-1",
         // Wildly wrong on purpose. `statedTotal` is only a reconciliation cue;
@@ -280,6 +289,7 @@ describe("vendor repository — spend rollup", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         name: "spend line",
         trade: "other",
         costType: "materials",
@@ -293,6 +303,7 @@ describe("vendor repository — spend rollup", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         name: "spend refund",
         trade: "other",
         costType: "materials",
@@ -314,10 +325,12 @@ describe("vendor repository — spend rollup", () => {
     const keptCharge = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "KEPT-1",
+      date: "2024-01-15",
     });
     const doomedCharge = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "DOOMED-1",
+      date: "2024-01-15",
     });
     // `findOrCreatePurchase` (the import hot path) still returns the internal
     // uuid; the expense input and `deletePurchases` speak the public shortcode.
@@ -326,6 +339,7 @@ describe("vendor repository — spend rollup", () => {
 
     const line = (name: string, cost: number, purchaseId: string) =>
       expenseCreateInput.parse({
+        date: "2024-01-15",
         name,
         trade: "other",
         costType: "materials",
@@ -377,13 +391,26 @@ describe("vendor repository — vendorOptions picklist", () => {
     const emptyId = await findOrCreateVendor(ctx.db, "Aspirational Vendor");
     const doomedId = await findOrCreateVendor(ctx.db, "Deleted Vendor");
 
-    await findOrCreatePurchase(ctx.db, { vendorId: busyId, orderId: "B-1" });
-    await findOrCreatePurchase(ctx.db, { vendorId: busyId, orderId: "B-2" });
+    await findOrCreatePurchase(ctx.db, {
+      vendorId: busyId,
+      orderId: "B-1",
+      date: "2024-01-15",
+    });
+    await findOrCreatePurchase(ctx.db, {
+      vendorId: busyId,
+      orderId: "B-2",
+      date: "2024-01-15",
+    });
     const deletedCharge = await findOrCreatePurchase(ctx.db, {
       vendorId: busyId,
       orderId: "B-3",
+      date: "2024-01-15",
     });
-    await findOrCreatePurchase(ctx.db, { vendorId: quietId, orderId: "Q-1" });
+    await findOrCreatePurchase(ctx.db, {
+      vendorId: quietId,
+      orderId: "Q-1",
+      date: "2024-01-15",
+    });
 
     await deletePurchases(
       ctx.db,
@@ -419,6 +446,7 @@ describe("vendor repository — deletion guard", () => {
     const charge = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "LB-1",
+      date: "2024-01-15",
     });
     const vendorShortcode = (await getVendorByID(ctx.db, vendorId)).id;
 
@@ -560,6 +588,7 @@ describe("vendor repository — mergeVendors", () => {
     const { output: created } = await createPurchase(
       ctx.db,
       purchaseCreateInput.parse({
+        date: "2024-01-15",
         vendorId: await vendorCode(vendorId),
         orderId,
         statedTotal,

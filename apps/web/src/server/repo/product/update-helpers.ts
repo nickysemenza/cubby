@@ -4,7 +4,10 @@
  * (unit mappings, external IDs, images) against an incoming desired state.
  */
 
-import type { ExternalIdInput } from "@cubby/schemas/external-id";
+import {
+  type ExternalIdInput,
+  storedExternalIdUrl,
+} from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { and, eq, inArray } from "drizzle-orm";
@@ -148,7 +151,7 @@ export async function syncProductExternalIds(
         source: eid.source,
         kind: eid.kind,
         externalId: eid.externalId,
-        url: eid.url ?? null,
+        url: storedExternalIdUrl(eid),
       })),
     );
   }
@@ -161,7 +164,7 @@ export async function syncProductExternalIds(
         source: eid.source,
         kind: eid.kind,
         externalId: eid.externalId,
-        url: eid.url ?? null,
+        url: storedExternalIdUrl(eid),
       })
       .where(eq(productExternalId.id, eid.id));
   }

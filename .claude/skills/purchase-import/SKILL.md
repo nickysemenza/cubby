@@ -12,13 +12,16 @@ This file is weighted toward **failure modes** — the happy path is easy, the t
 
 Start an existing-data audit with `list_purchases({ dataStatus: "needs_data" })`; narrow with
 `dataGap` when useful. Every Purchase and Product MCP response carries a live `dataQuality` summary:
-`status`, exact `gaps`, and explicit `exceptions`. Completeness is computed on every read, never
-stored as a flag. Adding evidence, enriching a field, or recording a legitimate exception removes
-the corresponding gap immediately.
+`status`, faceted owner `gaps`, explicit `exceptions`, and separately reported
+`relatedGaps`/`relatedExceptions`. Completeness is computed on every read, never
+stored as a flag. Adding evidence or enriching a field removes the corresponding
+gap; an exception suppresses it only while the underlying evidence fingerprint
+is unchanged. A later evidence change makes the acknowledgement `stale`.
 
-Purchase gaps cover date, order id, stated total, primary document, empty/unpriced Expenses,
-paperwork mismatch, and settlement source-reference coverage. Product manufacturer/category/model,
-Amazon ASIN, and exact external-id collision gaps roll up into every linked Purchase while retaining
+Purchase gaps cover order id, stated total, primary document, empty/unpriced Expenses,
+paperwork mismatch, and settlement evidence coverage. Product manufacturer/category/model,
+Amazon ASIN, and exact external-id collision gaps are returned separately in a Purchase's
+`relatedGaps`; they do not change the Purchase's own `dataQuality.status`. They retain
 the Product's `targetType: "product"` and `PRD-` shortcode as `targetId`. Purchase-owned
 exceptions use `targetType: "purchase"` and the Purchase's `PUR-` shortcode. Deduplicate and
 act on exceptions by `(targetType, targetId, check)`, because several linked Products may expose
@@ -45,7 +48,9 @@ other's authority.
    unambiguous network/last-four candidate. Last four alone is not unique. Create
    a provisional `FAC-` account when the evidence is only `Visa ····3692`.
 4. Normalize statement signs to Cubby: positive is a charge/outflow; negative is
-   a refund/inflow. A Monarch negative charge becomes positive here.
+   a refund/inflow. A Monarch negative charge becomes positive here. A transaction
+   linked to a Purchase must be `purchase`, `refund`, or `adjustment`; `purchase`
+   is positive and `refund` is negative.
 5. Search `list_financial_transactions` by source/reference before creating.
    When statement data arrives for an expected refund, update that entry to
    `posted` and append its source reference (read–merge–write arrays).
@@ -143,11 +148,10 @@ Five consequences that bite:
   from `info@osmowoodoil.com`, website `https://osmowoodoil.com`) — you are *defining* the roster
   spelling here, and nothing in v1 can merge a near-duplicate away later, so it is worth the extra
   call to make it deliberate rather than incidental.
-- **A purchase minted this way has NO `date`.** Resolving `vendor` + `orderId` through `update_expense`
-  creates the `Purchase` with `date: null`; it does not inherit the expense's date. Every purchase
-  created this way in the 2026-07-31 pass came back dateless and needed a follow-up
-  `update_purchase`. Set `date` (and `statedTotal`) on the purchase right after the write that minted
-  it — a dateless purchase falls out of every `dateFrom`/`dateTo` filter on `list_purchases`.
+- **Every Expense and Purchase requires a date.** When `vendor` + `orderId`
+  resolution mints a Purchase from an Expense write, it inherits that Expense's
+  date. Use the vendor's actual order/receipt date when it differs from the
+  ledger date; never clear either date to represent uncertainty.
 
 **`Vendor` and `Purchase` have a full MCP toolset.** You do not need SQL or the web UI to read the
 roster, open a purchase, or set a `statedTotal`:
@@ -568,14 +572,19 @@ single call.
     `statedTotalPresenceFilter: "none"` is the purchases-with-nothing-to-reconcile-against worklist.
   - **The Expenses of one Purchase** are `list_expenses` filtered by that purchase's `purchaseId` — the exact
     scope, needing no `vendorId`/`orderId` cross-reference.
-- Canonical product link: `https://www.amazon.com/dp/<ASIN>`.
+- Canonical Amazon product links are derived from ASIN as
+  `https://www.amazon.com/dp/<ASIN>`; omit the external-id `url` for
+  `source: "amazon"`, `kind: "asin"` rather than storing it twice.
 - Vendor identifiers for a *product* go in **`ProductExternalId`**
   (`source`/`kind`/`externalId`/`url`) — never a new column, never `Product.model` (that's
   manufacturer identity). Use `patch_product_external_ids` to upsert or explicitly remove only the
   named `(source, kind)` slots; preserve everything else. `update_product.externalIds` remains a
-  whole-set replacement for compatibility. New sources are normalized to trimmed lowercase while
-  `externalId` remains case-sensitive. Existing `legacy_unspecified` rows stay that way unless the
-  evidence explicitly establishes a typed replacement.
+  whole-set replacement for compatibility. Sources are canonical lowercase
+  kebab-case slugs (`home-depot`, not `home_depot`); `externalId` remains
+  case-sensitive. A live `(source, kind, externalId)` tuple has one global
+  Product owner, and a Product has at most one value in each `(source, kind)`
+  slot. Existing `legacy_unspecified` rows stay that way unless the evidence
+  explicitly establishes a typed replacement.
 
   Product MCP outputs include `model`. Use `modelPresenceFilter: "none"` for the missing-model
   worklist. `externalIdSource` plus `externalIdPresenceFilter` exposes source-specific identity gaps;
@@ -620,9 +629,9 @@ single call.
     distinctions define the generic Product; different meaningful specifications are different
     Products. For example, `Douglas Fir 2x4 STD/BTR S4S`, `1/4-in 4x8 AC exterior plywood`, and
     `15/32-in 4x8 CDX Struct 1 plywood` are three Products. Use `generic` as the manufacturer when no
-    maker is stated, put the printed vendor code in `externalIds`, and acknowledge `product_model` as
-    `not_applicable` when the material genuinely has no manufacturer model. Never copy the vendor code
-    into `model` merely to clear completeness.
+    maker is stated and put the printed vendor code in `externalIds`. Model completeness is
+    category-aware: commodity material categories do not require a manufacturer model. Never copy
+    the vendor code into `model` merely to clear completeness.
 
     **Only an unspecified or heterogeneous bulk bucket stays UNLINKED** — a row named merely
     `plywood`, `metal tubing`, `pvc fittings`, or `assorted clamps` when the evidence cannot recover
@@ -830,8 +839,9 @@ Run these checks in order:
    `purchaseFinancialSettlementMismatches` for the global worklist. Never alter Expenses merely to
    clear this status.
    Separately, computed completeness requires at least one linked `posted`, non-void
-   FinancialTransaction with a nonempty `sourceRefs` entry. Pending, expected, void, and
-   reference-free entries do not satisfy `settlement_reference`. Cash/check, inaccessible historical
+   qualifying FinancialTransaction with a nonempty `sourceRefs` entry, or a
+   posted transaction on a cash account. Pending, expected, and void entries do
+   not satisfy `settlement_reference`. Check, inaccessible historical
    statements, and aggregated transactions may be acknowledged with a well-supported
    `settlement_reference` exception.
 2. **Purchase paperwork vs. Expenses** — retain `purchasesNotReconciling` as a separate advisory

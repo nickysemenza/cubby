@@ -73,7 +73,7 @@ type MatchRow = {
   expenseShortcode: string;
   name: string;
   cost: number | null;
-  date: string | null;
+  date: string;
   future: boolean;
   notes: string | null;
   vendorName: string | null;

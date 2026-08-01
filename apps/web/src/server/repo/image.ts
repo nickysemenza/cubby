@@ -66,6 +66,7 @@ import {
   recipeImage,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
   buildOrderBy,
@@ -704,6 +705,12 @@ export const deleteImages = async (
     if (rows.length === 0) return { deletedIds: [], deletedKeys: [] };
 
     const ids = rows.map((row) => row.id);
+    const affectedPurchases = await tx
+      .selectDistinct({ purchaseId: purchaseImage.purchaseId })
+      .from(purchaseImage)
+      .where(
+        and(inArray(purchaseImage.imageId, ids), notDeleted(purchaseImage)),
+      );
 
     for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
       const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
@@ -724,6 +731,10 @@ export const deleteImages = async (
     }
 
     await tx.delete(image).where(inArray(image.id, ids));
+
+    await touchDataQualityTargets(tx, {
+      purchaseIds: affectedPurchases.map((row) => row.purchaseId),
+    });
 
     return { deletedIds: ids, deletedKeys: rows.map((row) => row.key) };
   });
@@ -1234,6 +1245,15 @@ const associateImageWithEntity = async (
         sortOrder,
         documentKind: documentKind ?? "other",
       });
+      await dbc
+        .update(purchase)
+        .set({ updatedAt: new Date() })
+        .where(
+          and(
+            eq(purchase.id, unsafePurchaseId(entityId)),
+            notDeleted(purchase),
+          ),
+        );
     })
     .exhaustive();
 };

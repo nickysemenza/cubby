@@ -15,6 +15,7 @@ import {
   oneOrMany,
   presenceFilter,
 } from "./pagination";
+import { wholeCentAmount } from "./money";
 import { costTypeSchema, plainDate, tradeSchema } from "./project";
 
 /**
@@ -41,9 +42,8 @@ const purchaseFields = {
     .describe(
       'The vendor\'s own order/receipt id — Amazon "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325". Free text: every retailer formats these differently and validating them would only reject real data. Unique per vendor when present; null for the ~40% of purchases that never got one.',
     ),
-  date: plainDate.nullable().describe("The vendor order or receipt date"),
-  statedTotal: z
-    .number()
+  date: plainDate.describe("The vendor order or receipt date"),
+  statedTotal: wholeCentAmount
     .nullable()
     .describe(
       "What the purchase paperwork says the total was, in dollars. NEVER summed into spend — spend is SUM(expense.cost). Purely a reconciliation cue against the expenses below it, and a mismatch is often correct (a partial refund reduces an expense without changing the stated paperwork total).",
@@ -54,8 +54,8 @@ const purchaseFields = {
 const purchaseCreateShape = {
   ...purchaseFields,
   orderId: z.string().nullable().default(null),
-  date: plainDate.nullable().default(null),
-  statedTotal: z.number().nullable().default(null),
+  date: plainDate,
+  statedTotal: wholeCentAmount.nullable().default(null),
   notes: z.string().nullable().default(null),
   /**
    * Newly-uploaded document ids awaiting association. The

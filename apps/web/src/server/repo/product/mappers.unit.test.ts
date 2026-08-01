@@ -341,12 +341,34 @@ describe("product mappers", () => {
       gaps: [
         {
           check: "product_model" as const,
+          facet: "identity" as const,
+          kind: "missing" as const,
           targetType: "product" as const,
           targetId: unsafeProductShortcode("PRD-TEST"),
           message: "Manufacturer model is not recorded.",
         },
       ],
+      facets: [
+        {
+          name: "identity" as const,
+          status: "needs_data" as const,
+          gaps: [
+            {
+              check: "product_model" as const,
+              facet: "identity" as const,
+              kind: "missing" as const,
+              targetType: "product" as const,
+              targetId: unsafeProductShortcode("PRD-TEST"),
+              message: "Manufacturer model is not recorded.",
+            },
+          ],
+        },
+        { name: "provenance" as const, status: "complete" as const, gaps: [] },
+        { name: "integrity" as const, status: "complete" as const, gaps: [] },
+      ],
       exceptions: [],
+      relatedGaps: [],
+      relatedExceptions: [],
     };
     const result = dbProductToAPI(row, dataQuality);
 

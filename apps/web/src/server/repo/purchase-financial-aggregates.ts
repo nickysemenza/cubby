@@ -1,3 +1,4 @@
+import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import { and, inArray, ne, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -44,6 +45,7 @@ export async function loadPurchaseFinancialAggregates(
     .where(
       and(
         inArray(financialTransaction.purchaseId, [...purchaseIds]),
+        inArray(financialTransaction.kind, [...purchaseSettlementKinds]),
         notDeleted(financialTransaction),
         ne(financialTransaction.status, "void"),
       ),

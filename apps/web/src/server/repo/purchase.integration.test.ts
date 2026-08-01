@@ -170,12 +170,14 @@ describe("purchase repository — findOrCreatePurchase", () => {
     const again = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "111-1234567-1234567",
+      date: "2024-03-01",
     });
     // Trimmed before matching, so a padded id from a scraped receipt resolves to
     // the charge already on file rather than creating a second one.
     const padded = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "  111-1234567-1234567  ",
+      date: "2024-03-01",
     });
 
     expect(again).toBe(first);
@@ -196,10 +198,12 @@ describe("purchase repository — findOrCreatePurchase", () => {
     const a = await findOrCreatePurchase(ctx.db, {
       vendorId: toolNirvana,
       orderId: "#11325",
+      date: "2024-03-01",
     });
     const b = await findOrCreatePurchase(ctx.db, {
       vendorId: otherStore,
       orderId: "#11325",
+      date: "2024-03-01",
     });
 
     expect(b).not.toBe(a);
@@ -223,8 +227,16 @@ describe("purchase repository — findOrCreatePurchase", () => {
     // two concurrent imports of one order must land on a single charge instead of
     // 500ing on `Purchase_vendorId_orderId_key`.
     const [a, b] = await Promise.all([
-      findOrCreatePurchase(ctx.db, { vendorId, orderId: "WN63446464" }),
-      findOrCreatePurchase(ctx.db, { vendorId, orderId: "WN63446464" }),
+      findOrCreatePurchase(ctx.db, {
+        vendorId,
+        orderId: "WN63446464",
+        date: "2024-03-01",
+      }),
+      findOrCreatePurchase(ctx.db, {
+        vendorId,
+        orderId: "WN63446464",
+        date: "2024-03-01",
+      }),
     ]);
 
     expect(a).toBe(b);
@@ -252,6 +264,7 @@ describe("purchase repository — findOrCreatePurchase", () => {
     const blank = await findOrCreatePurchase(ctx.db, {
       vendorId,
       orderId: "  ",
+      date: "2024-05-01",
     });
 
     // DELIBERATE, and not a bug to "fix" later: `(vendorId, null)` is not
@@ -501,7 +514,11 @@ describe("purchase repository — linkExpensesToPurchase", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Amazon Business");
     const { output: target } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "AB-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "AB-1",
+      }),
       ctx.actor,
     );
 
@@ -549,7 +566,11 @@ describe("purchase repository — linkExpensesToPurchase", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Link Guard Vendor");
     const { output: target } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "LG-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "LG-1",
+      }),
       ctx.actor,
     );
     await deleteExpenses(ctx.db, [line.id], ctx.actor);
@@ -677,7 +698,11 @@ describe("purchase repository — splitExpense", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Stated Total Vendor");
     const { output: charge } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, statedTotal: 431.24 }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        statedTotal: 431.24,
+      }),
       ctx.actor,
     );
     const { output: line } = await createExpense(
@@ -907,12 +932,20 @@ describe("purchase repository — mergePurchases", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Adopt Vendor");
     const { output: keeper } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: null }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: null,
+      }),
       ctx.actor,
     );
     const { output: loser } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "ADOPT-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "ADOPT-1",
+      }),
       ctx.actor,
     );
 
@@ -934,12 +967,18 @@ describe("purchase repository — mergePurchases", () => {
     const vendorB = await vendorShortcodeByName(ctx.db, "Vendor B");
     const { output: keeper } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: vendorA }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: vendorA,
+      }),
       ctx.actor,
     );
     const { output: other } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: vendorB }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: vendorB,
+      }),
       ctx.actor,
     );
 
@@ -966,12 +1005,20 @@ describe("purchase repository — mergePurchases", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Two Orders Vendor");
     const { output: keeper } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "ORD-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "ORD-1",
+      }),
       ctx.actor,
     );
     const { output: loser } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "ORD-2" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "ORD-2",
+      }),
       ctx.actor,
     );
 
@@ -1001,7 +1048,11 @@ describe("purchase repository — mergePurchases", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Self Merge Charge");
     const { output: keeper } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "SELF-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "SELF-1",
+      }),
       ctx.actor,
     );
 
@@ -1036,12 +1087,20 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     // both retailers — which is exactly how a vendor move can collide.
     const { output: held } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "#11325" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: homeDepot,
+        orderId: "#11325",
+      }),
       ctx.actor,
     );
     const { output: moving } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: toolNirvana, orderId: "#11325" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: toolNirvana,
+        orderId: "#11325",
+      }),
       ctx.actor,
     );
 
@@ -1064,7 +1123,11 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     // charge's order id onto one its own vendor already holds.
     const { output: sibling } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: homeDepot, orderId: "WN-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: homeDepot,
+        orderId: "WN-1",
+      }),
       ctx.actor,
     );
     await expect(
@@ -1096,7 +1159,11 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     const gone = await vendorShortcodeByName(ctx.db, "Out Of Business");
     const { output: charge } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: live, orderId: "LIV-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: live,
+        orderId: "LIV-1",
+      }),
       ctx.actor,
     );
     // Deleting a vendor with zero charges is allowed, which is exactly how a
@@ -1278,12 +1345,20 @@ describe("purchase repository — sorting over the joined name and rollups", () 
     const zzz = await vendorShortcodeByName(ctx.db, "ZZZ Supply");
     const { output: small } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: aaa, orderId: "SORT-SMALL" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: aaa,
+        orderId: "SORT-SMALL",
+      }),
       ctx.actor,
     );
     const { output: big } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId: zzz, orderId: "SORT-BIG" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId: zzz,
+        orderId: "SORT-BIG",
+      }),
       ctx.actor,
     );
     // One line at $5 vs. two lines totalling $300 — so count and total rank the
@@ -1345,7 +1420,12 @@ describe("purchase repository — purchase worklist filters", () => {
     ) => {
       const { output: charge } = await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({ vendorId, orderId, statedTotal }),
+        purchaseCreateInput.parse({
+          date: "2024-01-15",
+          vendorId,
+          orderId,
+          statedTotal,
+        }),
         ctx.actor,
       );
       if (cost !== undefined) {
@@ -1545,7 +1625,7 @@ describe("purchase repository — rollups never see a charge", () => {
       ["guard actual", 100, false, "2024-02-10"],
       ["guard committed", 50, true, "2024-03-05"],
       ["guard credit", -75, false, "2024-03-20"],
-      ["guard undated", 25, false, null],
+      ["guard fourth", 25, false, "2024-03-25"],
     ] as const) {
       seeded.push(
         (
@@ -1783,7 +1863,11 @@ describe("purchase repository — documents", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Metal Supermarkets");
     const { output: charge } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "MS-INVOICE-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "MS-INVOICE-1",
+      }),
       ctx.actor,
     );
     const chargeUuid = await purchaseUuid(ctx.db, charge.id);
@@ -1834,7 +1918,11 @@ describe("purchase repository — documents", () => {
 
     const { output: bareCharge } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "MS-INVOICE-2" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "MS-INVOICE-2",
+      }),
       ctx.actor,
     );
     expect(
@@ -1879,7 +1967,11 @@ describe("purchase repository — documents", () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Folder Vendor");
     const { output: charge } = await createPurchase(
       ctx.db,
-      purchaseCreateInput.parse({ vendorId, orderId: "FV-1" }),
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "FV-1",
+      }),
       ctx.actor,
     );
 

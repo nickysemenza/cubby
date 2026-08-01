@@ -12,6 +12,7 @@ import {
   presenceFilter,
 } from "./pagination";
 import { plainDate } from "./project";
+import { wholeCentAmount } from "./money";
 
 export const financialTransactionKind = z.enum([
   "purchase",
@@ -25,6 +26,40 @@ export const financialTransactionKind = z.enum([
   "other",
 ]);
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
+
+export const purchaseSettlementKinds = [
+  "purchase",
+  "refund",
+  "adjustment",
+] as const satisfies readonly FinancialTransactionKind[];
+
+export const isPurchaseSettlementKind = (
+  kind: FinancialTransactionKind,
+): kind is (typeof purchaseSettlementKinds)[number] =>
+  purchaseSettlementKinds.includes(
+    kind as (typeof purchaseSettlementKinds)[number],
+  );
+
+export const financialTransactionSettlementViolation = (value: {
+  purchaseId: unknown | null;
+  kind: FinancialTransactionKind;
+  amount: number;
+}): { path: "kind" | "amount"; message: string } | null => {
+  if (value.purchaseId !== null && !isPurchaseSettlementKind(value.kind)) {
+    return {
+      path: "kind",
+      message:
+        "only purchase, refund, or adjustment transactions may link to a Purchase",
+    };
+  }
+  if (value.kind === "purchase" && value.amount <= 0) {
+    return { path: "amount", message: "purchase amounts must be positive" };
+  }
+  if (value.kind === "refund" && value.amount >= 0) {
+    return { path: "amount", message: "refund amounts must be negative" };
+  }
+  return null;
+};
 
 export const financialTransactionStatus = z.enum([
   "expected",
@@ -56,10 +91,10 @@ export const financialTransactionSourceRefs = z
     return true;
   }, "sourceRefs must not contain duplicate source/externalId pairs");
 
-const nonZeroAmount = z
-  .number()
-  .finite()
-  .refine((amount) => amount !== 0, "amount must be non-zero");
+const nonZeroAmount = wholeCentAmount.refine(
+  (amount) => amount !== 0,
+  "amount must be non-zero",
+);
 
 const financialTransactionFields = {
   accountId: financialAccountShortcode,
@@ -100,8 +135,25 @@ const postedRequiresDate = <T extends z.ZodType>(schema: T) =>
     { message: "posted transactions require postedDate", path: ["postedDate"] },
   );
 
-export const financialTransactionCreateInput = postedRequiresDate(
-  z.object(financialTransactionCreateShape),
+const validSettlementState = <T extends z.ZodType>(schema: T) =>
+  schema.superRefine((value, ctx) => {
+    const transaction = value as {
+      purchaseId: unknown | null;
+      kind: FinancialTransactionKind;
+      amount: number;
+    };
+    const violation = financialTransactionSettlementViolation(transaction);
+    if (violation) {
+      ctx.addIssue({
+        code: "custom",
+        message: violation.message,
+        path: [violation.path],
+      });
+    }
+  });
+
+export const financialTransactionCreateInput = validSettlementState(
+  postedRequiresDate(z.object(financialTransactionCreateShape)),
 );
 export type FinancialTransactionCreateInput = z.infer<
   typeof financialTransactionCreateInput

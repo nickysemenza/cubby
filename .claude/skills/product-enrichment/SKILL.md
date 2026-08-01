@@ -30,7 +30,8 @@ evidence table, so return a source-backed batch report when finished.
 
 Use this evidence order and stop when the exact variant is proven:
 
-1. Open an existing `externalIds[].url` or canonical ASIN URL.
+1. Open an existing `externalIds[].url`; for an Amazon ASIN, derive
+   `https://www.amazon.com/dp/<ASIN>` even when `url` is null.
 2. Try deterministic UPC lookup when a UPC is already known.
 3. Search the manufacturer's site using manufacturer plus model.
 4. Search a reputable retailer using the exact model or retailer SKU.
@@ -50,12 +51,17 @@ Always attempt to capture the canonical identifiers exposed by the source:
   and the published 8, 12, 13, or 14-digit representation. Never derive one
   from a model or SKU.
 - Put the maker's model/MPN in `model`.
-- Put an Amazon ASIN in `externalIds` with `source: "amazon"`, `kind: "asin"`, and canonical
-  `/dp/<ASIN>` URL.
+- Put an Amazon ASIN in `externalIds` with `source: "amazon"` and `kind: "asin"`.
+  Omit `url`: Cubby derives the canonical `/dp/<ASIN>` URL on output instead of
+  storing the same identity twice.
 - Put retailer-specific SKUs in `externalIds` with `kind: "retailer_sku"`, not
   `model`. Use `internet_number`, `item_number`, or `catalog_number` only when
   that is how the source labels the identifier. Never relabel an existing
   `legacy_unspecified` slot without source evidence.
+- Use a canonical lowercase kebab-case source slug (`home-depot`, not
+  `home_depot` or `Home Depot`). A `(source, kind, externalId)` tuple can belong
+  to only one live Product, and each Product can carry only one value in a
+  `(source, kind)` slot.
 - Never invent a plausible-looking identifier or silently choose among
   variants. Skip ambiguous products and report the conflict.
 

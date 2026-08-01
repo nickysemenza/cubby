@@ -5,7 +5,10 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
-import type { ExternalIdKind } from "@cubby/schemas/external-id";
+import {
+  type ExternalIdKind,
+  storedExternalIdUrl,
+} from "@cubby/schemas/external-id";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -62,7 +65,9 @@ import {
 } from "~/server/repo/audit-log";
 import {
   loadProductDataQualities,
+  productAnyDataGapCondition,
   productDataGapCondition,
+  productDefectCondition,
   productNeedsDataCondition,
 } from "~/server/repo/data-quality";
 import {
@@ -456,9 +461,11 @@ export const productList = async (
       presenceCondition(product.model, filters.modelPresenceFilter),
       filters.dataStatus === "needs_data"
         ? needsData
-        : filters.dataStatus === "complete"
-          ? sql`NOT ${needsData}`
-          : undefined,
+        : filters.dataStatus === "defect"
+          ? productDefectCondition()
+          : filters.dataStatus === "complete"
+            ? sql`NOT ${productAnyDataGapCondition()}`
+            : undefined,
       selectedDataGaps.length > 0
         ? or(...selectedDataGaps.map(productDataGapCondition))
         : undefined,
@@ -715,6 +722,55 @@ async function throwIfDuplicateProduct(
   );
 }
 
+const assertExternalIdsAvailable = async (
+  tx: DrizzleTransaction,
+  entries: readonly {
+    source: string;
+    kind: ExternalIdKind;
+    externalId: string;
+  }[],
+  exceptProductId?: ProductId,
+): Promise<void> => {
+  if (entries.length === 0) return;
+  const [owner] = await tx
+    .select({
+      productId: product.id,
+      productShortcode: product.shortcode,
+      productName: product.name,
+      source: productExternalId.source,
+      kind: productExternalId.kind,
+      externalId: productExternalId.externalId,
+    })
+    .from(productExternalId)
+    .innerJoin(
+      product,
+      and(eq(product.id, productExternalId.productId), notDeleted(product)),
+    )
+    .where(
+      and(
+        notDeleted(productExternalId),
+        exceptProductId
+          ? sql`${productExternalId.productId} <> ${exceptProductId}`
+          : undefined,
+        or(
+          ...entries.map((entry) =>
+            and(
+              eq(productExternalId.source, entry.source),
+              eq(productExternalId.kind, entry.kind),
+              eq(productExternalId.externalId, entry.externalId),
+            ),
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  if (!owner) return;
+  throw createAppError(
+    "PRODUCT_ALREADY_EXISTS",
+    `${owner.source}/${owner.kind}/${owner.externalId} already belongs to ${owner.productShortcode} “${owner.productName}”.`,
+  );
+};
+
 // Create a new product
 export const createProduct = async (
   db: Database,
@@ -744,6 +800,7 @@ export const createProduct = async (
   // clear CONFLICT message — the lookups run on `db` because the tx is aborted.
   try {
     return await withTransaction(db, async (tx) => {
+      await assertExternalIdsAvailable(tx, externalIds ?? []);
       // Create the product first (price flows in via ...productData)
       const newProduct = await insertWithShortcode(tx, "product", {
         ...productData,
@@ -771,7 +828,7 @@ export const createProduct = async (
             source: eid.source.trim().toLowerCase(),
             kind: eid.kind,
             externalId: eid.externalId,
-            url: eid.url ?? null,
+            url: storedExternalIdUrl(eid),
           })),
         );
       }
@@ -897,6 +954,7 @@ export const updateProduct = async (
       await syncProductUnitMappings(tx, id, unitMappings);
     }
     if (externalIds !== undefined) {
+      await assertExternalIdsAvailable(tx, externalIds, id);
       await syncProductExternalIds(tx, id, externalIds);
     }
     await syncProductImages(
@@ -992,6 +1050,8 @@ export const patchProductExternalIds = async (
       ),
     });
 
+    await assertExternalIdsAvailable(tx, input.upsert, id);
+
     for (const entry of input.remove) {
       await tx
         .update(productExternalId)
@@ -1014,7 +1074,7 @@ export const patchProductExternalIds = async (
           source,
           kind: entry.kind,
           externalId: entry.externalId,
-          url: entry.url ?? null,
+          url: storedExternalIdUrl({ ...entry, source }),
         })
         .onConflictDoUpdate({
           target: [
@@ -1025,7 +1085,7 @@ export const patchProductExternalIds = async (
           targetWhere: sql`${productExternalId.deletedAt} IS NULL`,
           set: {
             externalId: entry.externalId,
-            url: entry.url ?? null,
+            url: storedExternalIdUrl({ ...entry, source }),
             updatedAt: new Date(),
           },
         });
@@ -1036,6 +1096,11 @@ export const patchProductExternalIds = async (
         notDeleted(productExternalId),
       ),
     });
+    const updatedAt = new Date();
+    await tx
+      .update(product)
+      .set({ updatedAt })
+      .where(and(eq(product.id, id), notDeleted(product)));
     const changes = computeChanges(
       { externalIds: beforeIds },
       { externalIds },
@@ -1049,7 +1114,12 @@ export const patchProductExternalIds = async (
         changes,
       });
     }
-    return dbProductToTopLevelAPI({ ...before, externalIds, images: [] });
+    return dbProductToTopLevelAPI({
+      ...before,
+      updatedAt,
+      externalIds,
+      images: [],
+    });
   });
 
 // Quick create a product with minimal data

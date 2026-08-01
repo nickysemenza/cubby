@@ -24,7 +24,7 @@ const today = () => format(new Date(), "yyyy-MM-dd");
 const quickAddPurchaseSchema = z.object({
   vendorId: z.string().min(1, "Vendor is required"),
   orderId: z.string(),
-  date: plainDate.nullable(),
+  date: plainDate,
   statedTotal: z.number().nullable(),
   notes: z.string(),
 });

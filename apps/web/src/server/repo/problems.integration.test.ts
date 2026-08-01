@@ -319,6 +319,7 @@ describe("problems repo", () => {
       const { output: expense } = await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade: "other",
           costType: "tools",
           name: "orphan-guard expense",
@@ -940,6 +941,7 @@ describe("problems service — tracker slice", () => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade: "other",
           costType: "materials",
           name,

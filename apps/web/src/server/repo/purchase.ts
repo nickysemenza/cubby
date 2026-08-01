@@ -22,6 +22,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type ExpenseId,
+  type ProductId,
   type PurchaseId,
   type PurchaseShortcode,
   unsafeExpenseId,
@@ -83,8 +84,11 @@ import {
 } from "~/server/repo/audit-log";
 import {
   loadPurchaseDataQualities,
+  purchaseAnyDataGapCondition,
   purchaseDataGapCondition,
+  purchaseDefectCondition,
   purchaseNeedsDataCondition,
+  touchDataQualityTargets,
 } from "~/server/repo/data-quality";
 import {
   applyImageOrder,
@@ -264,7 +268,7 @@ type PurchaseRow = {
   id: PurchaseId;
   shortcode: string;
   orderId: string | null;
-  date: string | null;
+  date: string;
   statedTotal: number | null;
   notes: string | null;
   dataExceptions: DataException[];
@@ -483,9 +487,11 @@ const buildPurchaseWhereClause = (
       documentPresenceCondition(filters.documentPresenceFilter),
       filters.dataStatus === "needs_data"
         ? purchaseNeedsDataCondition()
-        : filters.dataStatus === "complete"
-          ? sql`NOT ${purchaseNeedsDataCondition()}`
-          : undefined,
+        : filters.dataStatus === "defect"
+          ? purchaseDefectCondition()
+          : filters.dataStatus === "complete"
+            ? sql`NOT ${purchaseAnyDataGapCondition()}`
+            : undefined,
       filters.dataGap
         ? or(...[filters.dataGap].flat().map(purchaseDataGapCondition))
         : undefined,
@@ -676,6 +682,10 @@ export const reclassifyPurchaseDocument = async (
       .update(purchaseImage)
       .set({ documentKind: input.documentKind, updatedAt: new Date() })
       .where(eq(purchaseImage.id, before.id));
+    await tx
+      .update(purchase)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(purchase.id, id), notDeleted(purchase)));
     await logAuditEntry(tx, actor, {
       entityType: "purchase",
       entityId: id,
@@ -740,7 +750,7 @@ export const getPurchaseExpenses = async (
  */
 export const findOrCreatePurchase = async (
   db: Database | DrizzleTransaction,
-  input: { vendorId: VendorId; orderId?: string | null; date?: string | null },
+  input: { vendorId: VendorId; orderId?: string | null; date: string },
 ): Promise<PurchaseId> => {
   const orderId = input.orderId?.trim() || null;
 
@@ -748,7 +758,7 @@ export const findOrCreatePurchase = async (
     const created = await insertWithShortcode(db, "purchase", {
       vendorId: input.vendorId,
       orderId: null,
-      date: input.date ?? null,
+      date: input.date,
     });
     return created.id;
   }
@@ -764,7 +774,7 @@ export const findOrCreatePurchase = async (
     values: () => ({
       vendorId: input.vendorId,
       orderId,
-      date: input.date ?? null,
+      date: input.date,
     }),
   });
   return row.id;
@@ -994,7 +1004,7 @@ export const linkExpensesToPurchase = async (
 
     const before = await tx.query.expense.findMany({
       where: and(inArray(expense.id, expenseIds), notDeleted(expense)),
-      columns: { id: true, purchaseId: true },
+      columns: { id: true, productId: true, purchaseId: true },
     });
     if (before.length === 0) return;
 
@@ -1003,11 +1013,23 @@ export const linkExpensesToPurchase = async (
       .set({ purchaseId })
       .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
 
+    await touchDataQualityTargets(tx, {
+      productIds: before
+        .map((row) => row.productId)
+        .filter((value): value is ProductId => value !== null),
+      purchaseIds: [
+        purchaseId,
+        ...before
+          .map((row) => row.purchaseId)
+          .filter((value): value is PurchaseId => value !== null),
+      ],
+    });
+
     await logAuditEntries(
       tx,
       actor,
       before.flatMap((row) => {
-        const changes = computeChanges(row, { id: row.id, purchaseId }, [
+        const changes = computeChanges(row, { ...row, purchaseId }, [
           "purchaseId",
         ]);
         return changes
@@ -1160,6 +1182,18 @@ export const splitExpense = async (
     // returning a result that renders blank, `findOrphanedEntityEmbeddings` flags
     // it, and soft deletes aren't restorable so there's no clean recovery.
     await softDeleteEntityEmbeddingsTx(tx, "expense", [expenseId]);
+
+    await touchDataQualityTargets(tx, {
+      productIds: [
+        original.productId,
+        ...parts.map((part) =>
+          part.productId
+            ? unsafeProductId(productIds.get(part.productId) ?? "")
+            : null,
+        ),
+      ].filter((value): value is ProductId => value !== null),
+      purchaseIds: [chargeId],
+    });
 
     await logAuditEntries(tx, actor, [
       ...inserted.map((id) => ({

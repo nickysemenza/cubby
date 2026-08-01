@@ -121,6 +121,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           value={expense.date}
           config={{ type: "date" }}
           onSave={async (date) => {
+            if (date === null) return;
             await updateMutation.mutateAsync({
               id: expense.id,
               data: { date },

@@ -158,12 +158,12 @@ describe("expense repository — CRUD", () => {
     const { output: updated } = await updateExpense(
       ctx.db,
       created.id,
-      { name: "updated faucet", cost: 55, date: null, projectId: null },
+      { name: "updated faucet", cost: 55, projectId: null },
       ctx.actor,
     );
     expect(updated.name).toBe("updated faucet");
     expect(updated.cost).toBe(55);
-    expect(updated.date).toBeNull();
+    expect(updated.date).toBe("2026-01-15");
     expect(updated.projectId).toBeNull();
     expect(updated.projectName).toBeNull();
 
@@ -189,6 +189,7 @@ describe("expense repository — expenseList filters", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "plumbing",
         costType: "materials",
         name: "copper pipe",
@@ -199,6 +200,7 @@ describe("expense repository — expenseList filters", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "electrical",
         costType: "tools",
         name: "wire strippers",
@@ -209,6 +211,7 @@ describe("expense repository — expenseList filters", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "plumbing",
         costType: "services",
         name: "plumber visit",
@@ -299,6 +302,7 @@ describe("expense repository — expenseList filters", () => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade: "other",
           costType: "materials",
           name,
@@ -328,7 +332,7 @@ describe("expense repository — expenseList filters", () => {
     expect(subtree.data.map((p) => p.name)).not.toContain("unrelated expense");
   });
 
-  it("filters by dateFrom/dateTo (inclusive boundary, outside window, null-date excluded)", async () => {
+  it("filters by dateFrom/dateTo with inclusive boundaries", async () => {
     const { output: inWindow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -379,18 +383,6 @@ describe("expense repository — expenseList filters", () => {
       }),
       ctx.actor,
     );
-    const { output: nullDate } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "no date (future)",
-        future: true,
-      }),
-      ctx.actor,
-    );
-    expect(nullDate.date).toBeNull();
-
     const windowed = await expenseList(
       ctx.db,
       { dateFrom: "2026-02-01", dateTo: "2026-02-28" },
@@ -402,7 +394,6 @@ describe("expense repository — expenseList filters", () => {
     );
     expect(windowed.data.map((p) => p.id)).not.toContain(beforeWindow.id);
     expect(windowed.data.map((p) => p.id)).not.toContain(afterWindow.id);
-    expect(windowed.data.map((p) => p.id)).not.toContain(nullDate.id);
 
     // dateFrom alone — open upper bound.
     const fromOnly = await expenseList(
@@ -433,6 +424,7 @@ describe("expense repository — expenseList filters", () => {
         createExpense(
           ctx.db,
           expenseCreateInput.parse({
+            date: "2024-01-15",
             trade: "other",
             costType: "materials",
             name,
@@ -504,6 +496,7 @@ describe("expense repository — expenseList filters", () => {
     const { output: extractor } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "dust extractor",
@@ -515,6 +508,7 @@ describe("expense repository — expenseList filters", () => {
     const { output: chopSaw } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "chop saw",
@@ -525,6 +519,7 @@ describe("expense repository — expenseList filters", () => {
     const { output: unrelated } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "nursery mix",
@@ -736,6 +731,7 @@ describe("expense router", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "plumbing",
         costType: "materials",
         name: "chart match",
@@ -745,6 +741,7 @@ describe("expense router", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "electrical",
         costType: "materials",
         name: "chart non-match",
@@ -779,6 +776,7 @@ describe("expense router", () => {
         await createExpense(
           ctx.db,
           expenseCreateInput.parse({
+            date: "2024-01-15",
             trade: "drywall",
             costType: "tools",
             name,
@@ -960,6 +958,7 @@ describe("expense router", () => {
       await createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade,
           costType: "materials",
           name: `affinity ${trade}`,
@@ -972,6 +971,7 @@ describe("expense router", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "drywall",
         costType: "materials",
         name: "affinity unassigned",
@@ -1000,6 +1000,7 @@ describe("expense router", () => {
     const { output: p1 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "bulk move expense 1",
@@ -1010,6 +1011,7 @@ describe("expense router", () => {
     const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "bulk move expense 2",
@@ -1055,6 +1057,7 @@ describe("expense repository — moveExpenses", () => {
     const { output: p1, entityId: p1Id } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "move me 1",
@@ -1065,6 +1068,7 @@ describe("expense repository — moveExpenses", () => {
     const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "move me 2",
@@ -1112,6 +1116,7 @@ describe("expense repository — moveExpenses", () => {
     const { output: live } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "still live",
@@ -1122,6 +1127,7 @@ describe("expense repository — moveExpenses", () => {
     const { output: deleted } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "soon deleted",
@@ -1150,6 +1156,7 @@ describe("expense repository — moveExpenses", () => {
     const { output: expenseRow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "reject target",
@@ -1360,10 +1367,11 @@ describe("expense repository — expenseAnalytics", () => {
       }),
       ctx.actor,
     );
-    // p2: committed (future) spend, plumbing/materials, projectA, no date yet.
+    // p2: committed (future) spend, plumbing/materials, projectA, dated Jan.
     const { output: p2 } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2026-01-20",
         trade: "plumbing",
         costType: "materials",
         name: "analytics p2 committed",
@@ -1495,15 +1503,15 @@ describe("expense repository — expenseAnalytics", () => {
       ]),
     );
 
-    // --- monthly: p2 (no date) excluded; Jan (p1, p3) and Feb (p4) only ---
+    // --- monthly: Jan (p1, p2, p3) and Feb (p4) ---
     expect(result.monthly).toEqual([
       {
         month: "2026-01",
         actual: 100,
-        committed: 0,
+        committed: 50,
         credits: 20,
-        net: 80,
-        count: 2,
+        net: 130,
+        count: 3,
       },
       {
         month: "2026-02",
@@ -1517,8 +1525,8 @@ describe("expense repository — expenseAnalytics", () => {
 
     // --- cumulative: running sum of monthly.net, ascending ---
     expect(result.cumulative).toEqual([
-      { month: "2026-01", cumulativeNet: 80 },
-      { month: "2026-02", cumulativeNet: 110 },
+      { month: "2026-01", cumulativeNet: 130 },
+      { month: "2026-02", cumulativeNet: 160 },
     ]);
 
     // --- byProject: p3 (no project) excluded ---
@@ -1623,6 +1631,7 @@ describe("expense repository — expenseAnalytics", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "plumbing",
         costType: "materials",
         name: "analytics filter match",
@@ -1634,6 +1643,7 @@ describe("expense repository — expenseAnalytics", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "electrical",
         costType: "materials",
         name: "analytics filter non-match",
@@ -1673,6 +1683,7 @@ describe("expense repository — embedding cascade invariant", () => {
     const { output: expenseRow } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "embedding cascade check",
@@ -1704,6 +1715,7 @@ describe("expense repository — product bridge", () => {
     const { output: created } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "millwork",
         costType: "tools",
         name: "miter saw",
@@ -1742,6 +1754,7 @@ describe("expense repository — product bridge", () => {
     const { output: bought } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "flooring",
         costType: "tools",
         name: "tile saw",
@@ -1753,6 +1766,7 @@ describe("expense repository — product bridge", () => {
     const { output: sold } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "flooring",
         costType: "tools",
         name: "sold tile saw",
@@ -1764,6 +1778,7 @@ describe("expense repository — product bridge", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "flooring",
         costType: "materials",
         name: "unrelated thinset",
@@ -1803,6 +1818,7 @@ describe("expense repository — product bridge", () => {
     const { output: created } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "doomed drill",
@@ -1842,6 +1858,7 @@ describe("expense repository — product bridge", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "vendorless grommets",
@@ -1862,6 +1879,7 @@ describe("expense repository — product bridge", () => {
     const { output: lumber } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "lumber run",
@@ -1872,6 +1890,7 @@ describe("expense repository — product bridge", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "screws",
@@ -1897,6 +1916,7 @@ describe("expense repository — product bridge", () => {
     const { output: prime } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "prime order",
@@ -1907,6 +1927,7 @@ describe("expense repository — product bridge", () => {
     const { output: business } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "bulk order",
@@ -1931,6 +1952,7 @@ describe("expense repository — product bridge", () => {
         createExpense(
           ctx.db,
           expenseCreateInput.parse({
+            date: "2024-01-15",
             trade: "other",
             costType: "materials",
             name,
@@ -1960,6 +1982,7 @@ describe("expense repository — product bridge", () => {
     const { output: first } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "line one of the charge",
@@ -1971,6 +1994,7 @@ describe("expense repository — product bridge", () => {
     const { output: second } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "line two of the charge",
@@ -1982,6 +2006,7 @@ describe("expense repository — product bridge", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "unrelated charge",
@@ -2008,6 +2033,7 @@ describe("expense repository — product bridge", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "cash at the yard",
@@ -2017,6 +2043,7 @@ describe("expense repository — product bridge", () => {
     const { output: tileSaw } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "materials",
         name: "tile saw",
@@ -2063,6 +2090,7 @@ describe("expense repository — productPresenceFilter", () => {
     const { output: linked } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "linked expense",
@@ -2073,6 +2101,7 @@ describe("expense repository — productPresenceFilter", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "unlinked expense",
@@ -2099,6 +2128,7 @@ describe("expense repository — productPresenceFilter", () => {
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "linked sander expense",
@@ -2109,6 +2139,7 @@ describe("expense repository — productPresenceFilter", () => {
     const { output: unlinked } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "unlinked sander expense",
@@ -2148,6 +2179,7 @@ describe("expense repository — productPresenceFilter", () => {
     const { output: expense } = await createExpense(
       ctx.db,
       expenseCreateInput.parse({
+        date: "2024-01-15",
         trade: "other",
         costType: "tools",
         name: "doomed router expense",
@@ -2205,6 +2237,7 @@ describe("expense repository — charge grouping", () => {
     orderId: string | null = null,
   ) =>
     expenseCreateInput.parse({
+      date: "2024-01-15",
       trade: "other",
       costType: "materials",
       name,
@@ -2908,6 +2941,7 @@ describe("expense repository — matchExpenses", () => {
       createExpense(
         ctx.db,
         expenseCreateInput.parse({
+          date: "2024-01-15",
           trade: "other",
           costType: "tools",
           name,
@@ -2995,19 +3029,16 @@ describe("expense repository — matchExpenses", () => {
     expect(ids).not.toContain(purchaseOfSameSize.id);
   });
 
-  it("excludes null-cost and null-date rows from the amount arm", async () => {
+  it("excludes null-cost rows from the amount arm", async () => {
     const noCost = await line("no cost recorded", { date: "2026-03-01" });
-    const noDate = await line("planned, no date", { cost: 250, future: true });
     const real = await line("real row", { cost: 250, date: "2026-03-01" });
     expect(noCost.cost).toBeNull();
-    expect(noDate.date).toBeNull();
 
     const result = await run([{ key: "r", date: "2026-03-01", amount: 250 }]);
     const ids = (result.matches[0]?.candidates ?? []).map((c) => c.expenseId);
 
     expect(ids).toEqual([real.id]);
     expect(ids).not.toContain(noCost.id);
-    expect(ids).not.toContain(noDate.id);
   });
 
   it("ranks an order-id hit above a closer amount match, and ignores the day window for it", async () => {

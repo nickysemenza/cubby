@@ -58,6 +58,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
+  check,
   customType,
   date,
   doublePrecision,
@@ -600,6 +601,13 @@ export const productExternalId = pgTable(
     uniqueIndex("ProductExternalId_product_source_kind_key")
       .on(table.productId, table.source, table.kind)
       .where(sql`${table.deletedAt} IS NULL`),
+    uniqueIndex("ProductExternalId_source_kind_externalId_key")
+      .on(table.source, table.kind, table.externalId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    check(
+      "ProductExternalId_source_slug_check",
+      sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
+    ),
   ],
 );
 
@@ -1096,7 +1104,7 @@ export const purchase = pgTable(
     // The vendor order/receipt date. Distinct from `expense.date`, which stays the LEDGER date
     // driving monthly buckets and project date windows — an invoice dated the
     // 3rd can clear on the 8th.
-    date: date("date", { mode: "string" }),
+    date: date("date", { mode: "string" }).notNull(),
     // The literal vendor-printed total. NEVER summed into spend and never
     // rewritten to match settlement; FinancialTransaction owns charges/refunds.
     statedTotal: doublePrecision("statedTotal"),
@@ -1120,6 +1128,10 @@ export const purchase = pgTable(
       .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     index("Purchase_vendorId_idx").on(table.vendorId),
     index("Purchase_date_idx").on(table.date),
+    check(
+      "Purchase_statedTotal_whole_cent_check",
+      sql`${table.statedTotal} IS NULL OR abs(${table.statedTotal} * 100 - round(${table.statedTotal} * 100)) < 0.0000001`,
+    ),
     // Order ids are searched as substrings via repo/search.ts.
     index("Purchase_orderId_gin_idx").using(
       "gin",
@@ -1204,6 +1216,18 @@ export const financialTransaction = pgTable(
     index("FinancialTransaction_status_idx").on(table.status),
     index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
     index("FinancialTransaction_postedDate_idx").on(table.postedDate),
+    check(
+      "FinancialTransaction_amount_whole_cent_check",
+      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
+    ),
+    check(
+      "FinancialTransaction_posted_date_check",
+      sql`${table.status} <> 'posted' OR ${table.postedDate} IS NOT NULL`,
+    ),
+    check(
+      "FinancialTransaction_purchase_settlement_check",
+      sql`${table.purchaseId} IS NULL OR (${table.kind} IN ('purchase', 'refund', 'adjustment') AND ((${table.kind} = 'purchase' AND ${table.amount} > 0) OR (${table.kind} = 'refund' AND ${table.amount} < 0) OR ${table.kind} = 'adjustment'))`,
+    ),
   ],
 );
 
@@ -1215,7 +1239,7 @@ export const expense = pgTable(
     name: text("name").notNull(),
     // See project.costEstimate — dollars need double precision, not float4.
     cost: doublePrecision("cost"),
-    date: date("date", { mode: "string" }),
+    date: date("date", { mode: "string" }).notNull(),
     costType: text("costType", { enum: costTypeValues }).notNull(),
     trade: text("trade", { enum: tradeValues }).notNull(),
     url: text("url"),
@@ -1257,6 +1281,10 @@ export const expense = pgTable(
     index("Expense_costType_idx").on(table.costType),
     index("Expense_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     index("Expense_purchaseId_idx").on(table.purchaseId),
+    check(
+      "Expense_cost_whole_cent_check",
+      sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
+    ),
   ],
 );
 

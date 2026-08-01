@@ -203,7 +203,7 @@ export const makeExpenseInput = (
 ): ExpenseCreateInput => ({
   name: "Test Expense",
   cost: 100,
-  date: null,
+  date: "2024-01-15",
   costType: "materials",
   trade: "other",
   url: null,

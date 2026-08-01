@@ -691,6 +691,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       "create_expense",
       {
         name: "Shortcode Miter Saw",
+        date: "2024-01-15",
         cost: 249.99,
         costType: "tools",
         trade: "other",
@@ -759,7 +760,7 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     // public shortcode, same as every other FK field on the MCP boundary.
     const created = await callTool(
       "create_purchase",
-      { vendorId: vendorCode, orderId: "SC-0001" },
+      { vendorId: vendorCode, orderId: "SC-0001", date: "2024-01-15" },
       caller,
     );
     expectOk(created);
@@ -1334,7 +1335,7 @@ describe("specialized tools round-trip on shortcodes", () => {
 
     const purchase = await callTool(
       "create_purchase",
-      { vendorId: vendorCode },
+      { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(purchase);
@@ -1343,6 +1344,7 @@ describe("specialized tools round-trip on shortcodes", () => {
       "create_expense",
       {
         name: "Combo Kit",
+        date: "2024-01-15",
         cost: 100,
         costType: "tools",
         trade: "other",
@@ -1380,7 +1382,7 @@ describe("specialized tools round-trip on shortcodes", () => {
 
     const keep = await callTool(
       "create_purchase",
-      { vendorId: vendorCode },
+      { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(keep);
@@ -1388,7 +1390,7 @@ describe("specialized tools round-trip on shortcodes", () => {
 
     const loser = await callTool(
       "create_purchase",
-      { vendorId: vendorCode },
+      { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(loser);
@@ -1415,7 +1417,7 @@ describe("specialized tools round-trip on shortcodes", () => {
 
     const purchase = await callTool(
       "create_purchase",
-      { vendorId: vendorCode },
+      { vendorId: vendorCode, date: "2024-01-15" },
       caller,
     );
     expectOk(purchase);
@@ -1425,6 +1427,7 @@ describe("specialized tools round-trip on shortcodes", () => {
       "create_expense",
       {
         name: "Unlinked line",
+        date: "2024-01-15",
         cost: 42,
         costType: "materials",
         trade: "other",

@@ -151,6 +151,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           value={purchase.date}
           config={{ type: "date" }}
           onSave={async (date) => {
+            if (date === null) return;
             await updateMutation.mutateAsync({
               id: purchase.id,
               data: { date },

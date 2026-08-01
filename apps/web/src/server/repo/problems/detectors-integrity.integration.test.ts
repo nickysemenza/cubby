@@ -134,7 +134,10 @@ const mkVendor = (db: Database) =>
 
 const mkPurchase = async (db: Database) => {
   const v = await mkVendor(db);
-  return insertWithShortcode(db, "purchase", { vendorId: v.id });
+  return insertWithShortcode(db, "purchase", {
+    vendorId: v.id,
+    date: "2024-01-15",
+  });
 };
 
 const mkFinancialAccount = (db: Database) =>
@@ -315,6 +318,7 @@ const SOURCE_FACTORIES: Record<
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
+      date: "2024-01-15",
       productId: unsafeProductId(targetId),
     }),
 
@@ -385,6 +389,7 @@ const SOURCE_FACTORIES: Record<
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
+      date: "2024-01-15",
       projectId: unsafeProjectId(targetId),
     }),
 
@@ -420,13 +425,17 @@ const SOURCE_FACTORIES: Record<
   },
 
   "Purchase.vendorId": (db, targetId) =>
-    insertWithShortcode(db, "purchase", { vendorId: unsafeVendorId(targetId) }),
+    insertWithShortcode(db, "purchase", {
+      vendorId: unsafeVendorId(targetId),
+      date: "2024-01-15",
+    }),
 
   "Expense.purchaseId": (db, targetId) =>
     insertWithShortcode(db, "expense", {
       name: uniq("Expense"),
       costType: "materials",
       trade: "other",
+      date: "2024-01-15",
       purchaseId: unsafePurchaseId(targetId),
     }),
 
@@ -629,12 +638,14 @@ describe("findReferentialLivenessViolations", () => {
     const vendorRow = await mkVendor(ctx.db);
     const purchaseRow = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendorRow.id,
+      date: "2024-01-15",
     });
     const projectRow = await mkProject(ctx.db);
     await insertWithShortcode(ctx.db, "expense", {
       name: "Clean expense",
       costType: "materials",
       trade: "other",
+      date: "2024-01-15",
       projectId: projectRow.id,
       purchaseId: purchaseRow.id,
     });

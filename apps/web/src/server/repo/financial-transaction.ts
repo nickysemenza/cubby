@@ -8,11 +8,13 @@ import type {
 } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionOut,
+  financialTransactionSettlementViolation,
   financialTransactionSortableFields,
 } from "@cubby/schemas/financial-transaction";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
+  type PurchaseId,
   unsafeFinancialAccountId,
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionId,
@@ -44,6 +46,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
+import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
   buildOrderBy,
   buildPartialUpdateValues,
@@ -364,6 +367,9 @@ export async function createFinancialTransaction(
       entityId: created.id,
       action: "create",
     });
+    if (foreign.purchaseId) {
+      await touchDataQualityTargets(tx, { purchaseIds: [foreign.purchaseId] });
+    }
     return created.id;
   });
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
@@ -437,6 +443,8 @@ export async function updateFinancialTransaction(
     await assertSourceRefsAvailable(tx, sourceRefs, id);
     const values = buildPartialUpdateValues({ ...data, accountId, purchaseId });
     const nextStatus = data.status ?? before.status;
+    const nextKind = data.kind ?? before.kind;
+    const nextAmount = data.amount ?? before.amount;
     const nextPostedDate =
       data.postedDate === undefined ? before.postedDate : data.postedDate;
     if (nextStatus === "posted" && nextPostedDate === null)
@@ -444,6 +452,13 @@ export async function updateFinancialTransaction(
         "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED",
         "Posted financial transactions require a posted date.",
       );
+    const settlementViolation = financialTransactionSettlementViolation({
+      purchaseId,
+      kind: nextKind as FinancialTransactionCreateInput["kind"],
+      amount: nextAmount,
+    });
+    if (settlementViolation)
+      throw createAppError("CONSTRAINT_VIOLATION", settlementViolation.message);
     await tx
       .update(financialTransaction)
       .set(values)
@@ -471,6 +486,13 @@ export async function updateFinancialTransaction(
         action: "update",
         changes,
       });
+    if (changes) {
+      await touchDataQualityTargets(tx, {
+        purchaseIds: [before.purchaseId, purchaseId].filter(
+          (value): value is PurchaseId => value !== null,
+        ),
+      });
+    }
   });
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
 }
@@ -503,6 +525,13 @@ export async function deleteFinancialTransactions(
       ids,
       "FinancialTransaction",
     );
+    const qualityTargets = await tx.query.financialTransaction.findMany({
+      where: and(
+        inArray(financialTransaction.id, ids),
+        notDeleted(financialTransaction),
+      ),
+      columns: { purchaseId: true },
+    });
     await tx
       .update(financialTransaction)
       .set({ deletedAt: new Date() })
@@ -521,6 +550,11 @@ export async function deleteFinancialTransactions(
         action: "delete" as const,
       })),
     );
+    await touchDataQualityTargets(tx, {
+      purchaseIds: qualityTargets
+        .map((row) => row.purchaseId)
+        .filter((value): value is PurchaseId => value !== null),
+    });
   });
 }
 
