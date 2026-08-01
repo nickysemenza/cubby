@@ -10,6 +10,7 @@ export type PurchaseFinancialAggregate = {
   outstandingTransactionCount: number;
   postedTotal: number;
   projectedTotal: number;
+  postedRefundTotal: number;
 };
 
 export const emptyPurchaseFinancialAggregate =
@@ -19,6 +20,7 @@ export const emptyPurchaseFinancialAggregate =
     outstandingTransactionCount: 0,
     postedTotal: 0,
     projectedTotal: 0,
+    postedRefundTotal: 0,
   });
 
 /** One grouped scan for every requested purchase's non-void settlement rows. */
@@ -36,6 +38,7 @@ export async function loadPurchaseFinancialAggregates(
       outstandingTransactionCount: sql<number>`count(*) FILTER (WHERE ${financialTransaction.status} IN ('expected', 'pending'))::int`,
       postedTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (WHERE ${financialTransaction.status} = 'posted'), 0)::double precision`,
       projectedTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}), 0)::double precision`,
+      postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (WHERE ${financialTransaction.status} = 'posted' AND ${financialTransaction.kind} = 'refund'), 0)::double precision`,
     })
     .from(financialTransaction)
     .where(
@@ -61,6 +64,7 @@ export async function loadPurchaseFinancialAggregates(
                 ),
                 postedTotal: Number(row.postedTotal),
                 projectedTotal: Number(row.projectedTotal),
+                postedRefundTotal: Number(row.postedRefundTotal),
               },
             ] as const,
           ]

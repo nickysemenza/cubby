@@ -1,6 +1,7 @@
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { locationRelatedFilterFields } from "./related-view";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -27,6 +28,7 @@ export { locationTypeValues } from "@cubby/shared";
 
 // Filters accepted by the location list endpoint.
 export const locationFilterFields = {
+  ...locationRelatedFilterFields,
   nameFilter: z
     .string()
     .optional()

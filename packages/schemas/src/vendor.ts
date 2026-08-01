@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { vendorRelatedFilterFields } from "./related-view";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
@@ -39,6 +40,7 @@ export const vendorUpdateInput = z.object({
 export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
 
 export const vendorFilterFields = {
+  ...vendorRelatedFilterFields,
   search: z.string().optional(),
 };
 export const vendorFiltersSchema = z.object(vendorFilterFields);

@@ -1,122 +1,85 @@
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import type { VendorOut } from "@cubby/schemas/vendor";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import type { FC } from "react";
-import { ShelfEmpty } from "~/app/_components/data-table/shelf";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { NoneValue } from "~/components/ui/none-value";
+import { createColumnHelper } from "@tanstack/react-table";
+import { useMemo } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+  createCurrencyColumn,
+  createPlainDateColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import RTable from "~/app/_components/data-table/Table";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
-import { parsePlainDate } from "~/lib/plain-date";
-import { formatCurrency } from "~/lib/utils";
 
-// Module-level so the fallback keeps a stable reference across renders.
-const NO_PURCHASES: PurchaseOut[] = [];
-
-/**
- * How many purchases the panel shows. A vendor detail page is wayfinding, not the
- * purchases index — the roster's Purchases count is the true total, and `/purchases`
- * filtered by vendor is where the full list lives.
- */
-const PURCHASES_PAGE_SIZE = 25;
+const EMBEDDED_TABLE_STATE = {
+  initialSort: "date",
+  urlSync: false,
+  syncPaginationToUrl: false,
+} as const;
 
 /**
- * A vendor's purchases — `purchase.list` scoped to this vendor, newest first
- * (that procedure's default sort is `date` desc).
- *
- * A static `<Table>`, not an `<RTable>`: nothing here sorts, filters or
- * paginates. Each row links to its own purchase — the "an embedded table must
- * reach its own rows' entity" rule — via `EntityInlineLink`, which owns the
- * (vendor, orderId, date) label ladder a purchase needs in place of a name.
- *
- * `expenseTotal` is the purchase's real spend; `statedTotal` is only what the
- * paperwork claimed, so both columns are shown and neither is summed into the
- * other. They legitimately disagree (a partial refund reduces a line without
- * changing what the purchase stated).
+ * Server-backed purchase roster scoped to one vendor. Related Expense and
+ * Financial transaction columns come from the shared graph-preview registry,
+ * so this table and the global Purchase list render and filter them identically.
  */
-export const VendorPurchasesTable: FC<{ vendor: VendorOut }> = ({ vendor }) => {
+export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
   const api = useTRPC();
-  const { data, isPending } = useQuery(
-    api.purchase.list.queryOptions({
-      filters: { vendorId: vendor.id },
-      pagination: { pageIndex: 0, pageSize: PURCHASES_PAGE_SIZE },
-    }),
+  const helper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
+  const scope = useMemo<Partial<PurchaseFilters>>(
+    () => ({ vendorId: vendor.id }),
+    [vendor.id],
   );
-  const purchases = data?.items ?? NO_PURCHASES;
+  const columns = useMemo(
+    () => [
+      createPlainDateColumn(helper, "date", { header: "Date" }),
+      helper.display({
+        id: "purchase",
+        header: "Purchase",
+        meta: { className: "w-56" },
+        cell: (info) => (
+          <EntityInlineLink entity="purchase" data={info.row.original} />
+        ),
+      }),
+      helper.accessor("expenseCount", {
+        header: "Expense count",
+        meta: { numeric: true, className: "w-24" },
+      }),
+      createCurrencyColumn(helper, "statedTotal", {
+        header: "Stated",
+        className: "w-24",
+      }),
+      createCurrencyColumn(helper, "expenseTotal", {
+        header: "Expense total",
+        className: "w-28",
+        zeroAsEmpty: false,
+      }),
+    ],
+    [helper],
+  );
+  const list = useEntityList<PurchaseOut, PurchaseFilters>({
+    entity: "purchase",
+    queryOptions: api.purchase.list.queryOptions,
+    extraFilters: scope,
+    columns,
+    tableStateOptions: EMBEDDED_TABLE_STATE,
+    columnVisibilityScope: "vendor-detail",
+    hiddenFilterColumns: ["vendor"],
+  });
 
-  // `isPending` gates the empty state: without it "no purchases" flashes on every
-  // load, which reads as an answer rather than a pending state.
-  if (isPending) {
-    return <Description>Loading purchases…</Description>;
-  }
-
-  if (purchases.length === 0) {
-    return (
-      <ShelfEmpty
-        entity="purchase"
-        label="No purchases yet — each purchase records one transaction at this vendor"
-      />
-    );
-  }
-
+  if (!list.isLoading && list.data.length === 0) return <NoneValue />;
   return (
-    <Stack gap="sm">
-      <Table className="table-auto">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Purchase</TableHead>
-            <TableHead className="text-right">Expenses</TableHead>
-            <TableHead className="text-right">Stated</TableHead>
-            <TableHead className="text-right">Expense total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {purchases.map((purchase) => (
-            <TableRow key={purchase.id}>
-              <TableCell className="font-mono tabular-nums">
-                {purchase.date ? (
-                  format(parsePlainDate(purchase.date), "MMM d, yyyy")
-                ) : (
-                  <NoneValue />
-                )}
-              </TableCell>
-              <TableCell>
-                <EntityInlineLink entity="purchase" data={purchase} />
-              </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
-                {purchase.expenseCount}
-              </TableCell>
-              <TableCell className="text-right font-mono text-muted-foreground tabular-nums">
-                {purchase.statedTotal != null ? (
-                  formatCurrency(purchase.statedTotal)
-                ) : (
-                  <NoneValue />
-                )}
-              </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
-                {formatCurrency(purchase.expenseTotal)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {vendor.purchaseCount > purchases.length && (
-        <Description>
-          Showing the {purchases.length} most recent of {vendor.purchaseCount}{" "}
-          purchases.
-        </Description>
-      )}
-    </Stack>
+    <RTable
+      table={list.table}
+      isLoading={list.isLoading}
+      error={list.error}
+      timing={list.timing}
+      sizingKey="purchase:vendor-detail"
+      ariaLabel={`${vendor.name} purchases`}
+      embedded
+      showColumnMenu
+      infiniteScroll={list.infiniteScroll}
+      refreshControls={list.refreshControls}
+    />
   );
-};
+}

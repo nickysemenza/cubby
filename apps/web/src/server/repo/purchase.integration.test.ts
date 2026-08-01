@@ -80,6 +80,7 @@ import {
 } from "./purchase";
 import { makeExpenseInput, makeProductInput } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
+import { insertWithShortcode } from "./shortcode-utils";
 import { deleteVendors, findOrCreateVendor, getVendorByID } from "./vendor";
 
 /**
@@ -1363,12 +1364,82 @@ describe("purchase repository — purchase worklist filters", () => {
       return charge.id;
     };
 
+    const refundAdjusted = await makeCharge("FILTER-REFUND", 100, 80);
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Filter Card",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "4242",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+    const refundPurchaseId = unsafePurchaseId(
+      (await resolveLiveShortcode(ctx.db, refundAdjusted, "purchase"))!,
+    );
+    await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: refundPurchaseId,
+      kind: "refund",
+      status: "posted",
+      amount: -20,
+      transactionDate: "2026-07-02",
+      postedDate: "2026-07-03",
+      merchant: "Filter Supply",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+    const expectedOnly = await makeCharge("FILTER-EXPECTED", 100, 99.98);
+    const expectedPurchaseId = unsafePurchaseId(
+      (await resolveLiveShortcode(ctx.db, expectedOnly, "purchase"))!,
+    );
+    await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: expectedPurchaseId,
+      kind: "refund",
+      status: "expected",
+      amount: -0.02,
+      transactionDate: "2026-07-04",
+      postedDate: null,
+      merchant: "Filter Supply",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+    const nonRefund = await makeCharge("FILTER-NON-REFUND", 100, 99.97);
+    const nonRefundPurchaseId = unsafePurchaseId(
+      (await resolveLiveShortcode(ctx.db, nonRefund, "purchase"))!,
+    );
+    await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: nonRefundPurchaseId,
+      kind: "adjustment",
+      status: "posted",
+      amount: -0.03,
+      transactionDate: "2026-07-05",
+      postedDate: "2026-07-06",
+      merchant: "Filter Supply",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+
     return {
       empty: await makeCharge("FILTER-EMPTY", null),
       unpriced: await makeCharge("FILTER-UNPRICED", 10, null),
       match: await makeCharge("FILTER-MATCH", 100, 99.99),
       mismatch: await makeCharge("FILTER-MISMATCH", 100, 99.98),
       credit: await makeCharge("FILTER-CREDIT", -5, -5),
+      refundAdjusted,
+      expectedOnly,
+      nonRefund,
     };
   };
 
@@ -1387,10 +1458,25 @@ describe("purchase repository — purchase worklist filters", () => {
       new Set([seeded.unpriced]),
     );
     expect(await ids({ expenseStatus: "priced" })).toEqual(
-      new Set([seeded.match, seeded.mismatch, seeded.credit]),
+      new Set([
+        seeded.match,
+        seeded.mismatch,
+        seeded.credit,
+        seeded.refundAdjusted,
+        seeded.expectedOnly,
+        seeded.nonRefund,
+      ]),
     );
     expect(await ids({ expenseStatus: ["unpriced", "priced"] })).toEqual(
-      new Set([seeded.unpriced, seeded.match, seeded.mismatch, seeded.credit]),
+      new Set([
+        seeded.unpriced,
+        seeded.match,
+        seeded.mismatch,
+        seeded.credit,
+        seeded.refundAdjusted,
+        seeded.expectedOnly,
+        seeded.nonRefund,
+      ]),
     );
 
     const unpriced = (
@@ -1409,9 +1495,26 @@ describe("purchase repository — purchase worklist filters", () => {
     expect(await ids({ reconciliation: "match" })).toEqual(
       new Set([seeded.match, seeded.credit]),
     );
-    expect(await ids({ reconciliation: "mismatch" })).toEqual(
-      new Set([seeded.unpriced, seeded.mismatch]),
+    expect(await ids({ reconciliation: "refund_adjusted" })).toEqual(
+      new Set([seeded.refundAdjusted]),
     );
+    expect(await ids({ reconciliation: "mismatch" })).toEqual(
+      new Set([
+        seeded.unpriced,
+        seeded.mismatch,
+        seeded.expectedOnly,
+        seeded.nonRefund,
+      ]),
+    );
+    const [refundAdjusted] = (
+      await purchaseList(
+        ctx.db,
+        { reconciliation: "refund_adjusted" },
+        [],
+        page,
+      )
+    ).data;
+    expect(refundAdjusted?.reconciliation).toBe("refund_adjusted");
   });
 
   it("applies signed line-total bounds only when at least one line is priced", async () => {

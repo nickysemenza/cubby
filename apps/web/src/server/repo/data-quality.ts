@@ -204,11 +204,23 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
   }
   if (check === "paperwork_mismatch") {
     const tolerance = Math.round(RECONCILIATION_TOLERANCE * 100);
-    return `("Purchase"."statedTotal" IS NOT NULL AND abs(
-      floor(("Purchase"."statedTotal" * 100)::numeric + 0.5) -
-      floor((COALESCE((SELECT sum(dq_e."cost") FROM "Expense" dq_e
-        WHERE dq_e."purchaseId" = "Purchase"."id" AND dq_e."deletedAt" IS NULL), 0) * 100)::numeric + 0.5)
-    ) > ${tolerance} AND ${exceptionAbsent})`;
+    const expenseCents = `floor((COALESCE((SELECT sum(dq_e."cost") FROM "Expense" dq_e
+      WHERE dq_e."purchaseId" = "Purchase"."id" AND dq_e."deletedAt" IS NULL), 0) * 100)::numeric + 0.5)`;
+    const statedCents = `floor(("Purchase"."statedTotal" * 100)::numeric + 0.5)`;
+    const deltaCents = `(${expenseCents} - ${statedCents})`;
+    const refundCents = `floor((COALESCE((SELECT sum(dq_ft."amount") FROM "FinancialTransaction" dq_ft
+      WHERE dq_ft."purchaseId" = "Purchase"."id"
+        AND dq_ft."kind" = 'refund' AND dq_ft."status" = 'posted'
+        AND dq_ft."deletedAt" IS NULL), 0) * 100)::numeric + 0.5)`;
+    const fullyPriced = `NOT EXISTS (SELECT 1 FROM "Expense" dq_unpriced
+      WHERE dq_unpriced."purchaseId" = "Purchase"."id"
+        AND dq_unpriced."cost" IS NULL AND dq_unpriced."deletedAt" IS NULL)`;
+    const refundAdjusted = `(${fullyPriced} AND ${deltaCents} < ${-tolerance}
+      AND ${refundCents} = ${deltaCents})`;
+    return `("Purchase"."statedTotal" IS NOT NULL
+      AND abs(${deltaCents}) > ${tolerance}
+      AND NOT ${refundAdjusted}
+      AND ${exceptionAbsent})`;
   }
   return `(NOT EXISTS (
     SELECT 1 FROM "FinancialTransaction" dq_ft
@@ -493,22 +505,38 @@ export const loadPurchaseDataQualities = async (
           and(inArray(expense.purchaseId, uniqueIds), notDeleted(expense)),
         ),
       getDb(db)
-        .selectDistinct({ purchaseId: financialTransaction.purchaseId })
+        .select({
+          purchaseId: financialTransaction.purchaseId,
+          hasSettlementReference: sql<boolean>`bool_or(
+            ${financialTransaction.status} = 'posted'
+            AND jsonb_array_length(${financialTransaction.sourceRefs}) > 0
+          )`,
+          postedRefundTotal: sql<number>`COALESCE(sum(${financialTransaction.amount}) FILTER (
+            WHERE ${financialTransaction.status} = 'posted'
+              AND ${financialTransaction.kind} = 'refund'
+          ), 0)::double precision`,
+        })
         .from(financialTransaction)
         .where(
           and(
             inArray(financialTransaction.purchaseId, uniqueIds),
-            eq(financialTransaction.status, "posted"),
-            sql`jsonb_array_length(${financialTransaction.sourceRefs}) > 0`,
             notDeleted(financialTransaction),
           ),
-        ),
+        )
+        .groupBy(financialTransaction.purchaseId),
     ]);
   const expensesByPurchase = groupBy(expenses, (row) => row.purchaseId ?? "");
   const documentsByPurchase = groupBy(documents, (row) => row.purchaseId);
   const settlementCovered = new Set(
     qualifyingTransactions.flatMap((row) =>
-      row.purchaseId ? [row.purchaseId] : [],
+      row.purchaseId && row.hasSettlementReference ? [row.purchaseId] : [],
+    ),
+  );
+  const postedRefundByPurchase = new Map(
+    qualifyingTransactions.flatMap((row) =>
+      row.purchaseId
+        ? [[row.purchaseId, Number(row.postedRefundTotal)] as const]
+        : [],
     ),
   );
   const productIds = uniq(
@@ -561,12 +589,16 @@ export const loadPurchaseDataQualities = async (
       0,
     );
     if (
-      reconcilePurchase({ statedTotal: row.statedTotal, expenseTotal }) ===
-      "mismatch"
+      reconcilePurchase({
+        statedTotal: row.statedTotal,
+        expenseTotal,
+        unpricedExpenseCount: unpriced,
+        postedRefundTotal: postedRefundByPurchase.get(row.id) ?? 0,
+      }) === "mismatch"
     ) {
       add(
         "paperwork_mismatch",
-        "Expense total does not match the literal vendor-stated total.",
+        "Expense total differs from the literal vendor-stated total, and posted refunds do not fully explain it.",
       );
     }
     if (!settlementCovered.has(row.id)) {

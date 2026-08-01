@@ -174,7 +174,7 @@ export function PurchaseList() {
       columnHelper.display({
         id: "reconciliation",
         header: "Reconciles",
-        meta: { className: "w-32", mobile: { slot: "meta", priority: 60 } },
+        meta: { className: "w-48", mobile: { slot: "meta", priority: 60 } },
         cell: (info) => <ReconciliationBadge purchase={info.row.original} />,
       }),
       columnHelper.display({

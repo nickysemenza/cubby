@@ -90,6 +90,7 @@ import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
@@ -415,6 +416,7 @@ export const productList = async (
       { column: product.model, term: filters.modelFilter },
     ],
     [
+      ...relatedWhereConditions("product", filters, product.id),
       eqAnyOrPresence(
         product.category,
         filters.categoryFilter,

@@ -1,5 +1,6 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { inventoryRelatedFilterFields } from "./related-view";
 import { timestampedFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
@@ -24,6 +25,7 @@ export { positiveAmount } from "./codec";
 
 // Filters accepted by the inventory list endpoint.
 export const inventoryFilterFields = {
+  ...inventoryRelatedFilterFields,
   productNameFilter: z
     .string()
     .optional()

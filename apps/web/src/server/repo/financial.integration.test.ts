@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createExpense } from "./expense";
@@ -28,9 +29,11 @@ import {
   getPurchaseByID,
   linkExpensesToPurchase,
   mergePurchases,
+  purchaseList,
 } from "./purchase";
+import { loadRelatedPreviews } from "./related-view";
 import { resolveLiveShortcode } from "./shortcode-resolver";
-import { findOrCreateVendor, getVendorByID } from "./vendor";
+import { findOrCreateVendor, getVendorByID, vendorList } from "./vendor";
 
 const account = (
   name: string,
@@ -124,6 +127,156 @@ describe("financial repositories — critical invariants", () => {
         cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
       },
     });
+  });
+
+  it("batches distinct purchase previews and filters linked finance data", async () => {
+    const createdAccount = (
+      await createFinancialAccount(ctx.db, account("Preview Visa"), ctx.actor)
+    ).output;
+    const vendorId = await findOrCreateVendor(ctx.db, "Preview Vendor");
+    const previewVendor = await getVendorByID(ctx.db, vendorId);
+    const previewPurchase = (
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          vendorId: previewVendor.id,
+          orderId: "PREVIEW-1",
+        }),
+        ctx.actor,
+      )
+    ).output;
+    const expenses = [];
+    for (let index = 0; index < 4; index += 1) {
+      expenses.push(
+        (
+          await createExpense(
+            ctx.db,
+            expenseCreateInput.parse({
+              name: `preview line ${index}`,
+              trade: "other",
+              costType: "materials",
+              cost: index + 1,
+              purchaseId: previewPurchase.id,
+              future: false,
+            }),
+            ctx.actor,
+          )
+        ).output,
+      );
+    }
+    const activeTransaction = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: createdAccount.id,
+          purchaseId: previewPurchase.id,
+          kind: "purchase",
+          status: "posted",
+          postedDate: "2026-02-01",
+          merchant: "Preview merchant",
+          amount: 10,
+        }),
+        ctx.actor,
+      )
+    ).output;
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: createdAccount.id,
+        purchaseId: previewPurchase.id,
+        kind: "adjustment",
+        status: "void",
+        merchant: "Voided preview evidence",
+        amount: 1,
+      }),
+      ctx.actor,
+    );
+
+    const previews = await loadRelatedPreviews(ctx.db, {
+      source: "purchase",
+      sourceIds: [previewPurchase.id],
+      relationKeys: ["purchase.expenses", "purchase.transactions"],
+    });
+    expect(
+      previews.find((group) => group.relationKey === "purchase.expenses"),
+    ).toMatchObject({ totalCount: 4, items: expect.any(Array) });
+    expect(
+      previews.find((group) => group.relationKey === "purchase.expenses")
+        ?.items,
+    ).toHaveLength(3);
+    expect(
+      previews.find((group) => group.relationKey === "purchase.transactions")
+        ?.totalCount,
+    ).toBe(2);
+
+    const byExpense = await purchaseList(
+      ctx.db,
+      { expenseId: expenses[0]!.id },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(byExpense.data.map((row) => row.id)).toContain(previewPurchase.id);
+    const byTransactionSearch = await purchaseList(
+      ctx.db,
+      { financialTransactionSearch: "Preview merchant" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(byTransactionSearch.data.map((row) => row.id)).toContain(
+      previewPurchase.id,
+    );
+    const byTransactionId = await purchaseList(
+      ctx.db,
+      { financialTransactionId: activeTransaction.id },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(byTransactionId.data.map((row) => row.id)).toContain(
+      previewPurchase.id,
+    );
+
+    const vendorsByExpense = await vendorList(
+      ctx.db,
+      { expenseSearch: "preview line 2" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(vendorsByExpense.data.map((row) => row.id)).toContain(
+      previewVendor.id,
+    );
+    const accountsByTransaction = await listFinancialAccounts(
+      ctx.db,
+      { financialTransactionSearch: "Preview merchant" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(accountsByTransaction.data.map((row) => row.id)).toContain(
+      createdAccount.id,
+    );
+    const transactionsByExpense = await listFinancialTransactions(
+      ctx.db,
+      { expenseSearch: "preview line 3" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(transactionsByExpense.data.map((row) => row.id)).toContain(
+      activeTransaction.id,
+    );
+  });
+
+  it("keeps every curated preview path executable", async () => {
+    for (const source of new Set(
+      relatedViewRegistry.map((view) => view.source),
+    )) {
+      const groups = await loadRelatedPreviews(ctx.db, {
+        source,
+        sourceIds: ["NO-SUCH-SHORTCODE"],
+        relationKeys: relatedViewRegistry
+          .filter((view) => view.source === source)
+          .map((view) => view.key),
+      });
+      expect(groups).toEqual([]);
+    }
   });
 
   it("blocks account deletion, rejects cross-row source collisions, and preserves purchase-only updates", async () => {
@@ -500,8 +653,79 @@ describe("financial repositories — critical invariants", () => {
       status: "pending",
       postedTotal: 60.56,
       projectedTotal: 51.49,
+      postedRefundTotal: 0,
       outstandingTransactionCount: 1,
     });
+
+    const adjusted = await makePurchaseWithExpense(
+      "status-refund-adjusted",
+      199.26,
+    );
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: a.id,
+        purchaseId: adjusted.purchase.id,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-01-03",
+        amount: 326.36,
+      }),
+      ctx.actor,
+    );
+    for (const [postedDate, amount] of [
+      ["2026-01-04", -100],
+      ["2026-01-05", -27.1],
+    ] as const) {
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: a.id,
+          purchaseId: adjusted.purchase.id,
+          kind: "refund",
+          status: "posted",
+          postedDate,
+          amount,
+        }),
+        ctx.actor,
+      );
+    }
+    await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: a.id,
+        purchaseId: adjusted.purchase.id,
+        kind: "refund",
+        status: "void",
+        amount: -999,
+      }),
+      ctx.actor,
+    );
+    const deletedRefund = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: a.id,
+          purchaseId: adjusted.purchase.id,
+          kind: "refund",
+          status: "posted",
+          postedDate: "2026-01-06",
+          amount: -999,
+        }),
+        ctx.actor,
+      )
+    ).output;
+    await deleteFinancialTransactions(ctx.db, [deletedRefund.id], ctx.actor);
+    const adjustedReconciliation = (
+      await getPurchaseByID(ctx.db, adjusted.uuid)
+    ).financialReconciliation;
+    expect(adjustedReconciliation).toMatchObject({
+      status: "match",
+      postedRefundTotal: -127.1,
+      transactionCount: 3,
+    });
+    expect(adjustedReconciliation.postedTotal).toBeCloseTo(199.26);
+    expect(adjustedReconciliation.projectedTotal).toBeCloseTo(199.26);
 
     const mismatch = await makePurchaseWithExpense("status-mismatch", 10);
     await createFinancialTransaction(

@@ -609,19 +609,15 @@ function purchaseSubtitle(purchase: PurchaseNotReconciling): string {
 }
 
 /**
- * Names the discrepancy and its most likely innocent explanation, per direction.
- *
- * Deliberately not phrased as a fault: the lines coming in UNDER the stated total
- * is the partial-refund shape, which is correct as it stands, and the reverse can
- * simply be a stated total recorded before a line was added. `reconciliationDelta`
- * is the shared derivation (lines − stated), so this can't drift from the badge.
+ * Names the unexplained discrepancy by direction. Refund-adjusted purchases are
+ * excluded by the detector before reaching this worklist.
  */
 function purchaseDeltaHint(purchase: PurchaseNotReconciling): string | null {
   const delta = reconciliationDelta(purchase);
   if (delta === null) return null;
   const gap = formatCurrency(Math.abs(delta));
   return delta < 0
-    ? `Expenses come in ${gap} under the stated total — the shape a partial refund leaves, or an expense not recorded yet.`
+    ? `Expenses come in ${gap} under the stated total, and posted refund evidence does not fully explain the difference.`
     : `Expenses come in ${gap} over the stated total — an extra expense, or a stated total captured before one was added.`;
 }
 
@@ -1254,9 +1250,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     // reconcile" would read as a score to drive to 100%, which this isn't.
     coverage: {},
     entity: "purchase",
-    title: "Stated Totals That Don't Match the Expenses",
+    title: "Stated Totals That Need Review",
     description:
-      "What the paperwork claimed, next to what the purchase's expenses actually add up to. A cue, not a fault: a partial refund reduces an expense without changing what the purchase originally stated, so plenty of these are correct exactly as they are. Stated totals are never summed into spend — spend is always the expenses — so nothing here needs doing unless an expense is genuinely wrong or missing.",
+      "What the paperwork claimed, next to what the purchase's expenses actually add up to. Purchases whose posted refunds fully explain the difference are excluded. Stated totals are never summed into spend — spend is always the expenses.",
     emptyMessage:
       "Every purchase with a stated total agrees with its expenses. Purchases with no stated total recorded aren't compared.",
     renderItem: (purchase) => {
@@ -1276,7 +1272,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           : [],
         badges: [
           // The same soft `warning`-tone verdict the ledger column and the purchase
-          // page show, from the same `reconcilePurchase` — never a defect red.
+          // page show, from the same classifier — never a defect red.
           <ReconciliationBadge key="reconciliation" purchase={purchase} />,
           ...(purchase.orderId
             ? [<CodeChip key="order">{purchase.orderId}</CodeChip>]

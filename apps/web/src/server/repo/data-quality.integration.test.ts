@@ -231,6 +231,65 @@ describe("computed purchase and product data quality", () => {
     expect(purchases.data.map((item) => item.id)).toEqual([seeded.output.id]);
   });
 
+  it("does not flag a stated-total difference explained by posted refunds", async () => {
+    const seeded = await seedPurchase("Refund Quality Supply");
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({ purchaseId: seeded.output.id, cost: 20 }),
+      ctx.actor,
+    );
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Refund Quality Card",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "5454",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId: seeded.entityId,
+      kind: "refund",
+      status: "pending",
+      amount: -5,
+      transactionDate: "2026-07-02",
+      postedDate: null,
+      merchant: "Refund Quality Supply",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+
+    let quality = (
+      await loadPurchaseDataQualities(ctx.db, [seeded.entityId])
+    ).get(seeded.entityId)!;
+    expect(quality.gaps.map((gap) => gap.check)).toContain(
+      "paperwork_mismatch",
+    );
+
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ status: "posted", postedDate: "2026-07-03" })
+      .where(eq(financialTransaction.id, refund.id));
+
+    quality = (await loadPurchaseDataQualities(ctx.db, [seeded.entityId])).get(
+      seeded.entityId,
+    )!;
+    expect(quality.gaps.map((gap) => gap.check)).not.toContain(
+      "paperwork_mismatch",
+    );
+    expect(
+      (
+        await purchaseList(ctx.db, { dataGap: "paperwork_mismatch" }, [], page)
+      ).data.map((purchase) => purchase.id),
+    ).not.toContain(seeded.output.id);
+  });
+
   it("sets, replaces, clears, and validates typed exceptions", async () => {
     const seeded = await seedPurchase();
     let quality = await setDataException(

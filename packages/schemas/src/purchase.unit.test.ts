@@ -10,6 +10,19 @@ describe("purchase filter terminology", () => {
     expect(purchaseFilterFields).toHaveProperty("expenseStatus");
     expect(purchaseFilterFields).not.toHaveProperty("lineStatus");
   });
+
+  it("exposes the structured trio for every curated related column", () => {
+    for (const relation of [
+      "expense",
+      "financialTransaction",
+      "product",
+      "project",
+    ]) {
+      expect(purchaseFilterFields).toHaveProperty(`${relation}Id`);
+      expect(purchaseFilterFields).toHaveProperty(`${relation}PresenceFilter`);
+      expect(purchaseFilterFields).toHaveProperty(`${relation}Search`);
+    }
+  });
 });
 
 /**
@@ -44,6 +57,57 @@ describe("reconcilePurchase", () => {
     expect(reconcilePurchase({ statedTotal: 2400, expenseTotal: 2516 })).toBe(
       "mismatch",
     );
+  });
+
+  it("recognizes only fully-priced negative differences explained by posted refunds", () => {
+    expect(
+      reconcilePurchase({
+        statedTotal: 326.36,
+        expenseTotal: 199.26,
+        unpricedExpenseCount: 0,
+        postedRefundTotal: -127.1,
+      }),
+    ).toBe("refund_adjusted");
+    expect(
+      reconcilePurchase({
+        statedTotal: 326.36,
+        expenseTotal: 199.26,
+        unpricedExpenseCount: 1,
+        postedRefundTotal: -127.1,
+      }),
+    ).toBe("mismatch");
+    expect(
+      reconcilePurchase({
+        statedTotal: 199.26,
+        expenseTotal: 326.36,
+        unpricedExpenseCount: 0,
+        postedRefundTotal: 127.1,
+      }),
+    ).toBe("mismatch");
+  });
+
+  it("sums refund evidence before classification and compares in cents", () => {
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 79.99,
+        postedRefundTotal: -10.005 + -10.005,
+      }),
+    ).toBe("refund_adjusted");
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 80,
+        postedRefundTotal: 20,
+      }),
+    ).toBe("mismatch");
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 80,
+        postedRefundTotal: -19.99,
+      }),
+    ).toBe("mismatch");
   });
 
   it("absorbs sub-penny float drift and flags anything past the tolerance", () => {

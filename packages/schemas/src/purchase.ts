@@ -3,6 +3,7 @@ import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
+  financialTransactionShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -99,7 +100,12 @@ export type PurchaseExpenseStatus = z.infer<typeof purchaseExpenseStatus>;
  * The soft reconciliation verdict for a Purchase's stated total versus its Expenses.
  * `unknown` means there is no stated total to compare against.
  */
-export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
+export const purchaseReconciliation = z.enum([
+  "unknown",
+  "match",
+  "refund_adjusted",
+  "mismatch",
+]);
 export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
 
 export const purchaseDocumentKindValues = [
@@ -130,6 +136,30 @@ export const primaryPurchaseDocumentKinds = [
 export const purchaseFilterFields = {
   search: z.string().optional().describe("Substring match on order id"),
   vendorId: oneOrMany(vendorShortcode).optional(),
+  expenseId: oneOrMany(expenseShortcode).optional(),
+  expensePresenceFilter: presenceFilter,
+  expenseSearch: z
+    .string()
+    .optional()
+    .describe("Substring match on related expense names"),
+  financialTransactionId: oneOrMany(financialTransactionShortcode).optional(),
+  financialTransactionPresenceFilter: presenceFilter,
+  financialTransactionSearch: z
+    .string()
+    .optional()
+    .describe("Substring match on linked transaction merchant or description"),
+  productId: oneOrMany(productShortcode).optional(),
+  productPresenceFilter: presenceFilter,
+  productSearch: z
+    .string()
+    .optional()
+    .describe("Substring match on products reached through expenses"),
+  projectId: oneOrMany(projectShortcode).optional(),
+  projectPresenceFilter: presenceFilter,
+  projectSearch: z
+    .string()
+    .optional()
+    .describe("Substring match on projects reached through expenses"),
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
@@ -187,6 +217,8 @@ export const purchaseOut = z.object({
    * disagree — see the reconciliation note on `statedTotal`.
    */
   expenseTotal: z.number(),
+  /** Shared stated-total verdict, including posted-refund explanations. */
+  reconciliation: purchaseReconciliation,
   /** Settlement evidence only; never participates in spend rollups. */
   financialReconciliation: financialReconciliationSummary,
   /** Live invoice/receipt documents filed against this purchase. */
@@ -260,14 +292,29 @@ export const RECONCILIATION_TOLERANCE = 0.01;
 export const reconcilePurchase = (p: {
   statedTotal: number | null;
   expenseTotal: number;
+  unpricedExpenseCount?: number;
+  postedRefundTotal?: number;
+  financialReconciliation?: { postedRefundTotal: number };
 }): PurchaseReconciliation => {
   if (p.statedTotal === null) return "unknown";
-  const gapInCents = Math.abs(
-    Math.round(p.statedTotal * 100) - Math.round(p.expenseTotal * 100),
+  const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
+  const deltaInCents =
+    Math.round(p.expenseTotal * 100) - Math.round(p.statedTotal * 100);
+  if (Math.abs(deltaInCents) <= toleranceInCents) return "match";
+
+  const postedRefundInCents = Math.round(
+    (p.postedRefundTotal ?? p.financialReconciliation?.postedRefundTotal ?? 0) *
+      100,
   );
-  return gapInCents <= Math.round(RECONCILIATION_TOLERANCE * 100)
-    ? "match"
-    : "mismatch";
+  if (
+    (p.unpricedExpenseCount ?? 0) === 0 &&
+    deltaInCents < -toleranceInCents &&
+    postedRefundInCents === deltaInCents
+  ) {
+    return "refund_adjusted";
+  }
+
+  return "mismatch";
 };
 
 /**

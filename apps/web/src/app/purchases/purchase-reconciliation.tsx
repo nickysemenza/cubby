@@ -11,11 +11,10 @@ import { formatCurrency } from "~/lib/utils";
 /**
  * `statedTotal` vs `SUM(expense.cost)`, as a **soft** cue.
  *
- * Deliberately not an error tone and never a blocker: a mismatch is frequently
- * CORRECT — a partial refund reduces a line without changing what the purchase
- * itself stated — so the worst state here is `warning`, and nothing on the page
- * gates a write on it. `"unknown"` (no stated total recorded) is a quiet
- * neutral, not a problem to fix.
+ * Deliberately never a blocker. A difference exactly explained by posted refund
+ * evidence is `refund_adjusted` and neutral; only an unexplained difference gets
+ * the warning-toned `mismatch`. `"unknown"` (no stated total recorded) is a
+ * quiet neutral, not a problem to fix.
  *
  * The verdict itself always comes from `reconcilePurchase` in
  * `@cubby/schemas/purchase`, never re-derived here, so the list column, the
@@ -24,16 +23,42 @@ import { formatCurrency } from "~/lib/utils";
 const TONE: Record<PurchaseReconciliation, BadgeVariant> = {
   unknown: "slate",
   match: "positive",
+  refund_adjusted: "slate",
   mismatch: "warning",
 };
 
 const LABEL: Record<PurchaseReconciliation, string> = {
   unknown: "No stated total",
   match: "Reconciles",
-  mismatch: "Off",
+  refund_adjusted: "Refund-adjusted",
+  mismatch: "Needs review",
 };
 
-/** The delta the paperwork and the lines disagree by (mismatch only). */
+type ReconciliationPurchase = {
+  statedTotal: number | null;
+  expenseTotal: number;
+  unpricedExpenseCount: number;
+  reconciliation?: PurchaseReconciliation;
+  postedRefundTotal?: number;
+  financialReconciliation?: Pick<
+    PurchaseOut["financialReconciliation"],
+    "postedRefundTotal"
+  >;
+};
+
+export const purchaseReconciliationStatus = (
+  purchase: ReconciliationPurchase,
+): PurchaseReconciliation =>
+  purchase.reconciliation ??
+  reconcilePurchase({
+    ...purchase,
+    postedRefundTotal:
+      purchase.postedRefundTotal ??
+      purchase.financialReconciliation?.postedRefundTotal ??
+      0,
+  });
+
+/** The signed delta between the Expense total and the stated paperwork total. */
 export const reconciliationDelta = (purchase: {
   statedTotal: number | null;
   expenseTotal: number;
@@ -43,15 +68,15 @@ export const reconciliationDelta = (purchase: {
     : purchase.expenseTotal - purchase.statedTotal;
 
 export const ReconciliationBadge: FC<{
-  purchase: Pick<PurchaseOut, "statedTotal" | "expenseTotal">;
+  purchase: ReconciliationPurchase;
 }> = ({ purchase }) => {
-  const status = reconcilePurchase(purchase);
+  const status = purchaseReconciliationStatus(purchase);
   const delta = reconciliationDelta(purchase);
 
   return (
     <Badge variant={TONE[status]}>
-      {status === "mismatch" && delta !== null
-        ? `${LABEL.mismatch} ${formatCurrency(delta)}`
+      {(status === "mismatch" || status === "refund_adjusted") && delta !== null
+        ? `${LABEL[status]} ${formatCurrency(delta)}`
         : LABEL[status]}
     </Badge>
   );
@@ -69,7 +94,9 @@ export const ReconciliationNote: FC<{
       "No stated total recorded yet — nothing to compare the expenses against. Add what the receipt or invoice says to turn this into a cue."}
     {status === "match" &&
       "The expenses add up to what the purchase stated. Stated totals are never summed into spend — spend is always the expenses."}
+    {status === "refund_adjusted" &&
+      "Posted refund evidence fully explains why the expenses are below the original stated total. The stated total remains the literal paperwork amount, and spend remains the expenses."}
     {status === "mismatch" &&
-      "The expenses don't add up to what the purchase stated. That's often correct: a partial refund reduces an expense without changing what the paperwork claimed. Nothing here needs fixing unless an expense is genuinely wrong or missing."}
+      "The expenses don't add up to what the purchase stated, and posted refund evidence doesn't fully explain the difference. Review the expenses, stated total, or settlement evidence."}
   </Description>
 );

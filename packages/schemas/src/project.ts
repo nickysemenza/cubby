@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  expenseRelatedFilterFields,
+  projectRelatedFilterFields,
+  taskRelatedFilterFields,
+} from "./related-view";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import type { ShortcodeEntity } from "./entity-manifest";
@@ -301,6 +306,7 @@ export const projectOptionsOut = z.object({
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
 export const projectFilterFields = {
+  ...projectRelatedFilterFields,
   status: projectStatusSchema.optional(),
   kind: projectKindSchema.optional(),
   location: z.string().optional().describe("Exact match against locations[]"),
@@ -545,6 +551,7 @@ export const taskBulkReorderInput = z.object({
 export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
+  ...taskRelatedFilterFields,
   status: oneOrMany(taskStatusSchema).optional(),
   projectId: oneOrMany(projectShortcode).optional(),
   subjectProductId: oneOrMany(productShortcode).optional(),
@@ -848,6 +855,7 @@ export const expenseBulkCostTypeInput = z.object({
 export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
 export const expenseFilterFields = {
+  ...expenseRelatedFilterFields,
   // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
   // stay valid. Resolved with `eqAny` in the repo.
   costType: oneOrMany(costTypeSchema).optional(),

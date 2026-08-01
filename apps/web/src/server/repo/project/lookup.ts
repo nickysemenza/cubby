@@ -25,6 +25,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcode } from "~/server/repo/shortcode-resolver";
 import { projectContentDates, projectDependencyIds } from "./analytics";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
@@ -129,6 +130,7 @@ export const projectList = async (
     project,
     [],
     [
+      ...relatedWhereConditions("project", filters, project.id),
       pickerSearch,
       filters.status ? eq(project.status, filters.status) : undefined,
       filters.kind ? eq(project.kind, filters.kind) : undefined,

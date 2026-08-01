@@ -52,6 +52,7 @@ import type {
 import {
   purchaseSortableFields,
   RECONCILIATION_TOLERANCE,
+  reconcilePurchase,
 } from "@cubby/schemas/purchase";
 import {
   and,
@@ -209,6 +210,15 @@ const purchaseUnpricedExpenseCount = correlated<number>(
        AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
 );
 
+const purchasePostedRefundTotal = correlated<number>(
+  `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
+     FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."kind" = 'refund'
+       AND ft."status" = 'posted'
+       AND ft."deletedAt" IS NULL)`,
+);
+
 const purchaseDocumentCount = correlated<number>(
   `(SELECT count(*)::int FROM "PurchaseImage" pi
      JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
@@ -283,6 +293,12 @@ const dbPurchaseToAPI = (
   expenseCount: Number(row.expenseCount),
   unpricedExpenseCount: Number(row.unpricedExpenseCount),
   expenseTotal: Number(row.expenseTotal),
+  reconciliation: reconcilePurchase({
+    statedTotal: row.statedTotal,
+    expenseTotal: Number(row.expenseTotal),
+    unpricedExpenseCount: Number(row.unpricedExpenseCount),
+    postedRefundTotal: financial.postedRefundTotal,
+  }),
   documentCount: Number(row.documentCount),
   financialReconciliation: calculateFinancialReconciliation({
     expenseTotal: row.expenseTotal,
@@ -414,13 +430,24 @@ const reconciliationCondition = (
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
     floor((${purchaseExpenseTotal} * 100)::numeric + 0.5)
   )`;
+  const deltaInCents = sql`(
+    floor((${purchaseExpenseTotal} * 100)::numeric + 0.5) -
+    floor((${purchase.statedTotal} * 100)::numeric + 0.5)
+  )`;
+  const refundInCents = sql`floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5)`;
+  const refundAdjusted = sql`${purchaseUnpricedExpenseCount} = 0
+    AND ${deltaInCents} < ${-toleranceInCents}
+    AND ${refundInCents} = ${deltaInCents}`;
   return or(
     selected.includes("unknown") ? isNull(purchase.statedTotal) : undefined,
     selected.includes("match")
       ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} <= ${toleranceInCents}`
       : undefined,
+    selected.includes("refund_adjusted")
+      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents} AND ${refundAdjusted}`
+      : undefined,
     selected.includes("mismatch")
-      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents}`
+      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents} AND NOT (${refundAdjusted})`
       : undefined,
   );
 };
@@ -434,15 +461,108 @@ const documentPresenceCondition = (
       ? sql`${purchaseDocumentCount} = 0`
       : undefined;
 
+/**
+ * Curated related-entity predicate for Purchase list filters. Exact ids and a
+ * presence sentinel form one OR group; terminal-name search is an additional
+ * AND predicate. Identifiers/expressions are server constants at call sites;
+ * all user values stay parameterized.
+ */
+const relatedExistsCondition = (
+  table: "Expense" | "FinancialTransaction",
+  correlation: string,
+  targetUuids: string[] | undefined,
+  presence: "has" | "none" | undefined,
+  search: string | undefined,
+  searchExpression: string,
+  targetColumn = `related."id"`,
+  extraPredicate?: string,
+): SQL | undefined => {
+  if (targetUuids === undefined && !presence && !search) return undefined;
+  const base = sql`${sql.raw(correlation)}
+    AND related."deletedAt" IS NULL
+    ${extraPredicate ? sql`AND ${sql.raw(extraPredicate)}` : sql``}`;
+  const exists = (extra?: SQL) => sql`EXISTS (
+    SELECT 1 FROM ${sql.raw(`"${table}"`)} related
+    WHERE ${base} ${extra ? sql`AND ${extra}` : sql``}
+  )`;
+  const exact =
+    targetUuids === undefined
+      ? undefined
+      : targetUuids.length === 0
+        ? sql`false`
+        : exists(
+            sql`${sql.raw(targetColumn)} IN (${sql.join(
+              targetUuids.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`,
+          );
+  const presencePredicate =
+    presence === "has"
+      ? exists()
+      : presence === "none"
+        ? sql`NOT ${exists()}`
+        : undefined;
+  const identityGroup =
+    exact && presencePredicate
+      ? or(exact, presencePredicate)
+      : (exact ?? presencePredicate);
+  const searchPredicate = search?.trim()
+    ? exists(sql`${sql.raw(searchExpression)} ILIKE ${`%${search.trim()}%`}`)
+    : undefined;
+  return and(identityGroup, searchPredicate);
+};
+
 const buildPurchaseWhereClause = (
   filters: PurchaseFilters,
   vendorUuids: string[] | undefined,
+  relatedUuids: {
+    expense?: string[];
+    financialTransaction?: string[];
+    product?: string[];
+    project?: string[];
+  },
 ) =>
   buildSearchConditions(
     purchase,
     [{ column: purchase.orderId, term: filters.search }],
     [
       eqAny(purchase.vendorId, vendorUuids),
+      relatedExistsCondition(
+        "Expense",
+        `related."purchaseId" = "Purchase"."id"`,
+        relatedUuids.expense,
+        filters.expensePresenceFilter,
+        filters.expenseSearch,
+        `related."name"`,
+      ),
+      relatedExistsCondition(
+        "FinancialTransaction",
+        `related."purchaseId" = "Purchase"."id"`,
+        relatedUuids.financialTransaction,
+        filters.financialTransactionPresenceFilter,
+        filters.financialTransactionSearch,
+        `concat_ws(' ', related."merchant", related."rawDescription")`,
+      ),
+      relatedExistsCondition(
+        "Expense",
+        `related."purchaseId" = "Purchase"."id"`,
+        relatedUuids.product,
+        filters.productPresenceFilter,
+        filters.productSearch,
+        `(SELECT p."name" FROM "Product" p WHERE p."id" = related."productId" AND p."deletedAt" IS NULL)`,
+        `related."productId"`,
+        `EXISTS (SELECT 1 FROM "Product" p WHERE p."id" = related."productId" AND p."deletedAt" IS NULL)`,
+      ),
+      relatedExistsCondition(
+        "Expense",
+        `related."purchaseId" = "Purchase"."id"`,
+        relatedUuids.project,
+        filters.projectPresenceFilter,
+        filters.projectSearch,
+        `(SELECT p."name" FROM "Project" p WHERE p."id" = related."projectId" AND p."deletedAt" IS NULL)`,
+        `related."projectId"`,
+        `EXISTS (SELECT 1 FROM "Project" p WHERE p."id" = related."projectId" AND p."deletedAt" IS NULL)`,
+      ),
       eqAny(purchase.orderId, filters.orderId),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
       presenceCondition(
@@ -497,7 +617,29 @@ export const purchaseList = async (
         .filter((ref) => ref.entity === "vendor")
         .map((ref) => ref.id)
     : undefined;
-  const whereClause = buildPurchaseWhereClause(filters, vendorUuids);
+  const resolveRelated = async (
+    values: string | string[] | undefined,
+    entity: "expense" | "financialTransaction" | "product" | "project",
+  ) => {
+    if (!values) return undefined;
+    const codes = [values].flat();
+    return [...(await resolveShortcodes(db, codes)).values()]
+      .filter((ref) => ref.entity === entity)
+      .map((ref) => ref.id);
+  };
+  const [expenseUuids, financialTransactionUuids, productUuids, projectUuids] =
+    await Promise.all([
+      resolveRelated(filters.expenseId, "expense"),
+      resolveRelated(filters.financialTransactionId, "financialTransaction"),
+      resolveRelated(filters.productId, "product"),
+      resolveRelated(filters.projectId, "project"),
+    ]);
+  const whereClause = buildPurchaseWhereClause(filters, vendorUuids, {
+    expense: expenseUuids,
+    financialTransaction: financialTransactionUuids,
+    product: productUuids,
+    project: projectUuids,
+  });
   const { take, skip } = buildTakeSkip(pagination);
 
   const [rows, count] = await Promise.all([
