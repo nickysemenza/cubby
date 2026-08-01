@@ -286,10 +286,14 @@ export const attachFileToEntity = async (
       bytes = Buffer.from(
         await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
       );
-      const responseContentType = response.headers
+      const responseContentTypeHeader = response.headers
         .get("content-type")
         ?.split(";", 1)[0]
         ?.trim();
+      const responseContentType =
+        responseContentTypeHeader?.toLowerCase() === "application/octet-stream"
+          ? undefined
+          : responseContentTypeHeader;
       if (
         input.contentType &&
         responseContentType &&
@@ -300,7 +304,7 @@ export const attachFileToEntity = async (
           "contentType conflicts with the URL response Content-Type",
         );
       }
-      contentType = responseContentType;
+      contentType = responseContentType ?? input.contentType;
       sourceFilename = new URL(url).pathname.split("/").pop() || undefined;
     } catch (error) {
       // Bad/SSRF-blocked URL, redirect limit, oversized body — a caller error,

@@ -257,6 +257,56 @@ describe("attachFileToEntity", () => {
     expect(mocks.uploadToS3).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the caller content type when a URL response omits it", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64")),
+    );
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      url: "https://example.com/photo",
+      contentType: "image/png",
+    });
+
+    expect(result.contentType).toBe("image/png");
+    expect(mocks.uploadToS3).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: "image/png" }),
+    );
+  });
+
+  it("uses the caller content type for a generic URL response MIME", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64"), {
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    );
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      url: "https://example.com/photo",
+      contentType: "image/png",
+    });
+
+    expect(result.contentType).toBe("image/png");
+  });
+
+  it("rejects a caller content type that conflicts with a URL response", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64"), {
+        headers: { "content-type": "image/png" },
+      }),
+    );
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        url: "https://example.com/photo.png",
+        contentType: "image/jpeg",
+      }),
+    ).rejects.toThrow(/conflicts with the URL response Content-Type/);
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
   it("returns an existing idempotency winner before fetching or uploading", async () => {
     mocks.findAttachmentByIdempotencyKey.mockResolvedValueOnce({
       id: "winner-1",

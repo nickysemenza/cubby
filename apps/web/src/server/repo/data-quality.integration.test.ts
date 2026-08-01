@@ -461,10 +461,13 @@ describe("computed purchase and product data quality", () => {
       localProduct.id,
     ]);
 
-    for (const productId of [amazonProduct.entityId, localProduct.entityId]) {
+    for (const [index, productId] of [
+      amazonProduct.entityId,
+      localProduct.entityId,
+    ].entries()) {
       await insertAndReturn(ctx.db, productExternalId, {
         productId,
-        source: "catalog",
+        source: index === 0 ? "Catalog" : "catalog",
         kind: "catalog_number",
         externalId: "SHARED-1",
         url: null,
@@ -487,6 +490,10 @@ describe("computed purchase and product data quality", () => {
         ]),
       }),
     ]);
+    const sourceWide = await findProductExternalIdCollisions(ctx.db, {
+      source: "CATALOG",
+    });
+    expect(sourceWide.items).toEqual(collisions.items);
     const exact = await findProductExternalIdCollisions(ctx.db, {
       identifiers: [
         { source: "catalog", kind: "catalog_number", externalId: "SHARED-1" },
