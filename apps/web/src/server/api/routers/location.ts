@@ -66,7 +66,7 @@ import {
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 async function resolveLocationId(
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -191,13 +191,13 @@ const { getByID, getByShortcode, create, update } =
   });
 
 const getLocationTypesCount = protectedProcedure
-  .output(locationTypeCountsOut)
+  .output(strictOutput(locationTypeCountsOut))
   .query(async ({ ctx }) => {
     return await buildLocationTypeCount(ctx.db);
   });
 
 const makeTree = protectedProcedure
-  .output(infLocationListOut)
+  .output(strictOutput(infLocationListOut))
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
 /**
@@ -207,11 +207,11 @@ const makeTree = protectedProcedure
  * `locationParentOptions`). Mirrors `project.options`' role/shape.
  */
 const parentOptions = protectedProcedure
-  .output(z.array(locationParentOptionsOut))
+  .output(strictOutput(z.array(locationParentOptionsOut)))
   .query(({ ctx }) => locationParentOptions(ctx.db));
 
 const ensureGlobalUnknown = protectedProcedure
-  .output(infLocation)
+  .output(strictOutput(infLocation))
   .mutation(async ({ ctx }) => {
     const location = await ensureGlobalUnknownLocation(
       ctx.db,
@@ -228,7 +228,7 @@ const ensureGlobalUnknown = protectedProcedure
 
 const bulkUpdateParent = protectedProcedure
   .input(locationBulkUpdateParentInput)
-  .output(locationBulkUpdateParentOut)
+  .output(strictOutput(locationBulkUpdateParentOut))
   .mutation(async ({ ctx, input }) => {
     if (input.parentId && input.ids.includes(input.parentId)) {
       throw createAppError(
@@ -258,7 +258,7 @@ const bulkUpdateParent = protectedProcedure
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(locationShortcodesInput)
-  .output(locationsWithParentNameOut)
+  .output(strictOutput(locationsWithParentNameOut))
   .query(async ({ ctx, input }) => {
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });
@@ -266,7 +266,7 @@ const getByShortcodes = protectedProcedure
 // Get recently active locations for scanner quick-select
 const getRecentlyActive = protectedProcedure
   .input(recentlyActiveLocationsInput)
-  .output(recentlyActiveLocationsOut)
+  .output(strictOutput(recentlyActiveLocationsOut))
   .query(async ({ ctx, input }) => {
     return await getRecentlyActiveLocations(ctx.db, input?.limit ?? 5);
   });
@@ -292,7 +292,7 @@ const deleteItem = createDeleteProcedure<LocationShortcode>(
 // after the column is first added, and as a safety net for writes that bypass the
 // router (raw SQL / postgres MCP). Idempotent — same inventory → same numbers.
 const recomputeValuations = protectedProcedure
-  .output(recomputeLocationValuationsOut)
+  .output(strictOutput(recomputeLocationValuationsOut))
   .mutation(async ({ ctx }) => {
     const updated = await ctx.services.locationValuation.recompute();
     return { updated };
@@ -301,7 +301,7 @@ const recomputeValuations = protectedProcedure
 // Get child location counts for multiple parent locations (batched to avoid N+1)
 const getChildCountsByLocations = protectedProcedure
   .input(locationIdsInput)
-  .output(locationChildCountsOut)
+  .output(strictOutput(locationChildCountsOut))
   .query(async ({ ctx, input }) => {
     const ids = await resolveLocationIds(ctx.db, input.locationIds);
     const counts = await getChildCountsByLocationIds(ctx.db, ids);

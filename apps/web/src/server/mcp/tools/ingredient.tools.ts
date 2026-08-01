@@ -65,7 +65,7 @@ export function registerIngredientTools(server: McpServer) {
     call: (caller, params) =>
       caller.ingredient
         .resolveOrCreate({ names: params.names })
-        .then((results: unknown) => ({
+        .then((results) => ({
           results,
         })),
   });
@@ -79,13 +79,10 @@ export function registerIngredientTools(server: McpServer) {
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const merges = params.merges as Array<{
-        target: string;
-        aliases: string[];
-      }>;
-      const dryRun = params.dryRun as boolean | undefined;
+      const merges = params.merges;
+      const dryRun = params.dryRun;
       const results: Array<{
-        target: string;
+        target: (typeof merges)[number]["target"];
         ok: boolean;
         summary?: MergeSummaryOut;
         error?: string;
@@ -137,9 +134,10 @@ export function registerIngredientTools(server: McpServer) {
       const caller = getCaller(extra);
       const rows = await caller.ingredient.rawLines({ ids: params.ids });
       const byIngredient = groupBy(rows, (r) => r.ingredientId);
-      const ingredients = Object.entries(byIngredient).map(
-        ([ingredientId, lines]) => ({
-          ingredientId,
+      const ingredients = Object.values(byIngredient).map((lines) => {
+        const first = lines[0]!;
+        return {
+          ingredientId: first.ingredientId,
           lineCount: lines.length,
           lines: lines.map((l) => ({
             lineId: l.lineId,
@@ -150,8 +148,8 @@ export function registerIngredientTools(server: McpServer) {
             recipeName: l.recipeName,
             sectionName: l.sectionName,
           })),
-        }),
-      );
+        };
+      });
       return { count: ingredients.length, ingredients };
     },
   });

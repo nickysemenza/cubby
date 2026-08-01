@@ -1,11 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity";
 import {
-  type IngredientId,
+  type IngredientShortcode,
   type LocationShortcode,
   type ProductShortcode,
   type ProjectShortcode,
-  type RecipeId,
+  type RecipeShortcode,
   unsafeProductShortcode,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
@@ -1041,9 +1041,9 @@ type SingleEntityColumnData =
 
 // Branded id per pickable relation entity (usda-food has no picker).
 type SingleEntityIdMap = {
-  ingredient: IngredientId;
+  ingredient: IngredientShortcode;
   product: ProductShortcode;
-  recipe: RecipeId;
+  recipe: RecipeShortcode;
   location: LocationShortcode;
 };
 

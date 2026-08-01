@@ -20,12 +20,12 @@ import {
   hybridGlobalSearch,
   lexicalGlobalSearch,
 } from "~/server/services/semantic-search.service";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 // Main search procedure
 const global = protectedProcedure
   .input(globalSearchInputSchema)
-  .output(globalSearchOut)
+  .output(strictOutput(globalSearchOut))
   .query(async ({ ctx, input }): Promise<SearchResultItem[]> => {
     return input.mode === "lexical"
       ? await lexicalGlobalSearch(
@@ -47,13 +47,13 @@ export const searchRouter = createTRPCRouter({
   /** Entity-to-entity similarity over the stored embeddings (allowlisted pairs). */
   similar: protectedProcedure
     .input(similarEntitiesInputSchema)
-    .output(similarEntitiesOut)
+    .output(strictOutput(similarEntitiesOut))
     .query(async ({ ctx, input }) => {
       return await findSimilarEntitiesForPair(ctx.db, input);
     }),
   debug: protectedProcedure
     .input(globalSearchInputSchema)
-    .output(searchDebugOutSchema)
+    .output(strictOutput(searchDebugOutSchema))
     .query(async ({ ctx, input }) => {
       return await debugHybridSearch(
         ctx.db,
@@ -64,13 +64,13 @@ export const searchRouter = createTRPCRouter({
     }),
   backfillEmbeddings: protectedProcedure
     .input(semanticBackfillInputSchema)
-    .output(semanticBackfillOutSchema)
+    .output(strictOutput(semanticBackfillOutSchema))
     .mutation(async ({ ctx, input }) => {
       return await backfillEntityEmbeddings(ctx.db, input);
     }),
   enqueueEmbeddingBackfill: protectedProcedure
     .input(enqueueEmbeddingBackfillInputSchema)
-    .output(enqueueEmbeddingBackfillOutSchema)
+    .output(strictOutput(enqueueEmbeddingBackfillOutSchema))
     .mutation(async ({ ctx, input }) => {
       return await enqueueEntityEmbeddingBackfill(ctx.db, input);
     }),

@@ -25,7 +25,11 @@ import {
   createDeleteProcedure,
   createEntityListProcedure,
 } from "~/server/api/crud-factory";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  strictOutput,
+} from "~/server/api/trpc";
 import { createAppError } from "~/server/errors/app-error";
 import {
   getImageById,
@@ -104,7 +108,7 @@ export const imageRouter = createTRPCRouter({
    */
   update: protectedProcedure
     .input(z.object({ id: z.string(), data: imageUpdateInput }))
-    .output(imageWithEntitySchema)
+    .output(strictOutput(imageWithEntitySchema))
     .mutation(async ({ ctx, input }) => {
       return await updateImage(ctx.db, input.id, input.data);
     }),
@@ -119,7 +123,7 @@ export const imageRouter = createTRPCRouter({
    */
   markUploaded: protectedProcedure
     .input(getImageByIdSchema)
-    .output(imageWithEntitySchema)
+    .output(strictOutput(imageWithEntitySchema))
     .mutation(async ({ ctx, input }) => {
       return await markImageUploaded(ctx.db, input.id);
     }),
@@ -129,7 +133,7 @@ export const imageRouter = createTRPCRouter({
    */
   uploadImage: protectedProcedure
     .input(initiateUploadWithoutEntitySchema)
-    .output(initiateUploadWithoutEntityResponseSchema)
+    .output(strictOutput(initiateUploadWithoutEntityResponseSchema))
     .mutation(async ({ ctx, input }) => {
       try {
         const uploadData = await initiateImageUploadWithoutEntity(
@@ -158,7 +162,7 @@ export const imageRouter = createTRPCRouter({
    */
   uploadDocument: protectedProcedure
     .input(initiateDocumentUploadSchema)
-    .output(initiateUploadWithoutEntityResponseSchema)
+    .output(strictOutput(initiateUploadWithoutEntityResponseSchema))
     .mutation(async ({ ctx, input }) => {
       try {
         const uploadData = await initiateDocumentUpload(ctx.db, input);
@@ -183,7 +187,7 @@ export const imageRouter = createTRPCRouter({
    */
   importFromUrl: protectedProcedure
     .input(importImageFromUrlSchema)
-    .output(importImageFromUrlResponseSchema)
+    .output(strictOutput(importImageFromUrlResponseSchema))
     .mutation(async ({ ctx, input }) => {
       try {
         const filenamePrefix = `${input.entityType ?? "image"}-url-import`;
@@ -223,7 +227,7 @@ export const imageRouter = createTRPCRouter({
    */
   attachFile: protectedProcedure
     .input(mcpAttachFileInput)
-    .output(attachFileResponse)
+    .output(strictOutput(attachFileResponse))
     .mutation(async ({ ctx, input }) => {
       try {
         return await attachFileToEntity(ctx.db, input);
@@ -246,7 +250,7 @@ export const imageRouter = createTRPCRouter({
    */
   getByID: protectedProcedure
     .input(getImageByIdSchema)
-    .output(imageWithEntitySchema)
+    .output(strictOutput(imageWithEntitySchema))
     .query(async ({ ctx, input }) => {
       return await getImageById(ctx.db, input.id);
     }),
@@ -259,7 +263,7 @@ export const imageRouter = createTRPCRouter({
    */
   imagesByProjectIds: protectedProcedure
     .input(z.object({ projectIds: z.array(projectShortcode) }))
-    .output(z.record(z.string(), z.array(projectImageSummary)))
+    .output(strictOutput(z.record(z.string(), z.array(projectImageSummary))))
     .query(async ({ ctx, input }) => {
       const resolved = await resolveLiveShortcodes(
         ctx.db,
@@ -295,7 +299,7 @@ export const imageRouter = createTRPCRouter({
    */
   cullPendingImages: protectedProcedure
     .input(cullPendingImagesSchema)
-    .output(cullPendingImagesResponseSchema)
+    .output(strictOutput(cullPendingImagesResponseSchema))
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await cullPendingImageStorage(

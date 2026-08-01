@@ -12,7 +12,7 @@ import {
   usdaFoodSummaryListOut,
   usdaListInput,
 } from "@cubby/schemas/usda";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 // These return `foodSummaryWithLinkedProducts`, which embeds internal Cubby
 // product data (ids, prices, externalIds). The app is deployed publicly, so
@@ -20,21 +20,21 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 // publicProcedure without splitting off the linkedProducts enrichment.
 const getByAlternateID = protectedProcedure
   .input(usdaFoodLookupInput)
-  .output(foodSummaryWithLinkedProducts.nullable())
+  .output(strictOutput(foodSummaryWithLinkedProducts.nullable()))
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.findFood(input);
   });
 
 const getByID = protectedProcedure
   .input(usdaFoodIdInput)
-  .output(foodSummaryWithLinkedProducts.nullable())
+  .output(strictOutput(foodSummaryWithLinkedProducts.nullable()))
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.getFoodSummaryByID(input.id);
   });
 
 const list = protectedProcedure
   .input(usdaListInput)
-  .output(usdaFoodListOut)
+  .output(strictOutput(usdaFoodListOut))
   .query(async ({ ctx, input }) => {
     try {
       const { data, count } = await ctx.usdaService.listFoods(
@@ -62,7 +62,7 @@ const list = protectedProcedure
 
 const listSummaries = protectedProcedure
   .input(usdaListInput)
-  .output(usdaFoodSummaryListOut)
+  .output(strictOutput(usdaFoodSummaryListOut))
   .query(async ({ ctx, input }) => {
     try {
       const { data, count } = await ctx.usdaService.listFoodSummaries(
@@ -89,7 +89,7 @@ const listSummaries = protectedProcedure
 
 const enrichmentsByID = protectedProcedure
   .input(usdaFoodEnrichmentsInput)
-  .output(usdaFoodEnrichmentsOut)
+  .output(strictOutput(usdaFoodEnrichmentsOut))
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.getFoodEnrichmentsByID(input.fdcIds);
   });

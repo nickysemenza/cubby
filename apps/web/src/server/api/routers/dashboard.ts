@@ -1,6 +1,6 @@
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 import { getEntityCounts } from "~/server/repo/dashboard";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 /**
  * One call powering the homepage stat cards. The six DB totals are cheap
@@ -11,7 +11,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
  * /usda) enriched a row just to read `meta.totalCount`.
  */
 const counts = protectedProcedure
-  .output(dashboardCountsOut)
+  .output(strictOutput(dashboardCountsOut))
   .query(async ({ ctx }) => {
     const [entityCounts, usdaCounts] = await Promise.all([
       getEntityCounts(ctx.db),

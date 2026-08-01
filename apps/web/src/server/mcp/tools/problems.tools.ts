@@ -66,6 +66,9 @@ export function registerProblemsTools(server: McpServer) {
             availableTypes: Object.keys(all as Record<string, unknown>),
           };
         }
+        if (!Array.isArray(slice)) {
+          throw new Error(`Problem type '${params.type}' is not a list`);
+        }
         return { type: params.type, items: slice };
       }
       return all;
