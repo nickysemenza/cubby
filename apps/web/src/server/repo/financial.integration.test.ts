@@ -167,7 +167,7 @@ describe("financial repositories — critical invariants", () => {
     expect(first.rows[0]?.existingTransactionIds).toEqual([]);
 
     const proposed = first.rows[0]!.proposed;
-    await createFinancialTransaction(
+    const createdEvidence = await createFinancialTransaction(
       ctx.db,
       financialTransactionCreateInput.parse({
         accountId: createdAccount.id,
@@ -185,7 +185,6 @@ describe("financial repositories — critical invariants", () => {
       }),
       ctx.actor,
     );
-
     const laterExport = await previewFinancialStatementImport(ctx.db, {
       rows: [{ ...row, merchant: "Amazon.com", category: "Other" }],
     });
@@ -203,6 +202,17 @@ describe("financial repositories — critical invariants", () => {
     expect(changedIdentity.rows[0]).toMatchObject({
       status: "possible_existing",
     });
+
+    await updateFinancialTransaction(
+      ctx.db,
+      createdEvidence.output.id,
+      { postedDate: "2026-07-29" },
+      ctx.actor,
+    );
+    const correctedDateExport = await previewFinancialStatementImport(ctx.db, {
+      rows: [{ ...row, key: "corrected-date" }],
+    });
+    expect(correctedDateExport.rows[0]?.status).toBe("already_recorded");
 
     const manualEvidence = (
       await createFinancialTransaction(

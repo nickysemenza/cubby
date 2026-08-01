@@ -12,6 +12,7 @@ import {
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
+import { and, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
@@ -96,7 +97,18 @@ export async function previewFinancialStatementImport(
   db: Database,
   input: FinancialStatementImportPreviewInput,
 ): Promise<FinancialStatementImportPreviewOut> {
-  const [accounts, transactions, refs] = await Promise.all([
+  const sourceRefIds = await Promise.all(input.rows.map(sourceExternalId));
+  const dates = [...new Set(input.rows.map((row) => row.date))];
+  const sourceRefLookup = sql`EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(${financialTransaction.sourceRefs}) AS "sourceRef"
+    WHERE "sourceRef"->>'source' = 'monarch'
+      AND "sourceRef"->>'externalId' IN (${sql.join(
+        sourceRefIds.map((ref) => sql`${ref}`),
+        sql`, `,
+      )})
+  )`;
+  const [accounts, transactions] = await Promise.all([
     unwrapDb(db)
       .select({
         id: financialAccount.id,
@@ -118,12 +130,18 @@ export async function previewFinancialStatementImport(
         sourceRefs: financialTransaction.sourceRefs,
       })
       .from(financialTransaction)
-      .where(notDeleted(financialTransaction)),
-    Promise.all(input.rows.map(sourceExternalId)),
+      .where(
+        and(
+          notDeleted(financialTransaction),
+          // A source ref is global evidence and must survive a later posted-date
+          // correction; the date predicate handles the normal batch efficiently.
+          or(inArray(financialTransaction.postedDate, dates), sourceRefLookup),
+        ),
+      ),
   ]);
 
   const fingerprintCounts = new Map<string, number>();
-  for (const ref of refs)
+  for (const ref of sourceRefIds)
     fingerprintCounts.set(ref, (fingerprintCounts.get(ref) ?? 0) + 1);
 
   const parsedAccounts = accounts.map((account) => ({
@@ -139,7 +157,7 @@ export async function previewFinancialStatementImport(
   }));
 
   const rows = input.rows.map((row, index) => {
-    const externalId = refs[index]!;
+    const externalId = sourceRefIds[index]!;
     const sourceRef = { source: row.source, externalId };
     const normalizedAmount = -row.amount;
     const kind = row.kind ?? (normalizedAmount > 0 ? "purchase" : "refund");
@@ -151,7 +169,7 @@ export async function previewFinancialStatementImport(
       transactionDate: null,
       postedDate: row.date,
       merchant: row.merchant,
-      rawDescription: row.originalStatement || null,
+      rawDescription: row.originalStatement,
       sourceCategory: row.category,
       notes: row.notes,
     };
