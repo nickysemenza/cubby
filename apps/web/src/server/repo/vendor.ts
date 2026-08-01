@@ -176,7 +176,7 @@ const buildVendorWhereClause = (filters: VendorFilters) =>
     vendor,
     [],
     [
-      ...relatedWhereConditions("vendor", filters),
+      ...relatedWhereConditions("vendor", filters, vendor.id),
       filters.search
         ? or(
             formatSearchTerm(vendor.name, filters.search),

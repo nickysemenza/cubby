@@ -183,7 +183,7 @@ export const taskList = async (
     task,
     [],
     [
-      ...relatedWhereConditions("task", filters),
+      ...relatedWhereConditions("task", filters, task.id),
       searchCondition,
       eqAny(task.status, filters.status),
       // Carries `projectPresenceFilter` too — it ORs with the id selection, so

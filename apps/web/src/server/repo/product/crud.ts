@@ -407,7 +407,7 @@ export const productList = async (
       { column: product.model, term: filters.modelFilter },
     ],
     [
-      ...relatedWhereConditions("product", filters),
+      ...relatedWhereConditions("product", filters, product.id),
       eqAnyOrPresence(
         product.category,
         filters.categoryFilter,

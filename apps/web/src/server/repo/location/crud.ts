@@ -621,6 +621,7 @@ export const locationList = async (
       ...relatedWhereConditions(
         "location",
         filters as unknown as Record<string, unknown>,
+        location.id,
       ),
       pickerSearch,
       eqAny(location.type, filters.itemTypeFilter),

@@ -397,6 +397,7 @@ export const recipeList = async (
       ...relatedWhereConditions(
         "recipe",
         filters as unknown as Record<string, unknown>,
+        recipe.id,
       ),
       pickerSearch,
       eqAnyOrPresence(

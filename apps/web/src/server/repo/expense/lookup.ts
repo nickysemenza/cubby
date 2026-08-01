@@ -218,7 +218,7 @@ export const buildExpenseWhereClause = async (
       { column: expense.url, term: filters.urlSearch },
     ],
     [
-      ...relatedWhereConditions("expense", filters),
+      ...relatedWhereConditions("expense", filters, expense.id),
       nameSearch,
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),

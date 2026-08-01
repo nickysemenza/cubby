@@ -123,7 +123,11 @@ const whereFor = (filters: FinancialAccountFilters) =>
     financialAccount,
     [{ column: financialAccount.name, term: filters.search }],
     [
-      ...relatedWhereConditions("financialAccount", filters),
+      ...relatedWhereConditions(
+        "financialAccount",
+        filters,
+        financialAccount.id,
+      ),
       filters.identityKind
         ? sql`"FinancialAccount"."identity"->>'kind' = ANY(${[filters.identityKind].flat()})`
         : undefined,

@@ -8,7 +8,7 @@ import {
   relatedFilterPrefix,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
-import { and, or, type SQL, sql } from "drizzle-orm";
+import { and, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 
@@ -323,6 +323,7 @@ export async function loadRelatedPreviews(
 export function relatedWhereConditions(
   source: Entity,
   filters: Record<string, unknown>,
+  sourceId: SQLWrapper,
 ): SQL[] {
   return relatedViewRegistry
     .filter((view) => view.source === source)
@@ -348,7 +349,7 @@ export function relatedWhereConditions(
         SELECT 1
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
         ${sql.raw(view.joins)}
-        WHERE s."id" = ${sql.raw(`"${view.sourceTable}"."id"`)}
+        WHERE s."id" = ${sourceId}
           AND s."deletedAt" IS NULL
           ${extra ? sql`AND ${extra}` : sql``}
       )`;

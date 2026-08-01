@@ -286,6 +286,7 @@ export const inventoryentryList = async (
       ...relatedWhereConditions(
         "inventory",
         filters as unknown as Record<string, unknown>,
+        inventoryEntry.id,
       ),
       filters.locationIdFilter
         ? eq(inventoryEntry.locationId, filters.locationIdFilter)

@@ -130,7 +130,7 @@ export const projectList = async (
     project,
     [],
     [
-      ...relatedWhereConditions("project", filters),
+      ...relatedWhereConditions("project", filters, project.id),
       pickerSearch,
       filters.status ? eq(project.status, filters.status) : undefined,
       filters.kind ? eq(project.kind, filters.kind) : undefined,

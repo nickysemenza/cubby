@@ -180,7 +180,11 @@ async function whereFor(
       { column: financialTransaction.rawDescription, term: filters.search },
     ],
     [
-      ...relatedWhereConditions("financialTransaction", filters),
+      ...relatedWhereConditions(
+        "financialTransaction",
+        filters,
+        financialTransaction.id,
+      ),
       eqAny(financialTransaction.accountId, accountIds),
       eqAny(financialTransaction.purchaseId, purchaseIds),
       filters.purchasePresenceFilter === "has"
