@@ -45,7 +45,7 @@ export {
 } from "./query";
 // Relation loaders
 export { imageOrder, relations } from "./relations";
-export type { RowWithOptionalAliases } from "./transform";
+export type { MappableImageRecord, RowWithOptionalAliases } from "./transform";
 // Transform helpers
 export {
   buildPartialUpdateValues,

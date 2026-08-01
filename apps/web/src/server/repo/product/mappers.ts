@@ -1,3 +1,4 @@
+import type { DataException } from "@cubby/schemas/data-quality";
 import {
   unsafeIngredientShortcode,
   unsafeInventoryShortcode,
@@ -21,43 +22,45 @@ import {
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import type {
-  image,
   ingredient,
   location,
   product,
-  productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 import {
   isNotDeleted,
+  type MappableImageRecord,
   mapImages,
   mapRelation,
   parseInventoryAmount,
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
+import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductDeepDB, ProductListDB } from "./types";
 
 type ProductImageRow =
-  | typeof image.$inferSelect
+  | MappableImageRecord
   | {
-      image: typeof image.$inferSelect;
+      image: MappableImageRecord;
       deletedAt?: Date | null;
     };
 
 type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   images?: ProductImageRow[] | null;
-  externalIds?: Array<typeof productExternalId.$inferSelect> | null;
+  externalIds?: MappableProductExternalId[] | null;
   dataQuality?: ProductTopLevelOut["dataQuality"];
 };
 
 export const mapProductExternalIds = (
-  externalIds: Array<typeof productExternalId.$inferSelect> | undefined | null,
+  externalIds: MappableProductExternalId[] | undefined | null,
 ) =>
   (externalIds ?? [])
     .filter((externalId) => externalId.deletedAt === null)
     .map((externalId) => ({
       id: externalId.id,
       source: externalId.source,
+      kind: (externalId.kind ??
+        "legacy_unspecified") as import("@cubby/schemas/external-id").ExternalIdKind,
       externalId: externalId.externalId,
       url: externalId.url,
       createdAt: externalId.createdAt,
@@ -102,7 +105,13 @@ export const dbProductToTopLevelShape = (
   dataQuality: productData.dataQuality ?? {
     status: "complete",
     gaps: [],
-    exceptions: productData.dataExceptions ?? [],
+    exceptions: (productData.dataExceptions ?? []).map(
+      (exception: DataException) => ({
+        ...exception,
+        targetType: "product" as const,
+        targetId: unsafeProductShortcode(productData.shortcode),
+      }),
+    ),
   },
   images: mapImages(productData.images),
   externalIds: mapProductExternalIds(productData.externalIds),

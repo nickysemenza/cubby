@@ -6,12 +6,12 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { PresenceFilter } from "@cubby/schemas/pagination";
 import type {
-  image,
   ingredient,
   recipe,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import type { MappableImageRecord } from "~/server/repo/database-helpers";
 
 /**
  * An ingredient row joined with its optional backing Recipe (set when the
@@ -41,7 +41,7 @@ export type RecipeDeepDB = typeof recipe.$inferSelect & {
     }
   >;
   images: Array<{
-    image: typeof image.$inferSelect;
+    image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
 };

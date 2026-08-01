@@ -127,6 +127,17 @@ export {
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
 export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
+export const imageRenderStatusEnum = pgEnum("ImageRenderStatus", [
+  "unverified",
+  "verified",
+  "failed",
+]);
+export const imageStorageStatusEnum = pgEnum("ImageStorageStatus", [
+  "unverified",
+  "available",
+  "missing",
+  "metadata_mismatch",
+]);
 
 export const backgroundJobKindEnum = pgEnum("BackgroundJobKind", [
   "recipe-totals.recompute",
@@ -578,6 +589,7 @@ export const productExternalId = pgTable(
       .$type<ProductId>()
       .references(() => product.id),
     source: text("source").notNull(), // e.g. "amazon", "mcmaster", "mouser"
+    kind: text("kind").notNull().default("legacy_unspecified"),
     externalId: text("externalId").notNull(), // The actual identifier (ASIN, part number, etc.)
     url: text("url"), // Optional direct link to the product page
     ...baseTimestamps(),
@@ -585,8 +597,8 @@ export const productExternalId = pgTable(
   },
   (table) => [
     index("ProductExternalId_productId_idx").on(table.productId),
-    uniqueIndex("ProductExternalId_product_source_key")
-      .on(table.productId, table.source)
+    uniqueIndex("ProductExternalId_product_source_kind_key")
+      .on(table.productId, table.source, table.kind)
       .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
@@ -752,6 +764,21 @@ export const image = pgTable(
     size: integer("size").notNull(),
     contentType: text("contentType").notNull(),
     status: imageStatusEnum("status").notNull().default("PENDING"),
+    // Attachment integrity is intentionally nullable: browser presigned uploads
+    // and legacy rows are verified later by the explicit verification path.
+    width: integer("width"),
+    height: integer("height"),
+    detectedContentType: text("detectedContentType"),
+    sha256: text("sha256"),
+    renderStatus: imageRenderStatusEnum("renderStatus"),
+    storageStatus: imageStorageStatusEnum("storageStatus"),
+    verifiedAt: timestamp("verifiedAt", { mode: "date" }),
+    // MCP attachment retries are scoped to a concrete gallery target. These
+    // generic columns deliberately have no FK because Image may target five
+    // different tables.
+    targetType: text("targetType"),
+    targetId: uuid("targetId"),
+    idempotencyKey: text("idempotencyKey"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -761,6 +788,11 @@ export const image = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Image_createdAt_idx").on(table.createdAt),
     index("Image_status_idx").on(table.status),
+    uniqueIndex("Image_attachment_idempotency_key")
+      .on(table.targetType, table.targetId, table.idempotencyKey)
+      .where(
+        sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+      ),
   ],
 );
 
