@@ -43,6 +43,9 @@ function register(server: McpServer, app: McpAppBundle) {
           text: withCubbyOrigin(app.html, APP_ORIGIN),
           _meta: {
             ui: {
+              // CSP and domain are intentionally omitted. These personal,
+              // dev-only bundles are self-contained; omitted CSP denies
+              // network access, and a dedicated domain is submission-only.
               // The apps draw their own hairline rules and ink top-rule; a
               // host-supplied border/background frames a frame.
               prefersBorder: false,

@@ -425,6 +425,24 @@ describe("createMcpServer registration", () => {
     expect(() => createMcpServer()).not.toThrow();
   });
 
+  it("advertises the deployed Git commit as its development build id", async () => {
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const server = createMcpServer();
+    const client = new Client({ name: "test", version: "1.0.0" });
+
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+
+    try {
+      expect(client.getServerVersion()?.version).toBe(`dev-${__GIT_COMMIT__}`);
+    } finally {
+      await Promise.allSettled([client.close(), server.close()]);
+    }
+  });
+
   it("stores outputSchema on create_recipe and update_recipe", () => {
     const server = createMcpServer();
     expect(

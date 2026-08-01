@@ -104,7 +104,7 @@ export function createMcpServer() {
   const server = new McpServer(
     {
       name: "cubby",
-      version: "1.0.0",
+      version: `dev-${__GIT_COMMIT__}`,
     },
     {
       instructions: MCP_SERVER_INSTRUCTIONS,
