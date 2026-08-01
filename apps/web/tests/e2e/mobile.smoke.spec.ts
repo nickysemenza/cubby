@@ -1,6 +1,119 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("iPhone WebKit smoke", () => {
+  test("rapid client navigation never enters the View Transitions API", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => {
+      pageErrors.push(`${error.name}: ${error.message}`);
+    });
+    await page.addInitScript(() => {
+      const trackedWindow = window as Window & {
+        __cubbyViewTransitionCalls?: number;
+      };
+      trackedWindow.__cubbyViewTransitionCalls = 0;
+      Object.defineProperty(document, "startViewTransition", {
+        configurable: true,
+        value: () => {
+          trackedWindow.__cubbyViewTransitionCalls =
+            (trackedWindow.__cubbyViewTransitionCalls ?? 0) + 1;
+          throw new DOMException(
+            "Old view transition aborted by new view transition.",
+            "AbortError",
+          );
+        },
+      });
+    });
+
+    await page.goto("/", { waitUntil: "networkidle" });
+    const bottomNav = page.getByRole("navigation", {
+      name: "Main navigation",
+    });
+    for (const label of [
+      "Inventory",
+      "Recipes",
+      "Search",
+      "Recount",
+      "Recipes",
+      "Inventory",
+      "Search",
+    ]) {
+      await bottomNav.getByRole("link", { name: label, exact: true }).click();
+    }
+
+    await expect(page).toHaveURL(/\/search$/);
+    await expect(page.locator("body")).not.toContainText(
+      "Something went wrong",
+    );
+    expect(
+      await page.evaluate(
+        () =>
+          (window as Window & { __cubbyViewTransitionCalls?: number })
+            .__cubbyViewTransitionCalls ?? 0,
+      ),
+    ).toBe(0);
+    expect(
+      pageErrors.filter((message) =>
+        message.includes("Old view transition aborted by new view transition."),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a preload error reloads once and preserves the destination URL", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      try {
+        const key = "cubby:e2e-document-loads";
+        sessionStorage.setItem(
+          key,
+          String(Number(sessionStorage.getItem(key) ?? "0") + 1),
+        );
+      } catch {
+        // The initial opaque about:blank document can reject storage access.
+      }
+    });
+
+    await page.goto("/products/new#deploy-skew", {
+      waitUntil: "networkidle",
+    });
+    await page.evaluate(() =>
+      sessionStorage.removeItem("cubby:preload-reload-at"),
+    );
+    const destination = page.url();
+    const loadsBefore = await page.evaluate(() =>
+      Number(sessionStorage.getItem("cubby:e2e-document-loads")),
+    );
+
+    const reloaded = page.waitForNavigation({ waitUntil: "networkidle" });
+    await page.evaluate(() => {
+      setTimeout(() => {
+        const event = new Event("vite:preloadError", { cancelable: true });
+        Object.defineProperty(event, "payload", {
+          value: new TypeError(
+            "Failed to fetch dynamically imported module: /assets/old.js",
+          ),
+        });
+        window.dispatchEvent(event);
+      }, 0);
+    });
+    await reloaded;
+
+    expect(page.url()).toBe(destination);
+    await expect(
+      page.getByRole("heading", { name: "New product" }),
+    ).toBeVisible();
+    await expect(page.locator("body")).not.toContainText(
+      "Something went wrong",
+    );
+    expect(
+      await page.evaluate(() =>
+        Number(sessionStorage.getItem("cubby:e2e-document-loads")),
+      ),
+    ).toBe(loadsBefore + 1);
+  });
+
   test("navigates inventory, recipes, and forms with usable touch targets", async ({
     page,
   }) => {

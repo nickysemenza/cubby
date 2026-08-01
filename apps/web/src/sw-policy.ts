@@ -20,3 +20,13 @@ export function isBypassedPath(pathname: string): boolean {
 export function isCriticalPrecacheUrl(url: string): boolean {
   return url === "/offline.html" || url.endsWith(".css");
 }
+
+/** Only heal exact, successful manifest assets; never cache query variants. */
+export function shouldFillPrecache(
+  pathname: string,
+  search: string,
+  responseOk: boolean,
+  precacheUrls: ReadonlySet<string>,
+): boolean {
+  return responseOk && search === "" && precacheUrls.has(pathname);
+}

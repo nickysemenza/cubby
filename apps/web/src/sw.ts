@@ -1,5 +1,9 @@
 /// <reference lib="webworker" />
-import { isBypassedPath, isCriticalPrecacheUrl } from "./sw-policy";
+import {
+  isBypassedPath,
+  isCriticalPrecacheUrl,
+  shouldFillPrecache,
+} from "./sw-policy";
 
 /**
  * Cubby service worker (app-shell offline).
@@ -17,13 +21,13 @@ import { isBypassedPath, isCriticalPrecacheUrl } from "./sw-policy";
  *  - `/api/*`, `/trpc/*`, and auth endpoints are bypassed entirely: the SW does
  *    not call respondWith for them, so nothing stale or auth-sensitive is served.
  *
- * Hand-rolled (no workbox runtime deps) to keep the dependency surface small and
- * the caching rules explicit. vite-plugin-pwa (injectManifest) bundles this file
- * and replaces `self.__WB_MANIFEST` with the precache list at build time.
+ * Hand-rolled (no Workbox runtime deps) to keep the dependency surface small and
+ * the caching rules explicit. scripts/build-sw.mjs bundles this file and replaces
+ * `self.__WB_MANIFEST` with the precache list after the client build.
  */
 
 // The WebWorker lib types `self` as the generic WorkerGlobalScope; alias it to
-// the service-worker scope so skipWaiting/clients/fetch events type correctly.
+// the service-worker scope so lifecycle/client/fetch events type correctly.
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 // A standalone static page (NOT a router route) so it can be served as a
@@ -38,8 +42,8 @@ const manifest: Array<{ url: string; revision: string | null }> =
   self.__WB_MANIFEST;
 
 // Cache name is keyed to the build: a digest of every asset revision changes
-// whenever the build output changes, so a deploy gets a fresh cache and old
-// ones are dropped on activate (prevents stranding a client on stale chunks).
+// whenever the build output changes. An updated worker waits until the old
+// worker controls no clients, then activation safely drops the old cache.
 const BUILD_TAG = manifest
   .map((e) => e.revision ?? e.url)
   .join("|")
@@ -51,6 +55,7 @@ const CACHE_NAME = `cubby-shell-${BUILD_TAG >>> 0}`;
 const PRECACHE_URLS = [
   ...new Set([...manifest.map((e) => e.url), OFFLINE_URL]),
 ];
+const PRECACHE_URL_SET = new Set(PRECACHE_URLS);
 
 // Paths the SW must NEVER intercept — always hit the network directly so auth
 // and data are never served from cache.
@@ -73,7 +78,8 @@ sw.addEventListener("install", (event) => {
       await Promise.allSettled(
         optional.map((url) => cache.add(new Request(url, { cache: "reload" }))),
       );
-      await sw.skipWaiting();
+      // Do not skip waiting: force-activating this worker would mix its cache
+      // with pages still executing the previous deployment's application code.
     })(),
   );
 });
@@ -87,7 +93,8 @@ sw.addEventListener("activate", (event) => {
           .filter((k) => k.startsWith("cubby-shell-") && k !== CACHE_NAME)
           .map((k) => caches.delete(k)),
       );
-      await sw.clients.claim();
+      // Do not claim already-open pages. They keep one internally-consistent
+      // worker/cache generation until their next normal navigation.
     })(),
   );
 });
@@ -120,12 +127,26 @@ sw.addEventListener("fetch", (event) => {
   }
 
   // Static assets: cache-first against the precache, fall back to network.
+  // If a best-effort precache entry failed during install, a later successful
+  // request fills that exact manifest entry so offline coverage heals itself.
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(request);
       if (cached) return cached;
-      return fetch(request);
+      const response = await fetch(request);
+      if (
+        shouldFillPrecache(
+          url.pathname,
+          url.search,
+          response.ok,
+          PRECACHE_URL_SET,
+        )
+      ) {
+        // Best-effort heal: a quota failure must not fail an asset that fetched fine.
+        await cache.put(request, response.clone()).catch(() => {});
+      }
+      return response;
     })(),
   );
 });
