@@ -19,6 +19,7 @@ import {
   productCategoryDistributionOut,
   productCreateInput,
   productCreateManyInput,
+  productExternalIdCollisionsOut,
   productFiltersSchema,
   productFindOrCreateByUPCInput,
   productFindOrCreateByUPCOut,
@@ -40,9 +41,11 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { createAppError } from "~/server/errors/app-error";
+import { findProductExternalIdCollisions } from "~/server/repo/data-quality";
 import {
   deleteProducts,
   getCategoryDistribution,
@@ -431,6 +434,19 @@ const tagSiblings = protectedProcedure
     );
   });
 
+const externalIdCollisions = protectedProcedure
+  .input(
+    z.object({
+      source: z
+        .union([z.string().min(1), z.array(z.string().min(1))])
+        .optional(),
+    }),
+  )
+  .output(productExternalIdCollisionsOut)
+  .query(async ({ ctx, input }) => ({
+    items: await findProductExternalIdCollisions(ctx.db, input.source),
+  }));
+
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(productShortcodesInput)
@@ -563,4 +579,5 @@ export const productRouter = createTRPCRouter({
   categoryDistribution,
   tagOptions,
   tagSiblings,
+  externalIdCollisions,
 });

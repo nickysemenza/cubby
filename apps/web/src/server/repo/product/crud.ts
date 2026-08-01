@@ -62,6 +62,11 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  loadProductDataQualities,
+  productDataGapCondition,
+  productNeedsDataCondition,
+} from "~/server/repo/data-quality";
+import {
   assertNoDependents,
   associatePendingImages,
   buildOrderBy,
@@ -351,6 +356,24 @@ export const productList = async (
     .from(productUnitMappings)
     .where(notDeleted(productUnitMappings));
 
+  const externalSources = filters.externalIdSource
+    ? [filters.externalIdSource].flat()
+    : undefined;
+  const productIdsWithExternalIds = dbClient
+    .select({ productId: productExternalId.productId })
+    .from(productExternalId)
+    .where(
+      and(
+        notDeleted(productExternalId),
+        externalSources && externalSources.length > 0
+          ? inArray(productExternalId.source, externalSources)
+          : undefined,
+      ),
+    );
+
+  const selectedDataGaps = filters.dataGap ? [filters.dataGap].flat() : [];
+  const needsData = productNeedsDataCondition();
+
   // Mirrors `foodLookupParamFromProduct` returning null: no explicit fdc_id AND
   // no upc to auto-match. This is the closest pure-SQL predicate — it cannot
   // know whether the USDA worker resolves a food for that key, which is why the
@@ -407,6 +430,20 @@ export const productList = async (
         filters.unitMappingPresenceFilter,
         productIdsWithUnitMappings,
       ),
+      idSetPresence(
+        product.id,
+        filters.externalIdPresenceFilter,
+        productIdsWithExternalIds,
+      ),
+      presenceCondition(product.model, filters.modelPresenceFilter),
+      filters.dataStatus === "needs_data"
+        ? needsData
+        : filters.dataStatus === "complete"
+          ? sql`NOT ${needsData}`
+          : undefined,
+      selectedDataGaps.length > 0
+        ? or(...selectedDataGaps.map(productDataGapCondition))
+        : undefined,
       presenceCondition(
         product.fdc_id,
         filters.usdaPresenceFilter,
@@ -482,8 +519,15 @@ export const productList = async (
         ),
     ]);
 
+  const qualities = await loadProductDataQualities(
+    db,
+    results.map((row) => row.id),
+  );
   const products = results.map((prod: ProductListDB) =>
-    dbProductToListAPI(prod),
+    dbProductToListAPI({
+      ...prod,
+      dataQuality: qualities.get(prod.id),
+    }),
   );
 
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);

@@ -482,6 +482,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     id: p.id,
     name: p.name,
     manufacturer: p.manufacturer,
+    model: p.model,
     upc: p.upc,
     category: p.category,
     tags: p.tags ?? [],
@@ -497,6 +498,7 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
       b: m.b,
       source: m.source ?? null,
     })),
+    dataQuality: p.dataQuality,
   };
 });
 

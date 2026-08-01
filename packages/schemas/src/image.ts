@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { purchaseDocumentKind } from "./purchase";
 import type { ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
@@ -189,12 +190,29 @@ export const attachFileFields = {
     .string()
     .optional()
     .describe("Optional filename for the stored object."),
+  documentKind: purchaseDocumentKind
+    .optional()
+    .describe(
+      "Required when entityId is a PUR- Purchase shortcode; classifies the attached purchase evidence.",
+    ),
 };
 
 export const mcpAttachFileInput = z
   .object(attachFileFields)
-  .refine((v) => Boolean(v.url) !== Boolean(v.data), {
-    message: "Provide exactly one of `url` or `data`",
+  .superRefine((value, ctx) => {
+    if (Boolean(value.url) === Boolean(value.data)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Provide exactly one of `url` or `data`",
+      });
+    }
+    if (value.entityType === "purchase" && value.documentKind === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["documentKind"],
+        message: "documentKind is required for Purchase attachments",
+      });
+    }
   });
 export type McpAttachFileInput = z.infer<typeof mcpAttachFileInput>;
 

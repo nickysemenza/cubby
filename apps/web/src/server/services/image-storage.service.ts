@@ -303,6 +303,7 @@ export const attachFileToEntity = async (
       { key, url, filename, contentType, size: bytes.length },
       input.entityType,
       entityId,
+      input.documentKind,
     );
   } catch (error) {
     await deleteS3Object(key).catch((cleanupError) => {

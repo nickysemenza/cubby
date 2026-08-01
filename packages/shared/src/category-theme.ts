@@ -7,6 +7,7 @@ export const productCategoryValues = [
   "storage", // packout, systainers, toolboxes, bags
   "hardware", // screws, nails, bolts
   "electronics", // raspberry pi, cables, monitors
+  "software", // subscriptions and software licenses
   "household", // furniture, cookware, appliances
   "supplies", // cleaning products, tape, batteries, cables
 ] as const;
@@ -60,6 +61,7 @@ export const categoryColors: Record<ProductCategory | "uncategorized", string> =
 
     // Tech
     electronics: "var(--chart-7)",
+    software: "var(--chart-5)",
 
     // Home group
     household: "var(--chart-8)",

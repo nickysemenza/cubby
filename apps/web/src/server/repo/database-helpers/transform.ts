@@ -17,8 +17,11 @@ import { isNotDeleted } from "./query";
  */
 export type RowWithOptionalAliases<T extends { aliases: string[] }> = Omit<
   T,
-  "aliases"
-> & { aliases?: string[] };
+  "aliases" | "dataExceptions"
+> & {
+  aliases?: string[];
+  dataExceptions?: T extends { dataExceptions: infer E } ? E : never;
+};
 
 type ImageRecord = {
   id: string;

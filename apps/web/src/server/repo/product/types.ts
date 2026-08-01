@@ -2,6 +2,7 @@
  * Product repository type definitions.
  */
 
+import type { DataQuality } from "@cubby/schemas/data-quality";
 import type {
   image,
   ingredient,
@@ -41,6 +42,7 @@ export type ProductDeepDB = ProductSelect & {
 };
 
 export type ProductListDB = ProductSelect & {
+  dataQuality?: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: Array<typeof productExternalId.$inferSelect>;

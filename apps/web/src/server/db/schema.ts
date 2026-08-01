@@ -8,6 +8,7 @@ import type {
   BackgroundJobStatus,
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
+import type { DataException } from "@cubby/schemas/data-quality";
 import type {
   FinancialAccountIdentity,
   FinancialAccountSourceAlias,
@@ -43,6 +44,10 @@ import {
   taskStatusValues,
   tradeValues,
 } from "@cubby/schemas/project";
+import {
+  type PurchaseDocumentKind,
+  purchaseDocumentKindValues,
+} from "@cubby/schemas/purchase";
 import {
   type RecipeTotals,
   type RecipeYield,
@@ -528,6 +533,10 @@ export const product = pgTable(
     // weight/volume/calories instead. Does not suppress the problem — the card
     // stays flagged until those are filled manually.
     usdaUnavailable: boolean("usdaUnavailable"),
+    dataExceptions: jsonb("dataExceptions")
+      .notNull()
+      .$type<DataException[]>()
+      .default([]),
   },
   (table) => [
     shortcodeUnique("Product", table.shortcode),
@@ -1060,6 +1069,10 @@ export const purchase = pgTable(
     // rewritten to match settlement; FinancialTransaction owns charges/refunds.
     statedTotal: doublePrecision("statedTotal"),
     notes: text("notes"),
+    dataExceptions: jsonb("dataExceptions")
+      .notNull()
+      .$type<DataException[]>()
+      .default([]),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -1101,6 +1114,12 @@ export const purchaseImage = pgTable(
       .notNull()
       .references(() => image.id),
     sortOrder: integer("sortOrder").notNull().default(0),
+    documentKind: text("documentKind", {
+      enum: purchaseDocumentKindValues,
+    })
+      .notNull()
+      .$type<PurchaseDocumentKind>()
+      .default("other"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },

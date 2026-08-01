@@ -25,6 +25,7 @@ import {
   purchaseOut,
   purchaseSortableFields,
   purchaseUpdateInput,
+  reclassifyPurchaseDocumentInput,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
 import { z } from "zod";
@@ -38,6 +39,7 @@ import {
   linkExpensesToPurchase,
   mergePurchases,
   purchaseList,
+  reclassifyPurchaseDocument,
   splitExpense,
   updatePurchase,
 } from "~/server/repo/purchase";
@@ -215,6 +217,13 @@ const merge = protectedProcedure
     mergePurchases(ctx.db, input, ctx.actorContext),
   );
 
+const reclassifyDocument = protectedProcedure
+  .input(reclassifyPurchaseDocumentInput)
+  .output(purchaseOut)
+  .mutation(({ ctx, input }) =>
+    reclassifyPurchaseDocument(ctx.db, input, ctx.actorContext),
+  );
+
 const deleteItem = protectedProcedure
   .input(z.object({ ids: z.array(purchaseShortcode).min(1) }))
   .mutation(async ({ ctx, input }) => {
@@ -231,5 +240,6 @@ export const purchaseRouter = createTRPCRouter({
   link,
   split,
   merge,
+  reclassifyDocument,
   delete: deleteItem,
 });

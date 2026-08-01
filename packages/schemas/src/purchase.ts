@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
+import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
   productShortcode,
@@ -101,6 +102,31 @@ export type PurchaseExpenseStatus = z.infer<typeof purchaseExpenseStatus>;
 export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
 export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
 
+export const purchaseDocumentKindValues = [
+  "order_confirmation",
+  "sales_order",
+  "invoice",
+  "receipt",
+  "payment_receipt",
+  "credit_memo",
+  "return_authorization",
+  "quote",
+  "estimate",
+  "contract",
+  "statement",
+  "specification",
+  "other",
+] as const;
+export const purchaseDocumentKind = z.enum(purchaseDocumentKindValues);
+export type PurchaseDocumentKind = z.infer<typeof purchaseDocumentKind>;
+
+export const primaryPurchaseDocumentKinds = [
+  "order_confirmation",
+  "sales_order",
+  "invoice",
+  "receipt",
+] as const satisfies readonly PurchaseDocumentKind[];
+
 export const purchaseFilterFields = {
   search: z.string().optional().describe("Substring match on order id"),
   vendorId: oneOrMany(vendorShortcode).optional(),
@@ -115,6 +141,8 @@ export const purchaseFilterFields = {
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
   /** `"none"` matches purchases with no live invoice/receipt document. */
   documentPresenceFilter: presenceFilter,
+  dataStatus: dataQualityStatus.optional(),
+  dataGap: oneOrMany(dataCheck).optional(),
   /**
    * Inclusive bounds on SUM(expense.cost), in dollars. Bounds only apply to
    * Purchases with at least one priced Expense, so empty or unpriced-only Purchases do
@@ -185,14 +213,25 @@ export const purchaseOut = z.object({
        * affordance without a per-document round-trip back to `image.getByID`.
        */
       key: z.string(),
+      documentKind: purchaseDocumentKind,
     }),
   ),
+  dataQuality,
   ...timestampedFields,
 });
 export type PurchaseOut = z.infer<typeof purchaseOut>;
 
 export const purchaseListResponse = createPaginatedResponseSchema(purchaseOut);
 export type PurchaseListResponse = z.infer<typeof purchaseListResponse>;
+
+export const reclassifyPurchaseDocumentInput = z.object({
+  purchaseId: purchaseShortcode,
+  imageId: z.uuid(),
+  documentKind: purchaseDocumentKind,
+});
+export type ReclassifyPurchaseDocumentInput = z.infer<
+  typeof reclassifyPurchaseDocumentInput
+>;
 
 /**
  * `sum(expenses)` vs `statedTotal`, as a **soft** flag. Nothing rejects a write

@@ -43,6 +43,7 @@ import {
   attachableImageEntityId,
   imageSortableFields,
 } from "@cubby/schemas/image";
+import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -73,6 +74,7 @@ import {
   getDb,
   insertAndReturn,
   isNotDeleted,
+  nextImageSortOrder,
   notDeleted,
   updateAndReturn,
   withTransaction,
@@ -909,6 +911,7 @@ const associateImageWithEntity = async (
   entityType: AttachableImageEntity,
   entityId: string,
   imageId: string,
+  documentKind?: PurchaseDocumentKind,
 ): Promise<void> => {
   await match(entityType)
     .with("product", () =>
@@ -929,11 +932,20 @@ const associateImageWithEntity = async (
         imageId,
       ]),
     )
-    .with("purchase", () =>
-      associatePendingImages(dbc, purchaseImage, "purchaseId", entityId, [
+    .with("purchase", async () => {
+      const sortOrder = await nextImageSortOrder(
+        dbc,
+        purchaseImage,
+        purchaseImage.purchaseId,
+        entityId,
+      );
+      await dbc.insert(purchaseImage).values({
+        purchaseId: unsafePurchaseId(entityId),
         imageId,
-      ]),
-    )
+        sortOrder,
+        documentKind: documentKind ?? "other",
+      });
+    })
     .exhaustive();
 };
 
@@ -955,10 +967,17 @@ export const createAndAssociateUploadedImage = async (
   },
   entityType: AttachableImageEntity,
   entityId: string,
+  documentKind?: PurchaseDocumentKind,
 ): Promise<typeof image.$inferSelect> => {
   return await withTransaction(db, async (tx) => {
     const row = await createUploadedImageRecord(tx, params);
-    await associateImageWithEntity(tx, entityType, entityId, row.id);
+    await associateImageWithEntity(
+      tx,
+      entityType,
+      entityId,
+      row.id,
+      documentKind,
+    );
     return row;
   });
 };

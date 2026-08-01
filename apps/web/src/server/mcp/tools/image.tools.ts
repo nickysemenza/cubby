@@ -25,7 +25,8 @@ export function registerImageTools(server: McpServer) {
     description:
       "Attach an image or PDF to a product, recipe, location, project, or " +
       "purchase (one vendor order/receipt event — this is how a receipt or an emailed PDF " +
-      "invoice gets filed against the vendor event it documents). " +
+      "invoice gets filed against the vendor event it documents). Purchase attachments require " +
+      "documentKind; order_confirmation, sales_order, invoice, and receipt count as primary evidence. " +
       "Provide the file as EITHER `data` (base64, or a data: URI) OR `url` " +
       "(an http(s) link to fetch) — exactly one. For base64, set `contentType` " +
       "(image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, " +

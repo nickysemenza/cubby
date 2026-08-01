@@ -6,6 +6,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { registerMcpApps } from "./apps";
 import { installMockStrippedListToolsHandler } from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
+import { registerDataQualityTools } from "./tools/data-quality.tools";
 import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
 import { registerFinancialTools } from "./tools/financial.tools";
 import { registerImageTools } from "./tools/image.tools";
@@ -62,6 +63,7 @@ Workflow tips:
 - Ledger shape: \`Vendor ──< Purchase ──< Expense\`. ALL money lives on \`expense\` — list_expenses/create_expense are the spend ledger. A \`purchase\` is one vendor order, receipt, or deliberately separate purchase event (it is not a card charge), and its \`statedTotal\` is always the literal vendor-printed total and is never summed into spend.
 - Reconciling a vendor export against the ledger: match_expenses (read-only, ranks candidates for the whole batch) → update_expense to set vendor/orderId on what you confirm, or split_expense when one ledger row aggregates several export lines. Never write from a match without confirming it — and run match_expenses BEFORE create_expense, since the row you are about to add usually already exists under a different name.
 - Reconciling a purchase against its paperwork: update_purchase records \`statedTotal\`; list_problems type="purchasesNotReconciling" is the worklist of purchases whose expenses don't add up to it (a soft flag, often legitimately mismatched after a partial refund).
+- Purchase completeness: start with list_purchases dataStatus="needs_data" and optionally dataGap. Purchase and Product outputs carry computed dataQuality; linked Product gaps roll up into Purchases. Use set_data_exception only for source-backed negative knowledge, and require documentKind when attach_file targets a Purchase.
 - Financial settlement is separate evidence: FinancialTransaction amounts never enter spend. A Purchase is the vendor order/receipt; it may have several FTX- rows (installments, refunds, split tender). Use list_financial_transactions with purchaseId to inspect those rows.
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
@@ -84,6 +86,7 @@ function registerTools(server: McpServer) {
   registerUsdaTools(server);
   registerImageTools(server);
   registerAuditTools(server);
+  registerDataQualityTools(server);
   registerEntityIntegrityTools(server);
   // The `ui://` resources those tools' `_meta.ui.resourceUri` pointers resolve
   // to. Adds the `resources` capability, which is otherwise unused — cubby's
