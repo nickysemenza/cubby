@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { financialReconciliationSummary } from "./financial-reconciliation";
 import { wholeCentAmount } from "./money";
 import {
   expenseRelatedFilterFields,
@@ -1266,16 +1267,7 @@ export const expenseMatchPurchaseContext = z.object({
   expenseCount: z.number().int(),
   expenseTotal: z.number(),
   statedTotal: z.number().nullable(),
-  financialReconciliation: z.object({
-    status: z.enum(["unknown", "pending", "match", "mismatch"]),
-    transactionCount: z.number().int().nonnegative(),
-    postedTransactionCount: z.number().int().nonnegative(),
-    outstandingTransactionCount: z.number().int().nonnegative(),
-    postedTotal: z.number(),
-    projectedTotal: z.number(),
-    postedRefundTotal: z.number(),
-    delta: z.number().nullable(),
-  }),
+  financialReconciliation: financialReconciliationSummary,
 });
 
 export const expenseMatchCandidate = z.object({

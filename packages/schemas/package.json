@@ -48,6 +48,7 @@
     "./vendor": "./src/vendor.ts",
     "./purchase": "./src/purchase.ts",
     "./financial-account": "./src/financial-account.ts",
+    "./financial-reconciliation": "./src/financial-reconciliation.ts",
     "./financial-transaction": "./src/financial-transaction.ts"
   },
   "scripts": {
