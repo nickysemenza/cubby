@@ -50,6 +50,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
@@ -282,6 +283,11 @@ export const inventoryentryList = async (
       { column: product.manufacturer, term: filters.manufacturerFilter },
     ],
     [
+      ...relatedWhereConditions(
+        "inventory",
+        filters as unknown as Record<string, unknown>,
+        inventoryEntry.id,
+      ),
       filters.locationIdFilter
         ? eq(inventoryEntry.locationId, filters.locationIdFilter)
         : undefined,

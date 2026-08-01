@@ -39,6 +39,7 @@ import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { dbExpenseToAPI } from "./helpers";
 
@@ -217,6 +218,7 @@ export const buildExpenseWhereClause = async (
       { column: expense.url, term: filters.urlSearch },
     ],
     [
+      ...relatedWhereConditions("expense", filters, expense.id),
       nameSearch,
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),

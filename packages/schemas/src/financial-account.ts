@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { financialAccountRelatedFilterFields } from "./related-view";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { financialAccountShortcode } from "./identifiers";
 import {
@@ -115,6 +116,7 @@ export type FinancialAccountUpdateInput = z.infer<
 >;
 
 export const financialAccountFilterFields = {
+  ...financialAccountRelatedFilterFields,
   search: z.string().optional(),
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
   provisional: z.boolean().optional(),
