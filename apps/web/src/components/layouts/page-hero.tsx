@@ -375,7 +375,7 @@ function DetailPlate({
         data-testid="detail-spec-plate"
       >
         <CardContent className="px-4 py-1 sm:px-4">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="min-w-0">
               <DetailBreadcrumb entity={entity} heroNo={heroNo} />
               <h1 className="break-words font-bold font-heading text-2xl tracking-tight sm:text-3xl">
@@ -387,7 +387,7 @@ function DetailPlate({
                 </p>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
               {heroStamp && (
                 <InkStamp tone={heroStamp.tone} className="mt-1">
                   {heroStamp.label}
