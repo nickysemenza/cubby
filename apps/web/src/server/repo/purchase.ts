@@ -268,13 +268,9 @@ type PurchaseRow = {
 
 const dbPurchaseToAPI = (
   row: PurchaseRow,
+  dataQuality: PurchaseOut["dataQuality"],
   images: PurchaseOut["images"] = [],
   financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
-  dataQuality: PurchaseOut["dataQuality"] = {
-    status: "complete",
-    gaps: [],
-    exceptions: row.dataExceptions,
-  },
 ): PurchaseOut => ({
   id: unsafePurchaseShortcode(row.shortcode),
   vendorId: unsafeVendorShortcode(row.vendorShortcode),
@@ -532,9 +528,9 @@ export const purchaseList = async (
     data: rows.map((row) =>
       dbPurchaseToAPI(
         row,
+        dataQualities.get(row.id)!,
         [],
         financialByPurchase.get(row.id),
-        dataQualities.get(row.id),
       ),
     ),
     count,
@@ -561,9 +557,9 @@ export const getPurchaseByID = async (
   }
   return dbPurchaseToAPI(
     row,
+    dataQualities.get(id)!,
     images,
     financialByPurchase.get(id),
-    dataQualities.get(id),
   );
 };
 
