@@ -47,6 +47,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -122,6 +123,7 @@ const whereFor = (filters: FinancialAccountFilters) =>
     financialAccount,
     [{ column: financialAccount.name, term: filters.search }],
     [
+      ...relatedWhereConditions("financialAccount", filters),
       filters.identityKind
         ? sql`"FinancialAccount"."identity"->>'kind' = ANY(${[filters.identityKind].flat()})`
         : undefined,

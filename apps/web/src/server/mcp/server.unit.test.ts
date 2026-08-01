@@ -462,6 +462,18 @@ describe("listMcpToolCatalog", () => {
     )?.properties;
 
     expect(properties).toHaveProperty("expenseStatus");
+    expect(properties).toHaveProperty("expenseId");
+    expect(properties).toHaveProperty("expensePresenceFilter");
+    expect(properties).toHaveProperty("expenseSearch");
+    expect(properties).toHaveProperty("financialTransactionId");
+    expect(properties).toHaveProperty("financialTransactionPresenceFilter");
+    expect(properties).toHaveProperty("financialTransactionSearch");
+    expect(properties).toHaveProperty("productId");
+    expect(properties).toHaveProperty("productPresenceFilter");
+    expect(properties).toHaveProperty("productSearch");
+    expect(properties).toHaveProperty("projectId");
+    expect(properties).toHaveProperty("projectPresenceFilter");
+    expect(properties).toHaveProperty("projectSearch");
     expect(properties).not.toHaveProperty("lineStatus");
     expect(listPurchases?.description).toContain("List vendor purchases");
     expect(listPurchases?.description).not.toMatch(/vendor charges/i);

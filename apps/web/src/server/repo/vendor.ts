@@ -60,6 +60,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { foldChargeInto } from "~/server/repo/purchase";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -175,6 +176,7 @@ const buildVendorWhereClause = (filters: VendorFilters) =>
     vendor,
     [],
     [
+      ...relatedWhereConditions("vendor", filters),
       filters.search
         ? or(
             formatSearchTerm(vendor.name, filters.search),

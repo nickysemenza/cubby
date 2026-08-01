@@ -1,12 +1,18 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
   unsafeCookbookId,
+  unsafeExpenseId,
+  unsafeFinancialTransactionId,
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
+import {
+  relatedFilterPrefix,
+  relatedViewRegistry,
+} from "@cubby/schemas/related-view";
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import { locationTypeOptionsWithTheme } from "~/app/_components/locations/location-icons";
 import { productCategoryOptionsWithTheme } from "~/app/_components/products/product-category-icons";
@@ -550,6 +556,86 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       options: presenceFilterOptions("documents"),
     },
     {
+      columnId: "related:purchase.expenses",
+      field: "expenseSearch",
+      urlKey: "expense",
+      kind: "text",
+      placeholder: "Search related expenses...",
+    },
+    {
+      columnId: "related:purchase.transactions",
+      field: "financialTransactionSearch",
+      urlKey: "transaction",
+      kind: "text",
+      placeholder: "Search linked transactions...",
+    },
+    {
+      columnId: "related:purchase.products",
+      field: "productSearch",
+      urlKey: "product",
+      kind: "text",
+      placeholder: "Search related products...",
+    },
+    {
+      columnId: "related:purchase.projects",
+      field: "projectSearch",
+      urlKey: "project",
+      kind: "text",
+      placeholder: "Search related projects...",
+    },
+    {
+      columnId: "expenseId",
+      urlOnly: true,
+      kind: "idMulti",
+      brand: unsafeExpenseId,
+      placeholder: "Filter by expense id...",
+    },
+    {
+      columnId: "expensePresenceFilter",
+      urlOnly: true,
+      kind: "presence",
+      placeholder: "Filter expense presence...",
+    },
+    {
+      columnId: "financialTransactionId",
+      urlOnly: true,
+      kind: "idMulti",
+      brand: unsafeFinancialTransactionId,
+      placeholder: "Filter by financial transaction id...",
+    },
+    {
+      columnId: "financialTransactionPresenceFilter",
+      urlOnly: true,
+      kind: "presence",
+      placeholder: "Filter transaction presence...",
+    },
+    {
+      columnId: "productId",
+      urlOnly: true,
+      kind: "idMulti",
+      brand: unsafeProductId,
+      placeholder: "Filter by product id...",
+    },
+    {
+      columnId: "productPresenceFilter",
+      urlOnly: true,
+      kind: "presence",
+      placeholder: "Filter product presence...",
+    },
+    {
+      columnId: "projectId",
+      urlOnly: true,
+      kind: "idMulti",
+      brand: unsafeProjectId,
+      placeholder: "Filter by project id...",
+    },
+    {
+      columnId: "projectPresenceFilter",
+      urlOnly: true,
+      kind: "presence",
+      placeholder: "Filter project presence...",
+    },
+    {
       columnId: "expenseTotalMin",
       urlKey: "lineTotalMin",
       urlOnly: true,
@@ -907,8 +993,62 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
 };
 
 /** The specs for an entity, or an empty list when it has no list table. */
-export const getEntityFilters = (entity: Entity): readonly FilterSpec[] =>
-  entityFilters[entity] ?? [];
+const relatedFilterSpecs = Object.fromEntries(
+  [...new Set(relatedViewRegistry.map((view) => view.source))].map((entity) => {
+    // Project's roster is a client-filtered dashboard/tree, not project.list;
+    // its generated fields remain available to API/MCP callers, but a table
+    // header filter would filter only the already-loaded dashboard rows.
+    if (entity === "project") return [entity, []] as const;
+    const existing = entityFilters[entity] ?? [];
+    const existingColumns = new Set(existing.map((spec) => spec.columnId));
+    const generated: FilterSpec[] = [];
+    for (const view of relatedViewRegistry.filter(
+      (candidate) => candidate.source === entity,
+    )) {
+      const prefix = relatedFilterPrefix(view);
+      const candidates: FilterSpec[] = [
+        {
+          columnId: `related:${view.key}`,
+          field: `${prefix}Search`,
+          urlKey: `related-${prefix}`,
+          kind: "text",
+          placeholder: `Search related ${view.label.toLowerCase()}...`,
+        },
+        {
+          columnId: `${prefix}Id`,
+          urlOnly: true,
+          kind: "idMulti",
+          placeholder: `Filter by related ${view.label.toLowerCase()} id...`,
+        },
+        {
+          columnId: `${prefix}PresenceFilter`,
+          urlOnly: true,
+          kind: "presence",
+          placeholder: `Filter related ${view.label.toLowerCase()} presence...`,
+        },
+      ];
+      for (const candidate of candidates) {
+        if (!existingColumns.has(candidate.columnId)) {
+          existingColumns.add(candidate.columnId);
+          generated.push(candidate);
+        }
+      }
+    }
+    return [entity, generated] as const;
+  }),
+) as Partial<Record<Entity, readonly FilterSpec[]>>;
+
+const filterSpecCache = new Map<Entity, readonly FilterSpec[]>();
+export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {
+  const cached = filterSpecCache.get(entity);
+  if (cached) return cached;
+  const specs = [
+    ...(entityFilters[entity] ?? []),
+    ...(relatedFilterSpecs[entity] ?? []),
+  ];
+  filterSpecCache.set(entity, specs);
+  return specs;
+};
 
 /**
  * The `FilterConfig` for one column, straight from the manifest.

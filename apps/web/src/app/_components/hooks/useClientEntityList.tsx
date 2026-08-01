@@ -1,9 +1,16 @@
-import type { ColumnHelper } from "@tanstack/react-table";
+import {
+  type RelatedPreviewGroup,
+  relatedViewRegistry,
+} from "@cubby/schemas/related-view";
+import { useQuery } from "@tanstack/react-query";
+import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
+import { useTRPC } from "~/integrations/trpc/react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -109,6 +116,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   bulkActions,
   deleteEmptyLabel,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
+  const api = useTRPC();
   // Create columnHelper once — CRITICAL to prevent infinite re-renders.
   const columnHelper = useMemo(
     () => createColumnHelper<TData>() as ColumnHelper<TData>,
@@ -149,12 +157,95 @@ export function useClientEntityList<TData extends BaseListRow>({
 
   const tableState = useTableState(mergedTableStateOptions);
 
+  const relatedViews = useMemo(
+    () => relatedViewRegistry.filter((view) => view.source === entity),
+    [entity],
+  );
+  const relatedInitialVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        relatedViews.map((view) => [
+          `related:${view.key}`,
+          view.defaultVisible,
+        ]),
+      ),
+    [relatedViews],
+  );
+  const { columnVisibility, onColumnVisibilityChange } =
+    useTableColumnVisibility(entity, relatedInitialVisibility);
+  const visibleRelatedKeys = useMemo(
+    () =>
+      relatedViews
+        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
+        .map((view) => view.key),
+    [columnVisibility, relatedViews],
+  );
+  const sourceIds = useMemo(() => {
+    const ids: string[] = [];
+    const visit = (rows: TData[]) => {
+      for (const item of rows) {
+        ids.push(item.id);
+        const children = (item as TData & { subRows?: TData[] }).subRows;
+        if (children) visit(children);
+      }
+    };
+    visit(data);
+    return ids;
+  }, [data]);
+  const relatedQuery = useQuery({
+    ...api.relatedData.previews.queryOptions({
+      source: entity,
+      sourceIds,
+      relationKeys: visibleRelatedKeys,
+    }),
+    enabled: sourceIds.length > 0 && visibleRelatedKeys.length > 0,
+  });
+  const relatedByCell = useMemo(() => {
+    const map = new Map<string, RelatedPreviewGroup>();
+    for (const group of relatedQuery.data ?? []) {
+      map.set(`${group.sourceId}:${group.relationKey}`, group);
+    }
+    return map;
+  }, [relatedQuery.data]);
+  const relatedStateRef = useRef({
+    byCell: relatedByCell,
+    loading: relatedQuery.isLoading,
+  });
+  relatedStateRef.current = {
+    byCell: relatedByCell,
+    loading: relatedQuery.isLoading,
+  };
+  const relatedColumns = useMemo<ColumnDef<TData>[]>(
+    () =>
+      relatedViews.map((view) =>
+        columnHelper.display({
+          id: `related:${view.key}`,
+          header: view.label,
+          enableSorting: false,
+          meta: { className: "w-64", mobile: { slot: "meta", priority: 80 } },
+          cell: (info) => (
+            <RelatedPreviewCell
+              group={relatedStateRef.current.byCell.get(
+                `${info.row.original.id}:${view.key}`,
+              )}
+              loading={relatedStateRef.current.loading}
+            />
+          ),
+        }),
+      ),
+    [columnHelper, relatedViews],
+  );
+  const combinedCustomColumns = useMemo(
+    () => [...customColumns, ...relatedColumns],
+    [customColumns, relatedColumns],
+  );
+
   // Standard columns (name link/inline-edit/nameSuffix + actions column with
   // delete). No unit mappings in the client variant.
   const allColumns = useStandardColumns<TData>({
     entity,
     columnHelper,
-    customColumns,
+    customColumns: combinedCustomColumns,
     filters: filters ?? NO_FILTERS,
     enableRowSelection: listBulkActions.enableRowSelection,
     combinedExtraActions,
@@ -170,11 +261,6 @@ export function useClientEntityList<TData extends BaseListRow>({
       listBulkActions.enableRowSelection ? (row: TData) => row.id : undefined,
     [listBulkActions.enableRowSelection],
   );
-
-  // Persisted per-entity column visibility (same store as useEntityList).
-  // Column widths live in `RTable`, keyed off its `entity`/`sizingKey` prop.
-  const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility(entity);
 
   // Client-side everything: manual* all false. Expansion wired only when a
   // tree config is provided (getSubRows presence gates getExpandedRowModel).
@@ -192,6 +278,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     columnVisibility,
     onColumnVisibilityChange,
+    initialColumnVisibility: relatedInitialVisibility,
     getSubRows: tree?.getSubRows,
     filterFromLeafRows: tree?.filterFromLeafRows,
     paginateExpandedRows: tree?.paginateExpandedRows,

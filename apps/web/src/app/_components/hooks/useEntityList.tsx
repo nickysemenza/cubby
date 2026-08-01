@@ -1,11 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { PreviewDeleteEntity } from "@cubby/schemas/entity-integrity";
+import {
+  type RelatedPreviewGroup,
+  relatedViewRegistry,
+} from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { QueryKey } from "@tanstack/react-query";
+import { type QueryKey, useQuery } from "@tanstack/react-query";
 import type { ColumnDef, ColumnHelper, Table } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { entities } from "~/entities/entities";
@@ -14,8 +18,10 @@ import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
 } from "~/entities/filters";
+import { useTRPC } from "~/integrations/trpc/react";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -82,6 +88,8 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   extraActions?: (row: TData) => ReactNode;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
+  /** Separate persisted column set for an embedded table over this entity. */
+  columnVisibilityScope?: string;
   /**
    * Width class for the standard name column. Defaults to auto (`min-w-0`),
    * which is right for dense tables. Pass a fixed width (e.g. `w-64`) on sparse
@@ -200,6 +208,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   extraActions,
   deletable,
   initialColumnVisibility,
+  columnVisibilityScope,
   nameClassName,
   nameEditable,
   nameSuffix,
@@ -210,6 +219,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   TData,
   TFilters
 > {
+  const api = useTRPC();
   const [grouped, setGrouped] = useState(false);
 
   const onGroupedChange = useCallback((value: boolean) => {
@@ -310,6 +320,62 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
     infiniteResult;
 
+  const relatedViews = useMemo(
+    () => relatedViewRegistry.filter((view) => view.source === entity),
+    [entity],
+  );
+  const relatedInitialVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        relatedViews.map((view) => [
+          `related:${view.key}`,
+          view.defaultVisible,
+        ]),
+      ),
+    [relatedViews],
+  );
+  const mergedInitialColumnVisibility = useMemo(
+    () => ({ ...relatedInitialVisibility, ...initialColumnVisibility }),
+    [initialColumnVisibility, relatedInitialVisibility],
+  );
+  const { columnVisibility, onColumnVisibilityChange } =
+    useTableColumnVisibility(
+      entity,
+      mergedInitialColumnVisibility,
+      columnVisibilityScope,
+    );
+  const visibleRelatedKeys = useMemo(
+    () =>
+      relatedViews
+        .filter((view) => columnVisibility[`related:${view.key}`] !== false)
+        .map((view) => view.key),
+    [columnVisibility, relatedViews],
+  );
+  const sourceIds = useMemo(() => data.map((item) => item.id), [data]);
+  const relatedQuery = useQuery({
+    ...api.relatedData.previews.queryOptions({
+      source: entity,
+      sourceIds,
+      relationKeys: visibleRelatedKeys,
+    }),
+    enabled: sourceIds.length > 0 && visibleRelatedKeys.length > 0,
+  });
+  const relatedByCell = useMemo(() => {
+    const map = new Map<string, RelatedPreviewGroup>();
+    for (const group of relatedQuery.data ?? []) {
+      map.set(`${group.sourceId}:${group.relationKey}`, group);
+    }
+    return map;
+  }, [relatedQuery.data]);
+  const relatedStateRef = useRef({
+    byCell: relatedByCell,
+    loading: relatedQuery.isLoading,
+  });
+  relatedStateRef.current = {
+    byCell: relatedByCell,
+    loading: relatedQuery.isLoading,
+  };
+
   // Full-filtered-set totals for footer renderers — client rows only cover
   // the loaded pages, so footers must not sum/count them.
   const serverTotals = useMemo(
@@ -331,10 +397,38 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 
   // Build columns array with standard columns
+  const relatedColumns = useMemo<AnyColumnDef<TData>[]>(
+    () =>
+      relatedViews.map((view) =>
+        columnHelper.display({
+          id: `related:${view.key}`,
+          header: view.label,
+          enableSorting: false,
+          meta: {
+            className: "w-64",
+            mobile: { slot: "meta", priority: 80 },
+          },
+          cell: (info) => (
+            <RelatedPreviewCell
+              group={relatedStateRef.current.byCell.get(
+                `${info.row.original.id}:${view.key}`,
+              )}
+              loading={relatedStateRef.current.loading}
+            />
+          ),
+        }),
+      ),
+    [columnHelper, relatedViews],
+  );
+  const combinedCustomColumns = useMemo(
+    () => [...customColumns, ...relatedColumns],
+    [customColumns, relatedColumns],
+  );
+
   const allColumns = useStandardColumns<TData>({
     entity,
     columnHelper,
-    customColumns,
+    customColumns: combinedCustomColumns,
     filters: filters ?? NO_FILTERS,
     filterOptions,
     enableRowSelection: listBulkActions.enableRowSelection,
@@ -355,11 +449,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [listBulkActions.enableRowSelection],
   );
 
-  // Persisted per-entity column visibility (localStorage), layered over the
-  // page's initialColumnVisibility defaults.
-  const { columnVisibility, onColumnVisibilityChange } =
-    useTableColumnVisibility(entity, initialColumnVisibility);
-
   // Column widths are NOT wired here — `RTable` owns them, keyed off its
   // `entity`/`sizingKey` prop, so a hand-wired table can't miss out.
 
@@ -375,7 +464,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     enableRowSelection: listBulkActions.enableRowSelection,
     rowSelection: listBulkActions.rowSelection,
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
-    initialColumnVisibility,
+    initialColumnVisibility: mergedInitialColumnVisibility,
     columnVisibility,
     onColumnVisibilityChange,
     serverTotals,

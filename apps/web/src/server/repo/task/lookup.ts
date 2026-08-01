@@ -41,6 +41,7 @@ import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveShortcode,
   resolveShortcodes,
@@ -182,6 +183,7 @@ export const taskList = async (
     task,
     [],
     [
+      ...relatedWhereConditions("task", filters),
       searchCondition,
       eqAny(task.status, filters.status),
       // Carries `projectPresenceFilter` too — it ORs with the id selection, so

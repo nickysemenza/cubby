@@ -90,6 +90,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -393,6 +394,10 @@ export const recipeList = async (
     recipe,
     [],
     [
+      ...relatedWhereConditions(
+        "recipe",
+        filters as unknown as Record<string, unknown>,
+      ),
       pickerSearch,
       eqAnyOrPresence(
         recipe.cookbookId,

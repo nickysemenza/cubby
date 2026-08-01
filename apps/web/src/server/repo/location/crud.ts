@@ -67,6 +67,7 @@ import {
   present,
   sideEffect,
 } from "~/server/repo/impact";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -617,6 +618,10 @@ export const locationList = async (
     location,
     [],
     [
+      ...relatedWhereConditions(
+        "location",
+        filters as unknown as Record<string, unknown>,
+      ),
       pickerSearch,
       eqAny(location.type, filters.itemTypeFilter),
       parentCondition,
