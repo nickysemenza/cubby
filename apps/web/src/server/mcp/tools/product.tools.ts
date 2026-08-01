@@ -35,8 +35,8 @@ export function registerProductTools(server: McpServer) {
     slim: slimProduct,
     sort: { orderBy: "name" },
     descriptions: {
-      list: "Search products by name, manufacturer, UPC, model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id.",
-      get: "Get a product by ID, including manufacturer model, external identifiers, and computed dataQuality.",
+      list: "Search products by name, manufacturer, UPC, model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id. For the stocked product-enrichment worklist, pass inventoryPresenceFilter=has and imagePresenceFilter=none.",
+      get: "Get a product by ID, including manufacturer model, notes, external identifiers, displayable-image count and cover URL, and computed dataQuality.",
       create:
         'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
       update:

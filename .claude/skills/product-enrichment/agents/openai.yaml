@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Enrichment"
+  short_description: "Fill Cubby product images and identifiers"
+  default_prompt: "Use $product-enrichment to enrich Cubby products with verified identifiers, metadata, and cover images."

@@ -200,6 +200,15 @@ roster, open a purchase, or set a `statedTotal`:
   include `model`, external ids, and computed `dataQuality`, so the verification read should show
   the gap disappearing.
 
+### Product-enrichment handoff
+
+When a purchase source reveals a product UPC/EAN/GTIN, manufacturer model,
+Amazon ASIN, retailer SKU, or canonical product URL, capture it on the product
+using the existing `model`, `upc`, and read-merge-write `externalIds` rules in
+Phase 4. After the financial import is reconciled, invoke `$product-enrichment`
+to find one verified cover image and fill other exact-variant metadata. Product
+research must not delay or block expense, purchase, or settlement reconciliation.
+
 ## Phase 1 — decide how far to trust the export
 
 1. **Prove coverage.** Print min/max date and a per-year count. An eBay CSV once silently held only
