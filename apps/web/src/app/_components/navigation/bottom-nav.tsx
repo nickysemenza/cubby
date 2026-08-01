@@ -92,7 +92,6 @@ export function BottomNav() {
       // top-rule — separation by rule and tone, no raised/blurred/translucent
       // chrome.
       className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t-[3px] border-t-foreground bg-card md:hidden print:hidden"
-      style={{ viewTransitionName: "bottom-nav" }}
       aria-label="Main navigation"
     >
       <Row align="center" justify="around" className="h-14">

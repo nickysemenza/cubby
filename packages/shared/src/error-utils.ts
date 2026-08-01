@@ -10,6 +10,17 @@ export function getErrorMessage(error: unknown): string {
   if (typeof error === "string") {
     return error;
   }
+  // DOMException is not an Error subclass in every browser/runtime. Keep this
+  // structural fallback narrow so browser-generated failures retain the useful
+  // message without stringifying arbitrary objects.
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
   return "An unknown error occurred";
 }
 

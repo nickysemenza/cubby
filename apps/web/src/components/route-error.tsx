@@ -19,15 +19,30 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
-import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
+import {
+  getAppErrorDetails,
+  getErrorMessage,
+  isDynamicImportError,
+  isSupersededViewTransitionError,
+} from "~/lib/error-utils";
 
-type ErrorCategory = "auth" | "notFound" | "validation" | "network" | "generic";
+type ErrorCategory =
+  | "auth"
+  | "notFound"
+  | "validation"
+  | "network"
+  | "staleBuild"
+  | "navigation"
+  | "generic";
 
 const FRIENDLY_MESSAGES: Record<ErrorCategory, string> = {
   auth: "You need to sign in to view this page",
   notFound: "The item you're looking for doesn't exist or has been deleted",
   validation: "The request contained invalid data",
   network: "Unable to connect to the server. Please check your connection.",
+  staleBuild:
+    "Cubby couldn't load this version of the page. Reload to update the app.",
+  navigation: "Navigation was interrupted. Reload the app to continue.",
   generic: "Something went wrong",
 };
 
@@ -35,6 +50,7 @@ const categorizeError = (
   code: string | undefined,
   reason: string | undefined,
   message: string,
+  error: unknown,
 ): ErrorCategory => {
   // Auth errors
   if (code === "UNAUTHORIZED" || reason === "UNAUTHORIZED") {
@@ -54,6 +70,9 @@ const categorizeError = (
   if (code === "BAD_REQUEST" || code === "PARSE_ERROR") {
     return "validation";
   }
+
+  if (isDynamicImportError(error)) return "staleBuild";
+  if (isSupersededViewTransitionError(error)) return "navigation";
 
   // Network errors
   if (
@@ -88,12 +107,16 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
 
   const { code, reason, message } = getAppErrorDetails(error);
   const rawMessage = getErrorMessage(error);
-  const category = categorizeError(code, reason, rawMessage);
+  const category = categorizeError(code, reason, rawMessage, error);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
 
   // Capture unexpected errors to Sentry (not auth/notFound which are expected)
   useEffect(() => {
-    if (category === "generic" || category === "network") {
+    if (
+      category === "generic" ||
+      category === "network" ||
+      category === "staleBuild"
+    ) {
       Sentry.captureException(error);
     }
   }, [error, category]);
@@ -106,7 +129,11 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       {getIcon(category)}
 
       <h2 className="font-semibold text-xl">
-        {category === "notFound" ? "Not Found" : "Something went wrong"}
+        {category === "notFound"
+          ? "Not Found"
+          : category === "staleBuild"
+            ? "App update required"
+            : "Something went wrong"}
       </h2>
 
       <p className="max-w-md text-center text-muted-foreground">
@@ -133,12 +160,18 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           <Button
             variant="outline"
             onClick={() => {
-              reset?.();
-              router.invalidate();
+              if (category === "staleBuild" || category === "navigation") {
+                window.location.reload();
+              } else {
+                reset?.();
+                router.invalidate();
+              }
             }}
           >
             <RefreshCw className="mr-2 size-4" />
-            Try Again
+            {category === "staleBuild" || category === "navigation"
+              ? "Reload App"
+              : "Try Again"}
           </Button>
           <Button variant="ghost" render={<Link to="/" />} nativeButton={false}>
             Go Home

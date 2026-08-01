@@ -8,6 +8,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
+import { withHtmlNoCache } from "./lib/http-cache";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
@@ -126,7 +127,7 @@ const handler = {
                 Sentry.captureException(reconstructed);
               }
 
-              return response;
+              return withHtmlNoCache(response);
             }),
           { "http.request.method": request.method, "url.path": url.pathname },
         ),
@@ -189,6 +190,7 @@ export default Sentry.withSentry(
   () => ({
     dsn: SENTRY_DSN,
     sendDefaultPii: true,
+    release: `cubby@${__GIT_COMMIT__}`,
     // Explicit rather than relying on the SDK default, which is also
     // "production" — stating it keeps the three init sites (here, router.tsx,
     // instrument.server.mjs) readable as a set, so a future reader can see at a

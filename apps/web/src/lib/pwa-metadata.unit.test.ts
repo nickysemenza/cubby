@@ -20,3 +20,16 @@ describe("PWA paper-color metadata", () => {
     expect(offline).toContain(`--bg: ${PAPER_BACKGROUND}`);
   });
 });
+
+describe("PWA deployment cache headers", () => {
+  it("revalidates the worker while keeping hashed assets immutable", () => {
+    const headers = readFileSync(resolve("public/_headers"), "utf8");
+
+    expect(headers).toMatch(
+      /\/sw\.js\s+Cache-Control: public, max-age=0, must-revalidate/,
+    );
+    expect(headers).toMatch(
+      /\/assets\/\*\s+Cache-Control: public, max-age=31536000, immutable/,
+    );
+  });
+});

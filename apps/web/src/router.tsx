@@ -4,6 +4,8 @@ import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query
 import { RouteErrorComponent } from "~/components/route-error";
 import { RouteNotFound } from "~/components/route-not-found";
 import { RoutePending } from "~/components/route-pending";
+import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
+import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
@@ -36,7 +38,6 @@ export const getRouter = () => {
     defaultPreloadStaleTime: 0,
     // Preserve scroll position across back/forward navigation (long list pages).
     scrollRestoration: true,
-    defaultViewTransition: true,
     defaultErrorComponent: RouteErrorComponent,
     defaultNotFoundComponent: RouteNotFound,
     // Route-transition skeleton instead of a blank flash. Thresholds chosen so
@@ -59,10 +60,15 @@ export const getRouter = () => {
   // first paint, sign-in page included) — too steep for a single-user app.
   // Errors and tracing don't depend on it.
   if (!router.isServer) {
+    // Must be installed before a user can request a lazy route chunk. A tab
+    // left open across a deploy gets one guarded reload onto the new build.
+    installPreloadErrorRecovery();
+
     const isProd = import.meta.env.PROD;
     Sentry.init({
       dsn: SENTRY_DSN,
       sendDefaultPii: true,
+      release: `cubby@${__GIT_COMMIT__}`,
       // Without this the SDK defaults to "production", so every error from
       // `vite dev` on localhost lands in the same bucket as a real user's.
       // That is not hypothetical: CUBBY-DY accumulated 761 events over 11 days
@@ -76,7 +82,14 @@ export const getRouter = () => {
       // `sendDefaultPii` attaches the full request URL (incl. query string) to
       // events. Defensively redact any credential-bearing query param (e.g. a
       // stale MCP `?key=`) before the event leaves the browser.
-      beforeSend: scrubSentryEvent,
+      beforeSend: (event, hint) => {
+        // Historical Safari cancellation from the removed View Transitions
+        // integration. Keep this exact; other AbortErrors stay actionable.
+        if (isSupersededViewTransitionError(hint.originalException)) {
+          return null;
+        }
+        return scrubSentryEvent(event);
+      },
       // Tracing OFF in dev. React 19's dev build emits a `performance.measure`
       // per component render; Sentry's browser tracing turns each into a span and
       // builds the span tree in O(n²) (`addSpanChildren`). On component-heavy
