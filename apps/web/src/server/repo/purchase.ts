@@ -51,6 +51,7 @@ import type {
 import {
   purchaseSortableFields,
   RECONCILIATION_TOLERANCE,
+  reconcilePurchase,
 } from "@cubby/schemas/purchase";
 import {
   and,
@@ -208,6 +209,15 @@ const purchaseUnpricedExpenseCount = correlated<number>(
        AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
 );
 
+const purchasePostedRefundTotal = correlated<number>(
+  `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
+     FROM "FinancialTransaction" ft
+     WHERE ft."purchaseId" = "Purchase"."id"
+       AND ft."kind" = 'refund'
+       AND ft."status" = 'posted'
+       AND ft."deletedAt" IS NULL)`,
+);
+
 const purchaseDocumentCount = correlated<number>(
   `(SELECT count(*)::int FROM "PurchaseImage" pi
      JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
@@ -282,6 +292,12 @@ const dbPurchaseToAPI = (
   expenseCount: Number(row.expenseCount),
   unpricedExpenseCount: Number(row.unpricedExpenseCount),
   expenseTotal: Number(row.expenseTotal),
+  reconciliation: reconcilePurchase({
+    statedTotal: row.statedTotal,
+    expenseTotal: Number(row.expenseTotal),
+    unpricedExpenseCount: Number(row.unpricedExpenseCount),
+    postedRefundTotal: financial.postedRefundTotal,
+  }),
   documentCount: Number(row.documentCount),
   financialReconciliation: calculateFinancialReconciliation({
     expenseTotal: row.expenseTotal,
@@ -413,13 +429,24 @@ const reconciliationCondition = (
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
     floor((${purchaseExpenseTotal} * 100)::numeric + 0.5)
   )`;
+  const deltaInCents = sql`(
+    floor((${purchaseExpenseTotal} * 100)::numeric + 0.5) -
+    floor((${purchase.statedTotal} * 100)::numeric + 0.5)
+  )`;
+  const refundInCents = sql`floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5)`;
+  const refundAdjusted = sql`${purchaseUnpricedExpenseCount} = 0
+    AND ${deltaInCents} < ${-toleranceInCents}
+    AND ${refundInCents} = ${deltaInCents}`;
   return or(
     selected.includes("unknown") ? isNull(purchase.statedTotal) : undefined,
     selected.includes("match")
       ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} <= ${toleranceInCents}`
       : undefined,
+    selected.includes("refund_adjusted")
+      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents} AND ${refundAdjusted}`
+      : undefined,
     selected.includes("mismatch")
-      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents}`
+      ? sql`${purchase.statedTotal} IS NOT NULL AND ${gapInCents} > ${toleranceInCents} AND NOT (${refundAdjusted})`
       : undefined,
   );
 };

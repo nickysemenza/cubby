@@ -7,13 +7,11 @@
  * total can do is agree or disagree with those lines. This module reports the
  * disagreement.
  *
- * **Advisory, not a defect.** A mismatch is frequently CORRECT: a partial refund
- * reduces a line without changing what the charge originally stated. So this is
- * classed non-defect in `PROBLEM_CLASS` (it never counts toward `totalProblems`
- * and never turns the navbar badge red), it ships no "fix" mutation, and nothing
- * here — or anywhere else in the system — back-computes a cost from
- * `statedTotal`. A charge with no stated total is `"unknown"`, not a problem, and
- * is excluded before the comparison ever happens.
+ * **Advisory, not a defect.** Differences exactly explained by posted refunds
+ * are filtered out as `refund_adjusted`; the remaining mismatches still require
+ * human judgment. This stays non-defect in `PROBLEM_CLASS`, ships no "fix"
+ * mutation, and never back-computes a cost from `statedTotal`. A charge with no
+ * stated total is `"unknown"` and is excluded before comparison.
  */
 
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
@@ -36,6 +34,8 @@ type ChargeSumRow = {
   statedTotal: number;
   expenseTotal: number;
   expenseCount: number;
+  unpricedExpenseCount: number;
+  postedRefundTotal: number;
 };
 
 /**
@@ -75,7 +75,16 @@ export const findPurchasesNotReconciling = async (
       p."date"::text AS "date",
       p."statedTotal" AS "statedTotal",
       ${lineTotal} AS "expenseTotal",
-      count(e.id)::int AS "expenseCount"
+      count(e.id)::int AS "expenseCount",
+      count(e.id) FILTER (WHERE e.cost IS NULL)::int AS "unpricedExpenseCount",
+      COALESCE((
+        SELECT sum(ft.amount)
+        FROM "FinancialTransaction" ft
+        WHERE ft."purchaseId" = p.id
+          AND ft.kind = 'refund'
+          AND ft.status = 'posted'
+          AND ft."deletedAt" IS NULL
+      ), 0)::double precision AS "postedRefundTotal"
     FROM ${purchase} p
     LEFT JOIN ${vendor} v
       ON v.id = p."vendorId" AND v."deletedAt" IS NULL
@@ -96,6 +105,8 @@ export const findPurchasesNotReconciling = async (
       statedTotal: Number(row.statedTotal),
       expenseTotal: Number(row.expenseTotal),
       expenseCount: Number(row.expenseCount),
+      unpricedExpenseCount: Number(row.unpricedExpenseCount),
+      postedRefundTotal: Number(row.postedRefundTotal),
     }))
     .filter((row) => reconcilePurchase(row) === "mismatch");
 };

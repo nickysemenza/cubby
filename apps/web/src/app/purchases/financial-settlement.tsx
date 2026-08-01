@@ -13,6 +13,7 @@ type FinancialPurchase = PurchaseOut & {
     outstandingTransactionCount: number;
     postedTotal: number;
     projectedTotal: number;
+    postedRefundTotal: number;
     delta: number | null;
   };
 };

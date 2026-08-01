@@ -18,10 +18,16 @@ export const purchaseExpenseStatusOptions = buildSelectOptions(
   expenseStatusLabels,
 );
 
-const reconciliationValues = ["match", "mismatch", "unknown"] as const;
+const reconciliationValues = [
+  "match",
+  "refund_adjusted",
+  "mismatch",
+  "unknown",
+] as const;
 const reconciliationLabels: Record<PurchaseReconciliation, string> = {
   match: "Reconciles",
-  mismatch: "Off",
+  refund_adjusted: "Refund-adjusted",
+  mismatch: "Needs review",
   unknown: "No stated total",
 };
 

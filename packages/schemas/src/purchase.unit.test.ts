@@ -46,6 +46,57 @@ describe("reconcilePurchase", () => {
     );
   });
 
+  it("recognizes only fully-priced negative differences explained by posted refunds", () => {
+    expect(
+      reconcilePurchase({
+        statedTotal: 326.36,
+        expenseTotal: 199.26,
+        unpricedExpenseCount: 0,
+        postedRefundTotal: -127.1,
+      }),
+    ).toBe("refund_adjusted");
+    expect(
+      reconcilePurchase({
+        statedTotal: 326.36,
+        expenseTotal: 199.26,
+        unpricedExpenseCount: 1,
+        postedRefundTotal: -127.1,
+      }),
+    ).toBe("mismatch");
+    expect(
+      reconcilePurchase({
+        statedTotal: 199.26,
+        expenseTotal: 326.36,
+        unpricedExpenseCount: 0,
+        postedRefundTotal: 127.1,
+      }),
+    ).toBe("mismatch");
+  });
+
+  it("sums refund evidence before classification and compares in cents", () => {
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 79.99,
+        postedRefundTotal: -10.005 + -10.005,
+      }),
+    ).toBe("refund_adjusted");
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 80,
+        postedRefundTotal: 20,
+      }),
+    ).toBe("mismatch");
+    expect(
+      reconcilePurchase({
+        statedTotal: 100,
+        expenseTotal: 80,
+        postedRefundTotal: -19.99,
+      }),
+    ).toBe("mismatch");
+  });
+
   it("absorbs sub-penny float drift and flags anything past the tolerance", () => {
     // Why the tolerance exists at all: summing float line costs rarely lands
     // exactly on the vendor's stated total.

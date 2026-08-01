@@ -4,6 +4,7 @@ import type {
   ProjectShortcode,
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import { unsafePurchaseId } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   countProblems,
@@ -28,6 +29,7 @@ import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import {
+  financialTransaction,
   image,
   inventoryEntry,
   location as locationTable,
@@ -61,6 +63,8 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import { resolveLiveShortcode } from "./shortcode-resolver";
+import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
 import { findOrCreateVendor, getVendorByID, mergeVendors } from "./vendor";
 
@@ -1550,6 +1554,58 @@ describe("problems — charges not reconciling", () => {
         expenseCount: 1,
       },
     ]);
+  });
+
+  it("excludes differences fully explained by posted refund evidence", async () => {
+    const line = await seedLine({
+      name: "refund-adjusted purchase",
+      cost: 60,
+      vendor: "Posted Refund Mart",
+      orderId: "PRM-1",
+    });
+    const charge = await setStated(line.purchaseId as PurchaseShortcode, 100);
+    const purchaseId = unsafePurchaseId(
+      (await resolveLiveShortcode(ctx.db, charge.id, "purchase"))!,
+    );
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Posted Refund Card",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "4040",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: account.id,
+      purchaseId,
+      kind: "refund",
+      status: "pending",
+      amount: -40,
+      transactionDate: "2026-07-02",
+      postedDate: null,
+      merchant: "Posted Refund Mart",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+    });
+
+    expect(
+      (await findFastProblems(ctx.db)).purchasesNotReconciling,
+    ).toHaveLength(1);
+
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ status: "posted", postedDate: "2026-07-03" })
+      .where(eq(financialTransaction.id, refund.id));
+
+    expect((await findFastProblems(ctx.db)).purchasesNotReconciling).toEqual(
+      [],
+    );
   });
 
   it("is advisory: reported, but never counted as a defect", async () => {

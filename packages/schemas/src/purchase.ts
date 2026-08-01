@@ -99,7 +99,12 @@ export type PurchaseExpenseStatus = z.infer<typeof purchaseExpenseStatus>;
  * The soft reconciliation verdict for a Purchase's stated total versus its Expenses.
  * `unknown` means there is no stated total to compare against.
  */
-export const purchaseReconciliation = z.enum(["unknown", "match", "mismatch"]);
+export const purchaseReconciliation = z.enum([
+  "unknown",
+  "match",
+  "refund_adjusted",
+  "mismatch",
+]);
 export type PurchaseReconciliation = z.infer<typeof purchaseReconciliation>;
 
 export const purchaseDocumentKindValues = [
@@ -187,6 +192,8 @@ export const purchaseOut = z.object({
    * disagree — see the reconciliation note on `statedTotal`.
    */
   expenseTotal: z.number(),
+  /** Shared stated-total verdict, including posted-refund explanations. */
+  reconciliation: purchaseReconciliation,
   /** Settlement evidence only; never participates in spend rollups. */
   financialReconciliation: financialReconciliationSummary,
   /** Live invoice/receipt documents filed against this purchase. */
@@ -260,14 +267,29 @@ export const RECONCILIATION_TOLERANCE = 0.01;
 export const reconcilePurchase = (p: {
   statedTotal: number | null;
   expenseTotal: number;
+  unpricedExpenseCount?: number;
+  postedRefundTotal?: number;
+  financialReconciliation?: { postedRefundTotal: number };
 }): PurchaseReconciliation => {
   if (p.statedTotal === null) return "unknown";
-  const gapInCents = Math.abs(
-    Math.round(p.statedTotal * 100) - Math.round(p.expenseTotal * 100),
+  const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
+  const deltaInCents =
+    Math.round(p.expenseTotal * 100) - Math.round(p.statedTotal * 100);
+  if (Math.abs(deltaInCents) <= toleranceInCents) return "match";
+
+  const postedRefundInCents = Math.round(
+    (p.postedRefundTotal ?? p.financialReconciliation?.postedRefundTotal ?? 0) *
+      100,
   );
-  return gapInCents <= Math.round(RECONCILIATION_TOLERANCE * 100)
-    ? "match"
-    : "mismatch";
+  if (
+    (p.unpricedExpenseCount ?? 0) === 0 &&
+    deltaInCents < -toleranceInCents &&
+    postedRefundInCents === deltaInCents
+  ) {
+    return "refund_adjusted";
+  }
+
+  return "mismatch";
 };
 
 /**

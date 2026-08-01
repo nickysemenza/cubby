@@ -1,6 +1,5 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
-import { reconcilePurchase } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
@@ -41,9 +40,9 @@ import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
 import {
+  purchaseReconciliationStatus,
   ReconciliationBadge,
   ReconciliationNote,
-  reconciliationDelta,
 } from "./purchase-reconciliation";
 
 const NO_EXPENSES: ExpenseOut[] = [];
@@ -91,8 +90,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       "The purchase and its documents go; its expenses stay in the ledger, unattached to any purchase.",
   });
 
-  const status = reconcilePurchase(purchase);
-  const delta = reconciliationDelta(purchase);
+  const status = purchaseReconciliationStatus(purchase);
 
   const fields: BasicInfoField[] = [
     {
@@ -275,11 +273,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             className="border-[var(--border)] border-t pt-2"
           >
             <ReconciliationBadge purchase={purchase} />
-            {delta !== null && delta !== 0 && (
-              <span className="font-mono text-sm tabular-nums">
-                {formatCurrency(delta)}
-              </span>
-            )}
           </Row>
           <ReconciliationNote status={status} />
         </Stack>
@@ -361,7 +354,9 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           ? undefined
           : status === "match"
             ? { label: "Reconciles", tone: "green" }
-            : { label: "Check total", tone: "ink" }
+            : status === "refund_adjusted"
+              ? { label: "Refund-adjusted", tone: "ink" }
+              : { label: "Needs review", tone: "ink" }
       }
       heroStats={heroStats}
       actions={
