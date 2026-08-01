@@ -3,13 +3,13 @@ import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
-  financialTransactionShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
   vendorShortcode,
 } from "./identifiers";
 import { financialReconciliationSummary } from "./financial-transaction";
+import { purchaseRelatedFilterFields } from "./related-view";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -136,30 +136,7 @@ export const primaryPurchaseDocumentKinds = [
 export const purchaseFilterFields = {
   search: z.string().optional().describe("Substring match on order id"),
   vendorId: oneOrMany(vendorShortcode).optional(),
-  expenseId: oneOrMany(expenseShortcode).optional(),
-  expensePresenceFilter: presenceFilter,
-  expenseSearch: z
-    .string()
-    .optional()
-    .describe("Substring match on related expense names"),
-  financialTransactionId: oneOrMany(financialTransactionShortcode).optional(),
-  financialTransactionPresenceFilter: presenceFilter,
-  financialTransactionSearch: z
-    .string()
-    .optional()
-    .describe("Substring match on linked transaction merchant or description"),
-  productId: oneOrMany(productShortcode).optional(),
-  productPresenceFilter: presenceFilter,
-  productSearch: z
-    .string()
-    .optional()
-    .describe("Substring match on products reached through expenses"),
-  projectId: oneOrMany(projectShortcode).optional(),
-  projectPresenceFilter: presenceFilter,
-  projectSearch: z
-    .string()
-    .optional()
-    .describe("Substring match on projects reached through expenses"),
+  ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,

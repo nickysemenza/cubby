@@ -412,6 +412,12 @@ export const vendorRelatedFilterFields = {
   ...trio("product", productShortcode),
   ...trio("financialTransaction", financialTransactionShortcode),
 };
+export const purchaseRelatedFilterFields = {
+  ...trio("expense", expenseShortcode),
+  ...trio("financialTransaction", financialTransactionShortcode),
+  ...trio("product", productShortcode),
+  ...trio("project", projectShortcode),
+};
 export const expenseRelatedFilterFields = trio(
   "financialTransaction",
   financialTransactionShortcode,

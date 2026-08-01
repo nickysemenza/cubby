@@ -541,6 +541,8 @@ describe("purchase filters", () => {
       "related:purchase.projects",
     ]);
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "expenseTotalMin",
+      "expenseTotalMax",
       "expenseId",
       "expensePresenceFilter",
       "financialTransactionId",
@@ -549,8 +551,6 @@ describe("purchase filters", () => {
       "productPresenceFilter",
       "projectId",
       "projectPresenceFilter",
-      "expenseTotalMin",
-      "expenseTotalMax",
     ]);
   });
 
@@ -568,20 +568,20 @@ describe("purchase filters", () => {
       "lineTotal",
       "reconciliation",
       "documents",
-      "expense",
-      "transaction",
-      "product",
-      "project",
-      "expenseId",
-      "expensePresenceFilter",
-      "financialTransactionId",
-      "financialTransactionPresenceFilter",
-      "productId",
-      "productPresenceFilter",
-      "projectId",
-      "projectPresenceFilter",
       "lineTotalMin",
       "lineTotalMax",
+      "related-expense",
+      "expenseId",
+      "expensePresenceFilter",
+      "related-financialTransaction",
+      "financialTransactionId",
+      "financialTransactionPresenceFilter",
+      "related-product",
+      "productId",
+      "productPresenceFilter",
+      "related-project",
+      "projectId",
+      "projectPresenceFilter",
     ]);
     // And the fragment survives what `parseSearch` hands it — an all-digits
     // order-id search arrives pre-parsed as a number.

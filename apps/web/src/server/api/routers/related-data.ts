@@ -3,11 +3,11 @@ import {
   relatedPreviewOutput,
 } from "@cubby/schemas/related-view";
 import { loadRelatedPreviews } from "~/server/repo/related-view";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 export const relatedDataRouter = createTRPCRouter({
   previews: protectedProcedure
     .input(relatedPreviewInput)
-    .output(relatedPreviewOutput)
+    .output(strictOutput(relatedPreviewOutput))
     .query(({ ctx, input }) => loadRelatedPreviews(ctx.db, input)),
 });
