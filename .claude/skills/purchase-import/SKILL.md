@@ -584,14 +584,25 @@ single call.
   Everything else gets one, **after unbundling**. A bundle (`wall materials, strut stuff`) and an
   aggregate credit (`lowes returns` −$77.46) are *un-split imports*, not a kind of thing — split them
   per Phase 3 and each part takes its own product. Two shapes that look like exceptions and aren't:
-  - **A fungible bulk Expense stays UNLINKED** — `plywood`, `metal tubing`, `pvc fittings`. This is the
-    designed default, not an omission. `misc:` products (`isMiscProduct`,
+  - **A receipt-identified commodity material is a Product.** Lumber, plywood, sheet goods, tubing,
+    and fittings do not need a consumer brand to be productized when the receipt gives a stable,
+    repeatable specification. Dimensions, grade, treatment, finish, profile, and similar purchasing
+    distinctions define the generic Product; different meaningful specifications are different
+    Products. For example, `Douglas Fir 2x4 STD/BTR S4S`, `1/4-in 4x8 AC exterior plywood`, and
+    `15/32-in 4x8 CDX Struct 1 plywood` are three Products. Use `generic` as the manufacturer when no
+    maker is stated, put the printed vendor code in `externalIds`, and acknowledge `product_model` as
+    `not_applicable` when the material genuinely has no manufacturer model. Never copy the vendor code
+    into `model` merely to clear completeness.
+
+    **Only an unspecified or heterogeneous bulk bucket stays UNLINKED** — a row named merely
+    `plywood`, `metal tubing`, `pvc fittings`, or `assorted clamps` when the evidence cannot recover
+    consistent dimensions/grade/SKUs. `misc:` products (`isMiscProduct`,
     `packages/shared/src/constants.ts`) are an **inventory** convenience — a heterogeneous pile on a
     shelf, exempted from `findProductsMissingPrice` and carried as `miscNoPrice` in the location
-    valuation — and are deliberately **not** an expense-link target: hanging a $171 clamp run off a $5
-    `assorted clamps` bucket makes "net cost" mean two different things depending on the product.
-    Decided 2026-07; see *Bucket products do NOT get product links* in `docs/todos.md`. Unbundle into
-    specific SKUs where the receipt allows, and otherwise leave the row unlinked.
+    valuation — and remain deliberately **not** an expense-link target: hanging a $171 clamp run off a
+    $5 `assorted clamps` bucket makes "net cost" mean two different things depending on the product.
+    See *Bucket products do NOT get product links* in `docs/todos.md`. Unbundle into receipt-identified
+    products where the evidence allows; otherwise leave the row unlinked.
   - **A sample of one identified material is that product** (`walnut wood samples` → the walnut you
     then order); a mixed sample bag is a bucket and follows the rule above.
   - **A subscription is one product with N recurring expenses.** `chief architect monthly` (9 rows,
