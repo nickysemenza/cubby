@@ -1,0 +1,113 @@
+---
+name: product-enrichment
+description: Enrich Cubby products with verified cover images, UPC/EAN/GTIN barcodes, manufacturer models, Amazon ASINs, retailer identifiers, names, categories, manufacturers, and current prices. Use when the user wants to fill missing product images or details, burn down the stocked-product image backlog, research products from model numbers or external IDs, or correct product metadata from authoritative product pages.
+---
+
+# Enrich Cubby products
+
+Add product facts and one representative cover image through Cubby's existing
+MCP tools. Keep the work interactive: there is no enrichment queue or separate
+evidence table, so return a source-backed batch report when finished.
+
+## Build the worklist
+
+1. Call `search_products` with:
+   - `inventoryPresenceFilter: "has"`
+   - `imagePresenceFilter: "none"`
+   - `pageSize: 25`
+2. Work strongest identities first:
+   - UPC/EAN/GTIN;
+   - ASIN or another exact external ID;
+   - manufacturer plus model/MPN;
+   - model/MPN alone;
+   - name-only products last.
+3. Treat `imageCount` as the displayable-image count and `coverImageUrl` as the
+   current cover. PDFs do not count. Skip attachment when `imageCount > 0`
+   unless the user explicitly asks to replace or expand the gallery.
+
+## Resolve exact identity
+
+Use this evidence order and stop when the exact variant is proven:
+
+1. Open an existing `externalIds[].url` or canonical ASIN URL.
+2. Try deterministic UPC lookup when a UPC is already known.
+3. Search the manufacturer's site using manufacturer plus model.
+4. Search a reputable retailer using the exact model or retailer SKU.
+5. For Amazon, open `https://www.amazon.com/dp/<ASIN>` in the signed-in
+   in-app browser or Chrome session. Confirm the selected size/color/count
+   variant; an ASIN for a parent or neighboring variant is not proof.
+6. Use aggregators and general search only to find a primary page. They are not
+   sufficient by themselves to overwrite populated names or prices.
+
+Do not treat a cached UPC record with no image as a completed lookup. Continue
+through manufacturer, retailer, and browser sources. Do not generate a product
+image with AI; attach a real image of the exact product.
+
+Always attempt to capture the canonical identifiers exposed by the source:
+
+- Copy an exact published UPC/EAN/GTIN into `upc`. Preserve all leading zeroes
+  and the published 8, 12, 13, or 14-digit representation. Never derive one
+  from a model or SKU.
+- Put the maker's model/MPN in `model`.
+- Put an Amazon ASIN in `externalIds` with `source: "amazon"` and canonical
+  `/dp/<ASIN>` URL.
+- Put retailer-specific SKUs in `externalIds`, not `model`.
+- Never invent a plausible-looking identifier or silently choose among
+  variants. Skip ambiguous products and report the conflict.
+
+## Apply metadata safely
+
+Read the current product immediately before writing. `update_product` replaces
+the complete `externalIds` set, so merge by `source`, remove MCP-only timestamps,
+and send every identifier that should remain. Preserve unrelated identifiers.
+
+All metadata is eligible for correction only when exact-variant evidence is
+authoritative for that field:
+
+- Prefer manufacturer pages for manufacturer, model, canonical name, and
+  category.
+- Use an exact retailer page for UPC, retailer SKU, image, and a current offer.
+- Do not replace a concise correct name with a retailer SEO title.
+- Replace `price` only with a currently visible exact-variant offer sold
+  directly by the manufacturer or retailer. Ignore marketplace third-party
+  offers, crossed-out list prices, aggregators, and inferred averages.
+- Never blanket-apply a provider response. Compare and write fields
+  deliberately.
+
+## Attach one cover image
+
+Choose one clean representative image, preferring the manufacturer asset and
+then an exact retailer asset. Reject lifestyle shots, bundles, watermarks,
+wrong colors/sizes/counts, thumbnails, and images whose variant cannot be
+confirmed.
+
+Call `attach_file` once with the product's `PRD-` shortcode:
+
+1. Prefer `url` so Cubby fetches and stores the source image in R2.
+2. If the source blocks Cubby's server fetch, download the verified asset
+   through the signed-in browser and pass its bytes as base64 `data` with the
+   correct `contentType`.
+3. Do not attach a second image in the same enrichment pass.
+
+## Verify every write
+
+Call `get_product` after updating and attaching. Confirm:
+
+- UPC, model, manufacturer, metadata, and every prior external ID survived;
+- `imageCount` is `1` for a previously image-less product;
+- `coverImageUrl` is non-null and the stored image renders;
+- the product still describes the exact researched variant.
+
+If verification fails, stop that product and report it. Do not continue a
+batch on the assumption that the MCP response or attachment succeeded.
+
+## Report the batch
+
+Return a compact table with one row per candidate:
+
+| Product | Identity used | Source page(s) | Fields changed | Image | Outcome |
+| --- | --- | --- | --- | --- | --- |
+
+Use `enriched`, `skipped — ambiguous`, `skipped — no exact source`, or
+`failed — <reason>` as outcomes. Include direct source links in the report;
+Cubby's normal audit log remains the durable record of field writes.

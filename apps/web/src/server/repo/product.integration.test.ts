@@ -397,6 +397,74 @@ describe("product repository", () => {
       );
     });
 
+    it("combines stocked and missing-image filters for the enrichment worklist", async () => {
+      const shelf = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Enrichment Worklist Shelf" }),
+        ctx.actor,
+      );
+      const missingImage = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Stocked Without Image",
+          upc: "700000000010",
+        }),
+        ctx.actor,
+      );
+      const pendingImage = await insertAndReturn(ctx.db, image, {
+        key: "test-products/enrichment-cover.png",
+        url: "https://example.com/enrichment-cover.png",
+        filename: "enrichment-cover.png",
+        contentType: "image/png",
+        size: 10,
+        status: "UPLOADED",
+      });
+      const withImage = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Stocked With Image",
+          upc: "700000000011",
+          pendingImageIds: [pendingImage.id],
+        }),
+        ctx.actor,
+      );
+      const unstocked = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Unstocked Without Image",
+          upc: "700000000012",
+        }),
+        ctx.actor,
+      );
+
+      for (const stocked of [missingImage, withImage]) {
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId: stocked.id,
+            locationId: shelf.id,
+            amount: { value: 1, unit: "each" },
+          },
+          ctx.actor,
+        );
+      }
+
+      const worklist = await productList(
+        ctx.db,
+        {
+          inventoryPresenceFilter: "has",
+          imagePresenceFilter: "none",
+        },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      const ids = worklist.data.map((p) => p.id);
+
+      expect(ids).toContain(missingImage.id);
+      expect(ids).not.toContain(withImage.id);
+      expect(ids).not.toContain(unstocked.id);
+    });
+
     it("ingredientPresenceFilter: has/none partitions products by ingredient link", async () => {
       const ingredient = await createIngredient(
         ctx.db,

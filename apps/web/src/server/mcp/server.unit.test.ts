@@ -222,6 +222,51 @@ describe("slimProduct USDA signal", () => {
   });
 });
 
+describe("slimProduct enrichment context", () => {
+  it("reports identity fields and no cover for a product without images", () => {
+    const slim = slimProduct({
+      id: "PRD-ABCD",
+      name: "M18 framing nailer",
+      manufacturer: "Milwaukee",
+      model: "2744-20",
+      notes: "Bare tool",
+      images: [],
+    });
+
+    expect(slim).toMatchObject({
+      model: "2744-20",
+      notes: "Bare tool",
+      imageCount: 0,
+      coverImageUrl: null,
+    });
+  });
+
+  it("uses the first displayable image as cover and excludes PDF manuals", () => {
+    const slim = slimProduct({
+      id: "PRD-EFGH",
+      name: "Track saw",
+      manufacturer: "Festool",
+      images: [
+        {
+          url: "https://images.example.test/manual.pdf",
+          contentType: "application/pdf",
+        },
+        {
+          url: "https://images.example.test/cover.webp",
+          contentType: "image/webp",
+        },
+        {
+          url: "https://images.example.test/alternate.jpg",
+          contentType: "image/jpeg",
+        },
+      ],
+    });
+
+    expect(slim.imageCount).toBe(2);
+    expect(slim.coverImageUrl).toBe("https://images.example.test/cover.webp");
+  });
+});
+
 describe("slimMeal", () => {
   it("keeps meal essentials and summarizes each planned recipe", () => {
     const slim = slimMeal({

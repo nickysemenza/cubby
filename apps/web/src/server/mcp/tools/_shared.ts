@@ -1,6 +1,7 @@
 import { deletedCountOut } from "@cubby/schemas/common";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
+import { isDocumentFile } from "@cubby/schemas/image";
 import {
   type IngredientOut,
   ingredientMcpOut,
@@ -478,16 +479,22 @@ type ProductRow = ProductTopLevelOut & {
 };
 export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   const p = pRow as ProductRow;
+  const displayImages = (p.images ?? []).filter(
+    (image) => !isDocumentFile(image),
+  );
   return {
     id: p.id,
     name: p.name,
     manufacturer: p.manufacturer,
     model: p.model,
+    notes: p.notes,
     upc: p.upc,
     category: p.category,
     tags: p.tags ?? [],
     price: p.price,
     expectedQuantity: p.expectedQuantity,
+    imageCount: displayImages.length,
+    coverImageUrl: displayImages[0]?.url ?? null,
     fdc_id: p.fdc_id ?? null,
     usdaUnavailable: p.usdaUnavailable ?? null,
     externalIds: p.externalIds,
