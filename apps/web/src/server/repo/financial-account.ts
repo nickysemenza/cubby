@@ -21,6 +21,7 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
@@ -35,14 +36,20 @@ import {
   buildPartialUpdateValues,
   buildSearchConditions,
   countWhere,
+  executeListQueryWithCount,
   getDb,
   lockAndValidateForDelete,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
@@ -129,9 +136,9 @@ const whereFor = (filters: FinancialAccountFilters) =>
           ? [filters.externalAccountId].flat()
           : undefined,
       ),
-      filters.sourceAliasPresence === "has"
+      filters.sourceAliasPresenceFilter === "has"
         ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`
-        : filters.sourceAliasPresence === "none"
+        : filters.sourceAliasPresenceFilter === "none"
           ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") = 0`
           : undefined,
     ],
@@ -145,52 +152,56 @@ export async function listFinancialAccounts(
 ): Promise<{ data: FinancialAccountOut[]; count: number }> {
   const where = whereFor(filters);
   const { take, skip } = buildTakeSkip(pagination);
-  const rows = await getDb(db)
-    .select(columns)
-    .from(financialAccount)
-    .where(where)
-    .orderBy(
-      ...buildOrderBy(
-        financialAccount,
-        sorts,
-        [...financialAccountSortableFields],
-        {
-          resolve: (sort) =>
-            sort.orderBy === "transactionCount"
-              ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
-              : null,
-        },
-      ),
-    )
-    .limit(take)
-    .offset(skip);
+  const { data: rows, count } = await executeListQueryWithCount(
+    getDb(db)
+      .select(columns)
+      .from(financialAccount)
+      .where(where)
+      .orderBy(
+        ...buildOrderBy(
+          financialAccount,
+          sorts,
+          [...financialAccountSortableFields],
+          {
+            resolve: (sort) =>
+              sort.orderBy === "transactionCount"
+                ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
+                : null,
+          },
+        ),
+      )
+      .limit(take)
+      .offset(skip),
+    countWhere(db, financialAccount, where),
+  );
   return {
     data: rows.map(toOut),
-    count: await countWhere(db, financialAccount, where),
+    count,
   };
 }
 
-async function getFinancialAccountByID(db: Database, id: FinancialAccountId) {
-  const [row] = await getDb(db)
-    .select(columns)
-    .from(financialAccount)
-    .where(and(eq(financialAccount.id, id), notDeleted(financialAccount)))
-    .limit(1);
-  if (!row)
-    throw createAppError(
-      "FINANCIAL_ACCOUNT_NOT_FOUND",
-      `Financial account not found: ${id}`,
-    );
-  return toOut(row);
-}
+const financialAccountReader = createEntityReader<
+  FinancialAccountRow,
+  FinancialAccountOut,
+  FinancialAccountId,
+  Database | DrizzleTransaction
+>({
+  entity: "financialAccount",
+  fetchById: async (db, id) => {
+    const [row] = await unwrapDb(db)
+      .select(columns)
+      .from(financialAccount)
+      .where(and(eq(financialAccount.id, id), notDeleted(financialAccount)))
+      .limit(1);
+    return row;
+  },
+  fromDB: (_db, row) => toOut(row),
+  notFoundReason: "FINANCIAL_ACCOUNT_NOT_FOUND",
+});
 
-export async function getFinancialAccountByShortcode(
-  db: Database,
-  shortcode: string,
-) {
-  const id = await resolveLiveShortcode(db, shortcode, "financialAccount");
-  return id ? getFinancialAccountByID(db, unsafeFinancialAccountId(id)) : null;
-}
+const getFinancialAccountByID = financialAccountReader.getByID;
+export const getFinancialAccountByShortcode =
+  financialAccountReader.getByShortcode;
 
 async function assertAliasesAvailable(
   db: Database | DrizzleTransaction,
@@ -224,6 +235,15 @@ export async function createFinancialAccount(
   actor: ActorContext,
 ) {
   const id = await withTransaction(db, async (tx) => {
+    await lockFinancialEvidenceKeys(
+      tx,
+      "account-alias",
+      data.sourceAliases.flatMap((alias) =>
+        alias.externalAccountId
+          ? [`${alias.source}\0${alias.externalAccountId}`]
+          : [],
+      ),
+    );
     await assertAliasesAvailable(tx, data.sourceAliases);
     const created = await insertWithShortcode(tx, "financialAccount", data);
     await logAuditEntry(tx, actor, {
@@ -261,8 +281,18 @@ export async function updateFinancialAccount(
         "FINANCIAL_ACCOUNT_NOT_FOUND",
         `Financial account not found: ${id}`,
       );
-    if (data.sourceAliases !== undefined)
+    if (data.sourceAliases !== undefined) {
+      await lockFinancialEvidenceKeys(
+        tx,
+        "account-alias",
+        data.sourceAliases.flatMap((alias) =>
+          alias.externalAccountId
+            ? [`${alias.source}\0${alias.externalAccountId}`]
+            : [],
+        ),
+      );
       await assertAliasesAvailable(tx, data.sourceAliases, accountId);
+    }
     const values = buildPartialUpdateValues(data);
     await tx
       .update(financialAccount)
@@ -297,9 +327,14 @@ export async function deleteFinancialAccounts(
   shortcodes: FinancialAccountShortcode[],
   actor: ActorContext,
 ) {
-  const ids = await Promise.all(
-    shortcodes.map(async (code) => {
-      const id = await resolveLiveShortcode(db, code, "financialAccount");
+  const resolved = await resolveLiveShortcodes(
+    db,
+    shortcodes,
+    "financialAccount",
+  );
+  const ids = uniq(
+    shortcodes.map((code) => {
+      const id = resolved.get(code);
       if (!id)
         throw createAppError(
           "FINANCIAL_ACCOUNT_NOT_FOUND",

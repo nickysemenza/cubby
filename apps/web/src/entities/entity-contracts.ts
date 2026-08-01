@@ -156,13 +156,13 @@ const entityContracts = {
     defaultSort: entities.image.list?.defaultSort ?? "createdAt",
     sortableFields: entities.image.list?.sortableFields ?? [],
     canPreview: true,
-    invalidationKeys: [queryKeys.image.all],
+    invalidationKeys: [queryKeys.image.all, queryKeys.dashboard.counts],
     query: {
       list: (api, params) => api.image.list.queryOptions(listParams(params)),
       detail: (api, id) => api.image.getByID.queryOptions({ id }),
     },
     mutation: {
-      invalidationKeys: [queryKeys.image.all],
+      invalidationKeys: [queryKeys.image.all, queryKeys.dashboard.counts],
     },
   },
   "usda-food": {
@@ -191,13 +191,13 @@ const entityContracts = {
     // carries every field the preview needs, so `detail` warms that same query
     // and the panel's cookbook arm reads it (like the meal arm).
     canPreview: true,
-    invalidationKeys: [queryKeys.cookbook.all],
+    invalidationKeys: [queryKeys.cookbook.all, queryKeys.dashboard.counts],
     query: {
       list: (api) => api.recipe.listCookbooks.queryOptions(),
       detail: (api) => api.recipe.listCookbooks.queryOptions(),
     },
     mutation: {
-      invalidationKeys: [queryKeys.cookbook.all],
+      invalidationKeys: [queryKeys.cookbook.all, queryKeys.dashboard.counts],
     },
   },
   project: standardContract("project", projectMutationInvalidateKeys),

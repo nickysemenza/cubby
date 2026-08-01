@@ -73,7 +73,14 @@ const createDeleteProcedure = <TId extends string = string>(
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
-    .input(z.object({ ids: z.array(idSchema ?? z.string()).max(500) }))
+    .input(
+      z.object({
+        ids: z
+          .array(idSchema ?? z.string())
+          .min(1)
+          .max(500),
+      }),
+    )
     .output(z.object({ sideEffects: mutationSideEffectsSchema }))
     .mutation(async ({ ctx, input }) => {
       const ids = input.ids.map((id) =>
@@ -309,8 +316,8 @@ export function createEntityCrudWithoutListProcedures<
   };
 }
 
-// Generic CRUD procedures factory for entities. Every current entity router
-// goes through the searchable wrapper below; this base stays internal.
+// Generic CRUD procedures factory. Public wrappers below add either search
+// side effects or plain delete handling; this assembly stays internal.
 function createEntityCrudProcedures<
   SCreate extends ZodSchema,
   SUpdate extends ZodSchema,
@@ -356,7 +363,11 @@ function createEntityCrudProcedures<
       sorts: SortParams[],
       pagination: PaginationParams,
       groupBy?: string,
-    ) => Promise<{ data: TListOutput[]; count: number }>;
+    ) => Promise<{
+      data: TListOutput[];
+      count: number;
+      sums?: Record<string, number>;
+    }>;
     create: (
       ctx: ProtectedCrudServices,
       data: z.infer<SCreate>,
@@ -408,6 +419,74 @@ function createEntityCrudProcedures<
     list,
     create,
     update,
+  };
+}
+
+/**
+ * Standard CRUD for entities that do not participate in search embeddings.
+ * Keeping these routers on the same factory preserves the shared pagination,
+ * shortcode validation, and 500-item delete cap without adding fake search
+ * side effects.
+ */
+export function createNonSearchableEntityCrudProcedures<
+  SCreate extends ZodSchema,
+  SUpdate extends ZodSchema,
+  TOutput,
+  TFilters,
+  TId extends string = string,
+>({
+  schemas,
+  repository,
+  entityName,
+}: {
+  schemas: {
+    createInput: SCreate;
+    updateInput: SUpdate;
+    output: ZodSchema<TOutput>;
+    filters: ZodSchema<TFilters>;
+    sort?: {
+      sortableFields: readonly [string, ...string[]];
+      defaultSort: string;
+      groupableFields?: readonly [string, ...string[]];
+    };
+    idSchema: z.ZodType<unknown>;
+  };
+  repository: {
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    getByShortcode: (
+      ctx: ProtectedCrudServices,
+      shortcode: string,
+    ) => Promise<TOutput | null>;
+    list: (
+      ctx: ProtectedCrudServices,
+      filters: TFilters,
+      sorts: SortParams[],
+      pagination: PaginationParams,
+      groupBy?: string,
+    ) => Promise<{
+      data: TOutput[];
+      count: number;
+      sums?: Record<string, number>;
+    }>;
+    create: (
+      ctx: ProtectedCrudServices,
+      data: z.infer<SCreate>,
+    ) => Promise<TOutput>;
+    update: (
+      ctx: ProtectedCrudServices,
+      id: TId,
+      data: z.infer<SUpdate>,
+    ) => Promise<TOutput>;
+    delete: (
+      ctx: ProtectedCrudServices,
+      ids: TId[],
+    ) => Promise<BackgroundBatchRef[] | undefined>;
+  };
+  entityName: ShortcodeEntity;
+}) {
+  return {
+    ...createEntityCrudProcedures({ schemas, repository, entityName }),
+    delete: createDeleteProcedure(repository.delete, schemas.idSchema),
   };
 }
 

@@ -6,8 +6,8 @@ import {
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
-import { ExpenseActions } from "~/app/expenses/expense-actions";
 import { ExpenseList } from "~/app/expenses/expenselist";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -148,7 +148,7 @@ function ExpensesPage() {
       variant="list"
       title="Expenses"
       fullWidth
-      actions={<ExpenseActions />}
+      actions={<CreateDialogAction Dialog={CreateExpenseDialog} />}
     >
       <Stack gap="md">
         <ViewSwitcher

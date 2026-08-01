@@ -5,11 +5,13 @@ import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { financialTransactionMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { DetailSections } from "../_components/data-table/detail-page";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
+import { TableLink } from "../_components/table/TableLink";
 import { EditFinancialTransactionDialog } from "./edit-financial-transaction-dialog";
 export function FinancialTransactionDetail({
   transaction,
@@ -65,8 +67,31 @@ export function FinancialTransactionDetail({
                   },
                   { label: "Kind", value: transaction.kind },
                   { label: "Status", value: transaction.status },
-                  { label: "Account", value: transaction.accountId },
-                  { label: "Purchase", value: transaction.purchaseId ?? "—" },
+                  {
+                    label: "Account",
+                    value: (
+                      <TableLink
+                        to={entities.financialAccount.routes.detail}
+                        params={entityDetailParams(transaction.accountId)}
+                      >
+                        {transaction.accountName ?? transaction.accountId}
+                      </TableLink>
+                    ),
+                  },
+                  {
+                    label: "Purchase",
+                    value: transaction.purchaseId ? (
+                      <TableLink
+                        to={entities.purchase.routes.detail}
+                        params={entityDetailParams(transaction.purchaseId)}
+                        variant="mono"
+                      >
+                        {transaction.purchaseId}
+                      </TableLink>
+                    ) : (
+                      "—"
+                    ),
+                  },
                   { label: "Posted", value: transaction.postedDate ?? "—" },
                   {
                     label: "References",

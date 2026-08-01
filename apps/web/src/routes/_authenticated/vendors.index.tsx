@@ -1,7 +1,8 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { VendorActions } from "~/app/vendors/vendor-actions";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import { CreateVendorDialog } from "~/app/vendors/create-vendor-dialog";
 import { VendorList } from "~/app/vendors/vendorlist";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
@@ -40,7 +41,16 @@ export const Route = createFileRoute("/_authenticated/vendors/")({
 
 function VendorsPage() {
   return (
-    <Page variant="list" title="Vendors" fullWidth actions={<VendorActions />}>
+    <Page
+      variant="list"
+      title="Vendors"
+      fullWidth
+      actions={
+        <CreateDialogAction Dialog={CreateVendorDialog}>
+          New Vendor
+        </CreateDialogAction>
+      }
+    >
       <VendorList />
     </Page>
   );

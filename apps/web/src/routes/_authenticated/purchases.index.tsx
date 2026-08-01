@@ -1,7 +1,8 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { tableSearchFields } from "~/app/_components/data-table/table-search";
-import { PurchaseActions } from "~/app/purchases/purchase-actions";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import { CreatePurchaseDialog } from "~/app/purchases/create-purchase-dialog";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { Page } from "~/components/page/Page";
 import { entityFilterSearchFields } from "~/entities/filter-manifest";
@@ -56,7 +57,7 @@ function PurchasesPage() {
       variant="list"
       title="Purchases"
       fullWidth
-      actions={<PurchaseActions />}
+      actions={<CreateDialogAction Dialog={CreatePurchaseDialog} />}
     >
       <PurchaseList />
     </Page>

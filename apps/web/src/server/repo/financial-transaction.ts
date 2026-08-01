@@ -35,6 +35,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { financialTransaction } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -49,13 +50,18 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
+  executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   notDeleted,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import {
   resolveLiveShortcode,
+  resolveLiveShortcodes,
   resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -173,9 +179,9 @@ async function whereFor(
     [
       eqAny(financialTransaction.accountId, accountIds),
       eqAny(financialTransaction.purchaseId, purchaseIds),
-      filters.purchasePresence === "has"
+      filters.purchasePresenceFilter === "has"
         ? sql`${financialTransaction.purchaseId} IS NOT NULL`
-        : filters.purchasePresence === "none"
+        : filters.purchasePresenceFilter === "none"
           ? isNull(financialTransaction.purchaseId)
           : undefined,
       filters.kind
@@ -189,7 +195,7 @@ async function whereFor(
         filters.externalId ? [filters.externalId].flat() : undefined,
       ),
       filters.merchant
-        ? sql`${financialTransaction.merchant} ILIKE ${`%${filters.merchant}%`}`
+        ? formatSearchTerm(financialTransaction.merchant, filters.merchant)
         : undefined,
       filters.amountMin === undefined
         ? undefined
@@ -221,63 +227,62 @@ export async function listFinancialTransactions(
 ) {
   const where = await whereFor(db, filters);
   const { take, skip } = buildTakeSkip(pagination);
-  const rows = await getDb(db)
-    .select(columns)
-    .from(financialTransaction)
-    .where(where)
-    .orderBy(
-      ...buildOrderBy(
-        financialTransaction,
-        sorts,
-        [...financialTransactionSortableFields],
-        {
-          resolve: (sort) =>
-            sort.orderBy === "merchant"
-              ? [
-                  (sort.direction === "asc" ? asc : desc)(
-                    financialTransaction.merchant,
-                  ),
-                ]
-              : null,
-        },
-      ),
-    )
-    .limit(take)
-    .offset(skip);
+  const { data: rows, count } = await executeListQueryWithCount(
+    getDb(db)
+      .select(columns)
+      .from(financialTransaction)
+      .where(where)
+      .orderBy(
+        ...buildOrderBy(
+          financialTransaction,
+          sorts,
+          [...financialTransactionSortableFields],
+          {
+            resolve: (sort) =>
+              sort.orderBy === "merchant"
+                ? [
+                    (sort.direction === "asc" ? asc : desc)(
+                      financialTransaction.merchant,
+                    ),
+                  ]
+                : null,
+          },
+        ),
+      )
+      .limit(take)
+      .offset(skip),
+    countWhere(db, financialTransaction, where),
+  );
   return {
     data: rows.map(toOut),
-    count: await countWhere(db, financialTransaction, where),
+    count,
   };
 }
 
-export async function getFinancialTransactionByID(
-  db: Database,
-  id: FinancialTransactionId,
-) {
-  const [row] = await getDb(db)
-    .select(columns)
-    .from(financialTransaction)
-    .where(
-      and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-    )
-    .limit(1);
-  if (!row)
-    throw createAppError(
-      "FINANCIAL_TRANSACTION_NOT_FOUND",
-      `Financial transaction not found: ${id}`,
-    );
-  return toOut(row);
-}
+const financialTransactionReader = createEntityReader<
+  FinancialTransactionRow,
+  FinancialTransactionOut,
+  FinancialTransactionId,
+  Database | DrizzleTransaction
+>({
+  entity: "financialTransaction",
+  fetchById: async (db, id) => {
+    const [row] = await unwrapDb(db)
+      .select(columns)
+      .from(financialTransaction)
+      .where(
+        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
+      )
+      .limit(1);
+    return row;
+  },
+  fromDB: (_db, row) => toOut(row),
+  notFoundReason: "FINANCIAL_TRANSACTION_NOT_FOUND",
+});
 
-export async function getFinancialTransactionByShortcode(
-  db: Database,
-  shortcode: string,
-) {
-  const id = await resolveLiveShortcode(db, shortcode, "financialTransaction");
-  return id
-    ? getFinancialTransactionByID(db, unsafeFinancialTransactionId(id))
-    : null;
-}
+const getFinancialTransactionByID = financialTransactionReader.getByID;
+export const getFinancialTransactionByShortcode =
+  financialTransactionReader.getByShortcode;
 
 async function assertSourceRefsAvailable(
   db: Database | DrizzleTransaction,
@@ -336,6 +341,11 @@ export async function createFinancialTransaction(
 ) {
   const id = await withTransaction(db, async (tx) => {
     const foreign = await resolveForeignKeys(tx, data);
+    await lockFinancialEvidenceKeys(
+      tx,
+      "transaction-ref",
+      data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
+    );
     await assertSourceRefsAvailable(tx, data.sourceRefs);
     const created = await insertWithShortcode(tx, "financialTransaction", {
       ...data,
@@ -411,6 +421,11 @@ export async function updateFinancialTransaction(
                 })(),
             );
     const sourceRefs = data.sourceRefs ?? before.sourceRefs;
+    await lockFinancialEvidenceKeys(
+      tx,
+      "transaction-ref",
+      sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
+    );
     await assertSourceRefsAvailable(tx, sourceRefs, id);
     const values = buildPartialUpdateValues({ ...data, accountId, purchaseId });
     const nextStatus = data.status ?? before.status;
@@ -457,9 +472,14 @@ export async function deleteFinancialTransactions(
   shortcodes: FinancialTransactionShortcode[],
   actor: ActorContext,
 ) {
-  const ids = await Promise.all(
-    shortcodes.map(async (code) => {
-      const id = await resolveLiveShortcode(db, code, "financialTransaction");
+  const resolved = await resolveLiveShortcodes(
+    db,
+    shortcodes,
+    "financialTransaction",
+  );
+  const ids = uniq(
+    shortcodes.map((code) => {
+      const id = resolved.get(code);
       if (!id)
         throw createAppError(
           "FINANCIAL_TRANSACTION_NOT_FOUND",

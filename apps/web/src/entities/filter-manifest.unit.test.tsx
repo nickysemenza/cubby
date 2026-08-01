@@ -1,5 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity";
+import { financialAccountFilterFields } from "@cubby/schemas/financial-account";
+import { financialTransactionFilterFields } from "@cubby/schemas/financial-transaction";
 import { imageFilterFields } from "@cubby/schemas/image";
 import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
@@ -678,6 +680,55 @@ describe("manifest search fields survive JSON-parsed values", () => {
   });
 });
 
+describe("finance filters", () => {
+  const build = (
+    entity: "financialAccount" | "financialTransaction",
+    search: Record<string, unknown>,
+  ) => {
+    const specs = getEntityFilters(entity);
+    return buildFiltersFromManifest(
+      specs,
+      filterGetterFromSearch(specs, search),
+    );
+  };
+
+  it("maps account controls and URL-only evidence fields", () => {
+    expect(
+      build("financialAccount", {
+        q: "visa",
+        identity: "credit_card,bank_account",
+        provisional: "true",
+        aliases: "none",
+        last4: "1234",
+      }),
+    ).toEqual({
+      search: "visa",
+      identityKind: ["credit_card", "bank_account"],
+      provisional: true,
+      sourceAliasPresenceFilter: "none",
+      last4: "1234",
+    });
+  });
+
+  it("maps transaction controls and expands posted-date presets", () => {
+    const filters = build("financialTransaction", {
+      q: "hardware",
+      kind: "purchase,refund",
+      status: "pending,posted",
+      postedDate: "30d",
+      amountMin: "-25",
+    });
+    expect(filters).toMatchObject({
+      search: "hardware",
+      kind: ["purchase", "refund"],
+      status: ["pending", "posted"],
+      amountMin: "-25",
+      postedDateFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      postedDateTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    });
+  });
+});
+
 /**
  * Every field a manifest spec can emit must exist on that entity's
  * `*FilterFields`.
@@ -707,6 +758,8 @@ describe("manifest fields exist on the server schema", () => {
       ingredient: ingredientFilterFields,
       recipe: recipeFilterFields,
       image: imageFilterFields,
+      financialAccount: financialAccountFilterFields,
+      financialTransaction: financialTransactionFilterFields,
     };
 
   const emittedFields = (spec: FilterSpec): string[] => {

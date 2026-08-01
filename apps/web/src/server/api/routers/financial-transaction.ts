@@ -9,7 +9,6 @@ import {
   financialTransactionShortcode,
   unsafeFinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
-import { z } from "zod";
 import {
   createFinancialTransaction,
   deleteFinancialTransactions,
@@ -17,33 +16,19 @@ import {
   listFinancialTransactions,
   updateFinancialTransaction,
 } from "~/server/repo/financial-transaction";
-import {
-  createEntityCrudWithoutListProcedures,
-  createEntityListProcedure,
-} from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createNonSearchableEntityCrudProcedures } from "../crud-factory";
+import { createTRPCRouter } from "../trpc";
 
-const { list } = createEntityListProcedure({
+const procedures = createNonSearchableEntityCrudProcedures({
   schemas: {
+    createInput: financialTransactionCreateInput,
+    updateInput: financialTransactionUpdateData,
     output: financialTransactionOut,
     filters: financialTransactionFiltersSchema,
     sort: {
       sortableFields: financialTransactionSortableFields,
       defaultSort: "transactionDate",
     },
-  },
-  repository: {
-    list: (services, filters, sorts, pagination) =>
-      listFinancialTransactions(services.db, filters, sorts, pagination),
-  },
-  entityName: "financialTransaction",
-});
-
-const crud = createEntityCrudWithoutListProcedures({
-  schemas: {
-    createInput: financialTransactionCreateInput,
-    updateInput: financialTransactionUpdateData,
-    output: financialTransactionOut,
     idSchema: financialTransactionShortcode,
   },
   repository: {
@@ -71,19 +56,18 @@ const crud = createEntityCrudWithoutListProcedures({
           services.actorContext,
         )
       ).output,
+    list: (services, filters, sorts, pagination) =>
+      listFinancialTransactions(services.db, filters, sorts, pagination),
+    delete: async (services, ids) => {
+      await deleteFinancialTransactions(
+        services.db,
+        ids.map(unsafeFinancialTransactionShortcode),
+        services.actorContext,
+      );
+      return [];
+    },
   },
   entityName: "financialTransaction",
 });
 
-const deleteItem = protectedProcedure
-  .input(z.object({ ids: z.array(financialTransactionShortcode).min(1) }))
-  .mutation(async ({ ctx, input }) => {
-    await deleteFinancialTransactions(ctx.db, input.ids, ctx.actorContext);
-    return { sideEffects: { backgroundBatches: [] } };
-  });
-
-export const financialTransactionRouter = createTRPCRouter({
-  ...crud,
-  list,
-  delete: deleteItem,
-});
+export const financialTransactionRouter = createTRPCRouter(procedures);

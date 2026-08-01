@@ -101,6 +101,11 @@ import { dbExpenseToAPI } from "~/server/repo/expense/helpers";
 import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
+  emptyPurchaseFinancialAggregate,
+  loadPurchaseFinancialAggregates,
+  type PurchaseFinancialAggregate,
+} from "~/server/repo/purchase-financial-aggregates";
+import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
   resolveShortcodes,
@@ -203,34 +208,6 @@ const purchaseDocumentCount = correlated<number>(
      WHERE pi."purchaseId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
 );
 
-const purchaseFinancialTransactionCount = correlated<number>(
-  `(SELECT count(*)::int FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."deletedAt" IS NULL AND ft."status" <> 'void')`,
-);
-const purchasePostedFinancialTransactionCount = correlated<number>(
-  `(SELECT count(*)::int FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."deletedAt" IS NULL AND ft."status" = 'posted')`,
-);
-const purchaseOutstandingFinancialTransactionCount = correlated<number>(
-  `(SELECT count(*)::int FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."deletedAt" IS NULL AND ft."status" IN ('expected', 'pending'))`,
-);
-const purchasePostedFinancialTotal = correlated<number>(
-  `(SELECT COALESCE(sum(ft."amount") FILTER (WHERE ft."status" = 'posted'), 0)::double precision
-     FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."deletedAt" IS NULL AND ft."status" <> 'void')`,
-);
-const purchaseProjectedFinancialTotal = correlated<number>(
-  `(SELECT COALESCE(sum(ft."amount"), 0)::double precision
-     FROM "FinancialTransaction" ft
-     WHERE ft."purchaseId" = "Purchase"."id"
-       AND ft."deletedAt" IS NULL AND ft."status" <> 'void')`,
-);
-
 const purchaseVendorName = correlated<string | null>(
   `(SELECT v."name" FROM "Vendor" v
      WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
@@ -262,12 +239,6 @@ const purchaseColumns = {
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
   documentCount: purchaseDocumentCount,
-  financialTransactionCount: purchaseFinancialTransactionCount,
-  postedFinancialTransactionCount: purchasePostedFinancialTransactionCount,
-  outstandingFinancialTransactionCount:
-    purchaseOutstandingFinancialTransactionCount,
-  postedFinancialTotal: purchasePostedFinancialTotal,
-  projectedFinancialTotal: purchaseProjectedFinancialTotal,
 } as const;
 
 type PurchaseRow = {
@@ -285,16 +256,12 @@ type PurchaseRow = {
   unpricedExpenseCount: number;
   expenseTotal: number;
   documentCount: number;
-  financialTransactionCount: number;
-  postedFinancialTransactionCount: number;
-  outstandingFinancialTransactionCount: number;
-  postedFinancialTotal: number;
-  projectedFinancialTotal: number;
 };
 
 const dbPurchaseToAPI = (
   row: PurchaseRow,
   images: PurchaseOut["images"] = [],
+  financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
 ): PurchaseOut => ({
   id: unsafePurchaseShortcode(row.shortcode),
   vendorId: unsafeVendorShortcode(row.vendorShortcode),
@@ -310,11 +277,7 @@ const dbPurchaseToAPI = (
   financialReconciliation: calculateFinancialReconciliation({
     expenseTotal: row.expenseTotal,
     unpricedExpenseCount: row.unpricedExpenseCount,
-    transactionCount: row.financialTransactionCount,
-    postedTransactionCount: row.postedFinancialTransactionCount,
-    outstandingTransactionCount: row.outstandingFinancialTransactionCount,
-    postedTotal: row.postedFinancialTotal,
-    projectedTotal: row.projectedFinancialTotal,
+    ...financial,
   }),
   images,
   createdAt: row.createdAt,
@@ -517,36 +480,51 @@ export const purchaseList = async (
   const whereClause = buildPurchaseWhereClause(filters, vendorUuids);
   const { take, skip } = buildTakeSkip(pagination);
 
-  const rows = await getDb(db)
-    .select(purchaseColumns)
-    .from(purchase)
-    .where(whereClause)
-    .orderBy(
-      ...buildOrderBy(purchase, sorts, [...purchaseSortableFields], {
-        resolve: resolvePurchaseSort,
-      }),
-    )
-    .limit(take)
-    .offset(skip);
+  const [rows, count] = await Promise.all([
+    getDb(db)
+      .select(purchaseColumns)
+      .from(purchase)
+      .where(whereClause)
+      .orderBy(
+        ...buildOrderBy(purchase, sorts, [...purchaseSortableFields], {
+          resolve: resolvePurchaseSort,
+        }),
+      )
+      .limit(take)
+      .offset(skip),
+    countWhere(db, purchase, whereClause),
+  ]);
+  const financialByPurchase = await loadPurchaseFinancialAggregates(
+    db,
+    rows.map((row) => row.id),
+  );
 
-  const count = await countWhere(db, purchase, whereClause);
-
-  return { data: rows.map((row) => dbPurchaseToAPI(row)), count };
+  return {
+    data: rows.map((row) =>
+      dbPurchaseToAPI(row, [], financialByPurchase.get(row.id)),
+    ),
+    count,
+  };
 };
 
 export const getPurchaseByID = async (
   db: Database,
   id: PurchaseId,
 ): Promise<PurchaseOut> => {
-  const [row] = await getDb(db)
-    .select(purchaseColumns)
-    .from(purchase)
-    .where(and(eq(purchase.id, id), notDeleted(purchase)))
-    .limit(1);
+  const [rows, images, financialByPurchase] = await Promise.all([
+    getDb(db)
+      .select(purchaseColumns)
+      .from(purchase)
+      .where(and(eq(purchase.id, id), notDeleted(purchase)))
+      .limit(1),
+    loadPurchaseImages(db, id),
+    loadPurchaseFinancialAggregates(db, [id]),
+  ]);
+  const [row] = rows;
   if (!row) {
     throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
   }
-  return dbPurchaseToAPI(row, await loadPurchaseImages(db, id));
+  return dbPurchaseToAPI(row, images, financialByPurchase.get(id));
 };
 
 export type PurchaseLinkIdentity = Pick<

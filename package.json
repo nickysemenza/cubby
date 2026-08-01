@@ -14,6 +14,7 @@
     "openapi:check": "pnpm --filter @cubby/usda-api generate:openapi:check",
     "knip": "knip --no-config-hints",
     "dedupe:check": "pnpm dedupe --check",
+    "docs:check": "node scripts/check-markdown-links.mjs",
     "audit:security": "node scripts/check-security-audit.mjs",
     "lint": "pnpm -r lint",
     "format:check": "pnpm -r format:check",

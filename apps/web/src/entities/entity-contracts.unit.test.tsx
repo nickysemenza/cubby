@@ -1,5 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { countableEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
+import { queryKeys } from "~/lib/query-keys";
 import {
   type EntityDetailRoute,
   type EntityListRoute,
@@ -31,6 +33,15 @@ describe("entity-contracts drift guard", () => {
   it.each(standardEntities)("%s can preview (has a detail page)", (entity) => {
     expect(getEntityContract(entity).canPreview).toBe(true);
   });
+
+  it.each(countableEntities)(
+    "%s mutations invalidate the shared dashboard count",
+    (entity) => {
+      expect(getEntityContract(entity).invalidationKeys).toContainEqual(
+        queryKeys.dashboard.counts,
+      );
+    },
+  );
 });
 
 describe("derived entity route unions", () => {

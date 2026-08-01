@@ -368,4 +368,4 @@ See existing `.integration.test.ts` files for examples.
 
 - [Drizzle ORM Documentation](https://orm.drizzle.team/)
 - [Project CLAUDE.md](../../../../../CLAUDE.md) - Full architecture guidelines
-- [Schema Definitions](../../db/schema.ts) - Database schema
+- [Schema Definitions](../db/schema.ts) - Database schema

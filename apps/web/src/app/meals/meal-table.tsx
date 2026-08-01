@@ -27,7 +27,7 @@ const MEAL_TABLE_PAGE_SIZE = 500;
 /**
  * The `/meals?view=table` surface — the CRUD-complete sibling of the
  * calendar view: inline rename/reschedule, delete (row + bulk), and a
- * `/meals` header "New" action (`MealActions`, wired in meals.index.tsx)
+ * `/meals` header "New" action (wired in meals.index.tsx)
  * that the calendar-only "+ Meal" affordance never covered.
  *
  * `useClientEntityList`, not `useEntityList`: `meal.list`'s `orderBy` types

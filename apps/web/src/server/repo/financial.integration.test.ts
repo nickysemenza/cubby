@@ -52,6 +52,78 @@ const account = (
 describe("financial repositories — critical invariants", () => {
   const ctx = withTestDb();
 
+  it("serializes concurrent account alias claims", async () => {
+    const results = await Promise.allSettled([
+      createFinancialAccount(
+        ctx.db,
+        account("Concurrent Visa A", [
+          {
+            source: "concurrency-test",
+            alias: "Visa A",
+            externalAccountId: "shared-account",
+          },
+        ]),
+        ctx.actor,
+      ),
+      createFinancialAccount(
+        ctx.db,
+        account("Concurrent Visa B", [
+          {
+            source: "concurrency-test",
+            alias: "Visa B",
+            externalAccountId: "shared-account",
+          },
+        ]),
+        ctx.actor,
+      ),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected).toMatchObject({
+      reason: {
+        cause: { reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT" },
+      },
+    });
+  });
+
+  it("serializes concurrent transaction source-reference claims", async () => {
+    const createdAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Concurrent transaction Visa"),
+        ctx.actor,
+      )
+    ).output;
+    const input = (amount: number) =>
+      financialTransactionCreateInput.parse({
+        accountId: createdAccount.id,
+        kind: "purchase",
+        status: "pending",
+        amount,
+        sourceRefs: [
+          { source: "concurrency-test", externalId: "shared-transaction" },
+        ],
+      });
+
+    const results = await Promise.allSettled([
+      createFinancialTransaction(ctx.db, input(10), ctx.actor),
+      createFinancialTransaction(ctx.db, input(20), ctx.actor),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected).toMatchObject({
+      reason: {
+        cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
+      },
+    });
+  });
+
   it("blocks account deletion, rejects cross-row source collisions, and preserves purchase-only updates", async () => {
     const a = (
       await createFinancialAccount(
@@ -213,10 +285,15 @@ describe("financial repositories — critical invariants", () => {
     await deletePurchases(ctx.db, [p1.id], ctx.actor);
     const txs = await (
       await import("./financial-transaction")
-    ).listFinancialTransactions(ctx.db, { purchasePresence: "none" }, [], {
-      pageIndex: 0,
-      pageSize: 100,
-    });
+    ).listFinancialTransactions(
+      ctx.db,
+      { purchasePresenceFilter: "none" },
+      [],
+      {
+        pageIndex: 0,
+        pageSize: 100,
+      },
+    );
     expect(txs.data.some((row) => row.purchaseId === null)).toBe(true);
   });
 

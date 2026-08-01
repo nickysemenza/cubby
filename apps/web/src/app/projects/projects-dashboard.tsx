@@ -17,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Grid, Row, Section, Stack } from "~/components/layout";
@@ -48,7 +49,7 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
-
+import { CreateProjectDialog } from "./create-project-dialog";
 import {
   type Filters,
   filtersFromSearch,
@@ -58,7 +59,6 @@ import {
 import { DashboardFilters } from "./dashboard-filters";
 import { SingleSelectChipGroup } from "./filter-chips";
 import { NeedsAttention } from "./needs-attention";
-import { ProjectActions } from "./project-actions";
 import {
   capitalize,
   ExpenseList,
@@ -166,7 +166,9 @@ function DashboardToolbar({
         value={view}
         onValueChange={onViewChange}
       />
-      <ProjectActions />
+      <CreateDialogAction Dialog={CreateProjectDialog}>
+        New Project
+      </CreateDialogAction>
     </Row>
   );
 }

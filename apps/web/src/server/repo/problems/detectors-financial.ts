@@ -6,6 +6,7 @@ import { financialTransactionSourceRefs } from "@cubby/schemas/financial-transac
 import {
   unsafeFinancialAccountShortcode,
   unsafeFinancialTransactionShortcode,
+  unsafePurchaseId,
   unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -18,6 +19,10 @@ import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
+import {
+  emptyPurchaseFinancialAggregate,
+  loadPurchaseFinancialAggregates,
+} from "~/server/repo/purchase-financial-aggregates";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
  * must produce a defect, never make the complete Problems scan unavailable. */
@@ -113,46 +118,36 @@ export async function findPurchaseFinancialSettlementMismatches(
   db: Database,
 ): Promise<PurchaseFinancialSettlementMismatch[]> {
   const result = await getDb(db).execute<{
+    uuid: string;
     id: string;
     vendorName: string | null;
     expenseTotal: number;
     unpriced: number;
-    transactionCount: number;
-    postedTransactionCount: number;
-    outstandingTransactionCount: number;
-    postedTotal: number;
-    projectedTotal: number;
   }>(sql`
-    SELECT p.shortcode AS id, v.name AS "vendorName", COALESCE(e."expenseTotal", 0)::double precision AS "expenseTotal",
-      COALESCE(e.unpriced, 0)::int AS unpriced,
-      COALESCE(ft."transactionCount", 0)::int AS "transactionCount",
-      COALESCE(ft."postedTransactionCount", 0)::int AS "postedTransactionCount",
-      COALESCE(ft."outstandingTransactionCount", 0)::int AS "outstandingTransactionCount",
-      COALESCE(ft."postedTotal", 0)::double precision AS "postedTotal",
-      COALESCE(ft."projectedTotal", 0)::double precision AS "projectedTotal"
+    SELECT p.id AS uuid, p.shortcode AS id, v.name AS "vendorName",
+      COALESCE(e."expenseTotal", 0)::double precision AS "expenseTotal",
+      COALESCE(e.unpriced, 0)::int AS unpriced
     FROM "Purchase" p
     LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
     LEFT JOIN LATERAL (
       SELECT COALESCE(sum(e.cost), 0) AS "expenseTotal", count(e.id) FILTER (WHERE e.cost IS NULL) AS unpriced
       FROM "Expense" e WHERE e."purchaseId" = p.id AND e."deletedAt" IS NULL
     ) e ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT count(ft.id) AS "transactionCount", count(ft.id) FILTER (WHERE ft.status = 'posted') AS "postedTransactionCount",
-        count(ft.id) FILTER (WHERE ft.status IN ('expected', 'pending')) AS "outstandingTransactionCount",
-        COALESCE(sum(ft.amount) FILTER (WHERE ft.status = 'posted'), 0) AS "postedTotal", COALESCE(sum(ft.amount), 0) AS "projectedTotal"
-      FROM "FinancialTransaction" ft WHERE ft."purchaseId" = p.id AND ft."deletedAt" IS NULL AND ft.status <> 'void'
-    ) ft ON TRUE
     WHERE p."deletedAt" IS NULL
   `);
+  const purchaseIds = result.rows.map((row) => unsafePurchaseId(row.uuid));
+  const financialByPurchase = await loadPurchaseFinancialAggregates(
+    db,
+    purchaseIds,
+  );
   return result.rows.flatMap((row) => {
+    const financial =
+      financialByPurchase.get(unsafePurchaseId(row.uuid)) ??
+      emptyPurchaseFinancialAggregate();
     const financialReconciliation = calculateFinancialReconciliation({
       expenseTotal: row.expenseTotal,
       unpricedExpenseCount: row.unpriced,
-      transactionCount: row.transactionCount,
-      postedTransactionCount: row.postedTransactionCount,
-      outstandingTransactionCount: row.outstandingTransactionCount,
-      postedTotal: row.postedTotal,
-      projectedTotal: row.projectedTotal,
+      ...financial,
     });
     if (
       financialReconciliation.status !== "mismatch" ||

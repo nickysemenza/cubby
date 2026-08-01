@@ -44,6 +44,19 @@ export function FinancialTransactionList() {
           </TableLink>
         ),
       }),
+      helper.accessor("accountId", {
+        header: "Account",
+        meta: { className: "w-40" },
+        cell: (i) => (
+          <TableLink
+            to={entities.financialAccount.routes.detail}
+            params={entityDetailParams(i.getValue())}
+            className="block truncate"
+          >
+            {i.row.original.accountName ?? i.getValue()}
+          </TableLink>
+        ),
+      }),
       createTextColumn(helper, "kind", { header: "Kind", className: "w-32" }),
       createTextColumn(helper, "status", {
         header: "Status",
@@ -57,6 +70,22 @@ export function FinancialTransactionList() {
           mobile: { slot: "trailing", priority: 1 },
         },
         cell: (i) => formatCurrency(i.getValue()),
+      }),
+      helper.accessor("purchaseId", {
+        header: "Purchase",
+        meta: { className: "w-32" },
+        cell: (i) =>
+          i.getValue() ? (
+            <TableLink
+              to={entities.purchase.routes.detail}
+              params={entityDetailParams(i.getValue() as string)}
+              variant="mono"
+            >
+              {i.getValue()}
+            </TableLink>
+          ) : (
+            "—"
+          ),
       }),
       createPlainDateColumn(helper, "postedDate", { header: "Posted" }),
     ],

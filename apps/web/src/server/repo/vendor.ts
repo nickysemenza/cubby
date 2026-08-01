@@ -211,30 +211,30 @@ export const vendorList = async (
   const whereClause = buildVendorWhereClause(filters);
   const { take, skip } = buildTakeSkip(pagination);
 
-  const rows = await getDb(db)
-    .select(vendorColumns)
-    .from(vendor)
-    .where(whereClause)
-    .orderBy(
-      ...buildOrderBy(vendor, sorts, [...vendorSortableFields], {
-        resolve: resolveVendorSort,
-      }),
-    )
-    .limit(take)
-    .offset(skip);
-
-  const count = await countWhere(db, vendor, whereClause);
-
   // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
   // returned rows instead would quietly under-report the moment the roster
   // outgrows one page — a wrong number is worse than no number.
-  const [totals] = await getDb(db)
-    .select({
-      spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
-      purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
-    })
-    .from(vendor)
-    .where(whereClause);
+  const [rows, count, [totals]] = await Promise.all([
+    getDb(db)
+      .select(vendorColumns)
+      .from(vendor)
+      .where(whereClause)
+      .orderBy(
+        ...buildOrderBy(vendor, sorts, [...vendorSortableFields], {
+          resolve: resolveVendorSort,
+        }),
+      )
+      .limit(take)
+      .offset(skip),
+    countWhere(db, vendor, whereClause),
+    getDb(db)
+      .select({
+        spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
+        purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
+      })
+      .from(vendor)
+      .where(whereClause),
+  ]);
 
   return {
     data: rows.map(dbVendorToAPI),
