@@ -173,7 +173,10 @@ const fetchProductById = async (
 const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
-  fromDB: (_db, row: ProductDeepDB) => dbProductToAPI(row),
+  fromDB: async (db, row: ProductDeepDB) => {
+    const qualities = await loadProductDataQualities(db, [row.id]);
+    return dbProductToAPI(row, qualities.get(row.id)!);
+  },
   notFoundReason: "PRODUCT_NOT_FOUND",
 });
 
@@ -282,7 +285,11 @@ export const getProductsByShortcodes = async (
     where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
     ...relations.product.full,
   });
-  return results.map(dbProductToAPI);
+  const qualities = await loadProductDataQualities(
+    db,
+    results.map((row) => row.id),
+  );
+  return results.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
 };
 
 export const productList = async (

@@ -248,6 +248,7 @@ export const dbProductToListAPI = (
  */
 export const dbProductToAPI = (
   productData: ProductDeepDB,
+  dataQuality: ProductTopLevelOut["dataQuality"],
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
 
@@ -265,11 +266,7 @@ export const dbProductToAPI = (
     category: productData.category,
     price: productData.price,
     usdaUnavailable: productData.usdaUnavailable,
-    dataQuality: {
-      status: "complete",
-      gaps: [],
-      exceptions: productData.dataExceptions ?? [],
-    },
+    dataQuality,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,
     ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,

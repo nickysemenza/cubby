@@ -18,7 +18,7 @@ import {
 } from "./data-quality";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";
-import { productList } from "./product";
+import { getProductByID, productList } from "./product";
 import {
   createPurchase,
   purchaseList,
@@ -207,6 +207,13 @@ describe("computed purchase and product data quality", () => {
       ["product_model", product.id],
     ]);
 
+    const deepProduct = await getProductByID(ctx.db, product.entityId);
+    expect(deepProduct.dataQuality.gaps.map((gap) => gap.check)).toEqual([
+      "product_manufacturer",
+      "product_category",
+      "product_model",
+    ]);
+
     const products = await productList(
       ctx.db,
       { dataGap: "product_model", modelPresenceFilter: "none" },
@@ -354,6 +361,12 @@ describe("computed purchase and product data quality", () => {
         url: null,
       });
     }
+    const scopedQuality = (
+      await loadProductDataQualities(ctx.db, [amazonProduct.entityId])
+    ).get(amazonProduct.entityId)!;
+    expect(scopedQuality.gaps.map((gap) => gap.check)).toContain(
+      "duplicate_external_id",
+    );
     const collisions = await findProductExternalIdCollisions(ctx.db);
     expect(collisions).toEqual([
       expect.objectContaining({

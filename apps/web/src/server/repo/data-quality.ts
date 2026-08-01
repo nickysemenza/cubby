@@ -24,8 +24,8 @@ import {
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
 import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
-import { groupBy, uniq } from "es-toolkit";
+import { and, eq, inArray, isNotNull, or, type SQL, sql } from "drizzle-orm";
+import { groupBy, uniq, uniqBy } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -248,7 +248,7 @@ export const loadProductDataQualities = async (
 ): Promise<Map<ProductId, DataQuality>> => {
   const uniqueIds = uniq(ids);
   if (uniqueIds.length === 0) return new Map();
-  const [products, linkedExpenses, amazonExpenses, activeExternalIds] =
+  const [products, linkedExpenses, amazonExpenses, productExternalIds] =
     await Promise.all([
       getDb(db)
         .select({
@@ -301,8 +301,48 @@ export const loadProductDataQualities = async (
           product,
           and(eq(product.id, productExternalId.productId), notDeleted(product)),
         )
-        .where(notDeleted(productExternalId)),
+        .where(
+          and(
+            inArray(productExternalId.productId, uniqueIds),
+            notDeleted(productExternalId),
+          ),
+        ),
     ]);
+
+  const externalIdPairs = uniqBy(
+    productExternalIds,
+    (row) => `${row.source}\u0000${row.externalId}`,
+  );
+  const activeExternalIdOwners =
+    externalIdPairs.length === 0
+      ? []
+      : await getDb(db)
+          .select({
+            productId: productExternalId.productId,
+            source: productExternalId.source,
+            externalId: productExternalId.externalId,
+          })
+          .from(productExternalId)
+          .innerJoin(
+            product,
+            and(
+              eq(product.id, productExternalId.productId),
+              notDeleted(product),
+            ),
+          )
+          .where(
+            and(
+              notDeleted(productExternalId),
+              or(
+                ...externalIdPairs.map((row) =>
+                  and(
+                    eq(productExternalId.source, row.source),
+                    eq(productExternalId.externalId, row.externalId),
+                  ),
+                ),
+              ),
+            ),
+          );
 
   const expenseLinked = new Set(
     linkedExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),
@@ -311,11 +351,11 @@ export const loadProductDataQualities = async (
     amazonExpenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
   const externalIdsByProduct = groupBy(
-    activeExternalIds,
+    productExternalIds,
     (row) => row.productId,
   );
   const externalIdOwners = groupBy(
-    activeExternalIds,
+    activeExternalIdOwners,
     (row) => `${row.source}\u0000${row.externalId}`,
   );
   const result = new Map<ProductId, DataQuality>();

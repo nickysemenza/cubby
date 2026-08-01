@@ -16,7 +16,6 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import type { USDAClient } from "../clients/usda";
-import { loadProductDataQualities } from "../repo/data-quality";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
   createProduct as createProductRepo,
@@ -56,10 +55,7 @@ export const getProductWithFood = async (
   usdaClient: USDAClient,
   id: ProductId,
 ): Promise<ProductWithFoodOut> => {
-  const [product, qualities] = await Promise.all([
-    getProductByIDRepo(db, id),
-    loadProductDataQualities(db, [id]),
-  ]);
+  const product = await getProductByIDRepo(db, id);
 
   // Resolve the linked food: explicit fdc_id wins, else UPC auto-match.
   const lookupParam = foodLookupParamFromProduct(product);
@@ -75,7 +71,6 @@ export const getProductWithFood = async (
 
   return {
     ...product,
-    dataQuality: qualities.get(id) ?? product.dataQuality,
     food,
     recipeUsages,
   };

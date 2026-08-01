@@ -336,7 +336,19 @@ describe("product mappers", () => {
       ],
     } satisfies ProductDeepDB;
 
-    const result = dbProductToAPI(row);
+    const dataQuality = {
+      status: "needs_data" as const,
+      gaps: [
+        {
+          check: "product_model" as const,
+          targetType: "product" as const,
+          targetId: unsafeProductShortcode("PRD-TEST"),
+          message: "Manufacturer model is not recorded.",
+        },
+      ],
+      exceptions: [],
+    };
+    const result = dbProductToAPI(row, dataQuality);
 
     expect(result).toMatchObject({
       id: unsafeProductShortcode("PRD-TEST"),
@@ -356,6 +368,7 @@ describe("product mappers", () => {
       ],
       externalIds: [{ id: EXTERNAL_ID }],
       images: [{ id: IMAGE_ID }],
+      dataQuality,
       inventoryEntry: [
         {
           id: unsafeInventoryShortcode("INV-2345"),
