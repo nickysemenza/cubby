@@ -97,6 +97,8 @@ export {
   findParentRecipesWithDeletedSubRecipes,
   type StaleParentRecipe,
 } from "./detectors-recipe";
+// Optional vendor presentation coverage
+export { findVendorsWithoutLogos } from "./detectors-vendor";
 // Stale-parse detection + re-parse write path
 export {
   applyReparsedStaleLines,

@@ -78,6 +78,7 @@ export function useProblemsData(opts?: {
         manufacturerSpellingVariants:
           fast.data?.manufacturerSpellingVariants ?? [],
         duplicateVendors: fast.data?.duplicateVendors ?? [],
+        vendorsWithoutLogos: fast.data?.vendorsWithoutLogos ?? [],
         purchasesNotReconciling: fast.data?.purchasesNotReconciling ?? [],
         referentialLivenessViolations:
           fast.data?.referentialLivenessViolations ?? [],

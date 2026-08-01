@@ -9,7 +9,7 @@
  * "N of M" can't quietly compare two different sets.
  *
  * All plain `count(*)`s over already-indexed columns. Callers should run this
- * inside `withConnection` so the five queries share one pooled connection.
+ * inside `withConnection` so the six queries share one pooled connection.
  */
 
 import type { CoverageTotals } from "@cubby/schemas/problems";
@@ -21,9 +21,11 @@ import {
   inventoryEntry,
   location,
   product,
+  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  vendor,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -33,7 +35,7 @@ const first = (rows: Array<{ count: number }>): number =>
   Number(rows[0]?.count ?? 0);
 
 /**
- * The five coverage denominators, keyed by the detector each pairs with.
+ * The six coverage denominators, keyed by the detector each pairs with.
  *
  * `unvaluedBucketProducts` has none on purpose — a misc bucket isn't a fraction
  * of anything, so that section renders as a plain list (see
@@ -130,11 +132,29 @@ export const findCoverageTotals = async (
     )
     .where(and(notDeleted(ingredient), isNull(ingredient.recipeId)));
 
+  // Matches findVendorsWithoutLogos' population: live vendors referenced by at
+  // least one live purchase. Expense presence is deliberately irrelevant.
+  const activeVendors = await dbClient
+    .select({ count: COUNT })
+    .from(vendor)
+    .where(
+      and(
+        notDeleted(vendor),
+        exists(
+          dbClient
+            .select({ one: sql`1` })
+            .from(purchase)
+            .where(and(eq(purchase.vendorId, vendor.id), notDeleted(purchase))),
+        ),
+      ),
+    );
+
   return {
     productsWithNoImages: first(products),
     emptyLocations: first(leafLocations),
     staleLocations: first(stockedLocations),
     neverVerifiedInventory: first(inventoryEntries),
     ingredientsWithoutProduct: first(recipeIngredients),
+    vendorsWithPurchases: first(activeVendors),
   };
 };

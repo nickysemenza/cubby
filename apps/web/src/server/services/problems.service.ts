@@ -87,6 +87,7 @@ import {
   findStaleLocations,
   findUnknownParkedItems,
   findUnusedIngredients,
+  findVendorsWithoutLogos,
   loadProductsForCoverage,
   pruneUnusedAliases,
   type ReparsedStaleLineWrite,
@@ -503,6 +504,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       // Same shared spelling-key SQL as above, over the vendor roster instead —
       // one grouped scan of 114 rows.
       duplicateVendors: () => findDuplicateVendors(scoped),
+      vendorsWithoutLogos: () => findVendorsWithoutLogos(scoped),
       // One grouped SQL scan that returns only the offenders (the stated-total
       // comparison is a HAVING, not a JS filter) — cheap enough for this group.
       purchasesNotReconciling: () => findPurchasesNotReconciling(scoped),
@@ -537,6 +539,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unknownParkedItems: r.unknownParkedItems,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants,
     duplicateVendors: r.duplicateVendors,
+    vendorsWithoutLogos: r.vendorsWithoutLogos,
     purchasesNotReconciling: r.purchasesNotReconciling,
     referentialLivenessViolations: r.referentialLivenessViolations,
   };

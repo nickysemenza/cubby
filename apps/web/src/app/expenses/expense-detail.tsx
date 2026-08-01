@@ -19,7 +19,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { expenseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { persistedVendorId } from "~/lib/vendor-logo-lookup";
+import { persistedVendorId } from "~/lib/vendor-logo";
 import {
   type DetailSection,
   DetailSections,

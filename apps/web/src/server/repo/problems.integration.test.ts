@@ -24,6 +24,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
+import { VENDOR_LOGO_BY_SHORTCODE } from "~/lib/vendor-logos.generated";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import {
@@ -32,6 +33,7 @@ import {
   location as locationTable,
   product,
   productImage,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import {
   findAllProblems,
@@ -44,7 +46,7 @@ import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient, getIngredientByName } from "./ingredient";
 import { deleteInventoryEntries } from "./inventory";
 import { ensureGlobalUnknownLocation } from "./location";
-import { findStaleIngredientParses } from "./problems";
+import { findCoverageTotals, findStaleIngredientParses } from "./problems";
 import { deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
 import { updatePurchase } from "./purchase";
@@ -1352,6 +1354,72 @@ describe("problems — duplicate vendors", () => {
 
     const after = await findFastProblems(ctx.db);
     expect(after.duplicateVendors).toEqual([]);
+  });
+});
+
+describe("problems — vendor mini-logo coverage", () => {
+  const ctx = withTestDb();
+
+  const seedLine = (vendor: string, orderId: string) =>
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({ name: `${vendor} ${orderId}`, vendor, orderId }),
+        ),
+        ctx.actor,
+      ),
+    );
+
+  it("lists only active unseeded vendors and weights them by ledger visibility", async () => {
+    await findOrCreateVendor(ctx.db, "Unused Roster Vendor");
+    await seedLine("Quiet Unseeded Vendor", "Q-1");
+    await seedLine("Busy Unseeded Vendor", "B-1");
+    await seedLine("Busy Unseeded Vendor", "B-2");
+
+    const { vendorsWithoutLogos } = await findFastProblems(ctx.db);
+
+    expect(vendorsWithoutLogos.map((row) => row.name)).toEqual([
+      "Busy Unseeded Vendor",
+      "Quiet Unseeded Vendor",
+    ]);
+    expect(vendorsWithoutLogos[0]).toMatchObject({
+      purchaseCount: 2,
+      expenseRowCount: 2,
+    });
+    expect(PROBLEM_CLASS.vendorsWithoutLogos).toBe("coverage");
+    expect((await findCoverageTotals(ctx.db)).vendorsWithPurchases).toBe(2);
+  });
+
+  it("excludes a vendor whose public shortcode is in the generated manifest", async () => {
+    const [seededShortcode] = Object.keys(VENDOR_LOGO_BY_SHORTCODE);
+    if (!seededShortcode) throw new Error("expected a seeded vendor logo");
+
+    await seedLine("Manifest-backed Vendor", "M-1");
+    const vendorId = await findOrCreateVendor(ctx.db, "Manifest-backed Vendor");
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ shortcode: seededShortcode })
+      .where(eq(vendorTable.id, vendorId));
+
+    const { vendorsWithoutLogos } = await findFastProblems(ctx.db);
+    expect(vendorsWithoutLogos).toEqual([]);
+  });
+
+  it("excludes soft-deleted expense lines from the visibility count", async () => {
+    const keep = await seedLine("Deletion-count Vendor", "D-1");
+    const remove = await seedLine("Deletion-count Vendor", "D-2");
+    await deleteExpenses(ctx.db, [remove.id], ctx.actor);
+
+    const { vendorsWithoutLogos } = await findFastProblems(ctx.db);
+    expect(vendorsWithoutLogos).toEqual([
+      expect.objectContaining({
+        name: "Deletion-count Vendor",
+        purchaseCount: 2,
+        expenseRowCount: 1,
+      }),
+    ]);
+    expect(keep.id).not.toBe(remove.id);
   });
 });
 

@@ -46,6 +46,7 @@ const PROBLEM_LABELS: Record<
   unknownParkedItems: (n) => `${n} parked in Unknown`,
   manufacturerSpellingVariants: (n) => pl(n, "manufacturer spelling"),
   duplicateVendors: (n) => pl(n, "duplicate vendor"),
+  vendorsWithoutLogos: (n) => pl(n, "vendor without a mini logo"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
   orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),

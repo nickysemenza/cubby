@@ -1,6 +1,7 @@
+import { vendorShortcode } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
-import { vendorMonogram, vendorSlug } from "./vendor-logo";
-import { VENDOR_LOGO_BY_ID } from "./vendor-logos.generated";
+import { persistedVendorId, vendorMonogram, vendorSlug } from "./vendor-logo";
+import { VENDOR_LOGO_BY_SHORTCODE } from "./vendor-logos.generated";
 
 describe("vendorSlug", () => {
   it("deaccents, lowercases, and hyphenates punctuation", () => {
@@ -17,11 +18,7 @@ describe("vendorSlug", () => {
   });
 
   it("is idempotent — re-slugging an already-slugged string is a no-op", () => {
-    // This is the property that lets the manifest store a slug once (at seed
-    // time) while the render path's fallback recomputes it fresh from the
-    // vendor's current name: if `vendorSlug` weren't idempotent, comparing a
-    // stored slug against a freshly computed one would be comparing two
-    // different things even when nothing had changed.
+    // Stored slugs remain safe to normalize when a seed is refreshed.
     for (const name of [
       "Häfele",
       "B&H Photo",
@@ -38,9 +35,27 @@ describe("vendorSlug", () => {
     // Catches a seeder that accidentally writes a vendor's NAME or ID into the
     // manifest's value slot instead of its slug — a mistake `vendorSlug`'s
     // idempotence otherwise makes invisible to a naive equality check.
-    for (const slug of Object.values(VENDOR_LOGO_BY_ID)) {
+    for (const slug of Object.values(VENDOR_LOGO_BY_SHORTCODE)) {
       expect(vendorSlug(slug)).toBe(slug);
     }
+  });
+
+  it("keys every generated entry by a public vendor shortcode", () => {
+    for (const shortcode of Object.keys(VENDOR_LOGO_BY_SHORTCODE)) {
+      expect(vendorShortcode.safeParse(shortcode).success).toBe(true);
+    }
+  });
+});
+
+describe("persistedVendorId", () => {
+  const row = { vendor: "Amazon", vendorId: "VEN-2345" };
+
+  it("returns the id while the displayed and persisted names match", () => {
+    expect(persistedVendorId("Amazon", row)).toBe("VEN-2345");
+  });
+
+  it("withholds a stale id during an optimistic vendor edit", () => {
+    expect(persistedVendorId("Home Depot", row)).toBeNull();
   });
 });
 

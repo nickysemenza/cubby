@@ -260,6 +260,15 @@ export const duplicateVendorSchema = z.object({
   canonicalSampleId: vendorShortcode,
 });
 
+/** Optional presentation coverage: an active vendor with no seeded mini logo. */
+export const vendorWithoutLogoSchema = z.object({
+  id: vendorShortcode,
+  name: z.string(),
+  website: z.string().nullable(),
+  purchaseCount: z.number().int(),
+  expenseRowCount: z.number().int(),
+});
+
 export const productWithNoImagesSchema = z.object({
   ...productProblemFields,
   upc: z.string().nullable(),
@@ -416,6 +425,7 @@ const problemsFastShape = {
   unknownParkedItems: z.array(unknownParkedItemSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
+  vendorsWithoutLogos: z.array(vendorWithoutLogoSchema),
   purchasesNotReconciling: z.array(purchaseNotReconcilingSchema),
   // A live row still pointing at a soft-deleted target — see
   // `findReferentialLivenessViolations`. DB-only and cheap (one UNION ALL over
@@ -570,6 +580,7 @@ export const PROBLEM_CLASS = {
   staleLocations: "coverage",
   neverVerifiedInventory: "coverage",
   productsWithNoImages: "coverage",
+  vendorsWithoutLogos: "coverage",
   // Advisory, not backlog (see the note above): a purchase whose expenses disagree
   // with its stated total is often correct as-is, and the only mechanical "fix"
   // would be back-computing a cost from `statedTotal` — which nothing may do. So
@@ -637,6 +648,8 @@ export const coverageTotalsSchema = z.object({
   neverVerifiedInventory: z.number(),
   /** Live ingredients referenced by at least one live recipe. */
   ingredientsWithoutProduct: z.number(),
+  /** Live vendors referenced by at least one live purchase. */
+  vendorsWithPurchases: z.number(),
 });
 export type CoverageTotals = z.infer<typeof coverageTotalsSchema>;
 
@@ -715,6 +728,7 @@ export type NeverVerifiedInventory = z.infer<
 export type UnknownParkedItem = z.infer<typeof unknownParkedItemSchema>;
 export type LabelVariant = z.infer<typeof labelVariantSchema>;
 export type DuplicateVendor = z.infer<typeof duplicateVendorSchema>;
+export type VendorWithoutLogo = z.infer<typeof vendorWithoutLogoSchema>;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
 >;
