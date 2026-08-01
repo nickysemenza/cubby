@@ -1,6 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import {
@@ -405,7 +405,7 @@ function ExpectedItemReviewRow({
     >
       <div className="flex min-h-16 min-w-0 flex-1 items-center gap-2 p-2">
         <Image
-          src={item.product.images.find((img) => !isDocumentFile(img))?.url}
+          src={item.product.images.find(isDisplayableImageFile)?.url}
           alt=""
           displayWidth={96}
           className="size-12 shrink-0 border border-[var(--border)] object-cover"

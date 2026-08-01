@@ -1491,6 +1491,8 @@ interface UuidFinding {
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "add_recipe_to_meal.recipes[].id",
   "attach_file.imageId",
+  "get_product.images[].id",
+  "patch_product_external_ids.images[].id",
   "create_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
   "get_ingredient_raw_lines.ingredients[].lines[].lineId",
@@ -1503,6 +1505,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "remove_meal_recipe.recipes[].id",
   "update_meal.recipes[].id",
   "update_meal_recipe.recipes[].id",
+  "verify_product_images.images[].id",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

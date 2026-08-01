@@ -171,6 +171,7 @@ describe("inventory mappers", () => {
           {
             id: EXTERNAL_ID,
             source: "amazon",
+            kind: "legacy_unspecified",
             externalId: "B000000001",
             url: "https://example.com/product",
             createdAt: CREATED_AT,

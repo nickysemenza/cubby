@@ -38,6 +38,7 @@ export {
   getProductsByShortcodes,
   getProductsForFoodLookup,
   getProductUnitMappingsByProductIds,
+  patchProductExternalIds,
   productList,
   productSearch,
   quickCreateProduct,

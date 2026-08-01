@@ -15,9 +15,10 @@ import type {
 } from "@cubby/schemas/location";
 import { type LocationOut, locationType } from "@cubby/schemas/location";
 import { parseWithContext } from "~/lib/zod-utils";
-import type { image, location } from "~/server/db/schema";
+import type { location } from "~/server/db/schema";
 import {
   isNotDeleted,
+  type MappableImageRecord,
   mapImages,
   mapRelation,
   parseInventoryAmount,
@@ -34,7 +35,7 @@ import type { LocationListDB, LocationWithParentChild } from "./internal-types";
 export const dbLocationToAPI = (
   locationData: RowWithOptionalAliases<typeof location.$inferSelect> & {
     images?: Array<{
-      image: typeof image.$inferSelect;
+      image: MappableImageRecord;
       deletedAt?: Date | null;
     }>;
   },

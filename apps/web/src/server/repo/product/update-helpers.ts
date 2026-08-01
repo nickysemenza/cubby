@@ -120,7 +120,11 @@ export async function syncProductExternalIds(
   const toDelete = existingExternalIds.filter(
     (e) => !externalIds.some((eid) => eid.id === e.id),
   );
-  const toCreate = externalIds.filter((e) => e.id === undefined);
+  const normalized = externalIds.map((eid) => ({
+    ...eid,
+    source: eid.source.trim().toLowerCase(),
+  }));
+  const toCreate = normalized.filter((e) => e.id === undefined);
   const toUpdate = externalIds.filter(
     (e): e is ExternalIdInput & { id: string } => e.id !== undefined,
   );
@@ -142,17 +146,20 @@ export async function syncProductExternalIds(
       toCreate.map((eid) => ({
         productId,
         source: eid.source,
+        kind: eid.kind,
         externalId: eid.externalId,
         url: eid.url ?? null,
       })),
     );
   }
 
-  for (const eid of toUpdate) {
+  for (const raw of toUpdate) {
+    const eid = { ...raw, source: raw.source.trim().toLowerCase() };
     await tx
       .update(productExternalId)
       .set({
         source: eid.source,
+        kind: eid.kind,
         externalId: eid.externalId,
         url: eid.url ?? null,
       })

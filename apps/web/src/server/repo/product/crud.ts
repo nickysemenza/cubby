@@ -5,9 +5,9 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
-import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -35,7 +35,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  ne,
   or,
   sql,
   sum,
@@ -88,6 +87,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -147,6 +147,17 @@ const resolveProductSort = (sort: SortParams) => {
     ];
   }
 
+  if (sort.orderBy === "identity_strength") {
+    return [
+      sql.raw(`CASE
+        WHEN "product"."upc" IS NOT NULL AND "product"."upc" <> '' THEN 0
+        WHEN EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "product"."id" AND pei."deletedAt" IS NULL) THEN 1
+        WHEN lower(trim("product"."manufacturer")) NOT IN ('', 'generic', '(unspecified)') AND coalesce(trim("product"."model"), '') <> '' THEN 2
+        WHEN coalesce(trim("product"."model"), '') <> '' THEN 3
+        ELSE 4 END ${dirSql}`),
+    ];
+  }
+
   return null;
 };
 
@@ -154,7 +165,7 @@ const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
   buildOrderBy(product, sorts, [...productSortableFields], {
     groupBy,
     resolve: resolveProductSort,
-    tieBreaker: asc(product.name),
+    tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
   });
 
 const fetchProductById = async (
@@ -355,9 +366,7 @@ export const productList = async (
       image,
       and(eq(image.id, productImage.imageId), notDeleted(image)),
     )
-    .where(
-      and(notDeleted(productImage), ne(image.contentType, PDF_CONTENT_TYPE)),
-    );
+    .where(and(notDeleted(productImage), displayableImageWhere));
 
   const productIdsWithUnitMappings = dbClient
     .select({ productId: productUnitMappings.productId })
@@ -759,7 +768,8 @@ export const createProduct = async (
         await tx.insert(productExternalId).values(
           externalIds.map((eid) => ({
             productId: newProduct.id,
-            source: eid.source,
+            source: eid.source.trim().toLowerCase(),
+            kind: eid.kind,
             externalId: eid.externalId,
             url: eid.url ?? null,
           })),
@@ -949,6 +959,98 @@ export const updateProduct = async (
     });
   });
 };
+
+/** Patch selected external-ID slots without replacing unrelated identifiers. */
+export const patchProductExternalIds = async (
+  db: Database,
+  id: ProductId,
+  input: {
+    upsert: Array<{
+      source: string;
+      kind: ExternalIdKind;
+      externalId: string;
+      url?: string | null;
+    }>;
+    remove: Array<{ source: string; kind: ExternalIdKind }>;
+  },
+  actor: ActorContext,
+): Promise<ProductTopLevelOut> =>
+  await withTransaction(db, async (tx) => {
+    // Serialize slot patches for one Product while allowing other Products to
+    // proceed independently. The conflict target below still protects each
+    // individual slot at the database boundary.
+    await lockAndValidateForDelete(tx, product, [id], "Product");
+    const before = await tx.query.product.findFirst({
+      where: and(eq(product.id, id), notDeleted(product)),
+    });
+    if (!before)
+      throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
+    const beforeIds = await tx.query.productExternalId.findMany({
+      where: and(
+        eq(productExternalId.productId, id),
+        notDeleted(productExternalId),
+      ),
+    });
+
+    for (const entry of input.remove) {
+      await tx
+        .update(productExternalId)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(productExternalId.productId, id),
+            eq(productExternalId.source, entry.source.trim().toLowerCase()),
+            eq(productExternalId.kind, entry.kind),
+            notDeleted(productExternalId),
+          ),
+        );
+    }
+    for (const entry of input.upsert) {
+      const source = entry.source.trim().toLowerCase();
+      await tx
+        .insert(productExternalId)
+        .values({
+          productId: id,
+          source,
+          kind: entry.kind,
+          externalId: entry.externalId,
+          url: entry.url ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [
+            productExternalId.productId,
+            productExternalId.source,
+            productExternalId.kind,
+          ],
+          targetWhere: sql`${productExternalId.deletedAt} IS NULL`,
+          set: {
+            externalId: entry.externalId,
+            url: entry.url ?? null,
+            updatedAt: new Date(),
+          },
+        });
+    }
+    const externalIds = await tx.query.productExternalId.findMany({
+      where: and(
+        eq(productExternalId.productId, id),
+        notDeleted(productExternalId),
+      ),
+    });
+    const changes = computeChanges(
+      { externalIds: beforeIds },
+      { externalIds },
+      ["externalIds"],
+    );
+    if (changes) {
+      await logAuditEntry(tx, actor, {
+        entityType: "product",
+        entityId: id,
+        action: "update",
+        changes,
+      });
+    }
+    return dbProductToTopLevelAPI({ ...before, externalIds, images: [] });
+  });
 
 // Quick create a product with minimal data
 export const quickCreateProduct = async (

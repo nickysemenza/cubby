@@ -4,15 +4,17 @@
 
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type {
-  image,
   ingredient,
   inventoryEntry,
   location,
   product,
-  productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
-import type { RowWithOptionalAliases } from "~/server/repo/database-helpers";
+import type {
+  MappableImageRecord,
+  RowWithOptionalAliases,
+} from "~/server/repo/database-helpers";
+import type { MappableProductExternalId } from "./external-id-types";
 
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
@@ -24,19 +26,19 @@ type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
 export type ProductDeepDB = ProductSelect & {
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
-  externalIds: Array<typeof productExternalId.$inferSelect>;
+  externalIds: MappableProductExternalId[];
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: LocationSelect & {
         images: Array<{
-          image: typeof image.$inferSelect;
+          image: MappableImageRecord;
           deletedAt?: Date | null;
         }>;
       };
     }
   >;
   images: Array<{
-    image: typeof image.$inferSelect;
+    image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
 };
@@ -45,14 +47,14 @@ export type ProductListDB = ProductSelect & {
   dataQuality?: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
-  externalIds: Array<typeof productExternalId.$inferSelect>;
+  externalIds: MappableProductExternalId[];
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: LocationSelect;
     }
   >;
   images: Array<{
-    image: typeof image.$inferSelect;
+    image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
   // Scalar extras from `relations.product.list.extras` — count() returns

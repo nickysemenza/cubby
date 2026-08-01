@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   uploadToS3: vi.fn(),
   assertAttachableEntityExists: vi.fn(),
   createAndAssociateUploadedImage: vi.fn(),
+  createOrReuseAttachedImage: vi.fn(),
+  findAttachmentByIdempotencyKey: vi.fn(),
   fetchExternalResponse: vi.fn(),
   resolveLiveShortcode: vi.fn(),
 }));
@@ -21,6 +23,8 @@ vi.mock("~/server/repo/image", () => ({
   getImageByKey: mocks.getImageByKey,
   assertAttachableEntityExists: mocks.assertAttachableEntityExists,
   createAndAssociateUploadedImage: mocks.createAndAssociateUploadedImage,
+  createOrReuseAttachedImage: mocks.createOrReuseAttachedImage,
+  findAttachmentByIdempotencyKey: mocks.findAttachmentByIdempotencyKey,
 }));
 
 vi.mock("~/server/repo/shortcode-resolver", () => ({
@@ -143,7 +147,16 @@ describe("attachFileToEntity", () => {
     mocks.getImageByKey.mockResolvedValue(null);
     mocks.uploadToS3.mockResolvedValue(undefined);
     mocks.deleteS3Object.mockResolvedValue(undefined);
-    mocks.createAndAssociateUploadedImage.mockResolvedValue({ id: "img-99" });
+    mocks.createOrReuseAttachedImage.mockImplementation(
+      async (
+        _db: unknown,
+        params: { url: string; filename: string; contentType: string },
+      ) => ({
+        row: { id: "img-99", ...params, idempotencyKey: null },
+        reused: false,
+      }),
+    );
+    mocks.findAttachmentByIdempotencyKey.mockResolvedValue(null);
     mocks.resolveLiveShortcode.mockResolvedValue("prod-1");
   });
 
@@ -168,7 +181,7 @@ describe("attachFileToEntity", () => {
         contentType: "image/png",
       }),
     );
-    expect(mocks.createAndAssociateUploadedImage).toHaveBeenCalledWith(
+    expect(mocks.createOrReuseAttachedImage).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ contentType: "image/png", size: 70 }),
       "product",
@@ -198,7 +211,9 @@ describe("attachFileToEntity", () => {
     expect(result.kind).toBe("document");
     expect(mocks.uploadToS3).toHaveBeenCalledWith(
       expect.objectContaining({
-        key: "cubby/documents/PRD-TEST/permit.pdf",
+        key: expect.stringMatching(
+          /^cubby\/documents\/PRD-TEST\/permit-[\da-f-]+\.pdf$/,
+        ),
       }),
     );
   });
@@ -220,7 +235,7 @@ describe("attachFileToEntity", () => {
     expect(mocks.uploadToS3).toHaveBeenCalledWith(
       expect.objectContaining({
         key: expect.stringMatching(
-          /^cubby\/documents\/PRD-TEST\/permit-\d+\.pdf$/,
+          /^cubby\/documents\/PRD-TEST\/permit-[\da-f-]+\.pdf$/,
         ),
       }),
     );
@@ -240,6 +255,101 @@ describe("attachFileToEntity", () => {
 
     expect(result.kind).toBe("image");
     expect(mocks.uploadToS3).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the caller content type when a URL response omits it", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64")),
+    );
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      url: "https://example.com/photo",
+      contentType: "image/png",
+    });
+
+    expect(result.contentType).toBe("image/png");
+    expect(mocks.uploadToS3).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: "image/png" }),
+    );
+  });
+
+  it("uses the caller content type for a generic URL response MIME", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64"), {
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    );
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      url: "https://example.com/photo",
+      contentType: "image/png",
+    });
+
+    expect(result.contentType).toBe("image/png");
+  });
+
+  it("rejects a caller content type that conflicts with a URL response", async () => {
+    mocks.fetchExternalResponse.mockResolvedValue(
+      new Response(Buffer.from(PNG_BASE64, "base64"), {
+        headers: { "content-type": "image/png" },
+      }),
+    );
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        url: "https://example.com/photo.png",
+        contentType: "image/jpeg",
+      }),
+    ).rejects.toThrow(/conflicts with the URL response Content-Type/);
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
+  it("returns an existing idempotency winner before fetching or uploading", async () => {
+    mocks.findAttachmentByIdempotencyKey.mockResolvedValueOnce({
+      id: "winner-1",
+      url: "https://images.example/winner.png",
+      filename: "winner.png",
+      contentType: "image/png",
+      idempotencyKey: "stable-key",
+    });
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      data: PNG_BASE64,
+      contentType: "image/png",
+      idempotencyKey: "stable-key",
+    });
+
+    expect(result.imageId).toBe("winner-1");
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+  });
+
+  it("cleans only the losing object when the transactional idempotency check elects another winner", async () => {
+    mocks.createOrReuseAttachedImage.mockResolvedValueOnce({
+      row: {
+        id: "winner-2",
+        url: "https://images.example/winner.png",
+        filename: "winner.png",
+        contentType: "image/png",
+        idempotencyKey: "race-key",
+      },
+      reused: true,
+    });
+
+    const result = await attachFileToEntity({} as never, {
+      ...base,
+      data: PNG_BASE64,
+      contentType: "image/png",
+      idempotencyKey: "race-key",
+    });
+
+    expect(result.imageId).toBe("winner-2");
+    expect(mocks.deleteS3Object).toHaveBeenCalledWith(
+      expect.stringContaining("cubby/images/"),
+    );
   });
 
   it("rejects a missing target before touching storage", async () => {
@@ -286,7 +396,7 @@ describe("attachFileToEntity", () => {
     // The repo runs insert + associate in one transaction; a throw from either
     // (DB error, or the target deleted mid-flight) rolls back the row, and the
     // service then deletes the now-orphaned R2 object.
-    mocks.createAndAssociateUploadedImage.mockRejectedValue(new Error("gone"));
+    mocks.createOrReuseAttachedImage.mockRejectedValue(new Error("gone"));
 
     await expect(
       attachFileToEntity({} as never, {

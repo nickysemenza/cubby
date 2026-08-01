@@ -1,4 +1,7 @@
-import type { ExternalIdInput } from "@cubby/schemas/external-id";
+import {
+  type ExternalIdInput,
+  externalIdKind,
+} from "@cubby/schemas/external-id";
 import type { IngredientShortcode } from "@cubby/schemas/identifiers";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
@@ -23,6 +26,7 @@ import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   NullableNumericField,
   NullableTextareaField,
+  SelectField,
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
@@ -462,12 +466,24 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         addButtonText="Add External ID"
         emptyValue={{
           source: "",
+          kind: "legacy_unspecified",
           externalId: "",
           url: undefined,
         }}
       >
         {(_, index) => (
           <>
+            <div className="min-w-[8rem] flex-1">
+              <SelectField
+                form={form}
+                name={`externalIds.${index}.kind` as Path<TFieldValues>}
+                label="Kind"
+                options={externalIdKind.options.map((kind) => ({
+                  value: kind,
+                  label: kind.replaceAll("_", " "),
+                }))}
+              />
+            </div>
             <div className="min-w-[8rem] flex-1">
               <UnifiedTextField
                 form={form}

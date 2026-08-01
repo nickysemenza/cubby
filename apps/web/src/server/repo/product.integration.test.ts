@@ -18,6 +18,7 @@ import {
   deleteProducts,
   findProductByNameFuzzyManufacturer,
   getProductByID,
+  patchProductExternalIds,
   productList,
   updateProduct,
 } from "./product";
@@ -60,6 +61,144 @@ describe("product repository", () => {
     expect(retrievedProduct.manufacturer).toEqual(productData.manufacturer);
     expect(retrievedProduct.unitMappings).toEqual([]);
     expect(retrievedProduct.ingredient).toBeNull();
+  });
+
+  it("supports typed identifier replacement and slot-level patches", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        externalIds: [
+          { source: "Amazon ", kind: "asin", externalId: "B0OLD", url: null },
+          {
+            source: "amazon",
+            kind: "retailer_sku",
+            externalId: "SKU-1",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    expect(
+      created.externalIds.map((entry) => [entry.source, entry.kind]),
+    ).toEqual([
+      ["amazon", "asin"],
+      ["amazon", "retailer_sku"],
+    ]);
+
+    // The legacy replacement endpoint remains compatible when every typed
+    // entry is supplied, then the patch endpoint preserves untouched slots.
+    await updateProduct(
+      ctx.db,
+      created.entityId,
+      {
+        externalIds: [
+          {
+            id: created.externalIds[0]!.id,
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0REPLACED",
+            url: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [
+          {
+            source: "amazon",
+            kind: "retailer_sku",
+            externalId: "SKU-2",
+            url: null,
+          },
+          {
+            source: "mcmaster",
+            kind: "catalog_number",
+            externalId: "123",
+            url: null,
+          },
+        ],
+        remove: [],
+      },
+      ctx.actor,
+    );
+    await patchProductExternalIds(
+      ctx.db,
+      created.entityId,
+      {
+        upsert: [],
+        remove: [{ source: "amazon", kind: "asin" }],
+      },
+      ctx.actor,
+    );
+    const final = await getProductByID(ctx.db, created.entityId);
+    expect(
+      final.externalIds.map((entry) => [
+        entry.source,
+        entry.kind,
+        entry.externalId,
+      ]),
+    ).toEqual([
+      ["amazon", "retailer_sku", "SKU-2"],
+      ["mcmaster", "catalog_number", "123"],
+    ]);
+  });
+
+  it("orders identity-strength worklists deterministically", async () => {
+    const weak = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Same",
+        manufacturer: "generic",
+        model: null,
+        upc: null,
+      }),
+      ctx.actor,
+    );
+    const model = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Model",
+        manufacturer: "generic",
+        model: "M-1",
+        upc: null,
+      }),
+      ctx.actor,
+    );
+    const external = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "External",
+        upc: null,
+        externalIds: [
+          { source: "acme", kind: "item_number", externalId: "1", url: null },
+        ],
+      }),
+      ctx.actor,
+    );
+    const barcode = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Barcode", upc: "123456789012" }),
+      ctx.actor,
+    );
+    const first = await productList(
+      ctx.db,
+      {},
+      [{ orderBy: "identity_strength", direction: "asc" }],
+      { pageIndex: 0, pageSize: 2 },
+    );
+    const second = await productList(
+      ctx.db,
+      {},
+      [{ orderBy: "identity_strength", direction: "asc" }],
+      { pageIndex: 1, pageSize: 2 },
+    );
+    const ids = [...first.data, ...second.data].map((row) => row.id);
+    expect(ids).toEqual([barcode.id, external.id, model.id, weak.id]);
   });
 
   it("should list products with pagination and sorting", async () => {
@@ -1520,7 +1659,9 @@ describe("product repository", () => {
         ctx.db,
         makeProductInput({
           name: "Backstop Metadata Product",
-          externalIds: [{ source: "amazon", externalId: "B000BACKSTOP" }],
+          externalIds: [
+            { source: "amazon", kind: "asin", externalId: "B000BACKSTOP" },
+          ],
           unitMappings: [
             {
               a: { value: 1, unit: "cup" },

@@ -9,7 +9,7 @@ import {
   unsafeProductShortcode,
   unsafeProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
@@ -505,7 +505,7 @@ export function createImageColumn<T extends BaseRow>(
       ((row as unknown as ImageRow).images ?? []).filter(
         (img) =>
           img.contentType === undefined ||
-          !isDocumentFile({ contentType: img.contentType }),
+          isDisplayableImageFile({ ...img, contentType: img.contentType }),
       ));
   const { entity } = options;
 

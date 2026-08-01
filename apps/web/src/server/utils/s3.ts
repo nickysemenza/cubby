@@ -86,7 +86,9 @@ export const generateImageKey = (filename: string): string => {
   const baseName = sanitizedFilename.replace(`.${extension}`, "");
 
   const prefix = env.R2_KEY_PREFIX;
-  return `${prefix}/images/${baseName}-${timestamp}.${extension}`;
+  // Distinct attempts must never share an object key: an idempotency loser is
+  // allowed to clean up its own R2 object without risking the winner's bytes.
+  return `${prefix}/images/${baseName}-${timestamp}-${crypto.randomUUID()}.${extension}`;
 };
 
 /**
@@ -145,6 +147,11 @@ export const deleteS3Object = async (key: string): Promise<void> => {
     throw new Error(`Failed to delete ${key}: ${res.status} ${res.statusText}`);
   }
 };
+
+/** Read an R2 object through the signed S3 endpoint. Deliberately used only by
+ * explicit verification workflows; normal entity reads must not fetch storage. */
+export const getS3Object = async (key: string): Promise<Response> =>
+  await r2.fetch(objectUrl(key));
 
 /**
  * Upload a file directly to S3/R2 storage (server-side upload)

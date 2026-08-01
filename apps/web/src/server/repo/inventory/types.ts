@@ -1,14 +1,16 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type {
-  image,
   inventoryEntry,
   location,
   product,
-  productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
-import type { RowWithOptionalAliases } from "~/server/repo/database-helpers";
+import type {
+  MappableImageRecord,
+  RowWithOptionalAliases,
+} from "~/server/repo/database-helpers";
+import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
@@ -16,14 +18,14 @@ type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
 export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   product: ProductSelect & {
     unitMappings: Array<typeof productUnitMappings.$inferSelect>;
-    externalIds: Array<typeof productExternalId.$inferSelect>;
+    externalIds: MappableProductExternalId[];
     images: Array<{
-      image: typeof image.$inferSelect;
+      image: MappableImageRecord;
     }>;
   };
   location: LocationSelect & {
     images: Array<{
-      image: typeof image.$inferSelect;
+      image: MappableImageRecord;
     }>;
   };
 };

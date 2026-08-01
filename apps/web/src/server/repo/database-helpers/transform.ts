@@ -23,7 +23,7 @@ export type RowWithOptionalAliases<T extends { aliases: string[] }> = Omit<
   dataExceptions?: T extends { dataExceptions: infer E } ? E : never;
 };
 
-type ImageRecord = {
+export type MappableImageRecord = {
   id: string;
   url: string;
   key: string;
@@ -31,6 +31,13 @@ type ImageRecord = {
   size: number;
   contentType: string;
   status: ImageOut["status"];
+  width?: number | null;
+  height?: number | null;
+  detectedContentType?: string | null;
+  sha256?: string | null;
+  renderStatus?: ImageOut["renderStatus"] | null;
+  storageStatus?: ImageOut["storageStatus"] | null;
+  verifiedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -44,7 +51,10 @@ type ImageRecord = {
  */
 export const mapImages = (
   rows:
-    | Array<ImageRecord | { image: ImageRecord; deletedAt?: Date | null }>
+    | Array<
+        | MappableImageRecord
+        | { image: MappableImageRecord; deletedAt?: Date | null }
+      >
     | undefined
     | null,
 ): ImageOut[] => {
@@ -62,6 +72,15 @@ export const mapImages = (
       size: dbImage.size,
       contentType: dbImage.contentType,
       status: dbImage.status,
+      // Relation fixtures and old narrow projections deliberately omit these
+      // expand-only columns; API output represents those legacy values as null.
+      width: dbImage.width ?? null,
+      height: dbImage.height ?? null,
+      detectedContentType: dbImage.detectedContentType ?? null,
+      sha256: dbImage.sha256 ?? null,
+      renderStatus: dbImage.renderStatus ?? null,
+      storageStatus: dbImage.storageStatus ?? null,
+      verifiedAt: dbImage.verifiedAt ?? null,
       createdAt: dbImage.createdAt,
       updatedAt: dbImage.updatedAt,
     }));

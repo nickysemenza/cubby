@@ -10,14 +10,18 @@ import {
 } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
-import { externalIdInput } from "./external-id";
-import { externalIdOut } from "./external-id";
+import { externalIdInput, externalIdKind, externalIdOut } from "./external-id";
 import {
   ingredientShortcode,
   inventoryShortcode,
   productShortcode,
 } from "./identifiers";
-import { imageOut } from "./image";
+import {
+  imageOut,
+  ImageRenderStatus,
+  ImageStatus,
+  ImageStorageStatus,
+} from "./image";
 import { locationListRefOut, locationOut } from "./location";
 import {
   createPaginatedResponseSchema,
@@ -285,6 +289,7 @@ export const productSortableFields = [
   "location",
   "ingredient",
   "expenseTotal",
+  "identity_strength",
 ] as const;
 
 export type ProductSortField = (typeof productSortableFields)[number];
@@ -611,13 +616,14 @@ export const mcpProductUpdateInput = z.object({
     .array(
       z.object({
         source: z.string().min(1),
+        kind: externalIdKind,
         externalId: z.string().min(1),
         url: z.string().url().nullish(),
       }),
     )
     .optional()
     .describe(
-      'Retailer/vendor identifiers, e.g. an Amazon ASIN → [{ source: "amazon", externalId: "B0..." }]. Pass the COMPLETE desired set: it replaces the existing list. One id per (product, source).',
+      "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. One id per (product, source, kind).",
     ),
   upc: upc.nullable().optional(),
   fdc_id: fdcId.nullable().optional(),
@@ -633,10 +639,18 @@ export const mcpProductUpdateInput = z.object({
   ingredientId: ingredientShortcode.nullable().optional(),
   price: z.number().nonnegative().nullable().optional(),
   usdaUnavailable: z.boolean().nullable().optional(),
+  removeImageIds: z
+    .array(z.uuid())
+    .optional()
+    .describe("Product image ids to detach; non-Product files are rejected"),
+  imageOrder: z
+    .array(z.uuid())
+    .optional()
+    .describe("Product image ids in display order; first valid image is cover"),
 });
 
 /** Slim MCP projection of a product list/detail row. */
-export const productMcpOut = z.object({
+const productMcpFields = {
   id: productShortcode,
   name: z.string(),
   manufacturer: z.string(),
@@ -655,6 +669,7 @@ export const productMcpOut = z.object({
   externalIds: z.array(
     z.object({
       source: z.string().min(1),
+      kind: externalIdKind,
       externalId: z.string().min(1),
       url: z.string().url().nullish(),
       createdAt: z.date(),
@@ -666,8 +681,38 @@ export const productMcpOut = z.object({
   ingredientId: ingredientShortcode.nullable(),
   unitMappings: z.array(mcpUnitMappingOut),
   dataQuality,
-});
+};
+export const productMcpOut = z.object(productMcpFields);
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
+
+export const productMcpImageOut = z.object({
+  id: z.uuid(),
+  url: z.url(),
+  key: z.string(),
+  filename: z.string(),
+  size: z.int().positive(),
+  contentType: z.string(),
+  status: ImageStatus,
+  width: z.int().positive().nullable(),
+  height: z.int().positive().nullable(),
+  detectedContentType: z.string().nullable(),
+  sha256: z.string().nullable(),
+  renderStatus: ImageRenderStatus.nullable(),
+  storageStatus: ImageStorageStatus.nullable(),
+  verifiedAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  displayPosition: z.number().int().positive().nullable(),
+  isCover: z.boolean(),
+});
+
+/** Detailed MCP projection used only by get/mutations that need media state. */
+export const productMcpDetailOut = z.object({
+  ...productMcpFields,
+  coverImageId: z.uuid().nullable(),
+  images: z.array(productMcpImageOut),
+});
+export type ProductMcpDetailOut = z.infer<typeof productMcpDetailOut>;
 
 export const productMcpListOut = createPaginatedResponseSchema(productMcpOut);
 
@@ -675,8 +720,74 @@ export const productExternalIdCollisionsOut = z.object({
   items: z.array(
     z.object({
       source: z.string(),
+      kind: externalIdKind,
       externalId: z.string(),
       products: z.array(z.object({ id: productShortcode, name: z.string() })),
     }),
   ),
+  results: z
+    .array(
+      z.object({
+        source: z.string(),
+        kind: externalIdKind,
+        externalId: z.string(),
+        status: z.enum(["missing", "unique", "collision"]),
+        products: z.array(z.object({ id: productShortcode, name: z.string() })),
+      }),
+    )
+    .default([]),
 });
+
+export const productExternalIdCollisionInput = z
+  .object({
+    source: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+    identifiers: z
+      .array(
+        z.object({
+          source: z.string().min(1),
+          kind: externalIdKind,
+          externalId: z.string().min(1),
+        }),
+      )
+      .min(1)
+      .max(100)
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.source !== undefined && value.identifiers !== undefined)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "source and identifiers cannot be used together",
+        path: ["identifiers"],
+      });
+  });
+
+export const patchProductExternalIdsInput = z
+  .object({
+    id: productShortcode,
+    upsert: z
+      .array(
+        z.object({
+          source: z.string().min(1),
+          kind: externalIdKind,
+          externalId: z.string().min(1),
+          url: z.string().url().nullish(),
+        }),
+      )
+      .default([]),
+    remove: z
+      .array(z.object({ source: z.string().min(1), kind: externalIdKind }))
+      .default([]),
+  })
+  .superRefine((value, ctx) => {
+    const slots = new Set<string>();
+    for (const entry of [...value.upsert, ...value.remove]) {
+      const key = `${entry.source.trim().toLowerCase()}\u0000${entry.kind}`;
+      if (slots.has(key))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Each external-ID slot may be patched only once",
+        });
+      slots.add(key);
+    }
+  });

@@ -4,13 +4,11 @@
  */
 
 import type { InventoryItemForTree } from "@cubby/schemas/location";
+import type { inventoryEntry, location, product } from "~/server/db/schema";
 import type {
-  image,
-  inventoryEntry,
-  location,
-  product,
-} from "~/server/db/schema";
-import type { RowWithOptionalAliases } from "~/server/repo/database-helpers";
+  MappableImageRecord,
+  RowWithOptionalAliases,
+} from "~/server/repo/database-helpers";
 
 type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
@@ -24,7 +22,7 @@ export type LocationListDB = LocationSelect & {
     }
   >;
   images: Array<{
-    image: typeof image.$inferSelect;
+    image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
 };
@@ -37,7 +35,7 @@ export type LocationWithParentChild = LocationSelect & {
   children?: LocationWithParentChild[];
   parent?: LocationWithParentChild | null;
   images?: Array<{
-    image: typeof image.$inferSelect;
+    image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
   childCount?: number;

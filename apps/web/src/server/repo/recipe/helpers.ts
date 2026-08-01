@@ -17,7 +17,6 @@ import type {
   SectionIngredient,
 } from "@cubby/schemas/recipe";
 import type {
-  image,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -26,6 +25,7 @@ import { recipeImage } from "~/server/db/schema";
 import {
   imageOrder,
   isNotDeleted,
+  type MappableImageRecord,
   mapRelation,
   notDeleted,
 } from "~/server/repo/database-helpers";
@@ -39,7 +39,7 @@ import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
 type RecipeImageRow = {
-  image: typeof image.$inferSelect;
+  image: MappableImageRecord;
   deletedAt?: Date | null;
 };
 
@@ -52,6 +52,13 @@ const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
     size: row.image.size,
     contentType: row.image.contentType,
     status: row.image.status,
+    width: row.image.width ?? null,
+    height: row.image.height ?? null,
+    detectedContentType: row.image.detectedContentType ?? null,
+    sha256: row.image.sha256 ?? null,
+    renderStatus: row.image.renderStatus ?? null,
+    storageStatus: row.image.storageStatus ?? null,
+    verifiedAt: row.image.verifiedAt ?? null,
     createdAt: row.image.createdAt,
     updatedAt: row.image.updatedAt,
   }));

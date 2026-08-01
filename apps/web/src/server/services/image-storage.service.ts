@@ -20,14 +20,19 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
   assertAttachableEntityExists,
-  createAndAssociateUploadedImage,
+  createOrReuseAttachedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
   cullPendingImages,
   deleteImages,
+  findAttachmentByIdempotencyKey,
   getImageByKey,
 } from "~/server/repo/image";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  filenameForContentType,
+  inspectImageFile,
+} from "~/server/services/image-integrity";
 import {
   contentTypeToExtension,
   deleteS3Object,
@@ -89,6 +94,22 @@ const allocateDocumentKey = async (
     key = generateDocumentKey(deduped, folder);
   }
   return key;
+};
+
+// Server-side MCP attempts may race and a losing attempt is required to delete
+// only its own object. Unlike browser document uploads, readable keys are not
+// worth sharing here: append a UUID before allocation to make that guarantee.
+const allocateAttachmentDocumentKey = async (
+  db: Database,
+  filename: string,
+  folder: string,
+): Promise<string> => {
+  const dot = filename.lastIndexOf(".");
+  const attemptFilename =
+    dot > 0
+      ? `${filename.slice(0, dot)}-${crypto.randomUUID()}${filename.slice(dot)}`
+      : `${filename}-${crypto.randomUUID()}`;
+  return await allocateDocumentKey(db, attemptFilename, folder);
 };
 
 export const initiateImageUploadWithoutEntity = async (
@@ -176,6 +197,16 @@ function decodeBase64File(
         "Only base64 data: URIs are supported",
       );
     }
+    if (
+      inlineType &&
+      fallbackContentType &&
+      inlineType.toLowerCase() !== fallbackContentType.toLowerCase()
+    ) {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        "Data URI content type conflicts with contentType",
+      );
+    }
     return {
       bytes: Buffer.from(payload ?? "", "base64"),
       contentType: inlineType || fallbackContentType,
@@ -212,6 +243,29 @@ export const attachFileToEntity = async (
   }
   await assertAttachableEntityExists(db, input.entityType, entityId);
 
+  // A cheap retry can return before fetching/uploading bytes. The same lookup
+  // runs under the target-row lock in the repo to close the upload race.
+  if (input.idempotencyKey) {
+    const existing = await findAttachmentByIdempotencyKey(
+      db,
+      input.entityType,
+      entityId,
+      input.idempotencyKey,
+    );
+    if (existing) {
+      return {
+        imageId: existing.id,
+        url: existing.url,
+        filename: existing.filename,
+        contentType: existing.contentType,
+        kind: existing.contentType === PDF_CONTENT_TYPE ? "document" : "image",
+        entityType: input.entityType,
+        entityId: input.entityId,
+        idempotencyKey: existing.idempotencyKey,
+      };
+    }
+  }
+
   // 1. Resolve bytes + content type + filename from whichever input mode.
   let bytes: Buffer;
   let contentType: string | undefined;
@@ -232,9 +286,25 @@ export const attachFileToEntity = async (
       bytes = Buffer.from(
         await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
       );
-      contentType =
-        input.contentType ??
-        response.headers.get("content-type")?.split(";", 1)[0]?.trim();
+      const responseContentTypeHeader = response.headers
+        .get("content-type")
+        ?.split(";", 1)[0]
+        ?.trim();
+      const responseContentType =
+        responseContentTypeHeader?.toLowerCase() === "application/octet-stream"
+          ? undefined
+          : responseContentTypeHeader;
+      if (
+        input.contentType &&
+        responseContentType &&
+        input.contentType.toLowerCase() !== responseContentType.toLowerCase()
+      ) {
+        throw createAppError(
+          "IMAGE_ATTACH_FAILED",
+          "contentType conflicts with the URL response Content-Type",
+        );
+      }
+      contentType = responseContentType ?? input.contentType;
       sourceFilename = new URL(url).pathname.split("/").pop() || undefined;
     } catch (error) {
       // Bad/SSRF-blocked URL, redirect limit, oversized body — a caller error,
@@ -281,13 +351,17 @@ export const attachFileToEntity = async (
     );
   }
 
+  const inspected = await inspectImageFile(bytes, contentType);
+
   // 3. Store in R2, then record the row — rolling back the object if the DB
   // insert fails (mirrors importImageFromUrl).
   const extension = isDocument ? "pdf" : contentTypeToExtension(contentType);
-  const filename =
-    input.filename ?? sourceFilename ?? `attachment.${extension}`;
+  const filename = filenameForContentType(
+    input.filename ?? sourceFilename ?? `attachment.${extension}`,
+    contentType,
+  );
   const key = isDocument
-    ? await allocateDocumentKey(db, filename, input.entityId)
+    ? await allocateAttachmentDocumentKey(db, filename, input.entityId)
     : generateImageKey(filename);
 
   await uploadToS3({ key, body: bytes, contentType });
@@ -296,11 +370,19 @@ export const attachFileToEntity = async (
   // 4. Insert the row + associate in one transaction (owned by the repo), so a
   // failure in either step (e.g. the target was deleted since step 0) rolls back
   // the DB write; the catch then removes the now-orphaned R2 object.
-  let created: Awaited<ReturnType<typeof createAndAssociateUploadedImage>>;
+  let created: Awaited<ReturnType<typeof createOrReuseAttachedImage>>;
   try {
-    created = await createAndAssociateUploadedImage(
+    created = await createOrReuseAttachedImage(
       db,
-      { key, url, filename, contentType, size: bytes.length },
+      {
+        key,
+        url,
+        filename,
+        size: bytes.length,
+        ...inspected,
+        idempotencyKey: input.idempotencyKey,
+        expectedImageCount: input.expectedImageCount,
+      },
       input.entityType,
       entityId,
       input.documentKind,
@@ -312,14 +394,24 @@ export const attachFileToEntity = async (
     throw error;
   }
 
+  if (created.reused) {
+    await deleteS3Object(key).catch((cleanupError) => {
+      console.error(
+        "Failed to remove losing idempotent attachment object:",
+        cleanupError,
+      );
+    });
+  }
+
   return {
-    imageId: created.id,
-    url,
-    filename,
-    contentType,
-    kind: isDocument ? "document" : "image",
+    imageId: created.row.id,
+    url: created.row.url,
+    filename: created.row.filename,
+    contentType: created.row.contentType,
+    kind: created.row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
     entityType: input.entityType,
     entityId: input.entityId,
+    idempotencyKey: created.row.idempotencyKey,
   };
 };
 

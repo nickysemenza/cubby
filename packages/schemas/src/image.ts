@@ -12,6 +12,25 @@ export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
 export const ImageStatus = z.enum(imageStatusValues);
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
+// These values describe bytes and storage independently of the browser upload
+// lifecycle above.  Keeping them nullable on Image makes this an expand-only
+// change for pre-existing and presigned-upload rows.
+export const imageRenderStatusValues = [
+  "unverified",
+  "verified",
+  "failed",
+] as const;
+export const imageStorageStatusValues = [
+  "unverified",
+  "available",
+  "missing",
+  "metadata_mismatch",
+] as const;
+export const ImageRenderStatus = z.enum(imageRenderStatusValues);
+export const ImageStorageStatus = z.enum(imageStorageStatusValues);
+export type ImageRenderStatus = z.infer<typeof ImageRenderStatus>;
+export type ImageStorageStatus = z.infer<typeof ImageStorageStatus>;
+
 export const imageSortableFields = [
   "createdAt",
   "updatedAt",
@@ -47,11 +66,22 @@ const ALLOWED_DOCUMENT_TYPES = [PDF_CONTENT_TYPE] as const;
 export const isDocumentFile = (file: { contentType: string }): boolean =>
   file.contentType === PDF_CONTENT_TYPE;
 
+/** True when a file can be shown in a gallery and selected as a cover. */
+export const isDisplayableImageFile = (file: {
+  contentType: string;
+  renderStatus?: ImageRenderStatus | null;
+  storageStatus?: ImageStorageStatus | null;
+}): boolean =>
+  !isDocumentFile(file) &&
+  file.renderStatus !== "failed" &&
+  file.storageStatus !== "missing" &&
+  file.storageStatus !== "metadata_mismatch";
+
 /** Split an entity's attached files into displayable images vs documents. */
 export const partitionEntityFiles = <T extends { contentType: string }>(
   files: T[],
 ): { images: T[]; documents: T[] } => ({
-  images: files.filter((f) => !isDocumentFile(f)),
+  images: files.filter(isDisplayableImageFile),
   documents: files.filter(isDocumentFile),
 });
 
@@ -195,6 +225,22 @@ export const attachFileFields = {
     .describe(
       "Required when entityId is a PUR- Purchase shortcode; classifies the attached purchase evidence.",
     ),
+  idempotencyKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .optional()
+    .describe(
+      "Optional stable key: repeating it for the same target returns the original attachment.",
+    ),
+  expectedImageCount: z
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "Optional current displayable-image count; attachment fails if it has changed.",
+    ),
 };
 
 export const mcpAttachFileInput = z
@@ -224,6 +270,7 @@ export const attachFileResponse = z.object({
   kind: z.enum(["image", "document"]),
   entityType: attachableImageEntity,
   entityId: attachableImageEntityId,
+  idempotencyKey: z.string().nullable().optional(),
 });
 export type AttachFileResponse = z.infer<typeof attachFileResponse>;
 
@@ -248,6 +295,13 @@ export const imageOut = z.object({
   size: z.int().positive(),
   contentType: z.string(),
   status: ImageStatus,
+  width: z.int().positive().nullable(),
+  height: z.int().positive().nullable(),
+  detectedContentType: z.string().nullable(),
+  sha256: z.string().nullable(),
+  renderStatus: ImageRenderStatus.nullable(),
+  storageStatus: ImageStorageStatus.nullable(),
+  verifiedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -271,6 +325,13 @@ export const imageWithEntitySchema = z.object({
   size: z.int().positive(),
   contentType: z.string(),
   status: ImageStatus,
+  width: z.int().positive().nullable(),
+  height: z.int().positive().nullable(),
+  detectedContentType: z.string().nullable(),
+  sha256: z.string().nullable(),
+  renderStatus: ImageRenderStatus.nullable(),
+  storageStatus: ImageStorageStatus.nullable(),
+  verifiedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
   entityType: entityImage.nullable(),

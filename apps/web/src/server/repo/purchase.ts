@@ -15,6 +15,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { DataException } from "@cubby/schemas/data-quality";
 import type {
   ImpactItem,
   OperationDisposition,
@@ -266,7 +267,7 @@ type PurchaseRow = {
   date: string | null;
   statedTotal: number | null;
   notes: string | null;
-  dataExceptions: PurchaseOut["dataQuality"]["exceptions"];
+  dataExceptions: DataException[];
   createdAt: Date;
   updatedAt: Date;
   vendorName: string | null;

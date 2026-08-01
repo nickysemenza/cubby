@@ -1810,7 +1810,8 @@ describe("purchase repository — documents", () => {
       })
       .from(image)
       .where(eq(image.id, result.imageId));
-    expect(row?.key).toContain(`/documents/${charge.id}/metal-invoice.pdf`);
+    expect(row?.key).toContain(`/documents/${charge.id}/metal-invoice-`);
+    expect(row?.key).toMatch(/\.pdf$/);
     expect(row?.contentType).toBe("application/pdf");
     expect(row?.status).toBe("UPLOADED");
 

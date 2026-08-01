@@ -17,7 +17,6 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type {
   DuplicateUniqueProduct,
   OrphanedProduct,
@@ -33,7 +32,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  ne,
   notExists,
   type SQL,
   sql,
@@ -55,6 +53,7 @@ import {
   task,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   isRetainingEdgeKey,
   PRODUCT_EDGE_ROLES,
@@ -440,7 +439,7 @@ export const findProductsWithUpcGaps = async (
             and(
               eq(productImage.productId, product.id),
               notDeleted(productImage),
-              ne(image.contentType, PDF_CONTENT_TYPE),
+              displayableImageWhere,
             ),
           ),
       ),

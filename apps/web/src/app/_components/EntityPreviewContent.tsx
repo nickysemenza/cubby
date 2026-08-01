@@ -1,4 +1,4 @@
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import type {
   CostType,
@@ -363,7 +363,7 @@ export function ProductPreviewContent({ productId }: { productId: string }) {
               nutrients: data.food?.nutritionInfo.nutrientsPer100,
               price: data.price ?? undefined,
               upc: data.upc ?? undefined,
-              thumbUrl: data.images.find((img) => !isDocumentFile(img))?.url,
+              thumbUrl: data.images.find(isDisplayableImageFile)?.url,
               usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
             })}
           />
@@ -591,8 +591,7 @@ export function InventoryPreviewContent({
             locationType: data.location.type,
             amountText: tryFormatAmount(data.amount),
             valuation: data.valuation,
-            thumbUrl: data.product.images.find((img) => !isDocumentFile(img))
-              ?.url,
+            thumbUrl: data.product.images.find(isDisplayableImageFile)?.url,
           })}
         />
       )}

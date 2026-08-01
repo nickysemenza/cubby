@@ -1,11 +1,22 @@
 import { z } from "zod";
 
+export const externalIdKind = z.enum([
+  "asin",
+  "retailer_sku",
+  "internet_number",
+  "item_number",
+  "catalog_number",
+  "legacy_unspecified",
+]);
+export type ExternalIdKind = z.infer<typeof externalIdKind>;
+
 export const externalIdInput = z.object({
   id: z.uuid().optional(),
   source: z
     .string()
     .min(1)
     .describe("Source identifier (e.g. 'amazon', 'mcmaster', 'mouser')"),
+  kind: externalIdKind,
   externalId: z
     .string()
     .min(1)
@@ -25,6 +36,7 @@ export const externalIdOut = z.object({
     .string()
     .min(1)
     .describe("Source identifier (e.g. 'amazon', 'mcmaster', 'mouser')"),
+  kind: externalIdKind,
   externalId: z
     .string()
     .min(1)

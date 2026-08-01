@@ -34,12 +34,22 @@ export const dataExceptionReason = z.enum([
 ]);
 export type DataExceptionReason = z.infer<typeof dataExceptionReason>;
 
-export const dataException = z.object({
+const dataExceptionFields = {
   check: dataCheck,
   reason: dataExceptionReason,
   note: z.string().trim().min(1),
-});
+};
+export const dataException = z.object(dataExceptionFields);
 export type DataException = z.infer<typeof dataException>;
+
+// Stored exceptions remain target-free because their owning row supplies the
+// target. API results make that target explicit for direct and rolled-up data.
+export const dataQualityException = z.object({
+  ...dataExceptionFields,
+  targetType: z.enum(["purchase", "product"]),
+  targetId: z.string(),
+});
+export type DataQualityException = z.infer<typeof dataQualityException>;
 
 export const dataQualityStatus = z.enum(["complete", "needs_data"]);
 export type DataQualityStatus = z.infer<typeof dataQualityStatus>;
@@ -55,7 +65,7 @@ export type DataQualityGap = z.infer<typeof dataQualityGap>;
 export const dataQuality = z.object({
   status: dataQualityStatus,
   gaps: z.array(dataQualityGap),
-  exceptions: z.array(dataException),
+  exceptions: z.array(dataQualityException),
 });
 export type DataQuality = z.infer<typeof dataQuality>;
 

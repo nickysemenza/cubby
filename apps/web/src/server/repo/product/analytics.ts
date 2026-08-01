@@ -4,7 +4,6 @@
  */
 
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
-import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { and, arrayOverlaps, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -15,6 +14,7 @@ import {
   productImage,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
@@ -88,10 +88,7 @@ export const findProductsWithNoImages = async (
     )
     .leftJoin(
       image,
-      and(
-        eq(image.id, productImage.imageId),
-        sql`${image.contentType} <> ${PDF_CONTENT_TYPE}`,
-      ),
+      and(eq(image.id, productImage.imageId), displayableImageWhere),
     )
     .where(and(...conditions))
     .groupBy(product.id)

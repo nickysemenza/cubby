@@ -16,10 +16,12 @@ import {
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  patchProductExternalIdsInput,
   productApplyUpcInput,
   productCategoryDistributionOut,
   productCreateInput,
   productCreateManyInput,
+  productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
   productFiltersSchema,
   productFindOrCreateByUPCInput,
@@ -42,7 +44,6 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { createAppError } from "~/server/errors/app-error";
@@ -54,6 +55,7 @@ import {
   getProductsByShortcodes,
   getProductsSharingTags,
   getProductTagOptions,
+  patchProductExternalIds,
   productList as productListRepo,
   productSearch,
   quickCreateProduct,
@@ -63,6 +65,7 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
+import { verifyProductImages } from "~/server/services/image-verification.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -446,17 +449,31 @@ const tagSiblings = protectedProcedure
   });
 
 const externalIdCollisions = protectedProcedure
-  .input(
-    z.object({
-      source: z
-        .union([z.string().min(1), z.array(z.string().min(1))])
-        .optional(),
-    }),
-  )
+  .input(productExternalIdCollisionInput)
   .output(strictOutput(productExternalIdCollisionsOut))
-  .query(async ({ ctx, input }) => ({
-    items: await findProductExternalIdCollisions(ctx.db, input.source),
-  }));
+  .query(async ({ ctx, input }) =>
+    productExternalIdCollisionsOut.parse(
+      await findProductExternalIdCollisions(ctx.db, input),
+    ),
+  );
+
+const patchExternalIds = protectedProcedure
+  .input(patchProductExternalIdsInput)
+  .output(strictOutput(productWithFoodOut))
+  .mutation(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.id);
+    await patchProductExternalIds(ctx.db, id, input, ctx.actorContext);
+    return await getProductWithFood(ctx.db, ctx.usdaClient, id);
+  });
+
+const verifyImages = protectedProcedure
+  .input(productShortcode)
+  .output(strictOutput(productWithFoodOut))
+  .mutation(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input);
+    await verifyProductImages(ctx.db, id);
+    return await getProductWithFood(ctx.db, ctx.usdaClient, id);
+  });
 
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
@@ -591,4 +608,6 @@ export const productRouter = createTRPCRouter({
   tagOptions,
   tagSiblings,
   externalIdCollisions,
+  patchExternalIds,
+  verifyImages,
 });

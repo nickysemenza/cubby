@@ -22,10 +22,8 @@ import { and, inArray, isNull, or, sql } from "drizzle-orm";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  type image,
   ingredient,
   type product,
-  type productExternalId,
   type productUnitMappings,
   type recipe,
   type recipeSection,
@@ -33,10 +31,12 @@ import {
 } from "~/server/db/schema";
 import {
   formatSearchTerm,
+  type MappableImageRecord,
   mapRelation,
   notDeleted,
   type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
+import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 import {
   dbProductToTopLevelAPI,
   dbProductToTopLevelShape,
@@ -51,9 +51,9 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<
     ProductSelect & {
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
-      externalIds: Array<typeof productExternalId.$inferSelect>;
+      externalIds: MappableProductExternalId[];
       images: Array<{
-        image: typeof image.$inferSelect;
+        image: MappableImageRecord;
         deletedAt?: Date | null;
       }>;
     }

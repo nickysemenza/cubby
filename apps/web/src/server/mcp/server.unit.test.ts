@@ -28,6 +28,7 @@ import {
   MCP_SERVER_INSTRUCTIONS,
   slimMeal,
   slimProduct,
+  slimProductDetail,
   slimUsdaFood,
 } from "./server";
 import {
@@ -265,6 +266,54 @@ describe("slimProduct enrichment context", () => {
     expect(slim.imageCount).toBe(2);
     expect(slim.coverImageUrl).toBe("https://images.example.test/cover.webp");
   });
+
+  it("details every file while excluding failed integrity from cover positions", () => {
+    const now = new Date("2026-08-01T00:00:00Z");
+    const file = (
+      id: string,
+      contentType: string,
+      storageStatus: string | null,
+    ) => ({
+      id,
+      url: `https://images.example.test/${id}`,
+      key: `products/${id}`,
+      filename: id,
+      size: 100,
+      contentType,
+      status: "UPLOADED",
+      width: contentType === "application/pdf" ? null : 100,
+      height: contentType === "application/pdf" ? null : 100,
+      detectedContentType: contentType,
+      sha256: "a".repeat(64),
+      renderStatus: storageStatus === "missing" ? "failed" : "verified",
+      storageStatus,
+      verifiedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const detail = slimProductDetail({
+      id: "PRD-EFGH",
+      name: "Track saw",
+      manufacturer: "Festool",
+      images: [
+        file(
+          "11111111-1111-1111-1111-111111111111",
+          "application/pdf",
+          "available",
+        ),
+        file("22222222-2222-2222-2222-222222222222", "image/webp", "missing"),
+        file("33333333-3333-3333-3333-333333333333", "image/jpeg", "available"),
+      ],
+    });
+
+    expect(detail.coverImageId).toBe("33333333-3333-3333-3333-333333333333");
+    expect(detail.imageCount).toBe(1);
+    expect(detail.images.map((image) => image.displayPosition)).toEqual([
+      null,
+      null,
+      1,
+    ]);
+  });
 });
 
 describe("slimMeal", () => {
@@ -449,6 +498,8 @@ describe("listMcpToolCatalog", () => {
       "clear_data_exception",
       "reclassify_purchase_document",
       "find_product_external_id_collisions",
+      "patch_product_external_ids",
+      "verify_product_images",
     ]) {
       expect(byName.has(name), `${name} missing from catalog`).toBe(true);
     }
@@ -466,6 +517,7 @@ describe("listMcpToolCatalog", () => {
     expect(productFilters.properties).toHaveProperty(
       "externalIdPresenceFilter",
     );
+    expect(productFilters.properties).toHaveProperty("sort");
     const attachFile = byName.get("attach_file");
     expect(attachFile).toBeDefined();
     expect(
@@ -475,6 +527,28 @@ describe("listMcpToolCatalog", () => {
         }
       ).properties,
     ).toHaveProperty("documentKind");
+    expect(
+      (
+        attachFile!.inputSchema as {
+          properties?: Record<string, unknown>;
+        }
+      ).properties,
+    ).toMatchObject({
+      idempotencyKey: expect.any(Object),
+      expectedImageCount: expect.any(Object),
+    });
+
+    const updateProduct = byName.get("update_product");
+    expect(
+      (
+        updateProduct!.inputSchema as {
+          properties?: Record<string, unknown>;
+        }
+      ).properties,
+    ).toMatchObject({
+      removeImageIds: expect.any(Object),
+      imageOrder: expect.any(Object),
+    });
 
     const skill = readFileSync(
       new URL(
@@ -492,6 +566,30 @@ describe("listMcpToolCatalog", () => {
     ]) {
       expect(skill).toContain(name);
     }
+  });
+
+  it("keeps the product-enrichment skill aligned with hardened MCP tools", async () => {
+    const { tools } = await listMcpToolCatalog();
+    const names = new Set(tools.map((tool) => tool.name));
+    const skill = readFileSync(
+      new URL(
+        "../../../../../.claude/skills/product-enrichment/SKILL.md",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    for (const name of [
+      "patch_product_external_ids",
+      "find_product_external_id_collisions",
+      "attach_file",
+      "verify_product_images",
+    ]) {
+      expect(names.has(name), `${name} missing from catalog`).toBe(true);
+      expect(skill).toContain(name);
+    }
+    expect(skill).toContain('sort: "identity_strength"');
+    expect(skill).toContain("expectedImageCount");
+    expect(skill).toContain("idempotencyKey");
   });
 
   it("advertises canonical purchase and expense terminology", async () => {
@@ -668,6 +766,8 @@ describe("listMcpToolCatalog", () => {
       "update_location.removeImageIds",
       "update_purchase.imageOrder",
       "update_purchase.removeImageIds",
+      "update_product.imageOrder",
+      "update_product.removeImageIds",
       "reclassify_purchase_document.imageId",
       "update_recipe.sections[].id",
       "update_recipe.sections[].ingredients[].id",

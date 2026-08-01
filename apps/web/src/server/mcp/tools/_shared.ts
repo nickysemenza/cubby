@@ -1,7 +1,7 @@
 import { deletedCountOut } from "@cubby/schemas/common";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   type IngredientOut,
   ingredientMcpOut,
@@ -15,8 +15,10 @@ import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
 import { type MealOut, mealMcpOut } from "@cubby/schemas/meal";
 import { mcpListInputShape } from "@cubby/schemas/pagination";
 import {
+  type ProductMcpDetailOut,
   type ProductMcpOut,
   type ProductTopLevelOut,
+  productMcpDetailOut,
   productMcpOut,
 } from "@cubby/schemas/product";
 import {
@@ -482,9 +484,7 @@ type ProductRow = ProductTopLevelOut & {
 };
 export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   const p = pRow as ProductRow;
-  const displayImages = (p.images ?? []).filter(
-    (image) => !isDocumentFile(image),
-  );
+  const displayImages = (p.images ?? []).filter(isDisplayableImageFile);
   return {
     id: p.id,
     name: p.name,
@@ -511,6 +511,32 @@ export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
     dataQuality: p.dataQuality,
   };
 });
+
+export const slimProductDetail = defineSlim(
+  productMcpDetailOut,
+  (pRow: Row): ProductMcpDetailOut => {
+    const p = pRow as ProductRow;
+    const base = slimProduct(pRow);
+    let displayPosition = 0;
+    const images = (p.images ?? []).map((file) => {
+      const displayable = isDisplayableImageFile(file);
+      if (displayable) displayPosition += 1;
+      return {
+        ...file,
+        displayPosition: displayable ? displayPosition : null,
+        isCover: displayable && displayPosition === 1,
+      };
+    });
+    const cover = images.find((file) => file.isCover) ?? null;
+    return {
+      ...base,
+      imageCount: displayPosition,
+      coverImageId: cover?.id ?? null,
+      coverImageUrl: cover?.url ?? null,
+      images,
+    };
+  },
+);
 
 export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
   const r = rRow as RecipeTopLevel;
@@ -849,6 +875,7 @@ function listHandler(
     buildFilters?: BuildListFilters;
     filterFields?: Record<string, z.ZodType>;
     defaultPageSize?: number;
+    sortField?: string;
   },
 ) {
   const resolveFilters: BuildListFilters =
@@ -861,7 +888,13 @@ function listHandler(
     const caller = getCaller(extra);
     const result = await getEntityRouter(caller, routerName).list({
       filters: await resolveFilters(caller, params),
-      sort: { orderBy: config.orderBy, direction: config.direction ?? "asc" },
+      sort: {
+        orderBy:
+          (params.sort as string | undefined) ??
+          config.sortField ??
+          config.orderBy,
+        direction: config.direction ?? "asc",
+      },
       pagination: {
         pageIndex: (params.pageIndex as number) ?? 0,
         pageSize: (params.pageSize as number) ?? config.defaultPageSize ?? 50,
@@ -952,6 +985,7 @@ type EntityListToolConfig = {
   outputSchema: z.ZodType;
   slim: Slim;
   sort: { orderBy: string; direction?: "asc" | "desc" };
+  sortInput?: z.ZodType;
   annotations: ToolAnnotations;
   defaultPageSize?: number;
   maxPageSize?: number;
@@ -968,10 +1002,13 @@ export function registerEntityListTool(
     description: config.description,
     inputSchema: strictFilterInput(
       config.name,
-      mcpListInputShape(config.filterFields, {
-        defaultPageSize,
-        maxPageSize: config.maxPageSize,
-      }),
+      {
+        ...mcpListInputShape(config.filterFields, {
+          defaultPageSize,
+          maxPageSize: config.maxPageSize,
+        }),
+        ...(config.sortInput ? { sort: config.sortInput } : {}),
+      },
       config.filterFields,
     ),
     outputSchema: config.outputSchema,
@@ -982,6 +1019,7 @@ export function registerEntityListTool(
       filterFields: config.buildFilters ? undefined : config.filterFields,
       buildFilters: config.buildFilters,
       defaultPageSize,
+      sortField: config.sort.orderBy,
     }),
   });
 }
@@ -1135,6 +1173,7 @@ type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
   resolveUpdateData?: ResolveUpdateData;
   /** Override list's default filter passthrough — needed when a filter field is itself an FK shortcode. */
   buildFilters?: BuildListFilters;
+  listSortInput?: z.ZodType;
 };
 
 /**
@@ -1168,6 +1207,7 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
       outputSchema: config.mcpListOut,
       slim: config.slim,
       sort: config.sort,
+      sortInput: config.listSortInput,
       defaultPageSize: config.paging?.defaultPageSize,
       maxPageSize: config.paging?.maxPageSize,
       buildFilters: config.buildFilters,

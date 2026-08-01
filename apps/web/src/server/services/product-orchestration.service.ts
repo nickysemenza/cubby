@@ -13,7 +13,7 @@ import type {
   IngredientShortcode,
   ProductId,
 } from "@cubby/schemas/identifiers";
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
   ProductCreateInput,
   ProductTopLevelOut,
@@ -186,9 +186,7 @@ export async function applyUpcDataWithSideEffects(
 
   // PDF manuals share the images relation — a manual-only product still has
   // no displayable image and should get the UPC-lookup photo.
-  const hasDisplayableImage = current.images.some(
-    (img) => !isDocumentFile(img),
-  );
+  const hasDisplayableImage = current.images.some(isDisplayableImageFile);
   if (!hasDisplayableImage && lookup?.imageUrl) {
     try {
       await importImageFromUPC(

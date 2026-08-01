@@ -4,6 +4,7 @@ import {
   type DataCheck,
   type DataException,
   type DataQuality,
+  type DataQualityException,
   type DataQualityGap,
   type ProductDataCheck,
   type PurchaseDataCheck,
@@ -49,6 +50,13 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 const AMAZON_SOURCE = "amazon";
 
+const externalIdCollisionKey = (value: {
+  source: string;
+  kind: string;
+  externalId: string;
+}) =>
+  `${value.source.trim().toLowerCase()}\u0000${value.kind}\u0000${value.externalId}`;
+
 const hasException = (
   column: typeof product.dataExceptions | typeof purchase.dataExceptions,
   check: DataCheck,
@@ -80,7 +88,8 @@ const productHasExternalIdCollision = sql`EXISTS (
   SELECT 1
   FROM "ProductExternalId" dq_mine
   JOIN "ProductExternalId" dq_other
-    ON dq_other."source" = dq_mine."source"
+    ON lower(dq_other."source") = lower(dq_mine."source")
+   AND dq_other."kind" = dq_mine."kind"
    AND dq_other."externalId" = dq_mine."externalId"
    AND dq_other."productId" <> dq_mine."productId"
    AND dq_other."deletedAt" IS NULL
@@ -242,7 +251,7 @@ export const purchaseNeedsDataCondition = (): SQL =>
 
 const complete = (
   gaps: DataQualityGap[],
-  exceptions: DataException[],
+  exceptions: DataQualityException[],
 ): DataQuality => ({
   status: gaps.length === 0 ? "complete" : "needs_data",
   gaps,
@@ -253,6 +262,22 @@ const hasStoredException = (
   exceptions: DataException[],
   check: DataCheck,
 ): boolean => exceptions.some((exception) => exception.check === check);
+
+const targetExceptions = (
+  exceptions: DataException[],
+  targetType: "purchase" | "product",
+  targetId: string,
+): DataQualityException[] =>
+  exceptions.map((exception) => ({ ...exception, targetType, targetId }));
+
+const uniqueTargetExceptions = (
+  exceptions: DataQualityException[],
+): DataQualityException[] =>
+  uniqBy(
+    exceptions,
+    (exception) =>
+      `${exception.targetType}\u0000${exception.targetId}\u0000${exception.check}`,
+  );
 
 export const loadProductDataQualities = async (
   db: Database,
@@ -306,6 +331,7 @@ export const loadProductDataQualities = async (
         .select({
           productId: productExternalId.productId,
           source: productExternalId.source,
+          kind: productExternalId.kind,
           externalId: productExternalId.externalId,
         })
         .from(productExternalId)
@@ -321,10 +347,7 @@ export const loadProductDataQualities = async (
         ),
     ]);
 
-  const externalIdPairs = uniqBy(
-    productExternalIds,
-    (row) => `${row.source}\u0000${row.externalId}`,
-  );
+  const externalIdPairs = uniqBy(productExternalIds, externalIdCollisionKey);
   const activeExternalIdOwners =
     externalIdPairs.length === 0
       ? []
@@ -332,6 +355,7 @@ export const loadProductDataQualities = async (
           .select({
             productId: productExternalId.productId,
             source: productExternalId.source,
+            kind: productExternalId.kind,
             externalId: productExternalId.externalId,
           })
           .from(productExternalId)
@@ -348,7 +372,11 @@ export const loadProductDataQualities = async (
               or(
                 ...externalIdPairs.map((row) =>
                   and(
-                    eq(productExternalId.source, row.source),
+                    eq(
+                      sql<string>`lower(${productExternalId.source})`,
+                      row.source.trim().toLowerCase(),
+                    ),
+                    eq(productExternalId.kind, row.kind),
                     eq(productExternalId.externalId, row.externalId),
                   ),
                 ),
@@ -368,7 +396,7 @@ export const loadProductDataQualities = async (
   );
   const externalIdOwners = groupBy(
     activeExternalIdOwners,
-    (row) => `${row.source}\u0000${row.externalId}`,
+    externalIdCollisionKey,
   );
   const result = new Map<ProductId, DataQuality>();
 
@@ -406,9 +434,8 @@ export const loadProductDataQualities = async (
       if (
         externalIds.some(
           (externalId) =>
-            (externalIdOwners[
-              `${externalId.source}\u0000${externalId.externalId}`
-            ]?.length ?? 0) > 1,
+            (externalIdOwners[externalIdCollisionKey(externalId)]?.length ??
+              0) > 1,
         )
       ) {
         add(
@@ -417,7 +444,17 @@ export const loadProductDataQualities = async (
         );
       }
     }
-    result.set(row.id, complete(gaps, row.dataExceptions));
+    result.set(
+      row.id,
+      complete(
+        gaps,
+        targetExceptions(
+          row.dataExceptions,
+          "product",
+          unsafeProductShortcode(row.shortcode),
+        ),
+      ),
+    );
   }
   return result;
 };
@@ -571,12 +608,28 @@ export const loadPurchaseDataQualities = async (
       );
     }
     const seenProducts = new Set<ProductId>();
+    const rolledProductExceptions: DataQualityException[] = [];
     for (const item of purchaseExpenses) {
       if (!item.productId || seenProducts.has(item.productId)) continue;
       seenProducts.add(item.productId);
-      gaps.push(...(productQualities.get(item.productId)?.gaps ?? []));
+      const productQuality = productQualities.get(item.productId);
+      gaps.push(...(productQuality?.gaps ?? []));
+      rolledProductExceptions.push(...(productQuality?.exceptions ?? []));
     }
-    result.set(row.id, complete(gaps, row.dataExceptions));
+    result.set(
+      row.id,
+      complete(
+        gaps,
+        uniqueTargetExceptions([
+          ...targetExceptions(
+            row.dataExceptions,
+            "purchase",
+            unsafePurchaseShortcode(row.shortcode),
+          ),
+          ...rolledProductExceptions,
+        ]),
+      ),
+    );
   }
   return result;
 };
@@ -713,12 +766,22 @@ export const clearDataException = (
 
 export const findProductExternalIdCollisions = async (
   db: Database,
-  sources?: string | string[],
+  input?: {
+    source?: string | string[];
+    identifiers?: Array<{ source: string; kind: string; externalId: string }>;
+  },
 ) => {
-  const selected = sources ? [sources].flat() : undefined;
+  const selected = input?.source
+    ? [input.source].flat().map((source) => source.trim().toLowerCase())
+    : undefined;
+  const identifiers = input?.identifiers?.map((identifier) => ({
+    ...identifier,
+    source: identifier.source.trim().toLowerCase(),
+  }));
   const rows = await getDb(db)
     .select({
       source: productExternalId.source,
+      kind: productExternalId.kind,
       externalId: productExternalId.externalId,
       productId: product.id,
       productShortcode: product.shortcode,
@@ -733,17 +796,31 @@ export const findProductExternalIdCollisions = async (
       and(
         notDeleted(productExternalId),
         selected && selected.length > 0
-          ? inArray(productExternalId.source, selected)
-          : undefined,
+          ? inArray(sql<string>`lower(${productExternalId.source})`, selected)
+          : identifiers && identifiers.length > 0
+            ? or(
+                ...identifiers.map((identifier) =>
+                  and(
+                    eq(
+                      sql<string>`lower(${productExternalId.source})`,
+                      identifier.source,
+                    ),
+                    eq(productExternalId.kind, identifier.kind),
+                    eq(productExternalId.externalId, identifier.externalId),
+                  ),
+                ),
+              )
+            : undefined,
       ),
     );
-  return Object.entries(
-    groupBy(rows, (row) => `${row.source}\u0000${row.externalId}`),
-  ).flatMap(([, matches]) =>
+  const grouped = groupBy(rows, externalIdCollisionKey);
+  const items = Object.entries(grouped).flatMap(([, matches]) =>
     matches.length > 1
       ? [
           {
-            source: matches[0]!.source,
+            source: matches[0]!.source.trim().toLowerCase(),
+            kind: matches[0]!
+              .kind as import("@cubby/schemas/external-id").ExternalIdKind,
             externalId: matches[0]!.externalId,
             products: matches.map((row) => ({
               id: unsafeProductShortcode(row.productShortcode),
@@ -753,4 +830,23 @@ export const findProductExternalIdCollisions = async (
         ]
       : [],
   );
+  return {
+    items,
+    results: (identifiers ?? []).map((identifier) => {
+      const matches = grouped[externalIdCollisionKey(identifier)] ?? [];
+      return {
+        ...identifier,
+        status:
+          matches.length === 0
+            ? ("missing" as const)
+            : matches.length === 1
+              ? ("unique" as const)
+              : ("collision" as const),
+        products: matches.map((row) => ({
+          id: unsafeProductShortcode(row.productShortcode),
+          name: row.productName,
+        })),
+      };
+    }),
+  };
 };
