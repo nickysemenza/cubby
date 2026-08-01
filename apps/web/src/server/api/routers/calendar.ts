@@ -1,10 +1,10 @@
 import { calendarRangeInput, calendarRangeOut } from "@cubby/schemas/calendar";
 import { getCalendarRange } from "~/server/repo/calendar";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 export const calendarRouter = createTRPCRouter({
   range: protectedProcedure
     .input(calendarRangeInput)
-    .output(calendarRangeOut)
+    .output(strictOutput(calendarRangeOut))
     .query(({ ctx, input }) => getCalendarRange(ctx.db, input)),
 });

@@ -1,6 +1,7 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { productRelatedFilterFields } from "./related-view";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import {
   dataQuality,
@@ -12,7 +13,6 @@ import { requiredName } from "./common";
 import { externalIdInput } from "./external-id";
 import { externalIdOut } from "./external-id";
 import {
-  type IngredientId,
   ingredientShortcode,
   inventoryShortcode,
   productShortcode,
@@ -64,7 +64,9 @@ export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
  */
 export const hasFoodIndicators = (product: {
   fdc_id?: number | null;
-  ingredientId?: IngredientId | null;
+  // This presence-only predicate is shared by the public shortcode form and
+  // the private UUID repo boundary, so it deliberately accepts either shape.
+  ingredientId?: string | null;
 }): boolean =>
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
@@ -198,6 +200,7 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 // Filters accepted by the product list endpoint. Canonical shape shared by the
 // tRPC router (and available to any other list caller).
 export const productFilterFields = {
+  ...productRelatedFilterFields,
   nameFilter: z.string().optional().describe("Filter by product name"),
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   upcFilter: z.string().optional().describe("Filter by UPC code"),

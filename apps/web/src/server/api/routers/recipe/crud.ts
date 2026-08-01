@@ -54,7 +54,7 @@ import {
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../../crud-factory";
-import { protectedProcedure } from "../../trpc";
+import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveRecipeEntityId = async (
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -215,7 +215,7 @@ const { getByID, getByShortcode, create, update } =
 // fan-out of getByID calls. Missing/deleted ids are omitted from the result.
 const getManyByIDs = protectedProcedure
   .input(recipeIdsInput)
-  .output(recipeGraphListOut)
+  .output(strictOutput(recipeGraphListOut))
   .query(async ({ ctx, input }) => {
     return await getRecipesByIDs(
       ctx.db,
@@ -264,7 +264,7 @@ const deleteItem = createDeleteProcedure<RecipeShortcode>(
 );
 
 const getAllTagsEndpoint = protectedProcedure
-  .output(recipeTagsOut)
+  .output(strictOutput(recipeTagsOut))
   .query(async ({ ctx }) => {
     return await getAllTags(ctx.db);
   });

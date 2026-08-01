@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recipeRelatedFilterFields } from "./related-view";
 import {
   deriveUpdateData,
   deriveUpdateFields,
@@ -270,6 +271,7 @@ export const recipeSectionInput = z.object({
 // blocks, which are also reused by the output/form layers) so they reliably
 // Filters accepted by the recipe list endpoint.
 export const recipeFilterFields = {
+  ...recipeRelatedFilterFields,
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
   cookbookId: oneOrMany(cookbookShortcode).optional(),

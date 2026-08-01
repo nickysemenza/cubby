@@ -53,7 +53,7 @@ import {
   createEntityListProcedure,
   createGetByShortcodeProcedure,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const { list } = createEntityListProcedure({
   schemas: {
@@ -73,7 +73,7 @@ const { list } = createEntityListProcedure({
 
 const getByID = protectedProcedure
   .input(purchaseShortcode)
-  .output(purchaseOut)
+  .output(strictOutput(purchaseOut))
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "purchase");
     if (!id) {
@@ -94,7 +94,7 @@ const getByShortcode = createGetByShortcodeProcedure(
 /** This Purchase's spend lines — the Expense table on its detail page. */
 const expenses = protectedProcedure
   .input(purchaseShortcode)
-  .output(z.array(expenseOut))
+  .output(strictOutput(z.array(expenseOut)))
   .query(async ({ ctx, input }) => {
     const id = await resolveLiveShortcode(ctx.db, input, "purchase");
     if (!id) {
@@ -108,7 +108,7 @@ const expenses = protectedProcedure
 
 const create = protectedProcedure
   .input(purchaseCreateInput)
-  .output(purchaseOut)
+  .output(strictOutput(purchaseOut))
   .mutation(
     async ({ ctx, input }) =>
       (await createPurchase(ctx.db, input, ctx.actorContext)).output,
@@ -116,7 +116,7 @@ const create = protectedProcedure
 
 const update = protectedProcedure
   .input(purchaseUpdateInput)
-  .output(purchaseOut)
+  .output(strictOutput(purchaseOut))
   .mutation(
     async ({ ctx, input }) =>
       (await updatePurchase(ctx.db, input, ctx.actorContext)).output,
@@ -129,7 +129,7 @@ const update = protectedProcedure
  */
 const link = protectedProcedure
   .input(linkExpensesToPurchaseInput)
-  .output(purchaseOut)
+  .output(strictOutput(purchaseOut))
   .mutation(async ({ ctx, input }) => {
     const result = await linkExpensesToPurchase(
       ctx.db,
@@ -165,7 +165,7 @@ const link = protectedProcedure
 /** Split one expense into lines of the same charge. */
 const split = protectedProcedure
   .input(splitExpenseInput)
-  .output(z.array(expenseOut))
+  .output(strictOutput(z.array(expenseOut)))
   .mutation(async ({ ctx, input }) => {
     const items = await splitExpense(ctx.db, input, ctx.actorContext);
     // The original is already soft-deleted by the time we get here —
@@ -212,14 +212,14 @@ const split = protectedProcedure
 /** Merge charges the backfill couldn't group. Refuses across vendors. */
 const merge = protectedProcedure
   .input(mergePurchasesInput)
-  .output(purchaseOut)
+  .output(strictOutput(purchaseOut))
   .mutation(({ ctx, input }) =>
     mergePurchases(ctx.db, input, ctx.actorContext),
   );
 
 const reclassifyDocument = protectedProcedure
   .input(reclassifyPurchaseDocumentInput)
-  .output(purchaseOut)
+  .output(strictOutput(purchaseOut))
   .mutation(({ ctx, input }) =>
     reclassifyPurchaseDocument(ctx.db, input, ctx.actorContext),
   );

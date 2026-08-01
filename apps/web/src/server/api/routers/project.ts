@@ -44,7 +44,7 @@ import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks"
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const {
   getByID,
@@ -92,13 +92,13 @@ const {
 /** `/projects?view=overview`'s bounded summary read — see repo/project/dashboard-summary.ts. */
 const dashboardSummary = protectedProcedure
   .input(projectDashboardFiltersSchema)
-  .output(projectDashboardSummaryOut)
+  .output(strictOutput(projectDashboardSummaryOut))
   .query(({ ctx, input }) => projectDashboardSummary(ctx.db, input));
 
 /** `/projects?view=analytics`'s on-demand chart aggregates — see repo/project/portfolio-analytics.ts. */
 const portfolioAnalytics = protectedProcedure
   .input(projectDashboardFiltersSchema)
-  .output(projectPortfolioAnalyticsOut)
+  .output(strictOutput(projectPortfolioAnalyticsOut))
   .query(({ ctx, input }) => projectPortfolioAnalytics(ctx.db, input));
 
 /**
@@ -107,7 +107,7 @@ const portfolioAnalytics = protectedProcedure
  * Replaces paging through the full `list` at pageSize 500 just for names.
  */
 const options = protectedProcedure
-  .output(z.array(projectOptionsOut))
+  .output(strictOutput(z.array(projectOptionsOut)))
   .query(({ ctx }) => projectNameOptions(ctx.db));
 
 /**
@@ -118,7 +118,7 @@ const options = protectedProcedure
  */
 const createFromTasks = protectedProcedure
   .input(createProjectFromTasksInput)
-  .output(createProjectFromTasksOut)
+  .output(strictOutput(createProjectFromTasksOut))
   .mutation(async ({ ctx, input }) => {
     const { output, projectEntityId, taskEntityIds } =
       await createProjectFromTasks(ctx.db, input, ctx.actorContext);

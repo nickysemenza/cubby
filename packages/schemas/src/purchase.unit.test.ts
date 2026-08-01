@@ -10,6 +10,19 @@ describe("purchase filter terminology", () => {
     expect(purchaseFilterFields).toHaveProperty("expenseStatus");
     expect(purchaseFilterFields).not.toHaveProperty("lineStatus");
   });
+
+  it("exposes the structured trio for every curated related column", () => {
+    for (const relation of [
+      "expense",
+      "financialTransaction",
+      "product",
+      "project",
+    ]) {
+      expect(purchaseFilterFields).toHaveProperty(`${relation}Id`);
+      expect(purchaseFilterFields).toHaveProperty(`${relation}PresenceFilter`);
+      expect(purchaseFilterFields).toHaveProperty(`${relation}Search`);
+    }
+  });
 });
 
 /**

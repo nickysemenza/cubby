@@ -365,8 +365,23 @@ describe("vendor filters", () => {
     const [columnBacked, urlOnly] = partitionFilterSpecs(
       getEntityFilters("vendor"),
     );
-    expect(columnBacked.map((spec) => spec.columnId)).toEqual(["name"]);
-    expect(urlOnly).toEqual([]);
+    expect(columnBacked.map((spec) => spec.columnId)).toEqual([
+      "name",
+      "related:vendor.expenses",
+      "related:vendor.purchases",
+      "related:vendor.products",
+      "related:vendor.transactions",
+    ]);
+    expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "expenseId",
+      "expensePresenceFilter",
+      "purchaseId",
+      "purchasePresenceFilter",
+      "productId",
+      "productPresenceFilter",
+      "financialTransactionId",
+      "financialTransactionPresenceFilter",
+    ]);
   });
 
   it("gives the name column a text control", () => {
@@ -380,7 +395,21 @@ describe("vendor filters", () => {
   it("declares its URL key so the route schema can't strip it", () => {
     // The route spreads this into its `validateSearch`; a missing key means the
     // table writes the filter and the router removes it before anything reads it.
-    expect(Object.keys(entityFilterSearchFields("vendor"))).toEqual(["q"]);
+    expect(Object.keys(entityFilterSearchFields("vendor"))).toEqual([
+      "q",
+      "related-expense",
+      "expenseId",
+      "expensePresenceFilter",
+      "related-purchase",
+      "purchaseId",
+      "purchasePresenceFilter",
+      "related-product",
+      "productId",
+      "productPresenceFilter",
+      "related-financialTransaction",
+      "financialTransactionId",
+      "financialTransactionPresenceFilter",
+    ]);
     // And the fragment survives what `parseSearch` hands it — an all-digits
     // vendor name search arrives pre-parsed as a number.
     expect(
@@ -506,8 +535,20 @@ describe("purchase filters", () => {
       "expenseTotal",
       "reconciliation",
       "documentCount",
+      "related:purchase.expenses",
+      "related:purchase.transactions",
+      "related:purchase.products",
+      "related:purchase.projects",
     ]);
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
+      "expenseId",
+      "expensePresenceFilter",
+      "financialTransactionId",
+      "financialTransactionPresenceFilter",
+      "productId",
+      "productPresenceFilter",
+      "projectId",
+      "projectPresenceFilter",
       "expenseTotalMin",
       "expenseTotalMax",
     ]);
@@ -527,6 +568,18 @@ describe("purchase filters", () => {
       "lineTotal",
       "reconciliation",
       "documents",
+      "expense",
+      "transaction",
+      "product",
+      "project",
+      "expenseId",
+      "expensePresenceFilter",
+      "financialTransactionId",
+      "financialTransactionPresenceFilter",
+      "productId",
+      "productPresenceFilter",
+      "projectId",
+      "projectPresenceFilter",
       "lineTotalMin",
       "lineTotalMax",
     ]);
@@ -595,6 +648,8 @@ describe("expense URL-only scopes", () => {
       "productId",
       "orderIdExact",
       "purchaseId",
+      "financialTransactionId",
+      "financialTransactionPresenceFilter",
     ]);
     expect(columnBacked.some((spec) => spec.urlOnly)).toBe(false);
   });

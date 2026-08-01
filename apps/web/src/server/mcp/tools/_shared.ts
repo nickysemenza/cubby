@@ -66,19 +66,22 @@ type InferSchemaLike<T extends ZodSchemaLike> = T extends z.ZodType
     ? z.infer<z.ZodObject<T>>
     : Record<string, unknown>;
 
-type McpToolHandler<TInput extends ZodSchemaLike> = (
+type McpToolHandler<TInput extends ZodSchemaLike, TOutput extends z.ZodType> = (
   params: InferSchemaLike<TInput>,
   extra: ToolExtra,
-) => Promise<unknown | CallToolResult>;
+) => Promise<z.output<TOutput> | CallToolResult>;
 
-type RegisterMcpToolConfig<TInput extends ZodSchemaLike> = {
+type RegisterMcpToolConfig<
+  TInput extends ZodSchemaLike,
+  TOutput extends z.ZodType,
+> = {
   name: string;
   description: string;
   title?: string;
   inputSchema?: TInput;
-  outputSchema: z.ZodType;
+  outputSchema: TOutput;
   annotations: ToolAnnotations;
-  handler: McpToolHandler<TInput>;
+  handler: McpToolHandler<TInput, TOutput>;
   /**
    * `ui://` resource this tool renders through (MCP Apps / SEP-1865). Hosts that
    * don't support the extension ignore it and show the structured output, so
@@ -315,10 +318,10 @@ function isCallToolResult(value: unknown): value is CallToolResult {
   );
 }
 
-export function registerMcpTool<TInput extends ZodSchemaLike>(
-  server: McpServer,
-  config: RegisterMcpToolConfig<TInput>,
-) {
+export function registerMcpTool<
+  TInput extends ZodSchemaLike,
+  TOutput extends z.ZodType,
+>(server: McpServer, config: RegisterMcpToolConfig<TInput, TOutput>) {
   const inputSchema = normalizeObjectSchema(config.inputSchema) ?? z.object({});
   const callback = async (
     params: Record<string, unknown>,
@@ -401,7 +404,7 @@ export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
 // ---------------------------------------------------------------------------
 
 export type Row = Record<string, unknown>;
-type Slim = (row: Row) => unknown;
+type Slim<T = unknown> = (row: Row) => T;
 const slimSchemas = new WeakMap<Slim, z.ZodType>();
 const identity: Slim = (row) => row;
 
@@ -435,7 +438,7 @@ type InventoryRow = Pick<InventoryMcpOut, "amount" | "valuation"> & {
     id: ProductMcpOut["id"];
     name: string;
     manufacturer: string;
-    category: string | null;
+    category: ProductMcpOut["category"];
     model: string | null;
   } | null;
   // Widened (was `{ id: string; name: string }`) so the location ref can carry
@@ -679,6 +682,7 @@ export function respond<T>(
   result: unknown,
   slim?: (row: Row) => T,
 ): T;
+export function respond<T>(result: unknown, slim: Slim<T>): T;
 export function respond(result: unknown, slim?: Slim): unknown;
 export function respond(
   first: unknown,
@@ -696,6 +700,7 @@ export function respondList<T>(
   result: unknown,
   slim?: (row: Row) => T,
 ): { items: T[] };
+export function respondList<T>(result: unknown, slim: Slim<T>): { items: T[] };
 export function respondList(result: unknown, slim?: Slim): { items: unknown[] };
 export function respondList(
   first: unknown,
@@ -730,9 +735,10 @@ function isSchema(value: unknown): value is z.ZodType {
  * instead of a bare string. An agent handed a wrong-entity code fails at zod
  * parse, before the handler runs and therefore before any mutation.
  */
-export const idParam = (entity: ShortcodeEntity) => shortcodeSchema(entity);
+export const idParam = <TEntity extends ShortcodeEntity>(entity: TEntity) =>
+  shortcodeSchema(entity);
 
-const idsParam = (entity: ShortcodeEntity) =>
+const idsParam = <TEntity extends ShortcodeEntity>(entity: TEntity) =>
   z
     .array(shortcodeSchema(entity))
     .describe(`Array of ${entity} shortcodes to delete`);
@@ -1233,16 +1239,20 @@ export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
 /** Register a tool that calls a tRPC procedure and returns the result as-is. */
 export function registerRouterTool<
   TInput extends ZodSchemaLike = Record<string, never>,
+  TOutput extends z.ZodType = z.ZodType,
 >(
   server: McpServer,
   config: {
     name: string;
     description: string;
     inputSchema?: TInput;
-    outputSchema: z.ZodType;
+    outputSchema: TOutput;
     annotations: ToolAnnotations;
     uiResourceUri?: string;
-    call: (caller: Caller, params: InferSchemaLike<TInput>) => Promise<unknown>;
+    call: (
+      caller: Caller,
+      params: InferSchemaLike<TInput>,
+    ) => Promise<z.output<TOutput>>;
   },
 ) {
   registerMcpTool(server, {

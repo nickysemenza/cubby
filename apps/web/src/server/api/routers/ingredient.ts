@@ -70,7 +70,7 @@ import {
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 const resolveIngredientEntityId = async (
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -199,7 +199,7 @@ const { getByID, getByShortcode, create } =
 // through this proc) and report the count.
 const update = protectedProcedure
   .input(ingredientUpdateInput)
-  .output(ingredientWithFoodAndSideEffectsOut)
+  .output(strictOutput(ingredientWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const entityId = await resolveIngredientEntityId(ctx.db, input.id);
     const result = await updateIngredientService(
@@ -229,7 +229,7 @@ const update = protectedProcedure
 
 const merge = protectedProcedure
   .input(ingredientMergeInput)
-  .output(ingredientMergeOut)
+  .output(strictOutput(ingredientMergeOut))
   .mutation(async ({ ctx, input }) => {
     const [target, ...aliases] = await resolveIngredientEntityIds(ctx.db, [
       input.target,
@@ -301,7 +301,7 @@ const merge = protectedProcedure
 // costable, with coverage + recommended fix computed server-side.
 const enrichmentWorkbench = protectedProcedure
   .input(z.object({ recipeId: recipeShortcode.optional() }).optional())
-  .output(enrichmentRowsOut)
+  .output(strictOutput(enrichmentRowsOut))
   .query(async ({ ctx, input }) => {
     const recipeId = input?.recipeId
       ? await resolveLiveShortcode(ctx.db, input.recipeId, "recipe")
@@ -322,7 +322,7 @@ const enrichmentWorkbench = protectedProcedure
 // ships every usage's recipe body per row (see enrichmentWorkbenchIngredients).
 const recipeUsages = protectedProcedure
   .input(ingredientIdInput)
-  .output(ingredientRecipeUsagesOut)
+  .output(strictOutput(ingredientRecipeUsagesOut))
   .query(async ({ ctx, input }) => {
     const usages = await getRecipeUsagesForIngredient(
       ctx.db,
@@ -337,7 +337,7 @@ const recipeUsages = protectedProcedure
 // ingredients) without paging recipeUsages per id. Grouped by the MCP tool.
 const rawLines = protectedProcedure
   .input(ingredientRawLinesInput)
-  .output(ingredientRawLinesOut)
+  .output(strictOutput(ingredientRawLinesOut))
   .query(async ({ ctx, input }) => {
     return await getRawLinesForIngredients(
       ctx.db,
@@ -347,7 +347,7 @@ const rawLines = protectedProcedure
 
 const getByName = protectedProcedure
   .input(ingredientNameFilterInput)
-  .output(ingredientWithFoodOut.nullable())
+  .output(strictOutput(ingredientWithFoodOut.nullable()))
   .query(async ({ ctx, input }) => {
     return await getIngredientByName(ctx.db, ctx.usdaClient, input.nameFilter);
   });
@@ -357,7 +357,7 @@ const getByName = protectedProcedure
 // getByName per ingredient per recipe card (hundreds of round-trips).
 const matchNames = protectedProcedure
   .input(ingredientNamesInput)
-  .output(ingredientMatchesOut)
+  .output(strictOutput(ingredientMatchesOut))
   .query(async ({ ctx, input }) => {
     return await getIngredientMatches(ctx.db, input.names);
   });
@@ -368,7 +368,7 @@ const matchNames = protectedProcedure
 // search_ingredients-then-create_ingredient loop (dozens of calls) into one.
 const resolveOrCreate = protectedProcedure
   .input(ingredientResolvableNamesInput)
-  .output(ingredientResolveOrCreateOut)
+  .output(strictOutput(ingredientResolveOrCreateOut))
   .mutation(async ({ ctx, input }) => {
     const result = await resolveOrCreateIngredients(ctx.db, input.names);
     const created = result.filter((ingredient) => ingredient.created);
@@ -394,7 +394,7 @@ const getManyByIDs = protectedProcedure
   // Lean output: products + food only (the consumer computes costs and reads no
   // recipe-usage data) — the full ingredient graph's per-usage recipe bodies were
   // a ~1s over-fetch on a recipe's ingredient set.
-  .output(ingredientWithFoodLeanListOut)
+  .output(strictOutput(ingredientWithFoodLeanListOut))
   .query(async ({ ctx, input }) => {
     return await getIngredientsByIDs(
       ctx.db,

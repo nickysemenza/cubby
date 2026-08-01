@@ -17,18 +17,18 @@ import {
   retryBackgroundJob,
   retryFailedJobsForBatch,
 } from "~/server/repo/background-jobs";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 export const backgroundJobsRouter = createTRPCRouter({
   listBatches: protectedProcedure
     .input(backgroundBatchListInputSchema)
-    .output(backgroundBatchListOutSchema)
+    .output(strictOutput(backgroundBatchListOutSchema))
     .query(async ({ ctx, input }) => {
       return await listBackgroundBatches(ctx.db, input.limit);
     }),
   getBatch: protectedProcedure
     .input(backgroundBatchIdInputSchema)
-    .output(backgroundBatchDetailSchema)
+    .output(strictOutput(backgroundBatchDetailSchema))
     .query(async ({ ctx, input }) => {
       const batch = await getBackgroundBatchDetail(ctx.db, input.batchId);
       if (!batch) {
@@ -63,7 +63,7 @@ export const backgroundJobsRouter = createTRPCRouter({
     }),
   drain: protectedProcedure
     .input(backgroundDrainInputSchema)
-    .output(backgroundDrainOutSchema)
+    .output(strictOutput(backgroundDrainOutSchema))
     .mutation(async ({ ctx, input }) => {
       return await drainQueuedBackgroundJobs(ctx.db, input.limit);
     }),

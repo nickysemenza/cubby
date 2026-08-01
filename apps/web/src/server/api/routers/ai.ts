@@ -54,14 +54,14 @@ import {
   suggestUsdaFood,
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment/usda-match";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 /**
  * Suggest a category for a product based on its name and manufacturer
  */
 const suggestCategory = protectedProcedure
   .input(categorySuggestionInput)
-  .output(categorySuggestionSchema)
+  .output(strictOutput(categorySuggestionSchema))
   .query(async ({ ctx, input }) => {
     const client = getAnthropicClient();
     return client.suggestCategory(input.productName, input.manufacturer, {
@@ -77,7 +77,7 @@ const suggestCategory = protectedProcedure
  */
 const suggestLocationType = protectedProcedure
   .input(locationTypeSuggestionInput)
-  .output(locationTypeSuggestionSchema)
+  .output(strictOutput(locationTypeSuggestionSchema))
   .query(async ({ ctx, input }) => {
     const client = getAnthropicClient();
     return client.suggestLocationType(input.locationName, {
@@ -107,7 +107,7 @@ export const aiRouter = createTRPCRouter({
   suggestLocationType,
   describeLocation: protectedProcedure
     .input(aiLocationIdInput)
-    .output(locationDescriptionSchema)
+    .output(strictOutput(locationDescriptionSchema))
     .mutation(async ({ ctx, input }) => {
       return describeLocation(
         ctx.db,
@@ -116,7 +116,7 @@ export const aiRouter = createTRPCRouter({
     }),
   detectInventoryItems: protectedProcedure
     .input(aiLocationIdInput)
-    .output(detectedInventorySchema)
+    .output(strictOutput(detectedInventorySchema))
     .mutation(async ({ ctx, input }) => {
       return detectInventoryItems(
         ctx.db,
@@ -125,7 +125,7 @@ export const aiRouter = createTRPCRouter({
     }),
   approveDetectedInventoryItem: protectedProcedure
     .input(approveDetectedInventoryItemInput)
-    .output(approveDetectedInventoryItemOut)
+    .output(strictOutput(approveDetectedInventoryItemOut))
     .mutation(async ({ ctx, input }) => {
       return await approveDetectedInventoryItem(
         ctx.db,
@@ -143,7 +143,7 @@ export const aiRouter = createTRPCRouter({
   }),
   identifyProduct: protectedProcedure
     .input(productIdentificationInput)
-    .output(productIdentificationSchema)
+    .output(strictOutput(productIdentificationSchema))
     .mutation(async ({ ctx, input }) => {
       const client = getAnthropicClient();
       return client.identifyProduct(input.imageUrls, {
@@ -157,7 +157,7 @@ export const aiRouter = createTRPCRouter({
   // food for a stub ingredient. Returns the full chosen food (or null).
   suggestUsdaFood: protectedProcedure
     .input(usdaFoodSuggestionInput)
-    .output(usdaFoodSuggestionOut)
+    .output(strictOutput(usdaFoodSuggestionOut))
     .mutation(async ({ ctx, input }) => {
       return suggestUsdaFood(ctx.usdaService, ctx.db, input.ingredientName);
     }),
@@ -165,7 +165,7 @@ export const aiRouter = createTRPCRouter({
   // Read-only: returns one suggestion per name for review; links nothing.
   suggestUsdaFoodBatch: protectedProcedure
     .input(usdaFoodSuggestionBatchInput)
-    .output(usdaFoodSuggestionBatchOut)
+    .output(strictOutput(usdaFoodSuggestionBatchOut))
     .mutation(async ({ ctx, input }) => {
       return suggestUsdaFoodBatch(
         ctx.usdaService,
@@ -177,7 +177,7 @@ export const aiRouter = createTRPCRouter({
   // calling agent searches existing ingredients; read-only, the user confirms.
   suggestIngredientMergeBatch: protectedProcedure
     .input(ingredientMergeSuggestionBatchInput)
-    .output(ingredientMergeSuggestionBatchOut)
+    .output(strictOutput(ingredientMergeSuggestionBatchOut))
     .mutation(async ({ ctx, input }) => {
       const resolved = await resolveLiveShortcodes(
         ctx.db,
@@ -222,7 +222,7 @@ export const aiRouter = createTRPCRouter({
     }),
   parseSearch: protectedProcedure
     .input(parseSearchInput)
-    .output(parsedSearchSchema)
+    .output(strictOutput(parsedSearchSchema))
     .mutation(async ({ ctx, input }) => {
       const client = getAnthropicClient();
       const locationNames = await getLocationNames(ctx.db);
@@ -234,7 +234,7 @@ export const aiRouter = createTRPCRouter({
       });
     }),
   auditCategories: protectedProcedure
-    .output(categoryAuditSchema)
+    .output(strictOutput(categoryAuditSchema))
     .mutation(async ({ ctx }) => {
       const client = getAnthropicClient();
       const products = await getProductSummaryForAudit(ctx.db);
@@ -247,13 +247,13 @@ export const aiRouter = createTRPCRouter({
     }),
   usageRecent: protectedProcedure
     .input(aiUsageRecentInput)
-    .output(aiUsageRecentOut)
+    .output(strictOutput(aiUsageRecentOut))
     .query(async ({ ctx, input }) => {
       return await listRecentAiUsage(ctx.db, input.limit);
     }),
   usageSummary: protectedProcedure
     .input(aiUsageSummaryInput)
-    .output(aiUsageSummaryOut)
+    .output(strictOutput(aiUsageSummaryOut))
     .query(async ({ ctx, input }) => {
       return await summarizeAiUsage(ctx.db, input.days);
     }),

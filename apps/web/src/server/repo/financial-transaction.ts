@@ -61,6 +61,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -179,6 +180,11 @@ async function whereFor(
       { column: financialTransaction.rawDescription, term: filters.search },
     ],
     [
+      ...relatedWhereConditions(
+        "financialTransaction",
+        filters,
+        financialTransaction.id,
+      ),
       eqAny(financialTransaction.accountId, accountIds),
       eqAny(financialTransaction.purchaseId, purchaseIds),
       filters.purchasePresenceFilter === "has"

@@ -83,7 +83,7 @@ import {
   htmlToImportRecipe,
   scrapeToImportRecipe,
 } from "~/server/utils/scraper";
-import { protectedProcedure } from "../../trpc";
+import { protectedProcedure, strictOutput } from "../../trpc";
 
 const resolveCookbookEntityId = async (
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -101,17 +101,17 @@ const resolveCookbookEntityId = async (
 
 const scrape = protectedProcedure
   .input(scrapeRecipeInput)
-  .output(importRecipeSchema)
+  .output(strictOutput(importRecipeSchema))
   .mutation(async ({ input }) => await scrapeToImportRecipe(input));
 // Parse-only fallback for when a URL scrape is blocked (anti-bot, auth wall,
 // JS-rendered): the user pastes the page HTML and we run the same parser.
 const parseHtml = protectedProcedure
   .input(parseRecipeHtmlInput)
-  .output(importRecipeSchema)
+  .output(strictOutput(importRecipeSchema))
   .mutation(({ input }) => htmlToImportRecipe(input.html, input.url));
 const insertImport = protectedProcedure
   .input(importRecipeSchema)
-  .output(recipeImportIdOut)
+  .output(strictOutput(recipeImportIdOut))
   .mutation(async ({ ctx, input }) => {
     const result = await upsertImportRecipe(input, ctx.db, ctx.actorContext);
     // Persist the scraped hero photo (the browser form imports it client-side
@@ -140,7 +140,7 @@ const insertImport = protectedProcedure
 // per-recipe inserts attach to.
 const upsertCookbookEndpoint = protectedProcedure
   .input(upsertCookbookInput)
-  .output(cookbookIdOut)
+  .output(strictOutput(cookbookIdOut))
   .mutation(async ({ ctx, input }) => {
     const result = await upsertCookbook(ctx.db, input, {
       ...ctx.actorContext,
@@ -160,7 +160,7 @@ const upsertCookbookEndpoint = protectedProcedure
 // selective re-import (no LLM, no EPUB). See the import flow's "from stored source".
 const getCookbookSourceEndpoint = protectedProcedure
   .input(cookbookIdInput)
-  .output(cookbookSourceOut)
+  .output(strictOutput(cookbookSourceOut))
   .query(async ({ ctx, input }) => {
     const source = await getCookbookSource(
       ctx.db,
@@ -265,7 +265,7 @@ const importCookbookStream = protectedProcedure
 // update" per title). Empty when the cookbook doesn't exist yet.
 const getCookbookDiff = protectedProcedure
   .input(cookbookDiffInput)
-  .output(cookbookDiffOut)
+  .output(strictOutput(cookbookDiffOut))
   .query(async ({ ctx, input }) => {
     const cb = await getCookbookByName(ctx.db, input.book);
     if (!cb) return [];
@@ -281,7 +281,7 @@ const getCookbookDiff = protectedProcedure
 const normalizeNotionId = (id: string): string => id.replace(/-/g, "");
 
 const previewNotionSync = protectedProcedure
-  .output(notionPreviewOut)
+  .output(strictOutput(notionPreviewOut))
   .query(async ({ ctx }) => {
     const client = ctx.notionClient;
     if (!client) return [];
@@ -425,7 +425,7 @@ const importNotionSyncStream = protectedProcedure
 
 // Distinct cookbooks with recipe counts, for the browse-by-source index.
 const listCookbooksEndpoint = protectedProcedure
-  .output(cookbookSummariesOut)
+  .output(strictOutput(cookbookSummariesOut))
   .query(async ({ ctx }) => {
     return await listCookbooks(ctx.db);
   });
@@ -435,7 +435,7 @@ const listCookbooksEndpoint = protectedProcedure
 // row itself, in one transaction — a book must not outlive its recipes.
 const deleteCookbookEndpoint = protectedProcedure
   .input(cookbookIdInput)
-  .output(deleteCookbookOut)
+  .output(strictOutput(deleteCookbookOut))
   .mutation(async ({ ctx, input }) => {
     const cookbookId = await resolveCookbookEntityId(ctx.db, input.cookbookId);
     const recipeIds = (await getCookbookRecipesForDiff(ctx.db, cookbookId)).map(
@@ -493,7 +493,7 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
 
 const extractCookbookChunkProc = protectedProcedure
   .input(chunkRequestInput)
-  .output(chunkResponseOut)
+  .output(strictOutput(chunkResponseOut))
   .mutation(async ({ ctx, input }) => {
     return await extractCookbookChunk(
       {

@@ -68,7 +68,7 @@ import {
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 /** Resolve the public product id once before entering UUID-only repo code. */
 async function resolveProductId(
@@ -266,7 +266,7 @@ const deleteItem = createDeleteProcedure<InventoryShortcode>(
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
-  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
+  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const productShortcodes = uniq(input.items.map((i) => i.productId));
     const resolvedProducts = await resolveLiveShortcodes(
@@ -329,7 +329,7 @@ const bulkProcess = protectedProcedure
 // Bulk move inventory entries between locations
 const bulkMove = protectedProcedure
   .input(bulkMovePayload)
-  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
+  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const locationCodes = [input.sourceLocationId, input.targetLocationId];
     const [resolvedLocations, resolvedInventories] = await Promise.all([
@@ -378,7 +378,7 @@ const bulkMove = protectedProcedure
 // actually changed (adjust/remove) — a pure-verify commit is a free no-op.
 const reconcileSession = protectedProcedure
   .input(reconcileSessionPayload)
-  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
+  .output(strictOutput(inventoryWithLocationAndProductListAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const inventoryCodes = [
       ...input.expectedInventoryEntryIds,
@@ -458,7 +458,7 @@ const reconcileSession = protectedProcedure
 // Find products with expectedQuantity=1 in multiple locations
 const findDuplicates = protectedProcedure
   .input(inventoryFindDuplicatesInput)
-  .output(inventoryDuplicateUniqueProductsOut)
+  .output(strictOutput(inventoryDuplicateUniqueProductsOut))
   .query(async ({ ctx, input }) => {
     const excludeLocationId = input.excludeLocationId
       ? await resolveLocationId(ctx.db, input.excludeLocationId)
@@ -482,7 +482,7 @@ const findDuplicates = protectedProcedure
 // Get inventory counts for multiple locations (batched query to avoid N+1)
 const getCountsByLocations = protectedProcedure
   .input(inventoryLocationIdsInput)
-  .output(inventoryCountsByLocationOut)
+  .output(strictOutput(inventoryCountsByLocationOut))
   .query(async ({ ctx, input }) => {
     const resolved = await resolveEntityIds(
       ctx.db,
@@ -504,7 +504,7 @@ const getCountsByLocations = protectedProcedure
 // Get inventory entries for multiple locations (batched query to avoid N+1)
 const getByLocationIds = protectedProcedure
   .input(inventoryLocationIdsInput)
-  .output(inventoryWithLocationAndProductListOut)
+  .output(strictOutput(inventoryWithLocationAndProductListOut))
   .query(async ({ ctx, input }) => {
     const resolved = await resolveEntityIds(
       ctx.db,

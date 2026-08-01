@@ -14,21 +14,21 @@ import {
 } from "@cubby/schemas/suggestions";
 import pMap from "p-map";
 import { recipeList } from "~/server/repo/recipe";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 /** Upper bound on recipes scored per getMakeable call (ranking is O(n) availability calls). */
 const CANDIDATE_CAP = 500;
 
 const getRecipeAvailability = protectedProcedure
   .input(recipeAvailabilityInput)
-  .output(recipeAvailabilityOut)
+  .output(strictOutput(recipeAvailabilityOut))
   .query(async ({ ctx, input }) =>
     ctx.services.availability.getRecipeAvailability(input.recipeId),
   );
 
 const getMakeable = protectedProcedure
   .input(makeableRecipesInput)
-  .output(makeableRecipesOut)
+  .output(strictOutput(makeableRecipesOut))
   .query(async ({ ctx, input }) => {
     const minCoverage = input.minCoverage ?? 0;
     const limit = input.limit ?? 24;

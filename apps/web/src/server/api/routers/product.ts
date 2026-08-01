@@ -13,6 +13,7 @@ import {
   type ProductShortcode,
   productShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   productApplyUpcInput,
@@ -86,7 +87,7 @@ import {
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 async function resolveProductId(
   db: Parameters<typeof resolveLiveShortcode>[0],
@@ -269,7 +270,7 @@ const { list: search } = createEntityListProcedure({
 // shared recipes once per product.
 const create = protectedProcedure
   .input(productCreateInput)
-  .output(productWithFoodAndSideEffectsOut)
+  .output(strictOutput(productWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     return await createProductWithSideEffects(
       {
@@ -289,7 +290,7 @@ const create = protectedProcedure
 // report the count. Inventory-valuation recompute is added here too (stage D).
 const update = protectedProcedure
   .input(productUpdateInput)
-  .output(productWithFoodAndSideEffectsOut)
+  .output(strictOutput(productWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const id = await resolveProductId(ctx.db, input.id);
     return await updateProductWithSideEffects(
@@ -313,7 +314,7 @@ const update = protectedProcedure
 // Mirrors the field mapping in findOrCreateByUPC and the recompute in `update`.
 const applyUpcData = protectedProcedure
   .input(productApplyUpcInput)
-  .output(productWithFoodAndSideEffectsOut)
+  .output(strictOutput(productWithFoodAndSideEffectsOut))
   .mutation(async ({ ctx, input }) => {
     const id = await resolveProductId(ctx.db, input.id);
     return await applyUpcDataWithSideEffects(
@@ -331,7 +332,7 @@ const applyUpcData = protectedProcedure
 
 const summaries = protectedProcedure
   .input(productSummariesInput)
-  .output(productSummariesOut)
+  .output(strictOutput(productSummariesOut))
   .query(async ({ ctx, input }) => {
     return await getProductSummaries(
       ctx.db,
@@ -344,7 +345,7 @@ const summaries = protectedProcedure
 // Quick create a product with minimal data (just name required)
 const quickCreate = protectedProcedure
   .input(productQuickCreatePayload)
-  .output(productTopLevelOut)
+  .output(strictOutput(productTopLevelOut))
   .mutation(async ({ ctx, input }) => {
     const product = await quickCreateProduct(
       ctx.db,
@@ -372,7 +373,7 @@ const quickCreate = protectedProcedure
 // Checks local DB first, then USDA, then UPC worker, then creates with defaults
 const findOrCreateByUPC = protectedProcedure
   .input(productFindOrCreateByUPCInput)
-  .output(productFindOrCreateByUPCOut)
+  .output(strictOutput(productFindOrCreateByUPCOut))
   .mutation(async ({ ctx, input }) => {
     return findOrCreateByUPCService(
       ctx.db,
@@ -403,7 +404,7 @@ const backfillUPCImages = protectedProcedure.mutation(async function* ({
 
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
-  .output(productCategoryDistributionOut)
+  .output(strictOutput(productCategoryDistributionOut))
   .query(async ({ ctx }) => {
     return await getCategoryDistribution(ctx.db);
   });
@@ -414,7 +415,7 @@ const categoryDistribution = protectedProcedure
  * `expense.vendorOptions`.
  */
 const tagOptions = protectedProcedure
-  .output(productTagOptionsOut)
+  .output(strictOutput(productTagOptionsOut))
   .query(async ({ ctx }) => {
     return await getProductTagOptions(ctx.db);
   });
@@ -426,11 +427,21 @@ const tagOptions = protectedProcedure
  */
 const tagSiblings = protectedProcedure
   .input(productShortcode)
-  .output(productTagSiblingsOut)
+  .output(strictOutput(productTagSiblingsOut))
   .query(async ({ ctx, input }) => {
-    return await getProductsSharingTags(
+    const siblings = await getProductsSharingTags(
       ctx.db,
       await resolveProductId(ctx.db, input),
+    );
+
+    return siblings.map(
+      ({ shortcode, name, manufacturer, category, tags }) => ({
+        id: unsafeProductShortcode(shortcode),
+        name,
+        manufacturer,
+        category,
+        tags,
+      }),
     );
   });
 
@@ -442,7 +453,7 @@ const externalIdCollisions = protectedProcedure
         .optional(),
     }),
   )
-  .output(productExternalIdCollisionsOut)
+  .output(strictOutput(productExternalIdCollisionsOut))
   .query(async ({ ctx, input }) => ({
     items: await findProductExternalIdCollisions(ctx.db, input.source),
   }));
@@ -450,7 +461,7 @@ const externalIdCollisions = protectedProcedure
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(productShortcodesInput)
-  .output(productShortcodeListOut)
+  .output(strictOutput(productShortcodeListOut))
   .query(async ({ ctx, input }) => {
     return await getProductsByShortcodes(ctx.db, input.shortcodes);
   });

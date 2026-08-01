@@ -1,6 +1,4 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
-import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
   FileText,
@@ -13,7 +11,6 @@ import {
 import { type FC, useState } from "react";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { ExpenseList } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -39,13 +36,12 @@ import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { MergePurchasesDialog } from "./merge-purchases-dialog";
 import { PurchaseDocuments } from "./purchase-documents";
+import { PurchaseExpensesTable } from "./purchase-expenses-table";
 import {
   purchaseReconciliationStatus,
   ReconciliationBadge,
   ReconciliationNote,
 } from "./purchase-reconciliation";
-
-const NO_EXPENSES: ExpenseOut[] = [];
 
 /**
  * One vendor order/receipt event: what the paperwork said (`statedTotal`, documents) and
@@ -57,10 +53,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const api = useTRPC();
   const [mergeOpen, setMergeOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
-
-  const { data: expenses = NO_EXPENSES } = useQuery(
-    api.purchase.expenses.queryOptions(purchase.id),
-  );
 
   const updateMutation = useUpdateMutation({
     mutationFn: api.purchase.update.mutationOptions,
@@ -230,7 +222,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             Expenses are this purchase&apos;s categorized spend lines. Every
             dollar lives on them, not on the stated total.
           </Description>
-          <ExpenseList expenses={expenses} />
+          <PurchaseExpensesTable purchaseId={purchase.id} />
         </Stack>
       ),
     },
@@ -346,9 +338,8 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       entity="purchase"
       title={purchaseLabel(purchase)}
       rawData={purchase}
-      // Never a "red"/error tone: a purchase whose lines disagree with its stated
-      // total is frequently correct (a partial refund), so the strongest signal
-      // this page gives is the warning-toned badge in the Reconciliation card.
+      // Never a "red"/error tone: posted refunds produce a neutral status, while
+      // an unexplained difference stays an advisory warning rather than a blocker.
       heroStamp={
         status === "unknown"
           ? undefined

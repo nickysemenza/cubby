@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
@@ -79,10 +80,7 @@ export function LocationReviewPane({
   // contents previews without a second query.
   inventoryByLocation: Map<string, InventoryItem[]>;
   itemResolutions: Map<string, ItemResolution>;
-  // string, not ProductId: brands strip across tRPC outputs (CLAUDE.md), so the
-  // findDuplicates query data's id — and item.product.id it's matched against —
-  // are both plain strings here.
-  duplicateProductIds: Set<string>;
+  duplicateProductIds: Set<ProductShortcode>;
   onAdjust: (item: InventoryItem, amount: Amount) => void;
   onRemove: (item: InventoryItem) => void;
   onRelocate: (item: InventoryItem) => void;
