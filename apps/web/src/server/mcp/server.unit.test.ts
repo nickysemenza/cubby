@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { FINANCIAL_STATEMENT_IMPORT_MAX_ROWS } from "@cubby/schemas/financial-transaction";
 import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseMatchCandidate } from "@cubby/schemas/project";
 import {
@@ -1391,6 +1392,7 @@ describe("household tracker synthesis + bulk tools", () => {
       orderId: null,
       projectName: null,
       productName: null,
+      purchase: null,
       matchedOn: "amount_date",
       vendorMatch: null,
       dayDelta: 0,
@@ -1460,6 +1462,98 @@ describe("household tracker synthesis + bulk tools", () => {
     ]);
     expect(structured.unmatched).toEqual(["export-2"]);
     expect(structured.summary.exactOrderIdHits).toBe(1);
+  });
+
+  it("previews client-parsed Monarch rows without a CSV/file interface or writes", async () => {
+    const previewStatementImport = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          key: "row-1",
+          status: "ready_to_create",
+          accountId: "FAC-2345",
+          accountName: "Citi Double Cash",
+          provisionalAccount: null,
+          proposed: {
+            sourceRef: { source: "monarch", externalId: "v1:abc" },
+            amount: 54.29,
+            kind: "purchase",
+            status: "posted",
+            transactionDate: null,
+            postedDate: "2026-07-31",
+            merchant: "Amazon",
+            rawDescription: "AMZN Mktp",
+            sourceCategory: "Shopping",
+            notes: null,
+          },
+          existingTransactionIds: [],
+        },
+      ],
+      summary: {
+        rowsIn: 1,
+        alreadyRecorded: 0,
+        readyToCreate: 1,
+        possibleExisting: 0,
+        unresolvedAccount: 0,
+        indistinguishableDuplicate: 0,
+      },
+    });
+    const result = await callTool(
+      createMcpServer(),
+      "preview_financial_statement_import",
+      {
+        rows: [
+          {
+            key: "row-1",
+            account: "Citi Double Cash (...1702)",
+            date: "2026-07-31",
+            amount: -54.29,
+            merchant: "Amazon",
+            originalStatement: "AMZN Mktp",
+            category: "Shopping",
+          },
+        ],
+      },
+      { financialTransaction: { previewStatementImport } },
+    );
+
+    if (result.isError) throw new Error(JSON.stringify(result.content));
+    expect(previewStatementImport).toHaveBeenCalledWith({
+      rows: [expect.objectContaining({ source: "monarch", amount: -54.29 })],
+    });
+    const tool = getRegisteredTool(
+      createMcpServer(),
+      "preview_financial_statement_import",
+    );
+    expect(tool?.annotations?.readOnlyHint).toBe(true);
+    expect(JSON.stringify(tool?.inputSchema)).not.toContain("path");
+    expect(JSON.stringify(tool?.inputSchema)).not.toContain("file");
+  });
+
+  it("rejects a statement preview batch over 200 rows", async () => {
+    const previewStatementImport = vi.fn();
+    const result = await callTool(
+      createMcpServer(),
+      "preview_financial_statement_import",
+      {
+        rows: Array.from(
+          { length: FINANCIAL_STATEMENT_IMPORT_MAX_ROWS + 1 },
+          (_, index) => ({
+            key: `row-${index}`,
+            account: "Citi Double Cash (...1702)",
+            date: "2026-07-31",
+            amount: -1,
+            merchant: null,
+            originalStatement: `STATEMENT ${index}`,
+            category: null,
+            notes: null,
+          }),
+        ),
+      },
+      { financialTransaction: { previewStatementImport } },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(previewStatementImport).not.toHaveBeenCalled();
   });
 
   it("match_expenses rejects a batch over the row cap rather than silently truncating", async () => {

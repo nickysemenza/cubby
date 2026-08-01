@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { financialReconciliationSummary } from "./financial-reconciliation";
 import { wholeCentAmount } from "./money";
 import {
   expenseRelatedFilterFields,
@@ -1258,6 +1259,17 @@ export const expenseMatchRatioLabel = z.enum([
 ]);
 export type ExpenseMatchRatioLabel = z.infer<typeof expenseMatchRatioLabel>;
 
+/** Compact order context when a matched Expense is already filed to a Purchase. */
+export const expenseMatchPurchaseContext = z.object({
+  id: purchaseShortcode,
+  vendorName: z.string().nullable(),
+  orderId: z.string().nullable(),
+  expenseCount: z.number().int(),
+  expenseTotal: z.number(),
+  statedTotal: z.number().nullable(),
+  financialReconciliation: financialReconciliationSummary,
+});
+
 export const expenseMatchCandidate = z.object({
   expenseId: expenseShortcode,
   name: z.string(),
@@ -1270,6 +1282,8 @@ export const expenseMatchCandidate = z.object({
   orderId: z.string().nullable(),
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
+  /** Existing order context; null when the Expense has not been filed yet. */
+  purchase: expenseMatchPurchaseContext.nullable(),
   matchedOn: expenseMatchedOn,
   /**
    * Does this row's vendor agree with the one on the export line?

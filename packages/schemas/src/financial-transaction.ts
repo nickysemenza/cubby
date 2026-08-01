@@ -1,4 +1,12 @@
 import { z } from "zod";
+export {
+  financialReconciliationStatus,
+  financialReconciliationSummary,
+} from "./financial-reconciliation";
+export type {
+  FinancialReconciliationStatus,
+  FinancialReconciliationSummary,
+} from "./financial-reconciliation";
 import { financialTransactionRelatedFilterFields } from "./related-view";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
 import {
@@ -6,6 +14,10 @@ import {
   financialTransactionShortcode,
   purchaseShortcode,
 } from "./identifiers";
+import {
+  financialAccountIdentity,
+  financialAccountSourceAliases,
+} from "./financial-account";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -229,27 +241,102 @@ export type FinancialTransactionListResponse = z.infer<
   typeof financialTransactionListResponse
 >;
 
-export const financialReconciliationStatus = z.enum([
-  "unknown",
-  "pending",
-  "match",
-  "mismatch",
-]);
-export type FinancialReconciliationStatus = z.infer<
-  typeof financialReconciliationStatus
+// ---------------------------------------------------------------------------
+// MCP-client statement-import preview
+// ---------------------------------------------------------------------------
+
+/** Largest client-parsed statement batch one preview accepts. */
+export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
+
+/**
+ * One already-parsed Monarch row. Cubby accepts data, never a CSV path or
+ * upload: parsing and export handling belong to the MCP client.
+ */
+export const financialStatementImportRow = z.strictObject({
+  key: z.string().min(1),
+  source: z.literal("monarch").default("monarch"),
+  account: z.string().min(1),
+  date: plainDate,
+  /** Monarch signs charges negative and credits positive. */
+  amount: nonZeroAmount,
+  merchant: z.string().nullable().default(null),
+  originalStatement: z.string().min(1),
+  category: z.string().nullable().default(null),
+  notes: z.string().nullable().default(null),
+  /** The client may classify non-purchase statement activity explicitly. */
+  kind: financialTransactionKind.optional(),
+});
+export type FinancialStatementImportRow = z.infer<
+  typeof financialStatementImportRow
 >;
 
-export const financialReconciliationSummary = z.object({
-  status: financialReconciliationStatus,
-  transactionCount: z.number().int().nonnegative(),
-  postedTransactionCount: z.number().int().nonnegative(),
-  outstandingTransactionCount: z.number().int().nonnegative(),
-  postedTotal: z.number().finite(),
-  projectedTotal: z.number().finite(),
-  /** Posted refund evidence only; negative under the settlement sign convention. */
-  postedRefundTotal: z.number().finite(),
-  delta: z.number().finite().nullable(),
+export const financialStatementImportPreviewInput = z.strictObject({
+  rows: z
+    .array(financialStatementImportRow)
+    .min(1)
+    .max(FINANCIAL_STATEMENT_IMPORT_MAX_ROWS)
+    .refine(
+      (rows) => new Set(rows.map((row) => row.key)).size === rows.length,
+      "rows must have unique keys",
+    ),
 });
-export type FinancialReconciliationSummary = z.infer<
-  typeof financialReconciliationSummary
+export type FinancialStatementImportPreviewInput = z.infer<
+  typeof financialStatementImportPreviewInput
+>;
+
+export const financialStatementImportPreviewStatus = z.enum([
+  "already_recorded",
+  "ready_to_create",
+  "possible_existing",
+  "unresolved_account",
+  "indistinguishable_duplicate",
+]);
+export type FinancialStatementImportPreviewStatus = z.infer<
+  typeof financialStatementImportPreviewStatus
+>;
+
+const financialStatementImportProposedTransaction = z.object({
+  sourceRef: financialTransactionSourceRef,
+  amount: nonZeroAmount,
+  kind: financialTransactionKind,
+  status: z.literal("posted"),
+  transactionDate: plainDate.nullable(),
+  postedDate: plainDate,
+  merchant: z.string().nullable(),
+  rawDescription: z.string().nullable(),
+  sourceCategory: z.string().nullable(),
+  notes: z.string().nullable(),
+});
+
+/** A non-persisted account suggestion for an unresolved statement descriptor. */
+const financialStatementProvisionalAccount = z.object({
+  name: z.string().min(1),
+  identity: financialAccountIdentity,
+  provisional: z.literal(true),
+  sourceAliases: financialAccountSourceAliases,
+});
+
+export const financialStatementImportPreviewRow = z.object({
+  key: z.string(),
+  status: financialStatementImportPreviewStatus,
+  accountId: financialAccountShortcode.nullable(),
+  accountName: z.string().nullable(),
+  provisionalAccount: financialStatementProvisionalAccount.nullable(),
+  proposed: financialStatementImportProposedTransaction,
+  existingTransactionIds: z.array(financialTransactionShortcode),
+});
+
+export const financialStatementImportPreviewOut = z.object({
+  rows: z.array(financialStatementImportPreviewRow),
+  summary: z.object({
+    rowsIn: z.number().int(),
+    alreadyRecorded: z.number().int(),
+    readyToCreate: z.number().int(),
+    possibleExisting: z.number().int(),
+    unresolvedAccount: z.number().int(),
+    indistinguishableDuplicate: z.number().int(),
+  }),
+});
+export type FinancialStatementImportPreviewOut = z.infer<
+  typeof financialStatementImportPreviewOut
 >;

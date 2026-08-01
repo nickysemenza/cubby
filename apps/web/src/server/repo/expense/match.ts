@@ -50,7 +50,11 @@
  * query makes it structurally impossible for a grading signal to drift into a
  * filter — which it must never become.
  */
-import { unsafeExpenseShortcode } from "@cubby/schemas/identifiers";
+import {
+  unsafeExpenseShortcode,
+  unsafePurchaseId,
+  unsafePurchaseShortcode,
+} from "@cubby/schemas/identifiers";
 import type {
   ExpenseMatchCandidate,
   ExpenseMatchOptions,
@@ -60,6 +64,11 @@ import type {
 import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+import { calculateFinancialReconciliation } from "~/server/repo/financial-reconciliation";
+import {
+  emptyPurchaseFinancialAggregate,
+  loadPurchaseFinancialAggregates,
+} from "~/server/repo/purchase-financial-aggregates";
 
 /**
  * Raw shape of one candidate row off the wire.
@@ -80,6 +89,12 @@ type MatchRow = {
   orderId: string | null;
   projectName: string | null;
   productName: string | null;
+  purchaseId: string | null;
+  purchaseShortcode: string | null;
+  purchaseStatedTotal: number | null;
+  purchaseExpenseCount: number | null;
+  purchaseExpenseTotal: number | null;
+  purchaseUnpricedExpenseCount: number | null;
   matchedOn: "order_id" | "amount_date";
   vendorMatch: boolean | null;
   dayDelta: number | null;
@@ -211,6 +226,12 @@ export const matchExpenses = async (
         e."future"      AS "future",
         e."notes"       AS "notes",
         p."orderId"     AS "orderId",
+        p."id"          AS "purchaseId",
+        p."shortcode"   AS "purchaseShortcode",
+        p."statedTotal"::double precision AS "purchaseStatedTotal",
+        count(e."id") OVER (PARTITION BY p."id")::int AS "purchaseExpenseCount",
+        COALESCE(sum(e."cost") OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseExpenseTotal",
+        count(*) FILTER (WHERE e."cost" IS NULL) OVER (PARTITION BY p."id")::int AS "purchaseUnpricedExpenseCount",
         v."name"        AS "vendorName",
         pr."name"       AS "projectName",
         pd."name"       AS "productName"
@@ -339,6 +360,12 @@ export const matchExpenses = async (
       "orderId",
       "projectName",
       "productName",
+      "purchaseId",
+      "purchaseShortcode",
+      "purchaseStatedTotal",
+      "purchaseExpenseCount",
+      "purchaseExpenseTotal",
+      "purchaseUnpricedExpenseCount",
       CASE WHEN "arm" = 0 THEN 'order_id' ELSE 'amount_date' END AS "matchedOn",
       "vendorMatchRaw"                      AS "vendorMatch",
       "dayDeltaRaw"::int                    AS "dayDelta",
@@ -351,6 +378,17 @@ export const matchExpenses = async (
 
   const byKey = new Map<string, ExpenseMatchCandidate[]>();
   const rowByKey = new Map(rows.map((row) => [row.key, row]));
+  const purchaseIds = [
+    ...new Set(
+      res.rows.flatMap((row) =>
+        row.purchaseId ? [unsafePurchaseId(row.purchaseId)] : [],
+      ),
+    ),
+  ];
+  const financialByPurchase = await loadPurchaseFinancialAggregates(
+    db,
+    purchaseIds,
+  );
 
   for (const raw of res.rows) {
     const inputRow = rowByKey.get(raw.key);
@@ -375,6 +413,31 @@ export const matchExpenses = async (
       orderId: raw.orderId,
       projectName: raw.projectName,
       productName: raw.productName,
+      purchase:
+        raw.purchaseShortcode && raw.purchaseId
+          ? (() => {
+              const purchaseId = unsafePurchaseId(raw.purchaseId);
+              const financial =
+                financialByPurchase.get(purchaseId) ??
+                emptyPurchaseFinancialAggregate();
+              const expenseTotal = Number(raw.purchaseExpenseTotal);
+              return {
+                id: unsafePurchaseShortcode(raw.purchaseShortcode),
+                vendorName: raw.vendorName,
+                orderId: raw.orderId,
+                expenseCount: Number(raw.purchaseExpenseCount),
+                expenseTotal,
+                statedTotal: raw.purchaseStatedTotal,
+                financialReconciliation: calculateFinancialReconciliation({
+                  expenseTotal,
+                  unpricedExpenseCount: Number(
+                    raw.purchaseUnpricedExpenseCount,
+                  ),
+                  ...financial,
+                }),
+              };
+            })()
+          : null,
       matchedOn: raw.matchedOn,
       vendorMatch: raw.vendorMatch,
       dayDelta: raw.dayDelta === null ? null : Number(raw.dayDelta),

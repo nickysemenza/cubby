@@ -1,4 +1,4 @@
-import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-transaction";
+import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 
 export interface FinancialReconciliationInput {
   expenseTotal: number;

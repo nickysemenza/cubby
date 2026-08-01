@@ -6,6 +6,8 @@ import {
   financialAccountUpdateData,
 } from "@cubby/schemas/financial-account";
 import {
+  financialStatementImportPreviewInput,
+  financialStatementImportPreviewOut,
   financialTransactionCreateInput,
   financialTransactionFilterFields,
   financialTransactionListResponse,
@@ -13,7 +15,12 @@ import {
   financialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { defineSlim, registerEntityCrudToolset } from "./_shared";
+import {
+  defineSlim,
+  READ_ONLY_CLOSED,
+  registerEntityCrudToolset,
+  registerRouterTool,
+} from "./_shared";
 
 const slimFinancialAccount = defineSlim(
   financialAccountOut,
@@ -81,5 +88,16 @@ export function registerFinancialTools(server: McpServer) {
       delete:
         "Soft-delete Financial Transactions. Deleted and void transactions do not participate in Purchase reconciliation.",
     },
+  });
+
+  registerRouterTool(server, {
+    name: "preview_financial_statement_import",
+    description:
+      "Preview client-parsed Monarch statement rows before recording settlement evidence. Cubby accepts normalized rows only — never a CSV path, upload, or file contents. Pass at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate for each row. Unresolved rows include a non-persisted provisional Account suggestion. This tool is read-only: it never creates Accounts, Financial Transactions, Purchases, or links. Create only user-approved ready_to_create rows afterwards with create_financial_transaction using the returned proposed fields and accountId.",
+    inputSchema: financialStatementImportPreviewInput.shape,
+    outputSchema: financialStatementImportPreviewOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) =>
+      caller.financialTransaction.previewStatementImport(params),
   });
 }

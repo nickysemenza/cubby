@@ -8,7 +8,7 @@ import {
   purchaseShortcode,
   vendorShortcode,
 } from "./identifiers";
-import { financialReconciliationSummary } from "./financial-transaction";
+import { financialReconciliationSummary } from "./financial-reconciliation";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
   createPaginatedResponseSchema,
