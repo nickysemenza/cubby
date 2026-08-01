@@ -1,4 +1,4 @@
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { FC } from "react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -26,7 +26,7 @@ export const IngredientProductShelf: FC<{
     <ShelfGrid
       items={products}
       renderCard={(product) => {
-        const images = product.images.filter((img) => !isDocumentFile(img));
+        const images = product.images.filter(isDisplayableImageFile);
         return (
           <ShelfCard
             key={product.id}

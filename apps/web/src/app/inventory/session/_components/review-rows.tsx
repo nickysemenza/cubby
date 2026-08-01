@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ReactNode } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -96,7 +96,7 @@ export function ItemReviewCard({
       <Row align="center" gap="sm" wrap className="min-w-0">
         <Row align="center" gap="sm" className="min-w-56 flex-1">
           <Image
-            src={product.images.find((img) => !isDocumentFile(img))?.url}
+            src={product.images.find(isDisplayableImageFile)?.url}
             alt={product.name}
             displayWidth={96}
             className="size-12 shrink-0 border border-[var(--border)] object-cover"

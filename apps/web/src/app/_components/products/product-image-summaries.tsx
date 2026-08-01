@@ -1,4 +1,4 @@
-import { type ImageOut, isDocumentFile } from "@cubby/schemas/image";
+import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -46,7 +46,7 @@ export function ProductImageSummariesProvider({
     return Object.fromEntries(
       Object.entries(raw).map(([id, imgs]) => [
         id,
-        imgs.filter((img) => !isDocumentFile(img)),
+        imgs.filter(isDisplayableImageFile),
       ]),
     );
   }, [summaries, fetchedSummaries]);

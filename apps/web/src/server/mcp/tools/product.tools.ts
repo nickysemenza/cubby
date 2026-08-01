@@ -1,8 +1,11 @@
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
+  patchProductExternalIdsInput,
+  productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
   productFilterFields,
+  productMcpDetailOut,
   productMcpListOut,
   productMcpOut,
 } from "@cubby/schemas/product";
@@ -19,6 +22,7 @@ import {
   registerMcpTool,
   respond,
   slimProduct,
+  slimProductDetail,
   toUnitMappingInput,
   WRITE_CLOSED,
 } from "./_shared";
@@ -32,15 +36,18 @@ export function registerProductTools(server: McpServer) {
     filterFields: productFilterFields,
     mcpListOut: productMcpListOut,
     out: productMcpOut,
+    detailOut: productMcpDetailOut,
+    detailSlim: slimProductDetail,
     slim: slimProduct,
     sort: { orderBy: "name" },
+    listSortInput: z.enum(["name", "identity_strength"]).optional(),
     descriptions: {
-      list: "Search products by name, manufacturer, UPC, model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id. For the stocked product-enrichment worklist, pass inventoryPresenceFilter=has and imagePresenceFilter=none.",
-      get: "Get a product by ID, including manufacturer model, notes, external identifiers, displayable-image count and cover URL, and computed dataQuality.",
+      list: "Search products by name, manufacturer, UPC, model, category, or computed completeness. Start a product audit with dataStatus=needs_data and optionally dataGap. For enrichment use sort=identity_strength. modelPresenceFilter and externalIdSource/externalIdPresenceFilter expose identity worklists such as Amazon-linked products lacking an Amazon external id. For the stocked product-enrichment worklist, pass inventoryPresenceFilter=has and imagePresenceFilter=none.",
+      get: "Get a detailed product by ID, including identifiers, coverImageId, every attached Product file with integrity metadata/display position, and computed dataQuality. This read does not contact R2; use verify_product_images for an on-demand storage check.",
       create:
         'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
       update:
-        "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
+        "Update a product's fields, detach files with removeImageIds, and set cover/gallery order with imageOrder. externalIds replaces the full set when provided; use patch_product_external_ids to preserve unrelated identifier slots.",
       delete:
         "Soft-delete products by IDs. Fails while live inventory entries, expenses, or tasks still reference a product.",
     },
@@ -77,16 +84,40 @@ export function registerProductTools(server: McpServer) {
   registerMcpTool(server, {
     name: "find_product_external_id_collisions",
     description:
-      "Advisory exact-collision query for live Products sharing the same (source, externalId). This does not write or enforce uniqueness; inspect each collision before deciding whether it is a duplicate or a legitimate shared identifier.",
-    inputSchema: {
-      source: z
-        .union([z.string().min(1), z.array(z.string().min(1))])
-        .optional(),
-    },
+      "Find duplicate live Product external identifiers. Use source for a broad audit, or identifiers for ordered exact (source, kind, externalId) results including missing and unique slots.",
+    inputSchema: productExternalIdCollisionInput.shape,
     outputSchema: productExternalIdCollisionsOut,
     annotations: READ_ONLY_CLOSED,
     handler: (params, extra) =>
       getCaller(extra).product.externalIdCollisions(params),
+  });
+
+  registerMcpTool(server, {
+    name: "patch_product_external_ids",
+    description:
+      "Patch named (source, kind) identifier slots without replacing unrelated Product identifiers. Upserts overwrite only their slot; remove deletes only named slots.",
+    inputSchema: patchProductExternalIdsInput.shape,
+    outputSchema: productMcpDetailOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) =>
+      respond(
+        await getCaller(extra).product.patchExternalIds(params),
+        slimProductDetail,
+      ),
+  });
+
+  registerMcpTool(server, {
+    name: "verify_product_images",
+    description:
+      "Fetch every attached Product file from R2, backfill legacy integrity metadata, and record available, missing, or metadata-mismatch state. Returns the refreshed detailed Product; ordinary get_product performs no R2 requests.",
+    inputSchema: { id: idParam("product") },
+    outputSchema: productMcpDetailOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) =>
+      respond(
+        await getCaller(extra).product.verifyImages(params.id),
+        slimProductDetail,
+      ),
   });
 
   registerMcpTool(server, {

@@ -44,7 +44,7 @@ import {
   imageSortableFields,
 } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import { and, asc, eq, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type {
@@ -79,6 +79,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { displayableImageWhere } from "~/server/repo/image-displayability";
 import {
   countByTarget,
   impact,
@@ -120,6 +121,21 @@ export const createUploadedImageRecord = async (
     filename: string;
     contentType: string;
     size: number;
+    width?: number | null;
+    height?: number | null;
+    detectedContentType?: string | null;
+    sha256?: string | null;
+    renderStatus?: "unverified" | "verified" | "failed" | null;
+    storageStatus?:
+      | "unverified"
+      | "available"
+      | "missing"
+      | "metadata_mismatch"
+      | null;
+    verifiedAt?: Date | null;
+    targetType?: string | null;
+    targetId?: string | null;
+    idempotencyKey?: string | null;
   },
 ) => {
   return await insertAndReturn(db, image, {
@@ -127,6 +143,16 @@ export const createUploadedImageRecord = async (
     status: "UPLOADED",
   });
 };
+
+const imageIntegrityFields = (imageData: typeof image.$inferSelect) => ({
+  width: imageData.width,
+  height: imageData.height,
+  detectedContentType: imageData.detectedContentType,
+  sha256: imageData.sha256,
+  renderStatus: imageData.renderStatus,
+  storageStatus: imageData.storageStatus,
+  verifiedAt: imageData.verifiedAt,
+});
 
 // Type for image with pre-loaded entity relations
 // Note: Association deletedAt is filtered at query time, but we still need to check entity deletedAt
@@ -181,6 +207,7 @@ const imageWithRelationsToAPI = (
       size: imageData.size,
       contentType: imageData.contentType,
       status: imageData.status,
+      ...imageIntegrityFields(imageData),
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "PRODUCT",
@@ -202,6 +229,7 @@ const imageWithRelationsToAPI = (
       size: imageData.size,
       contentType: imageData.contentType,
       status: imageData.status,
+      ...imageIntegrityFields(imageData),
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "LOCATION",
@@ -223,6 +251,7 @@ const imageWithRelationsToAPI = (
       size: imageData.size,
       contentType: imageData.contentType,
       status: imageData.status,
+      ...imageIntegrityFields(imageData),
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "RECIPE",
@@ -244,6 +273,7 @@ const imageWithRelationsToAPI = (
       size: imageData.size,
       contentType: imageData.contentType,
       status: imageData.status,
+      ...imageIntegrityFields(imageData),
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "PROJECT",
@@ -268,6 +298,7 @@ const imageWithRelationsToAPI = (
       size: imageData.size,
       contentType: imageData.contentType,
       status: imageData.status,
+      ...imageIntegrityFields(imageData),
       createdAt: imageData.createdAt,
       updatedAt: imageData.updatedAt,
       entityType: "PURCHASE",
@@ -285,6 +316,7 @@ const imageWithRelationsToAPI = (
     size: imageData.size,
     contentType: imageData.contentType,
     status: imageData.status,
+    ...imageIntegrityFields(imageData),
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
     entityType: null,
@@ -899,6 +931,263 @@ export const assertAttachableEntityExists = async (
   }
 };
 
+/** Locate a previous MCP attachment retry without treating arbitrary Image rows
+ * as idempotency winners. */
+export const findAttachmentByIdempotencyKey = async (
+  db: Database | DrizzleTransaction,
+  entityType: AttachableImageEntity,
+  entityId: string,
+  idempotencyKey: string,
+): Promise<typeof image.$inferSelect | null> =>
+  (await ("query" in db ? db : getDb(db)).query.image.findFirst({
+    where: and(
+      eq(image.targetType, entityType),
+      eq(image.targetId, entityId),
+      eq(image.idempotencyKey, idempotencyKey),
+      notDeleted(image),
+    ),
+  })) ?? null;
+
+export const getImagesAttachedToEntity = async (
+  db: Database,
+  entityType: AttachableImageEntity,
+  entityId: string,
+): Promise<Array<typeof image.$inferSelect>> => {
+  const dbc = getDb(db);
+  return await match(entityType)
+    .with("product", () =>
+      dbc
+        .select({ image })
+        .from(productImage)
+        .innerJoin(image, eq(productImage.imageId, image.id))
+        .where(
+          and(
+            eq(productImage.productId, unsafeProductId(entityId)),
+            notDeleted(productImage),
+            notDeleted(image),
+          ),
+        )
+        .then((rows) => rows.map((row) => row.image)),
+    )
+    .with("recipe", () =>
+      dbc
+        .select({ image })
+        .from(recipeImage)
+        .innerJoin(image, eq(recipeImage.imageId, image.id))
+        .where(
+          and(
+            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            notDeleted(recipeImage),
+            notDeleted(image),
+          ),
+        )
+        .then((rows) => rows.map((row) => row.image)),
+    )
+    .with("location", () =>
+      dbc
+        .select({ image })
+        .from(locationImage)
+        .innerJoin(image, eq(locationImage.imageId, image.id))
+        .where(
+          and(
+            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            notDeleted(locationImage),
+            notDeleted(image),
+          ),
+        )
+        .then((rows) => rows.map((row) => row.image)),
+    )
+    .with("project", () =>
+      dbc
+        .select({ image })
+        .from(projectImage)
+        .innerJoin(image, eq(projectImage.imageId, image.id))
+        .where(
+          and(
+            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            notDeleted(projectImage),
+            notDeleted(image),
+          ),
+        )
+        .then((rows) => rows.map((row) => row.image)),
+    )
+    .with("purchase", () =>
+      dbc
+        .select({ image })
+        .from(purchaseImage)
+        .innerJoin(image, eq(purchaseImage.imageId, image.id))
+        .where(
+          and(
+            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            notDeleted(purchaseImage),
+            notDeleted(image),
+          ),
+        )
+        .then((rows) => rows.map((row) => row.image)),
+    )
+    .exhaustive();
+};
+
+export const updateImageIntegrity = async (
+  db: Database,
+  imageId: string,
+  values: Pick<
+    typeof image.$inferInsert,
+    | "width"
+    | "height"
+    | "detectedContentType"
+    | "sha256"
+    | "renderStatus"
+    | "storageStatus"
+    | "verifiedAt"
+  >,
+): Promise<void> => {
+  await getDb(db)
+    .update(image)
+    .set(values)
+    .where(and(eq(image.id, imageId), notDeleted(image)));
+};
+
+const lockAttachableEntity = async (
+  tx: DrizzleTransaction,
+  entityType: AttachableImageEntity,
+  entityId: string,
+): Promise<void> => {
+  const rows = await match(entityType)
+    .with("product", () =>
+      tx
+        .select({ id: product.id })
+        .from(product)
+        .where(
+          and(eq(product.id, unsafeProductId(entityId)), notDeleted(product)),
+        )
+        .for("update"),
+    )
+    .with("recipe", () =>
+      tx
+        .select({ id: recipe.id })
+        .from(recipe)
+        .where(and(eq(recipe.id, unsafeRecipeId(entityId)), notDeleted(recipe)))
+        .for("update"),
+    )
+    .with("location", () =>
+      tx
+        .select({ id: location.id })
+        .from(location)
+        .where(
+          and(
+            eq(location.id, unsafeLocationId(entityId)),
+            notDeleted(location),
+          ),
+        )
+        .for("update"),
+    )
+    .with("project", () =>
+      tx
+        .select({ id: project.id })
+        .from(project)
+        .where(
+          and(eq(project.id, unsafeProjectId(entityId)), notDeleted(project)),
+        )
+        .for("update"),
+    )
+    .with("purchase", () =>
+      tx
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(
+          and(
+            eq(purchase.id, unsafePurchaseId(entityId)),
+            notDeleted(purchase),
+          ),
+        )
+        .for("update"),
+    )
+    .exhaustive();
+  if (rows.length === 0) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `${entityType} ${entityId} not found`,
+    );
+  }
+};
+
+const countDisplayableAttachedImages = async (
+  tx: DrizzleTransaction,
+  entityType: AttachableImageEntity,
+  entityId: string,
+): Promise<number> => {
+  const whereImage = and(notDeleted(image), displayableImageWhere);
+  const totals = await match(entityType)
+    .with("product", () =>
+      tx
+        .select({ total: count() })
+        .from(productImage)
+        .innerJoin(image, eq(productImage.imageId, image.id))
+        .where(
+          and(
+            eq(productImage.productId, unsafeProductId(entityId)),
+            notDeleted(productImage),
+            whereImage,
+          ),
+        ),
+    )
+    .with("recipe", () =>
+      tx
+        .select({ total: count() })
+        .from(recipeImage)
+        .innerJoin(image, eq(recipeImage.imageId, image.id))
+        .where(
+          and(
+            eq(recipeImage.recipeId, unsafeRecipeId(entityId)),
+            notDeleted(recipeImage),
+            whereImage,
+          ),
+        ),
+    )
+    .with("location", () =>
+      tx
+        .select({ total: count() })
+        .from(locationImage)
+        .innerJoin(image, eq(locationImage.imageId, image.id))
+        .where(
+          and(
+            eq(locationImage.locationId, unsafeLocationId(entityId)),
+            notDeleted(locationImage),
+            whereImage,
+          ),
+        ),
+    )
+    .with("project", () =>
+      tx
+        .select({ total: count() })
+        .from(projectImage)
+        .innerJoin(image, eq(projectImage.imageId, image.id))
+        .where(
+          and(
+            eq(projectImage.projectId, unsafeProjectId(entityId)),
+            notDeleted(projectImage),
+            whereImage,
+          ),
+        ),
+    )
+    .with("purchase", () =>
+      tx
+        .select({ total: count() })
+        .from(purchaseImage)
+        .innerJoin(image, eq(purchaseImage.imageId, image.id))
+        .where(
+          and(
+            eq(purchaseImage.purchaseId, unsafePurchaseId(entityId)),
+            notDeleted(purchaseImage),
+            whereImage,
+          ),
+        ),
+    )
+    .exhaustive();
+  return Number(totals[0]?.total ?? 0);
+};
+
 /**
  * Attach an already-UPLOADED image to one of the four gallery entities by
  * dispatching to its join table. Mirrors {@link associateImagesWithProduct} for
@@ -964,23 +1253,113 @@ export const createAndAssociateUploadedImage = async (
     filename: string;
     contentType: string;
     size: number;
+    width?: number | null;
+    height?: number | null;
+    detectedContentType?: string | null;
+    sha256?: string | null;
+    renderStatus?: "unverified" | "verified" | "failed" | null;
+    storageStatus?:
+      | "unverified"
+      | "available"
+      | "missing"
+      | "metadata_mismatch"
+      | null;
+    verifiedAt?: Date | null;
+    targetType?: string | null;
+    targetId?: string | null;
+    idempotencyKey?: string | null;
   },
   entityType: AttachableImageEntity,
   entityId: string,
   documentKind?: PurchaseDocumentKind,
 ): Promise<typeof image.$inferSelect> => {
-  return await withTransaction(db, async (tx) => {
-    const row = await createUploadedImageRecord(tx, params);
+  return (
+    await createOrReuseAttachedImage(
+      db,
+      params,
+      entityType,
+      entityId,
+      documentKind,
+    )
+  ).row;
+};
+
+/**
+ * Transactional half of MCP attachment. The target row lock makes the gallery
+ * count precondition meaningful, while the partial unique index elects one
+ * winner if two requests with the same idempotency key race after uploading.
+ */
+export const createOrReuseAttachedImage = async (
+  db: Database,
+  params: Parameters<typeof createUploadedImageRecord>[1] & {
+    expectedImageCount?: number;
+  },
+  entityType: AttachableImageEntity,
+  entityId: string,
+  documentKind?: PurchaseDocumentKind,
+): Promise<{ row: typeof image.$inferSelect; reused: boolean }> =>
+  await withTransaction(db, async (tx) => {
+    await lockAttachableEntity(tx, entityType, entityId);
+    if (params.idempotencyKey) {
+      const winner = await findAttachmentByIdempotencyKey(
+        tx,
+        entityType,
+        entityId,
+        params.idempotencyKey,
+      );
+      if (winner) return { row: winner, reused: true };
+    }
+    if (params.expectedImageCount !== undefined) {
+      const actual = await countDisplayableAttachedImages(
+        tx,
+        entityType,
+        entityId,
+      );
+      if (actual !== params.expectedImageCount) {
+        throw createAppError(
+          "IMAGE_PRECONDITION_FAILED",
+          `Expected ${params.expectedImageCount} displayable images, found ${actual}`,
+        );
+      }
+    }
+
+    const { expectedImageCount: _expectedImageCount, ...record } = params;
+    const [inserted] = await tx
+      .insert(image)
+      .values({
+        ...record,
+        status: "UPLOADED",
+        targetType: entityType,
+        targetId: entityId,
+      })
+      .onConflictDoNothing({
+        target: [image.targetType, image.targetId, image.idempotencyKey],
+        where: sql`${image.idempotencyKey} IS NOT NULL AND ${image.deletedAt} IS NULL`,
+      })
+      .returning();
+    if (!inserted) {
+      // Only possible for an idempotency race; the target lock serializes the
+      // normal expected-count path. Re-read so the loser can return the winner.
+      if (params.idempotencyKey) {
+        const winner = await findAttachmentByIdempotencyKey(
+          tx,
+          entityType,
+          entityId,
+          params.idempotencyKey,
+        );
+        if (winner) return { row: winner, reused: true };
+      }
+      throw new Error("Image attachment insert unexpectedly returned no row");
+    }
     await associateImageWithEntity(
       tx,
       entityType,
       entityId,
-      row.id,
+      inserted.id,
       documentKind,
     );
-    return row;
+    return { row: inserted, reused: false };
   });
-};
 
 /**
  * Fetch images for a set of projects, grouped by project id and ordered

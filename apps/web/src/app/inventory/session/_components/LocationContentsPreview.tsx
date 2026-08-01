@@ -1,4 +1,4 @@
-import { isDocumentFile } from "@cubby/schemas/image";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -33,7 +33,7 @@ export function LocationContentsPreview({ items }: { items: InventoryItem[] }) {
         {thumbs.map((item) => (
           <Image
             key={item.id}
-            src={item.product.images.find((img) => !isDocumentFile(img))?.url}
+            src={item.product.images.find(isDisplayableImageFile)?.url}
             alt={productDisplayName(item.product.name)}
             displayWidth={64}
             className="size-8 shrink-0 border border-[var(--border)] object-cover"
