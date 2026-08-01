@@ -787,6 +787,130 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     );
     expectOk(updated);
   });
+
+  it("financial account and transaction: create -> list -> get -> update -> delete with account shortcode", async () => {
+    const caller = createTestCaller(domainRouter, ctx.db);
+
+    const account = await callTool(
+      "create_financial_account",
+      {
+        name: "Shortcode Settlement Visa",
+        identity: {
+          kind: "credit_card",
+          issuer: "Test Bank",
+          network: "visa",
+          last4: "4242",
+        },
+        sourceAliases: [
+          {
+            source: "shortcode-test",
+            alias: "Visa ending 4242",
+            externalAccountId: "acct-shortcode-4242",
+          },
+        ],
+      },
+      caller,
+    );
+    expectOk(account);
+    const accountOut = structured(account);
+    expectShortcode(accountOut.id, "financialAccount");
+    const accountCode = accountOut.id as string;
+
+    const listedAccounts = await callTool(
+      "list_financial_accounts",
+      { search: "Shortcode Settlement Visa" },
+      caller,
+    );
+    expectOk(listedAccounts);
+    expect(
+      (structured(listedAccounts).items as Array<Record<string, unknown>>).map(
+        (item) => item.id,
+      ),
+    ).toContain(accountCode);
+
+    const gotAccount = await callTool(
+      "get_financial_account",
+      { id: accountCode },
+      caller,
+    );
+    expectOk(gotAccount);
+    expect(structured(gotAccount).name).toBe("Shortcode Settlement Visa");
+
+    const updatedAccount = await callTool(
+      "update_financial_account",
+      { id: accountCode, notes: "Shortcode account note" },
+      caller,
+    );
+    expectOk(updatedAccount);
+    expect(structured(updatedAccount).notes).toBe("Shortcode account note");
+
+    const transaction = await callTool(
+      "create_financial_transaction",
+      {
+        accountId: accountCode,
+        kind: "purchase",
+        status: "pending",
+        amount: 42.5,
+        sourceRefs: [
+          { source: "shortcode-test", externalId: "transaction-4242" },
+        ],
+      },
+      caller,
+    );
+    expectOk(transaction);
+    const transactionOut = structured(transaction);
+    expectShortcode(transactionOut.id, "financialTransaction");
+    expect(transactionOut.accountId).toBe(accountCode);
+    const transactionCode = transactionOut.id as string;
+
+    const listedTransactions = await callTool(
+      "list_financial_transactions",
+      { accountId: accountCode },
+      caller,
+    );
+    expectOk(listedTransactions);
+    expect(
+      (
+        structured(listedTransactions).items as Array<Record<string, unknown>>
+      ).map((item) => item.id),
+    ).toContain(transactionCode);
+
+    const gotTransaction = await callTool(
+      "get_financial_transaction",
+      { id: transactionCode },
+      caller,
+    );
+    expectOk(gotTransaction);
+    expect(structured(gotTransaction).accountId).toBe(accountCode);
+
+    const updatedTransaction = await callTool(
+      "update_financial_transaction",
+      {
+        id: transactionCode,
+        status: "posted",
+        postedDate: "2026-07-31",
+      },
+      caller,
+    );
+    expectOk(updatedTransaction);
+    expect(structured(updatedTransaction).status).toBe("posted");
+
+    const deletedTransaction = await callTool(
+      "delete_financial_transactions",
+      { ids: [transactionCode] },
+      caller,
+    );
+    expectOk(deletedTransaction);
+    expect(structured(deletedTransaction).deleted).toBe(1);
+
+    const deletedAccount = await callTool(
+      "delete_financial_accounts",
+      { ids: [accountCode] },
+      caller,
+    );
+    expectOk(deletedAccount);
+    expect(structured(deletedAccount).deleted).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -260,7 +260,7 @@ export const locationUpdateInput = z.object({
 });
 
 export const locationBulkUpdateParentInput = z.object({
-  ids: z.array(locationShortcode).min(1),
+  ids: z.array(locationShortcode).min(1).max(3000),
   parentId: optionalLocationShortcode,
 });
 

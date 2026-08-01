@@ -20,6 +20,7 @@
 
 // CRUD operations
 export {
+  bulkReparentLocations,
   createLocation,
   deleteLocations,
   ensureGlobalUnknownLocation,

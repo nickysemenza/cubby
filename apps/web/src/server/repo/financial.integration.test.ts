@@ -13,6 +13,8 @@ import { createExpense } from "./expense";
 import {
   createFinancialAccount,
   deleteFinancialAccounts,
+  listFinancialAccounts,
+  updateFinancialAccount,
 } from "./financial-account";
 import {
   createFinancialTransaction,
@@ -218,6 +220,112 @@ describe("financial repositories — critical invariants", () => {
       });
       expect(filtered).toMatchObject({ data: [], count: 0 });
     }
+  });
+
+  it("rejects source-evidence collisions introduced through either update path", async () => {
+    const accountA = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Update alias source", [
+          {
+            source: "update-test",
+            alias: "Primary card",
+            externalAccountId: "account-shared",
+          },
+        ]),
+        ctx.actor,
+      )
+    ).output;
+    const accountB = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Update alias target"),
+        ctx.actor,
+      )
+    ).output;
+    await expect(
+      updateFinancialAccount(
+        ctx.db,
+        accountB.id,
+        {
+          sourceAliases: [
+            {
+              source: "update-test",
+              alias: "Duplicate card",
+              externalAccountId: "account-shared",
+            },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT" },
+    });
+
+    const transactionA = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: accountA.id,
+          kind: "purchase",
+          status: "pending",
+          amount: 10,
+          sourceRefs: [
+            { source: "update-test", externalId: "transaction-shared" },
+          ],
+        }),
+        ctx.actor,
+      )
+    ).output;
+    const transactionB = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: accountB.id,
+          kind: "purchase",
+          status: "pending",
+          amount: 20,
+        }),
+        ctx.actor,
+      )
+    ).output;
+    await expect(
+      updateFinancialTransaction(
+        ctx.db,
+        transactionB.id,
+        {
+          sourceRefs: [
+            { source: "update-test", externalId: "transaction-shared" },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
+    });
+
+    expect(transactionA.sourceRefs).toEqual([
+      { source: "update-test", externalId: "transaction-shared" },
+    ]);
+
+    const accountsByExternalId = await listFinancialAccounts(
+      ctx.db,
+      { externalAccountId: "account-shared" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(accountsByExternalId.data.map((entry) => entry.id)).toEqual([
+      accountA.id,
+    ]);
+    const transactionsByExternalId = await listFinancialTransactions(
+      ctx.db,
+      { externalId: "transaction-shared" },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(transactionsByExternalId.data.map((entry) => entry.id)).toEqual([
+      transactionA.id,
+    ]);
   });
 
   it("reconciles settlement separately from Expense spend and re-points/detaches transactions", async () => {

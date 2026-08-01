@@ -115,7 +115,7 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Shortcodes are the public id; uuids are private
 
-A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD-4K7M`) is what URLs, QR labels, and MCP expose. See [README](README.md#public-identifiers--shortcodes) for the twelve-prefix registry.
+A uuid PK is an implementation detail of the repo layer. The **shortcode** (`PRD-4K7M`) is what URLs, QR labels, and MCP expose. See [README](README.md#public-identifiers--shortcodes) for the fourteen-prefix registry.
 
 - **A uuid must never reach a URL or an MCP payload.** Detail routes are `/products/$shortcode`; guard-enforced by `uuid-entity-href` in `scripts/check-conventions.mjs`, which also catches server-built template hrefs the router's typed params can't see.
 - **Resolve in exactly one place** — `apps/web/src/server/repo/shortcode-resolver.ts`. Don't add a `findXByShortcode`; three of those existed and were deleted. `resolveShortcode` answers *"what does this code name"* (soft-deleted rows included, so a scan of a dead label can say so); `resolveLiveShortcode(db, code, entity)` answers *"can I still open it"* and pins the expected entity, so a `LOC-` code handed to a product lookup returns null instead of leaking a uuid.

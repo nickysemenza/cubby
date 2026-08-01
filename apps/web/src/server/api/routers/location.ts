@@ -33,12 +33,13 @@ import {
   recentlyActiveLocationsOut,
   recomputeLocationValuationsOut,
 } from "@cubby/schemas/location";
+import { uniq } from "es-toolkit";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
-import { withTransaction } from "~/server/repo/database-helpers";
 import {
   buildLocationTree,
   buildLocationTypeCount,
+  bulkReparentLocations,
   createLocation,
   deleteLocations,
   ensureGlobalUnknownLocation,
@@ -90,8 +91,8 @@ async function resolveLocationIds(
   if (missing) {
     throw createAppError("LOCATION_NOT_FOUND", `Location ${missing} not found`);
   }
-  return shortcodes.map((shortcode) =>
-    unsafeLocationId(resolved.get(shortcode)!),
+  return uniq(
+    shortcodes.map((shortcode) => unsafeLocationId(resolved.get(shortcode)!)),
   );
 }
 
@@ -241,17 +242,7 @@ const bulkUpdateParent = protectedProcedure
       ? await resolveLocationId(ctx.db, input.parentId)
       : null;
 
-    await withTransaction(ctx.db, async (tx) => {
-      for (const id of ids) {
-        await updateLocation(
-          tx,
-          id,
-          { parentId: input.parentId },
-          ctx.actorContext,
-          { resolvedParentId: parentId },
-        );
-      }
-    });
+    await bulkReparentLocations(ctx.db, ids, parentId, ctx.actorContext);
 
     await runMutationSideEffectsForEntities(
       ctx.db,
@@ -261,7 +252,7 @@ const bulkUpdateParent = protectedProcedure
         source: "location.bulkUpdateParent",
       })),
     );
-    return { updated: input.ids.length };
+    return { updated: ids.length };
   });
 
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)

@@ -38,6 +38,7 @@ import {
   inventoryWithLocationAndProductOut,
   reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
+import { uniq } from "es-toolkit";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bulkMoveInventoryEntries,
@@ -267,7 +268,7 @@ const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
   .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const productShortcodes = [...new Set(input.items.map((i) => i.productId))];
+    const productShortcodes = uniq(input.items.map((i) => i.productId));
     const resolvedProducts = await resolveLiveShortcodes(
       ctx.db,
       productShortcodes,

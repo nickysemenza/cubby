@@ -36,6 +36,7 @@ import type {
   TaskUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, task, taskDependency } from "~/server/db/schema";
@@ -137,9 +138,9 @@ export async function taskDependencyIds(
   // `blockedByIds`/`blockingIds` as public ids, and a uuid must never reach
   // that far. The KEYS stay the caller's own uuids (that's what every
   // `.get(row.id)` call site keys on).
-  const allTaskIds = [
-    ...new Set([...raw.blockedBy.values(), ...raw.blocking.values()].flat()),
-  ];
+  const allTaskIds = uniq(
+    [...raw.blockedBy.values(), ...raw.blocking.values()].flat(),
+  );
   const refs: EntityRef[] = allTaskIds.map((id) => ({ entity: "task", id }));
   const codes = await lookupShortcodes(db, refs);
   const toShortcodes = (ids: TaskId[]): TaskShortcode[] =>

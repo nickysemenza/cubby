@@ -86,17 +86,27 @@ export class USDAClient {
 
           // Cache successful getFood responses for 24 hours
           if (cache && isGetFood && response.ok) {
-            const body = await response.clone().text();
-            cache.put(
-              args.path,
-              new Response(body, {
-                status: response.status,
-                headers: {
-                  "Content-Type": "application/json",
-                  "Cache-Control": "public, max-age=86400",
-                },
-              }),
-            );
+            try {
+              const body = await response.clone().text();
+              await cache.put(
+                args.path,
+                new Response(body, {
+                  status: response.status,
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "public, max-age=86400",
+                  },
+                }),
+              );
+            } catch (error) {
+              // A cache failure must not turn a successful USDA response into
+              // an application error, but awaiting it keeps the write alive in
+              // the Worker request lifetime.
+              console.warn(
+                `[USDA] Cache write failed for ${args.path}:`,
+                error,
+              );
+            }
           }
 
           return {

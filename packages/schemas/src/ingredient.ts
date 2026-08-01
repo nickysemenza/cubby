@@ -316,7 +316,7 @@ export const ingredientNamesInput = z.object({
 });
 
 export const ingredientResolvableNamesInput = z.object({
-  names: z.array(z.string().min(1)),
+  names: z.array(z.string().min(1)).max(1000),
 });
 
 export const mcpIngredientCreateInput = z.object({

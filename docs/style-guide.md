@@ -71,46 +71,51 @@ className = "text-destructive";
 
 ### When to Use Each Approach
 
-| Approach            | Use Case                  | Example                                  |
-| ------------------- | ------------------------- | ---------------------------------------- |
-| Raw Tailwind        | One-off styling           | `className="mt-4"`                       |
-| `FlexContainer`     | Repeated flex patterns    | `<FlexContainer align="center" gap={2}>` |
-| `GridContainer`     | Grid layouts              | `<GridContainer cols="cards3">`          |
-| `SpacedContainer`   | Vertical stacked content  | `<SpacedContainer space={4}>`            |
-| CVA                 | Components with variants  | Button, Badge                            |
-| `@layer components` | Complex selector patterns | `.animate-popover`                       |
+| Approach            | Use Case                  | Example                            |
+| ------------------- | ------------------------- | ---------------------------------- |
+| Raw Tailwind        | One-off styling           | `className="mt-4"`                 |
+| `Row`               | Repeated horizontal flex  | `<Row align="center" gap="sm">`   |
+| `Grid`              | Preset responsive grids   | `<Grid cols="cards3">`             |
+| `Stack`             | Vertical stacked content  | `<Stack gap="md">`                 |
+| `Section`           | Titled semantic region    | `<Section title="Details">`        |
+| CVA                 | Components with variants  | Button, Badge                        |
+| `@layer components` | Complex selector patterns | `.animate-popover`                   |
 
 ### Layout Helper Components
 
-Located in `~/components/ui/`:
+Import from `~/components/layout` (the variants live in `~/styles/layouts.ts`):
 
 ```tsx
-// FlexContainer - replaces inline flex patterns
-<FlexContainer align="center" justify="between" gap={2}>
+// Row - replaces repeated horizontal flex patterns
+<Row align="center" justify="between" gap="sm">
   <span>Label</span>
   <Button>Action</Button>
-</FlexContainer>
+</Row>
 
-// GridContainer - responsive grids
-<GridContainer cols="cards3" gap={4}>
+// Grid - preset responsive grids
+<Grid cols="cards3" gap="md">
   {items.map(item => <Card key={item.id} />)}
-</GridContainer>
+</Grid>
 
-// SpacedContainer - vertical spacing
-<SpacedContainer space={4}>
+// Stack - vertical spacing
+<Stack gap="md">
   <Section1 />
   <Section2 />
-</SpacedContainer>
+</Stack>
 ```
 
-### FlexContainer Variants
+### Layout Variants
 
 ```ts
-direction: 'row' | 'col';
-align: 'start' | 'center' | 'end' | 'stretch';
+// Row: horizontal flex; no defaults beyond `flex`
+align: 'start' | 'center' | 'end' | 'baseline' | 'stretch';
 justify: 'start' | 'center' | 'end' | 'between' | 'around';
-gap: 0 | 1 | 2 | 3 | 4 | 6 | 8;
+gap: 'tight' | 'xs' | 'snug' | 'sm' | 'md' | 'lg';
 wrap: true | false;
+
+// Stack: vertical blocks; `gap="md"` is the default
+// Grid: preset columns: 'cards3' | 'thumbs' | 'images' | 'summary'
+// Section: semantic <section> with optional title and description
 ```
 
 ## Extracted CSS Classes
@@ -170,7 +175,7 @@ themes are rebuilt intentionally across the whole design system.
 1. **Use semantic tokens first** - Fall back to hard-coded colors only for status/data
 2. **Avoid theme-only variants** - Use semantic tokens instead of `dark:` or
    `terminal:` branches
-3. **Prefer helper components** - FlexContainer/GridContainer for repeated patterns
+3. **Prefer layout primitives** - Row/Stack/Grid/Section for repeated patterns
 4. **Extract long classNames** - Move to `@layer components` when >100 chars
 5. **Use `cn()` utility** - For merging classNames with conflict resolution
 6. **Maintain consistency** - Follow existing patterns in similar components

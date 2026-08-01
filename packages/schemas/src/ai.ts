@@ -101,6 +101,10 @@ export const detectedInventoryItemSchema = z.object(
 );
 export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
 
+// Each detected item triggers product matching work after the model response.
+// Keep the structured-output fan-out bounded for a single photo analysis.
+export const MAX_DETECTED_INVENTORY_ITEMS = 20;
+
 export const detectedProductMatchSchema = z.object({
   id: productShortcode,
   name: z.string(),
@@ -117,7 +121,7 @@ export const detectedItemSchema = z.object({
 export type DetectedItem = z.infer<typeof detectedItemSchema>;
 
 export const detectedInventoryAiResultSchema = z.object({
-  items: z.array(detectedInventoryItemSchema),
+  items: z.array(detectedInventoryItemSchema).max(MAX_DETECTED_INVENTORY_ITEMS),
   summary: z.string(),
 });
 export type DetectedInventoryAiResult = z.infer<
