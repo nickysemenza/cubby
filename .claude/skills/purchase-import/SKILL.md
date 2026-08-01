@@ -186,7 +186,7 @@ roster, open a purchase, or set a `statedTotal`:
   it; deleting a purchase nulls `purchaseId` on real money. Those stay UI-only.
 - `attach_file` files Purchase evidence — it takes the purchase's **`PUR-` shortcode as `entityId`**,
   **no `entityType`**, and a required `documentKind`. Use `reclassify_purchase_document` when an
-  existing attachment was classified incorrectly. See the size trap in Phase 4 before trying to
+  existing attachment was classified incorrectly. See the upload workflow in Phase 4 before trying to
   attach a PDF.
 
 ## Ground rules
@@ -529,14 +529,21 @@ single call.
     `statement`, `specification`, and `other` remain useful evidence but do not satisfy the
     `primary_document` check.
 
-    ⚠️ **You probably cannot do this from the main loop.** `data` wants base64, and a perfectly
-    ordinary one-page receipt blows the context: a 71KB PDF is **94,684 base64 characters**, which
-    `Read` truncates (~22k chars delivered, and the full file is billed near 90k tokens *in* before
-    the same payload is echoed *out* in the tool call). Don't try to page through it and reassemble —
-    a mis-stitched receipt is worse than none. Either hand the upload to a subagent, which pipes the
-    bytes straight into `attach_file` without them landing in the conversation, or ask the operator
-    to drag the file onto the purchase in the UI. `url` is the only cheap path, and only when the file
-    is already on a public http(s) URL — do not upload a private receipt somewhere to manufacture one.
+    **Upload directly from the orchestrator.** Read and base64-encode the local PDF inside an
+    execution context, then pass that value directly to `attach_file` from the same context. The
+    base64 payload stays out of the conversation and does not need a subagent. Do not read, page, or
+    reassemble base64 through the conversation. If this execution-context path is unavailable or
+    fails, ask the operator to drag the file onto the purchase in the UI. An existing public http(s)
+    URL is also acceptable, but do not upload a private receipt elsewhere merely to manufacture one.
+
+    **Normal receipt default: inspect once, attach once, read back once, and stop.** Extract text
+    first and render only pages where layout affects interpretation or extraction is ambiguous. Call
+    `attach_file` once, then call `get_purchase` once and confirm `documentCount`, an `images` entry
+    with the expected `filename` and `contentType`, and every purchase field changed during the
+    import (for example `date`, `orderId`, `statedTotal`, `notes`, or `vendorId`). Do not repeat visual
+    inspection of the unchanged source, download the stored copy, or compute its SHA-256 unless
+    corruption, truncation, or a transport failure is suspected.
+
     Filing the document is optional for financial reconciliation, but required for computed
     completeness unless `primary_document` is explicitly excepted. **Never hold up verified numbers
     on an attachment.**
