@@ -284,6 +284,113 @@ describe("computed purchase and product data quality", () => {
     ).rejects.toThrow("does not apply to purchase");
   });
 
+  it("targets exceptions and rolls distinct linked Product exceptions into a Purchase", async () => {
+    const seeded = await seedPurchase();
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ category: "tools", model: null }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        purchaseId: seeded.output.id,
+        productId: product.id,
+        cost: 10,
+      }),
+      ctx.actor,
+    );
+    // The same Product can appear on multiple Expense lines; its exception must
+    // appear only once in the Purchase-level rollup.
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        purchaseId: seeded.output.id,
+        productId: product.id,
+        cost: 15,
+      }),
+      ctx.actor,
+    );
+
+    const productQuality = await setDataException(
+      ctx.db,
+      {
+        entityId: product.id,
+        check: "product_model",
+        reason: "unavailable",
+        note: "The manufacturer does not publish a model number.",
+      },
+      ctx.actor,
+    );
+    expect(productQuality.exceptions).toEqual([
+      expect.objectContaining({
+        check: "product_model",
+        targetType: "product",
+        targetId: product.id,
+      }),
+    ]);
+
+    const purchaseQuality = await setDataException(
+      ctx.db,
+      {
+        entityId: seeded.output.id,
+        check: "primary_document",
+        reason: "unavailable",
+        note: "Historical receipt could not be recovered.",
+      },
+      ctx.actor,
+    );
+    expect(purchaseQuality.exceptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          check: "primary_document",
+          targetType: "purchase",
+          targetId: seeded.output.id,
+        }),
+        expect.objectContaining({
+          check: "product_model",
+          targetType: "product",
+          targetId: product.id,
+        }),
+      ]),
+    );
+    expect(
+      purchaseQuality.exceptions.filter(
+        (exception) =>
+          exception.targetType === "product" &&
+          exception.targetId === product.id &&
+          exception.check === "product_model",
+      ),
+    ).toHaveLength(1);
+
+    await clearDataException(
+      ctx.db,
+      { entityId: product.id, check: "product_model" },
+      ctx.actor,
+    );
+    const restored = (
+      await loadPurchaseDataQualities(ctx.db, [seeded.entityId])
+    ).get(seeded.entityId)!;
+    expect(restored.exceptions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          check: "product_model",
+          targetType: "product",
+          targetId: product.id,
+        }),
+      ]),
+    );
+    expect(restored.gaps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          check: "product_model",
+          targetType: "product",
+          targetId: product.id,
+        }),
+      ]),
+    );
+  });
+
   it("applies Amazon ASIN coverage only to Amazon-linked products and reports exact collisions", async () => {
     const amazon = await seedPurchase("Amazon");
     const local = await seedPurchase("Local Hardware");
@@ -336,6 +443,7 @@ describe("computed purchase and product data quality", () => {
     await insertAndReturn(ctx.db, productExternalId, {
       productId: amazonProduct.entityId,
       source: "amazon",
+      kind: "asin",
       externalId: "B000TEST01",
       url: null,
     });
@@ -357,6 +465,7 @@ describe("computed purchase and product data quality", () => {
       await insertAndReturn(ctx.db, productExternalId, {
         productId,
         source: "catalog",
+        kind: "catalog_number",
         externalId: "SHARED-1",
         url: null,
       });
@@ -368,7 +477,7 @@ describe("computed purchase and product data quality", () => {
       "duplicate_external_id",
     );
     const collisions = await findProductExternalIdCollisions(ctx.db);
-    expect(collisions).toEqual([
+    expect(collisions.items).toEqual([
       expect.objectContaining({
         source: "catalog",
         externalId: "SHARED-1",
@@ -377,6 +486,16 @@ describe("computed purchase and product data quality", () => {
           expect.objectContaining({ id: localProduct.id }),
         ]),
       }),
+    ]);
+    const exact = await findProductExternalIdCollisions(ctx.db, {
+      identifiers: [
+        { source: "catalog", kind: "catalog_number", externalId: "SHARED-1" },
+        { source: "catalog", kind: "catalog_number", externalId: "MISSING" },
+      ],
+    });
+    expect(exact.results.map((result) => result.status)).toEqual([
+      "collision",
+      "missing",
     ]);
   });
 });
