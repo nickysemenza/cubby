@@ -1,3 +1,4 @@
+import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import type { FC, ReactNode } from "react";
 import { usePageDetailContext } from "~/components/page/Page";
 import {
@@ -307,8 +308,14 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     typeof pageDetail.rawData.id === "string"
       ? pageDetail.rawData.id
       : undefined;
+  // The explorer intentionally returns nothing for terminal entities. Skip
+  // the surrounding section too, so their detail pages do not gain an empty
+  // card merely because they have an id.
+  const hasSourceViews = relatedViewRegistry.some(
+    (view) => view.source === pageDetail?.entity,
+  );
   const relationshipSection: DetailSection | undefined =
-    pageDetail && sourceId
+    pageDetail && sourceId && hasSourceViews
       ? {
           title: "Relationships",
           icon: relationshipsSectionIcon,

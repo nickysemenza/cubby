@@ -58,6 +58,7 @@ export interface RelationshipTreeProps {
     offset: number;
   }) => Promise<RelationshipChildrenPage>;
   /** Optional compact start state for detail pages. */
+  /** Composed `groupStateKey(presetKey, relationKey)` entries, when overridden. */
   initialExpandedGroupKeys?: readonly string[];
   className?: string;
 }
@@ -227,7 +228,9 @@ export function RelationshipTree({
   const initialKeys = useMemo(
     () =>
       initialExpandedGroupKeys ??
-      (activePreset?.groups[0] ? [activePreset.groups[0].key] : []),
+      (activePreset?.groups[0]
+        ? [groupStateKey(activePreset.key, activePreset.groups[0].key)]
+        : []),
     [activePreset, initialExpandedGroupKeys],
   );
   const [expanded, setExpanded] = useState<Set<string>>(
