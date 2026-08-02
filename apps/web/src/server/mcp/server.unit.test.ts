@@ -671,6 +671,9 @@ describe("listMcpToolCatalog", () => {
       "update_products",
       "create_expenses",
       "update_expenses",
+      "create_purchases",
+      "update_purchases",
+      "delete_empty_purchases",
       "update_tasks",
       "create_financial_transactions",
       "update_financial_transactions",
@@ -970,6 +973,8 @@ describe("listMcpToolCatalog", () => {
       "create_recipe.sections[].ingredients[].id",
       "update_products.items[].removeImageIds",
       "update_products.items[].imageOrder",
+      "update_purchases.items[].removeImageIds",
+      "update_purchases.items[].imageOrder",
       "create_recipe.sections[].instructions[].id",
       "update_meal_recipe.id",
       "update_location.imageOrder",
@@ -1949,6 +1954,33 @@ describe("purchase restructuring tools (split/link/merge)", () => {
   const PURCHASE_A = "PUR-8882";
   const PURCHASE_B = "PUR-8883";
 
+  it("delete_empty_purchases is destructive, bounded, and returns deleted IDs", async () => {
+    const server = createMcpServer();
+    expect(
+      getRegisteredTool(server, "delete_empty_purchases")?.annotations,
+    ).toEqual(WRITE_DESTRUCTIVE_CLOSED);
+    const deleteEmpty = vi.fn().mockResolvedValue({
+      deleted: 2,
+      deletedIds: [PURCHASE_A, PURCHASE_B],
+    });
+
+    const result = await callTool(
+      server,
+      "delete_empty_purchases",
+      { ids: [PURCHASE_A, PURCHASE_B] },
+      { purchase: { deleteEmpty } },
+    );
+
+    expect(deleteEmpty).toHaveBeenCalledWith({
+      ids: [PURCHASE_A, PURCHASE_B],
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      deleted: 2,
+      deletedIds: [PURCHASE_A, PURCHASE_B],
+    });
+  });
+
   it("split_expense is WRITE_CLOSED, wraps the array result in items, and passes params through", async () => {
     const server = createMcpServer();
     expect(getRegisteredTool(server, "split_expense")?.annotations).toEqual(
@@ -1975,6 +2007,7 @@ describe("purchase restructuring tools (split/link/merge)", () => {
           projectId: null,
           productId: null,
           productQuantity: null,
+          notes: "line evidence",
         },
         {
           name: "Blade",

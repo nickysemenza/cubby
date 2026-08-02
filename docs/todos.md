@@ -531,6 +531,30 @@ inflate — work *about* a product is `Task.subjectProductId`) and **installment
 that *moves money* is `splitExpense`, which exists and is money-bearing; `PurchaseLine` is
 pure SKU/quantity annotation and creates no products. Don't reach for it to do this job.
 
+### Purchase-import — maybe later (trigger-gated)
+
+These are not work implied by a completed historical backfill. Future imports are
+expected to be small and interactive; promote one only on the stated evidence.
+
+- [ ] **`FinancialTransactionAllocation`** — allocate one settlement transaction
+  across several Purchases. **Trigger**: real one-to-many charges or refunds remain
+  operationally unresolved after retaining the transaction unlinked. Allocations are
+  settlement evidence only; they never enter spend.
+- [ ] **`PurchaseEvidenceReference`** — structured Gmail, Drive, or vendor-portal
+  evidence pointers. **Trigger**: repeated need to query those references beyond
+  Purchase notes and attached documents. It must not turn pasted email text into a
+  fabricated primary attachment.
+- [ ] **Durable import checkpoints/orchestration**. **Trigger**: a future import
+  genuinely spans sessions and cannot resume from client-held source keys and normal
+  MCP queries. Do not build queues, retries, or vendor parsers for ordinary small
+  interactive imports.
+- [ ] **`PurchaseRelation`** for replacements/exchanges. **Trigger**: those links
+  need navigation or querying rather than truthful Purchase notes.
+
+Still rejected: permanent Amazon/Home Depot parsers, universal Product creation,
+additional Purchase money totals, and money-bearing adjustment tables. `PurchaseLine`
+already has its own trigger above and is intentionally not duplicated here.
+
 Two traps this design already walked into once — don't re-introduce them:
 `buildSearchConditions` **ANDs** its `searchFilters`, so vendor must never share the
 `search` term (it would mean `name ILIKE q AND vendor matches q`, and most rows have

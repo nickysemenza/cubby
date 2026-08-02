@@ -29,6 +29,9 @@ calling a batch, then reconcile its ordered results with the approval table.
 
 Do not retry a whole batch blindly. Retry only failed indices after correcting
 the cause, and re-read a row when the failure may reflect a concurrent write.
+An ingest approval persists across pagination or a 50-item technical boundary;
+stop only when new ambiguity, conflict, deletion, Product promotion, or
+receiving changes the decision.
 
 ## Duplicate identity
 
@@ -36,3 +39,9 @@ Use exact identifiers, never names, as duplicate evidence. Before adding an
 external ID, call `find_product_external_id_collisions` with the exact source,
 kind, and value. A collision is a stop-and-review condition. Same-name items
 from different manufacturers are usually separate Products.
+
+For a bogus duplicate Purchase, preview the operation, delete its bogus
+Expenses, and re-read it. Delete the Purchase only once it is empty, through
+`delete_empty_purchases`; that guarded operation must refuse live Expenses and
+Financial Transactions. Purchase deletion is identity cleanup, not spend or
+settlement cleanup.

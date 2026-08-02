@@ -18,6 +18,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
+  deleteEmptyPurchasesInput,
+  deleteEmptyPurchasesOut,
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
   purchaseCreateInput,
@@ -32,6 +34,7 @@ import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
   createPurchase,
+  deleteEmptyPurchases,
   deletePurchases,
   getPurchaseByID,
   getPurchaseByShortcode,
@@ -283,6 +286,18 @@ const deleteItem = protectedProcedure
     ]);
   });
 
+const deleteEmpty = protectedProcedure
+  .input(deleteEmptyPurchasesInput)
+  .output(strictOutput(deleteEmptyPurchasesOut))
+  .mutation(async ({ ctx, input }) => {
+    const deletedIds = await deleteEmptyPurchases(
+      ctx.db,
+      input.ids,
+      ctx.actorContext,
+    );
+    return { deleted: deletedIds.length, deletedIds };
+  });
+
 export const purchaseRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -295,4 +310,5 @@ export const purchaseRouter = createTRPCRouter({
   merge,
   reclassifyDocument,
   delete: deleteItem,
+  deleteEmpty,
 });

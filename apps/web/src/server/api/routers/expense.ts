@@ -12,6 +12,8 @@ import {
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
+  deleteExpensesWithPurchaseEffectsInput,
+  deleteExpensesWithPurchaseEffectsOut,
   expenseAnalyticsOut,
   expenseBulkCostTypeInput,
   expenseBulkMoveInput,
@@ -33,6 +35,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   createExpense,
   deleteExpenses,
+  deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
   expenseList,
   expenseTradeAffinity,
@@ -142,6 +145,24 @@ const {
   },
   entityName: "expense",
 });
+
+const deleteWithPurchaseEffects = protectedProcedure
+  .input(deleteExpensesWithPurchaseEffectsInput)
+  .output(strictOutput(deleteExpensesWithPurchaseEffectsOut))
+  .mutation(async ({ ctx, input }) => {
+    const deletion = await deleteExpensesWithPurchaseEffects(
+      ctx.db,
+      input.ids,
+      ctx.actorContext,
+    );
+    await recomputeRecipesForPriceAffectedProducts(
+      ctx.db,
+      ctx.services.recipeCosting,
+      deletion.priceAffectedProductIds,
+      "expense.delete",
+    );
+    return deletion.result;
+  });
 
 /**
  * Batch-resolve the shortcodes a bulk-write result carries into the internal
@@ -346,6 +367,7 @@ export const expenseRouter = createTRPCRouter({
   create,
   update,
   delete: deleteItem,
+  deleteWithPurchaseEffects,
   chartData,
   analytics,
   tradeAffinity,

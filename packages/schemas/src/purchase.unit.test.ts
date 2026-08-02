@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  deleteEmptyPurchasesInput,
   purchaseFilterFields,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
+  splitExpenseInput,
 } from "./purchase";
 
 describe("purchase filter terminology", () => {
@@ -22,6 +24,53 @@ describe("purchase filter terminology", () => {
       expect(purchaseFilterFields).toHaveProperty(`${relation}PresenceFilter`);
       expect(purchaseFilterFields).toHaveProperty(`${relation}Search`);
     }
+  });
+});
+
+describe("purchase operation inputs", () => {
+  it("requires a unique bounded delete-empty selection", () => {
+    expect(
+      deleteEmptyPurchasesInput.safeParse({ ids: ["PUR-6662"] }).success,
+    ).toBe(true);
+    expect(
+      deleteEmptyPurchasesInput.safeParse({
+        ids: ["PUR-6662", "PUR-6662"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("distinguishes inherited, replaced, and cleared split notes", () => {
+    const parsed = splitExpenseInput.parse({
+      expenseId: "EXP-6662",
+      parts: [
+        {
+          name: "inherit",
+          cost: 1,
+          costType: "materials",
+          trade: "other",
+        },
+        {
+          name: "replace",
+          cost: 1,
+          costType: "materials",
+          trade: "other",
+          notes: "line evidence",
+        },
+        {
+          name: "clear",
+          cost: 1,
+          costType: "materials",
+          trade: "other",
+          notes: null,
+        },
+      ],
+    });
+
+    expect(parsed.parts.map((part) => part.notes)).toEqual([
+      undefined,
+      "line evidence",
+      null,
+    ]);
   });
 });
 

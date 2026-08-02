@@ -9,6 +9,8 @@
 import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
+  deleteExpensesWithPurchaseEffectsInput,
+  deleteExpensesWithPurchaseEffectsOut,
   expenseAnalyticsOut,
   expenseCreateInput,
   expenseFilterFields,
@@ -46,6 +48,7 @@ import {
   slimProject,
   slimTask,
   strictFilterInput,
+  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
 // ---------------------------------------------------------------------------
@@ -315,9 +318,9 @@ export function registerProjectTools(server: McpServer) {
       create:
         "Log an expense (costType materials|tools|services; set future=true for planned spend), optionally attached to a project.",
       update: "Update an expense's fields.",
-      delete: "Soft-delete expenses by IDs.",
     },
     create: (caller, params) => caller.expense.create(params),
+    operations: { delete: false },
     batch: { create: true, update: true },
     resolveUpdateData: async (_caller, data) =>
       data.productId === undefined
@@ -326,6 +329,16 @@ export function registerProjectTools(server: McpServer) {
             ...data,
             productId: data.productId,
           },
+  });
+
+  registerRouterTool(server, {
+    name: "delete_expenses",
+    description:
+      "Soft-delete up to 200 distinct expenses atomically. Returns the deleted expense IDs, every Purchase affected, and the subset that now has no live Expenses; use the latter to inspect before deleting an empty Purchase. This does not delete Purchases or settlement records.",
+    inputSchema: deleteExpensesWithPurchaseEffectsInput,
+    outputSchema: deleteExpensesWithPurchaseEffectsOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.expense.deleteWithPurchaseEffects(params),
   });
 
   registerRouterTool(server, {

@@ -330,11 +330,39 @@ export const splitExpenseInput = z.object({
         projectId: projectShortcode.nullable().default(null),
         productId: productShortcode.nullable().default(null),
         productQuantity: z.number().int().positive().nullable().default(null),
+        notes: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(
+            "Omit to inherit the original Expense notes; pass null to clear them for this part.",
+          ),
       }),
     )
     .min(2),
 });
 export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
+
+/** Agent-safe Purchase deletion: only already-empty vendor events qualify. */
+export const deleteEmptyPurchasesInput = z.strictObject({
+  ids: z
+    .array(purchaseShortcode)
+    .min(1)
+    .max(200)
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      "ids must not contain duplicates",
+    ),
+});
+export type DeleteEmptyPurchasesInput = z.infer<
+  typeof deleteEmptyPurchasesInput
+>;
+
+export const deleteEmptyPurchasesOut = z.object({
+  deleted: z.number().int().nonnegative(),
+  deletedIds: z.array(purchaseShortcode),
+});
+export type DeleteEmptyPurchasesOut = z.infer<typeof deleteEmptyPurchasesOut>;
 
 /**
  * Merge purchases the backfill couldn't group — the 364 singletons with no order

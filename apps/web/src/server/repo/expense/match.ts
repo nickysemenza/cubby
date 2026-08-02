@@ -324,6 +324,24 @@ export const matchExpenses = async (
         END AS "vendorMatchRaw"
       FROM deduped
     ),
+    -- A confirmed same-vendor order-id hit is stronger than the broad
+    -- amount+date heuristic. Once one exists for an export row, retain every
+    -- order-id sibling (including an aggregate alongside components), but do
+    -- not pad the result with unrelated amount/date coincidences. Unknown and
+    -- conflicting vendor names deliberately do NOT suppress that arm: those
+    -- need the extra candidates for human review.
+    filtered AS (
+      SELECT *
+      FROM flagged candidate
+      WHERE candidate."arm" = 0
+        OR NOT EXISTS (
+          SELECT 1
+          FROM flagged confirmed
+          WHERE confirmed."key" = candidate."key"
+            AND confirmed."arm" = 0
+            AND confirmed."vendorMatchRaw" IS TRUE
+        )
+    ),
     ranked AS (
       SELECT
         *,
@@ -346,7 +364,7 @@ export const matchExpenses = async (
             abs("date" - "inDate") NULLS LAST,
             abs("cost" - "amount") NULLS LAST
         ) AS "rn"
-      FROM flagged
+      FROM filtered
     )
     SELECT
       "key",

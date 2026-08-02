@@ -1086,6 +1086,41 @@ export const expenseOut = z.object({
 export type ExpenseOut = z.infer<typeof expenseOut>;
 
 /**
+ * Result of the import-oriented expense cleanup operation.  These public ids
+ * let a caller safely continue the "remove bad lines, then inspect the now
+ * empty purchases" workflow without exposing database UUIDs.
+ */
+export const deleteExpensesWithPurchaseEffectsOut = z.object({
+  deleted: z.number().int().nonnegative(),
+  deletedIds: z.array(expenseShortcode),
+  affectedPurchaseIds: z.array(purchaseShortcode),
+  newlyEmptyPurchaseIds: z.array(purchaseShortcode),
+});
+export type DeleteExpensesWithPurchaseEffectsOut = z.infer<
+  typeof deleteExpensesWithPurchaseEffectsOut
+>;
+
+export const deleteExpensesWithPurchaseEffectsInput = z.strictObject({
+  ids: z
+    .array(expenseShortcode)
+    .min(1)
+    .max(200)
+    .superRefine((ids, ctx) => {
+      const seen = new Set<string>();
+      for (const [index, id] of ids.entries()) {
+        if (seen.has(id)) {
+          ctx.addIssue({
+            code: "custom",
+            path: [index],
+            message: `Duplicate expense id ${id}; each expense may be deleted once.`,
+          });
+        }
+        seen.add(id);
+      }
+    }),
+});
+
+/**
  * Bulk expense write output — the updated rows plus any background work the
  * write enqueued (embedding refresh), mirroring inventory's
  * `*ListAndSideEffectsOut` shape.

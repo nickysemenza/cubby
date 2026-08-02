@@ -742,10 +742,15 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       caller,
     );
     expectOk(deleted);
-    expect(structured(deleted).deleted).toBe(1);
+    expect(structured(deleted)).toMatchObject({
+      deleted: 1,
+      deletedIds: [expenseCode],
+      affectedPurchaseIds: [],
+      newlyEmptyPurchaseIds: [],
+    });
   });
 
-  it("purchase: create with a vendor shortcode -> list -> get -> update (no delete tool by design)", async () => {
+  it("purchase: create with a vendor shortcode -> list -> get -> update -> delete empty", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
 
     const vendor = await callTool(
@@ -787,6 +792,17 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
       caller,
     );
     expectOk(updated);
+
+    const deleted = await callTool(
+      "delete_empty_purchases",
+      { ids: [purchaseCode] },
+      caller,
+    );
+    expectOk(deleted);
+    expect(structured(deleted)).toEqual({
+      deleted: 1,
+      deletedIds: [purchaseCode],
+    });
   });
 
   it("financial account and transaction: create -> list -> get -> update -> delete with account shortcode", async () => {

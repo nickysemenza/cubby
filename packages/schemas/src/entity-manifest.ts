@@ -427,12 +427,11 @@ export const entityManifest = {
       ),
     ],
     lifecycle: { delete: { mode: "soft", bulk: true }, merge: true },
-    // No delete: soft-deleting a purchase nulls `purchaseId` on real money —
-    // stays UI-only. The restructuring ops (split/link/merge) are NOT missing
-    // from this list because they're withheld — they aren't CRUD ops at all, so
-    // this roster (get/list/create/update) doesn't cover them. They're exposed
-    // as their own MCP tools (split_expense, link_expenses_to_purchase,
-    // merge_purchases) registered directly in purchase.tools.ts.
+    // No generic delete: the UI operation may detach real money. MCP exposes a
+    // narrower delete_empty_purchases tool that refuses live Expense or
+    // FinancialTransaction references. The restructuring ops (split/link/merge)
+    // likewise live outside this CRUD roster and are registered directly in
+    // purchase.tools.ts.
     mcp: ["get", "list", "create", "update"],
     routerStyle: "custom",
   },

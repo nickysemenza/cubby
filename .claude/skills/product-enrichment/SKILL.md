@@ -123,6 +123,14 @@ then an exact retailer asset. Reject lifestyle shots, bundles, watermarks,
 wrong colors/sizes/counts, thumbnails, and images whose variant cannot be
 confirmed.
 
+Before attachment, perform a bundle checkpoint: confirm the page and image show
+the exact standalone Product, not a kit, multipack, accessory, or family page.
+If an exact listing is retired, bundle-only, variant-ambiguous, or has no
+canonical image, do not attach a substitute. Preserve the verified identity
+facts, record the supported image exception in the report, and leave the gallery
+unchanged. A manufacturer family image is allowed only when disclosed as such
+and useful to the user.
+
 Read `get_product` immediately before attachment and snapshot its images,
 cover, display order, count, and metadata. Call `attach_file` once with the
 product's `PRD-` shortcode, `expectedImageCount`, and a deterministic retry
@@ -178,6 +186,7 @@ Return a compact table with one row per candidate:
 | Product | Identity used | Source page(s) | Fields changed | Image | Outcome |
 | --- | --- | --- | --- | --- | --- |
 
-Use `enriched`, `skipped — ambiguous`, `skipped — no exact source`, or
-`failed — <reason>` as outcomes. Include direct source links in the report;
-Cubby's normal audit log remains the durable record of field writes.
+Use `enriched`, `skipped — ambiguous`, `skipped — no exact source`,
+`skipped — retired/bundle-only/no canonical image`, or `failed — <reason>` as
+outcomes. Include direct source links and any supported image exception in the
+report; Cubby's normal audit log remains the durable record of field writes.

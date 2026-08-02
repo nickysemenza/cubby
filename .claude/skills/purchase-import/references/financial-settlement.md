@@ -5,6 +5,8 @@
 Vendor documents establish Purchase identity, literal stated total, and
 Expense detail. Statements establish FinancialTransaction amount, Account,
 status, and posted date. Do not overwrite one source's facts with the other.
+Vendor-reported card/payment hints are evidence for notes or a future structured
+reference; they do not establish a Financial Account identity.
 
 Cubby signs are positive charge/outflow and negative refund/inflow. Monarch
 exports invert this for ordinary charges, so normalize before previewing.
@@ -33,3 +35,7 @@ Transactions spanning several Purchases remain unlinked until allocation exists.
 Keep refund Expenses on the original Purchase. Preserve the vendor's original
 stated total and record refund settlement separately. A reconciliation mismatch
 is an investigation cue, not a reason to rewrite spend or paperwork.
+
+For a posted transaction, retain a truthful source reference whenever available.
+Without one, the Purchase may remain flagged for missing `settlement_reference`;
+do not manufacture a reference to clear that gap.
