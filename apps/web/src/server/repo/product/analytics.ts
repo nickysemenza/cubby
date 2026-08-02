@@ -121,6 +121,20 @@ export const getProductTagOptions = async (
   return rows;
 };
 
+/** Distinct server-backed manufacturer roster for exact list filtering. */
+export const getProductManufacturerOptions = async (
+  db: Database,
+): Promise<Array<{ manufacturer: string; count: number }>> =>
+  getDb(db)
+    .select({
+      manufacturer: product.manufacturer,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(product)
+    .where(notDeleted(product))
+    .groupBy(product.manufacturer)
+    .orderBy(sql`count(*) DESC`, product.manufacturer);
+
 /**
  * Every other product sharing at least one tag with `id` — the "fits with this"
  * roster on the product detail page.

@@ -1,8 +1,14 @@
 import { z } from "zod";
 import { vendorRelatedFilterFields } from "./related-view";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
+import { plainDate } from "./project";
+import { presenceFilter } from "./pagination";
 
 /**
  * Vendor — the roster of places money goes. `Vendor ──< Purchase ──< Expense`:
@@ -40,8 +46,16 @@ export const vendorUpdateInput = z.object({
 export type VendorUpdateInput = z.infer<typeof vendorUpdateInput>;
 
 export const vendorFilterFields = {
+  ...auditDateFilterFields,
   ...vendorRelatedFilterFields,
   search: z.string().optional(),
+  purchaseCountMin: z.coerce.number().int().nonnegative().optional(),
+  purchaseCountMax: z.coerce.number().int().nonnegative().optional(),
+  spendMin: z.coerce.number().optional(),
+  spendMax: z.coerce.number().optional(),
+  latestPurchaseDatePresenceFilter: presenceFilter,
+  latestPurchaseDateFrom: plainDate.optional(),
+  latestPurchaseDateTo: plainDate.optional(),
 };
 export const vendorFiltersSchema = z.object(vendorFilterFields);
 export type VendorFilters = z.infer<typeof vendorFiltersSchema>;
@@ -52,7 +66,9 @@ export const vendorSortableFields = [
   // correlated subqueries in repo/vendor.ts — not columns on `Vendor`.
   "purchaseCount",
   "spend",
+  "latestPurchaseDate",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type VendorSortField = (typeof vendorSortableFields)[number];
 
@@ -67,6 +83,7 @@ export const vendorOut = z.object({
    * `purchase.statedTotal`, which is not spend.
    */
   spend: z.number(),
+  latestPurchaseDate: plainDate.nullable(),
   ...timestampedFields,
 });
 export type VendorOut = z.infer<typeof vendorOut>;

@@ -57,8 +57,6 @@ describe("manifestFilterConfig", () => {
   it.each([
     // Complements — selecting both would mean "no filter".
     ["expense", "product"],
-    ["task", "subjectProduct"],
-    ["product", "ingredient"],
     // The cross-entity presence filters. These also pin the exact `columnId`
     // each one hangs on: a spec whose id matches no column renders NOTHING,
     // silently (the bug recorded on `task.dueDate` in the manifest).
@@ -66,6 +64,7 @@ describe("manifestFilterConfig", () => {
     ["product", "food"],
     ["product", "image"],
     ["product", "unitMappingQuality"],
+    ["product", "purchaseDate"],
     ["location", "inventoryEntries"],
     ["ingredient", "appearsInRecipes"],
     ["recipe", "meals"],
@@ -119,7 +118,28 @@ describe("manifestFilterConfig", () => {
     ).toEqual({
       placeholder: "Filter by vendor...",
       filterType: "multiselect",
-      options: vendors,
+      options: [
+        { value: FILTER_ANY, label: "Has vendor", meta: true },
+        { value: FILTER_NONE, label: "(none)", meta: true },
+        ...vendors,
+      ],
+    });
+  });
+
+  it("puts the Product Projects roster and presence sentinels on its related column", () => {
+    const projects = [{ value: "PRJ-4K7M", label: "Kitchen" }];
+    expect(
+      manifestFilterConfig("product", "related:product.projects", {
+        project: projects,
+      }),
+    ).toEqual({
+      placeholder: "Filter by project...",
+      filterType: "multiselect",
+      options: [
+        { value: FILTER_ANY, label: "Has project", meta: true },
+        { value: FILTER_NONE, label: "(none)", meta: true },
+        ...projects,
+      ],
     });
   });
 
@@ -140,9 +160,7 @@ describe("manifestFilterConfig", () => {
   );
 
   it("returns undefined for a column with no declared filter", () => {
-    // `cost` HAS a spec (the preset select — presence sentinels plus amount
-    // buckets) — `createdAt` is a real expenses column that genuinely has none.
-    expect(manifestFilterConfig("expense", "createdAt")).toBeUndefined();
+    expect(manifestFilterConfig("expense", "updatedBy")).toBeUndefined();
   });
 });
 
@@ -163,14 +181,14 @@ describe("task subject-product filters", () => {
     });
   });
 
-  it("keeps the visible For-column presence filter independent", () => {
-    expect(build({ subjectProduct: "none" })).toEqual({
+  it("combines the visible exact-product picker with its presence sentinels", () => {
+    expect(build({ subjectProduct: FILTER_NONE })).toEqual({
       subjectProductPresenceFilter: "none",
     });
     expect(
       build({
         productId: "11111111-1111-4111-8111-111111111111",
-        subjectProduct: "has",
+        subjectProduct: FILTER_ANY,
       }),
     ).toEqual({
       subjectProductId: "11111111-1111-4111-8111-111111111111",
@@ -373,18 +391,21 @@ describe("vendor filters", () => {
     expect(build({})).toEqual({});
   });
 
-  it("declares exactly one spec, matching vendorFiltersSchema", () => {
-    // The rollup columns (`purchaseCount`, `spend`) are display/sort-only —
-    // there's no server filter behind either, so neither may grow a spec here.
+  it("declares the roster, rollup, recency, relationship, and audit filters", () => {
     const [columnBacked, urlOnly] = partitionFilterSpecs(
       getEntityFilters("vendor"),
     );
     expect(columnBacked.map((spec) => spec.columnId)).toEqual([
       "name",
+      "purchaseCount",
+      "spend",
+      "latestPurchaseDate",
       "related:vendor.expenses",
       "related:vendor.purchases",
       "related:vendor.products",
       "related:vendor.transactions",
+      "createdAt",
+      "updatedAt",
     ]);
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
       "expenseId",
@@ -411,6 +432,9 @@ describe("vendor filters", () => {
     // table writes the filter and the router removes it before anything reads it.
     expect(Object.keys(entityFilterSearchFields("vendor"))).toEqual([
       "q",
+      "purchaseCount",
+      "spend",
+      "latestPurchaseDate",
       "related-expense",
       "expenseId",
       "expensePresenceFilter",
@@ -423,6 +447,8 @@ describe("vendor filters", () => {
       "related-financialTransaction",
       "financialTransactionId",
       "financialTransactionPresenceFilter",
+      "createdAt",
+      "updatedAt",
     ]);
     // And the fragment survives what `parseSearch` hands it — an all-digits
     // vendor name search arrives pre-parsed as a number.
@@ -553,6 +579,8 @@ describe("purchase filters", () => {
       "related:purchase.transactions",
       "related:purchase.products",
       "related:purchase.projects",
+      "createdAt",
+      "updatedAt",
     ]);
     expect(urlOnly.map((spec) => spec.columnId)).toEqual([
       "expenseTotalMin",
@@ -596,6 +624,8 @@ describe("purchase filters", () => {
       "related-project",
       "projectId",
       "projectPresenceFilter",
+      "createdAt",
+      "updatedAt",
     ]);
     // And the fragment survives what `parseSearch` hands it — an all-digits
     // order-id search arrives pre-parsed as a number.

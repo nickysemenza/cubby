@@ -64,6 +64,18 @@ const SQL_RELATED_VIEWS = {
     `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
     "vendor",
   ),
+  "product.projects": named(
+    "Product",
+    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
+    "project",
+  ),
+  "product.purchases": dated(
+    "Product",
+    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = e."purchaseId" AND t."deletedAt" IS NULL`,
+    "purchase",
+    `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
+    `COALESCE(t."date"::timestamp, t."createdAt")`,
+  ),
   "product.expenses": dated(
     "Product",
     `JOIN "Expense" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,

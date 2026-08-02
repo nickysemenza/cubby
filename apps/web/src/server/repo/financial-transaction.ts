@@ -48,6 +48,7 @@ import {
 } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -183,6 +184,7 @@ async function whereFor(
       { column: financialTransaction.rawDescription, term: filters.search },
     ],
     [
+      ...auditDateWhereConditions(financialTransaction, filters),
       ...relatedWhereConditions(
         "financialTransaction",
         filters,

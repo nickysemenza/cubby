@@ -14,7 +14,7 @@ interface EntityRoutes {
 type CommonSectionType = "images" | "history" | "unit-mappings";
 
 /** Standard column types that can be auto-included in list pages */
-type StandardColumnType = "image" | "name" | "createdAt";
+type StandardColumnType = "image" | "name";
 
 /** Detail page conventions for an entity */
 interface EntityDetailConfig {

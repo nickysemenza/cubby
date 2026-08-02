@@ -1,5 +1,5 @@
 import type { ProductFilters } from "@cubby/schemas/product";
-import { taskCreateInput } from "@cubby/schemas/project";
+import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -22,6 +22,7 @@ import {
   productList,
   updateProduct,
 } from "./product";
+import { createProject } from "./project";
 import {
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventoryEntry,
@@ -540,6 +541,14 @@ describe("product repository", () => {
       );
       expect(hasFiltered.data.map((p) => p.id)).toContain(stocked.id);
       expect(hasFiltered.data.map((p) => p.id)).not.toContain(empty.id);
+
+      const exactLocation = await productList(
+        ctx.db,
+        { locationIdFilter: location.id },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(exactLocation.data.map((p) => p.id)).toEqual([stocked.id]);
     });
 
     it("inventoryPresenceFilter: none counts a soft-deleted-only inventory entry as none", async () => {
@@ -703,6 +712,14 @@ describe("product repository", () => {
       );
       expect(hasFiltered.data.map((p) => p.id)).toContain(linked.id);
       expect(hasFiltered.data.map((p) => p.id)).not.toContain(unlinked.id);
+
+      const exactIngredient = await productList(
+        ctx.db,
+        { ingredientIdFilter: ingredient.id },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(exactIngredient.data.map((p) => p.id)).toEqual([linked.id]);
     });
 
     it("categoryPresenceFilter: none returns only products with a null category", async () => {
@@ -834,6 +851,55 @@ describe("product repository", () => {
     });
 
     describe("expensePresenceFilter", () => {
+      it("filters and sorts by server-computed expense count and net basis", async () => {
+        const acquired = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Acquired Product", upc: "710000000030" }),
+          ctx.actor,
+        );
+        const untouched = await createProduct(
+          ctx.db,
+          makeProductInput({ name: "Untouched Product", upc: "710000000031" }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Part one",
+            productId: acquired.id,
+            cost: 60,
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Part two",
+            productId: acquired.id,
+            cost: 70,
+          }),
+          ctx.actor,
+        );
+
+        expect(
+          (await listWith({ expenseCountMin: 2 })).data.map((row) => row.id),
+        ).toEqual([acquired.id]);
+        expect(
+          (await listWith({ expenseTotalMin: 100 })).data.map((row) => row.id),
+        ).toEqual([acquired.id]);
+
+        const sorted = await productList(
+          ctx.db,
+          {},
+          [{ orderBy: "expenses", direction: "desc" }],
+          { pageIndex: 0, pageSize: 10 },
+        );
+        expect(sorted.data.map((row) => row.id)).toEqual([
+          acquired.id,
+          untouched.id,
+        ]);
+      });
+
       /**
        * The `NOT IN (NULL)` trap, and the most important test in this file.
        * `expense.productId` is nullable, so the subquery behind this filter
@@ -900,6 +966,140 @@ describe("product repository", () => {
 
         const none = await listWith({ expensePresenceFilter: "none" });
         expect(none.data.map((p) => p.id)).toContain(product.id);
+      });
+    });
+
+    describe("purchase provenance", () => {
+      it("filters and sorts by linked Project and latest Purchase date", async () => {
+        const { output: alphaProject } = await createProject(
+          ctx.db,
+          projectCreateInput.parse({ name: "Alpha Product Project" }),
+          ctx.actor,
+        );
+        const { output: zuluProject } = await createProject(
+          ctx.db,
+          projectCreateInput.parse({ name: "Zulu Product Project" }),
+          ctx.actor,
+        );
+        const alphaProduct = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Product in Alpha",
+            upc: "710000000020",
+          }),
+          ctx.actor,
+        );
+        const zuluProduct = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Product in Zulu",
+            upc: "710000000021",
+          }),
+          ctx.actor,
+        );
+        const unassignedProduct = await createProduct(
+          ctx.db,
+          makeProductInput({
+            name: "Product with no provenance",
+            upc: "710000000022",
+          }),
+          ctx.actor,
+        );
+
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Older alpha purchase",
+            productId: alphaProduct.id,
+            projectId: alphaProject.id,
+            vendor: "Alpha Store",
+            date: "2026-01-10",
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Newer alpha purchase",
+            productId: alphaProduct.id,
+            projectId: alphaProject.id,
+            vendor: "Alpha Store",
+            date: "2026-03-10",
+          }),
+          ctx.actor,
+        );
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            name: "Zulu purchase",
+            productId: zuluProduct.id,
+            projectId: zuluProject.id,
+            vendor: "Zulu Store",
+            date: "2026-02-10",
+          }),
+          ctx.actor,
+        );
+
+        const alphaOnly = await listWith({ projectId: alphaProject.id });
+        expect(alphaOnly.data.map((row) => row.id)).toEqual([alphaProduct.id]);
+
+        const hasProject = await listWith({ projectPresenceFilter: "has" });
+        expect(new Set(hasProject.data.map((row) => row.id))).toEqual(
+          new Set([alphaProduct.id, zuluProduct.id]),
+        );
+        const noProject = await listWith({ projectPresenceFilter: "none" });
+        expect(noProject.data.map((row) => row.id)).toContain(
+          unassignedProduct.id,
+        );
+
+        const byProject = await productList(
+          ctx.db,
+          {},
+          [
+            {
+              orderBy: "related:product.projects",
+              direction: "asc",
+            },
+          ],
+          { pageIndex: 0, pageSize: 10 },
+        );
+        expect(byProject.data.map((row) => row.id)).toEqual([
+          alphaProduct.id,
+          zuluProduct.id,
+          unassignedProduct.id,
+        ]);
+
+        const all = await listWith({});
+        expect(
+          all.data.find((row) => row.id === alphaProduct.id)?.purchaseDate,
+        ).toBe("2026-03-10");
+        expect(
+          all.data.find((row) => row.id === unassignedProduct.id)?.purchaseDate,
+        ).toBeNull();
+
+        const inFebruary = await listWith({
+          purchaseDateFrom: "2026-02-01",
+          purchaseDateTo: "2026-02-28",
+        });
+        expect(inFebruary.data.map((row) => row.id)).toEqual([zuluProduct.id]);
+        const noPurchaseDate = await listWith({
+          purchaseDatePresenceFilter: "none",
+        });
+        expect(noPurchaseDate.data.map((row) => row.id)).toContain(
+          unassignedProduct.id,
+        );
+
+        const byPurchaseDate = await productList(
+          ctx.db,
+          {},
+          [{ orderBy: "purchaseDate", direction: "desc" }],
+          { pageIndex: 0, pageSize: 10 },
+        );
+        expect(byPurchaseDate.data.map((row) => row.id)).toEqual([
+          alphaProduct.id,
+          zuluProduct.id,
+          unassignedProduct.id,
+        ]);
       });
     });
 

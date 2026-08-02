@@ -163,12 +163,16 @@ export function useClientEntityList<TData extends BaseListRow>({
   );
   const relatedInitialVisibility = useMemo(
     () =>
-      Object.fromEntries(
-        relatedViews.map((view) => [
-          `related:${view.key}`,
-          view.defaultVisible,
-        ]),
-      ),
+      ({
+        createdAt: false,
+        updatedAt: false,
+        ...Object.fromEntries(
+          relatedViews.map((view) => [
+            `related:${view.key}`,
+            view.defaultVisible,
+          ]),
+        ),
+      }) as Record<string, boolean>,
     [relatedViews],
   );
   const { columnVisibility, onColumnVisibilityChange } =

@@ -28,6 +28,7 @@ import { meal, mealRecipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries, logAuditEntry } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   countWhere,
   getDb,
@@ -116,6 +117,7 @@ export const mealList = async (
 
   const whereCondition = and(
     notDeleted(meal),
+    ...auditDateWhereConditions(meal, filters),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
   );

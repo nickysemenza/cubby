@@ -8,7 +8,11 @@ export type {
   FinancialReconciliationSummary,
 } from "./financial-reconciliation";
 import { financialTransactionRelatedFilterFields } from "./related-view";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -188,6 +192,7 @@ export type FinancialTransactionUpdateInput = z.infer<
 >;
 
 export const financialTransactionFilterFields = {
+  ...auditDateFilterFields,
   ...financialTransactionRelatedFilterFields,
   search: z.string().optional(),
   accountId: oneOrMany(financialAccountShortcode).optional(),
@@ -220,6 +225,7 @@ export const financialTransactionSortableFields = [
   "kind",
   "status",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type FinancialTransactionSortField =
   (typeof financialTransactionSortableFields)[number];

@@ -18,6 +18,18 @@ export const timestampedFields = {
   updatedAt: z.date(),
 } as const;
 
+/** Inclusive calendar-day bounds for the audit timestamps every entity carries. */
+const auditDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+
+export const auditDateFilterFields = {
+  createdFrom: auditDate.optional(),
+  createdTo: auditDate.optional(),
+  updatedFrom: auditDate.optional(),
+  updatedTo: auditDate.optional(),
+} as const;
+
 type StripDefault<F> =
   F extends z.ZodDefault<infer Inner extends z.ZodType> ? Inner : F;
 

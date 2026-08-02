@@ -65,4 +65,6 @@ export type ProductListDB = ProductSelect & {
   // with Number() defensively — same as `purchaseExpenseTotal` in
   // repo/purchase.ts.
   expenseTotal: number;
+  /** Latest live Purchase date across the Product's live Expense lines. */
+  purchaseDate: string | null;
 };

@@ -12,6 +12,7 @@ import {
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -46,6 +47,7 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
   ) : undefined;
 
 const tasksRoute = getRouteApi("/_authenticated/tasks/");
+const NO_PRODUCT_OPTIONS: FilterableComboboxItem[] = [];
 
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
@@ -72,6 +74,22 @@ export function TaskList({
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<TaskOut>(), []);
   const { options: projectOptions } = useProjectOptions();
+  const productOptionsQuery = useQuery(
+    api.product.list.queryOptions({
+      filters: {},
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 500 },
+    }),
+  );
+  const productOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      productOptionsQuery.data?.items.map(({ id, name, manufacturer }) => ({
+        value: id,
+        label: name,
+        hint: manufacturer,
+      })) ?? NO_PRODUCT_OPTIONS,
+    [productOptionsQuery.data],
+  );
   const taskBulkActions = useTaskBulkActions();
 
   const updateTaskMutation = useUpdateMutation({
@@ -90,7 +108,10 @@ export function TaskList({
   });
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
-  const projectFilterOptions = useFilterOptions({ project: projectOptions });
+  const projectFilterOptions = useFilterOptions({
+    project: projectOptions,
+    taskProducts: productOptions,
+  });
 
   // Scope constants that aren't column filters. Checklist subtasks are managed
   // from their parent's detail page, not surfaced as independent rows here.

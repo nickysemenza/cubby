@@ -29,6 +29,7 @@ export { dependencyIdsFor, replaceDependencyEdges } from "./dependency-edges";
 // Query helpers
 export {
   assertNoDependents,
+  auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,

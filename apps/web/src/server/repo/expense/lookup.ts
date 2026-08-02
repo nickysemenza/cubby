@@ -24,6 +24,7 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { expense, purchase } from "~/server/db/schema";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,
@@ -218,6 +219,7 @@ export const buildExpenseWhereClause = async (
       { column: expense.url, term: filters.urlSearch },
     ],
     [
+      ...auditDateWhereConditions(expense, filters),
       ...relatedWhereConditions("expense", filters, expense.id),
       nameSearch,
       eqAny(expense.costType, filters.costType),

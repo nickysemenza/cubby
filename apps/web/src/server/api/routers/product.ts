@@ -27,6 +27,7 @@ import {
   productFindOrCreateByUPCInput,
   productFindOrCreateByUPCOut,
   productListItemOut,
+  productManufacturerOptionsOut,
   productMarkUsdaUnavailableManyInput,
   productPickerItemOut,
   productQuickCreatePayload,
@@ -51,6 +52,7 @@ import { findProductExternalIdCollisions } from "~/server/repo/data-quality";
 import {
   deleteProducts,
   getCategoryDistribution,
+  getProductManufacturerOptions,
   getProductPickerItemsByIds,
   getProductsByShortcodes,
   getProductsSharingTags,
@@ -423,6 +425,10 @@ const tagOptions = protectedProcedure
     return await getProductTagOptions(ctx.db);
   });
 
+const manufacturerOptions = protectedProcedure
+  .output(strictOutput(productManufacturerOptionsOut))
+  .query(({ ctx }) => getProductManufacturerOptions(ctx.db));
+
 /**
  * "Fits with this" — every other product sharing a tag. Separate from
  * `getByID` so the detail page's main payload doesn't grow a join that only
@@ -606,6 +612,7 @@ export const productRouter = createTRPCRouter({
   backfillUPCImages,
   categoryDistribution,
   tagOptions,
+  manufacturerOptions,
   tagSiblings,
   externalIdCollisions,
   patchExternalIds,

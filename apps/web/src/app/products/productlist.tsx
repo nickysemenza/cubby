@@ -35,6 +35,7 @@ import {
   createExternalLinkColumn,
   createFilterableSelectColumn,
   createInventoryEntriesColumn,
+  createPlainDateColumn,
   createSingleEntityInlineLinkColumn,
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
@@ -51,6 +52,7 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProductTagOptions } from "../_components/hooks/useProductTagOptions";
+import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "../_components/inventory/hooks";
@@ -70,6 +72,7 @@ interface ProductListProps {
 // roster query is loading (and avoids turning every table render into a new
 // filter configuration).
 const NO_VENDOR_OPTIONS: FilterableComboboxItem[] = [];
+const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
 
 function renderNotesValue(notes: string | null): ReactNode {
   if (!notes) return <NoneValue />;
@@ -102,6 +105,49 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
+  const { options: projectOptions } = useProjectOptions();
+  const locationOptionsQuery = useQuery(
+    api.location.list.queryOptions({
+      filters: { inventoryPresenceFilter: "has" },
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 500 },
+    }),
+  );
+  const ingredientOptionsQuery = useQuery(
+    api.ingredient.list.queryOptions({
+      filters: { productPresenceFilter: "has" },
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 500 },
+    }),
+  );
+  const manufacturerOptionsQuery = useQuery(
+    api.product.manufacturerOptions.queryOptions(),
+  );
+  const locationOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      locationOptionsQuery.data?.items.map(({ id, name }) => ({
+        value: id,
+        label: name,
+      })) ?? NO_FILTER_OPTIONS,
+    [locationOptionsQuery.data],
+  );
+  const ingredientOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      ingredientOptionsQuery.data?.items.map(({ id, name }) => ({
+        value: id,
+        label: name,
+      })) ?? NO_FILTER_OPTIONS,
+    [ingredientOptionsQuery.data],
+  );
+  const manufacturerOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      manufacturerOptionsQuery.data?.map(({ manufacturer, count }) => ({
+        value: manufacturer,
+        label: manufacturer,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [manufacturerOptionsQuery.data],
+  );
   // The graph owns this picklist too: its count is distinct matching Products,
   // not the Vendor roster's purchase-count hint. Keeping the query keyed by
   // `product.vendors` also ensures only Vendors that can match a Product are
@@ -109,6 +155,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const vendorOptionsQuery = useQuery(
     api.relatedData.options.queryOptions({
       relationKey: "product.vendors",
+      limit: 100,
+    }),
+  );
+  const purchaseOptionsQuery = useQuery(
+    api.relatedData.options.queryOptions({
+      relationKey: "product.purchases",
       limit: 100,
     }),
   );
@@ -121,9 +173,23 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       })) ?? NO_VENDOR_OPTIONS,
     [vendorOptionsQuery.data],
   );
+  const purchaseOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      purchaseOptionsQuery.data?.map(({ id, label, count }) => ({
+        value: id,
+        label,
+        hint: String(count),
+      })) ?? NO_FILTER_OPTIONS,
+    [purchaseOptionsQuery.data],
+  );
   const filterOptions = useFilterOptions({
     tags: tagOptions,
     productVendors: vendorOptions,
+    project: projectOptions,
+    productLocations: locationOptions,
+    productIngredients: ingredientOptions,
+    manufacturers: manufacturerOptions,
+    productPurchases: purchaseOptions,
   });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
@@ -184,7 +250,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
-      // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
+      // Custom columns (image/name prepended; related + audit dates appended by hook)
       createFilterableSelectColumn(columnHelper, "category", {
         header: "Category",
         className: "w-32",
@@ -224,6 +290,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         },
       ),
       createTextColumn(columnHelper, "manufacturer", {
+        header: "Manufacturer",
         className: "min-w-0 w-40 truncate",
         mobile: { slot: "subtitle", priority: 20 },
         editable: {
@@ -284,6 +351,75 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
+      columnHelper.accessor((row) => row.model, {
+        id: "modelPresence",
+        header: "Model present",
+        enableSorting: false,
+        meta: { className: "w-24" },
+        cell: (info) => (info.getValue() ? "Has model" : <NoneValue />),
+      }),
+      columnHelper.accessor((row) => row.upc, {
+        id: "upcPresence",
+        header: "UPC present",
+        enableSorting: false,
+        meta: { className: "w-24" },
+        cell: (info) => (info.getValue() ? "Has UPC" : <NoneValue />),
+      }),
+      columnHelper.accessor((row) => row.notes, {
+        id: "notesPresence",
+        header: "Notes present",
+        enableSorting: false,
+        meta: { className: "w-24" },
+        cell: (info) => (info.getValue() ? "Has notes" : <NoneValue />),
+      }),
+      columnHelper.accessor((row) => row.dataQuality.status, {
+        id: "dataQuality",
+        header: "Data quality",
+        enableSorting: false,
+        meta: { className: "w-28", mobile: { slot: "meta", priority: 75 } },
+        cell: (info) => {
+          const status = info.getValue();
+          return (
+            <Badge variant={status === "defect" ? "destructive" : "outline"}>
+              {status === "needs_data"
+                ? "Needs data"
+                : status === "defect"
+                  ? "Defect"
+                  : "Complete"}
+            </Badge>
+          );
+        },
+      }),
+      columnHelper.accessor((row) => row.dataQuality.gaps, {
+        id: "dataGaps",
+        header: "Data gaps",
+        enableSorting: false,
+        meta: { className: "w-36", mobile: { slot: "meta", priority: 80 } },
+        cell: (info) => {
+          const gaps = info.getValue();
+          if (!gaps.length) return <NoneValue />;
+          return (
+            <span className="text-muted-foreground text-xs">
+              {gaps.map((gap) => gap.check.replaceAll("_", " ")).join(", ")}
+            </span>
+          );
+        },
+      }),
+      columnHelper.accessor("externalIds", {
+        id: "externalIds",
+        header: "External IDs",
+        enableSorting: false,
+        meta: { className: "w-36", mobile: { slot: "meta", priority: 85 } },
+        cell: (info) => {
+          const ids = info.getValue();
+          if (!ids.length) return <NoneValue />;
+          return (
+            <span className="text-muted-foreground text-xs">
+              {ids.map((externalId) => externalId.source).join(", ")}
+            </span>
+          );
+        },
+      }),
       createCurrencyColumn(columnHelper, "price", {
         header: "Price",
         mobile: { slot: "trailing", priority: 10, interactive: true },
@@ -314,6 +450,11 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         zeroAsEmpty: false,
         signedTone: true,
         mobile: { slot: "trailing", priority: 5 },
+      }),
+      createPlainDateColumn(columnHelper, "purchaseDate", {
+        header: "Purchase date",
+        className: "w-32",
+        mobile: { slot: "meta", priority: 55 },
       }),
       columnHelper.display({
         id: "food",
@@ -405,7 +546,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         // can't be renamed to `expenseCount` to fix it the other way: it's
         // persisted per-user in the `table-columns:product` localStorage key,
         // and renaming would reset everyone's column layout for a count.
-        enableSorting: false,
+        enableSorting: true,
         meta: {
           numeric: true,
           className: "w-24",
@@ -513,6 +654,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       createdAt: false,
       notes: false,
       expenseTotal: false,
+      dataQuality: false,
+      dataGaps: false,
+      externalIds: false,
+      modelPresence: false,
+      upcPresence: false,
+      notesPresence: false,
     },
     groupConfig,
   });

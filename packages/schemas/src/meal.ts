@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { mealRelatedFilterFields } from "./related-view";
 import { ingredientAvailabilityStatus } from "./availability";
 import {
@@ -21,7 +25,7 @@ import {
 
 export { mealDate, mealDateRange, mealScale } from "./meal-shared";
 
-export const mealSortableFields = ["date", "createdAt"] as const;
+export const mealSortableFields = ["date", "createdAt", "updatedAt"] as const;
 
 export type MealSortField = (typeof mealSortableFields)[number];
 
@@ -92,6 +96,7 @@ export const mealRecipeIdInput = z.object({
 });
 
 export const mealFilterFields = {
+  ...auditDateFilterFields,
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
   ...mealRelatedFilterFields,

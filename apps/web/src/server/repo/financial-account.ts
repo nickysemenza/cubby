@@ -32,6 +32,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -123,6 +124,7 @@ const whereFor = (filters: FinancialAccountFilters) =>
     financialAccount,
     [{ column: financialAccount.name, term: filters.search }],
     [
+      ...auditDateWhereConditions(financialAccount, filters),
       ...relatedWhereConditions(
         "financialAccount",
         filters,
