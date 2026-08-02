@@ -511,27 +511,12 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 - **Meal planning v1** — plan recipes onto a calendar (month + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
 - **Location arrange** — drag-drop reparenting of locations and items across a tree view and a Miller-column board, with an Unknown dock for unplaced items.
 
-### Now
+### Current and future work
 
-- _Nothing active — next focus will be promoted from **Next** below._
-
-### Next
-
-- **Inventory recount friction** — skip or bulk-verify empty descendant locations so a recount does not stall on zero-row stops.
-- **Costing-data repair** — make the ingredient equivalences report lead directly to the existing mapping workbench.
-- **Recipe decision data** — persist the prep/cook/total times that import already extracts, then expose them on detail and list surfaces.
-- **Mobile capture** — improve scanner lock-on with a reticle-aligned ROI and a real-iPhone acceptance pass.
-- **Meal composition** — let "Add to meal" join a meal that already exists for that day instead of always creating another one.
-
-This list mirrors the authoritative [backlog triage board](docs/todos.md#triage-board);
-update the board first and keep this roadmap summary in sync.
-
-### Later
-
-- **Nutrition & cost intelligence** — macro-aware nutrition through the product hop (see [Tenets](#tenets)), plus broader nutrient-density surfaces.
-- **Shopping and meal planning v2** — durable/manual shopping items, shopper-friendly units and cost, calendar ergonomics, meal labels/templates/recurrence, and nutrition goals (no inventory deduction — see [Tenets](#tenets)).
-- **House planning** — recurring maintenance, project materials/BOM, and the remaining tracker data/phone-view gaps. The expense ↔ inventory bridge, inbox, budget views, Problems detectors, quick-add actions, and home House card are already shipped.
-- **Engineering** — authenticated-route SSR reevaluation, test-placement criteria, cursor-budgeted MCP lists, and trigger-gated control consolidation.
+The authoritative Now / Next / Later ordering lives only in the
+[backlog triage board](docs/todos.md#triage-board), alongside each item's design
+constraints and promotion triggers. The README deliberately does not mirror the
+queue.
 
 ## 📚 Further Docs
 
