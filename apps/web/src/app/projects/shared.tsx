@@ -878,6 +878,7 @@ export function expenseVendorColumn(
               if (expense.purchaseId) {
                 const label = purchaseLabel({
                   orderId: expense.orderId,
+                  displayLabel: expense.purchaseDisplayLabel,
                   vendorName: v?.name ?? expense.vendor,
                   date: expense.purchaseDate,
                 });

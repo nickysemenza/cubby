@@ -238,6 +238,7 @@ const chargeContext = protectedProcedure
           purchase: z.object({
             id: purchaseShortcode,
             orderId: z.string().nullable(),
+            displayLabel: z.string().nullable(),
             date: plainDate.nullable(),
             vendorId: vendorShortcode,
             vendorName: z.string().nullable(),

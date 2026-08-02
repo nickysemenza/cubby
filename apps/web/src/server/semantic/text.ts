@@ -256,6 +256,7 @@ export function buildVendorEmbeddingText(
 const purchaseSearchTextInputSchema = z.object({
   vendorName: z.string(),
   orderId: nullableText,
+  displayLabel: nullableText,
   date: nullableText,
   notes: nullableText,
 });
@@ -267,6 +268,7 @@ export function buildPurchaseEmbeddingText(
   return joinFields([
     field("purchase vendor", parsed.vendorName),
     field("order", parsed.orderId),
+    field("display label", parsed.displayLabel),
     field("date", parsed.date),
     field("notes", parsed.notes),
   ]);

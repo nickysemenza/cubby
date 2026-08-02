@@ -20,6 +20,26 @@ describe("purchaseLabel", () => {
     ).toBe("111-1234567-1234567");
   });
 
+  it("appends preserved human context parenthetically", () => {
+    expect(
+      purchaseLabel({
+        orderId: "11100722797",
+        displayLabel: "pocket hole jig + bits",
+        vendorName: "Rockler",
+        date: "2024-05-01",
+      }),
+    ).toBe("11100722797 (pocket hole jig + bits)");
+  });
+
+  it("ignores blank display labels", () => {
+    expect(
+      purchaseLabel({
+        orderId: "11100722797",
+        displayLabel: "   ",
+      }),
+    ).toBe("11100722797");
+  });
+
   it("falls back to vendor + charge date when there's no order id", () => {
     // ~40% of real charges never got an order id from the vendor, so this rung —
     // not the one above — is the common path for a walk-in buy.
@@ -30,6 +50,17 @@ describe("purchaseLabel", () => {
         date: "2026-03-04",
       }),
     ).toBe("Tool Nirvana · Mar 4, 2026");
+  });
+
+  it("keeps orderless identity and appends human context", () => {
+    expect(
+      purchaseLabel({
+        orderId: null,
+        displayLabel: "walk-in lumber run",
+        vendorName: "Ganahl Lumber",
+        date: "2026-03-04",
+      }),
+    ).toBe("Ganahl Lumber · Mar 4, 2026 (walk-in lumber run)");
   });
 
   it("falls back to the bare vendor when there's no date either", () => {

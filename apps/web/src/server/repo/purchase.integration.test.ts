@@ -1201,6 +1201,39 @@ describe("purchase repository — mergePurchases", () => {
 describe("purchase repository — updatePurchase collision + liveness guards", () => {
   const ctx = withTestDb();
 
+  it("creates, updates, and clears a human display label without changing order identity", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Rockler");
+    const { output: created } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        date: "2024-05-01",
+        vendorId,
+        orderId: "11100722797",
+        displayLabel: "  pocket hole jig + bits  ",
+      }),
+      ctx.actor,
+    );
+
+    expect(created.orderId).toBe("11100722797");
+    expect(created.displayLabel).toBe("pocket hole jig + bits");
+
+    const { output: updated } = await updatePurchase(
+      ctx.db,
+      { id: created.id, data: { displayLabel: "  pocket-hole tools  " } },
+      ctx.actor,
+    );
+    expect(updated.orderId).toBe("11100722797");
+    expect(updated.displayLabel).toBe("pocket-hole tools");
+
+    const { output: cleared } = await updatePurchase(
+      ctx.db,
+      { id: created.id, data: { displayLabel: "   " } },
+      ctx.actor,
+    );
+    expect(cleared.orderId).toBe("11100722797");
+    expect(cleared.displayLabel).toBeNull();
+  });
+
   it("raises PURCHASE_MERGE_ORDER_COLLISION when the target (vendor, orderId) slot is taken", async () => {
     const toolNirvana = await vendorShortcodeByName(ctx.db, "Tool Nirvana");
     const homeDepot = await vendorShortcodeByName(ctx.db, "Home Depot");

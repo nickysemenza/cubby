@@ -37,6 +37,7 @@ const EXPENSE: ExpenseOut = {
   productName: "Fasteners",
   purchaseId: null,
   purchaseDate: null,
+  purchaseDisplayLabel: null,
   vendorId: null,
   vendor: null,
   orderId: null,

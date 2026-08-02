@@ -57,6 +57,7 @@ const LINKED: ExpenseOut = {
   productName: null,
   purchaseId: unsafePurchaseShortcode("PUR-4K7M"),
   purchaseDate: "2026-07-19",
+  purchaseDisplayLabel: null,
   vendorId: unsafeVendorShortcode("VEN-4K7M"),
   vendor: "Tool Shop",
   orderId: "ORDER-42",

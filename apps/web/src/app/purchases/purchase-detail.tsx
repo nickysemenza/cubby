@@ -146,6 +146,25 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       ),
     },
     {
+      label: "Display label",
+      value: (
+        <EditableCell
+          value={purchase.displayLabel}
+          config={{
+            type: "text",
+            placeholder: "e.g. pocket hole jig + bits",
+          }}
+          onSave={async (displayLabel) => {
+            await updateMutation.mutateAsync({
+              id: purchase.id,
+              data: { displayLabel },
+            });
+          }}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      ),
+    },
+    {
       label: "Date",
       value: (
         <EditableCell

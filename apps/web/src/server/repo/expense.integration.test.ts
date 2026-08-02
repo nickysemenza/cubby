@@ -1085,6 +1085,7 @@ describe("expense router", () => {
       expect(context?.purchase).toEqual({
         id: purchaseIdOf(self),
         orderId,
+        displayLabel: null,
         date: chargeDate,
         vendorId: vendorIdOf(self),
         vendorName: "Amazon",
