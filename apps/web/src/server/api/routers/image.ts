@@ -70,7 +70,7 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await imageList(services.db, filters.nameFilter, sort, pagination);
+      return await imageList(services.db, filters, sort, pagination);
     },
   },
   entityName: "image",

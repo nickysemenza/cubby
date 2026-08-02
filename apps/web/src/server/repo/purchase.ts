@@ -22,6 +22,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import {
   type ExpenseId,
+  type FinancialTransactionId,
   type ProductId,
   type PurchaseId,
   type PurchaseShortcode,
@@ -94,6 +95,7 @@ import {
 import {
   applyImageOrder,
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -477,6 +479,7 @@ const buildPurchaseWhereClause = (
     purchase,
     [{ column: purchase.orderId, term: filters.search }],
     [
+      ...auditDateWhereConditions(purchase, filters),
       eqAny(purchase.vendorId, vendorUuids),
       ...relatedWhereConditions("purchase", filters, purchase.id),
       eqAny(purchase.orderId, filters.orderId),
@@ -1474,6 +1477,7 @@ export const foldChargeInto = async (
     .update(purchase)
     .set({ deletedAt: new Date() })
     .where(and(eq(purchase.id, deadId), notDeleted(purchase)));
+  await softDeleteEntityEmbeddingsTx(tx, "purchase", [deadId]);
 
   // The charge itself gets a `delete` entry, and the survivor an `update` naming
   // what it absorbed — so a fold is reconstructible from the log rather than
@@ -1686,15 +1690,19 @@ export const mergePurchases = async (
  * and deleting a charge must never delete spend. Those rows fall back to reading
  * as "no vendor recorded", which is exactly what they are once the charge is gone.
  *
- * Neither `Purchase` nor `Vendor` is in the embedding pipeline in v1, so there
- * are no `EntityEmbedding` rows to clean up here.
+ * Purchase embeddings are retired in the same transaction. Callers refresh the
+ * detached expenses/financial transactions after the mutation commits.
  */
 export const deletePurchases = async (
   db: Database,
   shortcodes: PurchaseShortcode[],
   actor: ActorContext,
-): Promise<void> => {
-  if (shortcodes.length === 0) return;
+): Promise<{
+  expenseIds: ExpenseId[];
+  financialTransactionIds: FinancialTransactionId[];
+}> => {
+  if (shortcodes.length === 0)
+    return { expenseIds: [], financialTransactionIds: [] };
 
   const resolved = await resolveLiveShortcodes(db, shortcodes, "purchase");
   const missing = shortcodes.filter((code) => !resolved.has(code));
@@ -1708,7 +1716,7 @@ export const deletePurchases = async (
     unsafePurchaseId(resolved.get(code) ?? ""),
   );
 
-  await withTransaction(db, async (tx) => {
+  return withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, purchase, ids, "Purchase");
 
     const now = new Date();
@@ -1784,6 +1792,7 @@ export const deletePurchases = async (
       .update(purchase)
       .set({ deletedAt: now })
       .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
+    await softDeleteEntityEmbeddingsTx(tx, "purchase", ids);
 
     await logAuditEntries(
       tx,
@@ -1794,6 +1803,10 @@ export const deletePurchases = async (
         action: "delete" as const,
       })),
     );
+    return {
+      expenseIds: detaching.map((row) => row.id),
+      financialTransactionIds: detachingTransactions.map((row) => row.id),
+    };
   });
 };
 
@@ -1802,9 +1815,8 @@ export const deletePurchases = async (
  *
  * Reads the SAME `PURCHASE_DELETE_EDGE_POLICY` this file's mutation
  * implements. Both edges are non-blocking (`detach`/`soft-delete`), so this
- * preview has only `changes` — nothing refuses a purchase delete. Neither
- * `Purchase` nor `Vendor` is in the embedding pipeline (see `deletePurchases`'
- * own doc), so there are no `sideEffects` to report either.
+ * preview has only `changes` — nothing refuses a purchase delete. Embedding
+ * cleanup is an implementation invariant rather than a user-visible impact.
  *
  * Advisory only. `deletePurchases` still re-runs its own transaction; nothing
  * here is a lock or a permission.

@@ -67,6 +67,7 @@ import {
 } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,
@@ -394,6 +395,7 @@ export const recipeList = async (
     recipe,
     [],
     [
+      ...auditDateWhereConditions(recipe, filters),
       ...relatedWhereConditions(
         "recipe",
         filters as unknown as Record<string, unknown>,
@@ -440,6 +442,18 @@ export const recipeList = async (
         filters.imagePresenceFilter,
         recipeIdsWithImages,
       ),
+      filters.costTotalMin !== undefined
+        ? sql`(${recipe.totals}->>'costTotal')::numeric >= ${filters.costTotalMin}`
+        : undefined,
+      filters.costTotalMax !== undefined
+        ? sql`(${recipe.totals}->>'costTotal')::numeric <= ${filters.costTotalMax}`
+        : undefined,
+      filters.caloriesTotalMin !== undefined
+        ? sql`(${recipe.totals}->>'caloriesTotal')::numeric >= ${filters.caloriesTotalMin}`
+        : undefined,
+      filters.caloriesTotalMax !== undefined
+        ? sql`(${recipe.totals}->>'caloriesTotal')::numeric <= ${filters.caloriesTotalMax}`
+        : undefined,
     ],
   );
 

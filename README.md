@@ -511,21 +511,12 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 - **Meal planning v1** — plan recipes onto a calendar (month + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction is **out of scope for good**, not deferred — see [Tenets](#tenets).
 - **Location arrange** — drag-drop reparenting of locations and items across a tree view and a Miller-column board, with an Unknown dock for unplaced items.
 
-### Now
+### Current and future work
 
-- _Nothing active — next focus will be promoted from **Next** below._
-
-### Next
-
-- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: an expense ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations) and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) — estimate envelopes live on a sub-project's single-point `costEstimate`, not on ranged expenses (see docs/todos.md's Rejected list) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
-- **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
-
-### Later
-
-- **Nutrition & cost intelligence** — macro-aware nutrition through the product hop (see [Tenets](#tenets)), then price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
-- **Meal planning v2** — meal labels, recurring meals, meal templates, nutrition goals (no inventory deduction — see [Tenets](#tenets))
-- **WASM deep cuts** — batch recipe parsing, custom unit aliases
-- **Engineering backlog** — document test-placement criteria; persist scraped/Notion hero images on the server import path
+The authoritative Now / Next / Later ordering lives only in the
+[backlog triage board](docs/todos.md#triage-board), alongside each item's design
+constraints and promotion triggers. The README deliberately does not mirror the
+queue.
 
 ## 📚 Further Docs
 

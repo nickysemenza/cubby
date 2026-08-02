@@ -2,7 +2,10 @@ import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { createCurrencyColumn } from "~/app/_components/data-table/columnHelpers";
+import {
+  createCurrencyColumn,
+  createPlainDateColumn,
+} from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -113,6 +116,11 @@ export function VendorList() {
         zeroAsEmpty: false,
         signedTone: true,
         mobile: { slot: "trailing", priority: 5 },
+      }),
+      createPlainDateColumn(columnHelper, "latestPurchaseDate", {
+        header: "Latest purchase",
+        className: "w-32",
+        mobile: { slot: "meta", priority: 35 },
       }),
     ],
     [columnHelper],

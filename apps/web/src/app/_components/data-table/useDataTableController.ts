@@ -1,6 +1,6 @@
 import { useLocation } from "@tanstack/react-router";
 import type { Table as ITable, Row } from "@tanstack/react-table";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
@@ -47,23 +47,34 @@ export function useDataTableController<TItem>({
   const fetchNextPage = infiniteScroll?.fetchNextPage;
   const hasNextPage = infiniteScroll?.hasNextPage ?? false;
   const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
+  const isTransitioning = infiniteScroll?.isTransitioning ?? false;
+  const hasInfiniteScroll = infiniteScroll != null;
   const hasDesktopInfiniteSentinel =
-    !isMobile && !!infiniteScroll && (hasNextPage || isFetchingNextPage);
+    !isMobile &&
+    hasInfiniteScroll &&
+    !isTransitioning &&
+    (hasNextPage || isFetchingNextPage);
 
   const handleDesktopInfiniteIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+      if (
+        entries[0]?.isIntersecting &&
+        hasNextPage &&
+        !isFetchingNextPage &&
+        !isTransitioning
+      ) {
         fetchNextPage?.();
       }
     },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
+    [fetchNextPage, hasNextPage, isFetchingNextPage, isTransitioning],
   );
 
   const setDesktopInfiniteSentinel = useCallback(
     (sentinel: HTMLDivElement | null) => {
       desktopInfiniteObserverRef.current?.disconnect();
       desktopInfiniteObserverRef.current = null;
-      if (isMobile || !infiniteScroll || !sentinel) return;
+      if (isMobile || !hasInfiniteScroll || isTransitioning || !sentinel)
+        return;
 
       const observer = new IntersectionObserver(
         handleDesktopInfiniteIntersect,
@@ -74,7 +85,12 @@ export function useDataTableController<TItem>({
       observer.observe(sentinel);
       desktopInfiniteObserverRef.current = observer;
     },
-    [isMobile, infiniteScroll, handleDesktopInfiniteIntersect],
+    [
+      isMobile,
+      hasInfiniteScroll,
+      isTransitioning,
+      handleDesktopInfiniteIntersect,
+    ],
   );
 
   useEffect(() => {
@@ -82,6 +98,7 @@ export function useDataTableController<TItem>({
   }, []);
 
   const { rows } = table.getRowModel();
+  const rowKeys = useMemo(() => rows.map((row) => row.id), [rows]);
 
   // Desktop group detection (server trusts ordering)
   const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
@@ -100,6 +117,7 @@ export function useDataTableController<TItem>({
     scrollToIndex,
   } = useTableVirtualizer({
     rowCount: rows.length,
+    rowKeys,
     groupedItems,
     rowHeight: dConfig.rowHeight,
     isMobile,
@@ -122,7 +140,7 @@ export function useDataTableController<TItem>({
     getRowCellSelection,
     containerProps: cellSelectionContainerProps,
   } = useCellSelection({
-    enabled: !isMobile,
+    enabled: !isMobile && !isTransitioning,
     rows,
     table,
     scrollToFlatRow,
@@ -208,6 +226,7 @@ export function useDataTableController<TItem>({
     hydrated,
     isDebugEnabled,
     isFetchingNextPage,
+    isTransitioning,
     isMobile,
     resolveIndex,
     rows,

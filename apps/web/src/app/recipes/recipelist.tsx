@@ -1,5 +1,6 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { RotateCcw, Scale } from "lucide-react";
@@ -7,6 +8,7 @@ import { type ReactNode, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -69,6 +71,8 @@ const CoverageValue: React.FC<{
     </span>
   );
 };
+
+const NO_INGREDIENT_OPTIONS: FilterableComboboxItem[] = [];
 
 /**
  * The cell shown when a recipe's totals are null but it's plausibly stuck: a
@@ -152,9 +156,25 @@ export function RecipeList({
 
   const { options: tagOptions } = useRecipeTagOptions();
   const { options: cookbookOptions } = useCookbookOptions();
+  const ingredientOptionsQuery = useQuery(
+    api.relatedData.options.queryOptions({
+      relationKey: "recipe.ingredients",
+      limit: 100,
+    }),
+  );
+  const ingredientOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      ingredientOptionsQuery.data?.map(({ id, label, count }) => ({
+        value: id,
+        label,
+        hint: String(count),
+      })) ?? NO_INGREDIENT_OPTIONS,
+    [ingredientOptionsQuery.data],
+  );
   const filterOptions = useFilterOptions({
     tags: tagOptions,
     cookbook: cookbookOptions,
+    recipeIngredients: ingredientOptions,
   });
 
   // Mutation for inline editing (name, servings).

@@ -9,7 +9,11 @@ import {
   type ExternalIdKind,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  IngredientId,
+  LocationId,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
@@ -39,6 +43,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
   notInArray,
   or,
   sql,
@@ -56,6 +61,7 @@ import {
   productExternalId,
   productImage,
   productUnitMappings,
+  purchase,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -75,6 +81,7 @@ import {
 import {
   assertNoDependents,
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,
@@ -98,6 +105,7 @@ import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { relatedWhereConditions } from "~/server/repo/related-view";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
@@ -162,6 +170,56 @@ const resolveProductSort = (sort: SortParams) => {
 
   if (sort.orderBy === "price") {
     return [sql.raw(`${effectiveProductPriceSql()} ${dirSql}`)];
+  }
+
+  if (sort.orderBy === "expenses") {
+    return [
+      sql.raw(
+        `(SELECT count(*) FROM "Expense" e ` +
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
+  if (sort.orderBy === "purchaseDate") {
+    return [
+      sql.raw(
+        `(SELECT max(p."date") FROM "Expense" e ` +
+          `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
+  if (sort.orderBy === "related:product.purchases") {
+    return [
+      sql.raw(
+        `(SELECT max(COALESCE(p."date"::timestamp, p."createdAt")) FROM "Expense" e ` +
+          `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
+  if (sort.orderBy === "related:product.projects") {
+    return [
+      sql.raw(
+        `(SELECT min(lower(pr."name")) FROM "Expense" e ` +
+          `JOIN "Project" pr ON pr."id" = e."projectId" AND pr."deletedAt" IS NULL ` +
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
+  }
+
+  if (sort.orderBy === "related:product.vendors") {
+    return [
+      sql.raw(
+        `(SELECT min(lower(v."name")) FROM "Expense" e ` +
+          `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
+          `JOIN "Vendor" v ON v."id" = p."vendorId" AND v."deletedAt" IS NULL ` +
+          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
+      ),
+    ];
   }
 
   if (sort.orderBy === "identity_strength") {
@@ -332,6 +390,19 @@ export const productList = async (
 ) => {
   const dbClient = getDb(db);
 
+  const requestedLocationCodes = filters.locationIdFilter
+    ? [filters.locationIdFilter].flat()
+    : [];
+  const requestedIngredientCodes = filters.ingredientIdFilter
+    ? [filters.ingredientIdFilter].flat()
+    : [];
+  const [locationIdMap, ingredientIdMap] = await Promise.all([
+    resolveLiveShortcodes(db, requestedLocationCodes, "location"),
+    resolveLiveShortcodes(db, requestedIngredientCodes, "ingredient"),
+  ]);
+  const selectedLocationIds = [...locationIdMap.values()] as LocationId[];
+  const selectedIngredientIds = [...ingredientIdMap.values()] as IngredientId[];
+
   // Every cross-entity filter below is an UNCORRELATED subquery (it references
   // only the child table, never back at product.id), applied with
   // inArray/notInArray. That shape is load-bearing, not stylistic: THREE query
@@ -368,6 +439,22 @@ export const productList = async (
     )
     .where(notDeleted(inventoryEntry));
 
+  const productIdsAtSelectedLocations = dbClient
+    .select({ productId: inventoryEntry.productId })
+    .from(inventoryEntry)
+    .innerJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        selectedLocationIds.length > 0
+          ? inArray(inventoryEntry.locationId, selectedLocationIds)
+          : sql`false`,
+      ),
+    );
+
   // `expense.productId` is NULLABLE, so `isNotNull` is load-bearing: a NULL
   // inside a NOT IN list makes the whole predicate UNKNOWN and `notInArray`
   // would match zero rows instead of "products with no expenses".
@@ -392,6 +479,65 @@ export const productList = async (
       ),
     )
     .groupBy(expense.productId);
+
+  const productIdsWithPurchases = dbClient
+    .select({ productId: expense.productId })
+    .from(expense)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .where(and(notDeleted(expense), isNotNull(expense.productId)));
+
+  const taskStatuses = filters.taskStatusFilter
+    ? [filters.taskStatusFilter].flat()
+    : undefined;
+  const taskFilterActive = Boolean(
+    taskStatuses?.length ||
+      filters.taskOpenOnly ||
+      filters.taskDueFrom ||
+      filters.taskDueTo,
+  );
+  const productIdsWithFilteredTasks = dbClient
+    .select({ productId: task.subjectProductId })
+    .from(task)
+    .where(
+      and(
+        notDeleted(task),
+        isNotNull(task.subjectProductId),
+        taskStatuses?.length ? inArray(task.status, taskStatuses) : undefined,
+        filters.taskOpenOnly ? ne(task.status, "done") : undefined,
+        filters.taskDueFrom
+          ? sql`${task.dueDate} >= ${filters.taskDueFrom}`
+          : undefined,
+        filters.taskDueTo
+          ? sql`${task.dueDate} <= ${filters.taskDueTo}`
+          : undefined,
+      ),
+    );
+
+  const purchaseDateRangeActive = Boolean(
+    filters.purchaseDateFrom || filters.purchaseDateTo,
+  );
+  const productIdsInPurchaseDateRange = dbClient
+    .select({ productId: expense.productId })
+    .from(expense)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .where(
+      and(
+        notDeleted(expense),
+        isNotNull(expense.productId),
+        filters.purchaseDateFrom
+          ? sql`${purchase.date} >= ${filters.purchaseDateFrom}`
+          : undefined,
+        filters.purchaseDateTo
+          ? sql`${purchase.date} <= ${filters.purchaseDateTo}`
+          : undefined,
+      ),
+    );
 
   // Joins Image so this matches what the thumbnail cell actually renders — it
   // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
@@ -450,30 +596,67 @@ export const productList = async (
       { column: product.manufacturer, term: filters.manufacturerFilter },
       { column: product.upc, term: filters.upcFilter },
       { column: product.model, term: filters.modelFilter },
+      { column: product.notes, term: filters.notesFilter },
     ],
     [
+      ...auditDateWhereConditions(product, filters),
       ...relatedWhereConditions("product", filters, product.id),
       eqAnyOrPresence(
         product.category,
         filters.categoryFilter,
         filters.categoryPresenceFilter,
       ),
-      filters.ingredientPresenceFilter === "none"
-        ? isNull(product.ingredientId)
+      requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
+        ? sql`false`
+        : or(
+            selectedIngredientIds.length > 0
+              ? inArray(product.ingredientId, selectedIngredientIds)
+              : undefined,
+            presenceCondition(
+              product.ingredientId,
+              filters.ingredientPresenceFilter,
+            ),
+          ),
+      requestedLocationCodes.length > 0 && selectedLocationIds.length === 0
+        ? sql`false`
+        : or(
+            selectedLocationIds.length > 0
+              ? inArray(product.id, productIdsAtSelectedLocations)
+              : undefined,
+            idSetPresence(
+              product.id,
+              filters.inventoryPresenceFilter,
+              productIdsWithLiveInventory,
+            ),
+          ),
+      filters.expenseCountMin !== undefined
+        ? sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) >= ${filters.expenseCountMin}`
         : undefined,
-      filters.ingredientPresenceFilter === "has"
-        ? isNotNull(product.ingredientId)
+      filters.expenseCountMax !== undefined
+        ? sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) <= ${filters.expenseCountMax}`
         : undefined,
-      idSetPresence(
-        product.id,
-        filters.inventoryPresenceFilter,
-        productIdsWithLiveInventory,
-      ),
+      filters.expenseTotalMin !== undefined
+        ? sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) >= ${filters.expenseTotalMin}`
+        : undefined,
+      filters.expenseTotalMax !== undefined
+        ? sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL) <= ${filters.expenseTotalMax}`
+        : undefined,
       idSetPresence(
         product.id,
         filters.expensePresenceFilter,
         productIdsWithExpenses,
       ),
+      idSetPresence(
+        product.id,
+        filters.purchaseDatePresenceFilter,
+        productIdsWithPurchases,
+      ),
+      taskFilterActive
+        ? inArray(product.id, productIdsWithFilteredTasks)
+        : undefined,
+      purchaseDateRangeActive
+        ? inArray(product.id, productIdsInPurchaseDateRange)
+        : undefined,
       idSetPresence(
         product.id,
         filters.imagePresenceFilter,
@@ -491,6 +674,11 @@ export const productList = async (
         productIdsWithExternalIds,
       ),
       presenceCondition(product.model, filters.modelPresenceFilter),
+      presenceCondition(product.upc, filters.upcPresenceFilter),
+      presenceCondition(product.notes, filters.notesPresenceFilter),
+      filters.manufacturerExact
+        ? inArray(product.manufacturer, [filters.manufacturerExact].flat())
+        : undefined,
       filters.dataStatus === "needs_data"
         ? needsData
         : filters.dataStatus === "defect"

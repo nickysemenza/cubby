@@ -3,6 +3,7 @@ import {
   flatRowToVirtualIndex,
   type GroupedItem,
   resolveVirtualIndex,
+  tableVirtualItemKey,
 } from "./useTableVirtualizer";
 
 // A small grouped layout:
@@ -67,6 +68,22 @@ describe("resolveVirtualIndex", () => {
     expect(resolveVirtualIndex(5, grouped, true, 3)).toEqual({
       kind: "sentinel",
     });
+  });
+});
+
+describe("tableVirtualItemKey", () => {
+  const rowKeys = ["EXP-A", "EXP-B", "EXP-C"];
+
+  it("uses entity ids rather than virtual indexes for flat rows", () => {
+    expect(tableVirtualItemKey(1, rowKeys, null)).toBe("row:EXP-B");
+  });
+
+  it("keeps grouped headers, rows, and the sentinel in separate key spaces", () => {
+    expect(tableVirtualItemKey(0, rowKeys, grouped, true)).toBe("group:A");
+    expect(tableVirtualItemKey(2, rowKeys, grouped, true)).toBe("row:EXP-B");
+    expect(tableVirtualItemKey(grouped.length, rowKeys, grouped, true)).toBe(
+      "sentinel:infinite",
+    );
   });
 });
 

@@ -20,7 +20,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -42,6 +42,7 @@ import {
   applyImageOrder,
   assertNoDependents,
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -605,6 +606,26 @@ export const locationList = async (
       and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
     )
     .where(notDeleted(inventoryEntry));
+  const locationIdsMeetingInventoryMinimum = getDb(db)
+    .select({ locationId: inventoryEntry.locationId })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+    )
+    .where(notDeleted(inventoryEntry))
+    .groupBy(inventoryEntry.locationId)
+    .having(sql`count(*) >= ${filters.directItemCountMin ?? 0}`);
+  const locationIdsExceedingInventoryMaximum = getDb(db)
+    .select({ locationId: inventoryEntry.locationId })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
+    )
+    .where(notDeleted(inventoryEntry))
+    .groupBy(inventoryEntry.locationId)
+    .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
   // Build where conditions - always filter out deleted items
   const pickerSearch = filters.nameFilter
@@ -618,6 +639,7 @@ export const locationList = async (
     location,
     [],
     [
+      ...auditDateWhereConditions(location, filters),
       ...relatedWhereConditions(
         "location",
         filters as unknown as Record<string, unknown>,
@@ -631,6 +653,18 @@ export const locationList = async (
         filters.inventoryPresenceFilter,
         locationIdsWithLiveInventory,
       ),
+      filters.directItemCountMin !== undefined
+        ? inArray(location.id, locationIdsMeetingInventoryMinimum)
+        : undefined,
+      filters.directItemCountMax !== undefined
+        ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
+        : undefined,
+      filters.valuationMin !== undefined
+        ? sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0) >= ${filters.valuationMin}`
+        : undefined,
+      filters.valuationMax !== undefined
+        ? sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0) <= ${filters.valuationMax}`
+        : undefined,
     ],
   );
 
@@ -650,6 +684,14 @@ export const locationList = async (
             s.direction === "asc"
               ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
               : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+          ];
+        if (s.orderBy === "inventoryEntries")
+          return [
+            sql.raw(
+              `(SELECT count(*) FROM "InventoryEntry" ie ` +
+                `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
+                `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
+            ),
           ];
         // Joined parent name — a correlated subquery keeps this a relational
         // findMany. Soft-delete guarded, like the read path.

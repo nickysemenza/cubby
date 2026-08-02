@@ -7,7 +7,7 @@
  * cannot see. Both are needed; neither implies the other.
  *
  * Deliberately a pure SQL anti-join, NOT a reuse of the backfill's
- * `getStaleEmbeddingTextsForEntityTypes`: that path scans all ten tables, builds
+ * `getStaleEmbeddingTextsForEntityTypes`: that path scans every searchable table, builds
  * the embedding text for every live row, and SHA-hashes each one — fine for a
  * manual backfill, categorically unfit for the fast detector group. The tradeoff
  * is that we detect *missing* only, never *stale* (a row whose text changed but
@@ -25,14 +25,18 @@ import {
   cookbook,
   entityEmbedding,
   expense,
+  financialAccount,
+  financialTransaction,
   ingredient,
   inventoryEntry,
   location,
   meal,
   product,
   project,
+  purchase,
   recipe,
   task,
+  vendor,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -148,6 +152,49 @@ const embeddingSources = {
     idColumn: task.id,
     shortcodeColumn: task.shortcode,
     deletedAtColumn: task.deletedAt,
+  },
+  vendor: {
+    table: vendor,
+    idColumn: vendor.id,
+    shortcodeColumn: vendor.shortcode,
+    deletedAtColumn: vendor.deletedAt,
+  },
+  purchase: {
+    table: purchase,
+    idColumn: purchase.id,
+    shortcodeColumn: purchase.shortcode,
+    deletedAtColumn: purchase.deletedAt,
+    liveness: (client) =>
+      exists(
+        client
+          .select({ one: sql`1` })
+          .from(vendor)
+          .where(and(eq(vendor.id, purchase.vendorId), notDeleted(vendor))),
+      ),
+  },
+  financialAccount: {
+    table: financialAccount,
+    idColumn: financialAccount.id,
+    shortcodeColumn: financialAccount.shortcode,
+    deletedAtColumn: financialAccount.deletedAt,
+  },
+  financialTransaction: {
+    table: financialTransaction,
+    idColumn: financialTransaction.id,
+    shortcodeColumn: financialTransaction.shortcode,
+    deletedAtColumn: financialTransaction.deletedAt,
+    liveness: (client) =>
+      exists(
+        client
+          .select({ one: sql`1` })
+          .from(financialAccount)
+          .where(
+            and(
+              eq(financialAccount.id, financialTransaction.accountId),
+              notDeleted(financialAccount),
+            ),
+          ),
+      ),
   },
   expense: {
     table: expense,

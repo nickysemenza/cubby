@@ -83,6 +83,7 @@ function useParsedIngredientMatches(ingredientLines: string[]) {
 }
 
 interface ParsedIngredientWithMatch {
+  rowKey: string;
   raw: string;
   parsed: ParsedIngredientLine["parsed"];
   match: {
@@ -109,10 +110,14 @@ export function IngredientPreviewTable({
 
   // Combine parsed ingredients with match data
   const ingredientsWithMatch: ParsedIngredientWithMatch[] = useMemo(() => {
+    const occurrences = new Map<string, number>();
     return parsedIngredients.map((p) => {
       const match = ingredientMatchMap.get(p.parsed.name) ?? null;
+      const occurrence = occurrences.get(p.raw) ?? 0;
+      occurrences.set(p.raw, occurrence + 1);
       return {
         ...p,
+        rowKey: `${p.raw}\u0000${occurrence}`,
         match: match ? { id: match.id, name: match.name } : null,
         isLoading: !ingredientMatchMap.has(p.parsed.name),
       };
@@ -181,10 +186,9 @@ export function IngredientPreviewTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {ingredientsWithMatch.map((item, idx) => (
+          {ingredientsWithMatch.map((item) => (
             <IngredientRow
-              // biome-ignore lint/suspicious/noArrayIndexKey: stable order from text input
-              key={idx}
+              key={item.rowKey}
               item={item}
               showRaw={showRaw}
               onCreateClick={() => handleCreateIngredient(item.parsed.name)}

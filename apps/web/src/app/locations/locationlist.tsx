@@ -13,7 +13,6 @@ import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import {
-  createCreatedAtColumn,
   createEntityInlineLinkColumn,
   createFilterableSelectColumn,
   createImageColumn,
@@ -152,7 +151,6 @@ export function LocationList() {
         className: "min-w-0 w-56 truncate",
         mobile: { slot: "meta", priority: 70 },
       }),
-      createCreatedAtColumn(columnHelper),
       createTimestampColumn(columnHelper, "lastBulkInventory", {
         header: "Last Bulk Inventory",
         className: "w-32",
@@ -166,6 +164,7 @@ export function LocationList() {
         (e) => e.product,
         {
           layout: "inline",
+          enableSorting: true,
           mobile: { slot: "meta", priority: 80 },
         },
       ),

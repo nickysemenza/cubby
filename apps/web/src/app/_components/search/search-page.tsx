@@ -47,6 +47,8 @@ interface SearchPageProps {
 /** Stable empty filter list — a fresh `[]` would re-create table state each render. */
 const NO_COLUMN_FILTERS: ColumnFiltersState = [];
 
+const getSearchRowId = (row: SearchResultItem) => `${row.entityType}:${row.id}`;
+
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
   ...searchableEntities.map((e) => ({
@@ -135,6 +137,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getRowId: getSearchRowId,
     // Without a pagination row model the toolbar's rows-per-page control and
     // the bottom pager render but do nothing — every row was always drawn.
     getPaginationRowModel: getPaginationRowModel(),

@@ -1,3 +1,4 @@
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import {
   expenseCreateInput,
@@ -10,15 +11,19 @@ import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import { deleteCookbook, upsertCookbook } from "~/server/repo/cookbook";
 import { createExpense } from "~/server/repo/expense";
+import { createFinancialAccount } from "~/server/repo/financial-account";
+import { createFinancialTransaction } from "~/server/repo/financial-transaction";
 import {
   createMeal,
   createMealWithEntityId,
   deleteMeals,
 } from "~/server/repo/meal";
 import { createProject } from "~/server/repo/project";
+import { createPurchase } from "~/server/repo/purchase";
 import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { createTask } from "~/server/repo/task";
+import { createVendor } from "~/server/repo/vendor";
 import { makeRecipeInput } from "./repo.fixtures";
 import { globalSearch, hydrateSearchResultsByRefs } from "./search";
 
@@ -475,5 +480,120 @@ describe("hydrateSearchResultsByRefs: tracker entities", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]?.entityType).toBe("project");
+  });
+});
+
+describe("globalSearch: commercial and finance entities", () => {
+  const ctx = withTestDb();
+
+  it("finds and hydrates vendors, purchases, accounts, and transactions", async () => {
+    const vendor = await createVendor(
+      ctx.db,
+      {
+        name: "Finance Search Vendor",
+        website: "https://finance-search-vendor.example",
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const purchase = await createPurchase(
+      ctx.db,
+      {
+        vendorId: vendor.output.id,
+        orderId: "FINANCE-ORDER-MARKER",
+        date: "2026-06-15",
+        statedTotal: 99,
+        notes: "finance-purchase-notes-marker",
+      },
+      ctx.actor,
+    );
+    const account = await createFinancialAccount(
+      ctx.db,
+      {
+        name: "Finance Search Account",
+        identity: {
+          kind: "credit_card",
+          issuer: "Marker Bank",
+          network: "visa",
+          last4: "4242",
+        },
+        provisional: false,
+        sourceAliases: [
+          {
+            source: "search-test",
+            alias: "finance-account-alias-marker",
+            externalAccountId: null,
+          },
+        ],
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const transaction = await createFinancialTransaction(
+      ctx.db,
+      financialTransactionCreateInput.parse({
+        accountId: account.output.id,
+        purchaseId: purchase.output.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 99,
+        merchant: "Finance Search Merchant",
+        rawDescription: "finance-transaction-description-marker",
+      }),
+      ctx.actor,
+    );
+
+    const cases = [
+      ["Finance Search Vendor", "vendor", vendor.output.id],
+      ["FINANCE-ORDER-MARKER", "purchase", purchase.output.id],
+      ["finance-account-alias-marker", "financialAccount", account.output.id],
+      [
+        "finance-transaction-description-marker",
+        "financialTransaction",
+        transaction.output.id,
+      ],
+    ] as const;
+    for (const [term, entityType, id] of cases) {
+      const results = globalSearchOut.parse(await globalSearch(ctx.db, term));
+      expect(results).toContainEqual(
+        expect.objectContaining({ entityType, id }),
+      );
+    }
+
+    const hydrated = await hydrateSearchResultsByRefs(ctx.db, [
+      { entityType: "financialTransaction", entityId: transaction.entityId },
+      { entityType: "financialAccount", entityId: account.entityId },
+      { entityType: "purchase", entityId: purchase.entityId },
+      { entityType: "vendor", entityId: vendor.entityId },
+    ]);
+    expect(hydrated.map((row) => row.entityType)).toEqual([
+      "financialTransaction",
+      "financialAccount",
+      "purchase",
+      "vendor",
+    ]);
+    expect(hydrated).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entityType: "vendor",
+          purchaseCount: 1,
+          spend: 0,
+        }),
+        expect.objectContaining({
+          entityType: "purchase",
+          expenseCount: 0,
+          expenseTotal: 0,
+        }),
+        expect.objectContaining({
+          entityType: "financialAccount",
+          transactionCount: 1,
+        }),
+        expect.objectContaining({
+          entityType: "financialTransaction",
+          amount: 99,
+          accountName: "Finance Search Account",
+        }),
+      ]),
+    );
   });
 });

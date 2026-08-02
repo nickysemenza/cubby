@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
   unsafeCookbookId,
+  unsafeIngredientId,
   unsafeLocationId,
   unsafeProductId,
   unsafeProjectId,
@@ -67,6 +68,191 @@ export interface FilterSpec extends FilterSpecCore {
    */
   optionsKey?: string;
 }
+
+const resolveProductPurchaseDateFilter = (
+  preset: string | undefined,
+): {
+  purchaseDatePresenceFilter?: "has" | "none";
+  purchaseDateFrom?: string;
+  purchaseDateTo?: string;
+} => {
+  if (preset === "has" || preset === "none") {
+    return { purchaseDatePresenceFilter: preset };
+  }
+  const { dateFrom, dateTo } = resolveDateRange(preset);
+  return {
+    ...(dateFrom ? { purchaseDateFrom: dateFrom } : {}),
+    ...(dateTo ? { purchaseDateTo: dateTo } : {}),
+  };
+};
+
+const resolveAuditDateRange =
+  (prefix: "created" | "updated") =>
+  (preset: string | undefined): Record<string, string | undefined> => {
+    const { dateFrom, dateTo } = resolveDateRange(preset);
+    return {
+      [`${prefix}From`]: dateFrom,
+      [`${prefix}To`]: dateTo,
+    };
+  };
+
+const expenseCountOptions: FilterableComboboxItem[] = [
+  ...presenceFilterOptions("expenses"),
+  { value: "1", label: "1+ expenses" },
+  { value: "2", label: "2+ expenses" },
+  { value: "5", label: "5+ expenses" },
+];
+
+const resolveExpenseCount = (value: string | undefined) =>
+  value === "has" || value === "none"
+    ? { expensePresenceFilter: value }
+    : value
+      ? { expenseCountMin: Number(value) }
+      : {};
+
+const netBasisOptions: FilterableComboboxItem[] = [
+  { value: "positive", label: "Positive basis" },
+  { value: "zero", label: "Zero basis" },
+  { value: "negative", label: "Credit / negative" },
+  { value: "gte100", label: "$100 and up" },
+  { value: "gte500", label: "$500 and up" },
+];
+
+const resolveNetBasis = (value: string | undefined) => {
+  if (value === "positive") return { expenseTotalMin: 0.01 };
+  if (value === "zero") return { expenseTotalMin: 0, expenseTotalMax: 0 };
+  if (value === "negative") return { expenseTotalMax: -0.01 };
+  if (value === "gte100") return { expenseTotalMin: 100 };
+  if (value === "gte500") return { expenseTotalMin: 500 };
+  return {};
+};
+
+const resolveVendorPurchases = (value: string | undefined) =>
+  value === "none"
+    ? { purchaseCountMax: 0 }
+    : value === "has"
+      ? { purchaseCountMin: 1 }
+      : value
+        ? { purchaseCountMin: Number(value) }
+        : {};
+
+const resolveVendorSpend = (value: string | undefined) => {
+  if (value === "positive") return { spendMin: 0.01 };
+  if (value === "zero") return { spendMin: 0, spendMax: 0 };
+  if (value === "negative") return { spendMax: -0.01 };
+  if (value === "gte100") return { spendMin: 100 };
+  if (value === "gte500") return { spendMin: 500 };
+  return {};
+};
+
+const resolveLatestPurchaseDate = (preset: string | undefined) => {
+  if (preset === "has" || preset === "none") {
+    return { latestPurchaseDatePresenceFilter: preset };
+  }
+  const { dateFrom, dateTo } = resolveDateRange(preset);
+  return {
+    latestPurchaseDateFrom: dateFrom,
+    latestPurchaseDateTo: dateTo,
+  };
+};
+
+const resolveVerifiedDate = (preset: string | undefined) => {
+  if (preset === "has" || preset === "none") {
+    return { verifiedPresenceFilter: preset };
+  }
+  const { dateFrom, dateTo } = resolveDateRange(preset);
+  return { verifiedFrom: dateFrom, verifiedTo: dateTo };
+};
+
+const resolveProductTaskFilter = (value: string | undefined) => {
+  if (value === "has" || value === "none") {
+    return { taskPresenceFilter: value };
+  }
+  if (value === "open") return { taskOpenOnly: true };
+  if (taskStatusOptions.some((option) => option.value === value)) {
+    return { taskStatusFilter: value };
+  }
+  const { dueFrom, dueTo } = resolveDueRange(value);
+  return { taskDueFrom: dueFrom, taskDueTo: dueTo };
+};
+
+const resolveLocationItems = (value: string | undefined) =>
+  value === "none"
+    ? { directItemCountMax: 0 }
+    : value === "has"
+      ? { directItemCountMin: 1 }
+      : value
+        ? { directItemCountMin: Number(value) }
+        : {};
+
+const resolveLocationValuation = (value: string | undefined) => {
+  if (value === "positive") return { valuationMin: 0.01 };
+  if (value === "zero") return { valuationMin: 0, valuationMax: 0 };
+  if (value === "negative") return { valuationMax: -0.01 };
+  if (value === "gte100") return { valuationMin: 100 };
+  if (value === "gte500") return { valuationMin: 500 };
+  return {};
+};
+
+const recipeCostOptions: FilterableComboboxItem[] = [
+  { value: "under10", label: "Under $10" },
+  { value: "10to25", label: "$10–$25" },
+  { value: "25plus", label: "$25 and up" },
+];
+const resolveRecipeCost = (value: string | undefined) =>
+  value === "under10"
+    ? { costTotalMax: 10 }
+    : value === "10to25"
+      ? { costTotalMin: 10, costTotalMax: 25 }
+      : value === "25plus"
+        ? { costTotalMin: 25 }
+        : {};
+
+const calorieOptions: FilterableComboboxItem[] = [
+  { value: "under500", label: "Under 500 cal" },
+  { value: "500to1000", label: "500–1,000 cal" },
+  { value: "1000plus", label: "1,000+ cal" },
+];
+const resolveCalories = (value: string | undefined) =>
+  value === "under500"
+    ? { caloriesTotalMax: 500 }
+    : value === "500to1000"
+      ? { caloriesTotalMin: 500, caloriesTotalMax: 1000 }
+      : value === "1000plus"
+        ? { caloriesTotalMin: 1000 }
+        : {};
+
+const auditFilterEntities = new Set<Entity>([
+  "financialAccount",
+  "financialTransaction",
+  "expense",
+  "vendor",
+  "purchase",
+  "task",
+  "product",
+  "recipe",
+  "ingredient",
+  "inventory",
+  "location",
+  "image",
+]);
+
+const auditFilterSpecs: readonly FilterSpec[] = [
+  {
+    columnId: "createdAt",
+    kind: "range",
+    placeholder: "Filter by created date...",
+    options: dateRangeOptions,
+    expand: resolveAuditDateRange("created"),
+  },
+  {
+    columnId: "updatedAt",
+    kind: "range",
+    placeholder: "Filter by updated date...",
+    options: dateRangeOptions,
+    expand: resolveAuditDateRange("updated"),
+  },
+];
 
 /** The control a kind renders as. */
 const filterTypeForKind = (
@@ -454,6 +640,30 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "text",
       placeholder: "Search vendors...",
     },
+    {
+      columnId: "purchaseCount",
+      kind: "range",
+      placeholder: "Filter purchase count...",
+      options: expenseCountOptions.map((option) => ({
+        ...option,
+        label: option.label.replace("expenses", "purchases"),
+      })),
+      expand: resolveVendorPurchases,
+    },
+    {
+      columnId: "spend",
+      kind: "range",
+      placeholder: "Filter spend...",
+      options: netBasisOptions,
+      expand: resolveVendorSpend,
+    },
+    {
+      columnId: "latestPurchaseDate",
+      kind: "range",
+      placeholder: "Filter latest purchase...",
+      options: [...presenceFilterOptions("purchase"), ...dateRangeOptions],
+      expand: resolveLatestPurchaseDate,
+    },
   ],
 
   // One row per vendor purchase. These specs cover `purchaseFiltersSchema`,
@@ -621,10 +831,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "subjectProduct",
-      field: "subjectProductPresenceFilter",
-      kind: "presence",
+      field: "subjectProductId",
+      kind: "idMulti",
+      brand: unsafeProductId,
       placeholder: "Filter by product...",
-      options: presenceFilterOptions("product"),
+      optionsKey: "taskProducts",
+      nullable: {
+        field: "subjectProductPresenceFilter",
+        label: "product",
+      },
     },
   ],
 
@@ -637,9 +852,17 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "manufacturer",
-      field: "manufacturerFilter",
-      kind: "text",
+      field: "manufacturerExact",
+      kind: "multiselect",
       placeholder: "Filter by manufacturer...",
+      optionsKey: "manufacturers",
+    },
+    {
+      columnId: "manufacturerSearch",
+      field: "manufacturerFilter",
+      urlOnly: true,
+      kind: "text",
+      placeholder: "Search manufacturer...",
     },
     {
       columnId: "upc",
@@ -656,6 +879,18 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter by model...",
     },
     {
+      columnId: "modelPresence",
+      field: "modelPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter model presence...",
+    },
+    {
+      columnId: "upcPresence",
+      field: "upcPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter UPC presence...",
+    },
+    {
       columnId: "category",
       field: "categoryFilter",
       kind: "multiselect",
@@ -665,24 +900,89 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
     {
       columnId: "location",
-      field: "inventoryPresenceFilter",
-      kind: "presence",
+      field: "locationIdFilter",
+      kind: "idMulti",
+      brand: unsafeLocationId,
       placeholder: "Filter locations...",
-      options: presenceFilterOptions("inventory"),
+      optionsKey: "productLocations",
+      nullable: { field: "inventoryPresenceFilter", label: "inventory" },
     },
     {
       columnId: "ingredient",
-      field: "ingredientPresenceFilter",
-      kind: "presence",
+      field: "ingredientIdFilter",
+      kind: "idMulti",
+      brand: unsafeIngredientId,
       placeholder: "Filter ingredient...",
-      options: presenceFilterOptions("ingredient"),
+      optionsKey: "productIngredients",
+      nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
     },
     {
       columnId: "expenses",
-      field: "expensePresenceFilter",
-      kind: "presence",
+      kind: "range",
       placeholder: "Filter expenses...",
-      options: presenceFilterOptions("expenses"),
+      options: expenseCountOptions,
+      expand: resolveExpenseCount,
+    },
+    {
+      columnId: "expenseTotal",
+      kind: "range",
+      placeholder: "Filter net basis...",
+      options: netBasisOptions,
+      expand: resolveNetBasis,
+    },
+    {
+      columnId: "notes",
+      field: "notesFilter",
+      kind: "text",
+      placeholder: "Search notes...",
+    },
+    {
+      columnId: "notesPresence",
+      field: "notesPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter notes presence...",
+    },
+    {
+      columnId: "dataQuality",
+      field: "dataStatus",
+      kind: "select",
+      placeholder: "Filter data quality...",
+      options: [
+        { value: "complete", label: "Complete" },
+        { value: "needs_data", label: "Needs data" },
+        { value: "defect", label: "Defect" },
+      ],
+    },
+    {
+      columnId: "dataGaps",
+      field: "dataGap",
+      kind: "multiselect",
+      placeholder: "Filter data gaps...",
+      options: [
+        { value: "product_manufacturer", label: "Manufacturer" },
+        { value: "product_category", label: "Category" },
+        { value: "product_model", label: "Model" },
+        { value: "amazon_asin", label: "Amazon ASIN" },
+        { value: "duplicate_external_id", label: "Duplicate external ID" },
+      ],
+    },
+    {
+      columnId: "externalIds",
+      field: "externalIdPresenceFilter",
+      kind: "presence",
+      placeholder: "Filter external IDs...",
+      options: presenceFilterOptions("external ID"),
+    },
+    {
+      // Products may appear on several ledger lines; the cell shows the latest
+      // linked Purchase date, while a range matches when ANY linked live
+      // Purchase falls inside it. Has/(none) separates purchased provenance
+      // from products that have never been tied to a Purchase.
+      columnId: "purchaseDate",
+      kind: "range",
+      placeholder: "Filter by purchase date...",
+      options: [...presenceFilterOptions("purchase date"), ...dateRangeOptions],
+      expand: resolveProductPurchaseDateFilter,
     },
     {
       // Combined with `inventoryPresenceFilter: "has"` this is the
@@ -785,6 +1085,20 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter images...",
       options: presenceFilterOptions("image"),
     },
+    {
+      columnId: "costTotal",
+      kind: "range",
+      placeholder: "Filter recipe cost...",
+      options: recipeCostOptions,
+      expand: resolveRecipeCost,
+    },
+    {
+      columnId: "caloriesTotal",
+      kind: "range",
+      placeholder: "Filter calories...",
+      options: calorieOptions,
+      expand: resolveCalories,
+    },
   ],
 
   ingredient: [
@@ -838,6 +1152,13 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       placeholder: "Filter by category...",
       options: productCategoryOptionsWithTheme,
     },
+    {
+      columnId: "verifiedAt",
+      kind: "range",
+      placeholder: "Filter verification date...",
+      options: [...presenceFilterOptions("verification"), ...dateRangeOptions],
+      expand: resolveVerifiedDate,
+    },
   ],
 
   location: [
@@ -871,10 +1192,20 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       // "none" is the empty-shelf worklist. Counts only entries whose product
       // is live, matching what the cell renders (it drops deleted products).
       columnId: "inventoryEntries",
-      field: "inventoryPresenceFilter",
-      kind: "presence",
+      kind: "range",
       placeholder: "Filter inventory...",
-      options: presenceFilterOptions("inventory"),
+      options: expenseCountOptions.map((option) => ({
+        ...option,
+        label: option.label.replace("expenses", "items"),
+      })),
+      expand: resolveLocationItems,
+    },
+    {
+      columnId: "valuation",
+      kind: "range",
+      placeholder: "Filter valuation...",
+      options: netBasisOptions,
+      expand: resolveLocationValuation,
     },
   ],
 
@@ -939,6 +1270,98 @@ const relatedFilterSpecs = Object.fromEntries(
           brand: unsafeVendorId,
           placeholder: "Filter by vendor...",
           optionsKey: "productVendors",
+          nullable: { field: "vendorPresenceFilter", label: "vendor" },
+        });
+        continue;
+      }
+      if (view.key === "product.projects") {
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}Id`,
+          urlKey: `related-${prefix}`,
+          kind: "idMulti",
+          brand: unsafeProjectId,
+          placeholder: "Filter by project...",
+          optionsKey: "project",
+          nullable: { field: "projectPresenceFilter", label: "project" },
+        });
+        continue;
+      }
+      if (view.key === "product.purchases") {
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}Id`,
+          urlKey: `related-${prefix}`,
+          kind: "idMulti",
+          brand: unsafePurchaseId,
+          placeholder: "Filter by purchase...",
+          optionsKey: "productPurchases",
+          nullable: {
+            field: `${prefix}PresenceFilter`,
+            label: "purchase",
+          },
+        });
+        continue;
+      }
+      if (view.key === "product.tasks") {
+        generated.push({
+          columnId: `related:${view.key}`,
+          kind: "range",
+          placeholder: "Filter tasks...",
+          options: [
+            ...presenceFilterOptions("task"),
+            { value: "open", label: "Has open task" },
+            ...taskStatusOptions,
+            ...dueRangeOptions,
+          ],
+          expand: resolveProductTaskFilter,
+        });
+        continue;
+      }
+      if (view.key === "purchase.projects") {
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}Id`,
+          urlKey: `related-${prefix}`,
+          kind: "idMulti",
+          brand: unsafeProjectId,
+          placeholder: "Filter by project...",
+          optionsKey: "project",
+          nullable: {
+            field: `${prefix}PresenceFilter`,
+            label: "project",
+          },
+        });
+        generated.push(
+          {
+            columnId: `${prefix}Id`,
+            urlOnly: true,
+            kind: "idMulti",
+            brand: unsafeProjectId,
+            placeholder: "Filter by project id...",
+          },
+          {
+            columnId: `${prefix}PresenceFilter`,
+            urlOnly: true,
+            kind: "presence",
+            placeholder: "Filter project presence...",
+          },
+        );
+        continue;
+      }
+      if (view.key === "recipe.ingredients") {
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}Id`,
+          urlKey: `related-${prefix}`,
+          kind: "idMulti",
+          brand: unsafeIngredientId,
+          placeholder: "Filter by ingredient...",
+          optionsKey: "recipeIngredients",
+          nullable: {
+            field: `${prefix}PresenceFilter`,
+            label: "ingredient",
+          },
         });
         continue;
       }
@@ -981,6 +1404,7 @@ export const getEntityFilters = (entity: Entity): readonly FilterSpec[] => {
   const specs = [
     ...(entityFilters[entity] ?? []),
     ...(relatedFilterSpecs[entity] ?? []),
+    ...(auditFilterEntities.has(entity) ? auditFilterSpecs : []),
   ];
   filterSpecCache.set(entity, specs);
   return specs;

@@ -2,7 +2,7 @@ import {
   useWindowVirtualizer,
   type VirtualItem,
 } from "@tanstack/react-virtual";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // Estimated height for section headers (smaller than data rows).
 const SECTION_HEADER_HEIGHT = 28;
@@ -70,9 +70,29 @@ export function flatRowToVirtualIndex(
   );
 }
 
+/** Stable virtualizer key for a row, group header, or infinite sentinel. */
+export function tableVirtualItemKey(
+  index: number,
+  rowKeys: string[],
+  groupedItems: GroupedItem[] | null,
+  trailingSentinel = false,
+): string {
+  const baseCount = groupedItems ? groupedItems.length : rowKeys.length;
+  if (trailingSentinel && index === baseCount) return "sentinel:infinite";
+  if (groupedItems) {
+    const item = groupedItems[index];
+    if (!item) return `missing:${index}`;
+    if (item.kind === "header") return `group:${item.title}`;
+    return `row:${rowKeys[item.rowIndex] ?? item.rowIndex}`;
+  }
+  return `row:${rowKeys[index] ?? index}`;
+}
+
 interface UseTableVirtualizerArgs {
   /** Number of data rows (flat list length). */
   rowCount: number;
+  /** Stable TanStack row ids in flat row order. */
+  rowKeys: string[];
   /** Interleaved header+row items when grouping is active, else null. */
   groupedItems: GroupedItem[] | null;
   /** Per-row height from the active density config. */
@@ -112,6 +132,7 @@ interface UseTableVirtualizerResult {
  */
 export function useTableVirtualizer({
   rowCount,
+  rowKeys,
   groupedItems,
   rowHeight,
   isMobile,
@@ -160,8 +181,14 @@ export function useTableVirtualizer({
   // extra DOM is affordable; clamped to keep tiny/huge viewports sane.
   const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
   const overscan = Math.min(40, Math.max(12, Math.ceil(viewportH / rowHeight)));
+  const getItemKey = useCallback(
+    (index: number) =>
+      tableVirtualItemKey(index, rowKeys, groupedItems, trailingSentinel),
+    [groupedItems, rowKeys, trailingSentinel],
+  );
   const rowVirtualizer = useWindowVirtualizer({
     count: virtualizerCount,
+    getItemKey,
     estimateSize: (index) => {
       if (trailingSentinel && index === baseCount) {
         return rowHeight;

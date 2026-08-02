@@ -48,6 +48,7 @@ import {
 } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -63,6 +64,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
@@ -183,6 +185,7 @@ async function whereFor(
       { column: financialTransaction.rawDescription, term: filters.search },
     ],
     [
+      ...auditDateWhereConditions(financialTransaction, filters),
       ...relatedWhereConditions(
         "financialTransaction",
         filters,
@@ -541,6 +544,7 @@ export async function deleteFinancialTransactions(
           notDeleted(financialTransaction),
         ),
       );
+    await softDeleteEntityEmbeddingsTx(tx, "financialTransaction", ids);
     await logAuditEntries(
       tx,
       actor,

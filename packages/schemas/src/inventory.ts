@@ -1,7 +1,7 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { inventoryRelatedFilterFields } from "./related-view";
-import { timestampedFields } from "./base-entity";
+import { auditDateFilterFields, timestampedFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
 import { externalIdOut } from "./external-id";
@@ -13,6 +13,7 @@ import {
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
 import { productCategory } from "./product";
+import { plainDate } from "./project";
 import { duplicateUniqueProductSchema } from "./problems";
 import {
   createItemsResponseSchema,
@@ -25,6 +26,7 @@ export { positiveAmount } from "./codec";
 
 // Filters accepted by the inventory list endpoint.
 export const inventoryFilterFields = {
+  ...auditDateFilterFields,
   ...inventoryRelatedFilterFields,
   productNameFilter: z
     .string()
@@ -47,12 +49,16 @@ export const inventoryFilterFields = {
   categoryFilter: oneOrMany(productCategory)
     .optional()
     .describe("Filter by product category"),
+  verifiedPresenceFilter: z.enum(["has", "none"]).optional(),
+  verifiedFrom: plainDate.optional(),
+  verifiedTo: plainDate.optional(),
 };
 
 export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 
 export const inventorySortableFields = [
   "createdAt",
+  "updatedAt",
   "name",
   "product",
   "location",

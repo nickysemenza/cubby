@@ -61,6 +61,7 @@ const baseProduct = {
   usdaUnavailable: null,
   expenseCount: 0,
   expenseTotal: 42.5,
+  purchaseDate: null,
 };
 
 const baseImage = {

@@ -32,6 +32,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -45,6 +46,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -123,6 +125,7 @@ const whereFor = (filters: FinancialAccountFilters) =>
     financialAccount,
     [{ column: financialAccount.name, term: filters.search }],
     [
+      ...auditDateWhereConditions(financialAccount, filters),
       ...relatedWhereConditions(
         "financialAccount",
         filters,
@@ -378,6 +381,7 @@ export async function deleteFinancialAccounts(
       .where(
         and(inArray(financialAccount.id, ids), notDeleted(financialAccount)),
       );
+    await softDeleteEntityEmbeddingsTx(tx, "financialAccount", ids);
     await logAuditEntries(
       tx,
       actor,

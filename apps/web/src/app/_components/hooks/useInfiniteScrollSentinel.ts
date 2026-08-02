@@ -9,14 +9,20 @@ export function useInfiniteScrollSentinel(
   const fetchNextPage = controls?.fetchNextPage;
   const hasNextPage = controls?.hasNextPage ?? false;
   const isFetchingNextPage = controls?.isFetchingNextPage ?? false;
+  const isTransitioning = controls?.isTransitioning ?? false;
 
   const handleIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+      if (
+        entries[0]?.isIntersecting &&
+        hasNextPage &&
+        !isFetchingNextPage &&
+        !isTransitioning
+      ) {
         fetchNextPage?.();
       }
     },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
+    [fetchNextPage, hasNextPage, isFetchingNextPage, isTransitioning],
   );
 
   useEffect(() => {

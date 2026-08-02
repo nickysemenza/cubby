@@ -47,6 +47,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -58,6 +59,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -133,6 +135,11 @@ const vendorSpend = correlated<number>(
      WHERE p."vendorId" = "Vendor"."id" AND e."deletedAt" IS NULL)`,
 );
 
+const vendorLatestPurchaseDate = correlated<string | null>(
+  `(SELECT max(p."date") FROM "Purchase" p
+     WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
+);
+
 const vendorColumns = {
   id: vendor.id,
   shortcode: vendor.shortcode,
@@ -143,6 +150,7 @@ const vendorColumns = {
   updatedAt: vendor.updatedAt,
   purchaseCount: vendorPurchaseCount,
   spend: vendorSpend,
+  latestPurchaseDate: vendorLatestPurchaseDate,
 } as const;
 
 type VendorRow = {
@@ -155,6 +163,7 @@ type VendorRow = {
   updatedAt: Date;
   purchaseCount: number;
   spend: number;
+  latestPurchaseDate: string | null;
 };
 
 const dbVendorToAPI = (row: VendorRow): VendorOut => ({
@@ -167,6 +176,7 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   // column is double precision; Number() is the same defensive coercion
   // product/mappers.ts applies to its own aggregates.
   spend: Number(row.spend),
+  latestPurchaseDate: row.latestPurchaseDate,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
@@ -176,6 +186,30 @@ const buildVendorWhereClause = (filters: VendorFilters) =>
     vendor,
     [],
     [
+      ...auditDateWhereConditions(vendor, filters),
+      filters.purchaseCountMin !== undefined
+        ? sql`${vendorPurchaseCount} >= ${filters.purchaseCountMin}`
+        : undefined,
+      filters.purchaseCountMax !== undefined
+        ? sql`${vendorPurchaseCount} <= ${filters.purchaseCountMax}`
+        : undefined,
+      filters.spendMin !== undefined
+        ? sql`${vendorSpend} >= ${filters.spendMin}`
+        : undefined,
+      filters.spendMax !== undefined
+        ? sql`${vendorSpend} <= ${filters.spendMax}`
+        : undefined,
+      filters.latestPurchaseDatePresenceFilter === "has"
+        ? sql`${vendorLatestPurchaseDate} IS NOT NULL`
+        : filters.latestPurchaseDatePresenceFilter === "none"
+          ? sql`${vendorLatestPurchaseDate} IS NULL`
+          : undefined,
+      filters.latestPurchaseDateFrom
+        ? sql`${vendorLatestPurchaseDate} >= ${filters.latestPurchaseDateFrom}`
+        : undefined,
+      filters.latestPurchaseDateTo
+        ? sql`${vendorLatestPurchaseDate} <= ${filters.latestPurchaseDateTo}`
+        : undefined,
       ...relatedWhereConditions("vendor", filters, vendor.id),
       filters.search
         ? or(
@@ -197,6 +231,8 @@ const resolveVendorSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
   if (sort.orderBy === "purchaseCount") return [dir(vendorPurchaseCount)];
   if (sort.orderBy === "spend") return [dir(vendorSpend)];
+  if (sort.orderBy === "latestPurchaseDate")
+    return [dir(vendorLatestPurchaseDate)];
   return null;
 };
 
@@ -578,6 +614,7 @@ export const mergeVendors = async (
       .update(vendor)
       .set({ deletedAt: new Date() })
       .where(and(inArray(vendor.id, losers), notDeleted(vendor)));
+    await softDeleteEntityEmbeddingsTx(tx, "vendor", losers);
 
     await logAuditEntries(tx, actor, [
       {
@@ -663,6 +700,7 @@ export const deleteVendors = async (
       .update(vendor)
       .set({ deletedAt: now })
       .where(and(inArray(vendor.id, ids), notDeleted(vendor)));
+    await softDeleteEntityEmbeddingsTx(tx, "vendor", ids);
 
     await logAuditEntries(
       tx,

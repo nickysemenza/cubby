@@ -2,7 +2,11 @@ import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { locationRelatedFilterFields } from "./related-view";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { amount } from "./codec";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
@@ -28,6 +32,7 @@ export { locationTypeValues } from "@cubby/shared";
 
 // Filters accepted by the location list endpoint.
 export const locationFilterFields = {
+  ...auditDateFilterFields,
   ...locationRelatedFilterFields,
   nameFilter: z
     .string()
@@ -45,6 +50,10 @@ export const locationFilterFields = {
   inventoryPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't hold at least one live inventory entry",
   ),
+  directItemCountMin: z.coerce.number().int().nonnegative().optional(),
+  directItemCountMax: z.coerce.number().int().nonnegative().optional(),
+  valuationMin: z.coerce.number().optional(),
+  valuationMax: z.coerce.number().optional(),
 };
 
 export const locationFiltersSchema = z.object(locationFilterFields);
@@ -52,12 +61,14 @@ export type LocationFiltersInput = z.infer<typeof locationFiltersSchema>;
 
 export const locationSortableFields = [
   "createdAt",
+  "updatedAt",
   "name",
   "type",
   // Joined parent name — resolved by a correlated subquery in repo/location.
   "parent",
   "lastBulkInventory",
   "valuation",
+  "inventoryEntries",
 ] as const;
 
 export type LocationSortField = (typeof locationSortableFields)[number];

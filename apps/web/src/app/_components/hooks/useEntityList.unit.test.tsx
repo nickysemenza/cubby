@@ -6,8 +6,16 @@ interface TestRow {
   id: string;
 }
 
+interface CapturedTableOptions {
+  getRowId?: (row: TestRow) => string;
+  [key: string]: unknown;
+}
+
 const mocks = vi.hoisted(() => ({
-  useTableConfig: vi.fn(() => ({}) as Table<TestRow>),
+  useTableConfig: vi.fn(
+    (_options: CapturedTableOptions) => ({}) as Table<TestRow>,
+  ),
+  clearSelection: vi.fn(),
 }));
 
 vi.mock("@cubby/schemas/related-view", () => ({ relatedViewRegistry: [] }));
@@ -67,6 +75,7 @@ vi.mock("./useInfiniteTableList", () => ({
       fetchNextPage: vi.fn(),
       hasNextPage: true,
       isFetchingNextPage: false,
+      isTransitioning: false,
       loadAllPages: vi.fn(),
     },
     refreshControls: { onRefresh: vi.fn(), isRefreshing: false },
@@ -76,7 +85,7 @@ vi.mock("./useListBulkActions", () => ({
   ListBulkActionBar: () => null,
   useListBulkActions: () => ({
     config: undefined,
-    state: {},
+    state: { clearSelection: mocks.clearSelection },
     enableRowSelection: false,
     rowSelection: {},
     onRowSelectionChange: undefined,
@@ -97,7 +106,10 @@ vi.mock("./useStandardColumns", () => ({
 import { useEntityList } from "./useEntityList";
 
 describe("useEntityList", () => {
-  beforeEach(() => mocks.useTableConfig.mockClear());
+  beforeEach(() => {
+    mocks.useTableConfig.mockClear();
+    mocks.clearSelection.mockClear();
+  });
 
   it("does not re-paginate accumulated infinite-query rows", () => {
     renderHook(() =>
@@ -114,7 +126,42 @@ describe("useEntityList", () => {
         data: expect.arrayContaining([{ id: "row-199" }]),
         totalCount: 200,
         manualPagination: true,
+        initialColumnVisibility: {
+          createdAt: false,
+          updatedAt: false,
+        },
       }),
     );
+  });
+
+  it("uses entity ids even when bulk selection is disabled", () => {
+    renderHook(() =>
+      useEntityList<TestRow, Record<string, never>>({
+        entity: "product",
+        queryOptions: vi.fn(),
+        buildFilters: () => ({}),
+        columns: [],
+      }),
+    );
+
+    const options = mocks.useTableConfig.mock.calls[0]?.[0];
+    expect(options?.getRowId?.({ id: "EXP-TEST" })).toBe("EXP-TEST");
+  });
+
+  it("clears bulk selection when the filter scope changes, but not initially", () => {
+    const { rerender } = renderHook(
+      ({ scope }) =>
+        useEntityList<TestRow, { scope: string }>({
+          entity: "product",
+          queryOptions: vi.fn(),
+          buildFilters: () => ({ scope }),
+          columns: [],
+        }),
+      { initialProps: { scope: "first" } },
+    );
+
+    expect(mocks.clearSelection).not.toHaveBeenCalled();
+    rerender({ scope: "second" });
+    expect(mocks.clearSelection).toHaveBeenCalledTimes(1);
   });
 });

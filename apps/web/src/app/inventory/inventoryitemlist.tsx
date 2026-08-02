@@ -13,7 +13,6 @@ import { multiSelectFilterFn } from "~/entities/filters";
 import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
-  createCreatedAtColumn,
   createCurrencyColumn,
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
@@ -250,7 +249,6 @@ export function InventoryItemList() {
         className: "w-32",
         mobile: { slot: "meta", priority: 60 },
       }),
-      createCreatedAtColumn(columnHelper),
     ],
     [columnHelper],
   );

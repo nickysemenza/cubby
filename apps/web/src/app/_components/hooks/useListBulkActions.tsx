@@ -50,11 +50,13 @@ export function ListBulkActionBar<TData>({
   config,
   state,
   selectAllMatching,
+  disabled = false,
 }: {
   table: Table<TData>;
   config?: BulkActionsConfig<TData>;
   state: UseBulkActionsReturn<TData>;
   selectAllMatching?: BulkActionBarProps<TData>["selectAllMatching"];
+  disabled?: boolean;
 }) {
   if (!config) return null;
   const selectedRows: Row<TData>[] = table.getFilteredSelectedRowModel().rows;
@@ -68,6 +70,7 @@ export function ListBulkActionBar<TData>({
       isExecuting={state.isExecuting}
       currentAction={state.currentAction}
       selectAllMatching={selectAllMatching}
+      disabled={disabled}
     />
   );
 }

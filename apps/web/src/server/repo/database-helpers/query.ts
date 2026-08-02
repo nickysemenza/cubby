@@ -52,6 +52,36 @@ export function buildSearchConditions(
 }
 
 /**
+ * Shared server-side bounds for list-table Created / Updated filters. The upper
+ * bound is exclusive midnight on the following day, so a YYYY-MM-DD selection
+ * includes every timestamp on that calendar day.
+ */
+export function auditDateWhereConditions(
+  table: { createdAt: AnyColumn; updatedAt: AnyColumn },
+  filters: {
+    createdFrom?: string;
+    createdTo?: string;
+    updatedFrom?: string;
+    updatedTo?: string;
+  },
+): Array<SQL | undefined> {
+  return [
+    filters.createdFrom
+      ? sql`${table.createdAt} >= ${filters.createdFrom}::date`
+      : undefined,
+    filters.createdTo
+      ? sql`${table.createdAt} < (${filters.createdTo}::date + interval '1 day')`
+      : undefined,
+    filters.updatedFrom
+      ? sql`${table.updatedAt} >= ${filters.updatedFrom}::date`
+      : undefined,
+    filters.updatedTo
+      ? sql`${table.updatedAt} < (${filters.updatedTo}::date + interval '1 day')`
+      : undefined,
+  ];
+}
+
+/**
  * Helper function to format search terms for PostgreSQL pattern matching.
  */
 export const formatSearchTerm = (
@@ -107,9 +137,11 @@ export const countWhere = (
  * correlated subqueries): it returns the clauses that DEFINE that field's
  * order, or null to fall through to the generic column path. Cosmetic
  * tie-breakers must NOT live in a resolver — mid-stack they would swallow any
- * subsequent user sort; pass them once via `opts.tieBreaker` instead.
+ * subsequent user sort; pass them once via `opts.tieBreaker` instead. The
+ * table's unique primary key is always appended last so offset pages cannot
+ * overlap merely because the visible sort values are tied.
  */
-export const buildOrderBy = <T extends PgTable>(
+export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
   table: T,
   sorts: SortParams[],
   allowedFields: string[],
@@ -158,6 +190,7 @@ export const buildOrderBy = <T extends PgTable>(
   }
 
   if (tieBreaker) clauses.push(tieBreaker);
+  clauses.push(asc(table.id));
   return clauses;
 };
 

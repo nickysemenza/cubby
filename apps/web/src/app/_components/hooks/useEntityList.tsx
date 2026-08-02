@@ -9,10 +9,10 @@ import { type QueryKey, useQuery } from "@tanstack/react-query";
 import type { ColumnDef, ColumnHelper, Table } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { entities } from "~/entities/entities";
+import { entities, getSortableFields } from "~/entities/entities";
 import {
   getEntityFilters,
   manifestFilterConfig,
@@ -46,6 +46,7 @@ export interface BaseListRow {
   id: string;
   name?: string | null;
   createdAt?: string | Date;
+  updatedAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
 }
 
@@ -194,7 +195,7 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
  * Handles:
  * - Infinite table query via useInfiniteTableList
  * - Unit mappings loading if getMappings provided
- * - Standard columns based on entity config (image, name, createdAt)
+ * - Standard identity columns from entity config plus shared audit dates
  * - Filter expansion from simple string definitions
  */
 export function useEntityList<TData extends BaseListRow, TFilters>({
@@ -313,6 +314,20 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [effectiveBuildFilters, tableState],
   );
 
+  // Selection belongs to a filtered result set. Keeping ids selected after
+  // the filter scope changes makes the toolbar count disagree with the rows it
+  // can actually act on. Sorting alone deliberately does not clear selection.
+  const filterScopeKey = useMemo(
+    () => JSON.stringify(currentFilters),
+    [currentFilters],
+  );
+  const previousFilterScopeKeyRef = useRef(filterScopeKey);
+  useEffect(() => {
+    if (previousFilterScopeKeyRef.current === filterScopeKey) return;
+    previousFilterScopeKeyRef.current = filterScopeKey;
+    listBulkActions.state.clearSelection();
+  }, [filterScopeKey, listBulkActions.state.clearSelection]);
+
   const infiniteResult = useInfiniteTableList<TFilters, TData>({
     queryOptions,
     buildFilters: effectiveBuildFilters,
@@ -338,7 +353,12 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [relatedViews],
   );
   const mergedInitialColumnVisibility = useMemo(
-    () => ({ ...relatedInitialVisibility, ...initialColumnVisibility }),
+    () => ({
+      createdAt: false,
+      updatedAt: false,
+      ...relatedInitialVisibility,
+      ...initialColumnVisibility,
+    }),
     [initialColumnVisibility, relatedInitialVisibility],
   );
   const { columnVisibility, onColumnVisibilityChange } =
@@ -403,15 +423,19 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const relatedColumns = useMemo<AnyColumnDef<TData>[]>(
     () =>
       relatedViews.map((view) => {
+        const columnId = `related:${view.key}`;
         const filterConfig = manifestFilterConfig(
           entity,
-          `related:${view.key}`,
+          columnId,
           filterOptions,
         );
         return columnHelper.display({
-          id: `related:${view.key}`,
+          id: columnId,
           header: view.label,
-          enableSorting: false,
+          // Most relationship previews are display-only. A list may opt a
+          // specific derived relation into server sorting by declaring this
+          // exact column id in its sortable-fields contract.
+          enableSorting: getSortableFields(entity).includes(columnId),
           meta: {
             className: "w-64",
             mobile: { slot: "meta", priority: 80 },
@@ -451,12 +475,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     hiddenFilterColumns,
   });
 
-  // Memoize getRowId to prevent recreating on every render
-  const getRowId = useMemo(
-    () =>
-      listBulkActions.enableRowSelection ? (row: TData) => row.id : undefined,
-    [listBulkActions.enableRowSelection],
-  );
+  // Row identity is independent of whether selection happens to be enabled.
+  // Index ids transfer virtualizer measurements and row state to the wrong
+  // entity when filters, sorting, or accumulated pages change.
+  const getRowId = useCallback((row: TData) => row.id, []);
 
   // Column widths are NOT wired here — `RTable` owns them, keyed off its
   // `entity`/`sizingKey` prop, so a hand-wired table can't miss out.
@@ -517,6 +539,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
         onSelectAll: handleSelectAllMatching,
         isSelectingAll,
       }}
+      disabled={infiniteResult.infiniteScroll.isTransitioning}
     />
   ) : null;
 

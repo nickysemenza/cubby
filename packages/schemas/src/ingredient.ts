@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import {
@@ -35,6 +39,7 @@ export const ingredientBase = z.object(ingredientBaseFields);
  * roster with matching names and descriptions.
  */
 export const ingredientFilterFields = {
+  ...auditDateFilterFields,
   nameFilter: z
     .string()
     .optional()
@@ -55,6 +60,7 @@ export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
 export const ingredientSortableFields = [
   "createdAt",
+  "updatedAt",
   "name",
   "appearsInRecipes",
   "product",

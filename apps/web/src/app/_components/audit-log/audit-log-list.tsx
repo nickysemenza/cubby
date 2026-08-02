@@ -1,7 +1,9 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { AuditSource } from "@cubby/schemas/context";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { uniqBy } from "es-toolkit";
 import { Activity } from "lucide-react";
+import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import { Timeline } from "~/components/reui/timeline";
 import { Button } from "~/components/ui/button";
@@ -60,6 +62,15 @@ export function AuditLogList({
       enabled: isAuthenticated,
     });
 
+  const entries = useMemo(
+    () =>
+      uniqBy(
+        data?.pages.flatMap((page) => page.entries) ?? [],
+        (entry) => entry.entryKey,
+      ),
+    [data],
+  );
+
   // Pre-hydration renders the empty state on both sides; isPending only
   // matters after hydration, where it avoids flashing "No activity yet"
   // while the session is still resolving for a signed-in user.
@@ -70,8 +81,6 @@ export function AuditLogList({
       </Row>
     );
   }
-
-  const entries = data?.pages.flatMap((page) => page.entries) ?? [];
 
   if (entries.length === 0) {
     return (
@@ -88,7 +97,7 @@ export function AuditLogList({
       <Timeline mode="chronological">
         {entries.map((entry, index) => (
           <AuditLogEntryComponent
-            key={`${entry.entityType}:${entry.entityId}:${entry.action}:${entry.createdAt.toISOString()}`}
+            key={entry.entryKey}
             entry={entry}
             step={index + 1}
             showEntityLink={showEntityLink}
@@ -102,7 +111,7 @@ export function AuditLogList({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchNextPage()}
+            onClick={() => fetchNextPage({ cancelRefetch: false })}
             disabled={isFetchingNextPage}
           >
             {isFetchingNextPage ? (

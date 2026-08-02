@@ -2,7 +2,11 @@ import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { productRelatedFilterFields } from "./related-view";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import {
   dataQuality,
   dataQualityStatus,
@@ -20,6 +24,7 @@ import {
 import {
   ingredientShortcode,
   inventoryShortcode,
+  locationShortcode,
   productShortcode,
 } from "./identifiers";
 import {
@@ -35,6 +40,7 @@ import {
   presenceFilter,
 } from "./pagination";
 import { baseKind } from "./problems";
+import { plainDate, taskStatusSchema } from "./project";
 import { recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
@@ -210,10 +216,13 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 // Filters accepted by the product list endpoint. Canonical shape shared by the
 // tRPC router (and available to any other list caller).
 export const productFilterFields = {
+  ...auditDateFilterFields,
   ...productRelatedFilterFields,
   nameFilter: z.string().optional().describe("Filter by product name"),
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
+  manufacturerExact: oneOrMany(z.string()).optional(),
   upcFilter: z.string().optional().describe("Filter by UPC code"),
+  upcPresenceFilter: presenceFilter,
   modelFilter: z
     .string()
     .optional()
@@ -221,6 +230,8 @@ export const productFilterFields = {
       "Filter by model number — a tool's real identity when the name is generic.",
     ),
   modelPresenceFilter: presenceFilter,
+  notesFilter: z.string().optional(),
+  notesPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
@@ -229,7 +240,13 @@ export const productFilterFields = {
     .optional()
     .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
+  locationIdFilter: oneOrMany(locationShortcode).optional(),
   ingredientPresenceFilter: presenceFilter,
+  ingredientIdFilter: oneOrMany(ingredientShortcode).optional(),
+  taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
+  taskOpenOnly: z.boolean().optional(),
+  taskDueFrom: plainDate.optional(),
+  taskDueTo: plainDate.optional(),
   tagFilters: z
     .array(z.string())
     .optional()
@@ -249,6 +266,21 @@ export const productFilterFields = {
   expensePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one expense in the ledger. Both acquisitions and exits (negative rows) count.",
   ),
+  expenseCountMin: z.coerce.number().int().nonnegative().optional(),
+  expenseCountMax: z.coerce.number().int().nonnegative().optional(),
+  expenseTotalMin: z.coerce.number().optional(),
+  expenseTotalMax: z.coerce.number().optional(),
+  purchaseDatePresenceFilter: presenceFilter.describe(
+    "Filter to products that do / don't have a dated live Purchase linked through an Expense.",
+  ),
+  purchaseDateFrom: plainDate
+    .optional()
+    .describe("Match a product with any linked Purchase on or after this date"),
+  purchaseDateTo: plainDate
+    .optional()
+    .describe(
+      "Match a product with any linked Purchase on or before this date",
+    ),
   /**
    * `product.price` is a nullable column on the root table (not a
    * cross-entity id-set subquery like `expensePresenceFilter`/
@@ -284,6 +316,7 @@ export type ProductFilters = z.infer<typeof productFiltersSchema>;
 
 export const productSortableFields = [
   "createdAt",
+  "updatedAt",
   "name",
   "manufacturer",
   "model",
@@ -295,6 +328,14 @@ export const productSortableFields = [
   "location",
   "ingredient",
   "expenseTotal",
+  "expenses",
+  // Latest linked Purchase date — resolved by a correlated subquery in
+  // repo/product/crud.ts.
+  "purchaseDate",
+  // Alphabetically first linked Project name — same resolver file.
+  "related:product.projects",
+  "related:product.vendors",
+  "related:product.purchases",
   "identity_strength",
 ] as const;
 
@@ -459,6 +500,9 @@ export const productListItemOut = z.object({
   // this ledger, so they telescope correctly. 0 for a product with no
   // expenses, never null.
   expenseTotal: z.number(),
+  // A product can appear on several Expense lines/Purchases. The table shows
+  // the latest live Purchase date as the compact scalar provenance cue.
+  purchaseDate: plainDate.nullable(),
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 
@@ -531,6 +575,16 @@ export const productTagOptionsOut = z.array(
   }),
 );
 export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
+
+export const productManufacturerOptionsOut = z.array(
+  z.object({
+    manufacturer: z.string(),
+    count: z.number().int().nonnegative(),
+  }),
+);
+export type ProductManufacturerOptionsOut = z.infer<
+  typeof productManufacturerOptionsOut
+>;
 
 /**
  * Products sharing a tag with the one being viewed. Each row carries its own

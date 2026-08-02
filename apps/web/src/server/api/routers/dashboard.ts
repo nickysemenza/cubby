@@ -3,8 +3,8 @@ import { getEntityCounts } from "~/server/repo/dashboard";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
 /**
- * One call powering the homepage stat cards. The six DB totals are cheap
- * parallel COUNT(*)s (no list fetch, no enrichment); the USDA total comes from
+ * One call powering the homepage stat cards. The local totals come from one
+ * cheap scalar-subquery read (no list fetch, no enrichment); USDA comes from
  * the usda-api `/counts` manifest (a single read), NOT a `usda.list` whose
  * service layer would fire a discarded per-food USDA enrichment. Replaces the
  * seven `*.list({pageSize:1})` cards that each fetched + (for product/ingredient

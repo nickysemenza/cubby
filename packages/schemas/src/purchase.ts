@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
@@ -134,6 +138,7 @@ export const primaryPurchaseDocumentKinds = [
 ] as const satisfies readonly PurchaseDocumentKind[];
 
 export const purchaseFilterFields = {
+  ...auditDateFilterFields,
   search: z.string().optional().describe("Substring match on order id"),
   vendorId: oneOrMany(vendorShortcode).optional(),
   ...purchaseRelatedFilterFields,
@@ -177,6 +182,7 @@ export const purchaseSortableFields = [
   "expenseTotal",
   "documentCount",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];
 

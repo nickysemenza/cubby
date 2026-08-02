@@ -2,8 +2,8 @@
  * Purchase Router — one vendor order/receipt event per row.
  *
  * `list` comes from the shared factory; the rest is hand-rolled for the same two
- * reasons as `vendor.ts` (correlated rollups the factory can't produce, and
- * purchase is not searchable in v1), plus the three operations that have no
+ * reasons as `vendor.ts` (correlated rollups the factory can't produce), plus
+ * the three operations that have no
  * factory analogue at all: `link`, `split` and `merge`.
  *
  * There is deliberately no `splitPurchase` — one order is one purchase by
@@ -51,7 +51,10 @@ import {
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   createEntityListProcedure,
   createGetByShortcodeProcedure,
@@ -112,23 +115,33 @@ const expenses = protectedProcedure
 const create = protectedProcedure
   .input(purchaseCreateInput)
   .output(strictOutput(purchaseOut))
-  .mutation(
-    async ({ ctx, input }) =>
-      (await createPurchase(ctx.db, input, ctx.actorContext)).output,
-  );
+  .mutation(async ({ ctx, input }) => {
+    const result = await createPurchase(ctx.db, input, ctx.actorContext);
+    await runMutationSideEffects(ctx.db, {
+      action: "created",
+      entity: { entityType: "purchase", entityId: result.entityId },
+      source: "purchase.create",
+    });
+    return result.output;
+  });
 
 const update = protectedProcedure
   .input(purchaseUpdateInput)
   .output(strictOutput(purchaseOut))
-  .mutation(
-    async ({ ctx, input }) =>
-      (await updatePurchase(ctx.db, input, ctx.actorContext)).output,
-  );
+  .mutation(async ({ ctx, input }) => {
+    const result = await updatePurchase(ctx.db, input, ctx.actorContext);
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "purchase", entityId: result.entityId },
+      source: "purchase.update",
+    });
+    return result.output;
+  });
 
 /**
  * Attach existing expenses to a charge — one invoice spanning trades. The moved
- * expenses ARE searchable, so their embeddings refresh in one wave-wide dispatch
- * (same shape as `expense.bulkMove`); the charge itself is not indexed.
+ * expenses are searchable, so their embeddings refresh in one wave-wide dispatch
+ * (same shape as `expense.bulkMove`). Purchase identity itself is unchanged.
  */
 const link = protectedProcedure
   .input(linkExpensesToPurchaseInput)
@@ -239,9 +252,21 @@ const split = protectedProcedure
 const merge = protectedProcedure
   .input(mergePurchasesInput)
   .output(strictOutput(purchaseOut))
-  .mutation(({ ctx, input }) =>
-    mergePurchases(ctx.db, input, ctx.actorContext),
-  );
+  .mutation(async ({ ctx, input }) => {
+    const output = await mergePurchases(ctx.db, input, ctx.actorContext);
+    const entityId = await resolveLiveShortcode(ctx.db, output.id, "purchase");
+    if (entityId) {
+      await runMutationSideEffects(ctx.db, {
+        action: "updated",
+        entity: {
+          entityType: "purchase",
+          entityId: unsafePurchaseId(entityId),
+        },
+        source: "purchase.merge",
+      });
+    }
+    return output;
+  });
 
 const reclassifyDocument = protectedProcedure
   .input(reclassifyPurchaseDocumentInput)
@@ -253,7 +278,22 @@ const reclassifyDocument = protectedProcedure
 const deleteItem = protectedProcedure
   .input(z.object({ ids: z.array(purchaseShortcode).min(1) }))
   .mutation(async ({ ctx, input }) => {
-    await deletePurchases(ctx.db, input.ids, ctx.actorContext);
+    const detached = await deletePurchases(ctx.db, input.ids, ctx.actorContext);
+    await runMutationSideEffectsForEntities(ctx.db, [
+      ...detached.expenseIds.map((entityId) => ({
+        action: "updated" as const,
+        entity: { entityType: "expense" as const, entityId },
+        source: "purchase.delete",
+      })),
+      ...detached.financialTransactionIds.map((entityId) => ({
+        action: "updated" as const,
+        entity: {
+          entityType: "financialTransaction" as const,
+          entityId,
+        },
+        source: "purchase.delete",
+      })),
+    ]);
   });
 
 export const purchaseRouter = createTRPCRouter({

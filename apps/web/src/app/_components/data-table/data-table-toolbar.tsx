@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { Table } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { Row } from "~/components/layout";
+import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import { DataTableViews } from "./DataTableViews";
 import { DataTableViewOptions } from "./data-table-view-options";
@@ -24,6 +25,8 @@ interface DataTableToolbarProps<TData> {
   onResetColumnWidths?: () => void;
   /** Additional className for styling */
   className?: string;
+  /** Previous-query rows remain visible while the next first page is loading. */
+  isTransitioning?: boolean;
 }
 
 export function DataTableToolbar<TData>({
@@ -35,6 +38,7 @@ export function DataTableToolbar<TData>({
   showViewOptions = true,
   onResetColumnWidths,
   className,
+  isTransitioning = false,
 }: DataTableToolbarProps<TData>) {
   return (
     <Row align="center" justify="between" gap="sm" className={className}>
@@ -46,7 +50,20 @@ export function DataTableToolbar<TData>({
           />
         )}
         <DataTableViews table={table} entity={entity} />
-        {bulkActionBar}
+        <fieldset disabled={isTransitioning} className="contents">
+          {bulkActionBar}
+        </fieldset>
+        {isTransitioning && (
+          <Row
+            align="center"
+            gap="xs"
+            aria-live="polite"
+            className="text-muted-foreground text-xs"
+          >
+            <Spinner size="sm" />
+            Updating…
+          </Row>
+        )}
       </Row>
 
       <Row
@@ -64,7 +81,9 @@ export function DataTableToolbar<TData>({
           <LedgerFilters table={table} />
         </div>
 
-        {actions}
+        <fieldset disabled={isTransitioning} className="contents">
+          {actions}
+        </fieldset>
       </Row>
     </Row>
   );

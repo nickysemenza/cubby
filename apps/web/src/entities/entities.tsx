@@ -72,8 +72,8 @@ const entityDefinitions = {
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
-    // Note: ingredient list has custom column order (selection first, createdAt in middle)
-    // so we don't use standardColumns and define all columns explicitly
+    // Ingredient supplies its domain columns explicitly; the shared list hook
+    // still appends the default-hidden Created/Updated audit pair.
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",
@@ -100,7 +100,7 @@ const entityDefinitions = {
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",
-      standardColumns: ["image", "name", "createdAt"],
+      standardColumns: ["image", "name"],
       // `ingredient` and `location` are computed sorts handled explicitly by
       // productList, not physical product columns.
       sortableFields: productSortableFields,
@@ -120,7 +120,7 @@ const entityDefinitions = {
     detail: { commonSections: ["images", "history"] },
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["image", "name", "createdAt"],
+      standardColumns: ["image", "name"],
       // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
       // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
       // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
@@ -158,8 +158,7 @@ const entityDefinitions = {
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
     detail: { commonSections: ["history"] },
-    // Note: location list has custom column order (createdAt in middle, view toggle),
-    // so we don't use standardColumns and define all columns explicitly
+    // Location supplies its domain columns explicitly; audit dates are shared.
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
@@ -203,10 +202,10 @@ const entityDefinitions = {
     detail: { commonSections: ["history"] },
     // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
     // `emptyLabel`, which useStandardColumns's automatic "name" column
-    // doesn't support. `createdAt` is the one standard column left to append.
+    // doesn't support. Audit dates are appended for every entity list.
     list: {
       defaultSort: "date",
-      standardColumns: ["createdAt"],
+      standardColumns: [],
       sortableFields: mealSortableFields,
     },
   },
@@ -250,7 +249,7 @@ const entityDefinitions = {
     detail: { commonSections: ["history"] },
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["name", "createdAt"],
+      standardColumns: ["name"],
       sortableFields: taskSortableFields,
     },
   },
@@ -271,7 +270,7 @@ const entityDefinitions = {
     detail: { commonSections: ["history"] },
     list: {
       defaultSort: "name",
-      standardColumns: ["name", "createdAt"],
+      standardColumns: ["name"],
       sortableFields: vendorSortableFields,
     },
   },
@@ -309,7 +308,7 @@ const entityDefinitions = {
     detail: { commonSections: ["history"] },
     list: {
       defaultSort: "date",
-      standardColumns: ["name", "createdAt"],
+      standardColumns: ["name"],
       sortableFields: expenseSortableFields,
     },
   },
@@ -392,7 +391,7 @@ const entityDefinitions = {
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["createdAt"],
+      standardColumns: [],
       sortableFields: imageSortableFields,
     },
   },

@@ -5,7 +5,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -157,18 +157,33 @@ export function useClientEntityList<TData extends BaseListRow>({
 
   const tableState = useTableState(mergedTableStateOptions);
 
+  const filterScopeKey = useMemo(
+    () => JSON.stringify(tableState.allFilters),
+    [tableState.allFilters],
+  );
+  const previousFilterScopeKeyRef = useRef(filterScopeKey);
+  useEffect(() => {
+    if (previousFilterScopeKeyRef.current === filterScopeKey) return;
+    previousFilterScopeKeyRef.current = filterScopeKey;
+    listBulkActions.state.clearSelection();
+  }, [filterScopeKey, listBulkActions.state.clearSelection]);
+
   const relatedViews = useMemo(
     () => relatedViewRegistry.filter((view) => view.source === entity),
     [entity],
   );
   const relatedInitialVisibility = useMemo(
     () =>
-      Object.fromEntries(
-        relatedViews.map((view) => [
-          `related:${view.key}`,
-          view.defaultVisible,
-        ]),
-      ),
+      ({
+        createdAt: false,
+        updatedAt: false,
+        ...Object.fromEntries(
+          relatedViews.map((view) => [
+            `related:${view.key}`,
+            view.defaultVisible,
+          ]),
+        ),
+      }) as Record<string, boolean>,
     [relatedViews],
   );
   const { columnVisibility, onColumnVisibilityChange } =
@@ -256,11 +271,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     expandable: tree?.expandable,
   });
 
-  const getRowId = useMemo(
-    () =>
-      listBulkActions.enableRowSelection ? (row: TData) => row.id : undefined,
-    [listBulkActions.enableRowSelection],
-  );
+  const getRowId = useCallback((row: TData) => row.id, []);
 
   // Client-side everything: manual* all false. Expansion wired only when a
   // tree config is provided (getSubRows presence gates getExpandedRowModel).

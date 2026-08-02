@@ -65,6 +65,10 @@ export type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
  * Filters for recipe list queries.
  */
 export interface RecipeFilters {
+  createdFrom?: string;
+  createdTo?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
   nameFilter?: string;
   tagFilters?: string[];
   // The tag column's "(none)" / "Has tags" sentinel. "none" is untagged —
@@ -86,4 +90,8 @@ export interface RecipeFilters {
   mealPresenceFilter?: PresenceFilter;
   // "none" matches recipes with no live, non-PDF image.
   imagePresenceFilter?: PresenceFilter;
+  costTotalMin?: number;
+  costTotalMax?: number;
+  caloriesTotalMin?: number;
+  caloriesTotalMax?: number;
 }

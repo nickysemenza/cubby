@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { diffUnorderedIdSet } from "~/server/repo/audit-log";
+import {
+  decodeAuditCursor,
+  diffUnorderedIdSet,
+  encodeAuditCursor,
+} from "~/server/repo/audit-log";
+
+describe("audit cursor", () => {
+  it("round-trips an opaque timestamp + id cursor", () => {
+    const createdAt = new Date("2026-08-01T12:34:56.789Z");
+    const cursor = encodeAuditCursor({ createdAt, id: "private-row-id" });
+
+    expect(cursor).not.toContain(createdAt.toISOString());
+    expect(decodeAuditCursor(cursor)).toEqual({
+      createdAt,
+      id: "private-row-id",
+    });
+  });
+
+  it("continues accepting the legacy ISO timestamp cursor", () => {
+    const iso = "2026-08-01T12:34:56.789Z";
+    expect(decodeAuditCursor(iso)).toEqual({ createdAt: new Date(iso) });
+  });
+
+  it("rejects malformed cursors", () => {
+    expect(() => decodeAuditCursor("v1.not-base64-json")).toThrow(
+      "Invalid audit log cursor",
+    );
+  });
+});
 
 describe("diffUnorderedIdSet", () => {
   it("returns undefined when the sets are equal but reordered", () => {

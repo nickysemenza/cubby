@@ -237,6 +237,13 @@ export const relations = {
           sql<number>`(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL)`.as(
             "expenseTotal",
           ),
+        // A Product can be present on several Expense lines and Purchases.
+        // The list's compact provenance date is the latest live Purchase date.
+        purchaseDate: sql<
+          string | null
+        >`(SELECT max(p."date") FROM "Expense" e JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL)`.as(
+          "purchaseDate",
+        ),
       },
     },
   },

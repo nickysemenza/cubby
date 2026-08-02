@@ -42,6 +42,7 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   countWhere,
   executeListQueryWithCount,
@@ -496,6 +497,7 @@ export const ingredientList = async (
   const conditions: (SQL | undefined)[] = [
     isNull(ingredient.recipeId),
     notDeleted(ingredient),
+    ...auditDateWhereConditions(ingredient, filters),
   ];
 
   // Add name filter if provided
