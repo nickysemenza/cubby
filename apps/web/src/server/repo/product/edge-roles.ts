@@ -135,6 +135,14 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_TASKS",
     label: "tasks referencing them",
   },
+  "ProjectToolUsage.productId": {
+    code: "block-live-project-use",
+    effect: "block",
+    description:
+      "A tool with project-use history can't be deleted — detach that history first.",
+    reason: "PRODUCT_HAS_PROJECT_USES",
+    label: "project uses",
+  },
   "ProductExternalId.productId": {
     code: "soft-delete-metadata",
     effect: "soft-delete",

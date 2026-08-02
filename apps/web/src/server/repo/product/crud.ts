@@ -61,6 +61,7 @@ import {
   productExternalId,
   productImage,
   productUnitMappings,
+  projectToolUsage,
   purchase,
   task,
 } from "~/server/db/schema";
@@ -1482,6 +1483,14 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
       productId: subjectProductId,
     }));
   },
+  "ProjectToolUsage.productId": (tx, ids) =>
+    tx.query.projectToolUsage.findMany({
+      where: and(
+        inArray(projectToolUsage.productId, ids),
+        notDeleted(projectToolUsage),
+      ),
+      columns: { productId: true },
+    }),
 };
 
 /**

@@ -44,6 +44,10 @@ import {
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product";
+import {
+  productProjectUsesInput,
+  productProjectUsesOut,
+} from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -62,6 +66,7 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { listProductProjectUses } from "~/server/repo/project";
 import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
@@ -594,6 +599,14 @@ const deleteItem = createDeleteProcedure<ProductShortcode>(
   productShortcode,
 );
 
+const projectUses = protectedProcedure
+  .input(productProjectUsesInput)
+  .output(strictOutput(productProjectUsesOut))
+  .query(async ({ ctx, input }) => {
+    const id = await resolveProductId(ctx.db, input.productId);
+    return listProductProjectUses(ctx.db, id);
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -617,4 +630,5 @@ export const productRouter = createTRPCRouter({
   externalIdCollisions,
   patchExternalIds,
   verifyImages,
+  projectUses,
 });
