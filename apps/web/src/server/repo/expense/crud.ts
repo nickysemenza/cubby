@@ -19,11 +19,14 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   unsafeExpenseId,
+  unsafeExpenseShortcode,
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
+  unsafePurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
+  DeleteExpensesWithPurchaseEffectsOut,
   ExpenseBulkCostTypeInput,
   ExpenseBulkMoveInput,
   ExpenseBulkTradeInput,
@@ -34,7 +37,7 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { entityEmbedding, expense } from "~/server/db/schema";
+import { entityEmbedding, expense, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -862,12 +865,30 @@ export const setExpensesCostType = async (
   return getExpensesByIDs(db, updatedIds);
 };
 
-export const deleteExpenses = async (
+/**
+ * Soft-delete expenses and return the public identifiers needed by the
+ * import-cleanup MCP flow.  The legacy `deleteExpenses` wrapper below keeps
+ * the repository's price-recompute contract intact for existing callers.
+ */
+export const deleteExpensesWithPurchaseEffects = async (
   db: Database,
   shortcodes: ExpenseShortcode[],
   actor: ActorContext,
-): Promise<ProductId[]> => {
-  if (shortcodes.length === 0) return [];
+): Promise<{
+  priceAffectedProductIds: ProductId[];
+  result: DeleteExpensesWithPurchaseEffectsOut;
+}> => {
+  if (shortcodes.length === 0) {
+    return {
+      priceAffectedProductIds: [],
+      result: {
+        deleted: 0,
+        deletedIds: [],
+        affectedPurchaseIds: [],
+        newlyEmptyPurchaseIds: [],
+      },
+    };
+  }
 
   return await withTransaction(db, async (tx) => {
     const ids = await resolveLiveExpenseIds(tx, shortcodes);
@@ -875,8 +896,13 @@ export const deleteExpenses = async (
 
     const qualityTargets = await tx.query.expense.findMany({
       where: and(inArray(expense.id, ids), notDeleted(expense)),
-      columns: { productId: true, purchaseId: true },
+      columns: { shortcode: true, productId: true, purchaseId: true },
     });
+    const affectedPurchaseDbIds = uniq(
+      qualityTargets
+        .map((row) => row.purchaseId)
+        .filter((value): value is PurchaseId => value !== null),
+    );
     const pricesBefore = await loadEffectiveProductPricesById(
       tx,
       pricingProductIds(qualityTargets.map((row) => row.productId)),
@@ -909,9 +935,74 @@ export const deleteExpenses = async (
         action: "delete" as const,
       })),
     );
-    return await syncChangedEffectivePrices(tx, pricesBefore);
+
+    const purchases =
+      affectedPurchaseDbIds.length === 0
+        ? []
+        : await tx.query.purchase.findMany({
+            where: and(
+              inArray(purchase.id, affectedPurchaseDbIds),
+              notDeleted(purchase),
+            ),
+            columns: { id: true, shortcode: true },
+          });
+    const liveExpensePurchaseIds =
+      affectedPurchaseDbIds.length === 0
+        ? []
+        : await tx.query.expense.findMany({
+            where: and(
+              inArray(expense.purchaseId, affectedPurchaseDbIds),
+              notDeleted(expense),
+            ),
+            columns: { purchaseId: true },
+          });
+    const purchasesWithLiveExpenses = new Set(
+      liveExpensePurchaseIds
+        .map((row) => row.purchaseId)
+        .filter((value): value is PurchaseId => value !== null),
+    );
+    const purchaseShortcodes = new Map(
+      purchases.map((row) => [row.id, row.shortcode]),
+    );
+    const affectedPurchaseIds = affectedPurchaseDbIds.flatMap((id) => {
+      const shortcode = purchaseShortcodes.get(id);
+      return shortcode ? [unsafePurchaseShortcode(shortcode)] : [];
+    });
+    const newlyEmptyPurchaseIds = affectedPurchaseDbIds.flatMap((id) => {
+      const shortcode = purchaseShortcodes.get(id);
+      return shortcode && !purchasesWithLiveExpenses.has(id)
+        ? [unsafePurchaseShortcode(shortcode)]
+        : [];
+    });
+
+    return {
+      priceAffectedProductIds: await syncChangedEffectivePrices(
+        tx,
+        pricesBefore,
+      ),
+      result: {
+        deleted: qualityTargets.length,
+        deletedIds: qualityTargets.map((row) =>
+          unsafeExpenseShortcode(row.shortcode),
+        ),
+        affectedPurchaseIds,
+        newlyEmptyPurchaseIds,
+      },
+    };
   });
 };
+
+/**
+ * Existing deletion seam: callers that only need derived-price invalidation
+ * keep receiving product ids.  MCP uses the richer sibling above.
+ */
+export const deleteExpenses = async (
+  db: Database,
+  shortcodes: ExpenseShortcode[],
+  actor: ActorContext,
+): Promise<ProductId[]> =>
+  (await deleteExpensesWithPurchaseEffects(db, shortcodes, actor))
+    .priceAffectedProductIds;
 
 /**
  * What `deleteExpenses` would do to the given expenses, without doing it.

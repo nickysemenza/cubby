@@ -1193,7 +1193,7 @@ export const splitExpense = async (
           costType: part.costType,
           trade: part.trade,
           url: original.url,
-          notes: null,
+          notes: part.notes === undefined ? original.notes : part.notes,
           future: original.future,
           projectId,
           productId,
@@ -1701,10 +1701,11 @@ export const mergePurchases = async (
  * Purchase embeddings are retired in the same transaction. Callers refresh the
  * detached expenses/financial transactions after the mutation commits.
  */
-export const deletePurchases = async (
+const deletePurchasesWithPolicy = async (
   db: Database,
   shortcodes: PurchaseShortcode[],
   actor: ActorContext,
+  policy: "detach-references" | "require-empty",
 ): Promise<{
   expenseIds: ExpenseId[];
   financialTransactionIds: FinancialTransactionId[];
@@ -1739,22 +1740,6 @@ export const deletePurchases = async (
       .from(expense)
       .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
 
-    await tx
-      .update(expense)
-      .set({ purchaseId: null })
-      .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
-
-    await logAuditEntries(
-      tx,
-      actor,
-      detaching.map((row) => ({
-        entityType: "expense" as const,
-        entityId: row.id,
-        action: "update" as const,
-        changes: { purchaseId: { from: row.purchaseId, to: null } },
-      })),
-    );
-
     const detachingTransactions = await tx
       .select({
         id: financialTransaction.id,
@@ -1768,26 +1753,54 @@ export const deletePurchases = async (
         ),
       );
 
-    await tx
-      .update(financialTransaction)
-      .set({ purchaseId: null })
-      .where(
-        and(
-          inArray(financialTransaction.purchaseId, ids),
-          notDeleted(financialTransaction),
-        ),
+    if (
+      policy === "require-empty" &&
+      (detaching.length > 0 || detachingTransactions.length > 0)
+    ) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Cannot delete non-empty Purchases through MCP: delete linked Expenses first and unlink or delete linked Financial Transactions.",
+      );
+    }
+
+    if (policy === "detach-references") {
+      await tx
+        .update(expense)
+        .set({ purchaseId: null })
+        .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)));
+
+      await logAuditEntries(
+        tx,
+        actor,
+        detaching.map((row) => ({
+          entityType: "expense" as const,
+          entityId: row.id,
+          action: "update" as const,
+          changes: { purchaseId: { from: row.purchaseId, to: null } },
+        })),
       );
 
-    await logAuditEntries(
-      tx,
-      actor,
-      detachingTransactions.map((row) => ({
-        entityType: "financialTransaction" as const,
-        entityId: row.id,
-        action: "update" as const,
-        changes: { purchaseId: { from: row.purchaseId, to: null } },
-      })),
-    );
+      await tx
+        .update(financialTransaction)
+        .set({ purchaseId: null })
+        .where(
+          and(
+            inArray(financialTransaction.purchaseId, ids),
+            notDeleted(financialTransaction),
+          ),
+        );
+
+      await logAuditEntries(
+        tx,
+        actor,
+        detachingTransactions.map((row) => ({
+          entityType: "financialTransaction" as const,
+          entityId: row.id,
+          action: "update" as const,
+          changes: { purchaseId: { from: row.purchaseId, to: null } },
+        })),
+      );
+    }
 
     await tx
       .update(purchaseImage)
@@ -1816,6 +1829,26 @@ export const deletePurchases = async (
       financialTransactionIds: detachingTransactions.map((row) => row.id),
     };
   });
+};
+
+export const deletePurchases = async (
+  db: Database,
+  shortcodes: PurchaseShortcode[],
+  actor: ActorContext,
+) => deletePurchasesWithPolicy(db, shortcodes, actor, "detach-references");
+
+/**
+ * Agent-safe deletion for Purchase headers that carry no live spend or
+ * settlement evidence. The reference check and soft delete happen under the
+ * same Purchase row locks, so a clean preview is never trusted as a lock.
+ */
+export const deleteEmptyPurchases = async (
+  db: Database,
+  shortcodes: PurchaseShortcode[],
+  actor: ActorContext,
+): Promise<PurchaseShortcode[]> => {
+  await deletePurchasesWithPolicy(db, shortcodes, actor, "require-empty");
+  return shortcodes;
 };
 
 /**

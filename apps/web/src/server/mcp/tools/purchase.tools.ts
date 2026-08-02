@@ -21,9 +21,11 @@
  *
  * ## Deliberately not exposed
  *
- * - **delete** for either entity. `deleteVendors` refuses while live purchases
- *   reference the vendor and an agent has no way to resolve that; deleting a
- *   purchase nulls `purchaseId` on real money. Both stay UI-only.
+ * - **generic delete** for either entity. `deleteVendors` refuses while live
+ *   purchases reference the vendor and an agent has no way to resolve that;
+ *   the UI Purchase delete may null `purchaseId` on real money. The MCP-only
+ *   `delete_empty_purchases` below is deliberately narrower and refuses any
+ *   live Expense or FinancialTransaction reference.
  *
  * `purchase.split` / `.link` / `.merge` are NOT in that list anymore — they are
  * registered below as `split_expense`, `link_expenses_to_purchase` and
@@ -36,6 +38,8 @@
 import { unsafePurchaseId, unsafeVendorId } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
+  deleteEmptyPurchasesInput,
+  deleteEmptyPurchasesOut,
   linkExpensesToPurchaseInput,
   mergePurchasesInput,
   purchaseCreateInput,
@@ -126,6 +130,7 @@ export function registerPurchaseTools(server: McpServer) {
     // `purchase.getByID` takes the branded id as a bare scalar, not `{ id }`.
     get: (caller, id) => caller.purchase.getByID(unsafePurchaseId(id)),
     operations: { delete: false },
+    batch: { create: true, update: true },
     descriptions: {
       list: "List vendor purchases. A `purchase` is one vendor order, receipt, or deliberately separate purchase event, NOT an Expense or card charge. Each row returns vendor identity, order/date fields, Expense totals (the spend), the literal vendor `statedTotal`, classified documents, financial reconciliation (including `postedRefundTotal`), and computed dataQuality. Reconciliation is `refund_adjusted` when posted refunds exactly explain a lower Expense total; `mismatch` is reserved for unexplained differences. Related Expenses, FinancialTransactions, Products, and Projects each support an exact public-id filter, a has/none presence filter, and terminal-name text search; different related paths combine with AND. Start a completeness audit with dataStatus=needs_data; narrow with dataGap (one or several checks). Linked Product gaps are returned separately with the PRD- targetId and do not change the Purchase's own data status. Sorted newest purchase first.",
       get: "Get one vendor purchase by id. A `purchase` is a vendor order/receipt event, NOT an Expense or card charge. Returns vendor/order identity, literal `statedTotal`, Expense totals (the spend), classified documents, financial reconciliation (including `postedRefundTotal`), and computed dataQuality including linked Product gaps. A `refund_adjusted` reconciliation is neutral; `mismatch` needs review. Read Expenses with list_expenses and settlement evidence with list_financial_transactions, both filtered by this PUR- shortcode.",
@@ -135,6 +140,16 @@ export function registerPurchaseTools(server: McpServer) {
         "Update vendor-side purchase identity and paperwork. Nothing here changes spend or settlement: correct spend with update_expense and settlement evidence with update_financial_transaction. `statedTotal` must remain the literal vendor-printed total and is never summed. Also writable: vendorId, orderId, vendor date, notes, and document ordering/removal.",
     },
     create: (caller, params) => caller.purchase.create(params),
+  });
+
+  registerRouterTool(server, {
+    name: "delete_empty_purchases",
+    description:
+      "Soft-delete one or more Purchase headers only when every target is already empty of live Expenses and FinancialTransactions. This never removes spend: delete bogus Expenses first with delete_expenses, then verify the Purchase is empty. Purchase documents are removed with the Purchase. Call preview_entity_operation first with operation=delete and entity=purchase to inspect document and other effects, but treat that preview as advisory only — this mutation re-locks and re-validates every target atomically and refuses the entire batch if any target is no longer empty.",
+    inputSchema: deleteEmptyPurchasesInput,
+    outputSchema: deleteEmptyPurchasesOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.purchase.deleteEmpty(params),
   });
 
   registerRouterTool(server, {
@@ -150,7 +165,7 @@ export function registerPurchaseTools(server: McpServer) {
   registerRouterTool(server, {
     name: "split_expense",
     description:
-      "Split ONE Expense into ≥2 Expenses on the SAME purchase — the way an aggregate spend record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId (projectId/productId default to null). " +
+      "Split ONE Expense into ≥2 Expenses on the SAME purchase — the way an aggregate spend record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis instead of staying an unattributed blob. Any product in inventory whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity. Omitted notes inherit the original Expense notes; explicit null clears them for that part. The original URL, date and future state are preserved. " +
       "This REPLACES the old `(combo, saw portion)` naming convention that used to encode a split inside a single expense's name — do not invent names like that anymore; give each part its own real name instead. " +
       "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing validates the sum, and a deliberately mismatched total is DISPLAYED as a purchase-reconciliation cue against statedTotal/expenseTotal, never rejected. Posted refunds that exactly explain the gap are classified `refund_adjusted`; other differences remain `mismatch`. " +
       "The original Expense is soft-deleted and every part is created on the SAME purchase (`purchaseId`) the original had — this only re-labels how one purchase's money is attributed; it never creates a new purchase or moves money to a different vendor. If the purchase had no `statedTotal`, one is seeded from the original expense's cost so the parts have something to reconcile against. " +

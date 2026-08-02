@@ -35,6 +35,7 @@ export { expenseAnalytics, expenseTradeAffinity } from "./analytics";
 export {
   createExpense,
   deleteExpenses,
+  deleteExpensesWithPurchaseEffects,
   getExpenseByID,
   getExpenseByShortcode,
   moveExpenses,

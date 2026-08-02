@@ -6,8 +6,9 @@ description: Reconcile vendor orders, receipts, and financial statements against
 # Import vendor purchases
 
 Reconcile source evidence into Cubby without inventing identity, spend, or
-settlement. Keep the work interactive: propose matches and writes in batches,
-get approval, execute, verify, and report the outcome.
+settlement. Keep the work interactive: an explicit request to ingest authorizes
+unambiguous matched creates and updates; pause for ambiguity, destructive
+cleanup, Product promotion, or inventory receiving.
 
 ## Read this model first
 
@@ -44,28 +45,30 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 ## Default workflow
 
 1. Inspect the source's coverage before making absence-based claims. Record date
-   range, record count, source type, whether prices are unit or extended, and
-   whether the source is vendor paperwork or settlement evidence.
-2. Read the existing ledger. Start with `list_purchases({dataStatus:"needs_data"})`
-   for completeness, then `list_expenses`, `list_purchases`,
-   `list_financial_transactions`, and `list_vendors` scoped by the evidence.
+   range, record count, vendor, source type, whether prices are unit or extended,
+   and whether it is vendor paperwork or settlement evidence.
+2. Resolve the Vendor, then start the completeness audit with
+   `list_purchases({dataStatus:"needs_data",vendorId,dateFrom,dateTo})`. Scope
+   `list_expenses`, other `list_purchases` reads, and
+   `list_financial_transactions` to the same vendor/evidence window.
 3. Run `match_expenses` before proposing new Expense rows. It ranks candidates;
    it never verifies or writes. Read candidate descriptions, vendor, order ID,
    date, and amount rather than accepting a score.
-4. Present an approval table that separates: confirmed updates, proposed new
-   rows, ambiguous matches, conflicts, unsupported source rows, and explicit
-   Product-promotion candidates. Do not write until the user approves the
-   batch.
-5. Execute approved homogeneous work with `create_expenses`, `update_expenses`,
-   `create_products`, `update_products`, or `create_financial_transactions`.
-   Batches contain at most 50 items and are best-effort: inspect each ordered
-   result, retry only the failed items, and do not treat a partial success as a
-   complete import.
+4. Present a decision table separating confirmed writes, ambiguous matches,
+   conflicts, unsupported rows, and Product-promotion candidates. An explicit
+   ingest request approves the confirmed writes across technical batch
+   boundaries; obtain a separate decision for the other categories.
+5. Execute homogeneous work with `create_purchases`, `update_purchases`,
+   `create_expenses`, `update_expenses`, `create_products`, `update_products`,
+   or `create_financial_transactions`. Batches contain at most 50 items and are
+   best-effort: inspect each ordered result, retry only failed items, and do not
+   treat partial success as complete. Serialize dependent Purchase/Expense
+   mutations and re-read their rows after each structural or destructive write.
 6. Re-read touched Purchases and reconcile evidence. Never alter Expenses merely
    to make a reconciliation label look clean.
-7. Report counts for matched, created, updated, skipped, conflicted, and
-   unresolved source rows; also count touched Purchases, Expenses, Financial
-   Transactions, documents, Products, and receiving actions.
+7. Report source-row coverage (matched, created, updated, skipped, conflicted,
+   unresolved), stage/denominator progress, and counts for touched Purchases,
+   Expenses, Financial Transactions, documents, Products, and receiving actions.
 
 ## Purchase and Expense rules
 
@@ -79,6 +82,10 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
 - Use `split_expense` for a real aggregate Expense that needs per-product cost
   basis. Use `link_expenses_to_purchase` for several existing Expenses on one
   Purchase, and `merge_purchases` only after explicit approval.
+- For duplicate cleanup, call `preview_entity_operation`, delete only the bogus
+  Expenses, re-read to verify the Purchase is empty, then use
+  `delete_empty_purchases`. Deleting a Purchase never removes spend; do not use
+  it while Expenses or Financial Transactions remain.
 - Keep trustworthy coarse Expenses unlinked rather than inventing a line-level
   allocation. A Product link is a claim about that Product's cost basis.
 - Keep `Expense.cost` as the extended line total. When a linked Product's
@@ -129,10 +136,17 @@ or raw file contents to Cubby.
    reconciliation. A source-reference conflict is a failed item, not permission
    to change another row.
 
+Posted Financial Transactions without source references can leave a
+`settlement_reference` data-quality gap. Preserve vendor-reported payment hints
+as notes/evidence; do not infer a Financial Account from them.
+
 ## Documents and exceptions
 
 - Attach original evidence when available; do not manufacture PDFs from email
   or text merely to satisfy completeness.
+- Use final invoice/receipt first, then credit memo, order acknowledgment, and
+  quote/estimate. Pasted email text is useful note-level reconciliation evidence,
+  not an attached primary document.
 - File a Purchase document with `attach_file` and a truthful `documentKind`.
   Use `reclassify_purchase_document` only to correct an existing attachment.
 - Use `set_data_exception` and `clear_data_exception` only for source-backed
@@ -150,4 +164,6 @@ or raw file contents to Cubby.
 - Touched Purchase `statedTotal` remains literal paperwork; reconciliation gaps
   are explained rather than hidden.
 - Product creation, document filing, and inventory receiving were reported as
-  distinct actions.
+  distinct actions. Report coverage separately for the Purchase, acknowledgment,
+  final invoice/receipt, credit memo, charge, and refund, including unresolved
+  gaps.

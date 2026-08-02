@@ -39,7 +39,9 @@ vi.mock("~/server/utils/s3", async (importOriginal) => ({
 
 import type { Database } from "~/server/db";
 import {
+  auditLog,
   expense,
+  financialTransaction,
   image,
   purchase,
   purchaseImage,
@@ -67,6 +69,7 @@ import {
 import { projectRollups } from "./project/analytics";
 import {
   createPurchase,
+  deleteEmptyPurchases,
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
@@ -741,6 +744,68 @@ describe("purchase repository — splitExpense", () => {
     ).toBe(431.24);
   });
 
+  it("inherits, replaces, or clears source notes per part", async () => {
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "documented aggregate",
+          cost: 30,
+          vendor: "Notes Split Vendor",
+          orderId: "NOTES-1",
+          notes: "original receipt evidence",
+          url: "https://example.com/orders/NOTES-1",
+          future: true,
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const { items } = await splitExpense(
+      ctx.db,
+      splitExpenseInput.parse({
+        expenseId: original.id,
+        parts: [
+          {
+            name: "inherited",
+            cost: 10,
+            costType: "materials",
+            trade: "other",
+          },
+          {
+            name: "replaced",
+            cost: 10,
+            costType: "materials",
+            trade: "other",
+            notes: "specific line evidence",
+          },
+          {
+            name: "cleared",
+            cost: 10,
+            costType: "materials",
+            trade: "other",
+            notes: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    expect(
+      Object.fromEntries(items.map((item) => [item.name, item.notes])),
+    ).toEqual({
+      inherited: "original receipt evidence",
+      replaced: "specific line evidence",
+      cleared: null,
+    });
+    for (const item of items) {
+      expect(item.url).toBe("https://example.com/orders/NOTES-1");
+      expect(item.date).toBe(original.date);
+      expect(item.future).toBe(true);
+      expect(item.purchaseId).toBe(original.purchaseId);
+    }
+  });
+
   it("returns only products whose effective price changed", async () => {
     const product = await createProduct(
       ctx.db,
@@ -1259,6 +1324,158 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
 
 describe("purchase repository — deletion cascades", () => {
   const ctx = withTestDb();
+
+  it("deletes an empty Purchase and its documents without detaching money", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Empty Delete Vendor");
+    const { output: emptyPurchase } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId,
+        date: "2024-01-15",
+        orderId: "EMPTY-DELETE-1",
+      }),
+      ctx.actor,
+    );
+    const purchaseId = await purchaseUuid(ctx.db, emptyPurchase.id);
+    const document = await insertAndReturn(ctx.db, image, {
+      key: "test-documents/empty-delete.pdf",
+      url: "https://example.com/empty-delete.pdf",
+      filename: "empty-delete.pdf",
+      contentType: "application/pdf",
+      size: 100,
+      status: "UPLOADED",
+    });
+    const join = await insertAndReturn(ctx.db, purchaseImage, {
+      purchaseId,
+      imageId: document.id,
+    });
+
+    await expect(
+      deleteEmptyPurchases(ctx.db, [emptyPurchase.id], ctx.actor),
+    ).resolves.toEqual([emptyPurchase.id]);
+    await expect(
+      getPurchaseByShortcode(ctx.db, emptyPurchase.id),
+    ).resolves.toBeNull();
+
+    const [joinAfter] = await getDb(ctx.db)
+      .select({ deletedAt: purchaseImage.deletedAt })
+      .from(purchaseImage)
+      .where(eq(purchaseImage.id, join.id));
+    expect(joinAfter?.deletedAt).not.toBeNull();
+
+    const auditRows = await getDb(ctx.db)
+      .select({ action: auditLog.action })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, "purchase"),
+          eq(auditLog.entityId, purchaseId),
+          eq(auditLog.action, "delete"),
+        ),
+      );
+    expect(auditRows).toEqual([{ action: "delete" }]);
+  });
+
+  it("atomically refuses a delete-empty batch when any Purchase has spend", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Atomic Empty Delete Vendor",
+    );
+    const { output: emptyPurchase } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId,
+        date: "2024-01-15",
+        orderId: "ATOMIC-EMPTY",
+      }),
+      ctx.actor,
+    );
+    const { output: line } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "real spend",
+          cost: 25,
+          vendor: "Atomic Empty Delete Vendor",
+          orderId: "ATOMIC-NONEMPTY",
+        }),
+      ),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteEmptyPurchases(
+        ctx.db,
+        [emptyPurchase.id, line.purchaseId!],
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+
+    await expect(
+      getPurchaseByShortcode(ctx.db, emptyPurchase.id),
+    ).resolves.not.toBeNull();
+    const spendAfter = await expenseByShortcode(ctx.db, line.id);
+    expect(spendAfter.cost).toBe(25);
+    expect(spendAfter.purchaseId).toBe(line.purchaseId);
+  });
+
+  it("refuses an empty-header delete while settlement evidence is linked", async () => {
+    const vendorId = await vendorShortcodeByName(
+      ctx.db,
+      "Settlement Empty Delete Vendor",
+    );
+    const { output: purchaseWithSettlement } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId,
+        date: "2024-01-15",
+        orderId: "SETTLEMENT-ONLY",
+      }),
+      ctx.actor,
+    );
+    const account = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Settlement Delete Card",
+      identity: {
+        kind: "credit_card",
+        issuer: null,
+        network: "visa",
+        last4: "4242",
+      },
+      provisional: false,
+      sourceAliases: [],
+      notes: null,
+    });
+    const transaction = await insertWithShortcode(
+      ctx.db,
+      "financialTransaction",
+      {
+        accountId: account.id,
+        purchaseId: await purchaseUuid(ctx.db, purchaseWithSettlement.id),
+        kind: "purchase",
+        status: "posted",
+        amount: 25,
+        transactionDate: "2024-01-15",
+        postedDate: "2024-01-16",
+        merchant: "Settlement Empty Delete Vendor",
+        rawDescription: null,
+        sourceCategory: null,
+        sourceRefs: [{ source: "statement", externalId: "settlement-only" }],
+        notes: null,
+      },
+    );
+
+    await expect(
+      deleteEmptyPurchases(ctx.db, [purchaseWithSettlement.id], ctx.actor),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+
+    const [transactionAfter] = await getDb(ctx.db)
+      .select({ purchaseId: financialTransaction.purchaseId })
+      .from(financialTransaction)
+      .where(eq(financialTransaction.id, transaction.id));
+    expect(transactionAfter?.purchaseId).toBe(
+      await purchaseUuid(ctx.db, purchaseWithSettlement.id),
+    );
+  });
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {
     const { output: line } = await createExpense(

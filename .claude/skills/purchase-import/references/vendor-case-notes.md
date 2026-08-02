@@ -3,8 +3,27 @@
 Use these as reminders to seek evidence, not as rules that override a current
 source.
 
-- Amazon exports may repeat refund/return records. Deduplicate events before
-  summing and distinguish cancelled orders from fulfilled purchases.
+## Amazon
+
+- Amazon exports may repeat refund/return events. Deduplicate the event, not a
+  summary total; distinguish cancelled orders from fulfilled purchases and record
+  the documented refund destination.
+- Treat an ASIN as exact identity only when the purchased variant is confirmed.
+  Preserve the receipt-era title in Purchase/Expense evidence; do not replace it
+  with a current marketplace SEO title.
+- A replacement is not automatically a refund or a new unrelated purchase. Keep
+  its documented relationship in notes until a queryable relation is needed.
+
+## Home Depot
+
+- Treat order/return exports as event ledgers: deduplicate repeated aggregate
+  refunds before summing and use the final receipt/credit as the money evidence.
+- Use the exact Internet SKU as `source: "home-depot"`,
+  `kind: "internet_number"`. `Internet SKU` value `0` is unresolved identity,
+  not a usable identifier.
+- Return quantities remain positive while the Expense cost is negative. Preserve
+  source tax/discount rounding and explain any residual rather than redistributing
+  it silently.
 - Marketplace listing exports contain asking prices and listing dates; a
   `Sold` state can include cancellation or cross-listed inventory. Seek actual
   settlement before booking a sale.

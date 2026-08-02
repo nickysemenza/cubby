@@ -83,9 +83,9 @@ export function registerFinancialTools(server: McpServer) {
       list: "List Financial Transactions. IDs are FTX- shortcodes. Filter by account, Purchase or presence, kind, status, source/reference, merchant/search, amount, and transaction or posted dates. Amounts are settlement evidence and never enter spend.",
       get: "Get one Financial Transaction by FTX- shortcode.",
       create:
-        "Create settlement evidence. Positive amounts are charges/outflows; negative amounts are refunds/inflows. A transaction can link to at most one PUR- Purchase, or remain unmatched. Posted entries require postedDate.",
+        "Create settlement evidence. Positive amounts are charges/outflows; negative amounts are refunds/inflows. A transaction can link to at most one PUR- Purchase, or remain unmatched. Posted entries require postedDate. Preserve statement/provider evidence in sourceRefs when available: a posted transaction with no sourceRefs may leave its Purchase's settlement_reference data-quality check unresolved unless the linked account itself supplies qualifying cash evidence.",
       update:
-        "Update a Financial Transaction, for example when a pending refund posts. `sourceRefs` replaces the complete array; read–merge–write when appending statement evidence.",
+        "Update a Financial Transaction, for example when a pending refund posts. `sourceRefs` replaces the complete array; read–merge–write when appending statement evidence. Posting without sourceRefs may leave the linked Purchase's settlement_reference gap unresolved unless the account supplies qualifying cash evidence.",
       delete:
         "Soft-delete Financial Transactions. Deleted and void transactions do not participate in Purchase reconciliation.",
     },

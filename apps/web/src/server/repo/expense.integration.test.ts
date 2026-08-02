@@ -31,6 +31,7 @@ import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import {
   createExpense,
   deleteExpenses,
+  deleteExpensesWithPurchaseEffects,
   expenseAnalytics,
   expenseList,
   getExpenseByShortcode,
@@ -178,6 +179,61 @@ describe("expense repository — CRUD", () => {
       pageSize: 50,
     });
     expect(data.map((p) => p.id)).not.toContain(created.id);
+  });
+
+  it("reports affected and newly empty Purchases while retaining sibling lines", async () => {
+    const { output: retained } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "retained purchase line",
+          vendor: "Deletion Outcome Vendor",
+          orderId: "DELETE-OUTCOME-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const { output: sibling } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "deleted sibling line",
+          vendor: "Deletion Outcome Vendor",
+          orderId: "DELETE-OUTCOME-1",
+        }),
+      ),
+      ctx.actor,
+    );
+    const { output: only } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "deleted only line",
+          vendor: "Deletion Outcome Vendor",
+          orderId: "DELETE-OUTCOME-2",
+        }),
+      ),
+      ctx.actor,
+    );
+
+    const result = await deleteExpensesWithPurchaseEffects(
+      ctx.db,
+      [sibling.id, only.id],
+      ctx.actor,
+    );
+
+    expect(result.result).toEqual({
+      deleted: 2,
+      deletedIds: expect.arrayContaining([sibling.id, only.id]),
+      affectedPurchaseIds: expect.arrayContaining([
+        retained.purchaseId,
+        only.purchaseId,
+      ]),
+      newlyEmptyPurchaseIds: [only.purchaseId],
+    });
+    expect(await getExpenseByShortcode(ctx.db, retained.id)).not.toBeNull();
+    expect(await getExpenseByShortcode(ctx.db, sibling.id)).toBeNull();
+    expect(await getExpenseByShortcode(ctx.db, only.id)).toBeNull();
   });
 });
 
@@ -3223,6 +3279,160 @@ describe("expense repository — matchExpenses", () => {
     expect(result.summary.exactOrderIdHits).toBe(1);
   });
 
+  it("suppresses amount/date-only coincidences after a confirmed same-vendor order hit, while keeping all order siblings", async () => {
+    const orderId = "MATCHER-CONFIRMED-SIBLINGS";
+    const component = await line("order component", {
+      cost: 60,
+      date: "2025-01-05",
+      vendor: "Matcher Confirmed Vendor",
+      orderId,
+    });
+    const aggregate = await line("order aggregate", {
+      cost: 100,
+      date: "2025-01-05",
+      vendor: "Matcher Confirmed Vendor",
+      orderId,
+    });
+    const coincidence = await line("unrelated amount coincidence", {
+      cost: 100,
+      date: "2026-06-01",
+    });
+
+    const result = await run([
+      {
+        key: "confirmed",
+        date: "2026-06-01",
+        amount: 100,
+        orderId,
+        vendor: "Matcher Confirmed Vendor",
+      },
+    ]);
+    const candidates = result.matches[0]?.candidates ?? [];
+    const ids = candidates.map((candidate) => candidate.expenseId);
+
+    // Both lines on the exact order remain, even though neither needs to fit
+    // the date/amount window. That covers aggregate-vs-components imports.
+    expect(ids).toEqual(expect.arrayContaining([component.id, aggregate.id]));
+    expect(candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expenseId: component.id,
+          matchedOn: "order_id",
+          vendorMatch: true,
+        }),
+        expect.objectContaining({
+          expenseId: aggregate.id,
+          matchedOn: "order_id",
+          vendorMatch: true,
+        }),
+      ]),
+    );
+    expect(ids).not.toContain(coincidence.id);
+  });
+
+  it("keeps amount/date candidates when an exact order hit conflicts with the input vendor", async () => {
+    const orderId = "MATCHER-VENDOR-CONFLICT";
+    const conflict = await line("other retailer's same order id", {
+      cost: 500,
+      date: "2024-01-01",
+      vendor: "Matcher Other Retailer",
+      orderId,
+    });
+    const amountCandidate = await line("plausible amount candidate", {
+      cost: 75,
+      date: "2026-06-01",
+    });
+
+    const result = await run([
+      {
+        key: "conflict",
+        date: "2026-06-01",
+        amount: 75,
+        orderId,
+        vendor: "Matcher Expected Retailer",
+      },
+    ]);
+    const candidates = result.matches[0]?.candidates ?? [];
+
+    expect(candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expenseId: conflict.id,
+          matchedOn: "order_id",
+          vendorMatch: false,
+        }),
+        expect.objectContaining({
+          expenseId: amountCandidate.id,
+          matchedOn: "amount_date",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps amount/date candidates when vendor identity is unknown", async () => {
+    const orderId = "MATCHER-VENDOR-UNKNOWN";
+    const exact = await line("order with no input vendor", {
+      cost: 500,
+      date: "2024-01-01",
+      vendor: "Matcher Known Vendor",
+      orderId,
+    });
+    const amountCandidate = await line("plausible unknown-vendor candidate", {
+      cost: 75,
+      date: "2026-06-01",
+    });
+
+    const result = await run([
+      { key: "unknown", date: "2026-06-01", amount: 75, orderId },
+    ]);
+    const candidates = result.matches[0]?.candidates ?? [];
+
+    expect(candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expenseId: exact.id,
+          matchedOn: "order_id",
+          vendorMatch: null,
+        }),
+        expect.objectContaining({
+          expenseId: amountCandidate.id,
+          matchedOn: "amount_date",
+        }),
+      ]),
+    );
+  });
+
+  it("matches order ids exactly without stripping leading zeroes", async () => {
+    const leadingZero = await line("leading-zero order", {
+      cost: 50,
+      date: "2024-01-01",
+      vendor: "Matcher Zero Vendor",
+      orderId: "000123",
+    });
+    const noLeadingZero = await line("different order without zeroes", {
+      cost: 500,
+      date: "2020-01-01",
+      vendor: "Matcher Zero Vendor",
+      orderId: "123",
+    });
+
+    const result = await run([
+      {
+        key: "zeroes",
+        date: "2026-06-01",
+        amount: 50,
+        orderId: "000123",
+        vendor: "Matcher Zero Vendor",
+      },
+    ]);
+    const ids = (result.matches[0]?.candidates ?? []).map(
+      (candidate) => candidate.expenseId,
+    );
+
+    expect(ids).toContain(leadingZero.id);
+    expect(ids).not.toContain(noLeadingZero.id);
+  });
+
   it("demotes a cross-vendor orderId collision below every amount+date hit", async () => {
     // An order id is unique only WITHIN a vendor — `Purchase_vendorId_orderId_key`
     // is UNIQUE(vendorId, orderId), and short ids genuinely collide across
@@ -3282,6 +3492,10 @@ describe("expense repository — matchExpenses", () => {
       vendor: "Matcher Amazon",
       orderId: "111-CASE-TEST",
     });
+    const coincidence = await line("unrelated matching amount", {
+      cost: 42,
+      date: "2026-06-10",
+    });
 
     const result = await run([
       {
@@ -3293,11 +3507,17 @@ describe("expense repository — matchExpenses", () => {
       },
     ]);
 
-    expect(result.matches[0]?.candidates[0]).toMatchObject({
+    const candidates = result.matches[0]?.candidates ?? [];
+    expect(candidates[0]).toMatchObject({
       expenseId: row.id,
       matchedOn: "order_id",
       vendorMatch: true,
     });
+    // Case/whitespace normalization confirms the vendor, so the unrelated
+    // amount/date candidate is suppressed just like an exact spelling would be.
+    expect(candidates.map((candidate) => candidate.expenseId)).not.toContain(
+      coincidence.id,
+    );
   });
 
   it("reports vendorMatch: null when there is nothing to compare", async () => {
