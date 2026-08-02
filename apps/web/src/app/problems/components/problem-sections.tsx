@@ -629,7 +629,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
   section({
     id: "duplicates",
     label: "Duplicates",
-    select: (p) => p.duplicateUniqueProducts,
+    select: (p) => p.duplicateInventory,
     entity: "product",
     title: "Duplicate Unique Products",
     description:

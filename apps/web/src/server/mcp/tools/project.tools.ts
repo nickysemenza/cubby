@@ -10,9 +10,6 @@ import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
   expenseAnalyticsOut,
-  expenseBulkCostTypeInput,
-  expenseBulkMoveInput,
-  expenseBulkTradeInput,
   expenseCreateInput,
   expenseFilterFields,
   expenseMatchInput,
@@ -31,9 +28,6 @@ import {
   projectPortfolioAnalyticsOut,
   projectTaskStatusBreakdown,
   projectUpdateData,
-  taskBulkDueDateInput,
-  taskBulkMoveInput,
-  taskBulkStatusInput,
   taskCreateInput,
   taskFilterFields,
   taskMcpListOut,
@@ -52,7 +46,6 @@ import {
   slimProject,
   slimTask,
   strictFilterInput,
-  WRITE_CLOSED,
 } from "./_shared";
 
 // ---------------------------------------------------------------------------
@@ -171,26 +164,6 @@ const expenseMatchMcpOut = expenseMatchOut.omit({ matches: true }).extend({
   ),
 });
 
-/** Bulk task writes return the updated rows plus the background batches they
- * enqueued (embedding refresh); MCP clients only need the rows and a count. */
-const taskBulkMcpOut = z.object({
-  updated: z.number().int(),
-  items: z.array(taskOut),
-});
-
-/** Same shape for the expense bulk writes (bulkMove/bulkSetTrade/bulkSetCostType). */
-const expenseBulkMcpOut = z.object({
-  updated: z.number().int(),
-  items: z.array(expenseOut),
-});
-
-/** Drop `sideEffects` and add the count — entity-agnostic, shared by the task
- * and expense bulk tools. */
-async function bulkEntityWrite<T>(run: Promise<{ items: T[] }>) {
-  const { items } = await run;
-  return { updated: items.length, items };
-}
-
 export function registerProjectTools(server: McpServer) {
   registerEntityCrudToolset(server, {
     entity: "project",
@@ -306,6 +279,7 @@ export function registerProjectTools(server: McpServer) {
         "Soft-delete tasks by IDs (dependency edges are cleaned up). Deleting a task cascades to its live subtasks.",
     },
     create: (caller, params) => caller.task.create(params),
+    batch: { update: true },
   });
 
   registerRouterTool(server, {
@@ -326,38 +300,6 @@ export function registerProjectTools(server: McpServer) {
     call: (caller) => caller.task.summary(),
   });
 
-  registerRouterTool(server, {
-    name: "bulk_set_task_status",
-    description:
-      'Set the same status on many tasks at once (not_started|later|in_progress|blocked|done) — the triage path for "mark these done" / "park these". Returns the updated rows and a count.',
-    inputSchema: taskBulkStatusInput.shape,
-    outputSchema: taskBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) =>
-      bulkEntityWrite(caller.task.bulkSetStatus(params)),
-  });
-
-  registerRouterTool(server, {
-    name: "bulk_move_tasks",
-    description:
-      "Move many tasks onto one project at once; pass projectId: null to move them back to the Inbox (no project). Use after list_tasks to file loose inbox work. Returns the updated rows and a count.",
-    inputSchema: taskBulkMoveInput.shape,
-    outputSchema: taskBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => bulkEntityWrite(caller.task.bulkMove(params)),
-  });
-
-  registerRouterTool(server, {
-    name: "bulk_set_task_due_date",
-    description:
-      "Set (or clear) the same due date on many tasks. Both dueDate and dueEndDate are required — pass null to clear; a dueDate alone is a single-day task, both set is a date range. Returns the updated rows and a count.",
-    inputSchema: taskBulkDueDateInput.shape,
-    outputSchema: taskBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) =>
-      bulkEntityWrite(caller.task.bulkSetDueDate(params)),
-  });
-
   registerEntityCrudToolset(server, {
     entity: "expense",
     createInput: expenseCreateInput.shape,
@@ -376,6 +318,7 @@ export function registerProjectTools(server: McpServer) {
       delete: "Soft-delete expenses by IDs.",
     },
     create: (caller, params) => caller.expense.create(params),
+    batch: { create: true, update: true },
     resolveUpdateData: async (_caller, data) =>
       data.productId === undefined
         ? data
@@ -419,37 +362,5 @@ export function registerProjectTools(server: McpServer) {
     call: async (caller, params) => {
       return await caller.expense.match(params);
     },
-  });
-
-  registerRouterTool(server, {
-    name: "bulk_move_expenses",
-    description:
-      "Move many expenses onto one project at once; pass projectId: null to move them back to the Inbox (no project). Use after list_expenses to file loose or mis-attributed spend. Returns the updated rows and a count.",
-    inputSchema: expenseBulkMoveInput.shape,
-    outputSchema: expenseBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) => bulkEntityWrite(caller.expense.bulkMove(params)),
-  });
-
-  registerRouterTool(server, {
-    name: "bulk_set_expense_trade",
-    description:
-      "Set the same trade on many expenses at once (the 19-slug trade taxonomy shared with tasks and sub-projects — electrical|plumbing|countertop|…|other). Trade is required, not nullable: pass `other` rather than clearing it. Use after list_expenses (filter trade to find unclassified spend). Returns the updated rows and a count.",
-    inputSchema: expenseBulkTradeInput.shape,
-    outputSchema: expenseBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) =>
-      bulkEntityWrite(caller.expense.bulkSetTrade(params)),
-  });
-
-  registerRouterTool(server, {
-    name: "bulk_set_expense_cost_type",
-    description:
-      "Set the same costType on many expenses at once (materials|tools|services). Required, not nullable. Use after list_expenses to reclassify a batch of ledger lines so get_expense_analytics' byCostType split is right. Returns the updated rows and a count.",
-    inputSchema: expenseBulkCostTypeInput.shape,
-    outputSchema: expenseBulkMcpOut,
-    annotations: WRITE_CLOSED,
-    call: (caller, params) =>
-      bulkEntityWrite(caller.expense.bulkSetCostType(params)),
   });
 }

@@ -154,9 +154,12 @@ const { list } = createEntityListProcedure({
       const locationIdFilter = filters.locationIdFilter
         ? await resolveLocationId(services.db, filters.locationIdFilter)
         : undefined;
+      const productIdFilter = filters.productIdFilter
+        ? await resolveProductId(services.db, filters.productIdFilter)
+        : undefined;
       return await inventoryentryList(
         services.db,
-        { ...filters, locationIdFilter },
+        { ...filters, locationIdFilter, productIdFilter },
         sort,
         pagination,
       );

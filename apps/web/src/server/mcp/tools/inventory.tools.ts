@@ -1,8 +1,6 @@
 import {
   bulkMovePayload,
-  inventoryDuplicateFindOut,
   inventoryFilterFields,
-  inventoryFindDuplicatesInput,
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,
   inventoryMcpOut,
@@ -139,22 +137,6 @@ export function registerInventoryTools(server: McpServer) {
         items: params.items,
       });
       return respondList(moved, slimInventory);
-    },
-  });
-
-  registerMcpTool(server, {
-    name: "find_duplicate_inventory",
-    description:
-      "Find unique products (expectedQuantity = 1) that appear in more than one location — likely duplicates to consolidate.",
-    inputSchema: inventoryFindDuplicatesInput.shape,
-    outputSchema: inventoryDuplicateFindOut,
-    annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.inventory.findDuplicates({
-        excludeLocationId: params.excludeLocationId,
-      });
-      return { items: result };
     },
   });
 }

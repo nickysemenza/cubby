@@ -73,14 +73,26 @@ Always attempt to capture the canonical identifiers exposed by the source:
 - Never invent a plausible-looking identifier or silently choose among
   variants. Skip ambiguous products and report the conflict.
 
+The manufacturer is part of identity. Same-name merchandise from different
+brands is normally different Products: SupplyHouse `PVBC100-075` and `429-131`
+are separate products with separate brands, not two retailer slots on one
+record. Put maker-issued model/MPN in `model`; retailer SKUs belong in typed
+`externalIds`.
+
 ## Apply metadata safely
 
 Read the current product immediately before writing. Use
 `patch_product_external_ids` for identifier-only changes: upsert a precise
-`(source, kind)` slot and remove only an explicitly obsolete slot. It preserves
-all unrelated identifiers and is safe for concurrent changes to other slots.
-Use `update_product.externalIds` only when intentionally replacing the complete
-set; if so, preserve every desired identifier and remove MCP-only timestamps.
+`(source, kind)` slot and remove only an explicitly obsolete slot with its
+exact `expectedExternalId`. It preserves all unrelated identifiers and refuses
+the whole patch if the live slot changed. Use `update_product.externalIds` only
+when intentionally replacing the complete set; if so, preserve every desired
+identifier and remove MCP-only timestamps.
+When a researched item is absent, create it once with rich `create_product` or
+`create_products`: include manufacturer, model, category, aliases/tags, notes,
+expected quantity, price/mappings, UPC/FDC link, and verified external IDs.
+Do not create then update merely to add those fields. Product creation does not
+receive the item into inventory.
 
 Before adding an identifier, call `find_product_external_id_collisions` in exact
 mode with `identifiers: [{ source, kind, externalId }]`. A `collision` requires
@@ -107,9 +119,10 @@ then an exact retailer asset. Reject lifestyle shots, bundles, watermarks,
 wrong colors/sizes/counts, thumbnails, and images whose variant cannot be
 confirmed.
 
-Read `get_product` immediately before attachment and record its current
-`imageCount`. Call `attach_file` once with the product's `PRD-` shortcode,
-`expectedImageCount`, and a deterministic retry key:
+Read `get_product` immediately before attachment and snapshot its images,
+cover, display order, count, and metadata. Call `attach_file` once with the
+product's `PRD-` shortcode, `expectedImageCount`, and a deterministic retry
+key:
 
 `product-enrichment:<PRD-shortcode>:<source>:<kind-or-purpose>:cover:v1`
 
@@ -122,26 +135,37 @@ Read `get_product` immediately before attachment and record its current
 Retry the same logical attachment with the same `idempotencyKey`. A count
 precondition failure means another writer changed the gallery: re-read the
 Product and decide from the new state instead of incrementing the expected
-count. For cover replacement, attach and verify the new file before sending
-`removeImageIds` and `imageOrder` through `update_product`; never detach the old
-cover first.
+count. For cover replacement, never detach the old cover first.
 
 ## Verify every write
 
-Call `verify_product_images` after attachment, then call `get_product`. The
-detailed Product read returns `coverImageId` and every Product file in
-`images[]`; it does not contact R2 by itself. Confirm:
+Call `verify_product_images` after attachment and use its returned detailed
+Product rather than making a redundant immediate `get_product` call. Confirm
+the gallery is the snapshot plus the new verified file. Only then send one
+`update_product` with any `removeImageIds` and complete `imageOrder`; call
+`verify_product_images` again after that change. Confirm:
 
 - UPC, model, manufacturer, metadata, and every prior external ID survived;
-- `imageCount` increased by exactly one for a previously image-less product;
-- `coverImageId` and `coverImageUrl` identify the intended file;
+- image count, `coverImageId`, `isCover`, and display position match the
+  intended final gallery;
+- intentionally removed old cover IDs are absent and unrelated file metadata
+  survives;
 - the new image has a one-based `displayPosition`, passing render/storage
   integrity, dimensions, detected MIME, and SHA-256 metadata;
 - PDFs and failed-integrity files have `displayPosition: null` and do not count;
 - the product still describes the exact researched variant.
 
-If verification fails, stop that product and report it. Do not continue a
-batch on the assumption that the MCP response or attachment succeeded.
+If any verification differs from the expected snapshot, stop that product and
+report gallery drift. Do not continue on the assumption that an attachment or
+mutation response succeeded.
+
+Prefer an adequate-resolution exact image. If the only reliable source is
+low-resolution, use it only when useful and disclose the limitation. A shared
+family/series image is acceptable only with an explicit disclosure that it is
+not exact-item photography. Never guess CDN URLs. An image-complete Product is
+not necessarily fully enriched: report unresolved model, barcode, price, or
+identifier gaps separately. Receiving a durable Product remains an explicit,
+user-authorized inventory action.
 
 ## Report the batch
 

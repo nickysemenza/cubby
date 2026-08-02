@@ -30,7 +30,7 @@ const PROBLEM_LABELS: Record<
   keyof ProblemsCount["byType"],
   (n: number) => string
 > = {
-  duplicateUniqueProducts: (n) => pl(n, "duplicate"),
+  duplicateInventory: (n) => pl(n, "duplicate"),
   orphanedProducts: (n) => `${n} orphaned`,
   productsMissingPrice: (n) => `${n} stocked without a price`,
   unvaluedBucketProducts: (n) => pl(n, "unvalued bucket"),

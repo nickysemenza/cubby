@@ -572,6 +572,25 @@ export const mcpProductCreateInput = z.object({
     .string()
     .describe("Manufacturer or 'generic'")
     .meta({ mock: "company.name" }),
+  aliases: z
+    .array(z.string())
+    .default([])
+    .describe("Alternate names (replaces the complete alias set)"),
+  tags: z
+    .array(z.string())
+    .default([])
+    .describe("Compatibility/grouping tags (replaces the complete tag set)"),
+  fdc_id: fdcId
+    .nullable()
+    .optional()
+    .describe("USDA FoodData Central id; null means no explicit USDA link"),
+  model: z
+    .string()
+    .nullish()
+    .describe("Maker-issued model or MPN, not a retailer SKU"),
+  notes: z.string().nullish().describe("Product notes, URLs, or other details"),
+  expectedQuantity: z.number().int().positive().nullable().optional(),
+  category: productCategory.nullable().optional(),
   ingredientId: ingredientShortcode
     .nullable()
     .describe(
@@ -591,6 +610,9 @@ export const mcpProductCreateInput = z.object({
     .describe(
       'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
     ),
+  externalIds: externalIdValues
+    .default([])
+    .describe("Typed manufacturer, marketplace, or retailer identifiers"),
   usdaUnavailable: z
     .boolean()
     .nullable()
@@ -636,6 +658,12 @@ export const mcpProductUpdateInput = z.object({
   category: productCategory.nullable().optional(),
   ingredientId: ingredientShortcode.nullable().optional(),
   price: z.number().nonnegative().nullable().optional(),
+  unitMappings: z
+    .array(mcpUnitMappingInput)
+    .optional()
+    .describe(
+      "Complete replacement set of conversion/price mappings; an empty array clears all mappings.",
+    ),
   usdaUnavailable: z.boolean().nullable().optional(),
   removeImageIds: z
     .array(z.uuid())
@@ -774,7 +802,13 @@ export const patchProductExternalIdsInput = z
       )
       .default([]),
     remove: z
-      .array(z.object({ source: externalIdSource, kind: externalIdKind }))
+      .array(
+        z.object({
+          source: externalIdSource,
+          kind: externalIdKind,
+          expectedExternalId: z.string().min(1),
+        }),
+      )
       .default([]),
   })
   .superRefine((value, ctx) => {

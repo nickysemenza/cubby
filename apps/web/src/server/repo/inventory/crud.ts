@@ -200,6 +200,7 @@ interface InventoryFilters {
   productNameFilter?: string;
   locationNameFilter?: string;
   locationIdFilter?: LocationId;
+  productIdFilter?: ProductId;
   manufacturerFilter?: string;
   categoryFilter?: ProductCategory | ProductCategory[];
 }
@@ -290,6 +291,9 @@ export const inventoryentryList = async (
       ),
       filters.locationIdFilter
         ? eq(inventoryEntry.locationId, filters.locationIdFilter)
+        : undefined,
+      filters.productIdFilter
+        ? eq(inventoryEntry.productId, filters.productIdFilter)
         : undefined,
       eqAny(product.category, filters.categoryFilter),
     ],

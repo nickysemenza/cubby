@@ -4,7 +4,6 @@ import {
   ingredientMcpOut,
   ingredientMergeBatchInput,
   ingredientMergeBatchOut,
-  ingredientRawLinesBatchOut,
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateResponseOut,
   ingredientUpdateData,
@@ -12,13 +11,9 @@ import {
   mcpIngredientCreateInput,
 } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { groupBy } from "es-toolkit";
-import { z } from "zod";
 import {
   formatToolError,
   getCaller,
-  idParam,
-  READ_ONLY_CLOSED,
   registerEntityCrudToolset,
   registerMcpTool,
   registerRouterTool,
@@ -115,42 +110,6 @@ export function registerIngredientTools(server: McpServer) {
       return payload.merged === 0
         ? structuredSuccessWithError(payload, ingredientMergeBatchOut)
         : payload;
-    },
-  });
-
-  registerMcpTool(server, {
-    name: "get_ingredient_raw_lines",
-    description:
-      "Bulk parser-triage dump: for each ingredient id, the original rawLine of every recipe line currently linked to it.",
-    inputSchema: {
-      ids: z
-        .array(idParam("ingredient"))
-        .min(1)
-        .describe("Ingredient shortcodes to dump raw lines for"),
-    },
-    outputSchema: ingredientRawLinesBatchOut,
-    annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const rows = await caller.ingredient.rawLines({ ids: params.ids });
-      const byIngredient = groupBy(rows, (r) => r.ingredientId);
-      const ingredients = Object.values(byIngredient).map((lines) => {
-        const first = lines[0]!;
-        return {
-          ingredientId: first.ingredientId,
-          lineCount: lines.length,
-          lines: lines.map((l) => ({
-            lineId: l.lineId,
-            rawLine: l.rawLine,
-            modifier: l.modifier,
-            amounts: l.amounts,
-            recipeId: l.recipeId,
-            recipeName: l.recipeName,
-            sectionName: l.sectionName,
-          })),
-        };
-      });
-      return { count: ingredients.length, ingredients };
     },
   });
 }

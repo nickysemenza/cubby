@@ -172,6 +172,59 @@ describe("registerEntityCrudToolset", () => {
     );
     expect(getRegisteredTool(server, "delete_vendors")).toBeUndefined();
   });
+
+  it("registers bounded best-effort batches with valid all-failed results", async () => {
+    const server = new McpServer({ name: "t", version: "1.0.0" });
+    const mutationOut = z.object({ id: z.string(), changed: z.boolean() });
+    registerEntityCrudToolset(server, {
+      entity: "vendor",
+      createInput: { name: z.string() },
+      updateShape: { name: z.string().optional() },
+      filterFields: {},
+      mcpListOut: z.object({ items: z.array(z.object({ id: z.string() })) }),
+      out: mutationOut,
+      sort: { orderBy: "name" },
+      batch: { create: true, update: true },
+      slim: (value) => value as Record<string, unknown>,
+      descriptions: {
+        list: "list",
+        get: "get",
+        create: "create",
+        update: "update",
+        delete: "delete",
+      },
+    });
+
+    expect(getRegisteredTool(server, "create_vendors")).toBeDefined();
+    expect(getRegisteredTool(server, "update_vendors")).toBeDefined();
+
+    const create = vi.fn().mockRejectedValue(new Error("vendor write failed"));
+    const allFailed = await callTool(
+      server,
+      "create_vendors",
+      { items: [{ name: "one" }, { name: "two" }] },
+      { vendor: { create } },
+    );
+    expect(allFailed.isError).not.toBe(true);
+    expect(allFailed.structuredContent).toMatchObject({
+      summary: { requested: 2, succeeded: 0, failed: 2 },
+      results: [
+        { index: 0, status: "failed", error: "vendor write failed" },
+        { index: 1, status: "failed", error: "vendor write failed" },
+      ],
+    });
+
+    const tooMany = await callTool(
+      server,
+      "create_vendors",
+      {
+        items: Array.from({ length: 51 }, (_, index) => ({ name: `${index}` })),
+      },
+      { vendor: { create } },
+    );
+    expect(tooMany.isError).toBe(true);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("slimProduct USDA signal", () => {
@@ -509,6 +562,43 @@ describe("createMcpServer registration", () => {
 });
 
 describe("listMcpToolCatalog", () => {
+  it("exposes generic batches and retires redundant MCP wrappers", async () => {
+    const names = new Set(
+      (await listMcpToolCatalog()).tools.map((tool) => tool.name),
+    );
+    for (const name of [
+      "create_products",
+      "update_products",
+      "create_expenses",
+      "update_expenses",
+      "update_tasks",
+      "create_financial_transactions",
+      "update_financial_transactions",
+      "find_or_create_product_by_upc",
+    ]) {
+      expect(names.has(name), `${name} missing from catalog`).toBe(true);
+    }
+    for (const name of [
+      "get_meals_by_date_range",
+      "update_product_unit_mappings",
+      "bulk_set_task_status",
+      "bulk_move_tasks",
+      "bulk_set_task_due_date",
+      "bulk_move_expenses",
+      "bulk_set_expense_trade",
+      "bulk_set_expense_cost_type",
+      "get_ingredient_raw_lines",
+      "recompute_recipe_totals",
+      "reparse_stale_parses",
+      "find_duplicate_inventory",
+      "find_product_by_upc",
+    ]) {
+      expect(names.has(name), `${name} unexpectedly remains in catalog`).toBe(
+        false,
+      );
+    }
+  });
+
   it("keeps the purchase-import skill aligned with the completeness catalog", async () => {
     const { tools } = await listMcpToolCatalog();
     const byName = new Map(tools.map((tool) => [tool.name, tool]));
@@ -581,7 +671,6 @@ describe("listMcpToolCatalog", () => {
       "clear_data_exception",
       "reclassify_purchase_document",
       "find_product_external_id_collisions",
-      "unrecorded_purchase_candidate",
     ]) {
       expect(skill).toContain(name);
     }
@@ -738,7 +827,7 @@ describe("listMcpToolCatalog", () => {
     // whose advertised schema has no `properties` means the fallback fired.
     //
     // Supersedes an earlier per-tool spot-check of the tracker synthesis/bulk
-    // tools (get_house_status, bulk_move_tasks, …) — those derived
+    // tools (get_house_status and other catalog entries) — those derived
     // pick/omit/extend shapes are covered here along with everything else.
     const { tools } = await listMcpToolCatalog();
     const degraded = tools.filter((tool) =>
@@ -773,11 +862,14 @@ describe("listMcpToolCatalog", () => {
     const FREE_TEXT_ID_FIELDS = new Set([
       "orderId",
       "externalId",
+      "expectedExternalId",
       "externalAccountId",
     ]);
     const DECLARED_UUID_EXCEPTIONS = new Set([
       "create_recipe.sections[].id",
       "create_recipe.sections[].ingredients[].id",
+      "update_products.items[].removeImageIds",
+      "update_products.items[].imageOrder",
       "create_recipe.sections[].instructions[].id",
       "update_meal_recipe.id",
       "update_location.imageOrder",
@@ -1655,66 +1747,71 @@ describe("household tracker synthesis + bulk tools", () => {
     ]);
   });
 
-  it("bulk task writes drop sideEffects and report an updated count", async () => {
+  it("generic task batches preserve ordered partial successes", async () => {
     const updated = mock(taskOut, {
       seed: 4,
       overrides: { id: TASK_A, status: "done" },
     });
-    const bulkSetStatus = vi.fn().mockResolvedValue({
-      items: [updated],
-      sideEffects: { backgroundBatches: ["batch-1"] },
-    });
+    const update = vi
+      .fn()
+      .mockResolvedValueOnce(updated)
+      .mockRejectedValueOnce(new Error("write failed"));
 
     const result = await callTool(
       createMcpServer(),
-      "bulk_set_task_status",
-      { ids: [TASK_A], status: "done" },
-      { task: { bulkSetStatus } },
+      "update_tasks",
+      {
+        items: [
+          { id: TASK_A, status: "done" },
+          { id: "TSK-7773", status: "done" },
+        ],
+      },
+      { task: { update } },
     );
 
-    expect(bulkSetStatus).toHaveBeenCalledWith({
-      ids: [TASK_A],
-      status: "done",
-    });
     expect(result.isError).not.toBe(true);
     const structured = result.structuredContent as {
-      updated: number;
-      items: Array<Record<string, unknown>>;
+      summary: { requested: number; succeeded: number; failed: number };
+      results: Array<Record<string, unknown>>;
     };
-    expect(structured.updated).toBe(1);
-    expect(structured.items[0]?.id).toBe(TASK_A);
-    expect(result.structuredContent).not.toHaveProperty("sideEffects");
+    expect(structured.summary).toEqual({
+      requested: 2,
+      succeeded: 1,
+      failed: 1,
+    });
+    expect(structured.results[0]).toMatchObject({
+      index: 0,
+      status: "succeeded",
+      item: { id: TASK_A },
+    });
+    expect(structured.results[1]).toMatchObject({
+      index: 1,
+      status: "failed",
+      error: "write failed",
+    });
   });
 
-  it("bulk expense writes drop sideEffects and report an updated count", async () => {
+  it("rejects duplicate IDs before a generic update batch writes", async () => {
     const updated = mock(expenseOut, {
       seed: 5,
       overrides: { id: EXPENSE_A, projectId: PROJECT_A },
     });
-    const bulkMove = vi.fn().mockResolvedValue({
-      items: [updated],
-      sideEffects: { backgroundBatches: ["batch-2"] },
-    });
+    const update = vi.fn().mockResolvedValue(updated);
 
     const result = await callTool(
       createMcpServer(),
-      "bulk_move_expenses",
-      { ids: [EXPENSE_A], projectId: PROJECT_A },
-      { expense: { bulkMove } },
+      "update_expenses",
+      {
+        items: [
+          { id: EXPENSE_A, projectId: PROJECT_A },
+          { id: EXPENSE_A, projectId: null },
+        ],
+      },
+      { expense: { update } },
     );
 
-    expect(bulkMove).toHaveBeenCalledWith({
-      ids: [EXPENSE_A],
-      projectId: PROJECT_A,
-    });
-    expect(result.isError).not.toBe(true);
-    const structured = result.structuredContent as {
-      updated: number;
-      items: Array<Record<string, unknown>>;
-    };
-    expect(structured.updated).toBe(1);
-    expect(structured.items[0]?.id).toBe(EXPENSE_A);
-    expect(result.structuredContent).not.toHaveProperty("sideEffects");
+    expect(result.isError).toBe(true);
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

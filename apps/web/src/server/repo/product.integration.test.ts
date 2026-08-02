@@ -131,7 +131,13 @@ describe("product repository", () => {
       created.entityId,
       {
         upsert: [],
-        remove: [{ source: "amazon", kind: "asin" }],
+        remove: [
+          {
+            source: "amazon",
+            kind: "asin",
+            expectedExternalId: "B0REPLACED",
+          },
+        ],
       },
       ctx.actor,
     );
@@ -146,6 +152,56 @@ describe("product repository", () => {
       ["amazon", "retailer_sku", "SKU-2"],
       ["mcmaster", "catalog_number", "123"],
     ]);
+  });
+
+  it("does not mutate any external-ID slot when a removal precondition fails", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0CURRENT",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      patchProductExternalIds(
+        ctx.db,
+        created.entityId,
+        {
+          upsert: [
+            {
+              source: "mcmaster",
+              kind: "catalog_number",
+              externalId: "999",
+              url: null,
+            },
+          ],
+          remove: [
+            {
+              source: "amazon",
+              kind: "asin",
+              expectedExternalId: "B0STALE",
+            },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+    const current = await getProductByID(ctx.db, created.entityId);
+    expect(current.externalIds).toHaveLength(1);
+    expect(current.externalIds[0]).toMatchObject({
+      source: "amazon",
+      kind: "asin",
+      externalId: "B0CURRENT",
+    });
   });
 
   it("orders identity-strength worklists deterministically", async () => {

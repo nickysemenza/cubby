@@ -317,8 +317,7 @@ Roughly priority order.
   (`findTrackerProblems` in `services/problems.service.ts`, seven rules not six,
   feeding the navbar badge / `/problems` / homepage banner / `list_problems`);
   the MCP synthesis tools landed (`get_house_status`, `get_project_budget`,
-  `get_expense_analytics`, plus the `bulk_move_expenses` /
-  `bulk_set_expense_trade` / `bulk_set_expense_cost_type` classifiers); and
+  `get_expense_analytics`, plus generic `update_expenses` batch classification); and
   `Vendor`/`Purchase` now have a full MCP toolset (`list_`/`get_`/`create_`/
   `update_` for both, delete deliberately withheld), so an agent-driven import
   can read the roster and set a purchase's `statedTotal` without SQL or the web UI.
@@ -519,7 +518,7 @@ inflate — work *about* a product is `Task.subjectProductId`) and **installment
   appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
   constraint: `costType` is an operator-assigned *reporting* dimension and is already
   inconsistent (`countertop deposit` is materials, `2nd half of countertop` is services —
-  same vendor, same amount, same slab), and `bulk_set_expense_cost_type` exists, so a hard
+  same vendor, same amount, same slab), and `update_expenses` batches can reclassify rows, so a hard
   constraint would fail a bulk reclassify mid-transaction with an error about products.
 - [ ] **Duplicate-product detection keyed on `ProductExternalId`, never on names.** Motivating
   hazard: a product carrying any expense is *by construction* invisible to
@@ -823,7 +822,7 @@ Add a new kind there; don't re-scope "background jobs" as a project.
 
 - **CF Workers cron triggers.** Every candidate was a backstop for a single user —
   recipe-totals drain, nightly USDA sweep, soft-delete/audit retention purge, costing
-  drift check. The client poll plus the `recompute_recipe_totals` MCP backfill already
+  drift check. The client poll plus the Settings maintenance backfill already
   cover the drain; the rest doesn't earn a `scheduled` handler that can't be exercised
   under `vite dev` (Miniflare or prod only). Revisit only when something actually rots
   unattended. (Inventory expiry flagging is separately dead — see Meal planning v2's

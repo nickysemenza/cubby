@@ -37,6 +37,9 @@ export const inventoryFilterFields = {
   locationIdFilter: locationShortcode
     .optional()
     .describe("Filter by exact location ID"),
+  productIdFilter: productShortcode
+    .optional()
+    .describe("Filter by exact product ID"),
   manufacturerFilter: z
     .string()
     .optional()

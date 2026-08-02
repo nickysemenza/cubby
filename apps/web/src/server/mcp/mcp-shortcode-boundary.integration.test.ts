@@ -896,13 +896,73 @@ describe("MCP CRUD round trips are driven by shortcodes only", () => {
     expectOk(updatedTransaction);
     expect(structured(updatedTransaction).status).toBe("posted");
 
+    const duplicateSourceRefs = await callTool(
+      "create_financial_transactions",
+      {
+        items: [
+          {
+            accountId: accountCode,
+            kind: "purchase",
+            status: "pending",
+            amount: 9.99,
+            sourceRefs: [
+              {
+                source: "shortcode-test",
+                externalId: "duplicate-batch-source-ref",
+              },
+            ],
+          },
+          {
+            accountId: accountCode,
+            kind: "purchase",
+            status: "pending",
+            amount: 10.99,
+            sourceRefs: [
+              {
+                source: "shortcode-test",
+                externalId: "duplicate-batch-source-ref",
+              },
+            ],
+          },
+        ],
+      },
+      caller,
+    );
+    expectOk(duplicateSourceRefs);
+    const duplicateBatch = structured(duplicateSourceRefs) as {
+      summary: { requested: number; succeeded: number; failed: number };
+      results: Array<Record<string, unknown>>;
+    };
+    expect(duplicateBatch.summary).toEqual({
+      requested: 2,
+      succeeded: 1,
+      failed: 1,
+    });
+    expect(duplicateBatch.results[0]).toMatchObject({
+      index: 0,
+      status: "succeeded",
+    });
+    expect(duplicateBatch.results[1]).toMatchObject({
+      index: 1,
+      status: "failed",
+    });
+    const firstBatchResult = duplicateBatch.results[0];
+    if (!firstBatchResult?.item) {
+      throw new Error(
+        "Expected the first duplicate-source batch item to succeed",
+      );
+    }
+    const batchTransactionCode = (
+      firstBatchResult.item as Record<string, unknown>
+    ).id as string;
+
     const deletedTransaction = await callTool(
       "delete_financial_transactions",
-      { ids: [transactionCode] },
+      { ids: [transactionCode, batchTransactionCode] },
       caller,
     );
     expectOk(deletedTransaction);
-    expect(structured(deletedTransaction).deleted).toBe(1);
+    expect(structured(deletedTransaction).deleted).toBe(2);
 
     const deletedAccount = await callTool(
       "delete_financial_accounts",
@@ -1446,7 +1506,7 @@ describe("specialized tools round-trip on shortcodes", () => {
     expectOk(linked);
   });
 
-  it("bulk_move_tasks moves tasks onto a project by shortcode (the intended contract)", async () => {
+  it("update_tasks moves tasks onto a project by shortcode", async () => {
     const caller = createTestCaller(domainRouter, ctx.db);
     const project = await callTool(
       "create_project",
@@ -1465,13 +1525,15 @@ describe("specialized tools round-trip on shortcodes", () => {
     const taskCode = structured(task).id as string;
 
     const moved = await callTool(
-      "bulk_move_tasks",
-      { ids: [taskCode], projectId: projectCode },
+      "update_tasks",
+      { items: [{ id: taskCode, projectId: projectCode }] },
       caller,
     );
     expectOk(moved);
-    const items = structured(moved).items as Array<Record<string, unknown>>;
-    expect(items[0]?.projectId).toBe(projectCode);
+    const results = structured(moved).results as Array<Record<string, unknown>>;
+    expect((results[0]?.item as Record<string, unknown>)?.projectId).toBe(
+      projectCode,
+    );
   });
 });
 
@@ -1498,9 +1560,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "patch_product_external_ids.images[].id",
   "create_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
-  "get_ingredient_raw_lines.ingredients[].lines[].lineId",
   "get_meal.recipes[].id",
-  "get_meals_by_date_range.items[].recipes[].id",
   "get_recipe.images[].id",
   "get_recipe.sections[].id",
   "get_recipe.sections[].ingredients[].id",

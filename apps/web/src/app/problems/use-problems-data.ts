@@ -55,7 +55,7 @@ export function useProblemsData(opts?: {
     ],
     combine: ([fast, coverage, upc, tracker]) => {
       const sections = {
-        duplicateUniqueProducts: fast.data?.duplicateUniqueProducts ?? [],
+        duplicateInventory: fast.data?.duplicateInventory ?? [],
         orphanedProducts: fast.data?.orphanedProducts ?? [],
         productsMissingPrice: fast.data?.productsMissingPrice ?? [],
         unvaluedBucketProducts: fast.data?.unvaluedBucketProducts ?? [],

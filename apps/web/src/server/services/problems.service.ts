@@ -486,7 +486,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   // one connection beats 8 cold connects. See withConnection in db.ts.
   const r = await withConnection(db, (scoped) =>
     traceAllSeq({
-      duplicateUniqueProducts: () => findDuplicateUniqueProducts(scoped),
+      duplicateInventory: () => findDuplicateUniqueProducts(scoped),
       orphanedProducts: () => findOrphanedProducts(scoped),
       productsMissingPrice: () => findProductsMissingPrice(scoped),
       productsWithoutMappings: () => findProductsWithoutMappings(scoped),
@@ -528,7 +528,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     }),
   );
   return {
-    duplicateUniqueProducts: r.duplicateUniqueProducts,
+    duplicateInventory: r.duplicateInventory,
     orphanedProducts: r.orphanedProducts,
     productsMissingPrice: r.productsMissingPrice.real,
     unvaluedBucketProducts: r.productsMissingPrice.buckets,
