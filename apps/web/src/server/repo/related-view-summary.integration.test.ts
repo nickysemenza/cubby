@@ -5,8 +5,8 @@ import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
-import { image, productImage } from "~/server/db/schema";
-import { getDb } from "./database-helpers";
+import { image, productImage, projectImage } from "~/server/db/schema";
+import { insertAndReturn } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createProject } from "./project";
 import { createPurchase } from "./purchase";
@@ -73,19 +73,40 @@ describe("expense-backed relationship summaries", () => {
       makeProductInput({ name: "Summary Product B" }),
       ctx.actor,
     );
-    const [thumbnail] = await getDb(ctx.db)
-      .insert(image)
-      .values({
-        url: "https://example.com/summary-product.jpg",
-        key: "summary-product-image",
-        filename: "summary-product.jpg",
-        size: 1,
-        contentType: "image/jpeg",
-      })
-      .returning();
-    await getDb(ctx.db)
-      .insert(productImage)
-      .values({ productId: productA.entityId, imageId: thumbnail!.id });
+    const thumbnail = await insertAndReturn(ctx.db, image, {
+      url: "https://example.com/summary-product.jpg",
+      key: "summary-product-image",
+      filename: "summary-product.jpg",
+      size: 1,
+      contentType: "image/jpeg",
+    });
+    await insertAndReturn(ctx.db, productImage, {
+      productId: productA.entityId,
+      imageId: thumbnail.id,
+    });
+    const projectDocument = await insertAndReturn(ctx.db, image, {
+      url: "https://example.com/summary-project.pdf",
+      key: "summary-project-document",
+      filename: "summary-project.pdf",
+      size: 1,
+      contentType: "application/pdf",
+    });
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: root.entityId,
+      imageId: projectDocument.id,
+      sortOrder: -1,
+    });
+    const projectThumbnail = await insertAndReturn(ctx.db, image, {
+      url: "https://example.com/summary-project.jpg",
+      key: "summary-project-image",
+      filename: "summary-project.jpg",
+      size: 1,
+      contentType: "image/jpeg",
+    });
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: root.entityId,
+      imageId: projectThumbnail.id,
+    });
     const addExpense = async (data: {
       name: string;
       cost: number | null;
@@ -201,6 +222,7 @@ describe("expense-backed relationship summaries", () => {
       unknownAcquisitionQuantityCount: 1,
       target: {
         image: {
+          id: thumbnail.id,
           url: "https://example.com/summary-product.jpg",
           filename: "summary-product.jpg",
           contentType: "image/jpeg",
@@ -214,6 +236,18 @@ describe("expense-backed relationship summaries", () => {
     });
     expect(vendorProjects.totals.netSpend).toBe(27);
     expect(vendorProjects.data.some((row) => row.target === null)).toBe(true);
+    expect(
+      vendorProjects.data.find((row) => row.target?.id === root.output.id),
+    ).toMatchObject({
+      target: {
+        image: {
+          id: projectThumbnail.id,
+          url: "https://example.com/summary-project.jpg",
+          filename: "summary-project.jpg",
+          contentType: "image/jpeg",
+        },
+      },
+    });
 
     const purchaseProjects = await summary({
       relationKey: "purchase.projects",

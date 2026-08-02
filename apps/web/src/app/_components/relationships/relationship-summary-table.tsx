@@ -1,8 +1,10 @@
 import type { RelatedSummaryRelationKey } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, ImageIcon, Search } from "lucide-react";
 import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
+import { VendorMark } from "~/components/entity/vendor-cell";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -33,7 +35,12 @@ type SummaryRow = {
     entity: "product" | "project" | "vendor";
     id: string;
     label: string;
-    image: { url: string; filename: string; contentType: string } | null;
+    image: {
+      id: string;
+      url: string;
+      filename: string;
+      contentType: string;
+    } | null;
   } | null;
   expenseCount: number;
   purchaseCount: number;
@@ -86,6 +93,40 @@ const SORT_BY_COLUMN: Partial<Record<Column, SortField>> = {
   latestActivity: "latestActivity",
 };
 
+const TARGET_ENTITY_BY_RELATION: Record<
+  RelatedSummaryRelationKey,
+  NonNullable<SummaryRow["target"]>["entity"]
+> = {
+  "vendor.products": "product",
+  "vendor.projects": "project",
+  "purchase.projects": "project",
+  "project.vendors": "vendor",
+  "project.purchasedProducts": "product",
+  "product.vendors": "vendor",
+};
+
+function targetImage(
+  target: SummaryRow["target"],
+  fallbackEntity: NonNullable<SummaryRow["target"]>["entity"],
+) {
+  if (target?.entity === "vendor") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <VendorMark vendor={target.label} vendorId={target.id} />
+      </div>
+    );
+  }
+
+  return (
+    <ImageThumbnail
+      images={target?.image ? [target.image] : []}
+      alt={target ? `${target.label} image` : "No linked image"}
+      lazyPreview
+      entity={target?.entity ?? fallbackEntity}
+    />
+  );
+}
+
 function targetLink(target: NonNullable<SummaryRow["target"]>) {
   return (
     <EntityInlineLink
@@ -114,6 +155,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   compact = false,
 }) => {
   const api = useTRPC();
+  const targetEntity = TARGET_ENTITY_BY_RELATION[relationKey];
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(defaultSort);
   const [offset, setOffset] = useState(0);
@@ -230,6 +272,10 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
           <Table className={cn("table-auto", compact && "text-2xs")}>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16">
+                  <ImageIcon className="size-3 text-muted-foreground" />
+                  <span className="sr-only">Image</span>
+                </TableHead>
                 {columns.map((column) => {
                   const sortField = SORT_BY_COLUMN[column];
                   const isActive = sortField === sort.field;
@@ -270,18 +316,14 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
             <TableBody>
               {rows.map((row, index) => (
                 <TableRow key={row.target?.id ?? `unassigned-${index}`}>
+                  <TableCell className="h-px w-16 overflow-hidden px-0 py-0">
+                    {targetImage(row.target, targetEntity)}
+                  </TableCell>
                   {columns.map((column) => {
                     if (column === "target") {
                       return (
                         <TableCell key={column} className="min-w-48">
                           <Row gap="xs" align="center" className="min-w-0">
-                            {row.target?.image && (
-                              <img
-                                src={row.target.image.url}
-                                alt={row.target.image.filename}
-                                className="size-6 shrink-0 object-cover"
-                              />
-                            )}
                             {row.target ? (
                               targetLink(row.target)
                             ) : (

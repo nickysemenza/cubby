@@ -481,7 +481,7 @@ type SummaryDefinition = {
   targetJoin: string;
   /** Null targets are meaningful only for incomplete purchase/project provenance. */
   targetPresence: "required" | "optional";
-  image: boolean;
+  imageTarget: "product" | "project" | null;
 };
 
 const SUMMARY_DEFINITIONS: Record<
@@ -492,37 +492,37 @@ const SUMMARY_DEFINITIONS: Record<
     targetEntity: "product",
     targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
     targetPresence: "required",
-    image: true,
+    imageTarget: "product",
   },
   "vendor.projects": {
     targetEntity: "project",
     targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND t."deletedAt" IS NULL`,
     targetPresence: "optional",
-    image: false,
+    imageTarget: "project",
   },
   "purchase.projects": {
     targetEntity: "project",
     targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND t."deletedAt" IS NULL`,
     targetPresence: "optional",
-    image: false,
+    imageTarget: "project",
   },
   "project.vendors": {
     targetEntity: "vendor",
     targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
     targetPresence: "optional",
-    image: false,
+    imageTarget: null,
   },
   "project.purchasedProducts": {
     targetEntity: "product",
     targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
     targetPresence: "required",
-    image: true,
+    imageTarget: "product",
   },
   "product.vendors": {
     targetEntity: "vendor",
     targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
     targetPresence: "optional",
-    image: false,
+    imageTarget: null,
   },
 };
 
@@ -600,13 +600,17 @@ export async function loadRelatedSummary(
         AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
     )`;
   })();
-  const imageJoin = definition.image
+  const imageJoin = definition.imageTarget
     ? `LEFT JOIN LATERAL (
-        SELECT i."url", i."filename", i."contentType"
-        FROM "ProductImage" pi
-        JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
-        WHERE pi."productId" = t."id" AND pi."deletedAt" IS NULL
-        ORDER BY pi."sortOrder", pi."createdAt", pi."id"
+        SELECT i."id", i."url", i."filename", i."contentType"
+        FROM "${definition.imageTarget === "product" ? "ProductImage" : "ProjectImage"}" ti
+        JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
+        WHERE ti."${definition.imageTarget}Id" = t."id"
+          AND ti."deletedAt" IS NULL
+          AND i."contentType" <> 'application/pdf'
+          AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')
+          AND (i."storageStatus" IS NULL OR i."storageStatus" NOT IN ('missing', 'metadata_mismatch'))
+        ORDER BY ti."sortOrder", ti."createdAt", ti."id"
         LIMIT 1
       ) img ON TRUE`
     : "";
@@ -629,9 +633,9 @@ export async function loadRelatedSummary(
     expenseCount: `"expenseCount"`,
     knownAcquiredUnits: `"knownAcquiredUnits"`,
   }[sort.field];
-  const imageColumns = definition.image
-    ? sql`img."url" AS "imageUrl", img."filename" AS "imageFilename", img."contentType" AS "imageContentType"`
-    : sql`NULL::text AS "imageUrl", NULL::text AS "imageFilename", NULL::text AS "imageContentType"`;
+  const imageColumns = definition.imageTarget
+    ? sql`img."id"::text AS "imageId", img."url" AS "imageUrl", img."filename" AS "imageFilename", img."contentType" AS "imageContentType"`
+    : sql`NULL::text AS "imageId", NULL::text AS "imageUrl", NULL::text AS "imageFilename", NULL::text AS "imageContentType"`;
   const query = sql`
     WITH RECURSIVE ${scope}, targeted AS (
       SELECT se.*, t."shortcode" AS "targetId", t."name" AS "targetLabel", ${imageColumns}
@@ -642,7 +646,7 @@ export async function loadRelatedSummary(
         ${search ? sql`AND t."name" ILIKE ${`%${search}%`}` : sql``}
     ), grouped AS (
       SELECT
-        "targetId", "targetLabel", "imageUrl", "imageFilename", "imageContentType",
+        "targetId", "targetLabel", "imageId", "imageUrl", "imageFilename", "imageContentType",
         count(DISTINCT "expenseId")::int AS "expenseCount",
         count(DISTINCT "purchaseId")::int AS "purchaseCount",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "unpricedExpenseCount",
@@ -651,7 +655,7 @@ export async function loadRelatedSummary(
         COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::int AS "knownAcquiredUnits",
         count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
       FROM targeted
-      GROUP BY "targetId", "targetLabel", "imageUrl", "imageFilename", "imageContentType"
+      GROUP BY "targetId", "targetLabel", "imageId", "imageUrl", "imageFilename", "imageContentType"
     ), totals AS (
       SELECT
         count(DISTINCT "expenseId")::int AS "totalExpenseCount",
@@ -673,6 +677,7 @@ export async function loadRelatedSummary(
   type SummaryRaw = {
     targetId: string | null;
     targetLabel: string | null;
+    imageId: string | null;
     imageUrl: string | null;
     imageFilename: string | null;
     imageContentType: string | null;
@@ -727,8 +732,12 @@ export async function loadRelatedSummary(
               id: row.targetId,
               label: row.targetLabel,
               image:
-                row.imageUrl && row.imageFilename && row.imageContentType
+                row.imageId &&
+                row.imageUrl &&
+                row.imageFilename &&
+                row.imageContentType
                   ? {
+                      id: row.imageId,
                       url: row.imageUrl,
                       filename: row.imageFilename,
                       contentType: row.imageContentType,

@@ -1,8 +1,14 @@
+import { projectCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { cookbook, image, purchaseImage } from "~/server/db/schema";
+import {
+  cookbook,
+  image,
+  projectImage,
+  purchaseImage,
+} from "~/server/db/schema";
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn } from "./database-helpers";
 import {
@@ -12,9 +18,11 @@ import {
   cullPendingImages,
   deleteImages,
   getImageById,
+  getImagesByProjectIds,
   markImageUploaded,
   updateImage,
 } from "./image";
+import { createProject } from "./project";
 import { createPurchase } from "./purchase";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
@@ -92,6 +100,62 @@ describe("image repository", () => {
     });
 
     await expect(markImageUploaded(ctx.db, uploaded.id)).rejects.toThrow();
+  });
+
+  it("returns displayable project covers in cover order", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Project covers" }),
+      ctx.actor,
+    );
+    const pdf = await insertAndReturn(ctx.db, image, {
+      key: `test/${crypto.randomUUID()}.pdf`,
+      url: "https://example.com/project.pdf",
+      filename: "project.pdf",
+      contentType: "application/pdf",
+      size: 1024,
+    });
+    const failed = await insertAndReturn(ctx.db, image, {
+      key: `test/${crypto.randomUUID()}-failed.jpg`,
+      url: "https://example.com/failed.jpg",
+      filename: "failed.jpg",
+      contentType: "image/jpeg",
+      size: 1024,
+      renderStatus: "failed",
+    });
+    const cover = await insertAndReturn(ctx.db, image, {
+      key: `test/${crypto.randomUUID()}-cover.jpg`,
+      url: "https://example.com/cover.jpg",
+      filename: "cover.jpg",
+      contentType: "image/jpeg",
+      size: 1024,
+    });
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: project.entityId,
+      imageId: pdf.id,
+      sortOrder: -2,
+    });
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: project.entityId,
+      imageId: failed.id,
+      sortOrder: -1,
+    });
+    await insertAndReturn(ctx.db, projectImage, {
+      projectId: project.entityId,
+      imageId: cover.id,
+    });
+
+    await expect(
+      getImagesByProjectIds(ctx.db, [project.entityId]),
+    ).resolves.toEqual({
+      [project.entityId]: [
+        {
+          id: cover.id,
+          url: "https://example.com/cover.jpg",
+          filename: "cover.jpg",
+        },
+      ],
+    });
   });
 
   // findCullablePendingImages enumerates four join tables (product/location/

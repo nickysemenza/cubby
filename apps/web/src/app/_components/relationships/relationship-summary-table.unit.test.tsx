@@ -14,7 +14,10 @@ vi.mock("@tanstack/react-query", () => ({
             input.relationKey === "product.vendors"
               ? null
               : {
-                  entity: "product",
+                  entity:
+                    input.relationKey === "project.vendors"
+                      ? "vendor"
+                      : "product",
                   id: "PRD-TEST",
                   label: "Brush",
                   image: null,
@@ -54,6 +57,26 @@ vi.mock("~/app/_components/EntityInlineLink", () => ({
     <span>{data.name}</span>
   ),
 }));
+vi.mock("~/app/_components/table/ImageThumbnail", () => ({
+  ImageThumbnail: ({
+    images,
+    entity,
+  }: {
+    images: Array<{ url: string }>;
+    entity: string;
+  }) => (
+    <span
+      data-testid="summary-thumbnail"
+      data-entity={entity}
+      data-src={images[0]?.url}
+    />
+  ),
+}));
+vi.mock("~/components/entity/vendor-cell", () => ({
+  VendorMark: ({ vendor }: { vendor: string }) => (
+    <span data-testid="summary-vendor-mark">{vendor}</span>
+  ),
+}));
 
 import { RelationshipSummaryTable } from "./relationship-summary-table";
 
@@ -71,6 +94,10 @@ describe("RelationshipSummaryTable", () => {
     );
 
     await waitFor(() => expect(screen.getByText("Brush")).toBeInTheDocument());
+    expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(
+      "data-entity",
+      "product",
+    );
     expect(screen.getByText("+1?")).toBeInTheDocument();
     expect(mocks.queryOptions).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -102,6 +129,23 @@ describe("RelationshipSummaryTable", () => {
       ),
     );
     expect(screen.getByText(/\$18\.50 net/)).toBeInTheDocument();
+  });
+
+  it("uses the vendor mark for vendor-target summaries", async () => {
+    render(
+      <RelationshipSummaryTable
+        relationKey="project.vendors"
+        sourceId="PRJ-TEST"
+        columns={["target", "netSpend"]}
+        defaultSort={{ field: "netSpend", direction: "desc" }}
+        emptyCopy="Nothing yet."
+        expenseHref={() => "/expenses"}
+      />,
+    );
+
+    expect(await screen.findByTestId("summary-vendor-mark")).toHaveTextContent(
+      "Brush",
+    );
   });
 
   it("warning-styles a null target and keeps its exact ledger link", async () => {
