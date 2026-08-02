@@ -71,6 +71,20 @@ export const relatedViewRegistry = [
     inverseKey: "project.purchasedProducts",
   },
   {
+    key: "product.usedOnProjects",
+    source: "product",
+    target: "project",
+    label: "Used on projects",
+    defaultVisible: true,
+    order: "alphabetical",
+    path: [
+      inc("ProjectToolUsage.productId"),
+      out("ProjectToolUsage.projectId"),
+    ],
+    filterPrefix: "usedOnProject",
+    inverseKey: "project.usedTools",
+  },
+  {
     key: "product.purchases",
     source: "product",
     target: "purchase",
@@ -212,6 +226,20 @@ export const relatedViewRegistry = [
     path: [inc("Expense.projectId"), out("Expense.productId")],
     filterPrefix: "purchasedProduct",
     inverseKey: "product.projects",
+  },
+  {
+    key: "project.usedTools",
+    source: "project",
+    target: "product",
+    label: "Used tools",
+    defaultVisible: true,
+    order: "alphabetical",
+    path: [
+      inc("ProjectToolUsage.projectId"),
+      out("ProjectToolUsage.productId"),
+    ],
+    filterPrefix: "usedTool",
+    inverseKey: "product.usedOnProjects",
   },
   {
     key: "project.vendors",
@@ -510,6 +538,7 @@ export type RelatedSummaryInput = z.infer<typeof relatedSummaryInput>;
 
 const relatedSummaryImage = z
   .object({
+    id: z.string(),
     url: z.string(),
     filename: z.string(),
     contentType: z.string(),
@@ -619,6 +648,7 @@ const trio = <Prefix extends string, IdSchema extends z.ZodType>(
 export const productRelatedFilterFields = {
   ...trio("vendor", vendorShortcode),
   ...trio("project", projectShortcode),
+  ...trio("usedOnProject", projectShortcode),
   ...trio("purchase", purchaseShortcode),
   ...trio("expense", expenseShortcode),
   ...trio("relatedInventory", inventoryShortcode),
@@ -643,6 +673,7 @@ export const projectRelatedFilterFields = {
   ...trio("expense", expenseShortcode),
   ...trio("taskProduct", productShortcode),
   ...trio("purchasedProduct", productShortcode),
+  ...trio("usedTool", productShortcode),
   ...trio("vendor", vendorShortcode),
 };
 export const taskRelatedFilterFields = {

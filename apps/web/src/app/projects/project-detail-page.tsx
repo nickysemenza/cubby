@@ -21,6 +21,7 @@ import {
   Plus,
   ShoppingCart,
   Wallet,
+  Wrench,
 } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -74,6 +75,7 @@ import {
   projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "./project-query-params";
+import { ProjectToolsSection } from "./project-tools-section";
 import {
   capitalize,
   ExpenseList,
@@ -926,6 +928,13 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     content: <BasicInfo fields={fields} />,
   };
 
+  const toolsSection: DetailSection = {
+    title: "Tools used",
+    icon: Wrench,
+    zone: "main",
+    content: <ProjectToolsSection projectId={project.id} />,
+  };
+
   const resourcesSection: DetailSection = {
     title: "Resources",
     icon: ExternalLink,
@@ -1138,6 +1147,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(hasNotesContent ? [notesSection] : []),
     ...(showBudget ? [budgetSection] : []),
     tasksSection,
+    toolsSection,
     ...(hasSubtree ? [] : [expensesSection]),
     ...(hasSubtree ? [] : [purchasedProductsSection]),
     // Aside rail: metadata + (when empty) the slim Notes card.

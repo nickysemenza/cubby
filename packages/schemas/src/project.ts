@@ -1453,6 +1453,89 @@ export const expenseTradeAffinityOut = z.object({
 export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 
 // ---------------------------------------------------------------------------
+// Project tool usage and recommendation projections
+// ---------------------------------------------------------------------------
+
+export const projectToolProjectInput = z.object({
+  projectId: projectShortcode,
+});
+
+export const productProjectUsesInput = z.object({
+  productId: productShortcode,
+});
+
+export const projectToolMutationInput = z.object({
+  projectId: projectShortcode,
+  productIds: z.array(productShortcode).min(1).max(100),
+});
+
+export const projectToolMutationOut = z.object({
+  changed: z.number().int().nonnegative(),
+  attached: z.number().int().nonnegative(),
+});
+
+const projectToolEconomicsFields = {
+  projectUseCount: z.number().int().nonnegative(),
+  netLifetimeCost: z.number(),
+  costPerProjectUse: z.number().nullable(),
+  grossLifetimeAcquisitionCost: z.number().nonnegative(),
+};
+
+export const projectToolOut = z.object({
+  productId: productShortcode,
+  productName: z.string(),
+  manufacturer: z.string(),
+  attachedAt: z.date(),
+  projectPurchaseCost: z.number().nonnegative(),
+  ...projectToolEconomicsFields,
+});
+export type ProjectToolOut = z.infer<typeof projectToolOut>;
+export const projectToolsOut = z.array(projectToolOut);
+
+export const projectToolSuggestionOut = z.object({
+  productId: productShortcode,
+  productName: z.string(),
+  manufacturer: z.string(),
+  lane: z.enum(["purchased_here", "trade_match"]),
+  matchedTrade: tradeSchema.nullable(),
+  reasons: z.array(z.string()).min(1),
+  isInventoried: z.boolean(),
+  projectPurchaseCost: z.number().nonnegative(),
+  matchingExpenseCount: z.number().int().nonnegative(),
+  ...projectToolEconomicsFields,
+});
+export type ProjectToolSuggestionOut = z.infer<typeof projectToolSuggestionOut>;
+
+export const projectToolSuggestionsOut = z.object({
+  items: z.array(projectToolSuggestionOut),
+  purchasedHereCount: z.number().int().nonnegative(),
+  tradeMatchCount: z.number().int().nonnegative(),
+  unlinkedExpensivePurchases: z.object({
+    count: z.number().int().nonnegative(),
+    grossCost: z.number().nonnegative(),
+  }),
+});
+export type ProjectToolSuggestionsOut = z.infer<
+  typeof projectToolSuggestionsOut
+>;
+
+export const productProjectUsesOut = z.object({
+  productId: productShortcode,
+  ...projectToolEconomicsFields,
+  projects: z.array(
+    z.object({
+      projectId: projectShortcode,
+      projectName: z.string(),
+      status: projectStatusSchema,
+      kind: projectKindSchema.nullable(),
+      projectPurchaseCost: z.number().nonnegative(),
+      attachedAt: z.date(),
+    }),
+  ),
+});
+export type ProductProjectUsesOut = z.infer<typeof productProjectUsesOut>;
+
+// ---------------------------------------------------------------------------
 // MCP / dashboard projections
 // ---------------------------------------------------------------------------
 

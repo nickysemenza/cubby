@@ -155,6 +155,13 @@ export const entityManifest = {
         "ingredient",
         out("Product.ingredientId"),
       ),
+      path(
+        "project-uses",
+        "Used on projects",
+        "project",
+        inc("ProjectToolUsage.productId"),
+        out("ProjectToolUsage.projectId"),
+      ),
       imageGallery("ProductImage", "productId"),
       // Not one column: the USDA link resolves UPC-first and falls back to an
       // explicit fdc_id (see usda-link-resolved-at-query-time), so declaring
@@ -345,6 +352,13 @@ export const entityManifest = {
         "project",
         inc("ProjectDependency.projectId"),
         out("ProjectDependency.blockedByProjectId"),
+      ),
+      path(
+        "tools-used",
+        "Tools used",
+        "product",
+        inc("ProjectToolUsage.projectId"),
+        out("ProjectToolUsage.productId"),
       ),
       imageGallery("ProjectImage", "projectId"),
     ],

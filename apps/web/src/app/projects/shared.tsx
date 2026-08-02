@@ -8,6 +8,7 @@ import type {
   TaskStatus,
   Trade,
 } from "@cubby/schemas/project";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   type ColumnFiltersState,
@@ -41,6 +42,7 @@ import {
   createCreatedAtColumn,
   createCurrencyColumn,
   createFilterableSelectColumn,
+  createImageColumn,
   createNameColumn,
   createPlainDateColumn,
   createProductLinkColumn,
@@ -78,6 +80,10 @@ import {
   costTypeLabels,
   costTypeOptions,
 } from "~/app/expenses/expense-options";
+import {
+  createExpenseProductImageColumn,
+  ExpenseProductImages,
+} from "~/app/expenses/expense-product-image-column";
 import {
   TASK_STATUS_LABELS,
   taskStatusBadgeVariant,
@@ -1081,6 +1087,7 @@ export function ExpenseList({
   const columns = useMemo(
     () => [
       buildSelectColumn<ExpenseOut>(lastSelectedIdRef, shiftKeyRef),
+      createExpenseProductImageColumn(expenseHelper),
       createNameColumn(expenseHelper, "expense", "name", {
         header: "Expense",
         editable: nameEditable,
@@ -1302,7 +1309,7 @@ export function ExpenseList({
     ) : null;
 
   return (
-    <>
+    <ExpenseProductImages rows={expenses}>
       <RTable
         table={table}
         sizingKey="expense:embedded"
@@ -1315,7 +1322,7 @@ export function ExpenseList({
         controller={expenseBulkActions}
         onComplete={() => table.resetRowSelection()}
       />
-    </>
+    </ExpenseProductImages>
   );
 }
 
@@ -1342,6 +1349,15 @@ export function ProjectTable({
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<ProjectOut>(), []);
   const { options: projectOptions } = useProjectOptions();
+  const projectIds = useMemo(
+    () => projectOptions.map((project) => project.value),
+    [projectOptions],
+  );
+  const { data: projectImages } = useQuery({
+    ...api.image.imagesByProjectIds.queryOptions({ projectIds }),
+    staleTime: 5 * 60 * 1000,
+    enabled: projectIds.length > 0,
+  });
   const filterOptions = useFilterOptions({
     project: projectOptions,
     projectLocations: locations.map((value) => ({ value, label: value })),
@@ -1372,6 +1388,10 @@ export function ProjectTable({
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateProjectMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
+      createImageColumn(columnHelper, {
+        entity: "project",
+        getImages: (project) => projectImages?.[project.id] ?? [],
+      }),
       createFilterableSelectColumn(columnHelper, "status", {
         header: "Status",
         className: "w-32",
@@ -1540,7 +1560,7 @@ export function ProjectTable({
         },
       }),
     ],
-    [columnHelper],
+    [columnHelper, projectImages],
   );
 
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);

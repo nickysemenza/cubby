@@ -47,6 +47,7 @@ import {
   product,
   productImage,
   productUnitMappings,
+  projectToolUsage,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -177,6 +178,18 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
         .select({ id: sql`1` })
         .from(task)
         .where(and(eq(task.subjectProductId, product.id), notDeleted(task))),
+    ),
+  "ProjectToolUsage.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(projectToolUsage)
+        .where(
+          and(
+            eq(projectToolUsage.productId, product.id),
+            notDeleted(projectToolUsage),
+          ),
+        ),
     ),
 };
 

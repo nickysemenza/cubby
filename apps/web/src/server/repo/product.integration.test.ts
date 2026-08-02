@@ -1965,13 +1965,14 @@ describe("product repository", () => {
    * what a future entity needs before that generalization is worth building.
    */
   describe("PRODUCT_EDGE_ROLES backstop", () => {
-    it("has exactly the six edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
+    it("has exactly the seven edges this test exercises (name+ordering drift is a signal to update the test too)", () => {
       expect(Object.keys(PRODUCT_EDGE_ROLES).sort()).toEqual(
         [
           "Expense.productId",
           "InventoryEntry.productId",
           "ProductExternalId.productId",
           "ProductImage.productId",
+          "ProjectToolUsage.productId",
           "ProductUnitMappings.productId",
           "Task.subjectProductId",
         ].sort(),

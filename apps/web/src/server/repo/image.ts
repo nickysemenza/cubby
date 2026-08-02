@@ -1423,6 +1423,7 @@ export const getImagesByProjectIds = async (
         inArray(projectImage.projectId, projectIds),
         notDeleted(projectImage),
         notDeleted(image),
+        displayableImageWhere,
       ),
     )
     .orderBy(asc(projectImage.sortOrder), asc(projectImage.createdAt));
