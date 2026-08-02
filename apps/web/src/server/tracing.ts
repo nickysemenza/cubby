@@ -71,6 +71,9 @@ export const TraceNames = {
   // tRPC procedures
   trpc: (type: string, path: string) => `trpc.${type}.${path}`,
 
+  // MCP tool dispatch
+  mcp: (tool: string) => `mcp.tool.${tool}`,
+
   // External API calls
   api: (service: string, operation: string) => `api.${service}.${operation}`,
 

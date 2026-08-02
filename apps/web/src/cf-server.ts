@@ -14,6 +14,7 @@ import { scrubSentryEvent } from "./lib/sentry-scrub";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { withTrace } from "./server/tracing";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -150,11 +151,20 @@ const handler = {
   // Background queue consumer. Each message is a small persisted-job wakeup:
   // the payload lives in Postgres, so retries are inspectable and queue messages
   // stay bounded. Per-message ack/retry so one bad job doesn't replay the rest.
-  async queue(batch: BackgroundQueueBatch, env: Env) {
+  async queue(batch: BackgroundQueueBatch | TelemetryQueueBatch, env: Env) {
     setCfEnv(env);
     // Serial queue work does not need a local pg.Pool. Use one Worker-side
     // client for the whole invocation; Hyperdrive still owns the origin DB pool.
     await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
+      if (batch.queue === "cubby-telemetry") {
+        const [{ db }, { processTelemetryQueueBatch }] = await Promise.all([
+          import("./server/db"),
+          import("./server/telemetry-queue"),
+        ]);
+        await processTelemetryQueueBatch(db, batch);
+        return;
+      }
+
       // Imported here, not at module scope: the consumer pulls @tanstack/ai +
       // @cloudflare/tanstack-ai + @anthropic-ai/sdk (~553 KiB, plus a second
       // copy of zod) and only queue deliveries need it. A static import puts

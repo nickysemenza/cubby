@@ -29,13 +29,21 @@ describe("verifyMcpToken", () => {
   });
 
   it("verifies against this resource server's issuer and audience", async () => {
-    verifyAccessToken.mockResolvedValue({ sub: "user_1", sid: "sess_1" });
+    verifyAccessToken.mockResolvedValue({
+      sub: "user_1",
+      sid: "sess_1",
+      azp: "oauth-client-1",
+    });
 
     const actor = await verifyMcpToken(
       request({ authorization: "Bearer token.abc.def" }),
     );
 
-    expect(actor).toEqual({ userId: "user_1", sessionId: "sess_1" });
+    expect(actor).toEqual({
+      userId: "user_1",
+      sessionId: "sess_1",
+      clientId: "oauth-client-1",
+    });
     expect(verifyAccessToken).toHaveBeenCalledWith(
       "token.abc.def",
       expect.objectContaining({
@@ -72,7 +80,11 @@ describe("verifyMcpToken", () => {
 
     await expect(
       verifyMcpToken(request({ authorization: "Bearer t" })),
-    ).resolves.toEqual({ userId: "user_1", sessionId: null });
+    ).resolves.toEqual({
+      userId: "user_1",
+      sessionId: null,
+      clientId: null,
+    });
   });
 
   it.each([

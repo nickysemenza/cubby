@@ -82,7 +82,8 @@
   //   wrangler queues create cubby-background-dlq
   "queues": {
     "producers": [
-      { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" }
+      { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" },
+      { "binding": "TELEMETRY_QUEUE", "queue": "cubby-telemetry" }
     ],
     "consumers": [
       {
@@ -96,6 +97,14 @@
         "max_concurrency": 1,
         "max_retries": 3,
         "dead_letter_queue": "cubby-background-dlq"
+      },
+      {
+        "queue": "cubby-telemetry",
+        "max_batch_size": 100,
+        "max_batch_timeout": 5,
+        "max_concurrency": 1,
+        "max_retries": 3,
+        "dead_letter_queue": "cubby-telemetry-dlq"
       }
     ]
   },

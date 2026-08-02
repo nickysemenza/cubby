@@ -1,51 +1,8 @@
 import { desc, isNull, sql } from "drizzle-orm";
-import {
-  estimateAiUsageCostUsd,
-  type SupportedAiModelRef,
-} from "~/server/ai/models";
+import { estimateAiUsageCostUsd } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-
-type RecordAiUsageInput = SupportedAiModelRef & {
-  feature: string;
-  operation: string;
-  inputTokens?: number | null;
-  outputTokens?: number | null;
-  durationMs: number;
-  cacheStatus?: "hit" | "miss" | "none" | null;
-  entity?: { entityType: string; entityId: string } | null;
-  batchId?: string | null;
-};
-
-export async function recordAiUsage(
-  db: Database,
-  input: RecordAiUsageInput,
-): Promise<void> {
-  try {
-    await getDb(db)
-      .insert(aiUsage)
-      .values({
-        feature: input.feature,
-        provider: input.provider,
-        model: input.model,
-        operation: input.operation,
-        inputTokens: input.inputTokens ?? null,
-        outputTokens: input.outputTokens ?? null,
-        estimatedCost: estimateAiUsageCostUsd(input.provider, input.model, {
-          inputTokens: input.inputTokens,
-          outputTokens: input.outputTokens,
-        }),
-        durationMs: input.durationMs,
-        cacheStatus: input.cacheStatus ?? null,
-        entityType: input.entity?.entityType ?? null,
-        entityId: input.entity?.entityId ?? null,
-        batchId: input.batchId ?? null,
-      });
-  } catch (error) {
-    console.error("[ai-usage] failed to record usage", error);
-  }
-}
 
 export async function listRecentAiUsage(db: Database, limit: number) {
   const rows = await getDb(db)

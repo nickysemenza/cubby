@@ -1,7 +1,7 @@
 import type { ChatMiddleware } from "@tanstack/ai";
 import type { SupportedAiModelRef } from "~/server/ai/models";
+import { recordAiUsage } from "~/server/ai-usage";
 import type { Database } from "~/server/db";
-import { recordAiUsage } from "~/server/repo/ai-usage";
 
 export type AiGatewayUsageContext = SupportedAiModelRef & {
   db: Database;

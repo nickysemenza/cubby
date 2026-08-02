@@ -23,7 +23,7 @@ vi.mock("~/server/repo/ai-analysis", () => ({
   listAiAnalysesForEntityFeature: mocks.listAnalyses,
   upsertAiAnalysis: mocks.upsertAnalysis,
 }));
-vi.mock("~/server/repo/ai-usage", () => ({
+vi.mock("~/server/ai-usage", () => ({
   recordAiUsage: mocks.recordUsage,
 }));
 vi.mock("~/server/clients/anthropic", () => ({

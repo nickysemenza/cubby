@@ -45,6 +45,8 @@ export interface McpActor {
   userId: UserId;
   /** `sid` claim — the better-auth session the grant hangs off, if present. */
   sessionId: string | null;
+  /** OAuth authorized-party claim; absent only on legacy access tokens. */
+  clientId: string | null;
 }
 
 /**
@@ -78,6 +80,7 @@ export async function verifyMcpToken(
     return {
       userId: unsafeUserId(payload.sub),
       sessionId: typeof payload.sid === "string" ? payload.sid : null,
+      clientId: typeof payload.azp === "string" ? payload.azp : null,
     };
   } catch (error) {
     // Every rejection reaches the client as a bare 401, so without this the

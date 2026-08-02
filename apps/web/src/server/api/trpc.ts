@@ -97,6 +97,8 @@ export const buildCrudServices = (
  * @see https://trpc.io/docs/server/context
  */
 
+type RequestOrigin = "ui" | "api" | "mcp" | "agent";
+
 export const createTRPCContext = async (opts: {
   headers: Headers;
   /**
@@ -119,10 +121,12 @@ export const createTRPCContext = async (opts: {
 
     if (opts.actor) {
       const { userId, sessionId, source } = opts.actor;
+      const requestOrigin: RequestOrigin = source === "mcp" ? "mcp" : "api";
       return {
         ...crudServices,
         auth: { userId, sessionId },
         actorContext: buildActorContext(userId, source),
+        requestOrigin,
         ...opts,
       };
     }
@@ -143,6 +147,7 @@ export const createTRPCContext = async (opts: {
         sessionId: betterSession?.session?.id ?? null,
       },
       actorContext,
+      requestOrigin: "ui" as RequestOrigin,
       ...opts,
     };
   });
@@ -238,7 +243,11 @@ const INPUT_BYTES_CAP = 4096;
  * `rpc.input.truncated`), and redacts secret-ish keys — so traces stay lean and
  * never leak credentials.
  */
-export const recordInput = (span: AppSpan, input: unknown): void => {
+export const recordInput = (
+  span: AppSpan,
+  input: unknown,
+  includeValues = true,
+): void => {
   if (input == null || typeof input !== "object") return;
   let serialized: string;
   try {
@@ -247,6 +256,7 @@ export const recordInput = (span: AppSpan, input: unknown): void => {
     return; // non-serializable (e.g. a stream) — skip rather than throw
   }
   span.setAttribute("rpc.input.bytes", serialized.length);
+  if (!includeValues) return;
   if (serialized.length > INPUT_BYTES_CAP) {
     span.setAttribute("rpc.input.truncated", true);
     return;
@@ -272,7 +282,11 @@ const tracingMiddleWare = t.middleware(async (opts) =>
       "rpc.type": opts.type,
       "enduser.id": opts.ctx.auth?.userId ?? "guest",
     });
-    recordInput(span, await opts.getRawInput());
+    recordInput(
+      span,
+      await opts.getRawInput(),
+      opts.ctx.requestOrigin !== "mcp" && opts.ctx.requestOrigin !== "agent",
+    );
     try {
       const result = await opts.next();
 
@@ -334,6 +348,7 @@ const isAuthed = t.middleware(({ next, ctx }) => {
     ctx: {
       auth: ctx.auth,
       actorContext: ctx.actorContext,
+      requestOrigin: ctx.requestOrigin,
     },
   });
 });
@@ -421,6 +436,7 @@ export const createTestTRPCContext = (
     auth,
     isSystemRequest: false, // Test contexts are not system requests by default
     actorContext,
+    requestOrigin: "ui" as RequestOrigin,
     headers: opts.headers ?? new Headers(),
   };
 };
