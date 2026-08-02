@@ -1,4 +1,7 @@
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ProductShortcode,
+  ProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { CalendarPlus, Info, Link2, ListChecks } from "lucide-react";
@@ -6,6 +9,7 @@ import type { FC } from "react";
 import { useMemo, useState } from "react";
 import {
   WithProductSearch,
+  WithProjectSearch,
   WithTaskSearch,
 } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -323,17 +327,44 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     },
     {
       label: "Project",
-      value:
-        task.projectId && task.projectName && task.projectId ? (
-          <EntityInlineLink
-            entity="project"
-            data={{
-              id: task.projectId,
-              name: task.projectName,
-            }}
-            compact
-          />
-        ) : undefined,
+      value: (
+        <EditableEntityCell<ProjectShortcode>
+          value={
+            task.projectId && task.projectName
+              ? {
+                  id: task.projectId,
+                  name: task.projectName,
+                }
+              : null
+          }
+          label="project"
+          clearable
+          trigger="pencil"
+          onSave={async (projectId) => {
+            await updateMutation.mutateAsync({
+              id: task.id,
+              data: { projectId },
+            });
+          }}
+          SearchProvider={WithProjectSearch}
+          renderValue={(value) =>
+            value && task.projectId && value.id === task.projectId ? (
+              <EntityInlineLink
+                entity="project"
+                data={{
+                  id: task.projectId,
+                  name: value.name,
+                }}
+                compact
+              />
+            ) : value ? (
+              <span>{value.name}</span>
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
     },
     {
       label: "For",
@@ -475,7 +506,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
     {
       label: "Project",
       value:
-        task.projectId && task.projectName && task.projectId ? (
+        task.projectId && task.projectName ? (
           <EntityInlineLink
             entity="project"
             data={{
