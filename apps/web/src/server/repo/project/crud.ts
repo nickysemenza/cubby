@@ -31,6 +31,7 @@ import {
   project,
   projectDependency,
   projectImage,
+  projectToolUsage,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -99,6 +100,12 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Image associations are soft-deleted with the project; the underlying images are not.",
+  },
+  "ProjectToolUsage.projectId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Tool-use associations are soft-deleted with the project; the tool Products and their other project history remain.",
   },
 } as const satisfies IncomingEdgePolicy<"project", OperationDisposition>;
 
@@ -488,12 +495,29 @@ export const deleteProjects = async (
       ),
       columns: { projectId: true },
     });
+    const cascadedToolUsages = await tx.query.projectToolUsage.findMany({
+      where: and(
+        inArray(projectToolUsage.projectId, ids),
+        notDeleted(projectToolUsage),
+      ),
+      columns: { projectId: true },
+    });
 
     await tx
       .update(projectImage)
       .set({ deletedAt: now })
       .where(
         and(inArray(projectImage.projectId, ids), notDeleted(projectImage)),
+      );
+
+    await tx
+      .update(projectToolUsage)
+      .set({ deletedAt: now })
+      .where(
+        and(
+          inArray(projectToolUsage.projectId, ids),
+          notDeleted(projectToolUsage),
+        ),
       );
 
     await tx
@@ -506,6 +530,10 @@ export const deleteProjects = async (
 
     const auditEntries = buildCascadeAuditEntries("project", ids, {
       cascadedImages: countBy(cascadedImages, (i) => i.projectId),
+      cascadedToolUsages: countBy(
+        cascadedToolUsages,
+        (usage) => usage.projectId,
+      ),
     });
 
     await logAuditEntries(tx, actor, auditEntries);
@@ -613,6 +641,17 @@ export const previewDeleteProjects = async (
         dbClient,
         projectImage,
         projectImage.projectId,
+        ids,
+      ),
+    }),
+    impact({
+      disposition: PROJECT_DELETE_EDGE_POLICY["ProjectToolUsage.projectId"],
+      edgeKey: "ProjectToolUsage.projectId",
+      label: "tool uses",
+      byTargetId: await countByTarget(
+        dbClient,
+        projectToolUsage,
+        projectToolUsage.projectId,
         ids,
       ),
     }),

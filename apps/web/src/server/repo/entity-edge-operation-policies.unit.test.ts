@@ -98,6 +98,7 @@ describe("product retaining edges", () => {
   const RETAINING: readonly string[] = [
     "Expense.productId",
     "InventoryEntry.productId",
+    "ProjectToolUsage.productId",
     "Task.subjectProductId",
   ];
 

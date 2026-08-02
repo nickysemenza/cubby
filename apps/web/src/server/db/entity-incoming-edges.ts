@@ -53,6 +53,7 @@ import {
   project,
   projectDependency,
   projectImage,
+  projectToolUsage,
   purchase,
   purchaseImage,
   recipe,
@@ -134,6 +135,7 @@ export const INCOMING_EDGES = {
     "ProductImage.productId": { column: productImage.productId },
     "Expense.productId": { column: expense.productId },
     "Task.subjectProductId": { column: task.subjectProductId },
+    "ProjectToolUsage.productId": { column: projectToolUsage.productId },
   }),
   location: edges({
     "InventoryEntry.locationId": { column: inventoryEntry.locationId },
@@ -156,6 +158,7 @@ export const INCOMING_EDGES = {
     "Task.projectId": { column: task.projectId },
     "Expense.projectId": { column: expense.projectId },
     "ProjectImage.projectId": { column: projectImage.projectId },
+    "ProjectToolUsage.projectId": { column: projectToolUsage.projectId },
   }),
   task: edges({
     "Task.parentTaskId": { column: task.parentTaskId },

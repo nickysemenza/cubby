@@ -48,3 +48,10 @@ export {
 export { projectDashboardSummary } from "./dashboard-summary";
 export { projectList, projectNameOptions } from "./lookup";
 export { projectPortfolioAnalytics } from "./portfolio-analytics";
+export {
+  attachProjectTools,
+  detachProjectTools,
+  listProductProjectUses,
+  listProjectTools,
+  suggestProjectTools,
+} from "./tools";

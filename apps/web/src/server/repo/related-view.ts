@@ -72,6 +72,11 @@ const SQL_RELATED_VIEWS = {
     `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
     "project",
   ),
+  "product.usedOnProjects": named(
+    "Product",
+    `JOIN "ProjectToolUsage" ptu ON ptu."productId" = s."id" AND ptu."deletedAt" IS NULL JOIN "Project" t ON t."id" = ptu."projectId" AND t."deletedAt" IS NULL`,
+    "project",
+  ),
   "product.purchases": dated(
     "Product",
     `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" t ON t."id" = e."purchaseId" AND t."deletedAt" IS NULL`,
@@ -152,6 +157,11 @@ const SQL_RELATED_VIEWS = {
   "project.purchasedProducts": named(
     "Project",
     `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
+    "product",
+  ),
+  "project.usedTools": named(
+    "Project",
+    `JOIN "ProjectToolUsage" ptu ON ptu."projectId" = s."id" AND ptu."deletedAt" IS NULL JOIN "Product" t ON t."id" = ptu."productId" AND t."deletedAt" IS NULL`,
     "product",
   ),
   "project.vendors": named(

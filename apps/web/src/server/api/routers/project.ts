@@ -12,8 +12,15 @@
  * the repo — never client-side.
  */
 
-import type { ProjectShortcode } from "@cubby/schemas/identifiers";
-import { projectShortcode, unsafeProjectId } from "@cubby/schemas/identifiers";
+import type {
+  ProductShortcode,
+  ProjectShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  projectShortcode,
+  unsafeProductId,
+  unsafeProjectId,
+} from "@cubby/schemas/identifiers";
 import {
   createProjectFromTasksInput,
   createProjectFromTasksOut,
@@ -25,23 +32,35 @@ import {
   projectOut,
   projectPortfolioAnalyticsOut,
   projectSortableFields,
+  projectToolMutationInput,
+  projectToolMutationOut,
+  projectToolProjectInput,
+  projectToolSuggestionsOut,
+  projectToolsOut,
   projectUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  attachProjectTools,
   createProject,
   deleteProjects,
+  detachProjectTools,
   getProjectByID,
   getProjectByShortcode,
+  listProjectTools,
   projectDashboardSummary,
   projectList,
   projectNameOptions,
   projectPortfolioAnalytics,
+  suggestProjectTools,
   updateProject,
 } from "~/server/repo/project";
 import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { createSearchableEntityCrudProcedures } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
@@ -142,6 +161,75 @@ const createFromTasks = protectedProcedure
     return output;
   });
 
+async function resolveProjectToolIds(
+  db: Parameters<typeof resolveLiveShortcode>[0],
+  input: { projectId: ProjectShortcode; productIds?: ProductShortcode[] },
+) {
+  const projectId = await resolveLiveShortcode(db, input.projectId, "project");
+  if (!projectId) {
+    throw createAppError(
+      "PROJECT_NOT_FOUND",
+      `Project ${input.projectId} not found`,
+    );
+  }
+  if (!input.productIds) {
+    return { projectId: unsafeProjectId(projectId), productIds: [] };
+  }
+  const resolved = await resolveLiveShortcodes(db, input.productIds, "product");
+  const missing = input.productIds.find((code) => !resolved.has(code));
+  if (missing) {
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${missing} not found`);
+  }
+  return {
+    projectId: unsafeProjectId(projectId),
+    productIds: input.productIds.map((code) =>
+      unsafeProductId(resolved.get(code)!),
+    ),
+  };
+}
+
+const tools = protectedProcedure
+  .input(projectToolProjectInput)
+  .output(strictOutput(projectToolsOut))
+  .query(async ({ ctx, input }) => {
+    const ids = await resolveProjectToolIds(ctx.db, input);
+    return listProjectTools(ctx.db, ids.projectId);
+  });
+
+const toolSuggestions = protectedProcedure
+  .input(projectToolProjectInput)
+  .output(strictOutput(projectToolSuggestionsOut))
+  .query(async ({ ctx, input }) => {
+    const ids = await resolveProjectToolIds(ctx.db, input);
+    return suggestProjectTools(ctx.db, ids.projectId);
+  });
+
+const attachTools = protectedProcedure
+  .input(projectToolMutationInput)
+  .output(strictOutput(projectToolMutationOut))
+  .mutation(async ({ ctx, input }) => {
+    const ids = await resolveProjectToolIds(ctx.db, input);
+    return attachProjectTools(
+      ctx.db,
+      ids.projectId,
+      ids.productIds,
+      ctx.actorContext,
+    );
+  });
+
+const detachTools = protectedProcedure
+  .input(projectToolMutationInput)
+  .output(strictOutput(projectToolMutationOut))
+  .mutation(async ({ ctx, input }) => {
+    const ids = await resolveProjectToolIds(ctx.db, input);
+    return detachProjectTools(
+      ctx.db,
+      ids.projectId,
+      ids.productIds,
+      ctx.actorContext,
+    );
+  });
+
 export const projectRouter = createTRPCRouter({
   getByID,
   getByShortcode,
@@ -153,4 +241,8 @@ export const projectRouter = createTRPCRouter({
   portfolioAnalytics,
   options,
   createFromTasks,
+  tools,
+  toolSuggestions,
+  attachTools,
+  detachTools,
 });

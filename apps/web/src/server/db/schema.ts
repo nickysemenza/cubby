@@ -964,6 +964,33 @@ export const projectDependency = pgTable(
   ],
 );
 
+// Durable, deliberately coarse history that a reusable tool Product was used
+// on a Project. One live pair is one project-use; no quantities/hours/trades
+// live here because those would turn the relation into a usage ledger.
+export const projectToolUsage = pgTable(
+  "ProjectToolUsage",
+  {
+    id: pkUuid(),
+    projectId: uuid("projectId")
+      .notNull()
+      .$type<ProjectId>()
+      .references(() => project.id),
+    productId: uuid("productId")
+      .notNull()
+      .$type<ProductId>()
+      .references(() => product.id),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("ProjectToolUsage_projectId_productId_key")
+      .on(table.projectId, table.productId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("ProjectToolUsage_projectId_idx").on(table.projectId),
+    index("ProjectToolUsage_productId_idx").on(table.productId),
+  ],
+);
+
 export const task = pgTable(
   "Task",
   {
@@ -1412,6 +1439,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   inventoryEntry: many(inventoryEntry),
   images: many(productImage),
   expenses: many(expense),
+  projectToolUsages: many(projectToolUsage),
 }));
 
 export const productExternalIdRelations = relations(
@@ -1470,6 +1498,7 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   tasks: many(task),
   expenses: many(expense),
   images: many(projectImage),
+  toolUsages: many(projectToolUsage),
   parentProject: one(project, {
     fields: [project.parentProjectId],
     references: [project.id],
@@ -1481,6 +1510,20 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   blockedBy: many(projectDependency, { relationName: "ProjectBlocked" }),
   blocking: many(projectDependency, { relationName: "ProjectBlocking" }),
 }));
+
+export const projectToolUsageRelations = relations(
+  projectToolUsage,
+  ({ one }) => ({
+    project: one(project, {
+      fields: [projectToolUsage.projectId],
+      references: [project.id],
+    }),
+    product: one(product, {
+      fields: [projectToolUsage.productId],
+      references: [product.id],
+    }),
+  }),
+);
 
 export const projectDependencyRelations = relations(
   projectDependency,

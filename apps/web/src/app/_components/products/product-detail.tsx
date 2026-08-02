@@ -19,6 +19,7 @@ import {
   Plus,
   Receipt,
   Scale,
+  Wrench,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
@@ -50,6 +51,7 @@ import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductExpenseHistory } from "./product-expense-history";
 import { ProductForm } from "./product-form";
+import { ProductProjectUses } from "./product-project-uses";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTagSiblings } from "./product-tag-siblings";
 import { ProductTaskHistory } from "./product-task-history";
@@ -190,6 +192,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         />
       ),
     },
+    ...(product.category === "tools"
+      ? [
+          {
+            title: "Used on projects",
+            icon: Wrench,
+            zone: "main" as const,
+            content: <ProductProjectUses productId={product.id} />,
+          },
+        ]
+      : []),
     ...(isNonFood
       ? [
           {

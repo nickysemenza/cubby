@@ -190,6 +190,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "Durable work history performed on this product (e.g. a repair or maintenance task); deleting the subject would leave that history nameless.",
       liveness: { kind: "must-target-live" },
     },
+    "ProjectToolUsage.productId": {
+      role: "history",
+      label: "project uses",
+      description:
+        "Durable history that this reusable tool was used on a household project; deleting the tool would leave that history nameless.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   location: {
     "InventoryEntry.locationId": {
@@ -252,6 +259,13 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "media",
       label: "project photos",
       description: "A photo attached to this project.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ProjectToolUsage.projectId": {
+      role: "association",
+      label: "used tools",
+      description:
+        "A durable association recording a reusable tool used on this exact project.",
       liveness: { kind: "must-target-live" },
     },
   },

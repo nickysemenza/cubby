@@ -20,6 +20,8 @@ import {
   expenseOut,
   expenseUpdateData,
   LIVE_PROJECT_STATUSES,
+  productProjectUsesInput,
+  productProjectUsesOut,
   projectAttentionItemSchema,
   projectCreateInput,
   projectDashboardFiltersSchema,
@@ -29,6 +31,11 @@ import {
   projectOut,
   projectPortfolioAnalyticsOut,
   projectTaskStatusBreakdown,
+  projectToolMutationInput,
+  projectToolMutationOut,
+  projectToolProjectInput,
+  projectToolSuggestionsOut,
+  projectToolsOut,
   projectUpdateData,
   taskCreateInput,
   taskFilterFields,
@@ -48,6 +55,7 @@ import {
   slimProject,
   slimTask,
   strictFilterInput,
+  WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
@@ -188,6 +196,56 @@ export function registerProjectTools(server: McpServer) {
         "Soft-delete projects by IDs. Fails while live tasks, expenses, or sub-projects still reference a project.",
     },
     create: (caller, params) => caller.project.create(params),
+  });
+
+  registerRouterTool(server, {
+    name: "list_project_tools",
+    description:
+      "List the durable tools explicitly used on one exact project, including each tool's net lifetime cost, distinct project-use count, cost per use, and whether it was purchased for this project. Sub-project uses remain separate and count independently.",
+    inputSchema: projectToolProjectInput.shape,
+    outputSchema: projectToolsOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.project.tools(params),
+  });
+
+  registerRouterTool(server, {
+    name: "suggest_project_tools",
+    description:
+      "Suggest inventoried Cubby tools to attach to one exact project. Suggestions include tools purchased for the project at $100+ and trade-matched tools whose purchase history supports the project's task/expense trades; cheaper trade matches require at least two explicit prior project uses. This is a review queue only and never attaches tools automatically.",
+    inputSchema: projectToolProjectInput.shape,
+    outputSchema: projectToolSuggestionsOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.project.toolSuggestions(params),
+  });
+
+  registerRouterTool(server, {
+    name: "attach_project_tools",
+    description:
+      "Record that one or more existing Cubby tool products were used on one exact project. Repeating an existing live association is idempotent. This does not alter project spend or the product's expense history.",
+    inputSchema: projectToolMutationInput.shape,
+    outputSchema: projectToolMutationOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) => caller.project.attachTools(params),
+  });
+
+  registerRouterTool(server, {
+    name: "detach_project_tools",
+    description:
+      "Soft-delete one or more explicit tool-use associations from one exact project. This leaves the Product, Expenses, inventory, and any uses on other projects unchanged.",
+    inputSchema: projectToolMutationInput.shape,
+    outputSchema: projectToolMutationOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    call: (caller, params) => caller.project.detachTools(params),
+  });
+
+  registerRouterTool(server, {
+    name: "list_product_project_uses",
+    description:
+      "Show every exact project on which a Cubby tool product is explicitly recorded as used, plus its net lifetime cost, distinct project-use count, cost per use, and whether the tool was purchased for each project.",
+    inputSchema: productProjectUsesInput.shape,
+    outputSchema: productProjectUsesOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.product.projectUses(params),
   });
 
   registerRouterTool(server, {
