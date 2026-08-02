@@ -5,6 +5,7 @@ import { useTRPC } from "~/integrations/trpc/react";
 export const Route = createFileRoute(
   "/_authenticated/financial-transactions/$shortcode",
 )({
+  ssr: false,
   loader: async ({ params, context }) => {
     const item = await context.queryClient.ensureQueryData(
       context.trpc.financialTransaction.getByShortcode.queryOptions({

@@ -637,6 +637,13 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
 
 ## Architecture / engineering
 
+- [ ] **Re-evaluate SSR for authenticated detail routes.** They are deliberately
+  `ssr: false` today: the SSR tRPC client targets `http://localhost`, which Cloudflare
+  returns as error 1003 instead of JSON, and that self-fetch has no request session
+  context. Re-enable only after loaders use a direct server-side caller or a
+  request-scoped origin with forwarded authentication, and a Cloudflare preview
+  hard-refresh proves finance detail pages render. First confirm that SSR's initial
+  render benefit is worth the complexity for this single-user PWA.
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
 - [ ] **Selection-control consolidation — non-form phase.** Form and inline-edit
   pickers share the Base UI assignment-picker shell; remaining selectors are
