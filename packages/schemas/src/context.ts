@@ -14,6 +14,7 @@ export const APPLICATION_AUDIT_SOURCES = [
   "sheets_import",
   "epub_import",
   "api",
+  "mcp",
 ] as const;
 
 /**

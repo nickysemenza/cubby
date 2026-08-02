@@ -54,6 +54,10 @@ import {
   recipeSourceValues,
 } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
+import type {
+  McpToolCallOutcome,
+  McpToolCallSurface,
+} from "@cubby/schemas/telemetry";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -1695,6 +1699,47 @@ export const aiUsage = pgTable(
     ),
     index("AiUsage_entity_idx").on(table.entityType, table.entityId),
     index("AiUsage_batch_idx").on(table.batchId),
+  ],
+);
+
+// Durable, payload-free MCP usage events. The producer supplies the UUID so
+// Cloudflare Queue retries are idempotent via ON CONFLICT DO NOTHING.
+export const mcpToolCall = pgTable(
+  "McpToolCall",
+  {
+    id: pkUuid(),
+    toolName: text("toolName").notNull(),
+    outcome: text("outcome").notNull().$type<McpToolCallOutcome>(),
+    registeredAtCall: boolean("registeredAtCall").notNull(),
+    surface: text("surface").notNull().$type<McpToolCallSurface>(),
+    release: text("release").notNull(),
+    occurredAt: timestamp("occurredAt", { mode: "date" }).notNull(),
+    ingestedAt: timestamp("ingestedAt", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    userId: text("userId")
+      .notNull()
+      .$type<UserId>()
+      .references(() => user.id),
+    // Deliberately not an FK: revoking a dynamically registered OAuth client
+    // deletes it, while historical usage must retain the caller identity.
+    clientId: text("clientId"),
+  },
+  (table) => [
+    index("McpToolCall_tool_occurredAt_idx").on(
+      table.toolName,
+      table.occurredAt.desc(),
+    ),
+    index("McpToolCall_user_occurredAt_idx").on(
+      table.userId,
+      table.occurredAt.desc(),
+    ),
+    index("McpToolCall_client_occurredAt_idx").on(
+      table.clientId,
+      table.occurredAt.desc(),
+    ),
+    index("McpToolCall_outcome_idx").on(table.outcome),
+    index("McpToolCall_release_idx").on(table.release),
   ],
 );
 

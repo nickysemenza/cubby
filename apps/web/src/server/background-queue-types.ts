@@ -23,5 +23,6 @@ export interface BackgroundQueueDeliveredMessage {
 }
 
 export interface BackgroundQueueBatch {
+  readonly queue: "cubby-background";
   readonly messages: readonly BackgroundQueueDeliveredMessage[];
 }

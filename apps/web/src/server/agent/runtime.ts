@@ -4,6 +4,7 @@ import {
   type AgentStreamEvent,
   agentSourceSchema,
 } from "@cubby/schemas/agent";
+import type { UserId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
@@ -122,10 +123,11 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
 export async function* runAgentStream(
   caller: DomainCaller,
   db: Database,
+  userId: UserId,
   query: string,
 ): AsyncGenerator<AgentStreamEvent> {
   const adapter = getAnthropicClient().getTextAdapter();
-  const toolset = await createAgentToolset(caller);
+  const toolset = await createAgentToolset(caller, db, userId);
 
   try {
     const stream = chat({
@@ -175,13 +177,14 @@ export async function* runAgentStream(
 export async function runAgent(
   caller: DomainCaller,
   db: Database,
+  userId: UserId,
   query: string,
 ): Promise<AgentResult> {
   let answer = "";
   let sources: AgentResult["sources"] = [];
   let toolCalls: AgentResult["toolCalls"] = [];
 
-  for await (const event of runAgentStream(caller, db, query)) {
+  for await (const event of runAgentStream(caller, db, userId, query)) {
     if (event.type === "delta") {
       answer += event.text;
     } else if (event.type === "tool") {

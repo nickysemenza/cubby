@@ -14,7 +14,7 @@ vi.mock("~/server/cf-env", () => ({
   CF_AIG_GATEWAY_ID: "test-gateway",
 }));
 
-vi.mock("~/server/repo/ai-usage", () => ({
+vi.mock("~/server/ai-usage", () => ({
   recordAiUsage: recordAiUsageMock,
 }));
 

@@ -1,7 +1,10 @@
 import type { AgentToolCall } from "@cubby/schemas/agent";
+import type { UserId } from "@cubby/schemas/identifiers";
 import { type Tool, toolDefinition } from "@tanstack/ai";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { DomainCaller } from "~/server/api/domain";
+import type { Database } from "~/server/db";
+import { emitTelemetry } from "~/server/telemetry";
 
 /**
  * Bridges the existing Cubby MCP server (server/mcp/server.ts) to the
@@ -44,6 +47,8 @@ interface AgentToolset {
  */
 export async function createAgentToolset(
   caller: DomainCaller,
+  db?: Database,
+  userId?: UserId,
 ): Promise<AgentToolset> {
   // Imported dynamically, not at module scope. This module hangs off the tRPC
   // router graph (root.ts → routers/agent.ts → runtime.ts → here), so a static
@@ -75,7 +80,22 @@ export async function createAgentToolset(
         token: "",
         clientId: "cubby-agent",
         scopes: [],
-        extra: { caller },
+        extra: {
+          caller,
+          ...(db && userId
+            ? {
+                telemetry: {
+                  identity: {
+                    userId,
+                    clientId: "cubby-agent",
+                    surface: "in_app_agent",
+                  },
+                  emit: (event: Parameters<typeof emitTelemetry>[1]) =>
+                    emitTelemetry(db, event),
+                },
+              }
+            : {}),
+        },
       },
     });
 

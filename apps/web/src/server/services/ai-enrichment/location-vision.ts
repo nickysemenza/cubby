@@ -29,6 +29,7 @@ import {
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
+import { recordAiUsage } from "~/server/ai-usage";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
@@ -37,7 +38,6 @@ import {
   getCachedAiAnalysis,
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
-import { recordAiUsage } from "~/server/repo/ai-usage";
 import {
   createInventoryEntry,
   getInventoryByLocationIds,

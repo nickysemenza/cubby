@@ -12,7 +12,9 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTRPC } from "~/integrations/trpc/react";
+import { McpUsageDashboard } from "./mcp-usage-dashboard";
 
 type ToolAnnotations = {
   readOnlyHint?: boolean;
@@ -98,7 +100,7 @@ function SchemaPanel({
   );
 }
 
-export function McpInspector() {
+function CatalogInspector() {
   const api = useTRPC();
   const { data, isLoading, error } = useQuery(api.mcp.listTools.queryOptions());
   const [query, setQuery] = useState("");
@@ -205,5 +207,22 @@ export function McpInspector() {
         )}
       </Row>
     </Stack>
+  );
+}
+
+export function McpInspector() {
+  return (
+    <Tabs defaultValue="usage">
+      <TabsList>
+        <TabsTrigger value="usage">Usage</TabsTrigger>
+        <TabsTrigger value="catalog">Catalog</TabsTrigger>
+      </TabsList>
+      <TabsContent value="usage" className="pt-4">
+        <McpUsageDashboard />
+      </TabsContent>
+      <TabsContent value="catalog" className="pt-4">
+        <CatalogInspector />
+      </TabsContent>
+    </Tabs>
   );
 }

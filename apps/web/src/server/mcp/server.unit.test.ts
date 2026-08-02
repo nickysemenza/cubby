@@ -13,6 +13,10 @@ import {
 } from "@cubby/schemas/project";
 import { purchaseOut } from "@cubby/schemas/purchase";
 import { mcpRecipeCreateInput, recipeMcpOut } from "@cubby/schemas/recipe";
+import type {
+  McpTelemetryIdentity,
+  TelemetryMessageV1,
+} from "@cubby/schemas/telemetry";
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -56,6 +60,10 @@ async function callTool(
   args: Record<string, unknown>,
   // biome-ignore lint/suspicious/noExplicitAny: stub tRPC caller for tool tests
   caller: any,
+  telemetry?: {
+    identity: McpTelemetryIdentity;
+    emit: (event: TelemetryMessageV1) => Promise<void>;
+  },
 ) {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -65,7 +73,12 @@ async function callTool(
   clientTransport.send = (message, options) =>
     originalSend(message, {
       ...options,
-      authInfo: { token: "", clientId: "test", scopes: [], extra: { caller } },
+      authInfo: {
+        token: "",
+        clientId: "test",
+        scopes: [],
+        extra: { caller, telemetry },
+      },
     });
 
   await Promise.all([
@@ -79,6 +92,93 @@ async function callTool(
     await Promise.allSettled([client.close(), server.close()]);
   }
 }
+
+describe("MCP tool-call telemetry", () => {
+  const identity = {
+    userId: "user_1",
+    clientId: "oauth-client-1",
+    surface: "external_mcp" as const,
+  };
+
+  it("captures a successful call without arguments or output", async () => {
+    const emit = vi.fn(async (_event: TelemetryMessageV1) => undefined);
+    await callTool(
+      createMcpServer(),
+      "list_locations",
+      {},
+      {
+        location: {
+          list: async () => ({
+            meta: { pageIndex: 0, pageSize: 200, totalCount: 0 },
+            items: [],
+          }),
+        },
+      },
+      { identity, emit },
+    );
+
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "mcp_tool_call",
+        toolName: "list_locations",
+        outcome: "success",
+        registeredAtCall: true,
+        ...identity,
+      }),
+    );
+    expect(Object.keys(emit.mock.calls[0]?.[0] ?? {})).not.toEqual(
+      expect.arrayContaining(["arguments", "output", "errorText", "sessionId"]),
+    );
+  });
+
+  it("captures handler and validation errors", async () => {
+    const handlerEmit = vi.fn(async (_event: TelemetryMessageV1) => undefined);
+    await callTool(
+      createMcpServer(),
+      "list_locations",
+      {},
+      { location: { list: vi.fn().mockRejectedValue(new Error("failed")) } },
+      { identity, emit: handlerEmit },
+    );
+    expect(handlerEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "error", toolName: "list_locations" }),
+    );
+
+    const validationEmit = vi.fn(
+      async (_event: TelemetryMessageV1) => undefined,
+    );
+    await callTool(
+      createMcpServer(),
+      "list_expenses",
+      { costPresenceFilter: "sometimes" },
+      { expense: { list: vi.fn() } },
+      { identity, emit: validationEmit },
+    );
+    expect(validationEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "error", toolName: "list_expenses" }),
+    );
+  });
+
+  it("captures a named unknown tool as retired/unregistered evidence", async () => {
+    const emit = vi.fn(async (_event: TelemetryMessageV1) => undefined);
+
+    await callTool(
+      createMcpServer(),
+      "removed_tool",
+      {},
+      {},
+      { identity, emit },
+    ).catch(() => undefined);
+
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "error",
+        toolName: "removed_tool",
+        registeredAtCall: false,
+      }),
+    );
+  });
+});
 
 function schemaHasMockKey(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;

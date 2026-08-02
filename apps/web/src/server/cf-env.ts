@@ -6,6 +6,7 @@
 // return undefined and callers fall back to public URLs + global fetch.
 
 import type { BackgroundQueueProducer } from "./background-queue-types";
+import type { TelemetryQueueProducer } from "./telemetry-queue-types";
 
 let cfEnv: Env | undefined;
 
@@ -21,6 +22,11 @@ export const setCfEnv = (env: Env): void => {
  */
 export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
   return cfEnv?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
+};
+
+/** The low-priority telemetry queue, or undefined in the Node dev server. */
+export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
+  return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth

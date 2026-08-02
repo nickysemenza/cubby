@@ -1,10 +1,18 @@
+import {
+  mcpTelemetryIdentitySchema,
+  type TelemetryMessageV1,
+} from "@cubby/schemas/telemetry";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { TraceNames, withTrace } from "~/server/tracing";
 import { registerMcpApps } from "./apps";
-import { installMockStrippedListToolsHandler } from "./tools/_shared";
+import {
+  getRegisteredTool,
+  installMockStrippedListToolsHandler,
+} from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
 import { registerDataQualityTools } from "./tools/data-quality.tools";
 import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
@@ -101,6 +109,99 @@ function registerTools(server: McpServer) {
   registerMcpApps(server);
 }
 
+type RawRequestHandler = (
+  request: unknown,
+  extra: { authInfo?: AuthInfo },
+) => Promise<unknown>;
+
+type ProtocolInternals = {
+  _requestHandlers: Map<string, RawRequestHandler>;
+};
+
+type TelemetryExtra = {
+  identity?: unknown;
+  emit?: (event: TelemetryMessageV1) => Promise<void>;
+};
+
+function requestToolName(request: unknown): string | null {
+  if (!request || typeof request !== "object") return null;
+  const params = (request as { params?: unknown }).params;
+  if (!params || typeof params !== "object") return null;
+  const name = (params as { name?: unknown }).name;
+  return typeof name === "string" && name.length > 0 ? name : null;
+}
+
+/**
+ * Wrap the SDK-installed tools/call handler instead of duplicating its input
+ * and output validation. This private-map adapter is intentionally narrow and
+ * guarded by MCP server integration tests, like the registered-tool adapter.
+ */
+function installToolCallTelemetryHandler(server: McpServer): void {
+  const protocol = server.server as unknown as ProtocolInternals;
+  const original = protocol._requestHandlers.get("tools/call");
+  if (!original) throw new Error("MCP tools/call handler is not installed");
+
+  protocol._requestHandlers.set("tools/call", async (request, extra) => {
+    const toolName = requestToolName(request);
+    const spanName = TraceNames.mcp(toolName ?? "unknown");
+    return withTrace(spanName, async (span) => {
+      const telemetry = extra.authInfo?.extra?.telemetry as
+        | TelemetryExtra
+        | undefined;
+      const identity = mcpTelemetryIdentitySchema.safeParse(
+        telemetry?.identity,
+      );
+      const registeredAtCall = toolName
+        ? getRegisteredTool(server, toolName) !== undefined
+        : false;
+      span.setAttributes({
+        "rpc.system": "mcp",
+        "rpc.method": "tools/call",
+        "mcp.tool.name": toolName ?? "unknown",
+        "mcp.tool.registered": registeredAtCall,
+      });
+
+      let result: unknown;
+      let outcome: "success" | "error" = "error";
+      try {
+        result = await original(request, extra);
+        outcome =
+          result &&
+          typeof result === "object" &&
+          (result as { isError?: unknown }).isError === true
+            ? "error"
+            : "success";
+        if (outcome === "error") span.setError("MCP tool returned an error");
+      } catch (error) {
+        span.setError("MCP tool dispatch failed");
+        throw error;
+      } finally {
+        if (toolName && identity.success && telemetry?.emit) {
+          try {
+            await telemetry.emit({
+              version: 1,
+              eventId: crypto.randomUUID(),
+              occurredAt: new Date().toISOString(),
+              release: __GIT_COMMIT__,
+              type: "mcp_tool_call",
+              toolName,
+              outcome,
+              registeredAtCall,
+              ...identity.data,
+            });
+          } catch (error) {
+            console.error("[MCP telemetry] failed to record tool call", {
+              toolName,
+              error,
+            });
+          }
+        }
+      }
+      return result;
+    });
+  });
+}
+
 export function createMcpServer() {
   const server = new McpServer(
     {
@@ -112,6 +213,7 @@ export function createMcpServer() {
     },
   );
   registerTools(server);
+  installToolCallTelemetryHandler(server);
   installMockStrippedListToolsHandler(server);
   return server;
 }

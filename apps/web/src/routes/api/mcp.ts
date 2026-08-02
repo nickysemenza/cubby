@@ -12,6 +12,7 @@ async function handler({ request }: { request: Request }) {
     const { createCallerFactory, createTRPCContext } = await import(
       "~/server/api/trpc"
     );
+    const { emitTelemetry } = await import("~/server/telemetry");
     const createCaller = createCallerFactory(domainRouter);
 
     // OAuth 2.1 only. Clients (claude.ai connectors, Claude Code) discover the
@@ -22,16 +23,27 @@ async function handler({ request }: { request: Request }) {
 
     const ctx = await createTRPCContext({
       headers: request.headers,
-      actor: { ...actor, source: "api" },
+      actor: { ...actor, source: "mcp" },
     });
 
     const caller = createCaller(ctx);
 
     return await handleMcpRequest(request, {
       token: "",
-      clientId: "cubby-mcp",
+      clientId: actor.clientId ?? "unknown-oauth-client",
       scopes: [],
-      extra: { caller },
+      extra: {
+        caller,
+        telemetry: {
+          identity: {
+            userId: actor.userId,
+            clientId: actor.clientId,
+            surface: "external_mcp",
+          },
+          emit: (event: Parameters<typeof emitTelemetry>[1]) =>
+            emitTelemetry(ctx.db, event),
+        },
+      },
     });
   } catch (error) {
     console.error("[MCP] Error:", error);

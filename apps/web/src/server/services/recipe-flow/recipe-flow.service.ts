@@ -15,6 +15,7 @@ import {
   RECIPE_FLOW_PRIMARY_FEATURE,
 } from "~/server/ai/features";
 import type { SupportedChatModel } from "~/server/ai/models";
+import { recordAiUsage } from "~/server/ai-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -23,7 +24,6 @@ import {
   type StoredAiAnalysis,
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
-import { recordAiUsage } from "~/server/repo/ai-usage";
 import { getRecipeByID } from "~/server/repo/recipe";
 import { validateRecipeFlowPlan } from "./validation";
 

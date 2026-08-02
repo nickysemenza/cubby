@@ -12,8 +12,11 @@ export const agentRouter = createTRPCRouter({
     .input(agentAskInputSchema)
     .output(strictOutput(agentResultSchema))
     .mutation(async ({ ctx, input }) => {
-      const caller = domainRouter.createCaller(ctx);
-      return runAgent(caller, ctx.db, input.query);
+      const caller = domainRouter.createCaller({
+        ...ctx,
+        requestOrigin: "agent" as const,
+      });
+      return runAgent(caller, ctx.db, ctx.actorContext.userId, input.query);
     }),
 
   /**
@@ -26,7 +29,15 @@ export const agentRouter = createTRPCRouter({
   askStream: protectedProcedure
     .input(agentAskInputSchema)
     .query(async function* ({ ctx, input }) {
-      const caller = domainRouter.createCaller(ctx);
-      yield* runAgentStream(caller, ctx.db, input.query);
+      const caller = domainRouter.createCaller({
+        ...ctx,
+        requestOrigin: "agent" as const,
+      });
+      yield* runAgentStream(
+        caller,
+        ctx.db,
+        ctx.actorContext.userId,
+        input.query,
+      );
     }),
 });
