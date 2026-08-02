@@ -44,5 +44,9 @@ describe("RecipeCompareGrid", () => {
       "scope",
       "row",
     );
+    expect(screen.getByRole("rowheader", { name: "Yield" })).toHaveClass(
+      "text-left",
+      "font-normal",
+    );
   });
 });

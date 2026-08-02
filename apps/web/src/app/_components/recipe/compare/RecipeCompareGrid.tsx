@@ -165,7 +165,7 @@ const GridRow: React.FC<{
   <tr className="border-t">
     <th
       scope="row"
-      className={`${STICKY} px-2 py-2 align-top text-muted-foreground`}
+      className={`${STICKY} px-2 py-2 text-left align-top font-normal text-muted-foreground`}
     >
       {label}
     </th>
