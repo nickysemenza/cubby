@@ -404,6 +404,7 @@ describe("vendor filters", () => {
       "related:vendor.expenses",
       "related:vendor.purchases",
       "related:vendor.products",
+      "related:vendor.projects",
       "related:vendor.transactions",
       "createdAt",
       "updatedAt",
@@ -415,6 +416,8 @@ describe("vendor filters", () => {
       "purchasePresenceFilter",
       "productId",
       "productPresenceFilter",
+      "projectId",
+      "projectPresenceFilter",
       "financialTransactionId",
       "financialTransactionPresenceFilter",
     ]);
@@ -445,6 +448,9 @@ describe("vendor filters", () => {
       "related-product",
       "productId",
       "productPresenceFilter",
+      "related-project",
+      "projectId",
+      "projectPresenceFilter",
       "related-financialTransaction",
       "financialTransactionId",
       "financialTransactionPresenceFilter",
@@ -692,6 +698,7 @@ describe("expense URL-only scopes", () => {
       "productQuantityMax",
       "notesSearch",
       "urlSearch",
+      "includeSubProjects",
       "productId",
       "orderIdExact",
       "purchaseId",
@@ -775,8 +782,23 @@ describe("expense URL-only scopes", () => {
     // anything can read them back.
     const fields = entityFilterSearchFields("expense");
     expect(Object.keys(fields)).toEqual(
-      expect.arrayContaining(["productId", "order", "purchaseId"]),
+      expect.arrayContaining([
+        "productId",
+        "order",
+        "purchaseId",
+        "subprojects",
+      ]),
     );
+  });
+
+  it("routes the subtree deep-link scope to the server filter", () => {
+    const specs = getEntityFilters("expense");
+    expect(
+      buildFiltersFromManifest(
+        specs,
+        filterGetterFromSearch(specs, { subprojects: "true" }),
+      ),
+    ).toMatchObject({ includeSubProjects: true });
   });
 });
 

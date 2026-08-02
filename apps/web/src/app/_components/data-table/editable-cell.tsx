@@ -71,6 +71,8 @@ interface EditableCellProps<T> {
   clipboard?: CellClipboardSpec;
   /** Keep rich content outside the button and edit through a sibling pencil. */
   trigger?: "wrap" | "pencil";
+  /** Opens this cell when its host explicitly directs attention to it. */
+  autoOpen?: boolean;
 }
 
 /**
@@ -87,6 +89,7 @@ export function EditableCell<T>({
   renderValue,
   clipboard,
   trigger = "wrap",
+  autoOpen = false,
 }: EditableCellProps<T>) {
   // Select type has its own specialized implementation
   if (config.type === "select") {
@@ -99,6 +102,7 @@ export function EditableCell<T>({
         renderValue={renderValue as (value: string | null) => React.ReactNode}
         clipboard={clipboard}
         trigger={trigger}
+        autoOpen={autoOpen}
       />
     );
   }
@@ -113,6 +117,7 @@ export function EditableCell<T>({
         renderValue={renderValue as (value: string | null) => React.ReactNode}
         clipboard={clipboard}
         trigger={trigger}
+        autoOpen={autoOpen}
       />
     );
   }
@@ -126,6 +131,7 @@ export function EditableCell<T>({
       renderValue={renderValue}
       clipboard={clipboard}
       trigger={trigger}
+      autoOpen={autoOpen}
     />
   );
 }
@@ -329,6 +335,7 @@ function EditableInputCellInternal<T>({
   renderValue,
   clipboard,
   trigger,
+  autoOpen,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
@@ -336,11 +343,16 @@ function EditableInputCellInternal<T>({
   renderValue: (value: T | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
   trigger: EditTriggerMode;
+  autoOpen: boolean;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
   const edit = useCellEditState(clipboard, (saved) =>
     setOptimisticValue(saved as T | null),
   );
+
+  useEffect(() => {
+    if (autoOpen) edit.open();
+  }, [autoOpen, edit.open]);
 
   return (
     <>
@@ -538,6 +550,7 @@ function EditableSelectCellInternal({
   renderValue,
   clipboard,
   trigger,
+  autoOpen,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
@@ -546,11 +559,16 @@ function EditableSelectCellInternal({
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
   trigger: EditTriggerMode;
+  autoOpen: boolean;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
   const edit = useCellEditState(clipboard, (saved) =>
     setOptimisticValue(saved as string | null),
   );
+
+  useEffect(() => {
+    if (autoOpen) edit.open();
+  }, [autoOpen, edit.open]);
 
   return (
     <>
@@ -653,6 +671,7 @@ function EditableDateCellInternal({
   renderValue,
   clipboard,
   trigger,
+  autoOpen,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
@@ -660,11 +679,16 @@ function EditableDateCellInternal({
   renderValue: (value: string | null) => React.ReactNode;
   clipboard?: CellClipboardSpec;
   trigger: EditTriggerMode;
+  autoOpen: boolean;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
   const edit = useCellEditState(clipboard, (saved) =>
     setOptimisticValue(saved as string | null),
   );
+
+  useEffect(() => {
+    if (autoOpen) edit.open();
+  }, [autoOpen, edit.open]);
 
   return (
     <>

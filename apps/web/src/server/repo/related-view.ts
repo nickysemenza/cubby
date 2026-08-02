@@ -7,6 +7,9 @@ import type {
   RelatedOptionsOutput,
   RelatedPreviewGroup,
   RelatedPreviewInput,
+  RelatedSummaryInput,
+  RelatedSummaryOutput,
+  RelatedSummaryRelationKey,
   RelatedViewKey,
 } from "@cubby/schemas/related-view";
 import {
@@ -151,6 +154,11 @@ const SQL_RELATED_VIEWS = {
     `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
     "product",
   ),
+  "project.vendors": named(
+    "Project",
+    `JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
+    "vendor",
+  ),
   "task.blockedBy": named(
     "Task",
     `JOIN "TaskDependency" td ON td."taskId" = s."id" JOIN "Task" t ON t."id" = td."blockedByTaskId" AND t."deletedAt" IS NULL`,
@@ -181,6 +189,11 @@ const SQL_RELATED_VIEWS = {
     "Vendor",
     `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Product" t ON t."id" = e."productId" AND t."deletedAt" IS NULL`,
     "product",
+  ),
+  "vendor.projects": named(
+    "Vendor",
+    `JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL JOIN "Project" t ON t."id" = e."projectId" AND t."deletedAt" IS NULL`,
+    "project",
   ),
   "vendor.transactions": dated(
     "Vendor",
@@ -461,6 +474,285 @@ export async function loadRelatedMatches(
   `;
   const rows = rowsOf(await getDb(db).execute(query)) as Array<{ id: string }>;
   return rows.map((row) => row.id);
+}
+
+type SummaryDefinition = {
+  targetEntity: "product" | "project" | "vendor";
+  targetJoin: string;
+  /** Null targets are meaningful only for incomplete purchase/project provenance. */
+  targetPresence: "required" | "optional";
+  image: boolean;
+};
+
+const SUMMARY_DEFINITIONS: Record<
+  RelatedSummaryRelationKey,
+  SummaryDefinition
+> = {
+  "vendor.products": {
+    targetEntity: "product",
+    targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
+    targetPresence: "required",
+    image: true,
+  },
+  "vendor.projects": {
+    targetEntity: "project",
+    targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND t."deletedAt" IS NULL`,
+    targetPresence: "optional",
+    image: false,
+  },
+  "purchase.projects": {
+    targetEntity: "project",
+    targetJoin: `LEFT JOIN "Project" t ON t."id" = se."projectId" AND t."deletedAt" IS NULL`,
+    targetPresence: "optional",
+    image: false,
+  },
+  "project.vendors": {
+    targetEntity: "vendor",
+    targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
+    targetPresence: "optional",
+    image: false,
+  },
+  "project.purchasedProducts": {
+    targetEntity: "product",
+    targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
+    targetPresence: "required",
+    image: true,
+  },
+  "product.vendors": {
+    targetEntity: "vendor",
+    targetJoin: `LEFT JOIN "Vendor" t ON t."id" = se."vendorId" AND t."deletedAt" IS NULL`,
+    targetPresence: "optional",
+    image: false,
+  },
+};
+
+/**
+ * Expense-backed relationship rollups. The scope is deliberately expressed per
+ * supported relation rather than trying to compile arbitrary graph paths into
+ * SQL: these tables have money and liveness semantics that a generic join
+ * builder cannot safely infer.
+ */
+export async function loadRelatedSummary(
+  db: Database,
+  input: RelatedSummaryInput,
+): Promise<RelatedSummaryOutput> {
+  const definition = SUMMARY_DEFINITIONS[input.relationKey];
+  const scope = (() => {
+    if (input.relationKey.startsWith("vendor.")) {
+      return sql`scoped_expenses AS (
+        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+          e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+          p."date" AS "purchaseDate", p."vendorId"
+        FROM "Vendor" s
+        JOIN "Purchase" p ON p."vendorId" = s."id" AND p."deletedAt" IS NULL
+        JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
+        WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+      )`;
+    }
+    if (input.relationKey.startsWith("purchase.")) {
+      return sql`scoped_expenses AS (
+        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+          e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+          p."date" AS "purchaseDate", p."vendorId"
+        FROM "Purchase" p
+        JOIN "Expense" e ON e."purchaseId" = p."id" AND e."deletedAt" IS NULL
+        WHERE p."shortcode" = ${input.sourceId} AND p."deletedAt" IS NULL
+      )`;
+    }
+    if (input.relationKey.startsWith("product.")) {
+      return sql`scoped_expenses AS (
+        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+          e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+          p."date" AS "purchaseDate", p."vendorId"
+        FROM "Product" s
+        JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL
+        LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+        WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+          AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
+      )`;
+    }
+    if (input.includeSubProjects) {
+      return sql`project_scope AS (
+        SELECT "id" FROM "Project"
+        WHERE "shortcode" = ${input.sourceId} AND "deletedAt" IS NULL
+        UNION ALL
+        SELECT child."id" FROM "Project" child
+        JOIN project_scope parent ON child."parentProjectId" = parent."id"
+        WHERE child."deletedAt" IS NULL
+      ), scoped_expenses AS (
+        SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+          e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+          p."date" AS "purchaseDate", p."vendorId"
+        FROM project_scope scope
+        JOIN "Expense" e ON e."projectId" = scope."id" AND e."deletedAt" IS NULL
+        LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+        WHERE e."purchaseId" IS NULL OR p."id" IS NOT NULL
+      )`;
+    }
+    return sql`scoped_expenses AS (
+      SELECT e."id" AS "expenseId", e."cost", e."productQuantity", e."future",
+        e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
+        p."date" AS "purchaseDate", p."vendorId"
+      FROM "Project" s
+      JOIN "Expense" e ON e."projectId" = s."id" AND e."deletedAt" IS NULL
+      LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
+      WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+        AND (e."purchaseId" IS NULL OR p."id" IS NOT NULL)
+    )`;
+  })();
+  const imageJoin = definition.image
+    ? `LEFT JOIN LATERAL (
+        SELECT i."url", i."filename", i."contentType"
+        FROM "ProductImage" pi
+        JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
+        WHERE pi."productId" = t."id" AND pi."deletedAt" IS NULL
+        ORDER BY pi."sortOrder", pi."createdAt", pi."id"
+        LIMIT 1
+      ) img ON TRUE`
+    : "";
+  const targetValid =
+    definition.targetPresence === "required"
+      ? sql`true`
+      : definition.targetEntity === "project"
+        ? sql`(se."projectId" IS NULL OR t."id" IS NOT NULL)`
+        : sql`(se."purchaseId" IS NULL OR t."id" IS NOT NULL)`;
+  const search = input.search?.trim();
+  const sort = input.sort ?? {
+    field: "latestActivity" as const,
+    direction: "desc" as const,
+  };
+  const sortColumn = {
+    target: `COALESCE("targetLabel", '')`,
+    latestActivity: `"latestActivity"`,
+    netSpend: `"netSpend"`,
+    purchaseCount: `"purchaseCount"`,
+    expenseCount: `"expenseCount"`,
+    knownAcquiredUnits: `"knownAcquiredUnits"`,
+  }[sort.field];
+  const imageColumns = definition.image
+    ? sql`img."url" AS "imageUrl", img."filename" AS "imageFilename", img."contentType" AS "imageContentType"`
+    : sql`NULL::text AS "imageUrl", NULL::text AS "imageFilename", NULL::text AS "imageContentType"`;
+  const query = sql`
+    WITH RECURSIVE ${scope}, targeted AS (
+      SELECT se.*, t."shortcode" AS "targetId", t."name" AS "targetLabel", ${imageColumns}
+      FROM scoped_expenses se
+      ${sql.raw(definition.targetJoin)}
+      ${sql.raw(imageJoin)}
+      WHERE ${targetValid}
+        ${search ? sql`AND t."name" ILIKE ${`%${search}%`}` : sql``}
+    ), grouped AS (
+      SELECT
+        "targetId", "targetLabel", "imageUrl", "imageFilename", "imageContentType",
+        count(DISTINCT "expenseId")::int AS "expenseCount",
+        count(DISTINCT "purchaseId")::int AS "purchaseCount",
+        count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "unpricedExpenseCount",
+        COALESCE(sum("cost"), 0)::float8 AS "netSpend",
+        max(COALESCE("purchaseDate", "expenseDate"))::text AS "latestActivity",
+        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::int AS "knownAcquiredUnits",
+        count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "unknownAcquisitionQuantityCount"
+      FROM targeted
+      GROUP BY "targetId", "targetLabel", "imageUrl", "imageFilename", "imageContentType"
+    ), totals AS (
+      SELECT
+        count(DISTINCT "expenseId")::int AS "totalExpenseCount",
+        count(DISTINCT "purchaseId")::int AS "totalPurchaseCount",
+        count(DISTINCT "expenseId") FILTER (WHERE "cost" IS NULL)::int AS "totalUnpricedExpenseCount",
+        COALESCE(sum("cost"), 0)::float8 AS "totalNetSpend",
+        COALESCE(sum("productQuantity") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NOT NULL), 0)::int AS "totalKnownAcquiredUnits",
+        count(DISTINCT "expenseId") FILTER (WHERE "cost" > 0 AND NOT "future" AND "productQuantity" IS NULL)::int AS "totalUnknownAcquisitionQuantityCount"
+      FROM targeted
+    ), paged AS (
+      SELECT grouped.*, true AS "isPageRow"
+      FROM grouped
+      ORDER BY ${sql.raw(sortColumn)} ${sql.raw(sort.direction.toUpperCase())} NULLS LAST, "targetLabel", "targetId"
+      LIMIT ${input.limit} OFFSET ${input.offset}
+    )
+    SELECT paged.*, totals.*, (SELECT count(*)::int FROM grouped) AS "count"
+    FROM totals LEFT JOIN paged ON TRUE
+  `;
+  type SummaryRaw = {
+    targetId: string | null;
+    targetLabel: string | null;
+    imageUrl: string | null;
+    imageFilename: string | null;
+    imageContentType: string | null;
+    expenseCount: number | string;
+    purchaseCount: number | string;
+    unpricedExpenseCount: number | string;
+    netSpend: number | string;
+    latestActivity: string | null;
+    knownAcquiredUnits: number | string;
+    unknownAcquisitionQuantityCount: number | string;
+    isPageRow: boolean | null;
+    count: number | string;
+    totalExpenseCount: number | string;
+    totalPurchaseCount: number | string;
+    totalUnpricedExpenseCount: number | string;
+    totalNetSpend: number | string;
+    totalKnownAcquiredUnits: number | string;
+    totalUnknownAcquisitionQuantityCount: number | string;
+  };
+  const rows = rowsOf(
+    await getDb(db).execute(query),
+  ) as unknown as SummaryRaw[];
+  const first = rows[0];
+  const zeroTotals = {
+    expenseCount: 0,
+    purchaseCount: 0,
+    unpricedExpenseCount: 0,
+    netSpend: 0,
+    knownAcquiredUnits: 0,
+    unknownAcquisitionQuantityCount: 0,
+  };
+  const totals = first
+    ? {
+        expenseCount: Number(first.totalExpenseCount),
+        purchaseCount: Number(first.totalPurchaseCount),
+        unpricedExpenseCount: Number(first.totalUnpricedExpenseCount),
+        netSpend: Number(first.totalNetSpend),
+        knownAcquiredUnits: Number(first.totalKnownAcquiredUnits),
+        unknownAcquisitionQuantityCount: Number(
+          first.totalUnknownAcquisitionQuantityCount,
+        ),
+      }
+    : zeroTotals;
+  const count = first ? Number(first.count) : 0;
+  const pageRows = rows.filter((row) => row.isPageRow);
+  return {
+    data: pageRows.map((row) => ({
+      target:
+        row.targetId && row.targetLabel
+          ? {
+              entity: definition.targetEntity,
+              id: row.targetId,
+              label: row.targetLabel,
+              image:
+                row.imageUrl && row.imageFilename && row.imageContentType
+                  ? {
+                      url: row.imageUrl,
+                      filename: row.imageFilename,
+                      contentType: row.imageContentType,
+                    }
+                  : null,
+            }
+          : null,
+      expenseCount: Number(row.expenseCount),
+      purchaseCount: Number(row.purchaseCount),
+      unpricedExpenseCount: Number(row.unpricedExpenseCount),
+      netSpend: Number(row.netSpend),
+      latestActivity: row.latestActivity,
+      knownAcquiredUnits: Number(row.knownAcquiredUnits),
+      unknownAcquisitionQuantityCount: Number(
+        row.unknownAcquisitionQuantityCount,
+      ),
+    })),
+    count,
+    totals,
+    nextOffset:
+      input.offset + pageRows.length < count
+        ? input.offset + pageRows.length
+        : null,
+  };
 }
 
 /**

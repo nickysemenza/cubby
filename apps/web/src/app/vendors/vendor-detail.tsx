@@ -16,6 +16,7 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
 import { VendorPurchasesTable } from "./vendor-purchases-table";
 
 interface VendorDetailProps {
@@ -170,6 +171,56 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       // The page's primary content — everything else is metadata.
       zone: "main",
       content: <VendorPurchasesTable vendor={vendor} />,
+    },
+    {
+      title: "Purchased products",
+      icon: Receipt,
+      zone: "main",
+      content: (
+        <RelationshipSummaryTable
+          relationKey="vendor.products"
+          sourceId={vendor.id}
+          columns={[
+            "target",
+            "acquired",
+            "purchases",
+            "expenses",
+            "netSpend",
+            "latestActivity",
+          ]}
+          defaultSort={{ field: "latestActivity", direction: "desc" }}
+          emptyCopy="No products have been linked to this vendor's purchases yet."
+          note="Expenses without a linked product are excluded."
+          expenseHref={(target) =>
+            `/expenses?vendor=${encodeURIComponent(vendor.id)}&productId=${encodeURIComponent(target?.id ?? "")}`
+          }
+        />
+      ),
+    },
+    {
+      title: "Projects",
+      icon: Receipt,
+      content: (
+        <RelationshipSummaryTable
+          relationKey="vendor.projects"
+          sourceId={vendor.id}
+          columns={[
+            "target",
+            "purchases",
+            "expenses",
+            "unpriced",
+            "netSpend",
+            "latestActivity",
+          ]}
+          defaultSort={{ field: "netSpend", direction: "desc" }}
+          emptyCopy="No expenses from this vendor have been assigned to projects yet."
+          nullLabel="Unassigned"
+          compact
+          expenseHref={(target) =>
+            `/expenses?vendor=${encodeURIComponent(vendor.id)}&project=${encodeURIComponent(target?.id ?? "__none__")}`
+          }
+        />
+      ),
     },
     ...commonSections,
   ];

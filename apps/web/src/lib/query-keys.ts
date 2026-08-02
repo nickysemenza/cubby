@@ -125,6 +125,12 @@ export const queryKeys = {
     all: entityKey("financialTransaction"),
     list: procedureKey("financialTransaction", "list"),
   },
+  relatedData: {
+    // Relationship previews and aggregate summaries are derived from several
+    // entity families. Mutations invalidate this shared root rather than
+    // trying to enumerate relation-key-specific cache entries.
+    all: entityKey("relatedData"),
+  },
 } as const;
 
 export const inventoryMutationInvalidateKeys = [
@@ -138,6 +144,7 @@ export const inventoryMutationInvalidateKeys = [
 
 export const productMutationInvalidateKeys = [
   queryKeys.product.all,
+  queryKeys.relatedData.all,
   // Task rows embed their subject product's display name. A product rename
   // must not leave the task list/detail cache showing the old name.
   queryKeys.task.all,
@@ -252,6 +259,7 @@ export const mealMutationInvalidateKeys = [
 // project rollups (spent/progress) aggregate over them.
 export const projectMutationInvalidateKeys = [
   queryKeys.project.all,
+  queryKeys.relatedData.all,
   queryKeys.calendar.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
@@ -265,6 +273,7 @@ export const taskMutationInvalidateKeys = [
 
 export const expenseMutationInvalidateKeys = [
   queryKeys.expense.all,
+  queryKeys.relatedData.all,
   queryKeys.project.all,
   queryKeys.calendar.all,
   queryKeys.dashboard.counts,
@@ -292,6 +301,7 @@ export const expenseMutationInvalidateKeys = [
 export const vendorMutationInvalidateKeys = [
   queryKeys.vendor.all,
   queryKeys.purchase.all,
+  queryKeys.relatedData.all,
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
@@ -300,6 +310,7 @@ export const vendorMutationInvalidateKeys = [
 // and project rollups go stale alongside the vendor's own `purchaseCount`/`spend`.
 export const purchaseMutationInvalidateKeys = [
   queryKeys.purchase.all,
+  queryKeys.relatedData.all,
   queryKeys.vendor.all,
   queryKeys.expense.all,
   queryKeys.project.all,

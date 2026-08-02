@@ -2,27 +2,24 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
-import type { FC } from "react";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
-  TASK_STATUS_LABELS,
-  taskStatusBadgeVariant,
-} from "~/app/tasks/task-options";
+  createColumnHelper,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { type FC, useMemo } from "react";
+import {
+  createNameColumn,
+  createProjectLinkColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import RTable from "~/app/_components/data-table/Table";
+import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { taskDueColumn, taskStatusColumn } from "~/app/projects/shared";
 import { Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
-import { NoneValue } from "~/components/ui/none-value";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import { useTRPC } from "~/integrations/trpc/react";
-import { parsePlainDate } from "~/lib/plain-date";
+import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
 
 const EMPTY_TASKS: TaskOut[] = [];
@@ -30,18 +27,12 @@ const EMPTY_TASKS: TaskOut[] = [];
 const effectiveDueDate = (task: TaskOut) =>
   task.dueEndDate ?? task.dueDate ?? null;
 
-/**
- * Open work leads the list by nearest due date. Completed work follows in
- * reverse chronology. Undated rows use creation time as their stable fallback.
- * Subtasks are intentionally included: the product is the subject of the work
- * regardless of whether the task is a top-level plan or a checklist step.
- */
+/** Open work leads by due date; completed work follows in reverse chronology. */
 export function orderProductTasks(tasks: TaskOut[]): TaskOut[] {
   return [...tasks].sort((left, right) => {
     const leftDone = left.status === "done";
     const rightDone = right.status === "done";
     if (leftDone !== rightDone) return leftDone ? 1 : -1;
-
     const leftDue = effectiveDueDate(left);
     const rightDue = effectiveDueDate(right);
     if (leftDue && rightDue) {
@@ -54,19 +45,58 @@ export function orderProductTasks(tasks: TaskOut[]): TaskOut[] {
   });
 }
 
+/** Product-scoped task history; its own direct fields remain editable. */
 export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
   const api = useTRPC();
+  const helper = useMemo(() => createColumnHelper<TaskOut>(), []);
   const { data, isPending } = useQuery(
     api.task.chartData.queryOptions({ subjectProductId: product.id }),
   );
   const tasks = data ?? EMPTY_TASKS;
+  const update = useUpdateMutation({
+    mutationFn: api.task.update.mutationOptions,
+    entity: "task",
+    invalidateKeys: taskMutationInvalidateKeys,
+  });
+  const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
+  const columns = useMemo(
+    () => [
+      createNameColumn(helper, "task", "name", {
+        header: "Task",
+        editable: nameEditable,
+      }),
+      taskStatusColumn(helper, async (status, task) => {
+        await update.mutateAsync({ id: task.id, data: { status } });
+      }),
+      taskDueColumn(
+        helper,
+        async (dueDate, task, field) => {
+          await update.mutateAsync({ id: task.id, data: { [field]: dueDate } });
+        },
+        { effective: true },
+      ),
+      createProjectLinkColumn(helper, {
+        editable: {
+          onSave: async (projectId, task) => {
+            await update.mutateAsync({ id: task.id, data: { projectId } });
+          },
+        },
+      }),
+    ],
+    [helper, nameEditable],
+  );
+  const ordered = useMemo(() => orderProductTasks(tasks), [tasks]);
+  const table = useReactTable({
+    data: ordered,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (task) => task.id,
+  });
 
-  if (isPending) {
-    return <Description>Loading tasks…</Description>;
-  }
-
+  if (isPending) return <Description>Loading tasks…</Description>;
   if (tasks.length === 0) {
     return (
       <ShelfEmpty
@@ -76,57 +106,13 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
     );
   }
 
-  const ordered = orderProductTasks(tasks);
-
   return (
     <Stack gap="sm">
-      <Table className="table-auto">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Task</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Due</TableHead>
-            <TableHead>Project</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {ordered.map((task) => {
-            const dueDate = effectiveDueDate(task);
-            return (
-              <TableRow key={task.id}>
-                <TableCell>
-                  <EntityInlineLink entity="task" data={task} />
-                </TableCell>
-                <TableCell>
-                  <Badge variant={taskStatusBadgeVariant[task.status]}>
-                    {TASK_STATUS_LABELS[task.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono tabular-nums">
-                  {dueDate ? (
-                    format(parsePlainDate(dueDate), "MMM d, yyyy")
-                  ) : (
-                    <NoneValue />
-                  )}
-                </TableCell>
-                <TableCell>
-                  {task.projectId && task.projectName ? (
-                    <EntityInlineLink
-                      entity="project"
-                      data={{
-                        id: task.projectId,
-                        name: task.projectName,
-                      }}
-                    />
-                  ) : (
-                    <NoneValue />
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+      <RTable
+        table={table}
+        ariaLabel={`${product.name} task history`}
+        embedded
+      />
       <Link
         to="/tasks"
         search={{ view: "all", productId: product.id }}

@@ -36,6 +36,7 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { RelationshipSummaryTable } from "~/app/_components/relationships/relationship-summary-table";
 import { CreateExpenseDialog } from "~/app/expenses/create-expense-dialog";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
@@ -1059,6 +1060,60 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ),
   };
 
+  const purchasedProductsSection: DetailSection = {
+    title: "Purchased products",
+    icon: ShoppingCart,
+    zone: hasSubtree ? "full" : "main",
+    content: (
+      <RelationshipSummaryTable
+        relationKey="project.purchasedProducts"
+        sourceId={project.id}
+        includeSubProjects={true}
+        columns={[
+          "target",
+          "acquired",
+          "purchases",
+          "expenses",
+          "netSpend",
+          "latestActivity",
+        ]}
+        defaultSort={{ field: "latestActivity", direction: "desc" }}
+        emptyCopy="No product-linked expenses have been recorded for this project yet."
+        note="Expenses without a linked product are excluded."
+        expenseHref={(target) =>
+          `/expenses?project=${encodeURIComponent(project.id)}&subprojects=true&productId=${encodeURIComponent(target?.id ?? "")}`
+        }
+      />
+    ),
+  };
+
+  const vendorsSection: DetailSection = {
+    title: "Vendors",
+    icon: ShoppingCart,
+    content: (
+      <RelationshipSummaryTable
+        relationKey="project.vendors"
+        sourceId={project.id}
+        includeSubProjects={true}
+        columns={[
+          "target",
+          "purchases",
+          "expenses",
+          "unpriced",
+          "netSpend",
+          "latestActivity",
+        ]}
+        defaultSort={{ field: "netSpend", direction: "desc" }}
+        emptyCopy="No vendor-linked expenses have been recorded for this project yet."
+        nullLabel="No purchase/vendor"
+        compact
+        expenseHref={(target) =>
+          `/expenses?project=${encodeURIComponent(project.id)}&subprojects=true&vendor=${encodeURIComponent(target?.id ?? "__none__")}`
+        }
+      />
+    ),
+  };
+
   // The manifest's `history` common section, rendered inline rather than via
   // `useEntityDetail` (task-detail/expense-detail's route): project also
   // declares `images`, and that common section reads `data.images` — which
@@ -1084,14 +1139,17 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     ...(showBudget ? [budgetSection] : []),
     tasksSection,
     ...(hasSubtree ? [] : [expensesSection]),
+    ...(hasSubtree ? [] : [purchasedProductsSection]),
     // Aside rail: metadata + (when empty) the slim Notes card.
     overviewSection,
     resourcesSection,
     dependenciesSection,
     subProjectsSection,
+    vendorsSection,
     ...(hasNotesContent ? [] : [notesSection]),
     // Subtree projects show the ledger as a full-width band at the bottom.
     ...(hasSubtree ? [expensesSection] : []),
+    ...(hasSubtree ? [purchasedProductsSection] : []),
     // Paper trail last, same position task/expense detail give it.
     historySection,
   ];

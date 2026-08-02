@@ -1,67 +1,80 @@
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
-import { formatDistanceToNow } from "date-fns";
-import type { FC } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
-import { formatCurrency } from "~/lib/utils";
+  createColumnHelper,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { formatDistanceToNow } from "date-fns";
+import { type FC, useMemo } from "react";
+import {
+  createCurrencyColumn,
+  createEditableAmountColumn,
+  createSingleEntityInlineLinkColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import RTable from "~/app/_components/data-table/Table";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { useTRPC } from "~/integrations/trpc/react";
+import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { ShelfEmpty } from "../data-table/shelf";
-import { EntityInlineLink } from "../EntityInlineLink";
 
-/**
- * Where this product is stocked — one row per inventory entry, with the
- * on-hand amount, its valuation, and freshness. The primary content of a
- * product page alongside recipe usages; supersedes the old "Inventory
- * Locations" links row in Basic Information.
- *
- * Freshness is `verifiedAt` (last deliberate recount), never `updatedAt`: a
- * price change recomputes valuation and bumps `updatedAt`, which would make a
- * year-old count read as fresh. `—` = never verified.
- */
+type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
+
+/** Product inventory rows: location and amount are direct, editable entry fields. */
 export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   product,
 }) => {
-  const entries = product.inventoryEntry ?? [];
+  const api = useTRPC();
+  const helper = useMemo(() => createColumnHelper<InventoryEntry>(), []);
+  const update = useUpdateMutation({
+    mutationFn: api.inventory.update.mutationOptions,
+    entity: "inventory",
+    invalidateKeys: inventoryMutationInvalidateKeys,
+  });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
+  const columns = useMemo(
+    () => [
+      createSingleEntityInlineLinkColumn(helper, "location", "location", {
+        header: "Location",
+        className: "w-56",
+        editable: {
+          onSave: async (locationId, entry) => {
+            if (!locationId) return;
+            await update.mutateAsync({ id: entry.id, data: { locationId } });
+          },
+        },
+      }),
+      createEditableAmountColumn(helper, "amount", {
+        onSave: async (amount, entry) => {
+          await update.mutateAsync({ id: entry.id, data: { amount } });
+        },
+        getUnitMappings: () => product.unitMappings,
+      }),
+      createCurrencyColumn(helper, "valuation", {
+        header: "Value",
+        className: "w-24",
+      }),
+      helper.accessor("verifiedAt", {
+        header: "Verified",
+        meta: { className: "w-32" },
+        cell: (info) =>
+          info.getValue()
+            ? formatDistanceToNow(info.getValue()!, { addSuffix: true })
+            : "—",
+      }),
+    ],
+    [helper, product.unitMappings],
+  );
+  const table = useReactTable({
+    data: product.inventoryEntry,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (entry) => entry.id,
+  });
 
-  if (entries.length === 0) {
+  if (product.inventoryEntry.length === 0) {
     return <ShelfEmpty entity="inventory" label="Not stocked anywhere" />;
   }
-
   return (
-    <Table className="table-auto">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Location</TableHead>
-          <TableHead>Amount</TableHead>
-          <TableHead className="text-right">Value</TableHead>
-          <TableHead className="text-right">Verified</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {entries.map((entry) => (
-          <TableRow key={entry.id}>
-            <TableCell>
-              <EntityInlineLink entity="location" data={entry.location} />
-            </TableCell>
-            <TableCell className="font-mono tabular-nums">
-              {entry.amount.value} {entry.amount.unit}
-            </TableCell>
-            <TableCell className="text-right font-mono tabular-nums">
-              {entry.valuation != null ? formatCurrency(entry.valuation) : "—"}
-            </TableCell>
-            <TableCell className="text-right text-muted-foreground">
-              {entry.verifiedAt
-                ? formatDistanceToNow(entry.verifiedAt, { addSuffix: true })
-                : "—"}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <RTable table={table} ariaLabel={`${product.name} inventory`} embedded />
   );
 };
