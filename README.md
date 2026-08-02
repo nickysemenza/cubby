@@ -523,7 +523,8 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 - **Mobile capture** — improve scanner lock-on with a reticle-aligned ROI and a real-iPhone acceptance pass.
 - **Meal composition** — let "Add to meal" join a meal that already exists for that day instead of always creating another one.
 
-The ordered queue and promotion rules live in the [backlog triage board](docs/todos.md#triage-board).
+This list mirrors the authoritative [backlog triage board](docs/todos.md#triage-board);
+update the board first and keep this roadmap summary in sync.
 
 ### Later
 
