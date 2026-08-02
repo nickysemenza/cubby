@@ -1,3 +1,4 @@
+import { getErrorMessage } from "~/lib/error-utils";
 import type { SupportedAiModelRef } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
@@ -39,7 +40,7 @@ export async function recordAiUsage(
     });
   } catch (error) {
     console.error("[ai-usage] failed to record usage", {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
   }
 }
