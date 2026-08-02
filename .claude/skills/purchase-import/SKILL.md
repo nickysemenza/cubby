@@ -89,10 +89,15 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   `delete_empty_purchases`. Deleting a Purchase never removes spend; do not use
   it while Expenses or Financial Transactions remain.
 - Before replacing a human-entered aggregate Expense with source-derived detail,
-  preserve its meaningful title. Prefer a writable Purchase display label so the
-  UI can render it parenthetically; until that exists, prepend the exact title to
-  the Purchase notes. Do not copy an aggregate title onto every detailed line,
-  and never silently discard human-entered context during deduplication.
+  snapshot its title, date, `costType`, trade, project, notes, URL, and future
+  status. Write the exact meaningful title to `Purchase.displayLabel`; store only
+  the title text because the UI adds the order ID and parentheses. Do not copy it
+  onto every detailed line or overwrite a different nonblank display label.
+- Preserve the snapshot's classification and context on every split part unless
+  the source or user explicitly supports a correction. A promoted Product's
+  category is not evidence for changing ledger `costType`, trade, or project.
+  Re-read the Purchase and all replacement Expenses after the split and compare
+  them with the snapshot before continuing.
 - Keep trustworthy coarse Expenses unlinked rather than inventing a line-level
   allocation. A Product link is a claim about that Product's cost basis.
 - Keep `Expense.cost` as the extended line total. When a linked Product's
@@ -185,8 +190,10 @@ as notes/evidence; do not infer a Financial Account from them.
   date when posted, source reference, and Purchase link when known.
 - Touched Purchase `statedTotal` remains literal paperwork; reconciliation gaps
   are explained rather than hidden.
-- Meaningful human-entered aggregate titles are preserved on the retained
-  Purchase before duplicate Expenses are deleted.
+- Meaningful human-entered aggregate titles are preserved in
+  `Purchase.displayLabel` before duplicate Expenses are deleted, and replacement
+  Expenses retain the original human-entered classification and context unless
+  an evidenced correction is reported.
 - Every eligible Product candidate was promoted, explicitly skipped,
   conflicted, or left pending with a direct user question.
 - Product creation, document filing, and inventory receiving were reported as
