@@ -1,5 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type {
+  RelatedBranchInput,
+  RelatedBranchOutput,
+  RelatedMatchesInput,
+  RelatedOptionsInput,
+  RelatedOptionsOutput,
   RelatedPreviewGroup,
   RelatedPreviewInput,
   RelatedViewKey,
@@ -54,12 +59,24 @@ const dated = (
  * below are constants; caller data is parameterized separately.
  */
 const SQL_RELATED_VIEWS = {
+  "product.vendors": named(
+    "Product",
+    `JOIN "Expense" e ON e."productId" = s."id" AND e."deletedAt" IS NULL JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL JOIN "Vendor" t ON t."id" = p."vendorId" AND t."deletedAt" IS NULL`,
+    "vendor",
+  ),
   "product.expenses": dated(
     "Product",
     `JOIN "Expense" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
     "expense",
     `t."name"`,
     `COALESCE(t."date"::timestamp, t."createdAt")`,
+  ),
+  "product.inventory": dated(
+    "Product",
+    `JOIN "InventoryEntry" t ON t."productId" = s."id" AND t."deletedAt" IS NULL`,
+    "inventory",
+    `t."shortcode"`,
+    `t."createdAt"`,
   ),
   "product.tasks": named(
     "Product",
@@ -78,6 +95,11 @@ const SQL_RELATED_VIEWS = {
     "meal",
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,
+  ),
+  "meal.recipes": named(
+    "Meal",
+    `JOIN "MealRecipe" mr ON mr."mealId" = s."id" AND mr."deletedAt" IS NULL JOIN "Recipe" t ON t."id" = mr."recipeId" AND t."deletedAt" IS NULL`,
+    "recipe",
   ),
   "location.ingredients": named(
     "Location",
@@ -231,6 +253,8 @@ type RawRow = {
   totalCount: number | string;
 };
 
+type BranchRawRow = RawRow & { sortValue: string | number | Date | null };
+
 const rowsOf = (result: unknown): RawRow[] => {
   if (Array.isArray(result)) return result as RawRow[];
   if (result && typeof result === "object" && "rows" in result) {
@@ -312,6 +336,119 @@ export async function loadRelatedPreviews(
       ),
     )
   ).flat();
+}
+
+/**
+ * Load a single, paginated branch for the relationship outline. This shares
+ * the exact SQL realization used by table previews and predicates, so there
+ * is no parallel interpretation of a relationship in the UI layer.
+ */
+export async function loadRelatedBranch(
+  db: Database,
+  input: RelatedBranchInput,
+): Promise<RelatedBranchOutput> {
+  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const query = sql`
+    WITH related AS (
+      SELECT DISTINCT
+        t."shortcode" AS "id",
+        ${sql.raw(view.label)}::text AS "label",
+        ${sql.raw(view.sort)} AS "sortValue"
+      FROM ${sql.raw(`"${view.sourceTable}"`)} s
+      ${sql.raw(view.joins)}
+      WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
+    ), ranked AS (
+      SELECT *, count(*) OVER ()::int AS "totalCount"
+      FROM related
+    )
+    SELECT "id", "label", "sortValue", "totalCount"
+    FROM ranked
+    ORDER BY "sortValue" ${sql.raw(view.sortDirection)}, "label", "id"
+    LIMIT ${input.limit} OFFSET ${input.offset}
+  `;
+  const rows = rowsOf(await getDb(db).execute(query)) as BranchRawRow[];
+  const totalCount = rows.length ? Number(rows[0]?.totalCount) : 0;
+  const consumed = input.offset + rows.length;
+  return {
+    sourceId: input.sourceId,
+    relationKey: input.relationKey,
+    totalCount,
+    items: rows.map((row) => ({
+      entity: view.targetEntity,
+      id: row.id,
+      label: row.label,
+    })),
+    nextOffset: consumed < totalCount ? consumed : null,
+  };
+}
+
+/** Search targets for a relation, including the number of distinct sources. */
+export async function loadRelatedOptions(
+  db: Database,
+  input: RelatedOptionsInput,
+): Promise<RelatedOptionsOutput> {
+  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const search = input.search?.trim();
+  const query = sql`
+    SELECT
+      t."shortcode" AS "id",
+      ${sql.raw(view.label)}::text AS "label",
+      count(DISTINCT s."id")::int AS "count"
+    FROM ${sql.raw(`"${view.sourceTable}"`)} s
+    ${sql.raw(view.joins)}
+    WHERE s."deletedAt" IS NULL
+      ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${`%${search}%`}` : sql``}
+    GROUP BY t."shortcode", ${sql.raw(view.label)}
+    ORDER BY "label", "id"
+    LIMIT ${input.limit}
+  `;
+  const rows = rowsOf(await getDb(db).execute(query)) as unknown as Array<{
+    id: string;
+    label: string;
+    count: string | number;
+  }>;
+  return rows.map((row) => ({
+    entity: view.targetEntity,
+    id: row.id,
+    label: row.label,
+    count: Number(row.count),
+  }));
+}
+
+/** Return source shortcodes in the supplied scope that do (or do not) match. */
+export async function loadRelatedMatches(
+  db: Database,
+  input: RelatedMatchesInput,
+): Promise<string[]> {
+  const definition = relatedViewRegistry.find(
+    (view) => view.key === input.relationKey && view.source === input.source,
+  );
+  if (!definition) return [];
+  const view = SQL_RELATED_VIEWS[input.relationKey];
+  const sourceIds = [...new Set(input.sourceIds)];
+  const targetIds = [...new Set(input.targetIds)];
+  const query = sql`
+    SELECT root."shortcode" AS "id"
+    FROM ${sql.raw(`"${view.sourceTable}"`)} root
+    WHERE root."shortcode" IN (${sql.join(
+      sourceIds.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+      AND root."deletedAt" IS NULL
+      AND ${input.predicate === "none" ? sql`NOT ` : sql``}EXISTS (
+        SELECT 1
+        FROM ${sql.raw(`"${view.sourceTable}"`)} s
+        ${sql.raw(view.joins)}
+        WHERE s."id" = root."id"
+          AND s."deletedAt" IS NULL
+          AND t."shortcode" IN (${sql.join(
+            targetIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})
+      )
+  `;
+  const rows = rowsOf(await getDb(db).execute(query)) as Array<{ id: string }>;
+  return rows.map((row) => row.id);
 }
 
 /**

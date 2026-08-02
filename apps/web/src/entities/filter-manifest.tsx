@@ -924,6 +924,24 @@ const relatedFilterSpecs = Object.fromEntries(
       (candidate) => candidate.source === entity,
     )) {
       const prefix = relatedFilterPrefix(view);
+      // Product provenance is most useful as an exact Vendor roster filter,
+      // not as a free-text match on the rendered preview. Keep the control on
+      // the related column itself so its header, URL state, and server
+      // predicate are one piece of state. Other relationship filters retain
+      // their generated text/id/presence trio until they gain their own
+      // target-aware picker.
+      if (view.key === "product.vendors") {
+        generated.push({
+          columnId: `related:${view.key}`,
+          field: `${prefix}Id`,
+          urlKey: `related-${prefix}`,
+          kind: "idMulti",
+          brand: unsafeVendorId,
+          placeholder: "Filter by vendor...",
+          optionsKey: "productVendors",
+        });
+        continue;
+      }
       const candidates: FilterSpec[] = [
         {
           columnId: `related:${view.key}`,

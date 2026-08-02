@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { deriveUpdateData, timestampedFields } from "./base-entity";
+import { mealRelatedFilterFields } from "./related-view";
 import { ingredientAvailabilityStatus } from "./availability";
 import {
   ingredientShortcode,
@@ -93,6 +94,7 @@ export const mealRecipeIdInput = z.object({
 export const mealFilterFields = {
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
+  ...mealRelatedFilterFields,
 };
 
 export const mealFiltersSchema = z.object(mealFilterFields);

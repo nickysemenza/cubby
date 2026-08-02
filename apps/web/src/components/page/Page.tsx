@@ -23,6 +23,15 @@ const PageCountContext = createContext<
   ((count: number | undefined) => void) | null
 >(null);
 
+/** Detail-only context keeps shared body sections aware of their owner. */
+const PageDetailContext = createContext<
+  { entity: Entity; rawData: unknown } | undefined
+>(undefined);
+
+export function usePageDetailContext() {
+  return useContext(PageDetailContext);
+}
+
 /**
  * Report a list's true filtered record count up to the enclosing `<Page>`
  * header, rendered as "1,240 EXPENSES" at the end of the eyebrow line. Pass
@@ -127,9 +136,17 @@ export function Page(props: PageProps) {
           rawData={detail?.rawData}
           count={variant === "list" ? count : undefined}
         />
-        <PageCountContext.Provider value={setCount}>
-          <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
-        </PageCountContext.Provider>
+        <PageDetailContext.Provider
+          value={
+            detail
+              ? { entity: detail.entity, rawData: detail.rawData }
+              : undefined
+          }
+        >
+          <PageCountContext.Provider value={setCount}>
+            <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+          </PageCountContext.Provider>
+        </PageDetailContext.Provider>
       </div>
     </PageWrapper>
   );

@@ -16,6 +16,10 @@ import {
   useExpenseBulkActions,
 } from "~/app/_components/tracker/expense-bulk-actions";
 import {
+  createExpenseProductImageColumn,
+  ExpenseProductImages,
+} from "~/app/expenses/expense-product-image-column";
+import {
   expenseCostColumn,
   expenseCostTypeColumn,
   expenseDateColumn,
@@ -59,6 +63,7 @@ export function PurchaseExpensesTable({
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrappers are functionally stable
   const columns = useMemo(
     () => [
+      createExpenseProductImageColumn(helper),
       expenseCostColumn(
         helper,
         async (cost, row) => {
@@ -116,7 +121,7 @@ export function PurchaseExpensesTable({
     },
   });
   return (
-    <>
+    <ExpenseProductImages rows={list.data}>
       <RTable
         table={list.table}
         isLoading={list.isLoading}
@@ -135,6 +140,6 @@ export function PurchaseExpensesTable({
         controller={bulkActions}
         onComplete={() => list.table.resetRowSelection()}
       />
-    </>
+    </ExpenseProductImages>
   );
 }

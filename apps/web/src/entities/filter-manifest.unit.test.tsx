@@ -6,6 +6,7 @@ import { imageFilterFields } from "@cubby/schemas/image";
 import { ingredientFilterFields } from "@cubby/schemas/ingredient";
 import { inventoryFilterFields } from "@cubby/schemas/inventory";
 import { locationFilterFields } from "@cubby/schemas/location";
+import { mealFilterFields } from "@cubby/schemas/meal";
 import { productFilterFields } from "@cubby/schemas/product";
 import {
   expenseFilterFields,
@@ -107,6 +108,19 @@ describe("manifestFilterConfig", () => {
   it("does not prepend sentinels to a non-nullable multiselect", () => {
     const options = manifestFilterConfig("expense", "trade")?.options;
     expect(options?.some((o) => o.meta)).toBe(false);
+  });
+
+  it("puts the Product Vendors roster on its related preview column", () => {
+    const vendors = [{ value: "VEN-4K7M", label: "Hardware Store" }];
+    expect(
+      manifestFilterConfig("product", "related:product.vendors", {
+        productVendors: vendors,
+      }),
+    ).toEqual({
+      placeholder: "Filter by vendor...",
+      filterType: "multiselect",
+      options: vendors,
+    });
   });
 
   it.each([
@@ -807,6 +821,7 @@ describe("manifest fields exist on the server schema", () => {
       project: projectFilterFields,
       product: productFilterFields,
       inventory: inventoryFilterFields,
+      meal: mealFilterFields,
       purchase: purchaseFilterFields,
       vendor: vendorFilterFields,
       location: locationFilterFields,
