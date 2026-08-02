@@ -40,6 +40,7 @@ try {
     unknown: number;
     unknownWithNotes: number;
     unknownWithPdf: number;
+    unknownWithQuantityHint: number;
     unknownWithEvidence: number;
     unknownWithoutInlineEvidence: number;
   }>(`
@@ -48,6 +49,8 @@ try {
         e."productId",
         e."productQuantity",
         nullif(btrim(coalesce(e."notes", '')), '') IS NOT NULL AS has_notes,
+        concat_ws(' ', e."name", e."notes") ~*
+          '(qty|quantity|[0-9]+[[:space:]]*[x×]|x[[:space:]]*[0-9]+|pack of|set of)' AS has_quantity_hint,
         EXISTS (
           SELECT 1
           FROM "PurchaseImage" pi
@@ -76,6 +79,9 @@ try {
         WHERE "productQuantity" IS NULL AND has_pdf
       )::int AS "unknownWithPdf",
       count(*) FILTER (
+        WHERE "productQuantity" IS NULL AND has_quantity_hint
+      )::int AS "unknownWithQuantityHint",
+      count(*) FILTER (
         WHERE "productQuantity" IS NULL AND (has_notes OR has_pdf)
       )::int AS "unknownWithEvidence",
       count(*) FILTER (
@@ -100,7 +106,12 @@ try {
                 v."name" AS "vendor",
                 pu."orderId",
                 e."notes",
-                (e."notes" ~* '(qty|quantity|[0-9]+[[:space:]]*[x×]|x[[:space:]]*[0-9]+|pack of|set of)') AS "hasQuantityHint",
+                (concat_ws(' ', e."name", e."notes") ~* '(qty|quantity|[0-9]+[[:space:]]*[x×]|x[[:space:]]*[0-9]+|pack of|set of)') AS "hasQuantityHint",
+                (regexp_match(
+                  concat_ws(' ', e."name", e."notes"),
+                  '[(]qty[[:space:]]+([0-9]+)[)]',
+                  'i'
+                ))[1] AS "explicitQuantityToken",
                 coalesce(docs.documents, '[]'::json) AS documents
               FROM "Expense" e
               JOIN "Product" p
@@ -133,7 +144,12 @@ try {
                 AND e."cost" > 0
                 AND e."productQuantity" IS NULL
               ORDER BY
-                (e."notes" ~* '(qty|quantity|[0-9]+[[:space:]]*[x×]|x[[:space:]]*[0-9]+|pack of|set of)') DESC,
+                ((regexp_match(
+                  concat_ws(' ', e."name", e."notes"),
+                  '[(]qty[[:space:]]+([0-9]+)[)]',
+                  'i'
+                ))[1] IS NOT NULL) DESC,
+                (concat_ws(' ', e."name", e."notes") ~* '(qty|quantity|[0-9]+[[:space:]]*[x×]|x[[:space:]]*[0-9]+|pack of|set of)') DESC,
                 (coalesce(json_array_length(docs.documents), 0) > 0) DESC,
                 e."date" DESC,
                 e."shortcode"
