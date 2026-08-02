@@ -47,7 +47,10 @@ import {
   taskMutationInvalidateKeys,
 } from "~/lib/query-keys";
 
-const EMBEDDED_TABLE_STATE = { urlSync: false } as const;
+const EMBEDDED_TABLE_STATE = {
+  urlSync: false,
+  readUrlState: false,
+} as const;
 
 /**
  * Server-backed task list for Projects > Data. `projectScope` is contextual:

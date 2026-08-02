@@ -1,9 +1,9 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// useTableState calls useSearch({ strict: false }) unconditionally (even when
-// urlSync is off) so its lazy sort/filter/page initializers can read a shared
-// link's URL params, and useNavigate() to write them back. Neither runs
+// useTableState calls useSearch({ strict: false }) unconditionally so URL-aware
+// instances can seed state from shared links and URL writers can update them.
+// Neither hook runs
 // inside a RouterProvider here — mock both the same way
 // inventory-entries-cell.unit.test.tsx mocks `Link`.
 let mockSearch: Record<string, unknown> = {};
@@ -124,6 +124,48 @@ describe("useTableState — pageIndex reset on filter change", () => {
       search: (previous: Record<string, unknown>) => Record<string, unknown>;
     };
     expect(navigateOptions.search(mockSearch)).toEqual({ keep: "yes" });
+  });
+
+  it("ignores foreign URL state when an embedded table opts out of reads", () => {
+    mockSearch = {
+      q: "project-only",
+      sort: "startDate",
+      page: "8",
+      pageSize: "25",
+    };
+
+    const initialFilter = [{ id: "trade", value: ["electrical"] }];
+    const { result } = renderHook(() =>
+      useTableState({
+        initialSort: "dueDate",
+        initialFilter,
+        initialPagination: { pageIndex: 0, pageSize: 50 },
+        filterSpecs: URL_BACKED_SPECS,
+        urlSync: false,
+        readUrlState: false,
+      }),
+    );
+
+    expect(result.current.sorting).toEqual([{ id: "dueDate", desc: true }]);
+    expect(result.current.columnFilters).toEqual(initialFilter);
+    expect(result.current.allFilters).toBe(result.current.columnFilters);
+    expect(result.current.pagination).toEqual({ pageIndex: 0, pageSize: 50 });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps URL reads enabled when synchronization is on", () => {
+    mockSearch = { sort: "startDate", page: "3" };
+
+    const { result } = renderHook(() =>
+      useTableState({
+        initialSort: "dueDate",
+        urlSync: true,
+        readUrlState: false,
+      }),
+    );
+
+    expect(result.current.sorting).toEqual([{ id: "startDate", desc: false }]);
+    expect(result.current.pagination.pageIndex).toBe(2);
   });
 });
 

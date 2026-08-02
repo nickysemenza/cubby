@@ -62,6 +62,29 @@ test.describe("Project tracker", () => {
     await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
   });
 
+  test("projects data keeps project URL sorting out of embedded lists", async ({
+    page,
+  }) => {
+    await page.goto("/projects?view=data&sort=startDate");
+    await page.waitForLoadState("networkidle");
+
+    await expect(
+      page.getByRole("table", { name: "Projects Table" }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByRole("table", { name: "Project-scoped Tasks Table" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("table", { name: "Project-scoped Expenses Table" }),
+    ).toBeVisible();
+
+    // `startDate` is valid for Projects but not Tasks or Expenses. Those
+    // embedded lists must keep their entity defaults instead of reading the
+    // page owner's sort parameter.
+    await expect(page.getByText(/BAD_REQUEST/)).toHaveCount(0);
+    expect(new URL(page.url()).searchParams.get("sort")).toBe("startDate");
+  });
+
   test("tasks: quick-add creates a task and it appears in the table", async ({
     page,
   }) => {

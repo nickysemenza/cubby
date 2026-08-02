@@ -46,6 +46,15 @@ interface TableStateOptions {
    */
   urlSync?: boolean;
   /**
+   * Read sort, filters, and pagination from the current URL. Defaults to true
+   * so standalone/read-only table state keeps honoring shared links even when
+   * it is not the URL writer. Set false for a table embedded beside the page's
+   * owning table; otherwise foreign params such as a Project `sort=startDate`
+   * can become invalid Task/Expense query input. `urlSync` always implies URL
+   * reads, regardless of this value.
+   */
+  readUrlState?: boolean;
+  /**
    * Include pagination in URL sync. Infinite lists set this false because
    * their page index is an internal fetch cursor, not a user-visible page.
    */
@@ -54,6 +63,7 @@ interface TableStateOptions {
 
 /** Stable empty default (a fresh `[]` per render would churn the memos). */
 const NO_SPECS: readonly FilterSpecCore[] = [];
+const NO_URL_STATE: Record<string, unknown> = {};
 
 // URL search keys for table state.
 const SORT_KEY = "sort";
@@ -160,6 +170,7 @@ export function useTableState(
     initialPagination = defaultPagination,
     filterSpecs = NO_SPECS,
     urlSync = false,
+    readUrlState = true,
     syncPaginationToUrl = true,
   } = options;
 
@@ -174,25 +185,25 @@ export function useTableState(
   );
 
   // Router hooks are called unconditionally (Rules of Hooks); their results are
-  // only consumed when urlSync is on. useSearch(strict:false) works on any route.
+  // only consumed when this table reads or writes URL state.
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const navigate = useNavigate();
+  const urlStateSource = urlSync || readUrlState ? search : NO_URL_STATE;
 
   // Lazy initializers read the URL once (first render, incl. SSR) so a shared /
-  // reloaded link restores sort + page before first paint. Reading is
-  // unconditional (the keys are table-specific, absent on non-synced lists) —
-  // only the write-back below is gated on urlSync. Reading regardless also fixes
-  // the mobile case where the active hook flips after hydration (useIsMobile is
-  // false at SSR), so its tableState must still honor the incoming params.
+  // reloaded link restores sort + page before first paint. Reading defaults on
+  // even without write-through because the active mobile hook can flip after
+  // hydration (useIsMobile is false at SSR); embedded peer tables explicitly
+  // opt out so they cannot consume the page owner's params.
   const [sorting, setSortingRaw] = useState<SortingState>(() => {
-    const fromUrl = paramToSort(search[SORT_KEY]);
+    const fromUrl = paramToSort(urlStateSource[SORT_KEY]);
     return fromUrl ?? defaultSortState(initialSort);
   });
   // Lazy initializer: URL filters win over the caller's seed, so a shared link
   // restores the same rows before first paint.
   const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>(
     () => {
-      const fromUrl = decodeFilters(columnSpecs, search);
+      const fromUrl = decodeFilters(columnSpecs, urlStateSource);
       return fromUrl.length ? fromUrl : initialFilter;
     },
   );
@@ -208,11 +219,13 @@ export function useTableState(
   // `usePaginatedTableCore`'s `filters`). Same reason `projects-dashboard`
   // keys its filters memo off joined primitives.
   const urlOnlyKey = JSON.stringify(
-    urlOnlySpecs.map((spec) => search[spec.urlKey ?? spec.columnId] ?? null),
+    urlOnlySpecs.map(
+      (spec) => urlStateSource[spec.urlKey ?? spec.columnId] ?? null,
+    ),
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialized values above, not `search`'s reference, on purpose
   const urlOnlyFilters = useMemo(
-    () => decodeFilters(urlOnlySpecs, search),
+    () => decodeFilters(urlOnlySpecs, urlStateSource),
     [urlOnlySpecs, urlOnlyKey],
   );
   const allFilters = useMemo(
@@ -223,8 +236,12 @@ export function useTableState(
     [columnFilters, urlOnlyFilters],
   );
   const [pagination, setPaginationRaw] = useState<PaginationState>(() => {
-    const page = syncPaginationToUrl ? Number(search[PAGE_KEY]) : Number.NaN;
-    const size = syncPaginationToUrl ? Number(search[SIZE_KEY]) : Number.NaN;
+    const page = syncPaginationToUrl
+      ? Number(urlStateSource[PAGE_KEY])
+      : Number.NaN;
+    const size = syncPaginationToUrl
+      ? Number(urlStateSource[SIZE_KEY])
+      : Number.NaN;
     return {
       pageIndex:
         Number.isFinite(page) && page > 0
@@ -247,7 +264,7 @@ export function useTableState(
     [columnSpecs],
   );
   const managedSearchKey = JSON.stringify(
-    managedKeys.map((key) => search[key] ?? null),
+    managedKeys.map((key) => urlStateSource[key] ?? null),
   );
 
   // Interpret live managed params exactly as the lazy initializers do. This
@@ -255,11 +272,16 @@ export function useTableState(
   // while absent/invalid values continue to fall back to the caller defaults.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on managed values above, not the router's fresh search-object reference
   const urlState = useMemo(() => {
-    const urlFilters = decodeFilters(columnSpecs, search);
-    const page = syncPaginationToUrl ? Number(search[PAGE_KEY]) : Number.NaN;
-    const size = syncPaginationToUrl ? Number(search[SIZE_KEY]) : Number.NaN;
+    const urlFilters = decodeFilters(columnSpecs, urlStateSource);
+    const page = syncPaginationToUrl
+      ? Number(urlStateSource[PAGE_KEY])
+      : Number.NaN;
+    const size = syncPaginationToUrl
+      ? Number(urlStateSource[SIZE_KEY])
+      : Number.NaN;
     return {
-      sorting: paramToSort(search[SORT_KEY]) ?? defaultSortState(initialSort),
+      sorting:
+        paramToSort(urlStateSource[SORT_KEY]) ?? defaultSortState(initialSort),
       columnFilters: urlFilters.length ? urlFilters : initialFilter,
       pagination: {
         pageIndex:
@@ -315,7 +337,7 @@ export function useTableState(
   const serializedRawSearchState = JSON.stringify(
     Object.fromEntries(
       managedKeys
-        .map((key) => [key, search[key]])
+        .map((key) => [key, urlStateSource[key]])
         .filter(([, value]) => value !== undefined),
     ),
   );
