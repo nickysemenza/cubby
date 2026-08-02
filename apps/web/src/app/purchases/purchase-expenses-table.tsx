@@ -113,7 +113,7 @@ export function PurchaseExpensesTable({
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: api.expense.list.queryOptions,
-    extraFilters: scope,
+    scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     columnVisibilityScope: "purchase-detail",

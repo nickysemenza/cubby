@@ -47,7 +47,7 @@ import {
 } from "~/server/repo/expense-aggregate-sql";
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
-import { loadProjectSubtreeRollups } from "./subtree";
+import { loadProjectSubtreeRollups, projectCompletionYear } from "./subtree";
 
 const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   costVsEstimate: [],
@@ -62,8 +62,22 @@ export async function projectPortfolioAnalytics(
   db: Database,
   filters: ProjectPortfolioAnalyticsInput,
 ): Promise<ProjectPortfolioAnalyticsOut> {
+  const wholeTree = filters.completionYear
+    ? await loadProjectSubtreeRollups(db)
+    : null;
+  const completionIds = wholeTree
+    ? wholeTree.allRows
+        .filter((row) => {
+          const window = wholeTree.dateWindows.get(row.id);
+          return (
+            window &&
+            projectCompletionYear(row, window) === filters.completionYear
+          );
+        })
+        .map((row) => row.id)
+    : undefined;
   const projectRows = await getDb(db).query.project.findMany({
-    where: buildDashboardProjectWhere(filters),
+    where: buildDashboardProjectWhere(filters, completionIds),
     orderBy: [asc(project.name)],
     columns: { id: true, shortcode: true, name: true },
   });
@@ -74,7 +88,8 @@ export async function projectPortfolioAnalytics(
   const shortcodeById = new Map(
     projectRows.map((r) => [r.id, unsafeProjectShortcode(r.shortcode)]),
   );
-  const { subtreeRollups } = await loadProjectSubtreeRollups(db, ids);
+  const { subtreeRollups } =
+    wholeTree ?? (await loadProjectSubtreeRollups(db, ids));
 
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;

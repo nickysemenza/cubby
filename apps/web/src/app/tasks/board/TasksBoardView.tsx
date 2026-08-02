@@ -1,4 +1,8 @@
-import type { TaskBoardInput, TaskOut } from "@cubby/schemas/project";
+import type {
+  TaskBoardInput,
+  TaskFilters,
+  TaskOut,
+} from "@cubby/schemas/project";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -46,7 +50,7 @@ function BoardSkeleton() {
 }
 
 /** The `/tasks?view=board` surface: URL-driven column/lane controls + the board. */
-export function TasksBoardView() {
+export function TasksBoardView({ filters }: { filters: TaskFilters }) {
   const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
@@ -77,8 +81,8 @@ export function TasksBoardView() {
   // status label text), traded for the server doing the active/done split +
   // done cap instead of a fetch-everything chartData read.
   const boardInput: TaskBoardInput = useMemo(
-    () => ({ search: debouncedSearch || undefined }),
-    [debouncedSearch],
+    () => ({ ...filters, search: debouncedSearch || undefined }),
+    [filters, debouncedSearch],
   );
   const { data: board = NO_BOARD, isLoading } = useQuery(
     api.task.board.queryOptions(boardInput),
@@ -117,6 +121,17 @@ export function TasksBoardView() {
         search={searchValue}
         onSearchChange={setSearchValue}
       />
+      <p className="text-muted-foreground text-xs">
+        Board is a top-level layout and loads at most 20 recently completed
+        cards.{" "}
+        <a
+          href="/tasks?view=list&status=done"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          View the complete Completed list
+        </a>
+        .
+      </p>
       {isLoading ? (
         <BoardSkeleton />
       ) : (

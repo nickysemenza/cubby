@@ -1,7 +1,3 @@
-import {
-  LIVE_PROJECT_STATUSES,
-  projectStatusValues,
-} from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 import {
   DASHBOARD_FILTER_SEARCH_KEYS,
@@ -13,37 +9,30 @@ import {
 } from "./dashboard-filter-state";
 
 describe("filtersFromSearch", () => {
-  it("treats an absent statuses param as the default live three", () => {
+  it("treats an absent statuses param as unrestricted", () => {
     const filters = filtersFromSearch({});
-    expect(filters.statuses).toEqual(new Set(LIVE_PROJECT_STATUSES));
+    expect(filters.statuses).toEqual(new Set());
   });
 });
 
 describe("filtersToSearch", () => {
-  it("serializes the default (live three) status selection to undefined", () => {
+  it("serializes the unfiltered status selection to undefined", () => {
     const result = filtersToSearch(defaultFilters);
     expect(result.statuses).toBeUndefined();
   });
 
-  it("serializes a deselect-all (empty) status selection to all four statuses", () => {
+  it("serializes an empty status selection as no restriction", () => {
     const result = filtersToSearch({ ...defaultFilters, statuses: new Set() });
-    expect(result.statuses).toBeDefined();
-    expect(new Set(result.statuses)).toEqual(new Set(projectStatusValues));
-    expect(result.statuses).toHaveLength(4);
+    expect(result.statuses).toBeUndefined();
   });
 
-  it("round-trips a deselect-all selection back to the default live three", () => {
+  it("round-trips an empty selection as unrestricted", () => {
     const searched = filtersToSearch({
       ...defaultFilters,
       statuses: new Set(),
     });
     const reparsed = filtersFromSearch({ statuses: searched.statuses });
-    // All four statuses are present, not the live three — the URL is
-    // bi-state (absent = default three, present = exactly those), so an
-    // explicit all-four param is honored as-is rather than collapsed back
-    // down. The chip UI re-lighting "all four" (not "back to the default
-    // three") is the documented, intentional behavior.
-    expect(reparsed.statuses).toEqual(new Set(projectStatusValues));
+    expect(reparsed.statuses).toEqual(new Set());
   });
 
   it("omits kinds/locations/date when unset", () => {
@@ -51,29 +40,23 @@ describe("filtersToSearch", () => {
     expect(result.kinds).toBeUndefined();
     expect(result.locations).toBeUndefined();
     expect(result.date).toBeUndefined();
+    expect(result.completed).toBeUndefined();
   });
 });
 
 describe("filtersToScopeInput", () => {
-  it("always sets statusScope explicitly for the default filters", () => {
+  it("leaves statusScope undefined for the unfiltered default", () => {
     const scope = filtersToScopeInput(defaultFilters);
-    expect(scope.statusScope).toBeDefined();
-    expect(new Set(scope.statusScope)).toEqual(new Set(LIVE_PROJECT_STATUSES));
+    expect(scope.statusScope).toBeUndefined();
   });
 
-  it("always sets statusScope explicitly even for an empty selection", () => {
-    // filtersToScopeInput is a direct Filters -> scope mapping; it does not
-    // itself re-apply the "empty means all four" URL-serialization rule
-    // (that's filtersToSearch's job). What matters here is that the field
-    // is never left `undefined` — never relying on the server's own
-    // "omitted statusScope means all four statuses" default, since that
-    // default doesn't match the chips' default (the live three).
+  it("keeps an empty selection unrestricted", () => {
+    // Empty is the ordinary no-restriction state in both the URL and API.
     const scope = filtersToScopeInput({
       ...defaultFilters,
       statuses: new Set(),
     });
-    expect(scope.statusScope).toBeDefined();
-    expect(scope.statusScope).toEqual([]);
+    expect(scope.statusScope).toBeUndefined();
   });
 
   it("resolves a dateRange preset to dateFrom/dateTo using the injected today", () => {
@@ -88,6 +71,16 @@ describe("filtersToScopeInput", () => {
 
   it("leaves dateFrom/dateTo undefined when no dateRange is set", () => {
     const scope = filtersToScopeInput(defaultFilters);
+    expect(scope.dateFrom).toBeUndefined();
+    expect(scope.dateTo).toBeUndefined();
+  });
+
+  it("forwards completion year independently of the activity date range", () => {
+    const scope = filtersToScopeInput({
+      ...defaultFilters,
+      completionYear: "2024",
+    });
+    expect(scope.completionYear).toBe("2024");
     expect(scope.dateFrom).toBeUndefined();
     expect(scope.dateTo).toBeUndefined();
   });
@@ -150,15 +143,21 @@ describe("URL search-param key disjointness", () => {
    */
   const PROJECT_TABLE_MANIFEST_SEARCH_KEYS = [
     "name",
+    "statuses",
+    "kinds",
+    "locations",
+    "date",
+    "completed",
+    "parent",
     "sort",
     "page",
     "pageSize",
   ] as const;
 
-  it("shares no search-param keys between the dashboard chips and the project table", () => {
-    const chipKeys = new Set<string>(DASHBOARD_FILTER_SEARCH_KEYS);
+  it("uses the same URL keys in the dashboard and project list", () => {
     const tableKeys = new Set<string>(PROJECT_TABLE_MANIFEST_SEARCH_KEYS);
-    const intersection = [...chipKeys].filter((key) => tableKeys.has(key));
-    expect(intersection).toEqual([]);
+    expect(
+      DASHBOARD_FILTER_SEARCH_KEYS.every((key) => tableKeys.has(key)),
+    ).toBe(true);
   });
 });

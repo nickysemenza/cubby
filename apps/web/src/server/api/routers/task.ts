@@ -11,7 +11,6 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   actionableTasksOut,
-  taskBoardInput,
   taskBoardOut,
   taskBulkDueDateInput,
   taskBulkMoveInput,
@@ -24,6 +23,7 @@ import {
   taskOut,
   taskSortableFields,
   taskSummaryOut,
+  taskTimelineOut,
   taskUpdateData,
 } from "@cubby/schemas/project";
 import { z } from "zod";
@@ -39,6 +39,7 @@ import {
   getTaskByID,
   getTaskByShortcode,
   getTaskSummary,
+  getTaskTimeline,
   listActionableTasks,
   moveTasks,
   reorderTasks,
@@ -119,8 +120,9 @@ async function taskEntityIds(
  * unpaginated — see repo/task/actionable.ts for the semantics/ordering.
  */
 const listActionable = protectedProcedure
+  .input(taskFiltersSchema.optional())
   .output(strictOutput(actionableTasksOut))
-  .query(({ ctx }) => listActionableTasks(ctx.db));
+  .query(({ ctx, input }) => listActionableTasks(ctx.db, input ?? {}));
 
 /**
  * Every task matching the filters, in one round trip — chart/Gantt aggregates
@@ -268,9 +270,14 @@ const summary = protectedProcedure
  * fetch-everything-then-cap-client-side pattern. See repo/task/board.ts.
  */
 const board = protectedProcedure
-  .input(taskBoardInput)
+  .input(taskFiltersSchema)
   .output(strictOutput(taskBoardOut))
   .query(({ ctx, input }) => getTaskBoard(ctx.db, input));
+
+const timeline = protectedProcedure
+  .input(taskFiltersSchema)
+  .output(strictOutput(taskTimelineOut))
+  .query(({ ctx, input }) => getTaskTimeline(ctx.db, input));
 
 export const taskRouter = createTRPCRouter({
   getByID,
@@ -283,6 +290,7 @@ export const taskRouter = createTRPCRouter({
   chartData,
   summary,
   board,
+  timeline,
   bulkMove,
   bulkSetStatus,
   bulkSetTrade,

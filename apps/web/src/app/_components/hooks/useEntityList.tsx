@@ -61,11 +61,12 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
    */
   buildFilters?: (tableState: TableStateReturn) => TFilters;
   /**
-   * Filters that aren't column filters: page-level scope constants and view
-   * presets (a cookbook id, `topLevelOnly`, a mode's fixed `trade`). Merged
-   * OVER the manifest-derived filters. MUST be referentially stable.
+   * Contextual scope imposed by the surrounding page (for example, expenses
+   * belonging to the displayed purchase). Saved views and top-level presets
+   * must use ordinary manifest-backed filter state instead. Merged over the
+   * manifest-derived filters. MUST be referentially stable.
    */
-  extraFilters?: Partial<TFilters>;
+  scopeFilters?: Partial<TFilters>;
   /** Custom columns (inserted between standard columns) - accepts any accessor type */
   columns: AnyColumnDef<TData>[];
   /** Fallback filter definitions for columns the manifest doesn't cover. */
@@ -108,7 +109,7 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   namePrefix?: (row: TData) => ReactNode;
   /**
    * Column ids to render with no filter control — for a page that pins that
-   * column's value via `extraFilters` (which wins over the manifest-derived
+   * column's value via `scopeFilters` (which wins over the manifest-derived
    * filters), so a header control would otherwise be interactive but inert.
    * See `useStandardColumns`' doc comment. May be a fresh array literal each
    * render — internally stabilized.
@@ -137,7 +138,7 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
   table: Table<TData>;
   /**
    * The filter object the list query is running with (manifest-derived state
-   * plus `extraFilters`). For a page that must call a second procedure over
+   * plus `scopeFilters`). For a page that must call a second procedure over
    * the SAME filtered set — the expenses ledger's totals row — so it can't
    * drift from the table's own.
    */
@@ -195,7 +196,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   entity,
   queryOptions,
   buildFilters,
-  extraFilters,
+  scopeFilters,
   columns: customColumns,
   filters,
   filterOptions,
@@ -289,9 +290,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
           // both shapes, per each spec's `kind`.
           filterGetterFromColumnFilters(ts.allFilters),
         ),
-        ...extraFilters,
+        ...scopeFilters,
       }) as TFilters,
-    [entity, extraFilters],
+    [entity, scopeFilters],
   );
 
   const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;

@@ -106,7 +106,7 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
   const list = useEntityList<PurchaseOut, PurchaseFilters>({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
-    extraFilters: scope,
+    scopeFilters: scope,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     columnVisibilityScope: "vendor-detail",

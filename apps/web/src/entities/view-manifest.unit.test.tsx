@@ -88,6 +88,37 @@ describe("expense views produce the filters their old tabs pinned", () => {
   });
 });
 
+describe("project and task saved views use ordinary server filters", () => {
+  const build = (entity: "project" | "task", viewId: string) => {
+    const view = viewsForEntity(entity).find(
+      (candidate) => candidate.id === viewId,
+    );
+    if (!view) throw new Error(`no such view: ${entity}/${viewId}`);
+    const values = new Map(
+      view.filters.map((filter) => [filter.id, filter.value]),
+    );
+    return buildFiltersFromManifest(getEntityFilters(entity), (columnId) =>
+      values.get(columnId),
+    );
+  };
+
+  it("Completed projects is exactly status done", () => {
+    expect(build("project", "completed")).toEqual({ status: ["done"] });
+  });
+
+  it("Inbox tasks are open, unassigned, and parentless", () => {
+    expect(build("task", "inbox")).toEqual({
+      status: ["not_started", "later", "in_progress", "blocked"],
+      projectPresenceFilter: "none",
+      parentTaskPresenceFilter: "none",
+    });
+  });
+
+  it("Completed tasks is exactly status done", () => {
+    expect(build("task", "completed")).toEqual({ status: ["done"] });
+  });
+});
+
 describe("isViewActive", () => {
   const view = {
     id: "v",

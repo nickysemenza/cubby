@@ -16,7 +16,11 @@
  *     `endDate` are now manual OVERRIDES on a derived window, that overlap
  *     tests the project's dated CONTENT as well, not only the two columns.
  */
-import type { ProjectDashboardFilters } from "@cubby/schemas/project";
+import type { ProjectId } from "@cubby/schemas/identifiers";
+import type {
+  EmbeddedProjectScope,
+  ProjectDashboardFilters,
+} from "@cubby/schemas/project";
 import {
   and,
   arrayOverlaps,
@@ -30,22 +34,21 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
+import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import {
   buildSearchConditions,
+  getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
+import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 
 /**
  * `kinds`/`locations` conditions only (no status, no search, no date) —
  * factored out so `dashboard-summary.ts` can reuse them for the
  * `activeProjectCount`/`completedCount` portfolio stats, which need a FIXED
- * status condition (live / `= 'done'`) regardless of what `statusScope` the
- * caller passed, and deliberately ignore the date window: `completedCount`
- * feeds a "N completed projects — view history →" link to an UNSCOPED view,
- * so date-scoping the count would make the number disagree with the page it
- * links to.
+ * status condition regardless of what `statusScope` the caller passed.
  */
 export function dashboardKindLocationConditions(
   filters: Pick<ProjectDashboardFilters, "kinds" | "locations">,
@@ -203,7 +206,7 @@ function datedExpenseProjectIds(dateFrom?: string, dateTo?: string) {
  * `project.startDate` is indexed (`Project_startDate_idx`); the OR-with-NULL
  * shape means Postgres may not use it, which is fine at this row count.
  */
-function dashboardProjectDateCondition(
+export function dashboardProjectDateCondition(
   filters: Pick<ProjectDashboardFilters, "dateFrom" | "dateTo">,
 ): SQL | undefined {
   const { dateFrom, dateTo } = filters;
@@ -230,11 +233,15 @@ function dashboardProjectDateCondition(
  */
 function dashboardScopeConditions(
   filters: ProjectDashboardFilters,
+  completionIds?: ProjectId[],
 ): Array<SQL | undefined> {
   return [
     dashboardStatusCondition(filters),
     ...dashboardKindLocationConditions(filters),
     dashboardProjectDateCondition(filters),
+    filters.completionYear
+      ? inArray(project.id, completionIds ?? [])
+      : undefined,
   ];
 }
 
@@ -245,11 +252,12 @@ function dashboardScopeConditions(
  */
 export function buildDashboardProjectWhere(
   filters: ProjectDashboardFilters,
+  completionIds?: ProjectId[],
 ): SQL | undefined {
   return buildSearchConditions(
     project,
     [{ column: project.name, term: filters.search }],
-    dashboardScopeConditions(filters),
+    dashboardScopeConditions(filters, completionIds),
   );
 }
 
@@ -274,6 +282,7 @@ export function buildDashboardProjectWhere(
  */
 export function buildUndatedProjectWhere(
   filters: ProjectDashboardFilters,
+  completionIds?: ProjectId[],
 ): SQL | undefined {
   return buildSearchConditions(
     project,
@@ -281,10 +290,46 @@ export function buildUndatedProjectWhere(
     [
       dashboardStatusCondition(filters),
       ...dashboardKindLocationConditions(filters),
+      filters.completionYear
+        ? inArray(project.id, completionIds ?? [])
+        : undefined,
       isNull(project.startDate),
       isNull(project.endDate),
       notInArray(project.id, datedTaskProjectIds()),
       notInArray(project.id, datedExpenseProjectIds()),
     ],
   );
+}
+
+/** Resolve a visible Projects-page scope to live project ids for embedded lists. */
+export async function matchingEmbeddedProjectIds(
+  db: Database,
+  scope: EmbeddedProjectScope,
+): Promise<ProjectId[]> {
+  const filters: ProjectDashboardFilters = {
+    statusScope: scope.statuses,
+    kinds: scope.kinds,
+    locations: scope.locations,
+    search: scope.search,
+    dateFrom: scope.dateFrom,
+    dateTo: scope.dateTo,
+    completionYear: scope.completionYear,
+  };
+  const dated = scope.completionYear ? await loadProjectDateWindows(db) : null;
+  const completionIds = dated
+    ? dated.tree.allRows
+        .filter((row) => {
+          const window = dated.dateWindows.get(row.id);
+          return (
+            window &&
+            projectCompletionYear(row, window) === scope.completionYear
+          );
+        })
+        .map((row) => row.id)
+    : undefined;
+  const rows = await getDb(db)
+    .select({ id: project.id })
+    .from(project)
+    .where(buildDashboardProjectWhere(filters, completionIds));
+  return rows.map((row) => row.id);
 }

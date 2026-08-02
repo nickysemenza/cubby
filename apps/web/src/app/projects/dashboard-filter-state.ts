@@ -5,12 +5,7 @@
  * alias into a `.tsx`/`.ts` file. Only `@cubby/schemas/*` and `date-fns` are
  * allowed as imports here.
  */
-import {
-  LIVE_PROJECT_STATUSES,
-  type ProjectKind,
-  type ProjectStatus,
-  projectStatusValues,
-} from "@cubby/schemas/project";
+import type { ProjectKind, ProjectStatus } from "@cubby/schemas/project";
 import { format, startOfYear, subMonths } from "date-fns";
 
 export type Filters = {
@@ -19,6 +14,7 @@ export type Filters = {
   locations: Set<string>;
   /** Preset key ("3m" | "12m" | "ytd") or a 4-digit year; null = all time. */
   dateRange: string | null;
+  completionYear: string | null;
 };
 
 /**
@@ -31,6 +27,7 @@ export type FilterSearchParams = {
   kinds?: ProjectKind[];
   locations?: string[];
   date?: string;
+  completed?: string;
 };
 
 /** The search-param serialization of a `Filters` value — same shape as
@@ -40,6 +37,7 @@ export type FilterSearchOutput = {
   kinds: ProjectKind[] | undefined;
   locations: string[] | undefined;
   date: string | undefined;
+  completed: string | undefined;
 };
 
 /** The search-param keys this filter bar owns. Used to assert disjointness
@@ -51,6 +49,7 @@ export const DASHBOARD_FILTER_SEARCH_KEYS = [
   "kinds",
   "locations",
   "date",
+  "completed",
 ] as const;
 
 export type DateRangeBounds = {
@@ -87,68 +86,44 @@ export function dateRangeBounds(
   }
 }
 
-/** The dashboard's resting state: the three "live" statuses selected, no
- * kind/location/date narrowing. Replaces the old `emptyFilters` (all-empty
- * Sets, nothing lit) — the chips now default to an honest reflection of what
- * the server actually scopes to on first load. */
+/** The dashboard's resting state has no record-membership restriction. */
 export const defaultFilters: Filters = {
-  statuses: new Set(LIVE_PROJECT_STATUSES),
+  statuses: new Set(),
   kinds: new Set(),
   locations: new Set(),
   dateRange: null,
+  completionYear: null,
 };
 
-/** True when `filters.statuses` is exactly the default live-three selection
- * (order-independent) — the state that should serialize to an absent
- * `statuses` URL param. */
+/** An empty selection is the unfiltered status state. */
 export function isDefaultStatusSelection(filters: Filters): boolean {
-  return (
-    filters.statuses.size === LIVE_PROJECT_STATUSES.length &&
-    LIVE_PROJECT_STATUSES.every((status) => filters.statuses.has(status))
-  );
+  return filters.statuses.size === 0;
 }
 
-/** Parse the route's search params into `Filters`. An absent (or
- * catch-defaulted-to-undefined) `statuses` param means the default live
- * three, not "none selected" — the dashboard never actually shows zero
- * status chips lit on first load. */
+/** Parse ordinary URL filters. Absent means unrestricted. */
 export function filtersFromSearch(search: FilterSearchParams): Filters {
   return {
-    statuses: new Set(search.statuses ?? LIVE_PROJECT_STATUSES),
+    statuses: new Set(search.statuses ?? []),
     kinds: new Set(search.kinds ?? []),
     locations: new Set(search.locations ?? []),
     dateRange: search.date ?? null,
+    completionYear: search.completed ?? null,
   };
 }
 
 /**
  * Serialize `Filters` back to search params for `navigate({ search })`.
  *
- * Bi-state for `statuses`: the URL is either absent (meaning the default
- * live three) or present with exactly the selected statuses. The default
- * three selection therefore serializes to `undefined` so the default URL
- * stays clean (`/projects`, no `statuses` query param).
- *
- * An **empty** selection (the user toggled off every status chip) does
- * *not* serialize to `[]` — there's no representation for "empty" in the
- * bi-state model above, and landing on `?statuses=` would read as "nothing
- * lit but every row still shows" once round-tripped back through
- * `filtersFromSearch` (which treats absent/empty as "give me the default").
- * Instead it serializes to *all four* statuses: deselecting the last chip
- * re-selects all four rather than landing on an empty set. This also means
- * the round trip through the URL is what actually re-lights the chips —
- * there's no separate "prevent going empty" logic in the toggle handler.
+ * Empty/omitted fields always serialize as absent and add no server
+ * restriction. This is the invariant behind bare `/projects`.
  */
 export function filtersToSearch(filters: Filters): FilterSearchOutput {
   return {
-    statuses: isDefaultStatusSelection(filters)
-      ? undefined
-      : filters.statuses.size === 0
-        ? [...projectStatusValues]
-        : [...filters.statuses],
+    statuses: filters.statuses.size > 0 ? [...filters.statuses] : undefined,
     kinds: filters.kinds.size > 0 ? [...filters.kinds] : undefined,
     locations: filters.locations.size > 0 ? [...filters.locations] : undefined,
     date: filters.dateRange ?? undefined,
+    completed: filters.completionYear ?? undefined,
   };
 }
 
@@ -156,21 +131,17 @@ export function filtersToSearch(filters: Filters): FilterSearchOutput {
  * `project.portfolioAnalytics` accept (see `projectDashboardFiltersSchema`
  * in `@cubby/schemas/project`). */
 export type ScopeInput = {
-  statusScope: ProjectStatus[];
+  statusScope: ProjectStatus[] | undefined;
   kinds: ProjectKind[] | undefined;
   locations: string[] | undefined;
   dateFrom: string | undefined;
   dateTo: string | undefined;
+  completionYear: string | undefined;
 };
 
 /**
- * Map `Filters` to the tRPC scope input. `statusScope` is **always** sent
- * explicitly — never `undefined` — so the query never falls back to the
- * server's own default (an omitted `statusScope` means "no status
- * condition, i.e. all four statuses", per `projectDashboardFiltersSchema`'s
- * doc comment — that default does not match the chips' own default of "the
- * live three"). Relying on it would silently un-scope the dashboard's
- * default view. `dateRange` resolves to `dateFrom`/`dateTo` via
+ * Map `Filters` to the tRPC scope input. Empty status state remains omitted
+ * and therefore unrestricted. `dateRange` resolves to `dateFrom`/`dateTo` via
  * `dateRangeBounds`; `today` is injectable for the same testability reason
  * as `dateRangeBounds` itself.
  */
@@ -182,10 +153,11 @@ export function filtersToScopeInput(
     ? dateRangeBounds(filters.dateRange, today)
     : null;
   return {
-    statusScope: [...filters.statuses],
+    statusScope: filters.statuses.size > 0 ? [...filters.statuses] : undefined,
     kinds: filters.kinds.size > 0 ? [...filters.kinds] : undefined,
     locations: filters.locations.size > 0 ? [...filters.locations] : undefined,
     dateFrom: bounds?.from,
     dateTo: bounds?.to,
+    completionYear: filters.completionYear ?? undefined,
   };
 }

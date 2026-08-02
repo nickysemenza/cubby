@@ -22,6 +22,15 @@ interface DataTableViewsProps<TData> {
   entity: Entity | undefined;
 }
 
+interface SavedViewsMenuProps {
+  entity: Entity | undefined;
+  columnFilters: ReadonlyArray<{ id: string; value: unknown }>;
+  sorting: ReadonlyArray<{ id: string; desc: boolean }>;
+  onApplyFilters: (filters: ViewDefinition["filters"]) => void;
+  onApplySort: (sort: NonNullable<ViewDefinition["sort"]>) => void;
+  onResetPage?: () => void;
+}
+
 /**
  * Saved-view menu for a list table. Renders nothing for an entity with no
  * declared views, so every other table is untouched.
@@ -39,13 +48,34 @@ export function DataTableViews<TData>({
 
   const { columnFilters, sorting } = table.getState();
 
+  return (
+    <SavedViewsMenu
+      entity={entity}
+      columnFilters={columnFilters}
+      sorting={sorting}
+      onApplyFilters={(filters) => table.setColumnFilters(filters)}
+      onApplySort={(sort) => table.setSorting(sort)}
+      onResetPage={() => table.setPageIndex(0)}
+    />
+  );
+}
+
+/** Saved-view chooser decoupled from TanStack so dashboards can share it. */
+export function SavedViewsMenu({
+  entity,
+  columnFilters,
+  sorting,
+  onApplyFilters,
+  onApplySort,
+  onResetPage,
+}: SavedViewsMenuProps) {
+  const views = viewsForEntity(entity);
+  if (views.length === 0) return null;
+
   const applyView = (view: ViewDefinition) => {
-    table.setColumnFilters(view.filters);
-    if (view.sort) table.setSorting(view.sort);
-    // Belt-and-braces: setColumnFilters already resets the page (see
-    // useTableState), but a view that only changes the sort wouldn't, and
-    // landing on page 3 of a different result set shows an empty table.
-    table.setPageIndex(0);
+    onApplyFilters(view.filters);
+    if (view.sort) onApplySort(view.sort);
+    onResetPage?.();
   };
 
   return (

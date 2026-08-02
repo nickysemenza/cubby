@@ -1,4 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  LIVE_PROJECT_STATUSES,
+  taskStatusValues,
+} from "@cubby/schemas/project";
 import { FILTER_NONE } from "./filters";
 
 /**
@@ -6,7 +10,7 @@ import { FILTER_NONE } from "./filters";
  * table.
  *
  * These used to be view-switcher tabs whose filters lived in a
- * `Partial<ExpenseFilters>` spread into `useEntityList`'s `extraFilters`.
+ * `Partial<ExpenseFilters>` spread into `useEntityList`'s contextual scope.
  * That spread wins over the manifest-derived filters, so on a preset tab the
  * matching header control stayed interactive but inert — you could pick a
  * trade and nothing happened. The preset was also invisible in the URL, so a
@@ -45,13 +49,44 @@ export interface ViewDefinition {
   sort?: Array<{ id: string; desc: boolean }>;
 }
 
-/**
- * Only `expense` has views today. Tasks' `history` tab is deliberately NOT
- * here: it pins `completion: "done"`, a schema enum with no column and no
- * manifest spec, so it isn't expressible as column-filter state without
- * inventing a column for it. It keeps its tab.
- */
+/** Saved views select records; renderer tabs never do. */
 export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
+  project: [
+    {
+      id: "active",
+      label: "Active",
+      description: "Projects that have not been completed",
+      filters: [{ id: "status", value: [...LIVE_PROJECT_STATUSES] }],
+    },
+    {
+      id: "completed",
+      label: "Completed",
+      description: "Finished projects, including sub-projects",
+      filters: [{ id: "status", value: ["done"] }],
+    },
+  ],
+  task: [
+    {
+      id: "inbox",
+      label: "Inbox",
+      description: "Open top-level tasks with no project",
+      filters: [
+        {
+          id: "status",
+          value: taskStatusValues.filter((status) => status !== "done"),
+        },
+        { id: "project", value: [FILTER_NONE] },
+        { id: "parentTask", value: [FILTER_NONE] },
+      ],
+    },
+    {
+      id: "completed",
+      label: "Completed",
+      description: "Finished tasks, including subtasks",
+      filters: [{ id: "status", value: ["done"] }],
+      sort: [{ id: "updatedAt", desc: true }],
+    },
+  ],
   expense: [
     {
       id: "planned",

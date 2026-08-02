@@ -20,6 +20,7 @@ export function DashboardFilters({
   availableKinds,
   availableLocations,
   availableYears,
+  availableCompletionYears,
 }: {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
@@ -27,6 +28,7 @@ export function DashboardFilters({
   availableLocations: string[];
   /** Distinct years present in expense/task dates, newest first. */
   availableYears: string[];
+  availableCompletionYears: string[];
 }) {
   // Compares against `defaultFilters` (the live-three statuses, nothing
   // else), not an empty selection — so the resting first-load state, which
@@ -35,7 +37,8 @@ export function DashboardFilters({
     !isDefaultStatusSelection(filters) ||
     filters.kinds.size > 0 ||
     filters.locations.size > 0 ||
-    filters.dateRange !== null;
+    filters.dateRange !== null ||
+    filters.completionYear !== null;
 
   function toggle(key: "statuses" | "kinds" | "locations", value: string) {
     const next = new Set(filters[key]);
@@ -86,6 +89,14 @@ export function DashboardFilters({
           onChange={(dateRange) => onFiltersChange({ ...filters, dateRange })}
           formatLabel={(v) => DATE_PRESET_LABELS.get(v) ?? v}
           hint="narrows expenses, tasks & projects by date"
+        />
+        <SingleSelectChipGroup
+          label="Completed"
+          options={availableCompletionYears}
+          value={filters.completionYear}
+          onChange={(completionYear) =>
+            onFiltersChange({ ...filters, completionYear })
+          }
         />
       </Row>
       {hasFilters && (

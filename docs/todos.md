@@ -41,8 +41,8 @@ Ordered within each domain only; choose based on which surface is seeing real us
 - **Shopping:** split Shopping list v1.5 into independently shippable slices:
   (1) manual items + durable check-off, (2) shopper units + pack rounding,
   (3) estimated cost, then (4) URL exclusions + text/print export.
-- **House:** recurring maintenance; then the tracker data gaps as separate changes
-  (`completedAt`, portfolio figures, mobile renderer, project History, activity
+- **House:** recurring maintenance; then the tracker data gaps as separate
+  changes (`completedAt`, portfolio figures, mobile renderer, activity
   filter), not one omnibus PR.
 - **Small UX batch:** recipe clone, recipe QR labels, compare-page picker, and
   product bulk label printing. These may travel together only if their shared
@@ -727,10 +727,12 @@ as in `useTableColumnVisibility.ts` / `useTableColumnSizing.ts`
 (`table-columns:{entity}`). A saved view is the same shape `view-manifest.ts` already
 uses, so `DataTableViews` should just render two groups.
 
-Still not convertible, and this is by design: **Analytics, the task Board, and the
-`/tasks` `history` tab are different *renderers* or non-column state** (`history` pins
-`completion: "done"`, a schema enum with no column and no manifest spec). The switcher
-has to keep those arms.
+The invariant is now explicit: a **renderer changes presentation** and a
+**saved view selects records**. Projects History, Tasks History, and Tasks
+Inbox are manifest declarations backed by visible URL filters; they are not
+renderer arms. Renderer-intrinsic limits (Board's top-level layout/completed
+cap, Timeline's dated-only rows, Next's actionable semantics) must be
+server-enforced and disclosed.
 
 ### Remaining from the filter-honesty audit
 
@@ -739,9 +741,10 @@ workflows, honest infinite-list URL state, one server-list query path, and share
 project-tree expansion. The old ingredient `presenceCondition` item was stale; that
 implementation now uses `idSetPresence`.
 
-- [ ] **History view filtering/over-fetch.** `HistoryView` still owns local `useState`
-      filters, which are unshareable unlike every other view on that page, and reads only
-      `data.projects` from a payload that includes the attention computation.
+- [x] **History filtering/over-fetch.** Completed projects and tasks are
+      ordinary saved filters. Projects Data uses paginated server lists;
+      embedded Tasks and Expenses use an explicit matching-project scope and
+      exclude unassigned rows.
 
 ### Rejected
 

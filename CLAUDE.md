@@ -48,6 +48,20 @@ Two runtime traps that turned a WASM CPU leak into a "slow DB write" misdiagnosi
 
 ## Required Helpers
 
+### Renderers, saved views, and scopes
+
+- A **renderer** changes presentation; a **saved view** selects records through
+  ordinary manifest-backed, visible URL filter state.
+- Full-page list membership, sorting, totals, and pagination belong on the
+  server. Do not fetch all rows and decide membership in React.
+- `useEntityList.scopeFilters` is only for a visible contextual scope imposed
+  by a surrounding page (for example, expenses belonging to a displayed
+  purchase). Never use it to implement a top-level preset or renderer.
+- Empty or omitted filter fields mean unrestricted. A requested but unresolved
+  id must fail or match nothing; it must never widen to an unfiltered query.
+- Renderer-intrinsic omissions must be server-enforced and visibly disclosed
+  with an omitted count or a link to the complete List.
+
 Use these instead of inline patterns:
 
 | Pattern to avoid                                           | Use instead                                     | Import from                                  |

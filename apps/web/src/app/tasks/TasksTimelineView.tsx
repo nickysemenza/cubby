@@ -1,4 +1,4 @@
-import type { TaskOut } from "@cubby/schemas/project";
+import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
@@ -135,16 +135,10 @@ function TimelineSkeleton() {
 /** The `/tasks?view=timeline` surface: a calendar heatmap of due-date density
  * plus a flat Gantt for tasks that span a range (`dueDate` + `dueEndDate`).
  * Fetch-all, same convention as the board (`TasksBoardView`). */
-export function TasksTimelineView() {
+export function TasksTimelineView({ filters }: { filters: TaskFilters }) {
   const api = useTRPC();
-  const { data: tasks = NO_TASKS, isLoading } = useQuery(
-    api.task.chartData.queryOptions({}),
-  );
-
-  const datedTasks = useMemo(
-    () => tasks.filter((t) => t.dueDate != null),
-    [tasks],
-  );
+  const { data, isLoading } = useQuery(api.task.timeline.queryOptions(filters));
+  const datedTasks = data?.tasks ?? NO_TASKS;
 
   if (isLoading) {
     return <TimelineSkeleton />;
@@ -158,6 +152,23 @@ export function TasksTimelineView() {
 
   return (
     <Stack gap="lg">
+      <p className="text-muted-foreground text-xs">
+        Timeline intrinsically shows dated tasks only.{" "}
+        {data && data.undatedCount > 0 && (
+          <>
+            {data.undatedCount} matching undated task
+            {data.undatedCount === 1 ? " is" : "s are"} omitted.{" "}
+          </>
+        )}
+        <Link
+          to="/tasks"
+          search={{ view: "list" }}
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          Open the complete List
+        </Link>
+        .
+      </p>
       <Section
         title="Calendar"
         description="Due-date density across every task."

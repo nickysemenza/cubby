@@ -1,24 +1,23 @@
 import type {
-  ExpenseOut,
+  EmbeddedProjectScope,
   ProjectDashboardSummaryOut,
+  ProjectFilters,
   ProjectOut,
   ProjectPortfolioAnalyticsOut,
+  ProjectStatus,
   TaskOut,
 } from "@cubby/schemas/project";
+import { projectStatusValues } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { format } from "date-fns";
-import { partition, uniq } from "es-toolkit";
-import {
-  Calendar,
-  DollarSign,
-  Hammer,
-  History as HistoryIcon,
-  Wallet,
-} from "lucide-react";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { createColumnHelper } from "@tanstack/react-table";
+import { Calendar, DollarSign, Hammer, Wallet } from "lucide-react";
+import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
+import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -51,23 +50,25 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 import { CreateProjectDialog } from "./create-project-dialog";
 import {
+  defaultFilters,
   type Filters,
   filtersFromSearch,
   filtersToScopeInput,
   filtersToSearch,
 } from "./dashboard-filter-state";
 import { DashboardFilters } from "./dashboard-filters";
-import { SingleSelectChipGroup } from "./filter-chips";
 import { NeedsAttention } from "./needs-attention";
 import {
+  ProjectDataExpenseList,
+  ProjectDataTaskList,
+} from "./project-data-lists";
+import {
   capitalize,
-  ExpenseList,
   formatDate,
   formatDateRange,
   PROJECT_STATUS_LABELS,
   ProjectTable,
   StatusIcon,
-  TaskList,
 } from "./shared";
 
 // Charts are Nivo/d3-heavy and each tab's panel is unmounted until selected, so
@@ -106,14 +107,13 @@ const TaskStatusBoard = lazy(() =>
   })),
 );
 
-type DashboardView = "overview" | "analytics" | "data" | "gallery" | "history";
+type DashboardView = "overview" | "analytics" | "data" | "gallery";
 
 const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
   { value: "overview", label: "Overview" },
   { value: "analytics", label: "Analytics" },
   { value: "data", label: "Data" },
   { value: "gallery", label: "Gallery" },
-  { value: "history", label: "History" },
 ];
 
 /** Cover image (first attached image) per project id — keyed lookup for the gallery/overview cards. */
@@ -121,8 +121,6 @@ type CoverImages = RouterOutputs["image"]["imagesByProjectIds"];
 
 const NO_PROJECT_IDS: string[] = [];
 const NO_PROJECTS: ProjectOut[] = [];
-const NO_TASKS: TaskOut[] = [];
-const NO_EXPENSES: ExpenseOut[] = [];
 const NO_KINDS: string[] = [];
 const NO_LOCATIONS: string[] = [];
 const NO_YEARS: string[] = [];
@@ -137,15 +135,6 @@ export function ProjectsDashboard() {
   const onViewChange = (v: DashboardView) =>
     navigate({ search: (prev) => ({ ...prev, view: v }), replace: true });
 
-  // History has its own scope (forced to `status: done`) and its own local
-  // kind/location/completion-year filters — it doesn't share the
-  // statuses/kinds/locations/date chips the other four views use, so it gets
-  // its own top-level branch rather than one more `view === ...` block deep
-  // inside MainDashboard.
-  if (view === "history") {
-    return <HistoryView onViewChange={onViewChange} />;
-  }
-
   return <MainDashboard view={view} onViewChange={onViewChange} />;
 }
 
@@ -154,9 +143,11 @@ export function ProjectsDashboard() {
 function DashboardToolbar({
   view,
   onViewChange,
+  savedViews,
 }: {
   view: DashboardView;
   onViewChange: (v: DashboardView) => void;
+  savedViews?: ReactNode;
 }) {
   return (
     <Row justify="between" align="center" wrap gap="sm">
@@ -166,9 +157,12 @@ function DashboardToolbar({
         value={view}
         onValueChange={onViewChange}
       />
-      <CreateDialogAction Dialog={CreateProjectDialog}>
-        New Project
-      </CreateDialogAction>
+      <Row align="center" gap="sm">
+        {savedViews}
+        <CreateDialogAction Dialog={CreateProjectDialog}>
+          New Project
+        </CreateDialogAction>
+      </Row>
     </Row>
   );
 }
@@ -200,24 +194,23 @@ function DashboardErrorState({
 
 /**
  * `dashboardSummary` is fetched for all four of these views — it's the
- * bounded, cheap Overview read (summary counts, active-project list w/
+ * bounded, cheap Overview read (summary counts, filtered project list w/
  * rollups, task-status breakdown, upcoming tasks, Needs Attention, filter
  * options), and Data/Gallery reuse its `projects` list rather than issuing
  * their own query. Only `portfolioAnalytics` (chart aggregates) and the
- * Data view's raw task/expense fetch-alls are gated behind their own view,
- * per the whole point of splitting the old fetch-all `project.dashboard`.
+ * Data's three lists issue their own paginated server reads. The dashboard
+ * summary is never used as a browser-side membership oracle for them.
  */
 function MainDashboard({
   view,
   onViewChange,
 }: {
-  view: Exclude<DashboardView, "history">;
+  view: DashboardView;
   onViewChange: (v: DashboardView) => void;
 }) {
   const api = useTRPC();
   const search = route.useSearch();
   const navigate = route.useNavigate();
-  const projectPreview = useEntityPreview("project");
 
   // Keyed on the joined primitive values (not the array references
   // themselves) so a fresh-array-per-parse from validateSearch doesn't
@@ -229,7 +222,7 @@ function MainDashboard({
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives above, not the array references, on purpose
   const filters = useMemo<Filters>(
     () => filtersFromSearch(search),
-    [statusesKey, kindsKey, locationsKey, search.date],
+    [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
 
   const handleFiltersChange = (next: Filters) => {
@@ -243,10 +236,62 @@ function MainDashboard({
     });
   };
 
+  const savedViewFilters = useMemo(
+    () => [
+      ...(filters.statuses.size > 0
+        ? [{ id: "status", value: [...filters.statuses] }]
+        : []),
+      ...(filters.kinds.size > 0
+        ? [{ id: "kind", value: [...filters.kinds] }]
+        : []),
+      ...(filters.locations.size > 0
+        ? [{ id: "locations", value: [...filters.locations] }]
+        : []),
+      ...(filters.dateRange
+        ? [{ id: "dateRange", value: filters.dateRange }]
+        : []),
+      ...(filters.completionYear
+        ? [{ id: "completionYear", value: filters.completionYear }]
+        : []),
+    ],
+    [filters],
+  );
+  const savedViews = (
+    <SavedViewsMenu
+      entity="project"
+      columnFilters={savedViewFilters}
+      sorting={[]}
+      onApplyFilters={(viewFilters) => {
+        const status = viewFilters.find((filter) => filter.id === "status");
+        const statuses = Array.isArray(status?.value)
+          ? status.value.filter((value): value is ProjectStatus =>
+              projectStatusValues.includes(value as ProjectStatus),
+            )
+          : [];
+        handleFiltersChange({
+          ...defaultFilters,
+          statuses: new Set(statuses),
+        });
+      }}
+      onApplySort={() => undefined}
+    />
+  );
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives, not the Set references
   const scopeInput = useMemo(
     () => filtersToScopeInput(filters),
-    [statusesKey, kindsKey, locationsKey, search.date],
+    [statusesKey, kindsKey, locationsKey, search.date, search.completed],
+  );
+  const projectScope = useMemo<EmbeddedProjectScope>(
+    () => ({
+      statuses: scopeInput.statusScope,
+      kinds: scopeInput.kinds,
+      locations: scopeInput.locations,
+      dateFrom: scopeInput.dateFrom,
+      dateTo: scopeInput.dateTo,
+      completionYear: scopeInput.completionYear,
+    }),
+    [scopeInput],
   );
   const dashboardQuery = useQuery({
     ...api.project.dashboardSummary.queryOptions(scopeInput),
@@ -263,50 +308,11 @@ function MainDashboard({
     enabled: view === "analytics",
   });
 
-  // Data view's raw task/expense tables — also gated to their own tab, not
-  // fetched on every dashboard load. Date bounds apply server-side; the
-  // kind/location/status chips (which only project.dashboardSummary
-  // understands) are applied client-side below via the resulting project id
-  // set, same as the old client-side filtering.
-  const dataViewActive = view === "data";
-  const { data: allTasks = NO_TASKS } = useQuery({
-    ...api.task.chartData.queryOptions({
-      dueFrom: scopeInput.dateFrom,
-      dueTo: scopeInput.dateTo,
-    }),
-    enabled: dataViewActive,
-  });
-  const { data: allExpenses = NO_EXPENSES } = useQuery({
-    ...api.expense.chartData.queryOptions({
-      dateFrom: scopeInput.dateFrom,
-      dateTo: scopeInput.dateTo,
-    }),
-    enabled: dataViewActive,
-  });
-
   const projects = dashboardQuery.data?.projects ?? NO_PROJECTS;
-
-  const { scopedTasks, scopedExpenses } = useMemo(() => {
-    if (!dataViewActive) {
-      return { scopedTasks: NO_TASKS, scopedExpenses: NO_EXPENSES };
-    }
-    // Keyed by id, not name — project names aren't unique, so a name-keyed
-    // join here would cross-contaminate tasks/expenses across same-named
-    // projects.
-    const projectIds = new Set(projects.map((p) => p.id));
-    return {
-      scopedTasks: allTasks.filter(
-        (t) => !t.projectId || projectIds.has(t.projectId),
-      ),
-      scopedExpenses: allExpenses.filter(
-        (p) => !p.projectId || projectIds.has(p.projectId),
-      ),
-    };
-  }, [dataViewActive, projects, allTasks, allExpenses]);
 
   // Overview's project cards and Gallery both show cover images; the other
   // views don't render any project cards, so skip the query entirely there.
-  const showImages = view === "overview" || view === "gallery";
+  const showImages = view === "overview";
   const imageProjectIds = showImages
     ? projects.map((p) => p.id)
     : NO_PROJECT_IDS;
@@ -335,7 +341,11 @@ function MainDashboard({
   // to the stable empty arrays while `data` is still undefined.
   return (
     <Stack>
-      <DashboardToolbar view={view} onViewChange={onViewChange} />
+      <DashboardToolbar
+        view={view}
+        onViewChange={onViewChange}
+        savedViews={savedViews}
+      />
 
       <DashboardFilters
         filters={filters}
@@ -343,6 +353,9 @@ function MainDashboard({
         availableKinds={data?.filterOptions.kinds ?? NO_KINDS}
         availableLocations={data?.filterOptions.locations ?? NO_LOCATIONS}
         availableYears={data?.filterOptions.years ?? NO_YEARS}
+        availableCompletionYears={
+          data?.filterOptions.completionYears ?? NO_YEARS
+        }
       />
 
       {dashboardQuery.isLoading || !data ? (
@@ -362,10 +375,9 @@ function MainDashboard({
 
           {view === "data" && (
             <DataViewContent
-              projects={projects}
-              tasks={scopedTasks}
-              expenses={scopedExpenses}
-              projectPreview={projectPreview}
+              projectScope={projectScope}
+              locations={data.filterOptions.locations}
+              completionYears={data.filterOptions.completionYears}
               hiddenByDate={data.hiddenByDate}
               onClearDate={() =>
                 handleFiltersChange({ ...filters, dateRange: null })
@@ -375,7 +387,10 @@ function MainDashboard({
 
           {view === "gallery" && (
             <div className="pt-4">
-              <ProjectCards projects={projects} coverImages={coverImages} />
+              <ServerProjectGallery
+                locations={data.filterOptions.locations}
+                completionYears={data.filterOptions.completionYears}
+              />
             </div>
           )}
         </>
@@ -428,11 +443,11 @@ function OverviewView({
         {data.completedCount > 0 && (
           <Link
             to="/projects"
-            search={{ view: "history" }}
+            search={{ view: "data", statuses: ["done"] }}
             className="text-muted-foreground text-xs hover:text-foreground hover:underline"
           >
             {data.completedCount} completed project
-            {data.completedCount !== 1 ? "s" : ""} — view history →
+            {data.completedCount !== 1 ? "s" : ""} — view completed →
           </Link>
         )}
       </Section>
@@ -564,17 +579,15 @@ function AnalyticsView({
 // -- Data --
 
 function DataViewContent({
-  projects,
-  tasks,
-  expenses,
-  projectPreview,
+  projectScope,
+  locations,
+  completionYears,
   hiddenByDate,
   onClearDate,
 }: {
-  projects: ProjectOut[];
-  tasks: TaskOut[];
-  expenses: ExpenseOut[];
-  projectPreview: ReturnType<typeof useEntityPreview>;
+  projectScope: EmbeddedProjectScope;
+  locations: string[];
+  completionYears: string[];
   hiddenByDate: ProjectDashboardSummaryOut["hiddenByDate"];
   onClearDate: () => void;
 }) {
@@ -582,12 +595,7 @@ function DataViewContent({
     <Stack className="pt-4">
       <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Projects</h2>
-        <ProjectTable
-          projects={projects}
-          onRowClick={projectPreview.onRowClick}
-          onRowHover={projectPreview.onRowHover}
-          PreviewSheet={projectPreview.PreviewSheet}
-        />
+        <ProjectTable locations={locations} completionYears={completionYears} />
         <HiddenByDateNote
           count={hiddenByDate.projects}
           label="projects"
@@ -597,7 +605,7 @@ function DataViewContent({
 
       <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Tasks</h2>
-        <TaskList tasks={tasks} />
+        <ProjectDataTaskList projectScope={projectScope} />
         <HiddenByDateNote
           count={hiddenByDate.tasks}
           label="tasks"
@@ -607,7 +615,7 @@ function DataViewContent({
 
       <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Expenses</h2>
-        <ExpenseList expenses={expenses} />
+        <ProjectDataExpenseList projectScope={projectScope} />
         <HiddenByDateNote
           count={hiddenByDate.expenses}
           label="expenses"
@@ -652,123 +660,6 @@ function HiddenByDateNote({
   );
 }
 
-// -- History --
-
-/** `project.dates.effectiveEnd` (a plain "YYYY-MM-DD" date — the derived
- * rollup, or the manual override when set) when non-null; otherwise the
- * household-local year the project was last touched (a reasonable proxy for
- * "completed" — there's no dedicated `completedAt` column). */
-function completionYear(project: ProjectOut): string {
-  return (
-    project.dates.effectiveEnd ?? format(project.updatedAt, "yyyy-MM-dd")
-  ).slice(0, 4);
-}
-
-/**
- * Completed top-level projects — its own scope (`statusScope: ["done"]`,
- * unfiltered by the shared statuses/kinds/locations/date chips) and its own
- * local kind/location/completion-year filters, reusing `ProjectTable` (same
- * component the Data view uses) for the actual browsing surface.
- */
-function HistoryView({
-  onViewChange,
-}: {
-  onViewChange: (v: DashboardView) => void;
-}) {
-  const api = useTRPC();
-  const projectPreview = useEntityPreview("project");
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    ...api.project.dashboardSummary.queryOptions({ statusScope: ["done"] }),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const [kind, setKind] = useState<string | null>(null);
-  const [location, setLocation] = useState<string | null>(null);
-  const [year, setYear] = useState<string | null>(null);
-
-  const topLevelDone = useMemo(
-    () => (data?.projects ?? NO_PROJECTS).filter((p) => !p.parentProjectId),
-    [data],
-  );
-
-  // Kind/location rosters come from the server's `filterOptions` (already
-  // scoped to `statusScope: ["done"]`) rather than being re-derived from the
-  // fetched rows here — the server is the single source of truth for what
-  // options exist, per `dashboardSummary`.
-  const availableCompletionYears = useMemo(
-    () => uniq(topLevelDone.map(completionYear)).sort().reverse(),
-    [topLevelDone],
-  );
-
-  const filtered = useMemo(
-    () =>
-      topLevelDone.filter(
-        (p) =>
-          (!kind || p.kind === kind) &&
-          (!location || p.locations.includes(location)) &&
-          (!year || completionYear(p) === year),
-      ),
-    [topLevelDone, kind, location, year],
-  );
-
-  if (isError) {
-    return <DashboardErrorState error={error} onRetry={() => refetch()} />;
-  }
-
-  if (isLoading || !data) {
-    return <DashboardSkeleton />;
-  }
-
-  return (
-    <Stack>
-      <DashboardToolbar view="history" onViewChange={onViewChange} />
-
-      <Row wrap gap="lg">
-        <SingleSelectChipGroup
-          label="Kind"
-          options={data.filterOptions.kinds}
-          value={kind}
-          onChange={setKind}
-          formatLabel={capitalize}
-        />
-        <SingleSelectChipGroup
-          label="Location"
-          options={data.filterOptions.locations}
-          value={location}
-          onChange={setLocation}
-        />
-        <SingleSelectChipGroup
-          label="Completed"
-          options={availableCompletionYears}
-          value={year}
-          onChange={setYear}
-        />
-      </Row>
-
-      {filtered.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyIcon icon={HistoryIcon} />
-            <EmptyTitle>No completed projects</EmptyTitle>
-            <EmptyDescription>
-              {topLevelDone.length === 0
-                ? "Nothing has wrapped up yet."
-                : "Adjust your filters."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <ProjectTable
-          projects={filtered}
-          onRowClick={projectPreview.onRowClick}
-          onRowHover={projectPreview.onRowHover}
-          PreviewSheet={projectPreview.PreviewSheet}
-        />
-      )}
-    </Stack>
-  );
-}
-
 // -- Project Cards (Overview + Gallery) --
 
 function ProjectCards({
@@ -778,15 +669,7 @@ function ProjectCards({
   projects: ProjectOut[];
   coverImages: CoverImages | undefined;
 }) {
-  // Top-level only — sub-projects show on their parent's own detail page
-  // (Sub-projects section), not as independent cards here.
-  const topLevelProjects = projects.filter((p) => !p.parentProjectId);
-  const [active, done] = partition(
-    topLevelProjects,
-    (p) => p.status !== "done",
-  );
-
-  if (active.length === 0 && done.length === 0) {
+  if (projects.length === 0) {
     return (
       <Empty>
         <EmptyHeader>
@@ -799,33 +682,87 @@ function ProjectCards({
   }
 
   return (
+    <Grid cols="cards3">
+      {projects.map((project) => (
+        <ProjectCard
+          key={project.id}
+          project={project}
+          coverUrl={coverImages?.[project.id]?.[0]?.url}
+        />
+      ))}
+    </Grid>
+  );
+}
+
+/** Gallery is the ordinary paginated project list rendered as cards. */
+function ServerProjectGallery({
+  locations,
+  completionYears,
+}: {
+  locations: string[];
+  completionYears: string[];
+}) {
+  const api = useTRPC();
+  const helper = useMemo(() => createColumnHelper<ProjectOut>(), []);
+  const { options: projectOptions } = useProjectOptions();
+  const filterOptions = useFilterOptions({
+    project: projectOptions,
+    projectLocations: locations.map((value) => ({ value, label: value })),
+    projectCompletionYears: completionYears.map((value) => ({
+      value,
+      label: value,
+    })),
+  });
+  const columns = useMemo(
+    () => [
+      helper.accessor("status", { id: "status" }),
+      helper.accessor("kind", { id: "kind" }),
+      helper.accessor("locations", { id: "locations" }),
+      helper.accessor("parentProjectName", { id: "parent" }),
+      helper.accessor("startDate", { id: "startDate" }),
+    ],
+    [helper],
+  );
+  const list = useEntityList<ProjectOut, ProjectFilters>({
+    entity: "project",
+    queryOptions: api.project.list.queryOptions,
+    columns,
+    filterOptions,
+    columnVisibilityScope: "gallery",
+  });
+  const ids = useMemo(
+    () => list.data.map((project) => project.id),
+    [list.data],
+  );
+  const { data: images } = useQuery({
+    ...api.image.imagesByProjectIds.queryOptions({ projectIds: ids }),
+    enabled: ids.length > 0,
+  });
+
+  if (list.isLoading) return <Skeleton className="h-[400px] w-full" />;
+  if (list.error) {
+    return (
+      <DashboardErrorState
+        error={list.error}
+        onRetry={() => void list.refreshControls.onRefresh()}
+      />
+    );
+  }
+
+  return (
     <Stack>
-      {active.length > 0 && (
-        <Grid cols="cards3">
-          {active.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              coverUrl={coverImages?.[project.id]?.[0]?.url}
-            />
-          ))}
-        </Grid>
-      )}
-      {done.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-muted-foreground text-sm hover:text-foreground">
-            Completed ({done.length})
-          </summary>
-          <Grid cols="cards3" className="mt-4">
-            {done.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                coverUrl={coverImages?.[project.id]?.[0]?.url}
-              />
-            ))}
-          </Grid>
-        </details>
+      <ProjectCards projects={list.data} coverImages={images} />
+      {list.infiniteScroll.hasNextPage && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={list.infiniteScroll.isFetchingNextPage}
+          onClick={list.infiniteScroll.fetchNextPage}
+        >
+          {list.infiniteScroll.isFetchingNextPage
+            ? "Loading…"
+            : "Load more projects"}
+        </Button>
       )}
     </Stack>
   );

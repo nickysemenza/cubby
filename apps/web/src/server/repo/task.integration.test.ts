@@ -877,6 +877,70 @@ describe("task repository — subtasks (parentTaskId)", () => {
     expect(subtasksOnly.map((t) => t.id).sort()).toEqual(
       [doneSub.id, openSub.id].sort(),
     );
+
+    const { data: unfiltered } = await taskList(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 500,
+    });
+    expect(unfiltered.map((task) => task.id)).toEqual(
+      expect.arrayContaining([parent.id, doneSub.id, openSub.id]),
+    );
+  });
+
+  it("ordinary filters reproduce the Inbox cohort", async () => {
+    const { output: inbox } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "saved inbox task" }),
+      ctx.actor,
+    );
+    const { output: parent } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "saved inbox parent" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "saved inbox subtask",
+        parentTaskId: parent.id,
+      }),
+      ctx.actor,
+    );
+    const { output: completed } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "saved inbox done" }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, completed.id, { status: "done" }, ctx.actor);
+    const { output: assignedProject } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "saved inbox project" }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "saved inbox assigned",
+        projectId: assignedProject.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await taskList(
+      ctx.db,
+      {
+        status: ["not_started", "later", "in_progress", "blocked"],
+        projectPresenceFilter: "none",
+        parentTaskPresenceFilter: "none",
+      },
+      [],
+      { pageIndex: 0, pageSize: 500 },
+    );
+    expect(result.data.map((task) => task.id).sort()).toEqual(
+      [inbox.id, parent.id].sort(),
+    );
   });
 
   it("listActionableTasks excludes subtask rows, and parent rows carry subtask counts", async () => {

@@ -312,17 +312,45 @@ export const projectOptionsOut = z.object({
 });
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
+/**
+ * Visible `/projects` filter state forwarded to embedded Task/Expense lists.
+ * Its presence means "must belong to a live project matching this scope";
+ * unassigned rows are therefore excluded rather than silently unioned in.
+ */
+export const embeddedProjectScopeSchema = z.object({
+  statuses: z.array(projectStatusSchema).optional(),
+  kinds: z.array(projectKindSchema).optional(),
+  locations: z.array(z.string()).optional(),
+  search: z.string().optional(),
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
+  completionYear: z
+    .string()
+    .regex(/^\d{4}$/)
+    .optional(),
+});
+export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
+
 export const projectFilterFields = {
   ...auditDateFilterFields,
   ...projectRelatedFilterFields,
-  status: projectStatusSchema.optional(),
-  kind: projectKindSchema.optional(),
-  location: z.string().optional().describe("Exact match against locations[]"),
+  status: oneOrMany(projectStatusSchema).optional(),
+  kind: oneOrMany(projectKindSchema).optional(),
+  location: oneOrMany(z.string())
+    .optional()
+    .describe("Any exact match against locations[]"),
   search: z.string().optional(),
+  dateFrom: plainDate.optional(),
+  dateTo: plainDate.optional(),
+  completionYear: z
+    .string()
+    .regex(/^\d{4}$/)
+    .optional(),
+  parentProjectPresenceFilter: presenceFilter,
   /** Exclude sub-projects (rows with a non-null `parentProjectId`) from the list. */
   topLevelOnly: z.boolean().optional(),
-  /** Only this parent's live sub-projects. */
-  parentProjectId: projectShortcode.optional(),
+  /** Only these parents' live sub-projects. */
+  parentProjectId: oneOrMany(projectShortcode).optional(),
   // Only meaningful alongside `parentProjectId`: expands the filter to the
   // whole live subtree under that parent, not just direct children.
   includeSubProjects: z.boolean().optional(),
@@ -569,8 +597,9 @@ export const taskFilterFields = {
   search: z.string().optional(),
   /** Exclude subtasks (rows with a non-null `parentTaskId`) from the list. */
   topLevelOnly: z.boolean().optional(),
-  /** Only this parent's live subtasks. */
-  parentTaskId: taskShortcode.optional(),
+  /** Only these parents' live subtasks. */
+  parentTaskId: oneOrMany(taskShortcode).optional(),
+  parentTaskPresenceFilter: presenceFilter,
   /**
    * When combined with `projectId`, also match tasks in that project's live
    * descendant sub-projects.
@@ -580,6 +609,7 @@ export const taskFilterFields = {
   dueFrom: plainDate.optional().describe("Inclusive lower bound on due date"),
   /** Inclusive upper bound on a task's due date (matches `dueDate`). */
   dueTo: plainDate.optional().describe("Inclusive upper bound on due date"),
+  duePresenceFilter: presenceFilter,
   /** Completion scope — see `taskCompletionSchema`. Undefined = "all". */
   completion: taskCompletionSchema
     .optional()
@@ -594,6 +624,7 @@ export const taskFilterFields = {
   projectPresenceFilter: presenceFilter,
   /** Presence of a subject-product relationship. */
   subjectProductPresenceFilter: presenceFilter,
+  projectScope: embeddedProjectScopeSchema.optional(),
 };
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
@@ -749,13 +780,9 @@ export const taskSummaryOut = z.object({
 });
 export type TaskSummaryOut = z.infer<typeof taskSummaryOut>;
 
-/** `task.board`'s input — the axes a board view can scope by. */
-export const taskBoardInput = z.object({
-  projectId: projectShortcode.optional(),
-  includeSubProjects: z.boolean().optional(),
-  search: z.string().optional(),
-});
-export type TaskBoardInput = z.infer<typeof taskBoardInput>;
+/** `task.board` accepts the ordinary task-list filters. Its top-level layout
+ * and completed-card cap are renderer-intrinsic and disclosed by the UI. */
+export type TaskBoardInput = TaskFilters;
 
 /**
  * `task.board`'s output: every active (non-done) top-level task the board
@@ -769,6 +796,14 @@ export const taskBoardOut = z.object({
   doneCount: z.number().int(),
 });
 export type TaskBoardOut = z.infer<typeof taskBoardOut>;
+
+/** Timeline applies ordinary task filters, then intrinsically keeps dated
+ * tasks. `undatedCount` makes that renderer limitation visible. */
+export const taskTimelineOut = z.object({
+  tasks: z.array(taskOut),
+  undatedCount: z.number().int(),
+});
+export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
 
 // ---------------------------------------------------------------------------
 // Expense
@@ -1041,6 +1076,7 @@ export const expenseFilterFields = {
    * `purchaseId IS NULL`, since `purchase.vendorId` is NOT NULL (see above).
    */
   purchaseId: oneOrMany(purchaseShortcode).optional(),
+  projectScope: embeddedProjectScopeSchema.optional(),
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
@@ -1451,6 +1487,10 @@ const projectDashboardFilterFields = {
   search: z.string().optional(),
   dateFrom: plainDate.optional(),
   dateTo: plainDate.optional(),
+  completionYear: z
+    .string()
+    .regex(/^\d{4}$/)
+    .optional(),
 };
 export const projectDashboardFiltersSchema = z.object(
   projectDashboardFilterFields,
@@ -1536,6 +1576,7 @@ export type ProjectTaskStatusBreakdown = z.infer<
 export const projectFilterOptionsOut = z.object({
   kinds: z.array(projectKindSchema),
   locations: z.array(z.string()),
+  completionYears: z.array(z.string()),
   /**
    * Every calendar year (`"YYYY"`) the portfolio has data in — the union of
    * expense dates, task effective due dates, and project start/end dates —

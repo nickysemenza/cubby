@@ -481,7 +481,7 @@ export function RecipeList({
     queryOptions: api.recipe.list.queryOptions,
     // Constant scope when rendered on a cookbook page; merged over the
     // table's own column filters so search-within-a-book still works.
-    extraFilters: cookbookScope,
+    scopeFilters: cookbookScope,
     filterOptions,
     columns,
     nameClassName: "w-64",

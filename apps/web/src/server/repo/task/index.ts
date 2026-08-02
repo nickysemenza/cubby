@@ -35,3 +35,4 @@ export {
 } from "./crud";
 export { taskList } from "./lookup";
 export { getTaskSummary } from "./summary";
+export { getTaskTimeline } from "./timeline";
