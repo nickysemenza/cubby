@@ -1,13 +1,75 @@
 # Cubby — Work List
 
-The canonical backlog — high-level goals with the load-bearing details inline.
-Grouped by theme; every item is open/deferred. Design decisions and rejected
-alternatives live next to the items they concern (there is no separate plans
-directory — detail beyond what an item carries here gets re-derived at build
-time, against the code as it exists then).
+The canonical backlog. The **Triage board** is the execution queue; the domain
+catalog below carries the load-bearing detail. An unchecked box in the catalog
+means "valid idea," not "equally urgent." Anything not promoted to **Now** or
+**Next** is Later by default.
+
+Design decisions and rejected alternatives live next to the items they concern
+(there is no separate plans directory — detail beyond what an item carries here
+gets re-derived at build time, against the code as it exists then).
 
 Everything here is bounded by the [Tenets](../README.md#tenets). An idea that
 contradicts one belongs in a **Rejected** block, not in the open list.
+
+---
+
+## Triage board
+
+### Now
+
+Keep **Now** deliberately small. Promote one item into README's active slot when
+work starts; do not treat this table as permission to work all rows in parallel.
+Shape is a rough delivery size: S is one bounded surface; M crosses layers or
+needs multi-surface verification.
+
+| Order | Work | Why now | Shape |
+|---:|---|---|---|
+| 1 | [Empty locations stall a recount](#inventory--recount-2026-07-audit-residue) | Breaks a core inventory-maintenance flow; bounded fix | S |
+| 2 | [Close the equivalences-report loop](#recipe-scaling--density-coverage-phase-2) | Turns an existing report into the data-repair path the costing model expects | M |
+| 3 | [Persist imported recipe times](#recipe--cookbook-ux-2026-07-audit) | Stops dropping already-extracted data and adds the best weeknight decision axis | M |
+| 4 | [Faster scanner lock-on](#mobile--pwa) | Improves the phone-first capture path; requires a real-iPhone acceptance pass | M |
+| 5 | [Add a recipe to an existing meal](#meal-planning-v2) | Prevents one day/slot from fragmenting into duplicate meals | S–M |
+
+### Next
+
+Ordered within each domain only; choose based on which surface is seeing real use.
+
+- **Recipe data:** ingredient editing parity, then macro-aware nutrition. The
+  portion solver stays behind nutrition and real evidence that agent iteration is
+  painful.
+- **Shopping:** split Shopping list v1.5 into independently shippable slices:
+  (1) manual items + durable check-off, (2) shopper units + pack rounding,
+  (3) estimated cost, then (4) URL exclusions + text/print export.
+- **House:** recurring maintenance; then the tracker data gaps as separate changes
+  (`completedAt`, portfolio figures, mobile renderer, project History, activity
+  filter), not one omnibus PR.
+- **Small UX batch:** recipe clone, recipe QR labels, compare-page picker, and
+  product bulk label printing. These may travel together only if their shared
+  implementation surface makes the batch smaller than separate changes.
+
+### Promote only when triggered
+
+These are recorded options, not latent obligations. Their detailed entries name
+the evidence required before promotion.
+
+- UPC duplicate collapsing, aggregate-range materiality, Sentry lazy-init,
+  selection-control consolidation, and all three additional MCP Apps.
+- `ProjectTool`, `PurchaseLine`, `ExpenseProduct`, the service/product advisory,
+  and repeat-purchase ranking.
+- Product external-id collisions are **already queryable** through
+  `product.externalIdCollisions`; revisit a broader Problems surface only if an
+  auto-minting import creates a persistent operator worklist.
+- The before-drywall spatial-memory capture is the exception: promote it
+  immediately when construction timing makes that deadline real.
+
+### Triage rules
+
+- A shipped item leaves this file; git history and code tests are the archive.
+- A bundle that cannot ship atomically gets split before promotion.
+- "Optional," "only if it resurfaces," and explicit **Trigger** items do not enter
+  **Now** without the stated evidence.
+- Rejected ideas stay recorded so they do not cycle back through planning.
 
 ---
 
@@ -265,65 +327,24 @@ sub-projects (a sub-project's `costEstimate` is the budget envelope for a
 trade/phase, with subtree rollups on parents). The open work below connects it to
 the rest of cubby. Schema affordances already in place for it: `task.projectId` is
 nullable (inbox tasks) and `expense.future` marks planned-not-yet-actual spend.
-Roughly priority order.
+The triage board, not this catalog order, sets priority.
 
-- [x] **Expenses ↔ inventory bridge** — v1 shipped 2026-07 (`expense.productId` +
-  vendor capture, zero new tables at the time); deferred phases + triggers in the
-  subsection below. Foundation for the BOM. Vendor has since become its own entity
-  (`Vendor ──< Purchase ──< Expense`) — see the `Receipt`-phase note below.
 - [ ] **Recurring maintenance tasks**: simple every-N-weeks/months interval on a
   template — not RRULE; next instance generated on completion; surfaces in
   needs-attention. (The rest of the old maintenance+budgeting bundle shipped
   2026-07: inbox view + promote-to-project, the attention detectors in
   `repo/project/attention.ts`, and the planned-vs-actual budget views.)
-- [ ] **Deferred from the 2026-07-30 MCP-gap pass** (PRs #493–#500, which closed
-  the ledger money filters, `match_expenses`, `byVendor`, the product/inventory/
-  audit filters, and exposed `split_expense`/`merge_purchases`/
-  `link_expenses_to_purchase`). Three things were deliberately left:
-  - **Location subtree scoping.** There is no descendant walk for locations —
-    `parentId` matches direct children only, and `filter-manifest.tsx` says so in
-    a comment. Needs a new `repo/location/subtree.ts` (query +
-    `buildChildrenMap` + `collectDescendantIds` with a depth cap and `visited`
-    guard, modelled on `repo/project/subtree.ts`'s in-memory BFS), which forces
-    `locationList`'s where-build **async** — the same reason
-    `buildExpenseWhereClause` is. Then an `includeSubLocations` boolean on both
-    `locationFilterFields` and `inventoryFilterFields`, mirroring
-    `includeSubProjects`. Note `repo/location/tree.ts` has a real
-    `WITH RECURSIVE` CTE, but it fetches the whole tree with images and
-    inventory for the tree view — extract a scoped id helper rather than reusing
-    it. Cut because the cost is out of proportion to how often it actually came
-    up.
-  - **The new expense filters don't reach the project portfolio charts.**
-    `repo/project/portfolio-analytics.ts` hand-rolls its own `gte`/`lte` on
-    `expense.date` from a *different* input schema and never goes through
-    `buildExpenseWhereClause`, so `costMin`/`costMax`/`notesSearch`/`urlSearch`
-    and the OR-search are invisible to it. Stated as a known limit rather than
-    fixed; the fix is to route it through the shared builder.
-  - ~~**Unknown filter params are silently ignored, not rejected.**~~ **Decided
-    and shipped** — an unknown filter key now fails loudly. `strictFilterInput`
-    (`mcp/tools/_shared.ts`) builds each list tool's input with
-    `z.strictObject`, whose custom error names the offending key *and* lists the
-    valid ones, and which publishes `additionalProperties: false` so a client
-    learns the rule before failing. Note the `.strict()`-on-the-filter-schemas
-    option recorded here would **not** have worked: the MCP payload is stripped
-    twice before `expenseFiltersSchema` is reached, and the SDK hands the
-    handler the already-parsed object, so the rejection has to live in the tool
-    input schema itself. The web half — where rejecting at runtime would just
-    break the page — is pinned instead by a manifest-vs-schema test, which found
-    a live one (`project.name` emitted `name` against a schema with `search`).
-- [ ] **Surface the tracker to the rest of the app** (2026-07 audit) — mostly
-  shipped; what remains is the two UI entry points.
-  **Shipped:** the attention rules are a first-class Problems group
-  (`findTrackerProblems` in `services/problems.service.ts`, seven rules not six,
-  feeding the navbar badge / `/problems` / homepage banner / `list_problems`);
-  the MCP synthesis tools landed (`get_house_status`, `get_project_budget`,
-  `get_expense_analytics`, plus generic `update_expenses` batch classification); and
-  `Vendor`/`Purchase` now have a full MCP toolset (`list_`/`get_`/`create_`/
-  `update_` for both, delete deliberately withheld), so an agent-driven import
-  can read the roster and set a purchase's `statedTotal` without SQL or the web UI.
-  **Still open:** quick-capture Add Task/Project/Expense in the navbar-create +
-  palette registry (House is the only domain with no quick-add path); a House
-  tile on the home dashboard over the currently-unused `task.summary`.
+- [ ] **Location subtree filter scoping** (deferred from the 2026-07-30 MCP-gap
+  pass). `parentId` matches direct children only. Add a scoped descendant-id helper
+  modelled on `repo/project/subtree.ts` (depth cap + `visited` guard), make
+  `locationList`'s where-build async, then add `includeSubLocations` to location
+  and inventory filters. Do not reuse `repo/location/tree.ts`'s whole-tree,
+  relation-heavy CTE. Deferred because its cost exceeded its observed use.
+- [ ] **Make project portfolio expense charts honor ledger filters.**
+  `repo/project/portfolio-analytics.ts` hand-rolls date bounds from a different
+  input schema, so `costMin`/`costMax`/`notesSearch`/`urlSearch` and OR-search do
+  not reach it. Route the expense-grouped aggregates through the shared expense
+  filter builder without changing the separate project-set filters.
 - [ ] **Tracker data gaps** (2026-07 audit): `task.completedAt` (velocity /
   "year in the house" + de-noises the stalled-project detector — `updatedAt`
   resets on any edit); portfolio-level estimate
@@ -448,7 +469,7 @@ Follow-ups the split itself generated (small, none blocking):
   keeps every logo stored and lets the display adapt, instead of deciding at seed time
   that a brand has no logo at all.
 
-- [ ] **`Vendor.kind` was removed** after shipping — nothing branched on it and it was
+- **`Vendor.kind` stays removed** — nothing branched on it and it was
   null on 111 of 114 rows. Contractor metadata (license number, COI expiry) would
   bring it back as additive columns plus a discriminator; don't re-add it decoratively.
 
@@ -471,15 +492,6 @@ Deferred phases — each purely additive on top of v1, with its promotion trigge
   reasonably split, or a correct unit-price observation on a multi-quantity buy.
   Mechanical migration: insert-select from the non-null column, drop it, update read
   sites.
-- [ ] **Spend-by-vendor** analytics — `vendorOut` already carries a per-vendor `spend`
-  rollup and the roster sorts by it, so what's left is a `byVendor` aggregate
-  mirroring `byProject` in `repo/expense/analytics.ts` + a chart. Cheap; deferred only
-  for scope.
-- [ ] **Clear affordance for the `productId` deep link** — arriving via a product's
-  "See all in ledger" scopes the ledger with no visible chip and no way out but
-  editing the URL, because only the presence column has a header control. Raised in
-  the PR #421 review; a small active-filter chip would close it.
-
 #### "A product for every line item?" — asked and answered 2026-07-31
 
 **Measured before deciding** (live ledger): 1141 expenses, **1081 distinct names** — 92%
@@ -502,37 +514,18 @@ there. Two classes are genuinely never products: **service/labor lines** (no obj
 inflate — work *about* a product is `Task.subjectProductId`) and **installments**
 (`hotel payment 3/11`, `retaining wall 2/2` — that grouping is the purchase and the project).
 
-- [ ] **No `software` slot in `productCategoryValues`** — blocks productizing subscriptions,
-  which are the only genuinely high-frequency repeat purchases in the ledger. The enum is
-  food / tools / tool-consumables / tool-accessories / storage / hardware / electronics /
-  household / supplies. Leaving one **null** is not a workaround: a null category is
-  deliberately read as *potentially food* so uncategorized groceries keep their coverage
-  grading (`packages/shared/src/category-theme.ts`), so `autocad lt` would land in
-  `findProductsWithoutMappings` demanding weight/volume/calorie coverage forever. One enum
-  value + a theme entry. **Trigger**: wanting per-subscription lifetime spend
-  (`chief architect monthly` is $1,791 across 9 rows today and has nowhere to roll up).
-  Keep the recurrence *schedule* off `Product` — the product is the license, the payments
-  are expenses, same rule as 11 progress payments being 11 purchases.
 - [ ] **`servicesWithProduct` advisory detector** — mirrors `purchasesNotReconciling` in shape
-  (soft worklist, not an error list). Reports **zero** on the live ledger today, so any row
+  (soft worklist, not an error list). The 2026-07 audit found **zero** live rows, so any row
   appearing is a real regression rather than a backlog. Deliberately **not** a CHECK
   constraint: `costType` is an operator-assigned *reporting* dimension and is already
   inconsistent (`countertop deposit` is materials, `2nd half of countertop` is services —
   same vendor, same amount, same slab), and `update_expenses` batches can reclassify rows, so a hard
   constraint would fail a bulk reclassify mid-transaction with an error about products.
-- [ ] **Duplicate-product detection keyed on `ProductExternalId`, never on names.** Motivating
-  hazard: a product carrying any expense is *by construction* invisible to
-  `findOrphanedProducts` (`Expense.productId` has role `acquisition`, which retains) and
-  refuses deletion with `PRODUCT_HAS_EXPENSES` — so a duplicate minted during an import can
-  neither be surfaced nor deleted. Harmless at 432 hand-curated products; not harmless if
-  import ever mints at volume. **Scope it to exact `(source, externalId)` collisions across
-  two live products** — the name-similarity approach is already recorded dead above for
-  `findDuplicateVendors` (trigram > 0.3 flagged 13 pairs, all false positives) and product
-  names are worse, not better. **Trigger**: the first auto-minting import path.
 - [ ] **Repeat-purchase rollup** — `ProductExpenseHistory` already ships per-product on the
-  detail page, so what's missing is only the cross-product view: `GROUP BY productId` with
-  a purchase count and total, sorted by frequency. Cheap. **Trigger**: enough productized
-  repeat buys to be worth ranking — 6 today, so not yet.
+  detail page and the Products list exposes a linked-expense count. What's missing is
+  ranking that cross-product view by purchase count or total (the current Expenses column
+  intentionally cannot sort). **Trigger**: enough productized repeat buys to be worth
+  ranking — 6 at the 2026-07 audit, so not yet.
 
 **`PurchaseLine`'s trigger is still NOT met by this** (see the deferred phase above). Unbundling
 that *moves money* is `splitExpense`, which exists and is money-bearing; `PurchaseLine` is
@@ -664,89 +657,6 @@ HA is the *senses and voice*; cubby is the *memory and ledger*.
   server-owned byte budget. Invalid or filter/sort-incompatible cursors must fail
   explicitly rather than silently restarting from page one.
 
-### Shortcode cutover and MCP translation-layer retirement (completed)
-
-All public entity outputs and relationship fields now expose their canonical
-shortcodes through `id`/`*Id`, and public CRUD, filter, batch, and relationship
-inputs accept the corresponding shortcode brands. Redundant `shortcode` and
-`*Shortcode` siblings have been removed, and MCP consumes the same canonical
-contracts as tRPC and the UI rather than translating UUIDs at its boundary.
-
-Database primary keys, foreign-key columns, repo-internal reads, and mutation
-side-effect entity IDs intentionally remain UUIDs. Server-side FK writes and
-route/scan lookups resolve shortcodes at the domain boundary; the MCP-only
-`resolvePublicId*` helpers and `shortcode.resolveMany` bridge are retired.
-
-Permanent exceptions, asserted by the schema-walk test in
-`mcp-shortcode-boundary.integration.test.ts` rather than left to vigilance:
-image ids, USDA `fdc_id`, `mealRecipe.id`, recipe section/line ids,
-unit-mapping ids, background job/batch ids, and the dev-only diagnostics in
-`problems.tools.ts` (an orphaned embedding may name a row that no longer
-resolves, and a liveness violation's `sourceTable` can be a join table).
-
-### BUG: a purchase minted from an expense gets no date (propagation fixed)
-
-**Found 2026-07-31** during the 22-receipt tool/3D-printer ingest, which created
-the first 15 purchases ever minted through the live code path.
-
-**Symptom.** `create_expense` / `update_expense` with a `vendor` name (± `orderId`)
-find-or-creates the `Purchase`, and that new purchase always lands with
-`date: null` — even though the expense carries a real `date`. Seven purchases in
-that ingest came back dateless and had to be backfilled by hand with
-`update_purchase`.
-
-**Cause — a plumbing gap, not a decision.** `findOrCreatePurchase`
-(`repo/purchase.ts:465`) accepts a working `date?` param and inserts
-`date: input.date ?? null`. Its only production caller,
-`resolveCharge` (`repo/expense/crud.ts:151-232`), never passes one — and *cannot*,
-because `resolveCharge` narrows its `data` param to `{ vendor?, orderId? }`
-(crud.ts:154), so the expense's own `date` is structurally unreachable inside the
-function. The explicit `createPurchase` path (purchase.ts:505) does pass
-`date` + `statedTotal` correctly; only the implicit resolve path is broken.
-
-**It is NOT the same as the `statedTotal` null**, which is deliberate: pinned by a
-test with a comment explaining it (`purchase.integration.test.ts:456-458` — leaving
-it null gives `split_expense` something to seed) and called out in the
-`create_purchase` tool description (`mcp/tools/purchase.tools.ts:132`). There is no
-equivalent test, comment, or TODO for `date` anywhere. The two nulls also have
-*opposite* value: a null `statedTotal` is a useful worklist
-(`statedTotalPresenceFilter: "none"`), a null `date` is pure loss.
-
-**Impact.** `purchaseList`'s `dateFrom`/`dateTo` (purchase.ts:350-352) silently
-exclude a dateless purchase, and the default `date desc` sort has nothing to order
-it by — it goes quietly missing from date-filtered views. For a purchase with no
-`orderId` either, `purchaseLabel` (`lib/purchase-label.ts:28-30`) also degrades to
-a bare vendor name.
-
-**Blast radius today: zero.** 0 of 862 live purchases have a null date — but only
-because 847 came from the one-shot 2026-07-29 backfill (which set dates directly)
-and today's 15 were hand-corrected. Latent, not active. Low urgency, cheap fix.
-
-**Fix — everything should have a date.** Two layers:
-
-- [x] **Propagate it.** Shipped 2026-07-31. `resolveCharge` now carries the
-  expense's effective date into `findOrCreatePurchase`, covering both expense
-  creation and attaching a vendor later without overwriting an existing purchase.
-  Seeding the purchase date from the ledger date is safe in a way seeding
-  `statedTotal` is not: nothing reconciles against
-  `purchase.date`, so a day's imprecision costs nothing, whereas a guessed stated
-  total would manufacture false `purchasesNotReconciling` flags. `update_purchase`
-  still overrides when the receipt disagrees. Integration coverage now asserts
-  both implicit creation paths and live-purchase-only `purchaseDate` resolution.
-- [ ] **Then consider making `Purchase.date` NOT NULL** (`db/schema.ts:1028`),
-  which is the real intent. Nothing to backfill (0 nulls). Consequences to handle,
-  not surprises to discover:
-  - `foldChargeInto`'s date-carry branch (purchase.ts:919-927,
-    `survivor?.date == null && dead?.date != null`) becomes dead — simplify it.
-  - `purchaseLabel`'s dateless fallback becomes dead; the ladder collapses to
-    `orderId` → `vendor · date`.
-  - `purchaseCreateShape.date` (`packages/schemas/src/purchase.ts:60`) is
-    `plainDate.nullable().default(null)` — would have to become required, changing
-    the `create_purchase` MCP contract.
-  - ⚠️ A NOT NULL migration is **not additive**, which cuts against the standing
-    "keep schema additive/nullable" rule for this repo (dev `DATABASE_URL` is the
-    production Neon branch). Sequence it deliberately.
-
 ### MCP Apps — further candidates
 
 The SEP-1865 pipeline shipped with two apps (`get_shopping_list`,
@@ -808,15 +718,6 @@ implementation now uses `idSetPresence`.
 - [ ] **History view filtering/over-fetch.** `HistoryView` still owns local `useState`
       filters, which are unshareable unlike every other view on that page, and reads only
       `data.projects` from a payload that includes the attention computation.
-
-### Background work — where it stands
-
-The **queue is shipped**, not pending: `BACKGROUND_QUEUE` → `cubby-background` with a
-DLQ (`apps/web/wrangler.jsonc`), the producer/consumer in
-`apps/web/src/server/background-queue.ts`, a jobs repo + router, and the
-`/background-jobs` batch page. Live job kinds are recipe-totals recompute, entity
-embedding refresh, location AI description/inventory refresh, and location valuation.
-Add a new kind there; don't re-scope "background jobs" as a project.
 
 ### Rejected
 

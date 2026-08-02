@@ -517,15 +517,20 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Next
 
-- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: an expense ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations) and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) — estimate envelopes live on a sub-project's single-point `costEstimate`, not on ranged expenses (see docs/todos.md's Rejected list) → [docs/todos.md#household-tracker--erp](docs/todos.md#household-tracker--erp)
-- **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
+- **Inventory recount friction** — skip or bulk-verify empty descendant locations so a recount does not stall on zero-row stops.
+- **Costing-data repair** — make the ingredient equivalences report lead directly to the existing mapping workbench.
+- **Recipe decision data** — persist the prep/cook/total times that import already extracts, then expose them on detail and list surfaces.
+- **Mobile capture** — improve scanner lock-on with a reticle-aligned ROI and a real-iPhone acceptance pass.
+- **Meal composition** — let "Add to meal" join a meal that already exists for that day instead of always creating another one.
+
+The ordered queue and promotion rules live in the [backlog triage board](docs/todos.md#triage-board).
 
 ### Later
 
-- **Nutrition & cost intelligence** — macro-aware nutrition through the product hop (see [Tenets](#tenets)), then price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
-- **Meal planning v2** — meal labels, recurring meals, meal templates, nutrition goals (no inventory deduction — see [Tenets](#tenets))
-- **WASM deep cuts** — batch recipe parsing, custom unit aliases
-- **Engineering backlog** — document test-placement criteria; persist scraped/Notion hero images on the server import path
+- **Nutrition & cost intelligence** — macro-aware nutrition through the product hop (see [Tenets](#tenets)), plus broader nutrient-density surfaces.
+- **Shopping and meal planning v2** — durable/manual shopping items, shopper-friendly units and cost, calendar ergonomics, meal labels/templates/recurrence, and nutrition goals (no inventory deduction — see [Tenets](#tenets)).
+- **House planning** — recurring maintenance, project materials/BOM, and the remaining tracker data/phone-view gaps. The expense ↔ inventory bridge, inbox, budget views, Problems detectors, quick-add actions, and home House card are already shipped.
+- **Engineering** — authenticated-route SSR reevaluation, test-placement criteria, cursor-budgeted MCP lists, and trigger-gated control consolidation.
 
 ## 📚 Further Docs
 
