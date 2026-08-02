@@ -41,6 +41,10 @@ import {
   useExpenseBulkActions,
 } from "../_components/tracker/expense-bulk-actions";
 import { MoveToProjectDialog } from "../_components/tracker/move-to-project-dialog";
+import {
+  createExpenseProductImageColumn,
+  ExpenseProductImages,
+} from "./expense-product-image-column";
 import { SettleExpenseDialog } from "./settle-expense-dialog";
 
 // Scoped rather than a plain `useNavigate()` so `search` stays typed to this
@@ -156,6 +160,7 @@ export function ExpenseList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
+      createExpenseProductImageColumn(columnHelper),
       expenseCostColumn(
         columnHelper,
         async (cost, expense) => {
@@ -387,6 +392,7 @@ export function ExpenseList() {
     infiniteScroll,
     refreshControls,
     totalCount,
+    data,
   } = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: api.expense.list.queryOptions,
@@ -426,20 +432,22 @@ export function ExpenseList() {
         <StatTile label="Net">{formatCurrency(summary?.net ?? 0, 0)}</StatTile>
         <StatTile label="Count">{summary?.count ?? 0}</StatTile>
       </Grid>
-      <RTable
-        table={table}
-        additionalToolbarContent={scopeChips}
-        isLoading={isLoading}
-        error={error}
-        ariaLabel="Expenses Table"
-        timing={timing}
-        entity="expense"
-        onRowClick={onRowClick}
-        onRowHover={onRowHover}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
-      />
+      <ExpenseProductImages rows={data}>
+        <RTable
+          table={table}
+          additionalToolbarContent={scopeChips}
+          isLoading={isLoading}
+          error={error}
+          ariaLabel="Expenses Table"
+          timing={timing}
+          entity="expense"
+          onRowClick={onRowClick}
+          onRowHover={onRowHover}
+          bulkActionBar={bulkActionBar}
+          infiniteScroll={infiniteScroll}
+          refreshControls={refreshControls}
+        />
+      </ExpenseProductImages>
       <PreviewSheet />
       {deleteDialog}
       <ExpenseBulkActionDialogs
