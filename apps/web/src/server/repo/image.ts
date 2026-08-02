@@ -69,6 +69,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   countWhere,
   formatSearchTerm,
@@ -381,7 +382,7 @@ const imageEntityRelations = {
  */
 export const imageList = async (
   db: Database,
-  filterText: string | undefined,
+  filters: import("@cubby/schemas/image").ImageListFilters,
   sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
 ) => {
@@ -389,10 +390,19 @@ export const imageList = async (
 
   // Build where conditions
   const whereConditions: ReturnType<typeof eq>[] = [];
-  const filenameCondition = formatSearchTerm(image.filename, filterText);
+  const filenameCondition = formatSearchTerm(
+    image.filename,
+    filters.nameFilter,
+  );
   if (filenameCondition) {
     whereConditions.push(filenameCondition);
   }
+  whereConditions.push(
+    ...auditDateWhereConditions(image, filters).filter(
+      (condition): condition is NonNullable<typeof condition> =>
+        Boolean(condition),
+    ),
+  );
 
   const whereClause =
     whereConditions.length > 0 ? and(...whereConditions) : undefined;

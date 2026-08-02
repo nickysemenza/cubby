@@ -114,6 +114,10 @@ describe("useEntityList", () => {
         data: expect.arrayContaining([{ id: "row-199" }]),
         totalCount: 200,
         manualPagination: true,
+        initialColumnVisibility: {
+          createdAt: false,
+          updatedAt: false,
+        },
       }),
     );
   });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { auditDateFilterFields } from "./base-entity";
 import { purchaseDocumentKind } from "./purchase";
 import type { ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
@@ -151,10 +152,12 @@ export type ImageUpdateInput = z.infer<typeof imageUpdateInput>;
 // Filters accepted by the image list endpoint (filters-only, matching every
 // other *FiltersSchema — the crud factory owns sort/pagination).
 export const imageFilterFields = {
+  ...auditDateFilterFields,
   nameFilter: z.string().optional().describe("Filter by filename (substring)"),
 };
 
 export const imageListFiltersSchema = z.object(imageFilterFields);
+export type ImageListFilters = z.infer<typeof imageListFiltersSchema>;
 
 // Schema for importing an image from a URL. `entityType` is optional for the
 // same reason as `initiateUploadFields.entityType` above — a standalone

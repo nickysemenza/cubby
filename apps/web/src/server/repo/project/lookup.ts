@@ -17,6 +17,7 @@ import { asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,
@@ -130,6 +131,7 @@ export const projectList = async (
     project,
     [],
     [
+      ...auditDateWhereConditions(project, filters),
       ...relatedWhereConditions("project", filters, project.id),
       pickerSearch,
       filters.status ? eq(project.status, filters.status) : undefined,

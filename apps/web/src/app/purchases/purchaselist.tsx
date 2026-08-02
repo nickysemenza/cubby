@@ -26,6 +26,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
+import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { TableLink } from "../_components/table/TableLink";
 import { FinancialSettlementBadge } from "./financial-settlement";
 import { ReconciliationBadge } from "./purchase-reconciliation";
@@ -54,6 +55,7 @@ export function PurchaseList() {
   // the collapsed multi-select summary interpolate, and what the type-ahead
   // matches on), and each option keeps the vendor's brand mark.
   const vendorOptionsQuery = useQuery(api.vendor.options.queryOptions());
+  const { options: projectOptions } = useProjectOptions();
   const vendorOptions = useMemo<FilterableComboboxItem[]>(
     () =>
       vendorOptionsQuery.data?.map(({ id, name, count }) => ({
@@ -65,7 +67,10 @@ export function PurchaseList() {
     [vendorOptionsQuery.data],
   );
 
-  const filterOptions = useFilterOptions({ vendor: vendorOptions });
+  const filterOptions = useFilterOptions({
+    vendor: vendorOptions,
+    project: projectOptions,
+  });
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.purchase.delete.mutationOptions,

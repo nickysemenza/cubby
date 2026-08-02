@@ -61,6 +61,25 @@ export const relatedViewRegistry = [
     inverseKey: "vendor.products",
   },
   {
+    key: "product.projects",
+    source: "product",
+    target: "project",
+    label: "Projects",
+    defaultVisible: true,
+    order: "alphabetical",
+    path: [inc("Expense.productId"), out("Expense.projectId")],
+    inverseKey: "project.purchasedProducts",
+  },
+  {
+    key: "product.purchases",
+    source: "product",
+    target: "purchase",
+    label: "Purchases",
+    defaultVisible: false,
+    order: "newest",
+    path: [inc("Expense.productId"), out("Expense.purchaseId")],
+  },
+  {
     key: "product.expenses",
     source: "product",
     target: "expense",
@@ -192,6 +211,7 @@ export const relatedViewRegistry = [
     order: "alphabetical",
     path: [inc("Expense.projectId"), out("Expense.productId")],
     filterPrefix: "purchasedProduct",
+    inverseKey: "product.projects",
   },
   {
     key: "task.blockedBy",
@@ -475,6 +495,8 @@ const trio = <Prefix extends string, IdSchema extends z.ZodType>(
 
 export const productRelatedFilterFields = {
   ...trio("vendor", vendorShortcode),
+  ...trio("project", projectShortcode),
+  ...trio("purchase", purchaseShortcode),
   ...trio("expense", expenseShortcode),
   ...trio("relatedInventory", inventoryShortcode),
   ...trio("task", taskShortcode),

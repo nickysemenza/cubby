@@ -47,6 +47,10 @@ export type LocationWithParentChild = LocationSelect & {
  * Filters for location list queries.
  */
 export interface LocationFilters {
+  createdFrom?: string;
+  createdTo?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
   nameFilter?: string;
   itemTypeFilter?: string | string[];
   parentId?: string | string[];
@@ -54,4 +58,8 @@ export interface LocationFilters {
   // The inventory column's "(none)" / "Has inventory" sentinel — "none" is the
   // empty-shelf worklist. Counts only entries whose product is itself live.
   inventoryPresenceFilter?: "has" | "none";
+  directItemCountMin?: number;
+  directItemCountMax?: number;
+  valuationMin?: number;
+  valuationMax?: number;
 }

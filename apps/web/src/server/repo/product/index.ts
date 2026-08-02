@@ -23,6 +23,7 @@ export {
   findDuplicateUniqueProducts,
   findProductsWithNoImages,
   getCategoryDistribution,
+  getProductManufacturerOptions,
   getProductSummaryForAudit,
   getProductsSharingTags,
   getProductTagOptions,

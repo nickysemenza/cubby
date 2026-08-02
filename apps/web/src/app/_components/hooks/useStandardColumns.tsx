@@ -12,6 +12,7 @@ import {
   createImageColumn,
   createNameColumn,
   createUnitMappingsColumn,
+  createUpdatedAtColumn,
   type FilterConfig,
   multiSelectFilterFn,
 } from "../data-table/columnHelpers";
@@ -108,7 +109,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
  *
  * Handles:
  * - Select column (if row selection enabled)
- * - Standard columns (image, name, createdAt) based on entity config
+ * - Standard identity columns (image/name) plus shared Created/Updated dates
  * - Custom columns with auto-sorting based on sortable fields
  * - Unit mappings column
  * - Actions column (always last)
@@ -249,27 +250,37 @@ export function useStandardColumns<TData extends BaseListRow>({
     // Custom columns get two things applied from the registries: sorting from
     // `sortableFields`, and their filter control from the manifest.
     const sortableFields = getSortableFields(entity);
-    const processedColumns = customColumns.map((col) => {
-      // Get column id from id or accessorKey (need to cast for accessorKey access)
-      const accessorCol = col as { accessorKey?: string };
-      const colId = col.id ?? accessorCol.accessorKey ?? null;
+    const processedColumns = customColumns
+      // Audit timestamps have one canonical position: after every domain and
+      // related column, immediately before Actions. A few older custom tables
+      // supplied Created in the middle; drop that copy before appending the
+      // shared pair below.
+      .filter((col) => {
+        const accessorCol = col as { accessorKey?: string };
+        const colId = col.id ?? accessorCol.accessorKey ?? null;
+        return colId !== "createdAt" && colId !== "updatedAt";
+      })
+      .map((col) => {
+        // Get column id from id or accessorKey (need to cast for accessorKey access)
+        const accessorCol = col as { accessorKey?: string };
+        const colId = col.id ?? accessorCol.accessorKey ?? null;
 
-      // Auto-disable sorting for columns not in sortableFields; an explicit
-      // enableSorting on the column def still wins.
-      const enableSorting =
-        col.enableSorting !== undefined
-          ? col.enableSorting
-          : colId
-            ? sortableFields.includes(colId)
-            : false;
+        // Auto-disable sorting for columns not in sortableFields; an explicit
+        // enableSorting on the column def still wins.
+        const enableSorting =
+          col.enableSorting !== undefined
+            ? col.enableSorting
+            : colId
+              ? sortableFields.includes(colId)
+              : false;
 
-      // Manifest config overlays whatever the column factory baked in. The
-      // factories' own `filterConfig` (e.g. createFilterableSelectColumn
-      // deriving one from its editor options) stays as the fallback for
-      // columns and tables the manifest doesn't cover.
-      const withSorting = { ...col, enableSorting };
-      return colId ? withManifestFilter(withSorting, colId) : withSorting;
-    });
+        // Manifest config overlays whatever the column factory baked in. The
+        // factories' own `filterConfig` (e.g. createFilterableSelectColumn
+        // deriving one from its editor options) stays as the fallback for
+        // columns and tables the manifest doesn't cover.
+        const withSorting = { ...col, enableSorting };
+        return colId ? withManifestFilter(withSorting, colId) : withSorting;
+      });
     cols.push(...processedColumns);
 
     // Append unit mappings column if configured
@@ -293,10 +304,11 @@ export function useStandardColumns<TData extends BaseListRow>({
       );
     }
 
-    // Append createdAt column
-    if (standardColumns.includes("createdAt")) {
-      cols.push(createCreatedAtColumn(columnHelper));
-    }
+    // Every Cubby entity read shape carries both timestamps. Keep the audit
+    // pair together at the end; list hooks make both default-hidden while the
+    // View menu lets users opt them in.
+    cols.push(createCreatedAtColumn(columnHelper));
+    cols.push(createUpdatedAtColumn(columnHelper));
 
     // Append actions column (always last)
     cols.push(

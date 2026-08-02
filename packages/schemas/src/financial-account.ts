@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { financialAccountRelatedFilterFields } from "./related-view";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import { financialAccountShortcode } from "./identifiers";
 import {
   createPaginatedResponseSchema,
@@ -116,6 +120,7 @@ export type FinancialAccountUpdateInput = z.infer<
 >;
 
 export const financialAccountFilterFields = {
+  ...auditDateFilterFields,
   ...financialAccountRelatedFilterFields,
   search: z.string().optional(),
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
@@ -140,6 +145,7 @@ export const financialAccountSortableFields = [
   "provisional",
   "transactionCount",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type FinancialAccountSortField =
   (typeof financialAccountSortableFields)[number];

@@ -29,6 +29,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  auditDateWhereConditions,
   batchUpdateWithCaseWhen,
   buildOrderBy,
   buildPartialUpdateValues,
@@ -197,12 +198,19 @@ export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
 
 /** Filters for inventory list queries */
 interface InventoryFilters {
+  createdFrom?: string;
+  createdTo?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
   productNameFilter?: string;
   locationNameFilter?: string;
   locationIdFilter?: LocationId;
   productIdFilter?: ProductId;
   manufacturerFilter?: string;
   categoryFilter?: ProductCategory | ProductCategory[];
+  verifiedPresenceFilter?: "has" | "none";
+  verifiedFrom?: string;
+  verifiedTo?: string;
 }
 
 /**
@@ -284,6 +292,7 @@ export const inventoryentryList = async (
       { column: product.manufacturer, term: filters.manufacturerFilter },
     ],
     [
+      ...auditDateWhereConditions(inventoryEntry, filters),
       ...relatedWhereConditions(
         "inventory",
         filters as unknown as Record<string, unknown>,
@@ -296,6 +305,17 @@ export const inventoryentryList = async (
         ? eq(inventoryEntry.productId, filters.productIdFilter)
         : undefined,
       eqAny(product.category, filters.categoryFilter),
+      filters.verifiedPresenceFilter === "has"
+        ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`
+        : filters.verifiedPresenceFilter === "none"
+          ? sql`${inventoryEntry.verifiedAt} IS NULL`
+          : undefined,
+      filters.verifiedFrom
+        ? sql`${inventoryEntry.verifiedAt} >= ${filters.verifiedFrom}::date`
+        : undefined,
+      filters.verifiedTo
+        ? sql`${inventoryEntry.verifiedAt} < (${filters.verifiedTo}::date + interval '1 day')`
+        : undefined,
     ],
   );
 

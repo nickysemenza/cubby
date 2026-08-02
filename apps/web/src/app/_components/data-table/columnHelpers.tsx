@@ -197,6 +197,7 @@ interface BaseRow {
   // all — see `emptyLabel` on createNameColumn.
   name?: string | null;
   createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 /**
@@ -472,6 +473,26 @@ export function createCreatedAtColumn<T extends BaseRow>(
       // Copy-only: the display is relative ("5 months ago") but the copy
       // payload is the ISO date-time, which pastes usefully into a spreadsheet.
       cellData: timestampCellData<T>((row) => row.createdAt),
+    },
+    cell: (info) => {
+      const value = info.getValue();
+      return value ? <HoverableTimestamp timestamp={value} /> : <NoneValue />;
+    },
+  });
+}
+
+/** Creates the standard last-updated audit timestamp column. */
+export function createUpdatedAtColumn<T extends BaseRow>(
+  columnHelper: ColumnHelper<T>,
+) {
+  return columnHelper.accessor((row) => row.updatedAt, {
+    id: "updatedAt",
+    header: "Updated",
+    meta: {
+      className: "w-32",
+      mono: true,
+      mobile: { slot: "hidden" },
+      cellData: timestampCellData<T>((row) => row.updatedAt),
     },
     cell: (info) => {
       const value = info.getValue();

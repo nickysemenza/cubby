@@ -42,6 +42,7 @@ import {
   applyImageOrder,
   assertNoDependents,
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -618,6 +619,7 @@ export const locationList = async (
     location,
     [],
     [
+      ...auditDateWhereConditions(location, filters),
       ...relatedWhereConditions(
         "location",
         filters as unknown as Record<string, unknown>,
@@ -631,6 +633,18 @@ export const locationList = async (
         filters.inventoryPresenceFilter,
         locationIdsWithLiveInventory,
       ),
+      filters.directItemCountMin !== undefined
+        ? sql`COALESCE((${location.valuation}->>'directItemCount')::int, 0) >= ${filters.directItemCountMin}`
+        : undefined,
+      filters.directItemCountMax !== undefined
+        ? sql`COALESCE((${location.valuation}->>'directItemCount')::int, 0) <= ${filters.directItemCountMax}`
+        : undefined,
+      filters.valuationMin !== undefined
+        ? sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0) >= ${filters.valuationMin}`
+        : undefined,
+      filters.valuationMax !== undefined
+        ? sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0) <= ${filters.valuationMax}`
+        : undefined,
     ],
   );
 
@@ -650,6 +664,12 @@ export const locationList = async (
             s.direction === "asc"
               ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
               : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+          ];
+        if (s.orderBy === "inventoryEntries")
+          return [
+            s.direction === "asc"
+              ? sql`COALESCE((${location.valuation}->>'directItemCount')::int, 0) asc`
+              : sql`COALESCE((${location.valuation}->>'directItemCount')::int, 0) desc`,
           ];
         // Joined parent name — a correlated subquery keeps this a relational
         // findMany. Soft-delete guarded, like the read path.

@@ -93,6 +93,7 @@ import {
 import {
   applyImageOrder,
   associatePendingImages,
+  auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -474,6 +475,7 @@ const buildPurchaseWhereClause = (
     purchase,
     [{ column: purchase.orderId, term: filters.search }],
     [
+      ...auditDateWhereConditions(purchase, filters),
       eqAny(purchase.vendorId, vendorUuids),
       ...relatedWhereConditions("purchase", filters, purchase.id),
       eqAny(purchase.orderId, filters.orderId),

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { recipeRelatedFilterFields } from "./related-view";
 import {
+  auditDateFilterFields,
   deriveUpdateData,
   deriveUpdateFields,
   timestampedFields,
@@ -35,6 +36,7 @@ export * from "./recipe-shared";
 
 export const recipeSortableFields = [
   "createdAt",
+  "updatedAt",
   "name",
   // Joined cookbook name — resolved by a correlated subquery in repo/recipe.
   "cookbook",
@@ -271,6 +273,7 @@ export const recipeSectionInput = z.object({
 // blocks, which are also reused by the output/form layers) so they reliably
 // Filters accepted by the recipe list endpoint.
 export const recipeFilterFields = {
+  ...auditDateFilterFields,
   ...recipeRelatedFilterFields,
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
@@ -298,6 +301,10 @@ export const recipeFilterFields = {
   imagePresenceFilter: presenceFilter.describe(
     "Filter to recipes that do / don't have at least one image (PDFs don't count)",
   ),
+  costTotalMin: z.coerce.number().nonnegative().optional(),
+  costTotalMax: z.coerce.number().nonnegative().optional(),
+  caloriesTotalMin: z.coerce.number().nonnegative().optional(),
+  caloriesTotalMax: z.coerce.number().nonnegative().optional(),
 };
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);

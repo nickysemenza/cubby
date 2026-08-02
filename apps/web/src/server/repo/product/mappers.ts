@@ -255,6 +255,7 @@ export const dbProductToListAPI = (
     // Net basis: SUM(expense.cost), 0 for a product with no expenses (never
     // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
     expenseTotal: Number(productData.expenseTotal),
+    purchaseDate: productData.purchaseDate,
   };
 
   return parseWithContext(productListItemOut, result, {

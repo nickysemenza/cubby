@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { entities } from "~/entities/entities";
+import { entities, getSortableFields } from "~/entities/entities";
 import {
   getEntityFilters,
   manifestFilterConfig,
@@ -46,6 +46,7 @@ export interface BaseListRow {
   id: string;
   name?: string | null;
   createdAt?: string | Date;
+  updatedAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
 }
 
@@ -194,7 +195,7 @@ export interface UseEntityListReturn<TData, TFilters = unknown> {
  * Handles:
  * - Infinite table query via useInfiniteTableList
  * - Unit mappings loading if getMappings provided
- * - Standard columns based on entity config (image, name, createdAt)
+ * - Standard identity columns from entity config plus shared audit dates
  * - Filter expansion from simple string definitions
  */
 export function useEntityList<TData extends BaseListRow, TFilters>({
@@ -338,7 +339,12 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [relatedViews],
   );
   const mergedInitialColumnVisibility = useMemo(
-    () => ({ ...relatedInitialVisibility, ...initialColumnVisibility }),
+    () => ({
+      createdAt: false,
+      updatedAt: false,
+      ...relatedInitialVisibility,
+      ...initialColumnVisibility,
+    }),
     [initialColumnVisibility, relatedInitialVisibility],
   );
   const { columnVisibility, onColumnVisibilityChange } =
@@ -403,15 +409,19 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const relatedColumns = useMemo<AnyColumnDef<TData>[]>(
     () =>
       relatedViews.map((view) => {
+        const columnId = `related:${view.key}`;
         const filterConfig = manifestFilterConfig(
           entity,
-          `related:${view.key}`,
+          columnId,
           filterOptions,
         );
         return columnHelper.display({
-          id: `related:${view.key}`,
+          id: columnId,
           header: view.label,
-          enableSorting: false,
+          // Most relationship previews are display-only. A list may opt a
+          // specific derived relation into server sorting by declaring this
+          // exact column id in its sortable-fields contract.
+          enableSorting: getSortableFields(entity).includes(columnId),
           meta: {
             className: "w-64",
             mobile: { slot: "meta", priority: 80 },

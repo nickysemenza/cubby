@@ -52,6 +52,36 @@ export function buildSearchConditions(
 }
 
 /**
+ * Shared server-side bounds for list-table Created / Updated filters. The upper
+ * bound is exclusive midnight on the following day, so a YYYY-MM-DD selection
+ * includes every timestamp on that calendar day.
+ */
+export function auditDateWhereConditions(
+  table: { createdAt: AnyColumn; updatedAt: AnyColumn },
+  filters: {
+    createdFrom?: string;
+    createdTo?: string;
+    updatedFrom?: string;
+    updatedTo?: string;
+  },
+): Array<SQL | undefined> {
+  return [
+    filters.createdFrom
+      ? sql`${table.createdAt} >= ${filters.createdFrom}::date`
+      : undefined,
+    filters.createdTo
+      ? sql`${table.createdAt} < (${filters.createdTo}::date + interval '1 day')`
+      : undefined,
+    filters.updatedFrom
+      ? sql`${table.updatedAt} >= ${filters.updatedFrom}::date`
+      : undefined,
+    filters.updatedTo
+      ? sql`${table.updatedAt} < (${filters.updatedTo}::date + interval '1 day')`
+      : undefined,
+  ];
+}
+
+/**
  * Helper function to format search terms for PostgreSQL pattern matching.
  */
 export const formatSearchTerm = (

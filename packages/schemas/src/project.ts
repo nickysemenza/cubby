@@ -7,7 +7,11 @@ import {
   taskRelatedFilterFields,
 } from "./related-view";
 import { mutationSideEffectsSchema } from "./background-jobs";
-import { deriveUpdateData, timestampedFields } from "./base-entity";
+import {
+  auditDateFilterFields,
+  deriveUpdateData,
+  timestampedFields,
+} from "./base-entity";
 import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
@@ -309,6 +313,7 @@ export const projectOptionsOut = z.object({
 export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
 
 export const projectFilterFields = {
+  ...auditDateFilterFields,
   ...projectRelatedFilterFields,
   status: projectStatusSchema.optional(),
   kind: projectKindSchema.optional(),
@@ -332,6 +337,7 @@ export const projectSortableFields = [
   "startDate",
   "costEstimate",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type ProjectSortField = (typeof projectSortableFields)[number];
 
@@ -554,6 +560,7 @@ export const taskBulkReorderInput = z.object({
 export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 
 export const taskFilterFields = {
+  ...auditDateFilterFields,
   ...taskRelatedFilterFields,
   status: oneOrMany(taskStatusSchema).optional(),
   projectId: oneOrMany(projectShortcode).optional(),
@@ -601,6 +608,7 @@ export const taskSortableFields = [
   // Joined subject-product name — see the resolver in repo/task/lookup.ts.
   "subjectProduct",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type TaskSortField = (typeof taskSortableFields)[number];
 
@@ -858,6 +866,7 @@ export const expenseBulkCostTypeInput = z.object({
 export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
 export const expenseFilterFields = {
+  ...auditDateFilterFields,
   ...expenseRelatedFilterFields,
   // `oneOrMany`: the header filters are multi-select, but scalar MCP callers
   // stay valid. Resolved with `eqAny` in the repo.
@@ -1022,6 +1031,7 @@ export const expenseSortableFields = [
   "vendor",
   "orderId",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type ExpenseSortField = (typeof expenseSortableFields)[number];
 

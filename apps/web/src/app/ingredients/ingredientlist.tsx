@@ -32,7 +32,6 @@ import {
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import {
-  createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
@@ -219,7 +218,6 @@ export function IngredientList() {
           />
         ),
       }),
-      createCreatedAtColumn(columnHelper),
       columnHelper.accessor("appearsInRecipes", {
         id: "appearsInRecipes",
         header: "Recipes",

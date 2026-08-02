@@ -25,6 +25,7 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
 import {
+  auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,
@@ -183,6 +184,7 @@ export const taskList = async (
     task,
     [],
     [
+      ...auditDateWhereConditions(task, filters),
       ...relatedWhereConditions("task", filters, task.id),
       searchCondition,
       eqAny(task.status, filters.status),
