@@ -43,6 +43,7 @@ import { useEntityDetail } from "../hooks/useEntityDetail";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
+import { RelationshipSummaryTable } from "../relationships/relationship-summary-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
@@ -162,6 +163,32 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         </Button>
       ),
       content: <ProductExpenseHistory product={product} />,
+    },
+    {
+      title: "Purchase sources",
+      icon: Receipt,
+      content: (
+        <RelationshipSummaryTable
+          relationKey="product.vendors"
+          sourceId={product.id}
+          columns={[
+            "target",
+            "acquired",
+            "purchases",
+            "expenses",
+            "unpriced",
+            "netSpend",
+            "latestActivity",
+          ]}
+          defaultSort={{ field: "latestActivity", direction: "desc" }}
+          emptyCopy="No purchase sources have been linked to this product yet."
+          nullLabel="No purchase/vendor"
+          compact
+          expenseHref={(target) =>
+            `/expenses?productId=${encodeURIComponent(product.id)}&vendor=${encodeURIComponent(target?.id ?? "__none__")}`
+          }
+        />
+      ),
     },
     ...(isNonFood
       ? [

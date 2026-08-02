@@ -15,6 +15,9 @@ import { purchaseFilterFields } from "./purchase";
 import { recipeFilterFields } from "./recipe";
 import {
   relatedFilterPrefix,
+  relatedSummaryInput,
+  relatedSummaryOutput,
+  relatedSummaryRelationKeys,
   type RelatedViewDefinition,
   relatedViewRegistry,
 } from "./related-view";
@@ -31,6 +34,67 @@ const declaredLocalEdges = new Set(
 );
 
 describe("relatedViewRegistry", () => {
+  it("accepts only the curated expense-backed summary relations", () => {
+    expect(relatedSummaryRelationKeys).toEqual([
+      "vendor.products",
+      "vendor.projects",
+      "purchase.projects",
+      "project.vendors",
+      "project.purchasedProducts",
+      "product.vendors",
+    ]);
+    expect(
+      relatedSummaryInput.parse({
+        relationKey: "vendor.products",
+        sourceId: "VEN-ABCD",
+      }),
+    ).toMatchObject({ offset: 0, limit: 25 });
+    expect(() =>
+      relatedSummaryInput.parse({
+        relationKey: "vendor.purchases",
+        sourceId: "VEN-ABCD",
+      }),
+    ).toThrow();
+    expect(
+      relatedSummaryOutput.parse({
+        data: [],
+        count: 0,
+        totals: {
+          expenseCount: 0,
+          purchaseCount: 0,
+          unpricedExpenseCount: 0,
+          netSpend: 0,
+          knownAcquiredUnits: 0,
+          unknownAcquisitionQuantityCount: 0,
+        },
+        nextOffset: null,
+      }),
+    ).toBeTruthy();
+    expect(() =>
+      relatedSummaryInput.parse({
+        relationKey: "vendor.products",
+        sourceId: "VEN-ABCD",
+        extra: true,
+      }),
+    ).toThrow();
+    expect(() =>
+      relatedSummaryOutput.parse({
+        data: [],
+        count: 0,
+        totals: {
+          expenseCount: 0,
+          purchaseCount: 0,
+          unpricedExpenseCount: 0,
+          netSpend: 0,
+          knownAcquiredUnits: 0,
+          unknownAcquisitionQuantityCount: 0,
+        },
+        nextOffset: null,
+        extra: true,
+      }),
+    ).toThrow();
+  });
+
   it("has unique, source-prefixed keys and only curated 1-3 hop paths", () => {
     const keys = relatedViewRegistry.map((view) => view.key);
     expect(new Set(keys).size).toBe(keys.length);

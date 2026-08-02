@@ -124,7 +124,9 @@ export function PurchaseExpensesTable({
     initialColumnVisibility: {
       product: true,
       productQuantity: true,
-      project: false,
+      // A purchase can fund more than one project; keep the editable allocation
+      // visible rather than hiding it behind the column menu.
+      project: true,
       createdAt: false,
     },
   });

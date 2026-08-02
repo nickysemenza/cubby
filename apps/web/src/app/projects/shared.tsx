@@ -243,19 +243,35 @@ export function taskTradeColumn(
   });
 }
 
-/** Due-date column — inline date-picker + `dueDate` write. */
+/** Due-date column — optionally edits the effective end of a due-date range. */
 export function taskDueColumn(
   helper: ColumnHelper<TaskOut>,
-  save: (dueDate: string | null, task: TaskOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta },
+  save: (
+    dueDate: string | null,
+    task: TaskOut,
+    field: "dueDate" | "dueEndDate",
+  ) => Promise<void>,
+  opts?: { mobile?: MobileColumnMeta; effective?: boolean },
 ) {
   return createPlainDateColumn(helper, "dueDate", {
     header: "Due",
     className: "w-28",
     mobile: opts?.mobile,
+    editValue: opts?.effective
+      ? (task) => task.dueEndDate ?? task.dueDate
+      : undefined,
+    displayValue: opts?.effective
+      ? (task) => ({ value: task.dueEndDate ?? task.dueDate })
+      : undefined,
     editable: {
       onSave: async (newDueDate, task) => {
-        await save(newDueDate, task);
+        await save(
+          newDueDate,
+          task,
+          opts?.effective && task.dueEndDate !== null
+            ? "dueEndDate"
+            : "dueDate",
+        );
       },
     },
   });
@@ -616,7 +632,14 @@ export function expenseCostColumn(
 export function expenseProductQuantityColumn(
   helper: ColumnHelper<ExpenseOut>,
   save: (quantity: number | null, expense: ExpenseOut) => Promise<void>,
-  opts?: { mobile?: MobileColumnMeta; filterConfig?: FilterConfig },
+  opts?: {
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+    /** Lets a contextual prompt direct focus to one missing quantity. */
+    autoOpen?: (expense: ExpenseOut) => boolean;
+    /** Stable DOM target for a contextual prompt's scroll-to-editor action. */
+    id?: (expense: ExpenseOut) => string;
+  },
 ) {
   const saveValid = async (row: ExpenseOut, quantity: number | null) => {
     if (!row.productId) {
@@ -647,13 +670,16 @@ export function expenseProductQuantityColumn(
       const row = info.row.original;
       if (!row.productId) return <NoneValue />;
       return (
-        <EditableCell
-          value={info.getValue()}
-          config={{ type: "number", step: "1", placeholder: "Unknown" }}
-          onSave={(quantity) => saveValid(row, quantity)}
-          clipboard={specFromCellData(cellData, row)}
-          renderValue={(quantity) => quantity ?? <NoneValue />}
-        />
+        <span id={opts?.id?.(row)}>
+          <EditableCell
+            value={info.getValue()}
+            config={{ type: "number", step: "1", placeholder: "Unknown" }}
+            onSave={(quantity) => saveValid(row, quantity)}
+            clipboard={specFromCellData(cellData, row)}
+            renderValue={(quantity) => quantity ?? <NoneValue />}
+            autoOpen={opts?.autoOpen?.(row)}
+          />
+        </span>
       );
     },
   });

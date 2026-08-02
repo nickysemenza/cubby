@@ -565,6 +565,16 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       nullable: { field: "projectPresenceFilter", label: "project" },
     },
     {
+      // URL-only companion to an exact project deep link. Project detail
+      // summaries aggregate the complete descendant subtree, so their ledger
+      // links must carry the same scope to reconcile exactly.
+      columnId: "includeSubProjects",
+      urlKey: "subprojects",
+      urlOnly: true,
+      kind: "boolean",
+      placeholder: "Include sub-projects...",
+    },
+    {
       // No column renders this — it's seeded from the URL only (a deep link
       // from a product's detail page). Declared so the builder still maps it.
       columnId: "productId",

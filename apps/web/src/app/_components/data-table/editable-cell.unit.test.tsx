@@ -62,6 +62,22 @@ describe("EditableCell component", () => {
     });
   });
 
+  it("opens when a contextual host directs focus to the cell", async () => {
+    render(
+      <EditableCell
+        value={null}
+        onSave={vi.fn()}
+        config={{ type: "number", step: "1", placeholder: "Unknown" }}
+        renderValue={(v) => <span>{v ?? "Unknown"}</span>}
+        autoOpen
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("spinbutton")).toBeInTheDocument();
+    });
+  });
+
   it("renders currency type with $ prefix", async () => {
     render(
       <EditableCell

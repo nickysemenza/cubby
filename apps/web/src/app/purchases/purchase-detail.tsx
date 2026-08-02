@@ -32,6 +32,7 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { MergePurchasesDialog } from "./merge-purchases-dialog";
@@ -225,6 +226,24 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           </Description>
           <PurchaseExpensesTable purchaseId={purchase.id} />
         </Stack>
+      ),
+    },
+    {
+      title: "Project allocation",
+      icon: ReceiptText,
+      zone: "main",
+      content: (
+        <RelationshipSummaryTable
+          relationKey="purchase.projects"
+          sourceId={purchase.id}
+          columns={["target", "expenses", "unpriced", "netSpend"]}
+          defaultSort={{ field: "netSpend", direction: "desc" }}
+          emptyCopy="No expenses on this purchase have been assigned to projects yet."
+          nullLabel="Unassigned"
+          expenseHref={(target) =>
+            `/expenses?purchaseId=${encodeURIComponent(purchase.id)}&project=${encodeURIComponent(target?.id ?? "__none__")}`
+          }
+        />
       ),
     },
     {

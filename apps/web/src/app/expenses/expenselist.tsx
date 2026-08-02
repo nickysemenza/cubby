@@ -381,12 +381,35 @@ export function ExpenseList() {
       />
     ) : undefined;
 
+  // Project relationship summaries aggregate descendants. Their deep links
+  // carry `?subprojects=true` so the ledger and summary reconcile; expose that
+  // otherwise-invisible URL-only scope and let the user narrow back to the
+  // selected project without clearing the project itself.
+  const includesSubProjects = expensesSearch.subprojects === "true";
+  const clearSubProjectsScope = useCallback(() => {
+    void expensesNavigate({
+      search: (prev) => ({ ...prev, subprojects: undefined }),
+      replace: true,
+    });
+  }, [expensesNavigate]);
+  const subProjectsScopeChip = includesSubProjects ? (
+    <ScopeChip
+      name="Project scope"
+      value="Entire subtree"
+      onClear={clearSubProjectsScope}
+    />
+  ) : undefined;
+
   const scopeChips =
-    productScopeChip || orderScopeChip || purchaseScopeChip ? (
+    productScopeChip ||
+    orderScopeChip ||
+    purchaseScopeChip ||
+    subProjectsScopeChip ? (
       <Row align="center" gap="xs">
         {productScopeChip}
         {orderScopeChip}
         {purchaseScopeChip}
+        {subProjectsScopeChip}
       </Row>
     ) : undefined;
 

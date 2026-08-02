@@ -7,12 +7,15 @@ import {
   relatedOptionsOutput,
   relatedPreviewInput,
   relatedPreviewOutput,
+  relatedSummaryInput,
+  relatedSummaryOutput,
 } from "@cubby/schemas/related-view";
 import {
   loadRelatedBranch,
   loadRelatedMatches,
   loadRelatedOptions,
   loadRelatedPreviews,
+  loadRelatedSummary,
 } from "~/server/repo/related-view";
 import { createTRPCRouter, protectedProcedure, strictOutput } from "../trpc";
 
@@ -33,4 +36,8 @@ export const relatedDataRouter = createTRPCRouter({
     .input(relatedMatchesInput)
     .output(strictOutput(relatedMatchesOutput))
     .query(({ ctx, input }) => loadRelatedMatches(ctx.db, input)),
+  summary: protectedProcedure
+    .input(relatedSummaryInput)
+    .output(strictOutput(relatedSummaryOutput))
+    .query(({ ctx, input }) => loadRelatedSummary(ctx.db, input)),
 });
