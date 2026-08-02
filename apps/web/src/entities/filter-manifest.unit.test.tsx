@@ -481,12 +481,19 @@ describe("purchase filters", () => {
     );
   };
 
-  it("routes ?q= to the search field via the purchase column", () => {
+  it("routes broad and display-label searches through separate columns", () => {
     // The search hangs on `purchase` (the Purchase name column — a bespoke accessor
-    // over `purchaseLabel`, since `standardColumns` is `[]`), not on `orderId`,
-    // whose control is the presence worklist. Server-side it's a substring match
-    // on the order id.
+    // over purchase identity, since `standardColumns` is `[]`), not on `orderId`,
+    // whose control is the presence worklist. The dedicated label filter can
+    // narrow to human context without changing the established broad `?q=`.
     expect(build({ q: "WN63446464" })).toEqual({ search: "WN63446464" });
+    expect(build({ label: "pocket hole" })).toEqual({
+      displayLabelSearch: "pocket hole",
+    });
+    expect(manifestFilterConfig("purchase", "displayLabel")).toMatchObject({
+      filterType: "text",
+      placeholder: "Search display label...",
+    });
   });
 
   it("routes ?vendor= to the vendorId field as a set", () => {
@@ -574,6 +581,7 @@ describe("purchase filters", () => {
     );
     expect(columnBacked.map((spec) => spec.columnId)).toEqual([
       "purchase",
+      "displayLabel",
       "vendor",
       "orderId",
       "date",
@@ -604,11 +612,12 @@ describe("purchase filters", () => {
   });
 
   it("declares every URL key so the route schema can't strip them", () => {
-    // The route spreads this into its `validateSearch` and re-declares the same
-    // five by name; a missing key means the table writes the filter and the
+    // The route spreads this into its `validateSearch` and re-declares the
+    // visible keys by name; a missing key means the table writes the filter and the
     // router removes it before anything reads it back.
     expect(Object.keys(entityFilterSearchFields("purchase"))).toEqual([
       "q",
+      "label",
       "vendor",
       "orderId",
       "date",
@@ -658,6 +667,7 @@ describe("purchase filters", () => {
     const state = new Map(decoded.map((f) => [f.id, f.value]));
     expect(encodeFilters(specs, (columnId) => state.get(columnId))).toEqual({
       q: undefined,
+      label: undefined,
       vendor: "vendor-1,vendor-2",
       orderId: undefined,
       date: undefined,

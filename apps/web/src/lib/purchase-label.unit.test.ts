@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { purchaseLabel, purchaseLabelUsedVendor } from "./purchase-label";
+import {
+  purchaseIdentityLabel,
+  purchaseLabel,
+  purchaseLabelUsedVendor,
+} from "./purchase-label";
 
 /**
  * `Purchase` has no `name` column, so every surface that renders a charge
@@ -91,6 +95,30 @@ describe("purchaseLabel", () => {
     // Clearing an inline text edit writes "", not null — it must not become the
     // label.
     expect(purchaseLabel({ orderId: "", vendorName: "Lowe's" })).toBe("Lowe's");
+  });
+});
+
+describe("purchaseIdentityLabel", () => {
+  it("omits display context for full purchase rosters", () => {
+    expect(
+      purchaseIdentityLabel({
+        orderId: "11100722797",
+        displayLabel: "pocket hole jig + bits",
+        vendorName: "Rockler",
+        date: "2024-05-01",
+      }),
+    ).toBe("11100722797");
+  });
+
+  it("keeps the orderless identity ladder", () => {
+    expect(
+      purchaseIdentityLabel({
+        orderId: null,
+        displayLabel: "walk-in lumber run",
+        vendorName: "Ganahl Lumber",
+        date: "2026-03-04",
+      }),
+    ).toBe("Ganahl Lumber · Mar 4, 2026");
   });
 });
 

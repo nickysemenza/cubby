@@ -17,6 +17,7 @@ import { urlStringParam } from "~/lib/search-params";
 const searchSchema = z.object({
   ...entityFilterSearchFields("purchase"),
   q: urlStringParam,
+  label: urlStringParam,
   vendor: urlStringParam,
   orderId: urlStringParam,
   date: urlStringParam,
@@ -32,6 +33,7 @@ const searchSchema = z.object({
 
 const searchDefaults = {
   q: undefined,
+  label: undefined,
   vendor: undefined,
   orderId: undefined,
   date: undefined,

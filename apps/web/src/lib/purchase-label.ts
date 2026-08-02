@@ -17,21 +17,34 @@ import { parsePlainDate } from "./plain-date";
  * date, otherwise just the vendor. A nonblank display label is appended
  * parenthetically without replacing that identity.
  */
-export function purchaseLabel(purchase: {
+type PurchaseLabelInput = {
   orderId: string | null;
   displayLabel?: string | null;
   vendorName?: string | null;
   date?: string | null;
-}): string {
+};
+
+/**
+ * The stable vendor-side identity, without optional human context.
+ *
+ * Full Purchase rosters render `displayLabel` in its own editable column, so
+ * their clickable identity cell uses this helper to avoid printing the same
+ * label twice. Compact relation surfaces keep using {@link purchaseLabel}.
+ */
+export function purchaseIdentityLabel(purchase: PurchaseLabelInput): string {
   // `vendorName` is null only when the vendor row was soft-deleted, which the
   // repo refuses while live charges point at it — so this is a belt-and-braces
   // fallback, never the normal path.
   const vendor = purchase.vendorName ?? "Unknown vendor";
-  const identity = purchase.orderId
+  return purchase.orderId
     ? purchase.orderId
     : purchase.date
       ? `${vendor} · ${format(parsePlainDate(purchase.date), "MMM d, yyyy")}`
       : vendor;
+}
+
+export function purchaseLabel(purchase: PurchaseLabelInput): string {
+  const identity = purchaseIdentityLabel(purchase);
   const displayLabel = purchase.displayLabel?.trim();
   return displayLabel ? `${identity} (${displayLabel})` : identity;
 }

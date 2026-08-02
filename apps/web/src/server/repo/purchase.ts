@@ -101,6 +101,7 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
+  formatSearchTerm,
   getDb,
   lockAndValidateForDelete,
   nextImageSortOrder,
@@ -480,11 +481,17 @@ const buildPurchaseWhereClause = (
 ) =>
   buildSearchConditions(
     purchase,
+    [{ column: purchase.displayLabel, term: filters.displayLabelSearch }],
     [
-      { column: purchase.orderId, term: filters.search },
-      { column: purchase.displayLabel, term: filters.search },
-    ],
-    [
+      // The broad Purchase search is one term over two alternative identity
+      // fields. Passing both through `searchFilters` would AND them together,
+      // requiring the same text in both orderId AND displayLabel.
+      filters.search
+        ? or(
+            formatSearchTerm(purchase.orderId, filters.search),
+            formatSearchTerm(purchase.displayLabel, filters.search),
+          )
+        : undefined,
       ...auditDateWhereConditions(purchase, filters),
       eqAny(purchase.vendorId, vendorUuids),
       ...relatedWhereConditions("purchase", filters, purchase.id),
