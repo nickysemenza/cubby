@@ -19,6 +19,7 @@
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import type { ProjectDateWindow, ProjectStatus } from "@cubby/schemas/project";
+import { format } from "date-fns";
 import { asc } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
@@ -51,6 +52,8 @@ export type ProjectParentRow = {
    * needs it (asking for a budget estimate on a `done` project is meaningless).
    */
   status: ProjectStatus;
+  /** Completion-year fallback when the folded effective end is null. */
+  updatedAt: Date;
 };
 
 /** Depth cap for tree walks (children-map traversal, ancestor walks) —
@@ -73,6 +76,7 @@ async function allProjectParentRows(db: Database): Promise<ProjectParentRow[]> {
       startDate: project.startDate,
       endDate: project.endDate,
       status: project.status,
+      updatedAt: project.updatedAt,
     })
     .from(project)
     .where(notDeleted(project))
@@ -311,6 +315,17 @@ export type ProjectSubtreeRollups = ProjectTree & {
   dateWindows: Map<ProjectId, ProjectDateWindow>;
 };
 
+/** The existing History definition, centralized for every server read. */
+export function projectCompletionYear(
+  row: Pick<ProjectParentRow, "updatedAt">,
+  window: ProjectDateWindow,
+): string {
+  return (window.effectiveEnd ?? format(row.updatedAt, "yyyy-MM-dd")).slice(
+    0,
+    4,
+  );
+}
+
 /**
  * Step 1 of the pipeline on its own — one query, no rollups. Only for the
  * caller that needs the tree *before* it knows its ids: `projectList` resolves
@@ -325,6 +340,22 @@ export async function loadProjectTree(db: Database): Promise<ProjectTree> {
     childrenByParent: buildChildrenMap(allRows),
     nameById: new Map(allRows.map((r) => [r.id, r.name])),
     shortcodeById: new Map(allRows.map((r) => [r.id, r.shortcode])),
+  };
+}
+
+/** Lightweight whole-tree date fold without loading spend/task rollups. */
+export async function loadProjectDateWindows(
+  db: Database,
+  tree?: ProjectTree,
+): Promise<{
+  tree: ProjectTree;
+  dateWindows: Map<ProjectId, ProjectDateWindow>;
+}> {
+  const loaded = tree ?? (await loadProjectTree(db));
+  const contentDates = await projectContentDates(db);
+  return {
+    tree: loaded,
+    dateWindows: aggregateSubtreeDates(loaded.allRows, contentDates),
   };
 }
 

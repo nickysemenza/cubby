@@ -71,7 +71,16 @@ export function HouseCard() {
           <Link
             key={stat.key}
             to="/tasks"
-            search={{ view: stat.view }}
+            search={
+              stat.view === "inbox"
+                ? {
+                    view: "list",
+                    status: "not_started,later,in_progress,blocked",
+                    project: "__none__",
+                    parentTask: "__none__",
+                  }
+                : { view: "next" }
+            }
             className="transition-colors hover:bg-muted/50"
           >
             <StatTile label={stat.label}>

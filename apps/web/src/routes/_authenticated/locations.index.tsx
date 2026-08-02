@@ -21,7 +21,10 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import {
+  entityFilterSearchFields,
+  getEntityFilters,
+} from "~/entities/filter-manifest";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -48,8 +51,13 @@ export const Route = createFileRoute("/_authenticated/locations/")({
 });
 
 function LocationsPage() {
-  const { view = "gallery" } = Route.useSearch();
+  const search = Route.useSearch();
+  const { view = "gallery" } = search;
   const navigate = useNavigate({ from: Route.fullPath });
+  const rawSearch = search as Record<string, unknown>;
+  const tableFiltersActive = getEntityFilters("location").some((filter) =>
+    Boolean(rawSearch[filter.urlKey ?? filter.columnId]),
+  );
 
   return (
     <Page
@@ -63,8 +71,17 @@ function LocationsPage() {
           ariaLabel="Locations view"
           options={VIEW_SWITCHER_OPTIONS}
           value={view}
-          onValueChange={(v) => navigate({ search: { view: v } })}
+          onValueChange={(v) =>
+            navigate({ search: (prev) => ({ ...prev, view: v }) })
+          }
         />
+
+        {view !== "table" && tableFiltersActive && (
+          <Description>
+            Table filters are preserved in the URL but paused in this whole-tree
+            renderer. Switch to Table to apply them.
+          </Description>
+        )}
 
         {view === "gallery" && (
           <Suspense fallback={<SimpleLoading text="Loading gallery..." />}>

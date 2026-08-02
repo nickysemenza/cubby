@@ -64,42 +64,37 @@ export function TasksStatsStrip() {
 
   if (isLoading || !data) return <StatsSkeleton />;
 
-  const goTo = (view: "next" | "inbox") =>
-    navigate({ search: (prev) => ({ ...prev, view }) });
+  const goToNext = () =>
+    navigate({ search: (prev) => ({ ...prev, view: "next" }) });
+  const goToInbox = () =>
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        view: "list",
+        q: undefined,
+        status: "not_started,later,in_progress,blocked",
+        project: "__none__",
+        parentTask: "__none__",
+        dueDate: undefined,
+        trade: undefined,
+        subjectProduct: undefined,
+        productId: undefined,
+      }),
+    });
 
   return (
     <Grid cols="summary">
-      <StatLink
-        label="Total open"
-        value={data.totalOpen}
-        onClick={() => goTo("next")}
-      />
-      <StatLink label="Next" value={data.next} onClick={() => goTo("next")} />
-      <StatLink
-        label="Someday"
-        value={data.later}
-        onClick={() => goTo("next")}
-      />
-      <StatLink
-        label="Inbox"
-        value={data.inbox}
-        onClick={() => goTo("inbox")}
-      />
-      <StatLink
-        label="Overdue"
-        value={data.overdue}
-        onClick={() => goTo("next")}
-      />
+      <StatLink label="Total open" value={data.totalOpen} onClick={goToNext} />
+      <StatLink label="Next" value={data.next} onClick={goToNext} />
+      <StatLink label="Someday" value={data.later} onClick={goToNext} />
+      <StatLink label="Inbox" value={data.inbox} onClick={goToInbox} />
+      <StatLink label="Overdue" value={data.overdue} onClick={goToNext} />
       <StatLink
         label="Due in 7 days"
         value={data.dueThisWeek}
-        onClick={() => goTo("next")}
+        onClick={goToNext}
       />
-      <StatLink
-        label="Blocked"
-        value={data.blocked}
-        onClick={() => goTo("next")}
-      />
+      <StatLink label="Blocked" value={data.blocked} onClick={goToNext} />
     </Grid>
   );
 }

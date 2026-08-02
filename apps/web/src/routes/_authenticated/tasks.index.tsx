@@ -9,7 +9,6 @@ import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
 import { CreateTaskDialog } from "~/app/tasks/create-task-dialog";
-import { TaskInbox } from "~/app/tasks/inbox";
 import { NextTasks } from "~/app/tasks/next-tasks";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
 import { TaskList } from "~/app/tasks/tasklist";
@@ -20,7 +19,19 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { entityFilterSearchFields } from "~/entities/filter-manifest";
+import {
+  entityFilterSearchFields,
+  getEntityFilters,
+} from "~/entities/filter-manifest";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromSearch,
+} from "~/entities/filters";
+import {
+  isValidTaskStatusFilter,
+  normalizeTaskRenderer,
+  type TaskRenderer,
+} from "~/lib/list-view-normalization";
 import { urlStringParam } from "~/lib/search-params";
 
 // Timeline is the Gantt + the Nivo calendar heatmap, and its tab is unmounted
@@ -31,42 +42,62 @@ const TasksTimelineView = lazy(() =>
   })),
 );
 
-const viewOptions = [
-  "next",
-  "inbox",
-  "board",
-  "timeline",
-  "all",
-  "history",
-] as const;
-type ViewOption = (typeof viewOptions)[number];
+type ViewOption = TaskRenderer;
 
 const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "next", label: "Next" },
-  { value: "inbox", label: "Inbox" },
   { value: "board", label: "Board" },
   { value: "timeline", label: "Timeline" },
-  { value: "all", label: "All" },
-  { value: "history", label: "History" },
+  { value: "list", label: "List" },
 ];
 
-const searchSchema = z.object({
-  q: urlStringParam,
-  // Declared by name as well as through the manifest so typed links can set an
-  // exact product scope and the visible "For" presence filter.
-  productId: urlStringParam,
-  subjectProduct: urlStringParam,
-  view: z.enum(viewOptions).optional().catch(undefined),
-  // Board layout: column axis + swimlane axis. `lane` is normalized to only
-  // apply when `cols === "status"` inside TasksBoardView.
-  cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
-  lane: z.enum(["project", "trade"]).optional().catch(undefined),
-  // Quick-capture deep link (navbar "+" / command palette) — there is no
-  // /tasks/new route, so the create dialog is opened by this param.
-  create: z.boolean().optional().catch(undefined),
-  ...tableSearchFields,
-  ...entityFilterSearchFields("task"),
-});
+const taskStatusParam = urlStringParam.refine(
+  isValidTaskStatusFilter,
+  "Invalid task status filter",
+);
+
+export const taskSearchSchema = z
+  .object({
+    ...tableSearchFields,
+    ...entityFilterSearchFields("task"),
+    q: urlStringParam,
+    status: taskStatusParam,
+    project: urlStringParam,
+    parentTask: urlStringParam,
+    // Declared by name as well as through the manifest so typed links can set an
+    // exact product scope and the visible "For" presence filter.
+    productId: urlStringParam,
+    subjectProduct: urlStringParam,
+    view: urlStringParam,
+    // Board layout: column axis + swimlane axis. `lane` is normalized to only
+    // apply when `cols === "status"` inside TasksBoardView.
+    cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
+    lane: z.enum(["project", "trade"]).optional().catch(undefined),
+    // Quick-capture deep link (navbar "+" / command palette) — there is no
+    // /tasks/new route, so the create dialog is opened by this param.
+    create: z.boolean().optional().catch(undefined),
+  })
+  .transform(({ view, ...rest }) => {
+    const normalized = normalizeTaskRenderer(view);
+    if (normalized.clearFilters) {
+      return {
+        ...rest,
+        view: normalized.view,
+        q: undefined,
+        status: undefined,
+        project: undefined,
+        parentTask: undefined,
+        dueDate: undefined,
+        trade: undefined,
+        subjectProduct: undefined,
+        productId: undefined,
+      };
+    }
+    return {
+      ...rest,
+      ...normalized,
+    };
+  });
 
 const searchDefaults = {
   q: undefined,
@@ -79,7 +110,7 @@ const searchDefaults = {
 } as const;
 
 export const Route = createFileRoute("/_authenticated/tasks/")({
-  validateSearch: searchSchema,
+  validateSearch: taskSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: TasksPage,
   head: () => ({ meta: [{ title: "Tasks | cubby" }] }),
@@ -88,11 +119,14 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
 function TasksPage() {
   const search = Route.useSearch();
   const { q } = search;
-  // Default to the "what can I do next" view rather than the full list, which
-  // is dominated by completed tasks. A search deep-link (`q`) still lands on
-  // the All list so its seeded search isn't silently ignored.
-  const view = search.view ?? (q ? "all" : "next");
+  // Next is an explicitly labeled actionable-work renderer. A search deep
+  // link lands on List so its ordinary filter is never ignored.
+  const view = search.view ?? (q ? "list" : "next");
   const navigate = useNavigate({ from: Route.fullPath });
+  const rendererFilters = buildFiltersFromManifest(
+    getEntityFilters("task"),
+    filterGetterFromSearch(getEntityFilters("task"), search),
+  );
 
   return (
     // The board's natural width is its fixed column tracks, not the full
@@ -119,21 +153,17 @@ function TasksPage() {
           }
         />
 
-        {view === "next" && <NextTasks />}
+        {view === "next" && <NextTasks filters={rendererFilters} />}
 
-        {view === "inbox" && <TaskInbox />}
-
-        {view === "board" && <TasksBoardView />}
+        {view === "board" && <TasksBoardView filters={rendererFilters} />}
 
         {view === "timeline" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <TasksTimelineView />
+            <TasksTimelineView filters={rendererFilters} />
           </Suspense>
         )}
 
-        {view === "all" && <TaskList initialSearch={q} />}
-
-        {view === "history" && <TaskList completion="done" />}
+        {view === "list" && <TaskList initialSearch={q} />}
       </Stack>
 
       {/* Deep-linked quick capture: open state is read straight off the URL and

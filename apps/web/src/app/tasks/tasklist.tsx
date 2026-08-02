@@ -1,9 +1,10 @@
-import type { TaskCompletion, TaskOut } from "@cubby/schemas/project";
+import type { TaskShortcode } from "@cubby/schemas/identifiers";
+import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   taskDueColumn,
   taskStatusColumn,
@@ -13,6 +14,9 @@ import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { NoneValue } from "~/components/ui/none-value";
+import { entities, entityDetailParams } from "~/entities/entities";
+import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
 import {
@@ -29,10 +33,12 @@ import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { TableLink } from "../_components/table/TableLink";
 import {
   TaskBulkActionDialogs,
   useTaskBulkActions,
 } from "../_components/tracker/task-bulk-actions";
+import { CreateProjectFromTasksDialog } from "./create-project-from-tasks-dialog";
 
 /**
  * `N/M` checklist chip after a parent task's name. Module-level because
@@ -58,19 +64,9 @@ interface TaskListProps {
    * box afterwards behaves normally and does not sync back to the URL.
    */
   initialSearch?: string;
-  /**
-   * Completion scope forwarded to `task.list`'s `completion` filter — undefined
-   * keeps today's "all" default (the `/tasks?view=all` list). `/tasks?view=history`
-   * passes `"done"` to scope this same table to completed tasks.
-   */
-  completion?: TaskCompletion;
 }
 
-export function TaskList({
-  actions,
-  initialSearch,
-  completion,
-}: TaskListProps) {
+export function TaskList({ actions, initialSearch }: TaskListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<TaskOut>(), []);
   const { options: projectOptions } = useProjectOptions();
@@ -90,7 +86,13 @@ export function TaskList({
       })) ?? NO_PRODUCT_OPTIONS,
     [productOptionsQuery.data],
   );
-  const taskBulkActions = useTaskBulkActions();
+  const [createProjectTaskIds, setCreateProjectTaskIds] = useState<
+    TaskShortcode[] | null
+  >(null);
+  const taskBulkActions = useTaskBulkActions({
+    includeDueDate: true,
+    onCreateProject: setCreateProjectTaskIds,
+  });
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: api.task.update.mutationOptions,
@@ -108,17 +110,26 @@ export function TaskList({
   });
 
   // Runtime picklist for the manifest's `project` spec (optionsKey: "project").
+  const parentOptionsQuery = useQuery(
+    api.task.list.queryOptions({
+      filters: {},
+      sort: { orderBy: "name", direction: "asc" },
+      pagination: { pageIndex: 0, pageSize: 500 },
+    }),
+  );
+  const parentOptions = useMemo<FilterableComboboxItem[]>(
+    () =>
+      parentOptionsQuery.data?.items.map(({ id, name }) => ({
+        value: id,
+        label: name,
+      })) ?? [],
+    [parentOptionsQuery.data],
+  );
   const projectFilterOptions = useFilterOptions({
     project: projectOptions,
     taskProducts: productOptions,
+    parentTask: parentOptions,
   });
-
-  // Scope constants that aren't column filters. Checklist subtasks are managed
-  // from their parent's detail page, not surfaced as independent rows here.
-  const taskScope = useMemo(
-    () => ({ topLevelOnly: true, completion }),
-    [completion],
-  );
 
   // The status / due / trade columns come from the shared factories in
   // `~/app/projects/shared.tsx`, also used by the embedded `TaskList` on the
@@ -161,6 +172,29 @@ export function TaskList({
           },
         },
       }),
+      columnHelper.accessor("parentTaskName", {
+        id: "parentTask",
+        header: "Parent Task",
+        enableSorting: false,
+        meta: {
+          className: "w-40",
+          filterConfig: manifestFilterConfig("task", "parentTask", {
+            parentTask: parentOptions,
+          }),
+        },
+        cell: ({ row, getValue }) =>
+          row.original.parentTaskId && getValue() ? (
+            <TableLink
+              to={entities.task.routes.detail}
+              params={entityDetailParams(row.original.parentTaskId)}
+              className="block truncate"
+            >
+              {getValue()}
+            </TableLink>
+          ) : (
+            <NoneValue />
+          ),
+      }),
       taskDueColumn(
         columnHelper,
         async (dueDate, task) => {
@@ -182,7 +216,7 @@ export function TaskList({
         { mobile: { slot: "meta", priority: 50 } },
       ),
     ],
-    [columnHelper],
+    [columnHelper, parentOptions],
   );
 
   const tableStateOptions = useSeededFilter("name", initialSearch);
@@ -231,7 +265,6 @@ export function TaskList({
   } = useEntityList({
     entity: "task",
     queryOptions: api.task.list.queryOptions,
-    extraFilters: taskScope,
     filterOptions: projectFilterOptions,
     columns,
     deletable: deletableConfig,
@@ -264,6 +297,15 @@ export function TaskList({
         controller={taskBulkActions}
         onComplete={() => table.resetRowSelection()}
       />
+      {createProjectTaskIds && (
+        <CreateProjectFromTasksDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCreateProjectTaskIds(null);
+          }}
+          taskIds={createProjectTaskIds}
+        />
+      )}
     </div>
   );
 }

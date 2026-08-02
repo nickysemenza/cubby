@@ -13,7 +13,7 @@ import type {
   ProjectOut,
 } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
-import { asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { arrayOverlaps, asc, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import {
@@ -21,20 +21,25 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   notDeleted,
+  presenceCondition,
 } from "~/server/repo/database-helpers";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { resolveShortcode } from "~/server/repo/shortcode-resolver";
+import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { projectContentDates, projectDependencyIds } from "./analytics";
+import { dashboardProjectDateCondition } from "./dashboard-shared";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
   aggregateSubtreeDates,
   collectDescendantIds,
+  loadProjectDateWindows,
   loadProjectSubtreeRollups,
   loadProjectTree,
+  projectCompletionYear,
 } from "./subtree";
 
 /**
@@ -95,30 +100,53 @@ export const projectList = async (
   const tree = await loadProjectTree(db);
   const { childrenByParent } = tree;
 
-  // The filter arrives as a shortcode; resolve to the uuid the column
-  // actually stores. Not live-only: a filter naming a since-deleted project
-  // should still scope the query rather than silently match everything.
-  const resolvedParent = filters.parentProjectId
-    ? await resolveShortcode(db, filters.parentProjectId)
-    : null;
-  const parentProjectUuid =
-    resolvedParent && resolvedParent.entity === "project"
-      ? unsafeProjectId(resolvedParent.id)
-      : null;
+  const parentCodes = filters.parentProjectId
+    ? [filters.parentProjectId].flat()
+    : [];
+  const resolvedParents = await resolveShortcodes(db, parentCodes);
+  const parentProjectUuids = parentCodes.flatMap((code) => {
+    const resolved = resolvedParents.get(code);
+    return resolved?.entity === "project" ? [unsafeProjectId(resolved.id)] : [];
+  });
 
   // When scoped to a parent's subtree, resolve every live descendant id and
   // match on that set (excluding the parent itself — same shape as the plain
   // `parentProjectId` filter, just recursive); otherwise a direct-children match.
-  let parentCondition = parentProjectUuid
-    ? eq(project.parentProjectId, parentProjectUuid)
-    : undefined;
-  if (parentProjectUuid && filters.includeSubProjects) {
-    const descendantIds = collectDescendantIds(
-      childrenByParent,
-      parentProjectUuid,
+  let parentValues =
+    parentCodes.length === 0
+      ? undefined
+      : parentProjectUuids.length === 0
+        ? sql`false`
+        : inArray(project.parentProjectId, parentProjectUuids);
+  if (parentProjectUuids.length > 0 && filters.includeSubProjects) {
+    parentValues = inArray(
+      project.id,
+      parentProjectUuids.flatMap((id) =>
+        collectDescendantIds(childrenByParent, id),
+      ),
     );
-    parentCondition = inArray(project.id, descendantIds);
   }
+  const parentCondition = or(
+    parentValues,
+    presenceCondition(
+      project.parentProjectId,
+      filters.parentProjectPresenceFilter,
+    ),
+  );
+
+  const completionIds = filters.completionYear
+    ? await loadProjectDateWindows(db, tree).then(({ dateWindows }) =>
+        tree.allRows
+          .filter((row) => {
+            const window = dateWindows.get(row.id);
+            return (
+              window &&
+              projectCompletionYear(row, window) === filters.completionYear
+            );
+          })
+          .map((row) => row.id),
+      )
+    : null;
 
   const pickerSearch = filters.search
     ? or(
@@ -134,12 +162,13 @@ export const projectList = async (
       ...auditDateWhereConditions(project, filters),
       ...relatedWhereConditions("project", filters, project.id),
       pickerSearch,
-      filters.status ? eq(project.status, filters.status) : undefined,
-      filters.kind ? eq(project.kind, filters.kind) : undefined,
-      // `locations` is a free-form text[] column — exact-match membership.
+      eqAny(project.status, filters.status),
+      eqAny(project.kind, filters.kind),
       filters.location
-        ? sql`${filters.location} = ANY(${project.locations})`
+        ? arrayOverlaps(project.locations, [filters.location].flat())
         : undefined,
+      dashboardProjectDateCondition(filters),
+      completionIds ? inArray(project.id, completionIds) : undefined,
       filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
       parentCondition,
     ],

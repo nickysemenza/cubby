@@ -115,7 +115,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
       />
       <Link
         to="/tasks"
-        search={{ view: "all", productId: product.id }}
+        search={{ view: "list", productId: product.id }}
         className="text-primary text-xs hover:underline"
       >
         See all tasks →

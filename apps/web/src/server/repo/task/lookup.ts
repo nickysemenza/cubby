@@ -38,15 +38,13 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
+import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
   loadProjectTree,
 } from "~/server/repo/project/subtree";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import {
-  resolveShortcode,
-  resolveShortcodes,
-} from "~/server/repo/shortcode-resolver";
+import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 
@@ -81,7 +79,7 @@ const toUuids = async (
  * just be a separate condition in the caller's list — an AND there is the bug
  * this replaced. `undefined` when neither is given (no condition added).
  */
-export async function buildTaskProjectCondition(
+async function buildTaskProjectCondition(
   db: Database,
   projectId: ProjectShortcode | ProjectShortcode[] | undefined,
   includeSubProjects: boolean | undefined,
@@ -91,7 +89,7 @@ export async function buildTaskProjectCondition(
   const selectedCodes = projectId ? [projectId].flat() : [];
   if (selectedCodes.length === 0) return presenceCond;
   const selected = (await toUuids(db, selectedCodes)).map(unsafeProjectId);
-  if (selected.length === 0) return presenceCond;
+  if (selected.length === 0) return presenceCond ?? sql`false`;
   if (!includeSubProjects)
     return or(eqAny(task.projectId, selected), presenceCond);
 
@@ -153,13 +151,38 @@ export const taskList = async (
     filters.includeSubProjects,
     filters.projectPresenceFilter,
   );
-  const parentTaskUuid = filters.parentTaskId
-    ? await resolveShortcode(db, filters.parentTaskId)
+  const parentTaskCodes = filters.parentTaskId
+    ? [filters.parentTaskId].flat()
+    : [];
+  const parentTaskIds = (await toUuids(db, parentTaskCodes)).map(unsafeTaskId);
+  const scopedProjectIds = filters.projectScope
+    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
     : null;
   const subjectProductIds = await toUuids(
     db,
     filters.subjectProductId ? [filters.subjectProductId].flat() : [],
   );
+  const subjectProductCondition =
+    filters.subjectProductId &&
+    [filters.subjectProductId].flat().length > 0 &&
+    subjectProductIds.length === 0 &&
+    !filters.subjectProductPresenceFilter
+      ? sql`false`
+      : eqAnyOrPresence(
+          task.subjectProductId,
+          subjectProductIds,
+          filters.subjectProductPresenceFilter,
+        );
+  const parentTaskCondition =
+    parentTaskCodes.length > 0 &&
+    parentTaskIds.length === 0 &&
+    !filters.parentTaskPresenceFilter
+      ? sql`false`
+      : eqAnyOrPresence(
+          task.parentTaskId,
+          parentTaskIds,
+          filters.parentTaskPresenceFilter,
+        );
   const subjectProductNameMatches = filters.search
     ? dbClient
         .select({ id: product.id })
@@ -192,15 +215,14 @@ export const taskList = async (
       // it can't be a sibling condition here (that AND is what made
       // "project A or unassigned" inexpressible).
       projectCondition,
-      eqAnyOrPresence(
-        task.subjectProductId,
-        subjectProductIds,
-        filters.subjectProductPresenceFilter,
-      ),
+      subjectProductCondition,
       eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
-      parentTaskUuid && parentTaskUuid.entity === "task"
-        ? eq(task.parentTaskId, unsafeTaskId(parentTaskUuid.id))
+      parentTaskCondition,
+      scopedProjectIds
+        ? scopedProjectIds.length > 0
+          ? inArray(task.projectId, scopedProjectIds)
+          : sql`false`
         : undefined,
       // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
       // ranged task still inside its window isn't treated as overdue, matching
@@ -216,6 +238,11 @@ export const taskList = async (
         ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
         : undefined,
       filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
+      presenceCondition(
+        task.dueDate,
+        filters.duePresenceFilter,
+        and(isNull(task.dueDate), isNull(task.dueEndDate)),
+      ),
       // Completion scope: undefined/"all" adds no condition (today's default,
       // unchanged) — see taskCompletionSchema.
       filters.completion === "open"

@@ -62,6 +62,7 @@ import type {
   BlockedReason,
   BlockedTaskOut,
   ProjectStatus,
+  TaskFilters,
   TaskStatus,
 } from "@cubby/schemas/project";
 import { and, asc, ne } from "drizzle-orm";
@@ -82,6 +83,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI } from "./helpers";
+import { taskList } from "./lookup";
 
 /** The subset of a live, non-done task's fields the chain walk needs. */
 type OpenTaskNode = {
@@ -281,7 +283,24 @@ function compareBlocked(a: BlockedTaskOut, b: BlockedTaskOut): number {
 
 export async function listActionableTasks(
   db: Database,
+  filters: TaskFilters = {},
 ): Promise<ActionableTasksOut> {
+  // Membership is delegated to the ordinary list predicate. The actionable
+  // renderer then adds its disclosed open/top-level semantics while retaining
+  // the full graph below to explain why a matching row is blocked.
+  const matching = await taskList(
+    db,
+    { ...filters, completion: "open", topLevelOnly: true },
+    [],
+    { pageIndex: 0, pageSize: 100_000 },
+  );
+  const matchingShortcodes = new Set<string>(
+    matching.data.map((row) => row.id),
+  );
+  if (matchingShortcodes.size === 0) {
+    return { next: [], later: [], blocked: [] };
+  }
+
   const [
     openTaskRows,
     taskEdgeRows,
@@ -400,6 +419,7 @@ export async function listActionableTasks(
     // why-chain below, via `tasksById`/`taskEdgesByOwner` — those stay
     // unfiltered).
     if (row.parentTaskId) continue;
+    if (!matchingShortcodes.has(row.shortcode)) continue;
 
     const counts = subtaskCounts.get(row.id);
     const taskOutRow = dbTaskToAPI(

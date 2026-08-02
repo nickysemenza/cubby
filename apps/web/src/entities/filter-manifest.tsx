@@ -6,6 +6,7 @@ import {
   unsafeProductId,
   unsafeProjectId,
   unsafePurchaseId,
+  unsafeTaskId,
   unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -25,6 +26,10 @@ import {
   resolveDateRange,
   resolveProductQuantityFilter,
 } from "~/app/expenses/expense-options";
+import {
+  PROJECT_STATUS_OPTIONS,
+  projectKindOptions,
+} from "~/app/projects/project-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import {
   purchaseExpenseStatusOptions,
@@ -176,6 +181,13 @@ const resolveProductTaskFilter = (value: string | undefined) => {
   }
   const { dueFrom, dueTo } = resolveDueRange(value);
   return { taskDueFrom: dueFrom, taskDueTo: dueTo };
+};
+
+const resolveTaskDueFilter = (value: string | undefined) => {
+  if (value === "has" || value === "none") {
+    return { duePresenceFilter: value };
+  }
+  return resolveDueRange(value);
 };
 
 const resolveLocationItems = (value: string | undefined) =>
@@ -841,8 +853,8 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       columnId: "dueDate",
       kind: "range",
       placeholder: "Filter by due date...",
-      options: dueRangeOptions,
-      expand: resolveDueRange,
+      options: [...presenceFilterOptions("due date"), ...dueRangeOptions],
+      expand: resolveTaskDueFilter,
     },
     {
       columnId: "project",
@@ -876,6 +888,15 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
         field: "subjectProductPresenceFilter",
         label: "product",
       },
+    },
+    {
+      columnId: "parentTask",
+      field: "parentTaskId",
+      kind: "idMulti",
+      brand: unsafeTaskId,
+      placeholder: "Filter by parent task...",
+      optionsKey: "parentTask",
+      nullable: { field: "parentTaskPresenceFilter", label: "parent task" },
     },
   ],
 
@@ -1254,13 +1275,6 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     },
   ],
 
-  // Client-side tree table: this filters in the browser (`useClientEntityList`
-  // runs with manualFiltering off), so the spec is presentation-only — no
-  // `field` reaches a server filter object. Status/kind are deliberately NOT
-  // here: the dashboard's chips (`?statuses=&kinds=`) already scope this
-  // table's data server-side, and a second column-filter on the same concept
-  // would silently AND with the chips instead of replacing them — see
-  // `ProjectTable`'s comment in `app/projects/shared.tsx`.
   project: [
     {
       columnId: "name",
@@ -1274,16 +1288,63 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
       kind: "text",
       placeholder: "Filter by project name...",
     },
+    {
+      columnId: "status",
+      urlKey: "statuses",
+      kind: "multiselect",
+      placeholder: "Filter by status...",
+      options: PROJECT_STATUS_OPTIONS,
+    },
+    {
+      columnId: "kind",
+      urlKey: "kinds",
+      kind: "multiselect",
+      placeholder: "Filter by kind...",
+      options: projectKindOptions,
+    },
+    {
+      columnId: "locations",
+      field: "location",
+      urlKey: "locations",
+      kind: "multiselect",
+      placeholder: "Filter by location...",
+      optionsKey: "projectLocations",
+    },
+    {
+      columnId: "dateRange",
+      urlKey: "date",
+      urlOnly: true,
+      kind: "range",
+      placeholder: "Filter by project activity...",
+      options: dateRangeOptions,
+      expand: resolveDateRange,
+    },
+    {
+      columnId: "completionYear",
+      urlKey: "completed",
+      urlOnly: true,
+      kind: "select",
+      placeholder: "Filter by completion year...",
+      optionsKey: "projectCompletionYears",
+    },
+    {
+      columnId: "parent",
+      field: "parentProjectId",
+      kind: "idMulti",
+      brand: unsafeProjectId,
+      placeholder: "Filter by parent project...",
+      optionsKey: "project",
+      nullable: {
+        field: "parentProjectPresenceFilter",
+        label: "parent project",
+      },
+    },
   ],
 };
 
 /** The specs for an entity, or an empty list when it has no list table. */
 const relatedFilterSpecs = Object.fromEntries(
   [...new Set(relatedViewRegistry.map((view) => view.source))].map((entity) => {
-    // Project's roster is a client-filtered dashboard/tree, not project.list;
-    // its generated fields remain available to API/MCP callers, but a table
-    // header filter would filter only the already-loaded dashboard rows.
-    if (entity === "project") return [entity, []] as const;
     const existing = entityFilters[entity] ?? [];
     const existingColumns = new Set(existing.map((spec) => spec.columnId));
     const generated: FilterSpec[] = [];

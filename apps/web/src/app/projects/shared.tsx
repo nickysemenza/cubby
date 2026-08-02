@@ -21,20 +21,12 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  type Row as TableRow,
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
 import { ExternalLink, ListFilter, ListTodo, ShoppingCart } from "lucide-react";
-import {
-  type ComponentType,
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type VendorName,
   WithVendorSearch,
@@ -65,11 +57,14 @@ import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import { useBulkActions } from "~/app/_components/data-table/useBulkActions";
 import { useTableColumnVisibility } from "~/app/_components/data-table/useTableColumnVisibility";
-import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
+import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { ListBulkActionBar } from "~/app/_components/hooks/useListBulkActions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
+import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { TableLink } from "~/app/_components/table/TableLink";
 import {
@@ -120,7 +115,6 @@ import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
-import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { TradeBadge, tradeOptions } from "./trade-options";
 
 /**
@@ -1344,53 +1338,35 @@ const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
     <Badge variant="outline">{row.childProjectIds.length} sub</Badge>
   ) : undefined;
 
-/**
- * Renders through `useClientEntityList` over the dashboard's
- * already-fetched-and-chip-filtered `projects` array — no query of its own.
- * `buildProjectTree` nests sub-projects under their parent (WBS shape) so the
- * table's rows mirror the project hierarchy instead of a flat list, with
- * `useClientEntityList`'s `tree` option wiring TanStack's expand/collapse.
- *
- * This replaces an earlier design that ran its own independent `project.list`
- * query specifically to get server-backed infinite scroll, inline editing,
- * and delete — trading away visibility into the dashboard's status/kind/
- * location chip filters to get them (the table had its own separate inline
- * status/kind column filters instead). Now that `useClientEntityList` gives
- * inline editing + delete over caller-supplied data, that trade-off is gone:
- * the table always reflects exactly what the dashboard's chips show. Column
- * filtering for status/kind moved to the dashboard's chips (`DashboardFilters`)
- * — only the name search box remains local to this table.
- */
+/** Flat, fully server-filtered project list. Hierarchy is an ordinary Parent column. */
 export function ProjectTable({
-  projects,
-  onRowClick,
-  onRowHover,
-  PreviewSheet,
+  locations,
+  completionYears,
 }: {
-  projects: ProjectOut[];
-  onRowClick: (row: TableRow<ProjectTreeRow>) => void;
-  onRowHover: (row: TableRow<ProjectTreeRow>) => void;
-  PreviewSheet: ComponentType;
+  locations: string[];
+  completionYears: string[];
 }) {
   const api = useTRPC();
+  const columnHelper = useMemo(() => createColumnHelper<ProjectOut>(), []);
+  const { options: projectOptions } = useProjectOptions();
   const projectIds = useMemo(
-    () => projects.map((project) => project.id),
-    [projects],
+    () => projectOptions.map((project) => project.value),
+    [projectOptions],
   );
   const { data: projectImages } = useQuery({
     ...api.image.imagesByProjectIds.queryOptions({ projectIds }),
     staleTime: 5 * 60 * 1000,
     enabled: projectIds.length > 0,
   });
-  // Columns are helper'd over `ProjectTreeRow`, not `ProjectOut`: the client
-  // hook's rows are `ProjectOut & { subRows }`, and TanStack's `ColumnDef` is
-  // invariant in `TData`, so a `ProjectOut`-helper wouldn't typecheck against
-  // `useClientEntityList`'s table. `ProjectTreeRow` is a structural supertype
-  // of `ProjectOut` (every accessor below only reads `ProjectOut` fields), so
-  // this is a pure type-parameter swap — no behavior change.
-  const columnHelper = useMemo(() => createColumnHelper<ProjectTreeRow>(), []);
-
-  const treeData = useMemo(() => buildProjectTree(projects), [projects]);
+  const filterOptions = useFilterOptions({
+    project: projectOptions,
+    projectLocations: locations.map((value) => ({ value, label: value })),
+    projectCompletionYears: completionYears.map((value) => ({
+      value,
+      label: value,
+    })),
+  });
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("project");
 
   const updateProjectMutation = useUpdateMutation({
     mutationFn: api.project.update.mutationOptions,
@@ -1398,7 +1374,7 @@ export function ProjectTable({
     invalidateKeys: projectMutationInvalidateKeys,
   });
 
-  const nameEditable = useNameEditable<ProjectTreeRow>(
+  const nameEditable = useNameEditable<ProjectOut>(
     updateProjectMutation.mutateAsync,
   );
 
@@ -1421,10 +1397,6 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by status...",
         selectOptions: PROJECT_STATUS_OPTIONS,
-        // No header filter: the dashboard's Status chips already scope this
-        // server-side. A column filter here would filter the already-scoped
-        // rows again, client-side, and the two would silently AND.
-        filterConfig: null,
         renderCell: (status: ProjectStatus) => (
           <Row align="center" gap="xs">
             <StatusIcon status={status} />
@@ -1446,8 +1418,6 @@ export function ProjectTable({
         className: "w-32",
         placeholder: "Filter by kind...",
         selectOptions: projectKindOptions,
-        // See the Status column above — the dashboard's Kind chips own this.
-        filterConfig: null,
         renderCell: (kind: ProjectKind | null) =>
           kind ? (
             <Badge variant="secondary">{capitalize(kind)}</Badge>
@@ -1495,10 +1465,30 @@ export function ProjectTable({
           );
         },
       }),
+      columnHelper.accessor("parentProjectName", {
+        id: "parent",
+        header: "Parent",
+        enableSorting: false,
+        meta: { className: "w-40" },
+        cell: ({ row, getValue }) =>
+          row.original.parentProjectId && getValue() ? (
+            <TableLink
+              to={entities.project.routes.detail}
+              params={entityDetailParams(row.original.parentProjectId)}
+              className="block truncate"
+            >
+              {getValue()}
+            </TableLink>
+          ) : (
+            <NoneValue />
+          ),
+      }),
       columnHelper.accessor((row) => row.rollup.subtree.actualSpent, {
         id: "actual",
         header: "Actual",
-        enableSorting: true,
+        // A rollup isn't a stored Project sort field. Keep membership and
+        // ordering honest by not pretending this can be sorted in-browser.
+        enableSorting: false,
         meta: { numeric: true, className: "w-24" },
         cell: ({ row }) => {
           const { subtree } = row.original.rollup;
@@ -1573,59 +1563,41 @@ export function ProjectTable({
     [columnHelper, projectImages],
   );
 
-  // Status/kind are deliberately absent from the filter manifest (and so
-  // never URL-sync here): the dashboard's chips (`?statuses=&kinds=`) already
-  // scope `projects` server-side before it reaches this table, and a manifest
-  // spec on the same concept would silently AND with the chips instead of
-  // replacing them — a filter you can't see and can't clear from either
-  // control. Only the name search is manifest-driven; keep it that way.
-  const filters = useMemo(
-    () => [{ id: "name", placeholder: "Search projects..." }],
-    [],
-  );
-
-  // defaultSortState always defaults to desc — matches the original
-  // ProjectTable's `sorting: [{ id: "startDate", desc: true }]`.
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
-  const { table, bulkActionBar, deleteDialog } = useClientEntityList({
+  const {
+    table,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+    refreshControls,
+    isLoading,
+    error,
+    timing,
+  } = useEntityList({
     entity: "project",
-    data: treeData,
+    queryOptions: api.project.list.queryOptions,
     columns,
-    filters,
+    filterOptions,
     deletable: deletableConfig,
     nameEditable,
     nameSuffix: subProjectCountSuffix,
     tableStateOptions,
-    tree: {
-      getSubRows: (row) => row.subRows,
-      expandable: true,
-      filterFromLeafRows: true,
-      paginateExpandedRows: false,
-      autoResetExpanded: false,
-    },
   });
-
-  // Auto-expand the whole tree while a name search is active, so a match
-  // nested several levels deep in the WBS is actually visible; collapse back
-  // once the search is cleared. Edge-triggered on `searching` alone (not
-  // every keystroke, and not on `table`, which is otherwise a stable ref) so
-  // this doesn't fight a user who manually expanded/collapsed specific rows
-  // mid-search.
-  const searching = Boolean(table.getColumn("name")?.getFilterValue());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally edge-triggered on `searching` only — see comment above
-  useEffect(() => {
-    table.toggleAllRowsExpanded(searching);
-  }, [searching]);
 
   return (
     <div>
       <RTable
         table={table}
+        isLoading={isLoading}
+        error={error}
         ariaLabel="Projects Table"
+        timing={timing}
         entity="project"
         onRowClick={onRowClick}
         onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       <PreviewSheet />
       {deleteDialog}

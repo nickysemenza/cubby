@@ -36,6 +36,7 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
+import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
   loadProjectTree,
@@ -147,7 +148,9 @@ export const buildExpenseWhereClause = async (
   let projectValues =
     selectedProjectIds.length > 0
       ? eqAny(expense.projectId, selectedProjectIds)
-      : undefined;
+      : selectedProjectCodes.length > 0
+        ? sql`false`
+        : undefined;
   if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
     const { childrenByParent } = await loadProjectTree(db);
     projectValues = inArray(
@@ -173,6 +176,9 @@ export const buildExpenseWhereClause = async (
     projectValues,
     presenceCondition(expense.projectId, filters.projectPresenceFilter),
   );
+  const scopedProjectIds = filters.projectScope
+    ? await matchingEmbeddedProjectIds(db, filters.projectScope)
+    : null;
 
   // `search` matches the expense NAME only, and its terms OR. It is passed as
   // an extra condition rather than a `searchFilters` entry because
@@ -225,6 +231,11 @@ export const buildExpenseWhereClause = async (
       eqAny(expense.costType, filters.costType),
       eqAny(expense.trade, filters.trade),
       projectCondition,
+      scopedProjectIds
+        ? scopedProjectIds.length > 0
+          ? inArray(expense.projectId, scopedProjectIds)
+          : sql`false`
+        : undefined,
       eqAny(expense.productId, productUuids),
       // "linked" means productId IS NOT NULL — this deliberately includes
       // expenses whose product was later soft-deleted (those read back with

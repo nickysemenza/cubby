@@ -12,7 +12,12 @@ import {
 import { eq, or } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { image, projectDependency, projectImage } from "~/server/db/schema";
+import {
+  image,
+  project,
+  projectDependency,
+  projectImage,
+} from "~/server/db/schema";
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, expenseList } from "./expense";
@@ -31,7 +36,7 @@ import {
   aggregateSubtreeDates,
   type ProjectParentRow,
 } from "./project/subtree";
-import { createTask, updateTask } from "./task";
+import { createTask, taskList, updateTask } from "./task";
 
 describe("project repository", () => {
   const ctx = withTestDb();
@@ -945,6 +950,214 @@ describe("project repository — sub-projects (parentProjectId)", () => {
     expect(childrenOfParent.data.map((p) => p.id)).toEqual([child.id]);
   });
 
+  it("filters by multiple statuses, kinds, and locations", async () => {
+    const { output: first } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "multi first",
+        status: "planning",
+        kind: "furniture",
+        locations: ["Garage"],
+      }),
+      ctx.actor,
+    );
+    const { output: second } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "multi second",
+        status: "done",
+        kind: "garden",
+        locations: ["Yard"],
+      }),
+      ctx.actor,
+    );
+    await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "multi excluded",
+        status: "in_progress",
+        kind: "workshop",
+        locations: ["Kitchen"],
+      }),
+      ctx.actor,
+    );
+
+    const result = await projectList(
+      ctx.db,
+      {
+        status: ["planning", "done"],
+        kind: ["furniture", "garden"],
+        location: ["Garage", "Yard"],
+      },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(result.data.map((row) => row.id).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
+    expect(result.count).toBe(2);
+  });
+
+  it("supports explicit parent presence and includes each child as a row", async () => {
+    const { output: parent } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "presence parent" }),
+      ctx.actor,
+    );
+    const { output: child } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "presence child",
+        parentProjectId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    const roots = await projectList(
+      ctx.db,
+      { parentProjectPresenceFilter: "none" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(roots.data.map((row) => row.id)).toEqual([parent.id]);
+
+    const nested = await projectList(
+      ctx.db,
+      { parentProjectPresenceFilter: "has" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(nested.data.map((row) => row.id)).toEqual([child.id]);
+    expect(nested.data[0]?.parentProjectName).toBe(parent.name);
+  });
+
+  it("filters completion year by effective end with updatedAt fallback", async () => {
+    const { output: dated } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "completed by effective end",
+        endDate: "2024-09-10",
+      }),
+      ctx.actor,
+    );
+    const { output: fallback, entityId: fallbackEntityId } =
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "completed by update fallback" }),
+        ctx.actor,
+      );
+    await getDb(ctx.db)
+      .update(project)
+      .set({ updatedAt: new Date("2022-04-05T12:00:00Z") })
+      .where(eq(project.id, fallbackEntityId));
+
+    const byEnd = await projectList(ctx.db, { completionYear: "2024" }, [], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+    expect(byEnd.data.map((row) => row.id)).toEqual([dated.id]);
+
+    const byFallback = await projectList(
+      ctx.db,
+      { completionYear: "2022" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(byFallback.data.map((row) => row.id)).toEqual([fallback.id]);
+  });
+
+  it("embedded task and expense lists require a matching live project", async () => {
+    const { output: matching } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "embedded matching",
+        kind: "household",
+      }),
+      ctx.actor,
+    );
+    const { output: other } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "embedded other", kind: "garden" }),
+      ctx.actor,
+    );
+    const { output: matchingTask } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "matching attached task",
+        trade: "other",
+        projectId: matching.id,
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "other attached task",
+        trade: "other",
+        projectId: other.id,
+      }),
+      ctx.actor,
+    );
+    await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "unassigned task",
+        trade: "other",
+      }),
+      ctx.actor,
+    );
+    const { output: matchingExpense } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "matching attached expense",
+        date: "2024-01-10",
+        trade: "other",
+        costType: "materials",
+        projectId: matching.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "other attached expense",
+        date: "2024-01-10",
+        trade: "other",
+        costType: "materials",
+        projectId: other.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "unassigned expense",
+        date: "2024-01-10",
+        trade: "other",
+        costType: "materials",
+      }),
+      ctx.actor,
+    );
+
+    const tasks = await taskList(
+      ctx.db,
+      { projectScope: { kinds: ["household"] } },
+      [],
+      { pageIndex: 0, pageSize: 1 },
+    );
+    expect(tasks.data.map((row) => row.id)).toEqual([matchingTask.id]);
+    expect(tasks.count).toBe(1);
+
+    const expenses = await expenseList(
+      ctx.db,
+      { projectScope: { kinds: ["household"] } },
+      [],
+      { pageIndex: 0, pageSize: 1 },
+    );
+    expect(expenses.data.map((row) => row.id)).toEqual([matchingExpense.id]);
+    expect(expenses.count).toBe(1);
+  });
+
   it("includeSubProjects expands the expense filter to the whole subtree", async () => {
     const { output: parent } = await createProject(
       ctx.db,
@@ -1149,6 +1362,7 @@ describe("project repository — date windows (derivation)", () => {
       startDate: null,
       endDate: null,
       status: "in_progress",
+      updatedAt: new Date("2024-01-01T00:00:00Z"),
     };
     const b: ProjectParentRow = {
       id: unsafeProjectId("cycle-b"),
@@ -1159,6 +1373,7 @@ describe("project repository — date windows (derivation)", () => {
       startDate: null,
       endDate: null,
       status: "in_progress",
+      updatedAt: new Date("2024-01-01T00:00:00Z"),
     };
     const ownDates = new Map([
       [a.id, { contentStart: "2024-01-05", contentEnd: "2024-01-05" }],

@@ -52,7 +52,7 @@ import {
   dashboardKindLocationConditions,
 } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
-import { loadProjectSubtreeRollups } from "./subtree";
+import { loadProjectSubtreeRollups, projectCompletionYear } from "./subtree";
 
 /** Cap on `nextTasks` — a preview strip, not a full list (see `task.board`/`task.listActionable` for those). */
 const NEXT_TASKS_CAP = 10;
@@ -85,10 +85,21 @@ export async function projectDashboardSummary(
   // page-scoped is free here for the same reason: attention already needed
   // every id, and a superset never changes a page row's subtree numbers.
   const subtreeLoad = await loadProjectSubtreeRollups(db);
-  const { subtreeRollups } = subtreeLoad;
+  const { subtreeRollups, dateWindows, allRows } = subtreeLoad;
+  const completionIds = filters.completionYear
+    ? allRows
+        .filter((row) => {
+          const window = dateWindows.get(row.id);
+          return (
+            window &&
+            projectCompletionYear(row, window) === filters.completionYear
+          );
+        })
+        .map((row) => row.id)
+    : undefined;
 
   // Carries status + kind/location + the date window (see dashboard-shared.ts).
-  const scopedWhere = buildDashboardProjectWhere(filters);
+  const scopedWhere = buildDashboardProjectWhere(filters, completionIds);
   const kindLocationConditions = dashboardKindLocationConditions(filters);
   const today = householdLocalDate();
   const dateFilterActive = Boolean(filters.dateFrom || filters.dateTo);
@@ -108,10 +119,9 @@ export async function projectDashboardSummary(
       where: scopedWhere,
       orderBy: [asc(project.name)],
     }),
-    // The two portfolio headline stats keep a FIXED status and deliberately
-    // ignore the date window — `completedCount` labels a link to an UNSCOPED
-    // history view, so date-scoping it would print a number that disagrees
-    // with the page it opens.
+    // Portfolio headline stats keep a fixed status. `completedCount` is fully
+    // unscoped because its link applies only the Completed saved filter; the
+    // number and destination therefore use the exact same predicate.
     countWhere(
       db,
       project,
@@ -124,14 +134,14 @@ export async function projectDashboardSummary(
     countWhere(
       db,
       project,
-      and(
-        notDeleted(project),
-        eq(project.status, "done"),
-        ...kindLocationConditions,
-      ),
+      and(notDeleted(project), eq(project.status, "done")),
     ),
     dateFilterActive
-      ? countWhere(db, project, buildUndatedProjectWhere(filters))
+      ? countWhere(
+          db,
+          project,
+          buildUndatedProjectWhere(filters, completionIds),
+        )
       : Promise.resolve(0),
     getDb(db)
       .selectDistinct({ kind: project.kind })
@@ -332,6 +342,14 @@ export async function projectDashboardSummary(
   ])
     .sort()
     .reverse();
+  const completionYears = uniq(
+    allRows.flatMap((row) => {
+      const window = dateWindows.get(row.id);
+      return window ? [projectCompletionYear(row, window)] : [];
+    }),
+  )
+    .sort()
+    .reverse();
 
   return {
     summary: { activeProjectCount, openTaskCount, actualSpend, committedSpend },
@@ -339,7 +357,7 @@ export async function projectDashboardSummary(
     taskStatusByProject: [...statusByProject.values()],
     nextTasks,
     attention,
-    filterOptions: { kinds, locations, years },
+    filterOptions: { kinds, locations, years, completionYears },
     hiddenByDate: {
       projects: undatedProjectCount,
       tasks: undatedTaskCount,

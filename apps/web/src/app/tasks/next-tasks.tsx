@@ -2,6 +2,7 @@ import type {
   ActionableTaskOut,
   ActionableTasksOut,
   BlockedTaskOut,
+  TaskFilters,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { ListTodo } from "lucide-react";
@@ -146,10 +147,10 @@ function TaskRows({ rows }: { rows: ActionableTaskOut[] }) {
 }
 
 /** The `/tasks?view=next` surface: Next / Someday / Blocked, from `task.listActionable`. */
-export function NextTasks() {
+export function NextTasks({ filters }: { filters: TaskFilters }) {
   const api = useTRPC();
   const { data, isLoading, isError, error, refetch } = useQuery(
-    api.task.listActionable.queryOptions(),
+    api.task.listActionable.queryOptions(filters),
   );
 
   if (isError) {
@@ -179,6 +180,11 @@ export function NextTasks() {
 function NextTasksBody({ data }: { data: ActionableTasksOut }) {
   return (
     <Stack gap="lg">
+      <p className="text-muted-foreground text-xs">
+        Next is an actionable-work renderer: it includes open top-level tasks
+        and explains blockers. Compatible project, trade, search, and due-date
+        filters are applied by the server.
+      </p>
       <Section title="Next" description="Unblocked tasks you can act on now.">
         {data.next.length === 0 ? (
           <p className="text-muted-foreground text-sm">

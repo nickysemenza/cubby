@@ -93,7 +93,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   /**
    * Column ids to render with NO filter control, even though the manifest (or
    * a column factory's own fallback) declares one. For a page that pins that
-   * column's value via `useEntityList`'s `extraFilters` — which spreads OVER
+   * column's value via `useEntityList`'s contextual `scopeFilters` — which spreads OVER
    * the manifest-derived filters, so it silently wins — the header control
    * would otherwise be interactive but inert: the user picks a value, the
    * page-level scope clobbers it. E.g. the cookbook detail page's embedded
