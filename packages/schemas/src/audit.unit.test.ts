@@ -131,6 +131,7 @@ describe("auditLogListInput window filters", () => {
 });
 
 const entry = (source: string) => ({
+  entryKey: `test:${source}`,
   entityType: "product" as const,
   entityId: "PRD-2CRC",
   action: "update" as const,
