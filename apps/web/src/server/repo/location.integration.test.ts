@@ -165,6 +165,46 @@ describe("locationList parentPresenceFilter", () => {
       const none = await listWith({ inventoryPresenceFilter: "none" });
       expect(none.data.map((l) => l.id)).toContain(empty.id);
       expect(none.data.map((l) => l.id)).not.toContain(stocked.id);
+
+      const atLeastOne = await listWith({ directItemCountMin: 1 });
+      expect(atLeastOne.data.map((l) => l.id)).toContain(stocked.id);
+      expect(atLeastOne.data.map((l) => l.id)).not.toContain(empty.id);
+
+      const zeroItems = await listWith({ directItemCountMax: 0 });
+      expect(zeroItems.data.map((l) => l.id)).toContain(empty.id);
+      expect(zeroItems.data.map((l) => l.id)).not.toContain(stocked.id);
+
+      // Inventory count sorting must use the live relation, not this persisted
+      // valuation snapshot (which can temporarily lag inventory mutations).
+      await getDb(ctx.db)
+        .update(location)
+        .set({
+          valuation: {
+            directValuation: 0,
+            totalValuation: 0,
+            directItemCount: 999,
+            totalItemCount: 999,
+            direct: { priced: 0, missingPricing: 0, miscNoPrice: 0 },
+            total: { priced: 0, missingPricing: 0, miscNoPrice: 0 },
+          },
+        })
+        .where(
+          eq(
+            location.id,
+            unsafeLocationId(
+              (await resolveLiveShortcode(ctx.db, empty.id, "location"))!,
+            ),
+          ),
+        );
+      const sorted = await locationList(
+        ctx.db,
+        {},
+        [{ orderBy: "inventoryEntries", direction: "desc" }],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(sorted.data.findIndex((l) => l.id === stocked.id)).toBeLessThan(
+        sorted.data.findIndex((l) => l.id === empty.id),
+      );
     });
 
     /**
@@ -223,6 +263,9 @@ describe("locationList parentPresenceFilter", () => {
 
       const has = await listWith({ inventoryPresenceFilter: "has" });
       expect(has.data.map((l) => l.id)).not.toContain(shelf.id);
+
+      const zeroItems = await listWith({ directItemCountMax: 0 });
+      expect(zeroItems.data.map((l) => l.id)).toContain(shelf.id);
     });
   });
 });
