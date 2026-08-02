@@ -1643,7 +1643,7 @@ describe("purchase repository — deletion cascades", () => {
  * column path can't produce them, so a regression here silently falls back to
  * the default order rather than erroring.
  */
-describe("purchase repository — sorting over the joined name and rollups", () => {
+describe("purchase repository — sorting purchase columns and rollups", () => {
   const ctx = withTestDb();
 
   const seed = async () => {
@@ -1711,6 +1711,42 @@ describe("purchase repository — sorting over the joined name and rollups", () 
 
     expect(await idsSortedBy("expenseTotal", "desc")).toEqual([big, small]);
     expect(await idsSortedBy("expenseTotal", "asc")).toEqual([small, big]);
+  });
+
+  it("sorts display labels in both directions with nulls last", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Label Sort Supply");
+    const createLabelled = async (
+      orderId: string,
+      displayLabel: string | null,
+    ) =>
+      (
+        await createPurchase(
+          ctx.db,
+          purchaseCreateInput.parse({
+            date: "2024-01-15",
+            vendorId,
+            orderId,
+            displayLabel,
+          }),
+          ctx.actor,
+        )
+      ).output.id;
+
+    const beta = await createLabelled("LABEL-BETA", "beta tools");
+    const none = await createLabelled("LABEL-NONE", null);
+    const alpha = await createLabelled("LABEL-ALPHA", "alpha supplies");
+    const sorted = async (direction: "asc" | "desc") =>
+      (
+        await purchaseList(
+          ctx.db,
+          {},
+          [{ orderBy: "displayLabel", direction }],
+          page,
+        )
+      ).data.map((row) => row.id);
+
+    expect(await sorted("asc")).toEqual([alpha, beta, none]);
+    expect(await sorted("desc")).toEqual([beta, alpha, none]);
   });
 });
 
@@ -1833,6 +1869,37 @@ describe("purchase repository — purchase worklist filters", () => {
     new Set(
       (await purchaseList(ctx.db, filters, [], page)).data.map((row) => row.id),
     );
+
+  it("searches order id OR display label and can narrow to the label alone", async () => {
+    const vendorId = await vendorShortcodeByName(ctx.db, "Label Filter Supply");
+    const createSearchable = async (
+      orderId: string,
+      displayLabel: string | null,
+    ) =>
+      (
+        await createPurchase(
+          ctx.db,
+          purchaseCreateInput.parse({
+            date: "2024-01-15",
+            vendorId,
+            orderId,
+            displayLabel,
+          }),
+          ctx.actor,
+        )
+      ).output.id;
+
+    const orderMatch = await createSearchable("POCKET-ORDER", "fasteners");
+    const labelMatch = await createSearchable("OTHER-ORDER", "pocket hole jig");
+    await createSearchable("UNRELATED", null);
+
+    expect(await ids({ search: "pocket" })).toEqual(
+      new Set([orderMatch, labelMatch]),
+    );
+    expect(await ids({ displayLabelSearch: "pocket" })).toEqual(
+      new Set([labelMatch]),
+    );
+  });
 
   it("filters the disjoint empty, unpriced, and fully-priced line states", async () => {
     const seeded = await seed();

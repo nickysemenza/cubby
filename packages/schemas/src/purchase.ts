@@ -150,6 +150,10 @@ export const purchaseFilterFields = {
     .string()
     .optional()
     .describe("Substring match on order id or human display label"),
+  displayLabelSearch: z
+    .string()
+    .optional()
+    .describe("Substring match on the human display label only"),
   vendorId: oneOrMany(vendorShortcode).optional(),
   ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),
@@ -184,6 +188,7 @@ export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
 
 export const purchaseSortableFields = [
   "orderId",
+  "displayLabel",
   "date",
   "statedTotal",
   // Joined / rolled-up, resolved by correlated subqueries in repo/purchase.ts.

@@ -722,17 +722,23 @@ const entityFilters: Partial<Record<Entity, readonly FilterSpec[]>> = {
     {
       // `?q=`, the money family's search key — and it hangs on `purchase`, not
       // `orderId`. `purchase` IS purchase's name column (`standardColumns` is
-      // `[]`, so there's no hook-prepended `name`): a bespoke accessor over
-      // `purchaseLabel`, which is why it's absent from `purchaseSortableFields`
-      // and stays unsortable. Server-side the term is a substring match on the
-      // ORDER ID; the `orderId` column's own control is the presence worklist
-      // below, and two specs can't share a `columnId` — they'd read the same
-      // filter slot.
+      // `[]`, so there's no hook-prepended `name`): a bespoke identity accessor,
+      // which is why it's absent from `purchaseSortableFields` and stays
+      // unsortable. Server-side the term is a broad substring match over order
+      // id OR display label; the dedicated label column below can narrow that
+      // to human context alone.
       columnId: "purchase",
       field: "search",
       urlKey: "q",
       kind: "text",
-      placeholder: "Search order id...",
+      placeholder: "Search order id or label...",
+    },
+    {
+      columnId: "displayLabel",
+      field: "displayLabelSearch",
+      urlKey: "label",
+      kind: "text",
+      placeholder: "Search display label...",
     },
     {
       // Id-based, like the ledger's vendor filter: the column RENDERS

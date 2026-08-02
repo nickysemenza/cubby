@@ -9,11 +9,13 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import RTable from "~/app/_components/data-table/Table";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { TableLink } from "~/app/_components/table/TableLink";
 import { NoneValue } from "~/components/ui/none-value";
+import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
+import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 
@@ -58,7 +60,13 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
         header: "Purchase",
         meta: { className: "w-56" },
         cell: (info) => (
-          <EntityInlineLink entity="purchase" data={info.row.original} />
+          <TableLink
+            to={entities.purchase.routes.detail}
+            params={entityDetailParams(info.row.original.id)}
+            className="block truncate"
+          >
+            {purchaseIdentityLabel(info.row.original)}
+          </TableLink>
         ),
       }),
       createTextColumn(helper, "orderId", {
@@ -67,6 +75,19 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
         editable: {
           onSave: async (orderId, purchase) => {
             await update.mutateAsync({ id: purchase.id, data: { orderId } });
+          },
+        },
+      }),
+      createTextColumn(helper, "displayLabel", {
+        header: "Display label",
+        placeholder: "e.g. pocket hole jig + bits",
+        className: "w-56",
+        editable: {
+          onSave: async (displayLabel, purchase) => {
+            await update.mutateAsync({
+              id: purchase.id,
+              data: { displayLabel },
+            });
           },
         },
       }),

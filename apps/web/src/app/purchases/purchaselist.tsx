@@ -13,7 +13,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
-import { purchaseLabel } from "~/lib/purchase-label";
+import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
@@ -27,6 +27,7 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
+import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TableLink } from "../_components/table/TableLink";
 import { FinancialSettlementBadge } from "./financial-settlement";
 import { ReconciliationBadge } from "./purchase-reconciliation";
@@ -79,12 +80,20 @@ export function PurchaseList() {
     entity: "purchase",
   });
 
+  const update = useUpdateMutation({
+    mutationFn: api.purchase.update.mutationOptions,
+    entity: "purchase",
+    invalidateKeys: purchaseMutationInvalidateKeys,
+  });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       // A purchase has no `name`, so this is its name column: the identity
-      // ladder from `purchaseLabel` (order id, else vendor · date), linked to
-      // the purchase itself and carrying the order-id substring search.
-      columnHelper.accessor((row) => purchaseLabel(row), {
+      // ladder from `purchaseIdentityLabel` (order id, else vendor · date),
+      // linked to the purchase itself and carrying the broad identity search.
+      // Human context has its own column below, so it is not duplicated here.
+      columnHelper.accessor((row) => purchaseIdentityLabel(row), {
         id: "purchase",
         header: "Purchase",
         enableSorting: false,
@@ -125,6 +134,24 @@ export function PurchaseList() {
         header: "Order #",
         className: "w-40 font-mono",
         mobile: { slot: "meta", priority: 20 },
+      }),
+      createTextColumn(columnHelper, "displayLabel", {
+        header: "Display label",
+        placeholder: "e.g. pocket hole jig + bits",
+        className: "w-56",
+        mobile: {
+          slot: "subtitle",
+          priority: 5,
+          interactive: true,
+        },
+        editable: {
+          onSave: async (displayLabel, purchase) => {
+            await update.mutateAsync({
+              id: purchase.id,
+              data: { displayLabel },
+            });
+          },
+        },
       }),
       createPlainDateColumn(columnHelper, "date", {
         header: "Date",
