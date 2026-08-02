@@ -34,6 +34,8 @@ interface MobileListScreenProps<TItem> {
   /** Toggle grouping on/off (controlled from parent) */
   onGroupedChange?: (value: boolean) => void;
   isTransitioning?: boolean;
+  /** External cell-render state snapshot; see useTableConfig. */
+  rowContentVersion?: unknown;
 }
 
 export function MobileListScreen<TItem>({
@@ -50,6 +52,7 @@ export function MobileListScreen<TItem>({
   grouped = false,
   onGroupedChange,
   isTransitioning = false,
+  rowContentVersion,
 }: MobileListScreenProps<TItem>) {
   const groupToggle =
     groupConfig && onGroupedChange ? (
@@ -105,6 +108,7 @@ export function MobileListScreen<TItem>({
               groupConfig={groupConfig}
               grouped={grouped}
               isTransitioning={isTransitioning}
+              rowContentVersion={rowContentVersion}
             />
           );
           return refreshControls ? (

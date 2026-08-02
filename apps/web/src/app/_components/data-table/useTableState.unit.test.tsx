@@ -147,11 +147,9 @@ describe("useTableState — URL-backed column filters", () => {
   });
 
   it("writes interactive filters to the URL and removes cleared keys", async () => {
-    const { result } = renderHook(() =>
+    const { result, rerender } = renderHook(() =>
       useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
     );
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
-    mockNavigate.mockClear();
 
     await act(async () => {
       result.current.setColumnFilters([
@@ -170,6 +168,10 @@ describe("useTableState — URL-backed column filters", () => {
       trade: "demo,electrical",
     });
 
+    // A real navigation has updated the router search before the user clears
+    // the filter; model that acknowledgement before testing the next write.
+    mockSearch = { q: "lemon", trade: "demo,electrical" };
+    rerender();
     mockNavigate.mockClear();
     await act(async () => {
       result.current.setColumnFilters([]);
@@ -186,6 +188,105 @@ describe("useTableState — URL-backed column filters", () => {
         trade: "demo,electrical",
       }),
     ).toEqual({ keep: "yes" });
+  });
+
+  it("reconciles same-route filter, sort, and page navigation after mount", async () => {
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+    mockNavigate.mockClear();
+
+    mockSearch = {
+      q: "lemon",
+      trade: "demo,electrical",
+      sort: "name,-createdAt",
+      page: "3",
+      pageSize: "50",
+    };
+    rerender();
+
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        sorting: [
+          { id: "name", desc: false },
+          { id: "createdAt", desc: true },
+        ],
+        columnFilters: [
+          { id: "name", value: "lemon" },
+          { id: "trade", value: ["demo", "electrical"] },
+        ],
+        pagination: { pageIndex: 2, pageSize: 50 },
+      }),
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("follows Back and Forward without writing the previous state back", async () => {
+    mockSearch = { q: "first", sort: "name", page: "2" };
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+    mockNavigate.mockClear();
+
+    mockSearch = { q: "second", sort: "-createdAt", page: "4" };
+    rerender();
+    await waitFor(() => {
+      expect(result.current.columnFilters).toEqual([
+        { id: "name", value: "second" },
+      ]);
+      expect(result.current.pagination.pageIndex).toBe(3);
+    });
+
+    mockSearch = { q: "first", sort: "name", page: "2" };
+    rerender();
+    await waitFor(() => {
+      expect(result.current.columnFilters).toEqual([
+        { id: "name", value: "first" },
+      ]);
+      expect(result.current.sorting).toEqual([{ id: "name", desc: false }]);
+      expect(result.current.pagination.pageIndex).toBe(1);
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("treats a matching URL update as a local-write acknowledgement", async () => {
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+    mockNavigate.mockClear();
+
+    await act(async () => {
+      result.current.setColumnFilters([{ id: "name", value: "lemon" }]);
+    });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
+
+    mockSearch = { q: "lemon" };
+    rerender();
+    await waitFor(() =>
+      expect(result.current.columnFilters).toEqual([
+        { id: "name", value: "lemon" },
+      ]),
+    );
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a no-op local setter block later external navigation", async () => {
+    const { result, rerender } = renderHook(() =>
+      useTableState({ filterSpecs: URL_BACKED_SPECS, urlSync: true }),
+    );
+
+    await act(async () => {
+      result.current.setSorting((old) => old);
+    });
+    mockSearch = { q: "navigated", page: "2" };
+    rerender();
+
+    await waitFor(() => {
+      expect(result.current.columnFilters).toEqual([
+        { id: "name", value: "navigated" },
+      ]);
+      expect(result.current.pagination.pageIndex).toBe(1);
+    });
   });
 });
 
@@ -261,11 +362,19 @@ describe("useTableState — URL-only filter specs", () => {
     ]);
   });
 
-  it("leaves the URL-only param alone on write-through", () => {
+  it("leaves the URL-only param alone on write-through", async () => {
     // No column state can produce `productId`, so the sync must not claim (and
     // therefore delete) its key — the ScopeChip's clear is the only writer.
     mockSearch = { productId: "prod-1" };
-    renderHook(() => useTableState({ filterSpecs: SPECS, urlSync: true }));
+    const { result } = renderHook(() =>
+      useTableState({ filterSpecs: SPECS, urlSync: true }),
+    );
+    await act(async () => {
+      result.current.setColumnFilters([
+        { id: "vendor", value: ["Home Depot"] },
+      ]);
+    });
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
 
     const call = mockNavigate.mock.calls[0]?.[0] as {
       search: (prev: Record<string, unknown>) => Record<string, unknown>;

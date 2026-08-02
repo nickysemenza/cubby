@@ -163,9 +163,12 @@ const GridRow: React.FC<{
   average: ReactNode;
 }> = ({ label, recipes, renderCell, average }) => (
   <tr className="border-t">
-    <td className={`${STICKY} px-2 py-2 align-top text-muted-foreground`}>
+    <th
+      scope="row"
+      className={`${STICKY} px-2 py-2 text-left align-top font-normal text-muted-foreground`}
+    >
       {label}
-    </td>
+    </th>
     {recipes.map((c, i) => (
       <td key={c.recipe.id} className="px-2 py-2 align-top">
         {renderCell(c, i)}

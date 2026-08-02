@@ -26,12 +26,9 @@ interface DataTableViewsProps<TData> {
  * Saved-view menu for a list table. Renders nothing for an entity with no
  * declared views, so every other table is untouched.
  *
- * Applying a view sets table STATE — never `navigate({ search })`.
- * `useTableState` reads the URL exactly once, in lazy `useState`
- * initializers, so navigating would change the address bar and leave the
- * table showing the old rows. Setting state is the direction that works: the
- * existing write-back effect then serializes it to the URL, which is what
- * makes a view and a shared link the same thing.
+ * Applying a view sets table STATE. `useTableState` writes that controlled
+ * state through to the URL, while external navigation is reconciled back into
+ * the table. That keeps views, shared links, and Back/Forward equivalent.
  */
 export function DataTableViews<TData>({
   table,

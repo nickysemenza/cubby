@@ -183,6 +183,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     isMobile,
     resolveIndex,
     rows,
+    rowContentVersion,
     scrollMargin,
     setDesktopInfiniteSentinel,
     styles,
@@ -364,6 +365,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               )}
               cellClassName={styles.cell}
               columnsKey={columnsKey}
+              rowContentVersion={rowContentVersion}
               height={`${virtualRow.size}px`}
             />
           );
@@ -761,6 +763,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           grouped={grouped}
           onGroupedChange={onGroupedChange}
           isTransitioning={isTransitioning}
+          rowContentVersion={rowContentVersion}
         />
       )}
 

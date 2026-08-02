@@ -39,9 +39,10 @@ interface TableStateOptions {
   filterSpecs?: readonly FilterSpecCore[];
   /**
    * Mirror sort + pagination to the URL search params (bookmarkable / shareable
-   * / survives reload). Write-through is keyed on the serialized state, never
-   * URL→state, so it can't render-loop. Enable on exactly one tableState per
-   * page (the active data hook) — see useEntityList.
+   * / survives reload). The live URL is authoritative after mount; guarded
+   * write-through keeps local interactions and browser navigation from
+   * fighting. Enable on exactly one tableState per page (the active data hook)
+   * — see useEntityList.
    */
   urlSync?: boolean;
   /**
@@ -82,6 +83,37 @@ function paramToSort(value: unknown): SortingState | undefined {
     }))
     .filter((s) => s.id);
   return parsed.length ? parsed : undefined;
+}
+
+/** The canonical, URL-owned slice of a table's controlled state. */
+function serializeUrlState(
+  sorting: SortingState,
+  columnFilters: ColumnFiltersState,
+  pagination: PaginationState,
+  columnSpecs: readonly FilterSpecCore[],
+  initialSort: string,
+  syncPaginationToUrl: boolean,
+): string {
+  const sort = sortToParam(sorting);
+  return JSON.stringify({
+    ...encodeFilters(
+      columnSpecs,
+      (columnId) =>
+        columnFilters.find((filter) => filter.id === columnId)?.value as
+          | string
+          | string[]
+          | undefined,
+    ),
+    [SORT_KEY]: sort === `-${initialSort}` ? undefined : sort,
+    [PAGE_KEY]:
+      syncPaginationToUrl && pagination.pageIndex > 0
+        ? pagination.pageIndex + 1
+        : undefined,
+    [SIZE_KEY]:
+      syncPaginationToUrl && pagination.pageSize !== defaultPagination.pageSize
+        ? pagination.pageSize
+        : undefined,
+  });
 }
 
 export interface TableStateReturn {
@@ -203,12 +235,112 @@ export function useTableState(
     };
   });
 
+  // Every key this hook owns. URL-only keys are deliberately absent: no
+  // column state can produce them, so this table must never delete them.
+  const managedKeys = useMemo(
+    () => [
+      ...columnSpecs.map((spec) => spec.urlKey ?? spec.columnId),
+      SORT_KEY,
+      PAGE_KEY,
+      SIZE_KEY,
+    ],
+    [columnSpecs],
+  );
+  const managedSearchKey = JSON.stringify(
+    managedKeys.map((key) => search[key] ?? null),
+  );
+
+  // Interpret live managed params exactly as the lazy initializers do. This
+  // gives Back/Forward and same-route links a canonical comparison target,
+  // while absent/invalid values continue to fall back to the caller defaults.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on managed values above, not the router's fresh search-object reference
+  const urlState = useMemo(() => {
+    const urlFilters = decodeFilters(columnSpecs, search);
+    const page = syncPaginationToUrl ? Number(search[PAGE_KEY]) : Number.NaN;
+    const size = syncPaginationToUrl ? Number(search[SIZE_KEY]) : Number.NaN;
+    return {
+      sorting: paramToSort(search[SORT_KEY]) ?? defaultSortState(initialSort),
+      columnFilters: urlFilters.length ? urlFilters : initialFilter,
+      pagination: {
+        pageIndex:
+          Number.isFinite(page) && page > 0
+            ? page - 1
+            : initialPagination.pageIndex,
+        pageSize:
+          Number.isFinite(size) && size > 0 ? size : initialPagination.pageSize,
+      },
+    };
+  }, [
+    managedSearchKey,
+    columnSpecs,
+    initialSort,
+    initialFilter,
+    initialPagination,
+    syncPaginationToUrl,
+  ]);
+
+  const serializedUrlState = useMemo(
+    () =>
+      serializeUrlState(
+        sorting,
+        columnFilters,
+        pagination,
+        columnSpecs,
+        initialSort,
+        syncPaginationToUrl,
+      ),
+    [
+      sorting,
+      columnFilters,
+      pagination,
+      columnSpecs,
+      initialSort,
+      syncPaginationToUrl,
+    ],
+  );
+  const serializedSearchState = useMemo(
+    () =>
+      serializeUrlState(
+        urlState.sorting,
+        urlState.columnFilters,
+        urlState.pagination,
+        columnSpecs,
+        initialSort,
+        syncPaginationToUrl,
+      ),
+    [urlState, columnSpecs, initialSort, syncPaginationToUrl],
+  );
+  // Unlike `serializedSearchState`, retain explicit default and disabled-page
+  // params so write-through can clean up keys this table owns.
+  const serializedRawSearchState = JSON.stringify(
+    Object.fromEntries(
+      managedKeys
+        .map((key) => [key, search[key]])
+        .filter(([, value]) => value !== undefined),
+    ),
+  );
+
+  // `true` means a controlled setter has changed state but the write effect
+  // has not issued navigation yet. A string is the expected URL acknowledgement.
+  const pendingLocalWrite = useRef<true | string | null>(null);
+  // External navigation updates three independent state atoms. Keep its
+  // target until the following render has all three values, rather than
+  // clearing a one-commit boolean before those updates take effect.
+  const applyingExternalState = useRef<string | null>(null);
+  const hasObservedSearch = useRef(false);
+
   // Wrap state setters in startTransition to prevent UI freezing
   const setSorting = useCallback(
     (value: SortingState | ((old: SortingState) => SortingState)) =>
-      startTransition(() =>
-        setSortingRaw(typeof value === "function" ? value : () => value),
-      ),
+      startTransition(() => {
+        setSortingRaw((old) => {
+          const next = typeof value === "function" ? value(old) : value;
+          if (JSON.stringify(next) !== JSON.stringify(old)) {
+            pendingLocalWrite.current = true;
+          }
+          return next;
+        });
+      }),
     [],
   );
   // Mirrors columnFilters into a ref so setColumnFilters (memoized with `[]`
@@ -245,6 +377,7 @@ export function useTableState(
         // saved view matching the current state) doesn't knock the user off
         // their page.
         if (JSON.stringify(next) !== JSON.stringify(old)) {
+          pendingLocalWrite.current = true;
           setPaginationRaw((p) =>
             p.pageIndex === 0 ? p : { ...p, pageIndex: 0 },
           );
@@ -254,9 +387,15 @@ export function useTableState(
   );
   const setPagination = useCallback(
     (value: PaginationState | ((old: PaginationState) => PaginationState)) =>
-      startTransition(() =>
-        setPaginationRaw(typeof value === "function" ? value : () => value),
-      ),
+      startTransition(() => {
+        setPaginationRaw((old) => {
+          const next = typeof value === "function" ? value(old) : value;
+          if (JSON.stringify(next) !== JSON.stringify(old)) {
+            pendingLocalWrite.current = true;
+          }
+          return next;
+        });
+      }),
     [],
   );
 
@@ -302,64 +441,50 @@ export function useTableState(
     return buildSortsParams(sorting, initialSort);
   }, [sorting, initialSort]);
 
-  // --- URL write-through (urlSync only) ------------------------------------
-  // The default sort is descending on `initialSort` (see defaultSortState), so
-  // that value is omitted from the URL to keep it clean. Serialize the
-  // URL-relevant slice; the effect navigates only when this string changes —
-  // it depends on STATE, not the URL, so writing the URL can't re-trigger it
-  // (no render loop, even if the route's validateSearch strips the keys).
-  const defaultSortParam = `-${initialSort}`;
-  const serializedUrlState = useMemo(() => {
-    const sortP = sortToParam(sorting);
-    return JSON.stringify({
-      ...encodeFilters(
-        columnSpecs,
-        (columnId) =>
-          columnFilters.find((f) => f.id === columnId)?.value as
-            | string
-            | string[]
-            | undefined,
-      ),
-      [SORT_KEY]: sortP === defaultSortParam ? undefined : sortP,
-      [PAGE_KEY]:
-        syncPaginationToUrl && pagination.pageIndex > 0
-          ? pagination.pageIndex + 1
-          : undefined,
-      [SIZE_KEY]:
-        syncPaginationToUrl &&
-        pagination.pageSize !== defaultPagination.pageSize
-          ? pagination.pageSize
-          : undefined,
-    });
-  }, [
-    sorting,
-    pagination,
-    columnFilters,
-    columnSpecs,
-    defaultSortParam,
-    syncPaginationToUrl,
-  ]);
-
-  // Every key this hook owns. Enumerated rather than derived from `next`'s
-  // own keys: JSON.stringify drops undefined, so a cleared filter is ABSENT
-  // from `next` — iterating its keys could set and update a param but never
-  // delete one. A URL-only key is deliberately absent: no column state can
-  // produce it, so listing it here would delete it on the first write-through.
-  const managedKeys = useMemo(
-    () => [
-      SORT_KEY,
-      PAGE_KEY,
-      SIZE_KEY,
-      ...columnSpecs.map((spec) => spec.urlKey ?? spec.columnId),
-    ],
-    [columnSpecs],
-  );
-
-  const lastWrittenUrlState = useRef<string | null>(null);
+  // Live URL state is authoritative after mount. The first render keeps the
+  // lazy initializer behavior intact; after that, an unacknowledged local
+  // write is allowed to finish, while a different URL is browser navigation
+  // and replaces all managed state atomically without the filter/page-reset
+  // side effect meant for interactive edits.
   useEffect(() => {
     if (!urlSync) return;
-    if (lastWrittenUrlState.current === serializedUrlState) return;
-    lastWrittenUrlState.current = serializedUrlState;
+    if (!hasObservedSearch.current) {
+      hasObservedSearch.current = true;
+      return;
+    }
+    if (pendingLocalWrite.current === serializedRawSearchState) {
+      pendingLocalWrite.current = null;
+      return;
+    }
+    if (pendingLocalWrite.current === true) return;
+    if (serializedSearchState === serializedUrlState) return;
+
+    applyingExternalState.current = serializedSearchState;
+    setSortingRaw(urlState.sorting);
+    setColumnFiltersRaw(urlState.columnFilters);
+    setPaginationRaw(urlState.pagination);
+  }, [
+    urlSync,
+    serializedRawSearchState,
+    serializedSearchState,
+    serializedUrlState,
+    urlState,
+  ]);
+
+  // --- URL write-through (urlSync only) ------------------------------------
+  useEffect(() => {
+    if (!urlSync) return;
+    if (applyingExternalState.current !== null) {
+      if (serializedUrlState !== applyingExternalState.current) return;
+      applyingExternalState.current = null;
+      return;
+    }
+    if (serializedRawSearchState === serializedUrlState) {
+      pendingLocalWrite.current = null;
+      return;
+    }
+    if (pendingLocalWrite.current === serializedUrlState) return;
+    pendingLocalWrite.current = serializedUrlState;
     const next = JSON.parse(serializedUrlState) as Record<string, unknown>;
     void navigate({
       to: ".",
@@ -373,7 +498,13 @@ export function useTableState(
       },
       replace: true,
     });
-  }, [urlSync, serializedUrlState, managedKeys, navigate]);
+  }, [
+    urlSync,
+    serializedUrlState,
+    serializedRawSearchState,
+    managedKeys,
+    navigate,
+  ]);
 
   // Memoize the entire return object to prevent recreating on every render - CRITICAL
   return useMemo(

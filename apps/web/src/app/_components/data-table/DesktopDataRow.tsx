@@ -35,6 +35,8 @@ export interface DesktopDataRowProps<TItem> {
   rowClassName: string;
   cellClassName: string;
   columnsKey: string;
+  /** External cell-render state snapshot; see useTableConfig. */
+  rowContentVersion?: unknown;
   height?: string;
   /**
    * This row's slice of the current cell selection, or undefined when the row
@@ -158,6 +160,7 @@ function rowPropsAreEqual<TItem>(
     previous.rowClassName === next.rowClassName &&
     previous.cellClassName === next.cellClassName &&
     previous.columnsKey === next.columnsKey &&
+    Object.is(previous.rowContentVersion, next.rowContentVersion) &&
     previous.height === next.height &&
     previous.rowIndex === next.rowIndex &&
     previous.suppressCellRowClick === next.suppressCellRowClick &&

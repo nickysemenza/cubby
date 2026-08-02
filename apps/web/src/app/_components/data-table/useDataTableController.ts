@@ -215,6 +215,9 @@ export function useDataTableController<TItem>({
   // status rows and the virtualizer spacer rows below. +1 for the spacer.
   const colSpan =
     table.getVisibleLeafColumns().length + 1 + (isDebugEnabled ? 1 : 0);
+  // Cell renderers may intentionally read ref-backed async state outside the
+  // row object. Keep that dependency explicit for memoized render surfaces.
+  const rowContentVersion = table.options.meta?.rowContentVersion;
 
   return {
     cellSelectionContainerProps,
@@ -230,6 +233,7 @@ export function useDataTableController<TItem>({
     isMobile,
     resolveIndex,
     rows,
+    rowContentVersion,
     scrollMargin,
     setDesktopInfiniteSentinel,
     styles,

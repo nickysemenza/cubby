@@ -248,6 +248,7 @@ export function USDAFoodList() {
     columns,
     tableState,
     totalCount: foodsResp?.meta.totalCount || 0,
+    getRowId: (row) => String(row.fdc_id),
     // While name-searching, results are relevance-ranked server-side, so the
     // column sort UI would be misleading — disable it until the filter clears.
     enableSorting: !nameFilter,

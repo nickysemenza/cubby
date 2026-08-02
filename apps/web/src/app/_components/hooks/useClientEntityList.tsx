@@ -1,16 +1,10 @@
-import {
-  type RelatedPreviewGroup,
-  relatedViewRegistry,
-} from "@cubby/schemas/related-view";
-import { useQuery } from "@tanstack/react-query";
-import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
+import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import type { ColumnHelper } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { entities } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
-import { useTRPC } from "~/integrations/trpc/react";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
-import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -21,6 +15,7 @@ import type {
 } from "./useEntityList";
 import { ListBulkActionBar, useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
+import { useRelatedPreviewColumns } from "./useRelatedPreviewColumns";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 
 /** Stable empty-filters default (avoids a fresh `[]` reference each render). */
@@ -116,7 +111,6 @@ export function useClientEntityList<TData extends BaseListRow>({
   bulkActions,
   deleteEmptyLabel,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
-  const api = useTRPC();
   // Create columnHelper once — CRITICAL to prevent infinite re-renders.
   const columnHelper = useMemo(
     () => createColumnHelper<TData>() as ColumnHelper<TData>,
@@ -207,49 +201,14 @@ export function useClientEntityList<TData extends BaseListRow>({
     visit(data);
     return ids;
   }, [data]);
-  const relatedQuery = useQuery({
-    ...api.relatedData.previews.queryOptions({
-      source: entity,
-      sourceIds,
-      relationKeys: visibleRelatedKeys,
-    }),
-    enabled: sourceIds.length > 0 && visibleRelatedKeys.length > 0,
+  const { relatedColumns, rowContentVersion } = useRelatedPreviewColumns({
+    entity,
+    sourceIds,
+    visibleRelationKeys: visibleRelatedKeys,
+    relatedViews,
+    columnHelper,
+    supportsServerSorting: false,
   });
-  const relatedByCell = useMemo(() => {
-    const map = new Map<string, RelatedPreviewGroup>();
-    for (const group of relatedQuery.data ?? []) {
-      map.set(`${group.sourceId}:${group.relationKey}`, group);
-    }
-    return map;
-  }, [relatedQuery.data]);
-  const relatedStateRef = useRef({
-    byCell: relatedByCell,
-    loading: relatedQuery.isLoading,
-  });
-  relatedStateRef.current = {
-    byCell: relatedByCell,
-    loading: relatedQuery.isLoading,
-  };
-  const relatedColumns = useMemo<ColumnDef<TData>[]>(
-    () =>
-      relatedViews.map((view) =>
-        columnHelper.display({
-          id: `related:${view.key}`,
-          header: view.label,
-          enableSorting: false,
-          meta: { className: "w-64", mobile: { slot: "meta", priority: 80 } },
-          cell: (info) => (
-            <RelatedPreviewCell
-              group={relatedStateRef.current.byCell.get(
-                `${info.row.original.id}:${view.key}`,
-              )}
-              loading={relatedStateRef.current.loading}
-            />
-          ),
-        }),
-      ),
-    [columnHelper, relatedViews],
-  );
   const combinedCustomColumns = useMemo(
     () => [...customColumns, ...relatedColumns],
     [customColumns, relatedColumns],
@@ -294,6 +253,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     filterFromLeafRows: tree?.filterFromLeafRows,
     paginateExpandedRows: tree?.paginateExpandedRows,
     autoResetExpanded: tree?.autoResetExpanded,
+    rowContentVersion,
   });
 
   const bulkActionBar = listBulkActions.config ? (

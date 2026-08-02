@@ -69,6 +69,8 @@ interface MobileCardViewProps<TItem> {
   /** Whether grouping is currently active */
   grouped?: boolean;
   isTransitioning?: boolean;
+  /** External cell-render state snapshot; see useTableConfig. */
+  rowContentVersion?: unknown;
 }
 
 export function MobileCardView<TItem>({
@@ -78,10 +80,11 @@ export function MobileCardView<TItem>({
   groupConfig,
   grouped = false,
   isTransitioning = false,
+  rowContentVersion,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
-  const mobileRows = useMobileListModel({ table, entity });
+  const mobileRows = useMobileListModel({ table, entity, rowContentVersion });
 
   // Group the live mobile models themselves. `useReactTable` keeps its table
   // instance stable while replacing the row model as infinite pages arrive,
