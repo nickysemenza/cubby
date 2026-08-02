@@ -43,8 +43,8 @@ export default function EntityCount() {
   // branching on it alone makes the first client render diverge from SSR.
   const isAuthenticated = useHydrated() && !!session.data?.user;
 
-  // One call for all seven totals: six cheap COUNT(*)s + the USDA manifest
-  // count, none of which fetch or enrich a list row (see dashboard router). The
+  // One call for every local count plus the USDA manifest count, none of which
+  // fetch or enrich a list row (see dashboard router). The
   // old per-entity `list({pageSize:1})` cards fired discarded USDA enrichment on
   // the product/ingredient/usda cards — the homepage's USDA-on-critical-path.
   const countsQuery = useQuery({
@@ -71,8 +71,8 @@ export default function EntityCount() {
 
   return (
     <div className="overflow-hidden border border-[var(--border)] bg-card">
-      {/* 12 manifest cells → 6-up fills exactly two rows on lg (no ragged tail). */}
-      <div className="grid grid-cols-3 divide-x divide-y divide-border/60 sm:grid-cols-4 lg:grid-cols-6">
+      {/* 16 cells → exact 8/4/2-column rows at each responsive tier. */}
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-4 xl:grid-cols-8">
         {cards.map(({ entity, count }) => {
           const def = entities[entity];
           return (

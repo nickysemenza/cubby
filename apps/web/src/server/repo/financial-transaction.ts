@@ -63,6 +63,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import {
@@ -541,6 +542,7 @@ export async function deleteFinancialTransactions(
           notDeleted(financialTransaction),
         ),
       );
+    await softDeleteEntityEmbeddingsTx(tx, "financialTransaction", ids);
     await logAuditEntries(
       tx,
       actor,

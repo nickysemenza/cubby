@@ -15,6 +15,10 @@ const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
 const findTaskEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
 const findMealEmbeddingRefsForRecipesMock = vi.hoisted(() => vi.fn());
 const findTrackerEmbeddingRefsForProjectsMock = vi.hoisted(() => vi.fn());
+const findEmbeddingRefsForVendorsMock = vi.hoisted(() => vi.fn());
+const findEmbeddingRefsForPurchasesMock = vi.hoisted(() => vi.fn());
+const findTransactionEmbeddingRefsForAccountsMock = vi.hoisted(() => vi.fn());
+const findCommercialEmbeddingRefsForExpensesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("~/server/background-dispatch", () => ({
   dispatchBackgroundJobs: dispatchBackgroundJobsMock,
@@ -31,6 +35,12 @@ vi.mock("~/server/repo/entity-embedding", () => ({
   findTaskEmbeddingRefsForProducts: findTaskEmbeddingRefsForProductsMock,
   findMealEmbeddingRefsForRecipes: findMealEmbeddingRefsForRecipesMock,
   findTrackerEmbeddingRefsForProjects: findTrackerEmbeddingRefsForProjectsMock,
+  findEmbeddingRefsForVendors: findEmbeddingRefsForVendorsMock,
+  findEmbeddingRefsForPurchases: findEmbeddingRefsForPurchasesMock,
+  findTransactionEmbeddingRefsForAccounts:
+    findTransactionEmbeddingRefsForAccountsMock,
+  findCommercialEmbeddingRefsForExpenses:
+    findCommercialEmbeddingRefsForExpensesMock,
 }));
 
 function fakeBatchRef(overrides: Partial<BackgroundBatchRef> = {}) {
@@ -55,6 +65,10 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findTaskEmbeddingRefsForProductsMock.mockResolvedValue([]);
     findMealEmbeddingRefsForRecipesMock.mockResolvedValue([]);
     findTrackerEmbeddingRefsForProjectsMock.mockResolvedValue([]);
+    findEmbeddingRefsForVendorsMock.mockResolvedValue([]);
+    findEmbeddingRefsForPurchasesMock.mockResolvedValue([]);
+    findTransactionEmbeddingRefsForAccountsMock.mockResolvedValue([]);
+    findCommercialEmbeddingRefsForExpensesMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -66,6 +80,10 @@ describe("runMutationSideEffectsForEntities batching", () => {
     findTaskEmbeddingRefsForProductsMock.mockReset();
     findMealEmbeddingRefsForRecipesMock.mockReset();
     findTrackerEmbeddingRefsForProjectsMock.mockReset();
+    findEmbeddingRefsForVendorsMock.mockReset();
+    findEmbeddingRefsForPurchasesMock.mockReset();
+    findTransactionEmbeddingRefsForAccountsMock.mockReset();
+    findCommercialEmbeddingRefsForExpensesMock.mockReset();
   });
 
   it("dispatches one entity-embedding batch per wave, not one per entity", async () => {
@@ -205,6 +223,8 @@ describe("mutation side effects manifest", () => {
     expect(Object.keys(mutationSideEffectManifest).sort()).toEqual([
       "cookbook",
       "expense",
+      "financialAccount",
+      "financialTransaction",
       "image",
       "ingredient",
       "inventory",
@@ -212,8 +232,10 @@ describe("mutation side effects manifest", () => {
       "meal",
       "product",
       "project",
+      "purchase",
       "recipe",
       "task",
+      "vendor",
     ]);
     for (const handlers of Object.values(mutationSideEffectManifest)) {
       expect(handlers).toHaveProperty("onCreate");

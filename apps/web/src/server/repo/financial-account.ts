@@ -45,6 +45,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -378,6 +379,7 @@ export async function deleteFinancialAccounts(
       .where(
         and(inArray(financialAccount.id, ids), notDeleted(financialAccount)),
       );
+    await softDeleteEntityEmbeddingsTx(tx, "financialAccount", ids);
     await logAuditEntries(
       tx,
       actor,

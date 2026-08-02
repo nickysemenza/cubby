@@ -1,21 +1,29 @@
 import type {
+  ExpenseId,
+  FinancialAccountId,
   IngredientId,
   LocationId,
   ProductId,
   ProjectId,
+  PurchaseId,
   RecipeId,
+  VendorId,
 } from "@cubby/schemas/identifiers";
 import {
   unsafeCookbookId,
   unsafeExpenseId,
+  unsafeFinancialAccountId,
+  unsafeFinancialTransactionId,
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeMealId,
   unsafeProductId,
   unsafeProjectId,
+  unsafePurchaseId,
   unsafeRecipeId,
   unsafeTaskId,
+  unsafeVendorId,
 } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -29,6 +37,8 @@ import {
   cookbook,
   entityEmbedding,
   expense,
+  financialAccount,
+  financialTransaction,
   ingredient,
   inventoryEntry,
   location,
@@ -36,10 +46,12 @@ import {
   mealRecipe,
   product,
   project,
+  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
   task,
+  vendor,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -230,6 +242,110 @@ export async function findTrackerEmbeddingRefsForProjects(
   ];
 }
 
+/** Purchases and their downstream ledger/settlement records embed vendor identity. */
+export async function findEmbeddingRefsForVendors(
+  db: Database,
+  vendorIds: VendorId[],
+): Promise<SearchableEntityRef[]> {
+  if (vendorIds.length === 0) return [];
+  const purchases = await getDb(db).query.purchase.findMany({
+    where: and(inArray(purchase.vendorId, vendorIds), notDeleted(purchase)),
+    columns: { id: true },
+  });
+  return findEmbeddingRefsForPurchases(
+    db,
+    purchases.map((row) => row.id),
+    true,
+  );
+}
+
+/** Expenses and settlement transactions embed their linked Purchase identity. */
+export async function findEmbeddingRefsForPurchases(
+  db: Database,
+  purchaseIds: PurchaseId[],
+  includePurchases = false,
+): Promise<SearchableEntityRef[]> {
+  if (purchaseIds.length === 0) return [];
+  const [expenses, transactions] = await Promise.all([
+    getDb(db).query.expense.findMany({
+      where: and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
+      columns: { id: true },
+    }),
+    getDb(db).query.financialTransaction.findMany({
+      where: and(
+        inArray(financialTransaction.purchaseId, purchaseIds),
+        notDeleted(financialTransaction),
+      ),
+      columns: { id: true },
+    }),
+  ]);
+  return [
+    ...(includePurchases
+      ? purchaseIds.map(
+          (entityId): SearchableEntityRef => ({
+            entityType: "purchase",
+            entityId,
+          }),
+        )
+      : []),
+    ...expenses.map(
+      (row): SearchableEntityRef => ({
+        entityType: "expense",
+        entityId: row.id,
+      }),
+    ),
+    ...transactions.map(
+      (row): SearchableEntityRef => ({
+        entityType: "financialTransaction",
+        entityId: row.id,
+      }),
+    ),
+  ];
+}
+
+/** Transactions embed their account's display identity. */
+export async function findTransactionEmbeddingRefsForAccounts(
+  db: Database,
+  accountIds: FinancialAccountId[],
+): Promise<SearchableEntityRef[]> {
+  if (accountIds.length === 0) return [];
+  const rows = await getDb(db).query.financialTransaction.findMany({
+    where: and(
+      inArray(financialTransaction.accountId, accountIds),
+      notDeleted(financialTransaction),
+    ),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({
+    entityType: "financialTransaction",
+    entityId: row.id,
+  }));
+}
+
+/** Expense writes can create Purchase/Vendor rows implicitly during resolution. */
+export async function findCommercialEmbeddingRefsForExpenses(
+  db: Database,
+  expenseIds: ExpenseId[],
+): Promise<SearchableEntityRef[]> {
+  if (expenseIds.length === 0) return [];
+  const rows = await getDb(db)
+    .selectDistinct({ purchaseId: purchase.id, vendorId: vendor.id })
+    .from(expense)
+    .innerJoin(
+      purchase,
+      and(eq(expense.purchaseId, purchase.id), notDeleted(purchase)),
+    )
+    .innerJoin(
+      vendor,
+      and(eq(purchase.vendorId, vendor.id), notDeleted(vendor)),
+    )
+    .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
+  return rows.flatMap((row): SearchableEntityRef[] => [
+    { entityType: "purchase", entityId: row.purchaseId },
+    { entityType: "vendor", entityId: row.vendorId },
+  ]);
+}
+
 type LiveIdLoader = (db: Database, ids: string[]) => Promise<Set<string>>;
 
 const createLiveIdLoader =
@@ -292,6 +408,30 @@ const liveIdLoaders = {
     unsafeProjectId,
   ),
   task: createLiveIdLoader(task, task.id, task.deletedAt, unsafeTaskId),
+  vendor: createLiveIdLoader(
+    vendor,
+    vendor.id,
+    vendor.deletedAt,
+    unsafeVendorId,
+  ),
+  purchase: createLiveIdLoader(
+    purchase,
+    purchase.id,
+    purchase.deletedAt,
+    unsafePurchaseId,
+  ),
+  financialAccount: createLiveIdLoader(
+    financialAccount,
+    financialAccount.id,
+    financialAccount.deletedAt,
+    unsafeFinancialAccountId,
+  ),
+  financialTransaction: createLiveIdLoader(
+    financialTransaction,
+    financialTransaction.id,
+    financialTransaction.deletedAt,
+    unsafeFinancialTransactionId,
+  ),
   expense: createLiveIdLoader(
     expense,
     expense.id,

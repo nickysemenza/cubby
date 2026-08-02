@@ -59,7 +59,7 @@ export const usdaRouteId = (fdcId: number): string => String(fdcId);
 
 const listParams = (params: ListParams) => params as never;
 
-// The 11 core entities share a mechanically-identical contract whose only axes
+// The standard routed entities share a mechanically-identical contract whose axes
 // are the router key (== entity key), the invalidation-key list, how `getByID`
 // takes its id, and (product only) a picker-search query. image / usda-food /
 // cookbook genuinely diverge (different router keys, fdc_id coercion,
@@ -204,11 +204,8 @@ const entityContracts = {
   task: standardContract("task", taskMutationInvalidateKeys),
   expense: standardContract("expense", expenseMutationInvalidateKeys),
   // Vendor and purchase are ordinary standard contracts now that `api.vendor.*`
-  // / `api.purchase.*` exist. They're `canPreview: true` because both have a
-  // detail route and a hovercard arm (EntityPreviewContent) — NOT because
-  // they're searchable; neither is in the embedding pipeline in v1, so nothing
-  // routes a *search result* to them. `detailId: "scalar"` is the one real
-  // divergence: both routers are hand-rolled and take the branded id directly.
+  // / `api.purchase.*` exist. `detailId: "scalar"` is the one real divergence:
+  // both routers are hand-rolled and take the branded id directly.
   vendor: standardContract("vendor", vendorMutationInvalidateKeys, {
     detailId: "scalar",
   }),

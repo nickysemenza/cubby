@@ -26,6 +26,10 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   meal: "meal",
   project: "project",
   task: "task",
+  vendor: "vendor",
+  purchase: "purchase",
+  financialAccount: "financialAccount",
+  financialTransaction: "financialTransaction",
   expense: "expense",
 };
 
@@ -205,6 +209,35 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
         : null,
     )
     .with({ entityType: "task" }, (item) => item.projectName)
+    .with({ entityType: "vendor" }, (item) => {
+      const parts: string[] = [];
+      if (item.purchaseCount != null && item.purchaseCount > 0)
+        parts.push(`${item.purchaseCount} purchases`);
+      if (item.spend != null && item.spend !== 0)
+        parts.push(`${formatCurrency(item.spend)} spent`);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })
+    .with({ entityType: "purchase" }, (item) => {
+      const parts: string[] = [];
+      if (item.expenseCount != null && item.expenseCount > 0)
+        parts.push(`${item.expenseCount} expenses`);
+      if (item.expenseTotal != null)
+        parts.push(formatCurrency(item.expenseTotal));
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })
+    .with({ entityType: "financialAccount" }, (item) => {
+      const parts: string[] = [];
+      if (item.provisional) parts.push("provisional");
+      if (item.transactionCount != null && item.transactionCount > 0)
+        parts.push(`${item.transactionCount} transactions`);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })
+    .with({ entityType: "financialTransaction" }, (item) => {
+      const parts: string[] = [];
+      if (item.amount != null) parts.push(formatCurrency(item.amount));
+      if (item.status) parts.push(item.status);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })
     .with({ entityType: "expense" }, (item) => {
       const parts: string[] = [];
       if (item.cost != null) parts.push(formatCurrency(item.cost));

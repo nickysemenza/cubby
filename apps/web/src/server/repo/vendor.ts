@@ -58,6 +58,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { foldChargeInto } from "~/server/repo/purchase";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -578,6 +579,7 @@ export const mergeVendors = async (
       .update(vendor)
       .set({ deletedAt: new Date() })
       .where(and(inArray(vendor.id, losers), notDeleted(vendor)));
+    await softDeleteEntityEmbeddingsTx(tx, "vendor", losers);
 
     await logAuditEntries(tx, actor, [
       {
@@ -663,6 +665,7 @@ export const deleteVendors = async (
       .update(vendor)
       .set({ deletedAt: now })
       .where(and(inArray(vendor.id, ids), notDeleted(vendor)));
+    await softDeleteEntityEmbeddingsTx(tx, "vendor", ids);
 
     await logAuditEntries(
       tx,

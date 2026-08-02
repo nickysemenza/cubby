@@ -169,6 +169,10 @@ describe("entity manifest", () => {
       "meal",
       "project",
       "task",
+      "vendor",
+      "purchase",
+      "financialAccount",
+      "financialTransaction",
       "expense",
     ]);
   });
