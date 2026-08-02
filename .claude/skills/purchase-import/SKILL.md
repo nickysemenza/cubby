@@ -88,6 +88,11 @@ Expense → Purchase ← FinancialTransaction → FinancialAccount
   Expenses, re-read to verify the Purchase is empty, then use
   `delete_empty_purchases`. Deleting a Purchase never removes spend; do not use
   it while Expenses or Financial Transactions remain.
+- Before replacing a human-entered aggregate Expense with source-derived detail,
+  preserve its meaningful title. Prefer a writable Purchase display label so the
+  UI can render it parenthetically; until that exists, prepend the exact title to
+  the Purchase notes. Do not copy an aggregate title onto every detailed line,
+  and never silently discard human-entered context during deduplication.
 - Keep trustworthy coarse Expenses unlinked rather than inventing a line-level
   allocation. A Product link is a claim about that Product's cost basis.
 - Keep `Expense.cost` as the extended line total. When a linked Product's
@@ -180,6 +185,8 @@ as notes/evidence; do not infer a Financial Account from them.
   date when posted, source reference, and Purchase link when known.
 - Touched Purchase `statedTotal` remains literal paperwork; reconciliation gaps
   are explained rather than hidden.
+- Meaningful human-entered aggregate titles are preserved on the retained
+  Purchase before duplicate Expenses are deleted.
 - Every eligible Product candidate was promoted, explicitly skipped,
   conflicted, or left pending with a direct user question.
 - Product creation, document filing, and inventory receiving were reported as
