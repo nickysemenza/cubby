@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { ChevronRight, Network, RotateCcw } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -42,6 +43,7 @@ export interface RelationshipPreset {
 interface RelationshipChildrenPage {
   items: readonly RelationshipEntity[];
   hasMore: boolean;
+  totalCount?: number;
 }
 
 export interface RelationshipTreeProps {
@@ -91,35 +93,72 @@ function routeParams(item: RelationshipEntity) {
 function EntityRow({
   item,
   depth,
+  expandable,
+  expanded,
+  onToggle,
+  children,
 }: {
   item: RelationshipEntity;
   depth: number;
+  expandable: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  children?: ReactNode;
 }) {
   const Icon = entities[item.entity].lucideIcon;
   return (
-    <div
-      className="flex min-w-0 items-center gap-1 border-[var(--border)] border-t px-2 py-1 text-sm"
-      style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
-    >
-      <Icon className="size-3 shrink-0 text-slate" aria-hidden />
-      <TableLink
-        to={entities[item.entity].routes.detail as EntityDetailRoute}
-        params={routeParams(item)}
-        className="min-w-0 truncate"
-        variant="muted"
+    <div>
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-1 border-[var(--border)] border-t px-2 py-1 text-sm",
+          item.cycle && "text-muted-foreground",
+        )}
+        style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
       >
-        {item.label}
-      </TableLink>
-      {item.facts && item.facts.length > 0 && (
-        <span className="ml-auto shrink-0 truncate font-mono text-2xs text-slate">
-          {item.facts.join(" · ")}
+        {expandable ? (
+          <button
+            type="button"
+            aria-label={
+              expanded ? "Collapse related records" : "Expand related records"
+            }
+            aria-expanded={expanded}
+            onClick={onToggle}
+            className="shrink-0 rounded p-0.5 hover:bg-muted"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3 transition-transform",
+                expanded && "rotate-90",
+              )}
+            />
+          </button>
+        ) : (
+          <span className="size-4 shrink-0" />
+        )}
+        <Icon className="size-3 shrink-0 text-slate" aria-hidden />
+        <TableLink
+          to={entities[item.entity].routes.detail as EntityDetailRoute}
+          params={routeParams(item)}
+          className="min-w-0 truncate"
+          variant="muted"
+        >
+          {item.label}
+        </TableLink>
+        <span className="shrink-0 font-mono text-2xs text-slate">
+          {item.id}
         </span>
-      )}
-      {item.cycle && (
-        <span className="shrink-0 font-mono text-2xs text-slate uppercase tracking-wider">
-          See above
-        </span>
-      )}
+        {item.facts && item.facts.length > 0 && (
+          <span className="ml-auto shrink-0 truncate font-mono text-2xs text-slate">
+            {item.facts.join(" · ")}
+          </span>
+        )}
+        {item.cycle && (
+          <span className="shrink-0 font-mono text-2xs text-slate uppercase tracking-wider">
+            Reference
+          </span>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
@@ -132,6 +171,7 @@ function GroupRow({
   page,
   onLoadMore,
   loadChildren,
+  renderEntity,
 }: {
   group: RelationshipGroup;
   depth: number;
@@ -140,6 +180,7 @@ function GroupRow({
   page?: LoadedPage;
   onLoadMore: () => void;
   loadChildren?: RelationshipTreeProps["loadChildren"];
+  renderEntity: (item: RelationshipEntity, depth: number) => ReactNode;
 }) {
   const visibleItems = page?.items ?? group.items ?? [];
   const hasMore = page?.hasMore ?? group.hasMore ?? false;
@@ -164,9 +205,7 @@ function GroupRow({
       </button>
       {expanded && (
         <div>
-          {visibleItems.map((item) => (
-            <EntityRow key={entityKey(item)} item={item} depth={depth + 1} />
-          ))}
+          {visibleItems.map((item) => renderEntity(item, depth + 1))}
           {visibleItems.length === 0 && !loading && !error && (
             <p
               className="border-[var(--border)] border-t px-2 py-1 text-muted-foreground text-sm"
@@ -237,12 +276,22 @@ export function RelationshipTree({
     () => new Set(initialKeys),
   );
   const [pages, setPages] = useState<Record<string, LoadedPage>>({});
+  const [nodeGroups, setNodeGroups] = useState<
+    Record<string, readonly RelationshipGroup[]>
+  >({});
+  const [loadingNodes, setLoadingNodes] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [limitMessage, setLimitMessage] = useState<string>();
 
   const loadPage = useCallback(
-    async (group: RelationshipGroup, append: boolean) => {
+    async (
+      group: RelationshipGroup,
+      append: boolean,
+      parent?: RelationshipEntity,
+    ) => {
       if (!activePreset || !loadChildren) return;
-      const stateKey = groupStateKey(activePreset.key, group.key);
+      const stateKey = groupStateKey(activePreset.key, group.key, parent);
       const previous = pages[stateKey];
       const baseItems = append ? (previous?.items ?? group.items ?? []) : [];
       setPages((current) => ({
@@ -253,6 +302,7 @@ export function RelationshipTree({
         const next = await loadChildren({
           presetKey: activePreset.key,
           relationKey: group.key,
+          parent,
           offset: baseItems.length,
         });
         setPages((current) => ({
@@ -273,9 +323,9 @@ export function RelationshipTree({
   );
 
   const toggleGroup = useCallback(
-    (group: RelationshipGroup) => {
+    (group: RelationshipGroup, parent?: RelationshipEntity) => {
       if (!activePreset) return;
-      const stateKey = groupStateKey(activePreset.key, group.key);
+      const stateKey = groupStateKey(activePreset.key, group.key, parent);
       setExpanded((current) => {
         const next = new Set(current);
         if (next.has(stateKey)) next.delete(stateKey);
@@ -283,9 +333,47 @@ export function RelationshipTree({
         return next;
       });
       if (!pages[stateKey] && !group.items && loadChildren)
-        void loadPage(group, false);
+        void loadPage(group, false, parent);
     },
     [activePreset, loadChildren, loadPage, pages],
+  );
+
+  const loadNode = useCallback(
+    async (item: RelationshipEntity, nodeKey: string) => {
+      if (!activePreset || !loadChildren || nodeGroups[nodeKey]) return;
+      const views = relatedViewRegistry.filter(
+        (view) => view.source === item.entity,
+      );
+      if (views.length === 0) return;
+      setLoadingNodes((current) => new Set(current).add(nodeKey));
+      try {
+        const pages = await Promise.all(
+          views.map(async (view) => {
+            const page = await loadChildren({
+              presetKey: activePreset.key,
+              relationKey: view.key,
+              parent: item,
+              offset: 0,
+            });
+            return {
+              key: view.key,
+              label: view.label,
+              totalCount: page.totalCount ?? page.items.length,
+              items: page.items,
+              hasMore: page.hasMore,
+            } satisfies RelationshipGroup;
+          }),
+        );
+        setNodeGroups((current) => ({ ...current, [nodeKey]: pages }));
+      } finally {
+        setLoadingNodes((current) => {
+          const next = new Set(current);
+          next.delete(nodeKey);
+          return next;
+        });
+      }
+    },
+    [activePreset, loadChildren, nodeGroups],
   );
 
   const selectPreset = useCallback(
@@ -323,6 +411,73 @@ export function RelationshipTree({
   }, [activePreset, pages]);
 
   if (!activePreset) return null;
+
+  // Each render walks in display order. Keep the first contextual occurrence
+  // strong and render later appearances as muted references: that preserves
+  // truthful paths without making repeated records look like new ones.
+  const seenEntityKeys = new Set<string>();
+  const renderEntity: (item: RelationshipEntity, depth: number) => ReactNode = (
+    item,
+    depth,
+  ) => {
+    // A bounded outline remains legible and prevents a manually-expanded
+    // cyclic graph from becoming an unbounded DOM tree. The detail link still
+    // gives the record a full fresh root context.
+    const identity = entityKey(item);
+    const duplicate = seenEntityKeys.has(identity);
+    seenEntityKeys.add(identity);
+    const reference = depth >= 6 || duplicate;
+    const nodeKey = `${activePreset.key}:entity:${entityKey(item)}`;
+    const childGroups = nodeGroups[nodeKey];
+    const hasChildren =
+      !reference &&
+      relatedViewRegistry.some((view) => view.source === item.entity);
+    const expandedNode = expanded.has(nodeKey);
+    return (
+      <EntityRow
+        key={`${nodeKey}:${depth}`}
+        item={reference ? { ...item, cycle: true } : item}
+        depth={depth}
+        expandable={hasChildren}
+        expanded={expandedNode}
+        onToggle={() => {
+          setExpanded((current) => {
+            const next = new Set(current);
+            if (next.has(nodeKey)) next.delete(nodeKey);
+            else next.add(nodeKey);
+            return next;
+          });
+          if (!expandedNode) void loadNode(item, nodeKey);
+        }}
+      >
+        {expandedNode && loadingNodes.has(nodeKey) && (
+          <p
+            className="border-[var(--border)] border-t px-2 py-1 text-muted-foreground text-sm"
+            style={{ paddingLeft: `${(depth + 1) * 1.25 + 0.5}rem` }}
+          >
+            Loading connections…
+          </p>
+        )}
+        {expandedNode &&
+          childGroups?.map((group) => {
+            const stateKey = groupStateKey(activePreset.key, group.key, item);
+            return (
+              <GroupRow
+                key={stateKey}
+                group={group}
+                depth={depth + 1}
+                expanded={expanded.has(stateKey)}
+                onToggle={() => toggleGroup(group, item)}
+                page={pages[stateKey]}
+                onLoadMore={() => void loadPage(group, true, item)}
+                loadChildren={loadChildren}
+                renderEntity={renderEntity}
+              />
+            );
+          })}
+      </EntityRow>
+    );
+  };
 
   return (
     <section className={cn("min-w-0", className)} aria-label="Relationships">
@@ -363,6 +518,7 @@ export function RelationshipTree({
               page={pages[stateKey]}
               onLoadMore={() => void loadPage(group, true)}
               loadChildren={loadChildren}
+              renderEntity={renderEntity}
             />
           );
         })}

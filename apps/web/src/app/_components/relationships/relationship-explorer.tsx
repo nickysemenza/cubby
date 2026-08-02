@@ -121,16 +121,19 @@ export function RelationshipExplorer({
   const loadChildren = useCallback(
     async ({
       relationKey,
+      parent,
       offset,
     }: {
       relationKey: string;
+      parent?: { id: string };
       offset: number;
     }) => {
-      if (!sourceId) return { items: [], hasMore: false };
+      const branchSourceId = parent?.id ?? sourceId;
+      if (!branchSourceId) return { items: [], hasMore: false };
       const page = await queryClient.fetchQuery(
         api.relatedData.branch.queryOptions({
           relationKey: relationKey as (typeof relationKeys)[number],
-          sourceId,
+          sourceId: branchSourceId,
           offset,
           limit: 25,
         }),
@@ -138,6 +141,7 @@ export function RelationshipExplorer({
       return {
         items: page.items,
         hasMore: page.nextOffset !== null,
+        totalCount: page.totalCount,
       };
     },
     [api.relatedData.branch, queryClient, sourceId],
