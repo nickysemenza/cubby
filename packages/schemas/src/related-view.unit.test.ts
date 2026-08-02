@@ -13,7 +13,11 @@ import {
 } from "./project";
 import { purchaseFilterFields } from "./purchase";
 import { recipeFilterFields } from "./recipe";
-import { relatedFilterPrefix, relatedViewRegistry } from "./related-view";
+import {
+  relatedFilterPrefix,
+  type RelatedViewDefinition,
+  relatedViewRegistry,
+} from "./related-view";
 import { vendorFilterFields } from "./vendor";
 
 const declaredLocalEdges = new Set(
@@ -50,8 +54,9 @@ describe("relatedViewRegistry", () => {
   });
 
   it("keeps declared inverse paths directional and reciprocal", () => {
-    const byKey = new Map(relatedViewRegistry.map((view) => [view.key, view]));
-    for (const view of relatedViewRegistry) {
+    const views: readonly RelatedViewDefinition[] = relatedViewRegistry;
+    const byKey = new Map(views.map((view) => [view.key, view]));
+    for (const view of views) {
       if (!view.inverseKey) continue;
       const inverse = byKey.get(view.inverseKey);
       expect(inverse, `${view.key}: ${view.inverseKey}`).toBeDefined();

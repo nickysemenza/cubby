@@ -108,6 +108,7 @@ export const relatedViewRegistry = [
     defaultVisible: false,
     order: "newest",
     path: [inc("MealRecipe.recipeId"), out("MealRecipe.mealId")],
+    inverseKey: "meal.recipes",
   },
   {
     key: "meal.recipes",
