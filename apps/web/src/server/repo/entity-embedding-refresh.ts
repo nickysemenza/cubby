@@ -516,6 +516,7 @@ async function getPurchaseEmbeddingTexts(
       id: purchase.id,
       vendorName: vendor.name,
       orderId: purchase.orderId,
+      displayLabel: purchase.displayLabel,
       date: purchase.date,
       notes: purchase.notes,
     })

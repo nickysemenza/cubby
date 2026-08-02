@@ -46,6 +46,12 @@ const purchaseFields = {
     .describe(
       'The vendor\'s own order/receipt id — Amazon "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325". Free text: every retailer formats these differently and validating them would only reject real data. Unique per vendor when present; null for the ~40% of purchases that never got one.',
     ),
+  displayLabel: z
+    .string()
+    .nullable()
+    .describe(
+      "Optional human-entered context preserved from the original ledger, rendered parenthetically after the purchase identity — for example 11100722797 (pocket hole jig + bits).",
+    ),
   date: plainDate.describe("The vendor order or receipt date"),
   statedTotal: wholeCentAmount
     .nullable()
@@ -58,6 +64,7 @@ const purchaseFields = {
 const purchaseCreateShape = {
   ...purchaseFields,
   orderId: z.string().nullable().default(null),
+  displayLabel: z.string().nullable().optional(),
   date: plainDate,
   statedTotal: wholeCentAmount.nullable().default(null),
   notes: z.string().nullable().default(null),
@@ -139,7 +146,10 @@ export const primaryPurchaseDocumentKinds = [
 
 export const purchaseFilterFields = {
   ...auditDateFilterFields,
-  search: z.string().optional().describe("Substring match on order id"),
+  search: z
+    .string()
+    .optional()
+    .describe("Substring match on order id or human display label"),
   vendorId: oneOrMany(vendorShortcode).optional(),
   ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),

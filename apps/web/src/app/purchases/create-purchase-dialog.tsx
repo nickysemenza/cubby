@@ -24,6 +24,7 @@ const today = () => format(new Date(), "yyyy-MM-dd");
 const quickAddPurchaseSchema = z.object({
   vendorId: z.string().min(1, "Vendor is required"),
   orderId: z.string(),
+  displayLabel: z.string(),
   date: plainDate,
   statedTotal: z.number().nullable(),
   notes: z.string(),
@@ -51,6 +52,7 @@ export function CreatePurchaseDialog({
     () => ({
       vendorId: presetVendorId ?? "",
       orderId: "",
+      displayLabel: "",
       date: today(),
       statedTotal: null,
       notes: "",
@@ -72,6 +74,7 @@ export function CreatePurchaseDialog({
       buildPayload={(values) => ({
         vendorId: unsafeVendorShortcode(values.vendorId),
         orderId: values.orderId.trim() || null,
+        displayLabel: values.displayLabel.trim() || null,
         date: values.date,
         statedTotal: values.statedTotal,
         notes: values.notes.trim() || null,
@@ -92,6 +95,12 @@ export function CreatePurchaseDialog({
             name="orderId"
             label="Order #"
             placeholder="Vendor order / receipt #"
+          />
+          <UnifiedTextField
+            form={form}
+            name="displayLabel"
+            label="Display label"
+            placeholder="e.g. pocket hole jig + bits"
           />
           <PlainDateField form={form} name="date" label="Purchase date" />
           <NullableNumericField

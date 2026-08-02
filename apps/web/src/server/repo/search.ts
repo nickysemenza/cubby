@@ -470,6 +470,7 @@ const searchQueries = {
     lexicalCondition: (query) =>
       or(
         formatSearchTerm(purchase.orderId, query),
+        formatSearchTerm(purchase.displayLabel, query),
         formatSearchTerm(purchase.notes, query),
         formatSearchTerm(vendor.name, query),
         formatSearchTerm(vendor.website, query),
@@ -481,9 +482,15 @@ const searchQueries = {
         .select({
           entityId: purchase.id,
           id: purchase.shortcode,
-          name: sql<string>`COALESCE(
-            NULLIF(${purchase.orderId}, ''),
-            ${vendor.name} || ' · ' || ${purchase.date}::text
+          name: sql<string>`(
+            COALESCE(
+              NULLIF(${purchase.orderId}, ''),
+              ${vendor.name} || ' · ' || ${purchase.date}::text
+            ) || CASE
+              WHEN NULLIF(btrim(${purchase.displayLabel}), '') IS NOT NULL
+                THEN ' (' || btrim(${purchase.displayLabel}) || ')'
+              ELSE ''
+            END
           )`.as("name"),
           subtitle: vendor.name,
           entityType: sql<"purchase">`'purchase'`.as("entityType"),
@@ -564,6 +571,7 @@ const searchQueries = {
         formatSearchTerm(financialTransaction.notes, query),
         formatSearchTerm(financialAccount.name, query),
         formatSearchTerm(purchase.orderId, query),
+        formatSearchTerm(purchase.displayLabel, query),
         formatSearchTerm(vendor.name, query),
         sql`${financialTransaction.sourceRefs}::text ILIKE ${term}`,
         sql`${financialTransaction.transactionDate}::text ILIKE ${term}`,

@@ -1136,6 +1136,9 @@ export const purchase = pgTable(
     // formats these differently. Null on the ~40% of events where the vendor never
     // issued one for (a contractor's progress payment, a farmers-market run).
     orderId: text("orderId"),
+    // Human-entered context from the original ledger, kept separate from the
+    // vendor's immutable identity and rendered parenthetically in the title.
+    displayLabel: text("displayLabel"),
     // The vendor order/receipt date. Distinct from `expense.date`, which stays the LEDGER date
     // driving monthly buckets and project date windows — an invoice dated the
     // 3rd can clear on the 8th.
@@ -1171,6 +1174,10 @@ export const purchase = pgTable(
     index("Purchase_orderId_gin_idx").using(
       "gin",
       sql`${table.orderId} gin_trgm_ops`,
+    ),
+    index("Purchase_displayLabel_gin_idx").using(
+      "gin",
+      sql`${table.displayLabel} gin_trgm_ops`,
     ),
   ],
 );

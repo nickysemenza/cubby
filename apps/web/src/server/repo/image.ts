@@ -177,11 +177,11 @@ type ImageWithRelations = typeof image.$inferSelect & {
   }>;
   purchaseImages: Array<{
     purchaseId: string;
-    // Purchase has no `name` column (see purchase-label.ts) — orderId is the
-    // closest thing to a display label, and null on the ~40% of charges the
-    // vendor never issued one for.
+    // Purchase has no `name` column (see purchase-label.ts); its vendor identity
+    // and optional human context stay separate.
     purchase: {
       orderId: string | null;
+      displayLabel: string | null;
       shortcode: string;
       deletedAt: Date | null;
     };
@@ -305,7 +305,11 @@ const imageWithRelationsToAPI = (
       updatedAt: imageData.updatedAt,
       entityType: "PURCHASE",
       entityId: attachableImageEntityId.parse(purchaseAssoc.purchase.shortcode),
-      entityName: purchaseAssoc.purchase.orderId,
+      entityName: purchaseAssoc.purchase.orderId
+        ? purchaseAssoc.purchase.displayLabel?.trim()
+          ? `${purchaseAssoc.purchase.orderId} (${purchaseAssoc.purchase.displayLabel.trim()})`
+          : purchaseAssoc.purchase.orderId
+        : purchaseAssoc.purchase.displayLabel,
     };
   }
 
@@ -369,7 +373,12 @@ const imageEntityRelations = {
     where: notDeleted(purchaseImage),
     with: {
       purchase: {
-        columns: { orderId: true, shortcode: true, deletedAt: true },
+        columns: {
+          orderId: true,
+          displayLabel: true,
+          shortcode: true,
+          deletedAt: true,
+        },
       },
     },
     columns: { purchaseId: true },

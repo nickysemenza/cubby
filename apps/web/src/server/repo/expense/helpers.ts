@@ -54,6 +54,7 @@ export type ExpenseRow = {
     id: PurchaseId;
     shortcode: string;
     orderId: string | null;
+    displayLabel: string | null;
     date: string;
     vendorId: VendorId;
     deletedAt: Date | null;
@@ -97,6 +98,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
       ? unsafePurchaseShortcode(purchaseRow.shortcode)
       : null,
     purchaseDate: purchaseRow?.date ?? null,
+    purchaseDisplayLabel: purchaseRow?.displayLabel ?? null,
     vendorId:
       purchaseRow?.vendor != null
         ? unsafeVendorShortcode(purchaseRow.vendor.shortcode)

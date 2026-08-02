@@ -74,15 +74,16 @@ type EntityInlineLinkProps = {
         projectName?: string | null;
       };
     }
-  // A purchase has NO `name` — its identity is (vendor, orderId, date), so the
-  // label comes from `purchaseLabel` rather than a column. Deliberately not
-  // `MinimalEntityData`: there is no name to pass, and accepting one would
-  // invite callers to invent one.
+  // A purchase has NO `name` — its identity is (vendor, orderId, date), with an
+  // optional human display label, so the visible text comes from
+  // `purchaseLabel`. Deliberately not `MinimalEntityData`: accepting an
+  // invented name would collapse vendor identity and human context together.
   | {
       entity: "purchase";
       data: {
         id: string;
         orderId: string | null;
+        displayLabel?: string | null;
         vendorName?: string | null;
         date?: string | null;
       };

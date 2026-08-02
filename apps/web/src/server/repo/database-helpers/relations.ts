@@ -76,6 +76,7 @@ const withProjectAndProductNameOnly = {
         id: true,
         shortcode: true,
         orderId: true,
+        displayLabel: true,
         date: true,
         vendorId: true,
         deletedAt: true,

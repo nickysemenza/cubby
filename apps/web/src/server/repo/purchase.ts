@@ -255,6 +255,7 @@ const purchaseColumns = {
   id: purchase.id,
   shortcode: purchase.shortcode,
   orderId: purchase.orderId,
+  displayLabel: purchase.displayLabel,
   date: purchase.date,
   statedTotal: purchase.statedTotal,
   notes: purchase.notes,
@@ -273,6 +274,7 @@ type PurchaseRow = {
   id: PurchaseId;
   shortcode: string;
   orderId: string | null;
+  displayLabel: string | null;
   date: string;
   statedTotal: number | null;
   notes: string | null;
@@ -296,6 +298,7 @@ const dbPurchaseToAPI = (
   id: unsafePurchaseShortcode(row.shortcode),
   vendorId: unsafeVendorShortcode(row.vendorShortcode),
   orderId: row.orderId,
+  displayLabel: row.displayLabel,
   date: row.date,
   statedTotal: row.statedTotal,
   notes: row.notes,
@@ -477,7 +480,10 @@ const buildPurchaseWhereClause = (
 ) =>
   buildSearchConditions(
     purchase,
-    [{ column: purchase.orderId, term: filters.search }],
+    [
+      { column: purchase.orderId, term: filters.search },
+      { column: purchase.displayLabel, term: filters.search },
+    ],
     [
       ...auditDateWhereConditions(purchase, filters),
       eqAny(purchase.vendorId, vendorUuids),
@@ -607,7 +613,7 @@ export const getPurchaseByID = async (
 
 export type PurchaseLinkIdentity = Pick<
   PurchaseOut,
-  "id" | "orderId" | "date" | "vendorId" | "vendorName"
+  "id" | "orderId" | "displayLabel" | "date" | "vendorId" | "vendorName"
 >;
 
 /**
@@ -625,6 +631,7 @@ export const getPurchaseLinkIdentityByID = async (
     .select({
       shortcode: purchase.shortcode,
       orderId: purchase.orderId,
+      displayLabel: purchase.displayLabel,
       date: purchase.date,
       vendorName: purchaseVendorName,
       vendorShortcode: purchaseVendorShortcode,
@@ -637,6 +644,7 @@ export const getPurchaseLinkIdentityByID = async (
     ? {
         id: unsafePurchaseShortcode(row.shortcode),
         orderId: row.orderId,
+        displayLabel: row.displayLabel,
         date: row.date,
         vendorId: unsafeVendorShortcode(row.vendorShortcode),
         vendorName: row.vendorName,
@@ -806,6 +814,7 @@ export const createPurchase = async (
     const created = await insertWithShortcode(tx, "purchase", {
       vendorId,
       orderId: data.orderId?.trim() || null,
+      displayLabel: data.displayLabel?.trim() || null,
       date: data.date,
       statedTotal: data.statedTotal,
       notes: data.notes,
@@ -834,6 +843,7 @@ export const createPurchase = async (
 const PURCHASE_AUDIT_FIELDS = [
   "vendorId",
   "orderId",
+  "displayLabel",
   "date",
   "statedTotal",
   "notes",
@@ -931,6 +941,10 @@ export const updatePurchase = async (
         vendorId: resolvedVendorId,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
+        displayLabel:
+          data.displayLabel === undefined
+            ? undefined
+            : data.displayLabel?.trim() || null,
         date: data.date,
         statedTotal: data.statedTotal,
         notes: data.notes,
@@ -1363,6 +1377,7 @@ export const foldChargeInto = async (
   const [dead] = await tx
     .select({
       statedTotal: purchase.statedTotal,
+      displayLabel: purchase.displayLabel,
       notes: purchase.notes,
       date: purchase.date,
     })
@@ -1372,6 +1387,7 @@ export const foldChargeInto = async (
   const [survivor] = await tx
     .select({
       statedTotal: purchase.statedTotal,
+      displayLabel: purchase.displayLabel,
       notes: purchase.notes,
       date: purchase.date,
     })
@@ -1383,6 +1399,10 @@ export const foldChargeInto = async (
     statedTotal:
       survivor?.statedTotal == null && dead?.statedTotal != null
         ? dead.statedTotal
+        : undefined,
+    displayLabel:
+      survivor?.displayLabel == null && dead?.displayLabel != null
+        ? dead.displayLabel
         : undefined,
     notes:
       survivor?.notes == null && dead?.notes != null ? dead.notes : undefined,

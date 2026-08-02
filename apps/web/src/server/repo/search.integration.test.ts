@@ -501,6 +501,7 @@ describe("globalSearch: commercial and finance entities", () => {
       {
         vendorId: vendor.output.id,
         orderId: "FINANCE-ORDER-MARKER",
+        displayLabel: "pocket hole jig marker",
         date: "2026-06-15",
         statedTotal: 99,
         notes: "finance-purchase-notes-marker",
@@ -546,6 +547,7 @@ describe("globalSearch: commercial and finance entities", () => {
     const cases = [
       ["Finance Search Vendor", "vendor", vendor.output.id],
       ["FINANCE-ORDER-MARKER", "purchase", purchase.output.id],
+      ["pocket hole jig marker", "purchase", purchase.output.id],
       ["finance-account-alias-marker", "financialAccount", account.output.id],
       [
         "finance-transaction-description-marker",
@@ -581,6 +583,7 @@ describe("globalSearch: commercial and finance entities", () => {
         }),
         expect.objectContaining({
           entityType: "purchase",
+          name: "FINANCE-ORDER-MARKER (pocket hole jig marker)",
           expenseCount: 0,
           expenseTotal: 0,
         }),

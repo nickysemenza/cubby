@@ -70,6 +70,7 @@ const expense: ExpenseOut = {
   orderId: "#11325",
   purchaseId: unsafePurchaseShortcode("PUR-2345"),
   purchaseDate: "2026-07-29",
+  purchaseDisplayLabel: null,
   vendorId: unsafeVendorShortcode("VEN-2345"),
   projectName: null,
   productName: null,

@@ -1023,6 +1023,7 @@ const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
 export type PurchasePreview = {
   id: string;
   orderId: string | null;
+  displayLabel?: string | null;
   date: string | null;
   statedTotal: number | null;
   expenseCount: number;
@@ -1089,6 +1090,7 @@ export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
           {...toPurchaseCard({
             id: purchaseId,
             orderId: data.orderId,
+            displayLabel: data.displayLabel,
             date: data.date,
             statedTotal: data.statedTotal,
             expenseCount: data.expenseCount,

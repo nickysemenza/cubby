@@ -1110,6 +1110,8 @@ export const expenseOut = z.object({
   purchaseId: purchaseShortcode.nullable(),
   /** The linked purchase's own date, distinct from this expense's ledger date. */
   purchaseDate: plainDate.nullable(),
+  /** Human-entered context carried by the linked Purchase. */
+  purchaseDisplayLabel: z.string().nullable(),
   /** The purchase's vendor, denormalized onto the expense so tables can link it. */
   vendorId: vendorShortcode.nullable(),
   projectName: z.string().nullable(),
